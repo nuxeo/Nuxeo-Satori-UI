@@ -32,7 +32,23 @@
         "port": 6006,
         "configDir": "libs/shared/satori-components/.storybook",
         "browserTarget": "satori-components:build-storybook",
-        "compodoc": false
+        "experimentalZoneless": true,
+        "compodoc": true,
+        "compodocArgs": [
+          "-p",
+          "libs/shared/satori-components/tsconfig.lib.json",
+          "-e",
+          "json",
+          "-d",
+          "dist/compodoc/satori-components",
+          "--disablePrivate",
+          "--disableProtected",
+          "--disableInternal",
+          "--disableLifeCycleHooks",
+          "--disableSourceCode",
+          "--disableTemplateTab",
+          "--disableStyleTab"
+        ]
       },
       "configurations": {
         "ci": {
@@ -41,7 +57,8 @@
         "satori": {
           "browserTarget": "satori-components:build-storybook:satori"
         }
-      }
+      },
+      "$comment": "`experimentalZoneless` is read from this target's own options, not from `browserTarget`; without it the dev server loads Zone.js under the zoneless providers in `preview.ts` (NG0914)."
     },
     "build-storybook": {
       "executor": "@storybook/angular:build-storybook",
@@ -59,7 +76,22 @@
         "tsConfig": "libs/shared/satori-components/.storybook/tsconfig.json",
         "styles": ["libs/shared/satori-components/.storybook/material-theme.scss"],
         "experimentalZoneless": true,
-        "compodoc": false
+        "compodoc": true,
+        "compodocArgs": [
+          "-p",
+          "libs/shared/satori-components/tsconfig.lib.json",
+          "-e",
+          "json",
+          "-d",
+          "dist/compodoc/satori-components",
+          "--disablePrivate",
+          "--disableProtected",
+          "--disableInternal",
+          "--disableLifeCycleHooks",
+          "--disableSourceCode",
+          "--disableTemplateTab",
+          "--disableStyleTab"
+        ]
       },
       "configurations": {
         "ci": {

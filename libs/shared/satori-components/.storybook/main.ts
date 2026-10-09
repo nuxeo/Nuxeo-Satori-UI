@@ -14,7 +14,7 @@ const config: StorybookConfig = {
   // The application's catalogue, for components whose chrome is translated through ngx-translate
   // under keys the application owns, such as `nxs-permissions-panel`.
   staticDirs: [{ from: '../../../../apps/nuxeo-ui/public/i18n', to: 'i18n' }],
-  addons: [],
+  addons: ['@storybook/addon-docs', '@storybook/addon-a11y'],
   framework: {
     name: '@storybook/angular',
     options: {},

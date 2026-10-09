@@ -6,8 +6,11 @@ import {
   provideTranslateService,
   type TranslationObject,
 } from '@ngx-translate/core';
+import { setCompodocJson } from '@storybook/addon-docs/angular';
 import { applicationConfig, type Preview } from '@storybook/angular';
 import type { Observable } from 'rxjs';
+
+import documentation from '../../../../dist/compodoc/satori-components/documentation.json';
 
 /**
  * The application's catalogue, served at `i18n/` by `main.ts`. Composite components translate their
@@ -21,6 +24,37 @@ class ApplicationCatalogueLoader implements TranslateLoader {
     return this.http.get<TranslationObject>(`i18n/${lang}.json`);
   }
 }
+
+setCompodocJson(documentation);
+
+type ArgTypesEnhancer = NonNullable<Preview['argTypesEnhancers']>[number];
+
+/** Each component's `input.required()` inputs, as Compodoc reports them. */
+const requiredInputs = new Map(
+  documentation.components.map((component) => [
+    component.name,
+    new Set(
+      (component.inputsClass ?? []).filter((input) => input.required).map((input) => input.name),
+    ),
+  ]),
+);
+
+/**
+ * The Docs and Controls tables mark an input required from `argType.type.required`, which
+ * Storybook's Compodoc reader never sets, so without this no input shows as required.
+ */
+const markRequiredInputs: ArgTypesEnhancer = ({ argTypes, component }) => {
+  const required = requiredInputs.get(component?.name ?? '');
+  if (!required?.size) return argTypes;
+  return Object.fromEntries(
+    Object.entries(argTypes).map(([name, argType]) => [
+      name,
+      required.has(name) && argType.type
+        ? { ...argType, type: { ...argType.type, required: true } }
+        : argType,
+    ]),
+  );
+};
 
 /** Zoneless, like the library's specs and `build-storybook`'s `experimentalZoneless`. */
 const preview: Preview = {
@@ -37,9 +71,14 @@ const preview: Preview = {
       ],
     }),
   ],
+  argTypesEnhancers: [markRequiredInputs],
   parameters: {
     layout: 'centered',
     controls: { expanded: true },
+    // The panel observes; it does not judge. `docs/accessibility.md` gives the WCAG verdict to the
+    // axe runtime layer alone, and `todo` reports a violation as a warning where `error` would
+    // fail the story.
+    a11y: { test: 'todo' },
   },
 };
 
