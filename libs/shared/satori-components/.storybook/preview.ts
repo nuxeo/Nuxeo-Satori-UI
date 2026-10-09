@@ -10,7 +10,7 @@ import { setCompodocJson } from '@storybook/addon-docs/angular';
 import { applicationConfig, type Preview } from '@storybook/angular';
 import type { Observable } from 'rxjs';
 
-import documentation from '../../../../dist/compodoc/satori-components/documentation.json';
+import documentation from '../documentation.json';
 
 /**
  * The application's catalogue, served at `i18n/` by `main.ts`. Composite components translate their

@@ -132,7 +132,7 @@ What each story file documents, and where it comes from:
   ticket, branch or change history.
 - **Inputs, outputs, types and defaults** come from Compodoc, which both Storybook targets run
   first (`compodoc: true`; `compodocArgs` reads `tsconfig.lib.json` and writes
-  `dist/compodoc/satori-components/documentation.json`, leaving out private, protected,
+  the gitignored `libs/shared/satori-components/documentation.json`, leaving out private, protected,
   `@internal` and lifecycle members, and the source, templates and styles Storybook does not
   read — the JSON is bundled into the preview). An input's JSDoc is its description in the table, so keep
   it free of maintainer notes; put those in a `//` comment. `preview.ts` marks an input required
