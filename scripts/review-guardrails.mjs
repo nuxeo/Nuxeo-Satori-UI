@@ -6895,10 +6895,33 @@ function resolveFile(fromFile, specifier, pathMaps) {
 }
 
 /**
+ * An object literal member's key as JavaScript reads it: `stories`, `'stories'` and `['stories']`
+ * are one key. `undefined` for a spread, or for a key computed any other way.
+ */
+function staticPropertyKey(member) {
+  const name = member.name;
+  if (!name) return undefined;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (!ts.isComputedPropertyName(name)) return undefined;
+  let key = name.expression;
+  while (
+    ts.isParenthesizedExpression(key) ||
+    ts.isAsExpression(key) ||
+    ts.isSatisfiesExpression(key)
+  ) {
+    key = key.expression;
+  }
+  return ts.isStringLiteralLike(key) ? key.text : undefined;
+}
+
+/**
  * The `@Component` classes a module exports, by public name, following re-exports.
  *
  * `export class X` with a `@Component` decorator, `export { a as b } from './m'`,
- * `export * from './m'`, and an imported class re-exported by a bare `export { X }`.
+ * `export * from './m'`, and an imported or locally declared class exported by a bare
+ * `export { X }`.
  */
 function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
   // `ancestors` guards a re-export cycle along one path only: a module re-exported twice from
@@ -6933,11 +6956,21 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
       callee.name.text === 'Component'
     );
   };
+  const declared = new Set(
+    source.statements
+      .filter(
+        (statement) =>
+          ts.isClassDeclaration(statement) &&
+          statement.name &&
+          (ts.getDecorators(statement) ?? []).some(isComponentDecorator),
+      )
+      .map((statement) => statement.name.text),
+  );
 
   for (const statement of source.statements) {
     if (ts.isClassDeclaration(statement) && statement.name) {
       const exported = statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
-      if (exported && (ts.getDecorators(statement) ?? []).some(isComponentDecorator)) {
+      if (exported && declared.has(statement.name.text)) {
         found.set(statement.name.text, { file, className: statement.name.text });
       }
       continue;
@@ -6946,8 +6979,14 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
     if (!statement.moduleSpecifier) {
       if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) continue;
       for (const element of statement.exportClause.elements) {
-        const local = imported.get((element.propertyName ?? element.name).text);
-        if (element.isTypeOnly || !local) continue;
+        if (element.isTypeOnly) continue;
+        const localName = (element.propertyName ?? element.name).text;
+        if (declared.has(localName)) {
+          found.set(element.name.text, { file, className: localName });
+          continue;
+        }
+        const local = imported.get(localName);
+        if (!local) continue;
         const target = resolveFile(file, local.specifier, pathMaps);
         const origin =
           target && exportedComponentClasses(target, pathMaps, new Set(seen)).get(local.name);
@@ -7043,21 +7082,8 @@ function storiedComponents(storyFile, pathMaps) {
     );
     return covered;
   }
-  // A key as JavaScript reads it: `excludeStories`, `'excludeStories'` and `['excludeStories']` are
-  // one key. `undefined` for a key computed any other way.
-  const propertyKey = (p) => {
-    const name = p.name;
-    if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-      return name.text;
-    }
-    if (ts.isComputedPropertyName(name)) {
-      const key = unwrap(name.expression);
-      if (key && ts.isStringLiteralLike(key)) return key.text;
-    }
-    return undefined;
-  };
   // A computed key can be `excludeStories` as easily as anything else, so the file counts no story.
-  if (defaultExport.properties.some((p) => propertyKey(p) === undefined)) {
+  if (defaultExport.properties.some((p) => staticPropertyKey(p) === undefined)) {
     fail(
       `${storyFile} computes a key of its default-exported meta, so which of its exports are ` +
         'stories was not read and none was counted. Write each key as a name or a string.',
@@ -7068,7 +7094,7 @@ function storiedComponents(storyFile, pathMaps) {
   // (`{ excludeStories }`) is the file's top-level constant of that name; `undefined` when there is
   // none to read, or the key is a method or an accessor.
   const metaProperty = (name) => {
-    const property = defaultExport.properties.findLast((p) => propertyKey(p) === name);
+    const property = defaultExport.properties.findLast((p) => staticPropertyKey(p) === name);
     if (!property) return null;
     if (ts.isPropertyAssignment(property)) return unwrap(property.initializer);
     if (ts.isShorthandPropertyAssignment(property)) return unwrap(variables.get(name));
@@ -7152,7 +7178,9 @@ function storiedComponents(storyFile, pathMaps) {
 /**
  * The `stories` globs a Storybook `main.ts` exports, read from its syntax tree — the default export
  * or the constant it names, behind `satisfies` or `as` — so a comment mentioning a glob does not
- * count. `null` when the list is not string literals the guardrail can read.
+ * count. The last `stories` key is the one JavaScript keeps. `null` when the list is not string
+ * literals the guardrail can read, or the config has a spread or a computed key that could replace
+ * it.
  */
 function storybookStoryGlobs(main) {
   const source = ts.createSourceFile(main, read(main), ts.ScriptTarget.Latest, true);
@@ -7185,13 +7213,11 @@ function storybookStoryGlobs(main) {
     node && ts.isIdentifier(node) ? unwrap(variables.get(node.text)) : node;
   config = resolve(config);
   if (!config || !ts.isObjectLiteralExpression(config)) return null;
-  const property = config.properties.find(
-    (p) =>
-      (ts.isPropertyAssignment(p) || ts.isShorthandPropertyAssignment(p)) &&
-      (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) &&
-      p.name.text === 'stories',
-  );
+  if (config.properties.some((p) => staticPropertyKey(p) === undefined)) return null;
+  const property = config.properties.findLast((p) => staticPropertyKey(p) === 'stories');
   if (!property) return null;
+  if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property))
+    return null;
   const value = resolve(
     ts.isPropertyAssignment(property) ? unwrap(property.initializer) : property.name,
   );
@@ -7227,8 +7253,9 @@ function checkSatoriComponentsHaveStories() {
     const globs = storybookStoryGlobs(main);
     if (globs === null) {
       fail(
-        `${main} does not export a \`stories\` list of string literals, so whether Storybook ` +
-          'loads the stories this check counts was not read.',
+        `${main} does not export a \`stories\` list of string literals, with no spread or ` +
+          'computed key beside it, so whether Storybook loads the stories this check counts was ' +
+          'not read.',
       );
     } else if (!globs.includes(STORY_GLOB)) {
       fail(

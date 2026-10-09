@@ -6384,6 +6384,40 @@ expectRed(
   /exports `NxsThingComponent` .* no story documents it/,
 );
 
+// A class declared without `export` and exported later by a bare `export { X }` is exported all the same.
+const nxsComponentExportedLater = () =>
+  `${nxsComponent().replace('export class', 'class')}export { NxsThingComponent };\n`;
+
+expectRed(
+  'a component the barrel declares itself and exports by a bare export, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/src/index.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-local', standalone: true, template: '' })\n" +
+      'class NxsLocalComponent {}\nexport { NxsLocalComponent };\n' +
+      "export { NxsThingComponent } from './lib/thing/thing.component';\n",
+    [NXS_STORY]: nxsStory(),
+  }),
+  null,
+  /exports `NxsLocalComponent` \(libs\/shared\/satori-components\/src\/index\.ts\), and no story documents it/,
+);
+
+expectRed(
+  'a component its module declares and exports by a bare export, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_COMPONENT]: nxsComponentExportedLater() }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component its module declares and exports by a bare export, with a story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_COMPONENT]: nxsComponentExportedLater(), [NXS_STORY]: nxsStory() }),
+);
+
 expectRed(
   'a story file that mentions the component but documents another',
   'checkSatoriComponentsHaveStories',
@@ -6716,6 +6750,56 @@ expectGreen(
       "import type { StorybookConfig } from '@storybook/angular';\n" +
       "const config: StorybookConfig = { stories: ['../src/**/*.stories.ts'], addons: [] };\n" +
       'export default config;\n',
+  }),
+);
+
+// The config's keys are read as JavaScript reads them: the last `stories` wins, and a spread or a
+// computed key could be the one that replaces it.
+expectRed(
+  'a Storybook main.ts whose spread replaces the stories glob',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../src/**/*.stories.ts'], ...{ stories: ['../docs/**/*.mdx'] } };\n",
+  }),
+  null,
+  /main\.ts does not export a `stories` list of string literals, with no spread or computed key/,
+);
+
+expectRed(
+  'a Storybook main.ts whose later stories key replaces the glob',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../src/**/*.stories.ts'], ['stories']: ['../docs/**/*.mdx'] };\n",
+  }),
+  null,
+  /main\.ts does not load `\.\.\/src\/\*\*\/\*\.stories\.ts`/,
+);
+
+expectRed(
+  'a Storybook main.ts with a key computed from an expression',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "const KEY = 'stories';\n" +
+      "export default { stories: ['../src/**/*.stories.ts'], [KEY]: ['../docs/**/*.mdx'] };\n",
+  }),
+  null,
+  /main\.ts does not export a `stories` list of string literals, with no spread or computed key/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a Storybook main.ts whose last stories key loads the glob',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../docs/**/*.mdx'], ['stories']: ['../src/**/*.stories.ts'] };\n",
   }),
 );
 
