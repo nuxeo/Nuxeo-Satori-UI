@@ -56,7 +56,7 @@ const markRequiredInputs: ArgTypesEnhancer = ({ argTypes, component }) => {
   );
 };
 
-/** Zoneless, like the library's specs and `build-storybook`'s `experimentalZoneless`. */
+/** Zoneless, like the library's specs and both Storybook targets' `experimentalZoneless`. */
 const preview: Preview = {
   decorators: [
     applicationConfig({

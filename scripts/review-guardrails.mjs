@@ -7101,24 +7101,25 @@ function storiedComponents(storyFile, pathMaps) {
     return undefined;
   };
 
-  // Storybook builds a component's Docs page only for a meta tagged `autodocs`, so without it the
-  // file's stories render and the description, inputs and outputs are documented nowhere. Read for
-  // every story file, whether or not its meta names an exported component.
+  // Storybook generates a component's Docs page from a meta tagged `autodocs`, and this library
+  // loads no MDX, so without the tag the file's stories render with no page for the description,
+  // inputs and outputs. Read for every story file, whether or not its meta names an exported
+  // component.
   const tagsValue = metaProperty('tags');
   const tags =
     tagsValue && ts.isIdentifier(tagsValue) ? unwrap(variables.get(tagsValue.text)) : tagsValue;
   if (!tags || !ts.isArrayLiteralExpression(tags) || !tags.elements.every(ts.isStringLiteralLike)) {
     fail(
       `${storyFile} has no \`tags\` list of string literals on its default-exported meta, so ` +
-        "whether it carries `autodocs` was not read. Add `tags: ['autodocs']` — Storybook builds " +
-        'the Docs page that documents the component only for a meta tagged `autodocs`.',
+        "whether it carries `autodocs` was not read. Add `tags: ['autodocs']` — Storybook " +
+        'generates the Docs page that documents the component from a meta tagged `autodocs`.',
     );
   } else {
     const names = tags.elements.map((element) => element.text);
     if (!names.includes('autodocs') || names.includes('!autodocs')) {
       fail(
-        `${storyFile} does not tag its meta \`autodocs\`, so Storybook builds no Docs page for ` +
-          "it and the component's description, inputs and outputs are documented nowhere. Add " +
+        `${storyFile} does not tag its meta \`autodocs\`, so Storybook generates no Docs page ` +
+          "for it and the component's description, inputs and outputs are not shown. Add " +
           "`'autodocs'` to the meta's `tags`.",
       );
     }

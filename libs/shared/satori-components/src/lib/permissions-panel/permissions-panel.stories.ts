@@ -178,7 +178,7 @@ function inMemoryDocuments(
   };
 }
 
-/** Logs each call in the Actions panel, under the method's name, before the fake answers it. */
+/** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
 function logged<A extends unknown[], R>(
   name: string,
   method: (...args: A) => R,
