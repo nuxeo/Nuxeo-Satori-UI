@@ -100,7 +100,7 @@ gate, also in CI):
 | No `@alfresco/*` and no `@hylandsoftware/*` — imported directly (even when a tsconfig alias maps the name to a workspace file), reached through any workspace import, or loaded by a stylesheet or inline `styles`. A type-only import counts. Stylesheet paths are read from the syntax tree; one the guardrail cannot read statically fails | `checkSatoriComponentsDependencies`        |
 | Reached only through `@nuxeo-satori/platform/components`: no subpath under it, no relative path into the library, no second alias in any tsconfig (a project's own `paths` included), and the alias and `libs/platform/components/ng-package.json` both name `src/index.ts`                                                                   | `checkSatoriComponentsEntryPoint`          |
 | Federation readiness: no `@NgModule`, every component, directive and pipe says `standalone: true`, and no `providedIn` of any value                                                                                                                                                                                                           | `checkSatoriComponentsFederationReadiness` |
-| Every component the barrel exports has a `*.stories.ts` under `src/` whose meta says `component: <Class>` and exports a story, and `.storybook/main.ts` loads `../src/**/*.stories.ts`                                                                                                                                                        | `checkSatoriComponentsHaveStories`         |
+| Every component the barrel exports has a `*.stories.ts` under `src/` whose meta says `component: <Class>` and exports a story, and `.storybook/main.ts` loads `../src/**/*.stories.ts`. Every story file's meta carries the `autodocs` tag, so it has a Docs page                                                                             | `checkSatoriComponentsHaveStories`         |
 
 Satori is to reach these components only through a later, separate `/components-satori` entry
 point that re-registers the same IDs, so that once Satori is an optional peer of the package (the
@@ -122,6 +122,29 @@ and the default configuration's `styles` as well as `src/`. Whenever the library
 builds it with `@hylandsoftware` and `@alfresco` removed from `node_modules`, so an accidental
 Satori import fails the build rather than compiling. Only the opt-in `:satori` configuration reaches `@hylandsoftware/satori-ui`, for its theme.
 `typecheck` type-checks the stories too. Where the static build is hosted is not decided.
+
+What each story file documents, and where it comes from:
+
+- **Docs page** (`@storybook/addon-docs`): one per component, generated for a meta tagged
+  `autodocs`. Its description is the meta's `parameters.docs.description.component` — what the
+  component is, every input and output, what it calls and where its data comes from, and what the
+  stories replace — and each story's JSDoc renders under that story. Customer-facing, so no
+  ticket, branch or change history.
+- **Inputs, outputs, types and defaults** come from Compodoc, which both Storybook targets run
+  first (`compodoc: true`; `compodocArgs` reads `tsconfig.lib.json` and writes
+  `dist/compodoc/satori-components/documentation.json`, leaving out private, protected,
+  `@internal` and lifecycle members, and the source, templates and styles Storybook does not
+  read — the JSON is bundled into the preview). An input's JSDoc is its description in the table, so keep
+  it free of maintainer notes; put those in a `//` comment. `preview.ts` marks an input required
+  from Compodoc's `required`, which Storybook's Compodoc reader ignores, so no input would show as
+  required without it. `.storybook/compodoc.d.ts` types the import where Storybook has never run.
+- **Actions**: callback inputs and outputs are `fn()` args, and a story's in-memory fake of a
+  service logs each call with `action()` — the permissions panel's `DocumentDetailService` and the
+  Drive dialog's `NuxeoDriveService` do.
+- **Accessibility panel** (`@storybook/addon-a11y`): observation only. `preview.ts` sets
+  `a11y.test` to `todo`, which reports a violation as a warning; the WCAG verdict belongs to the
+  axe runtime layer in `docs/accessibility.md`. The lock resolves its `axe-core` to the 4.13.0
+  that `a11y/versions.mjs` records as the baseline engine.
 
 **Coverage: a hard 90% line floor** (`FLOORS` in `scripts/beta-harness/coverage-gate.mjs`), from
 the first commit rather than ratcheted, counted on distinct lines rather than statements. The
@@ -158,8 +181,10 @@ into the library to dodge the rule.
    `npx nx test satori-components --coverage.enabled=true`, then `npm run beta:coverage`.
 4. Export it from `src/index.ts`, run `npm run beta:api -- --update` and review the
    `docs/api/platform.api.md` diff, then `npm run beta:publishable`.
-5. `src/lib/<name>/<name>.stories.ts` with `component: Nxs<Name>Component` in its meta and a story
-   per meaningful state; `checkSatoriComponentsHaveStories` fails an exported component without one.
+5. `src/lib/<name>/<name>.stories.ts` with `component: Nxs<Name>Component`, `tags: ['autodocs']`
+   and a `parameters.docs.description.component` in its meta, and a story per meaningful state;
+   `checkSatoriComponentsHaveStories` fails an exported component without one, and a story file
+   without the tag. Callback inputs and outputs are `fn()` args.
    Stories and `.storybook/` are outside the coverage floor and SonarCloud, like specs.
 6. A new runtime dependency is a `libs/platform/package.json` peer, or is listed in
    `allowedNonPeerDependencies`.
