@@ -3,25 +3,40 @@ import { moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 
 import { NxsEmptyStateComponent } from './empty-state.component';
 
-/**
- * The strings below stand in for what a caller binds through its own translate pipe: the
- * library ships no catalogue, so every text input arrives already translated.
- */
+const componentDescription = `
+The "nothing here" message for a list, panel or result set: a heading, an optional second line, an
+optional icon, and whatever actions the host places inside it.
+
+Text arrives already translated — the library ships no translations of its own — so a host binds its
+own keys, for example \`[heading]="'browse.empty' | translate"\`. Buttons such as "Create folder" or
+"Clear filters" are projected as content, so they and what they do stay the host's. The component is a
+status region, so assistive technology announces it when it appears.
+
+**Inputs**
+
+- \`heading\` — \`string\`, **required**. What is empty, in one line.
+- \`headingLevel\` — \`1\` to \`6\`, optional, default \`2\`. The heading's level in the page outline,
+  rendered as the native \`<h1>\`–\`<h6>\`. Set it one below the heading of the section it empties.
+- \`message\` — \`string\`, optional, default \`''\`. A second line, usually what to do next. Not shown
+  when blank.
+- \`icon\` — \`string\`, optional, default \`''\`. A Material Icons ligature such as \`search_off\`.
+  Decorative, so hidden from assistive technology.
+
+It emits nothing and calls nothing; projected buttons raise their own events. In these stories the
+text is plain strings standing in for what a host translates.
+`;
+
 const meta: Meta<NxsEmptyStateComponent> = {
   title: 'States/Empty state',
   component: NxsEmptyStateComponent,
+  tags: ['autodocs'],
   args: {
     heading: 'This folder is empty',
     message: '',
     icon: '',
   },
-  argTypes: {
-    heading: { control: 'text', description: 'What is empty, in one line. Required.' },
-    message: { control: 'text', description: 'What to do next. Not rendered when blank.' },
-    icon: {
-      control: 'text',
-      description: 'A Material icon ligature, hidden from assistive technology.',
-    },
+  parameters: {
+    docs: { description: { component: componentDescription } },
   },
 };
 

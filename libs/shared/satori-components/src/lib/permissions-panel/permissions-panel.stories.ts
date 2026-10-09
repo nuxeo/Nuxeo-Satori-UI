@@ -1,6 +1,8 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { defer, of, throwError, type Observable } from 'rxjs';
+import { action } from 'storybook/actions';
+import { fn } from 'storybook/test';
 
 import {
   DocumentDetailService,
@@ -154,17 +156,36 @@ function inMemoryDocuments(
   });
 
   return {
-    getDocumentPermissions: read,
-    addPermission: (uid, params) => written(uid, () => (local = [...local, entry(params)])),
-    replacePermission: (uid, params) =>
+    getDocumentPermissions: logged('getDocumentPermissions', read),
+    addPermission: logged('addPermission', (uid, params) =>
+      written(uid, () => (local = [...local, entry(params)])),
+    ),
+    replacePermission: logged('replacePermission', (uid, params) =>
       written(uid, () => (local = local.map((e) => (e.id === params.id ? entry(params) : e)))),
-    removePermissionById: (uid, id) =>
+    ),
+    removePermissionById: logged('removePermissionById', (uid, id) =>
       written(uid, () => (local = local.filter((e) => e.id !== id))),
-    blockPermissionInheritance: (uid) => written(uid, () => (local = [...local, BLOCK])),
-    unblockPermissionInheritance: (uid) =>
+    ),
+    blockPermissionInheritance: logged('blockPermissionInheritance', (uid) =>
+      written(uid, () => (local = [...local, BLOCK])),
+    ),
+    unblockPermissionInheritance: logged('unblockPermissionInheritance', (uid) =>
       written(uid, () => (local = local.filter((e) => e.id !== BLOCK.id))),
-    searchUsersGroups: (term) =>
+    ),
+    searchUsersGroups: logged('searchUsersGroups', (term) =>
       of(PRINCIPALS.filter((p) => p.displayLabel.toLowerCase().includes(term.toLowerCase()))),
+    ),
+  };
+}
+
+/** Logs each call in the Actions panel, under the method's name, before the fake answers it. */
+function logged<A extends unknown[], R>(
+  name: string,
+  method: (...args: A) => R,
+): (...args: A) => R {
+  return (...args) => {
+    action(name)(...args);
+    return method(...args);
   };
 }
 
@@ -184,27 +205,65 @@ const SHARED: Fixture = {
   permissions: EVERYTHING,
 };
 
-/**
- * A document's permissions, read from and written to Nuxeo through `DocumentDetailService`. These
- * stories hold the ACL in memory instead, so add, edit, remove, Save and blocking inheritance all
- * work here and reset on reload.
- */
+const componentDescription = `
+A document's permissions: the entries set on the document itself, the ones it inherits from its
+parents, whether inheritance is blocked, and each entry's time frame and status. A user allowed to
+manage permissions can add, edit and remove the document's own entries, and block or restore
+inheritance.
+
+**Inputs**
+
+- \`documentId\` — \`string\`, **required**, and the panel's only required input. The uid of the
+  document whose permissions to show.
+- \`permissionsChanged\` — \`(() => void) | null\`, optional, default \`null\`. A callback, not an
+  output: the panel calls it after any write that may have changed the document's permissions, so a
+  host showing other permission-derived content can read it again.
+
+**Where its data comes from**
+
+Everything goes through the platform's \`DocumentDetailService\`, so every request carries the
+application's sign-in. The panel reads the document with three enrichers:
+
+- \`acls\` fills the tables: the document's own entries, the inherited ones, and any other named
+  list, which is shown read-only.
+- \`permissions\` decides whether the panel is editable. Holding \`WriteSecurity\` or \`Everything\`
+  makes it editable; with anything less the same tables are shown read-only.
+- \`userVisiblePermissions\` fills the permission dropdown's suggested group. Nuxeo's standard
+  permissions, and any others \`permissions\` reports, follow it.
+
+**What it calls**
+
+Edits are staged and applied on **Save**, one call per entry — \`addPermission\`,
+\`replacePermission\` or \`removePermissionById\` — so an entry the user did not touch is never
+rewritten. Just before writing, the panel reads the document again and refuses the whole save,
+naming each entry and why, if any change cannot be written as shown — because the entry changed on
+the server meanwhile, for example. Afterwards it reads once more and reports any change the server
+does not show. Blocking and restoring inheritance call \`blockPermissionInheritance\` and
+\`unblockPermissionInheritance\`, and the user and group search calls \`searchUsersGroups\`.
+
+Hiding a control is not the security boundary: Nuxeo checks every write. Labels and permission
+names are translated from the application's catalogue. Sharing with external users is not shown
+here; the host owns that.
+
+**In these stories** \`DocumentDetailService\` is replaced by an in-memory fake holding one
+document's permissions. Adding, editing, removing, saving and blocking inheritance all work, nothing
+is sent to a server, and the fake starts again from its fixture on reload. Every call the panel makes
+to it is logged in the **Actions** panel, and so is \`permissionsChanged\`.
+`;
+
 const meta: Meta<NxsPermissionsPanelComponent> = {
   title: 'Panels/Permissions panel',
   component: NxsPermissionsPanelComponent,
-  args: { documentId: 'claims-2026' },
+  tags: ['autodocs'],
+  args: { documentId: 'claims-2026', permissionsChanged: fn() },
   argTypes: {
-    documentId: {
-      control: false,
-      description: 'The uid of the document whose permissions to show. Required.',
-    },
-    permissionsChanged: {
-      control: false,
-      description:
-        'Called after a write that may have changed the ACL, so a host can read what it derives again.',
-    },
+    documentId: { control: false },
+    permissionsChanged: { control: false },
   },
-  parameters: { layout: 'padded' },
+  parameters: {
+    layout: 'padded',
+    docs: { description: { component: componentDescription } },
+  },
 };
 
 export default meta;

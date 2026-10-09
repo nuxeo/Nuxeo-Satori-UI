@@ -4,34 +4,45 @@ import { moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 
 import { NxsFolderHeaderComponent } from './folder-header.component';
 
-/**
- * The strings below stand in for what a caller binds through its own translate pipe. Actions are
- * projected, so the buttons and what they do stay the caller's.
- */
+const componentDescription = `
+The header above a folder's or other container's contents: its type icon, its title as the page
+heading, an optional second line, and the container's actions on the right.
+
+The actions are projected as they are, so the host keeps its own buttons, menus and handlers.
+Anything marked with the \`nxsFolderHeaderDetail\` attribute — a breadcrumb trail, say — is projected
+under the title instead. On a narrow screen the actions drop below the title. While the container is
+loading, leave \`heading\` blank: the header then renders no heading rather than an empty one.
+
+**Inputs**
+
+- \`heading\` — \`string\`, optional, default \`''\`. The container's title. Blank renders no heading.
+- \`headingLevel\` — \`1\` to \`6\`, optional, default \`1\`. The title's level in the page outline,
+  rendered as the native \`<h1>\`–\`<h6>\`. The header is usually the page's own heading; lower it
+  where it sits inside a section that already has one.
+- \`subheading\` — \`string\`, optional, default \`''\`. A second line under the title, usually the
+  type's name, already translated.
+- \`documentType\` — \`string\`, optional, default \`''\`. The container's Nuxeo type, which picks
+  the icon. Blank renders no icon.
+
+It emits nothing and calls nothing; projected buttons raise their own events. In these stories the
+text is plain strings standing in for what a host translates, and the buttons do nothing.
+`;
+
 const meta: Meta<NxsFolderHeaderComponent> = {
   title: 'Panels/Folder header',
   component: NxsFolderHeaderComponent,
+  tags: ['autodocs'],
   args: {
     heading: 'Claims 2026',
     headingLevel: 1,
     subheading: 'Folder',
     documentType: 'Folder',
   },
-  argTypes: {
-    heading: { control: 'text', description: "The container's title. Blank renders no heading." },
-    headingLevel: {
-      control: { type: 'select' },
-      options: [1, 2, 3, 4, 5, 6],
-      description: "The title's level in the page outline.",
-    },
-    subheading: { control: 'text', description: 'A second line under the title.' },
-    documentType: {
-      control: 'text',
-      description: "The container's Nuxeo type, which picks the icon. Blank renders no icon.",
-    },
-  },
   decorators: [moduleMetadata({ imports: [MatButtonModule, MatIconModule] })],
-  parameters: { layout: 'padded' },
+  parameters: {
+    layout: 'padded',
+    docs: { description: { component: componentDescription } },
+  },
   render: (args) => ({
     props: args,
     template: `

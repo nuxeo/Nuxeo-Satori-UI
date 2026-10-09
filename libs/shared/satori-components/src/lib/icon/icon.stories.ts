@@ -2,17 +2,31 @@ import type { Meta, StoryObj } from '@storybook/angular';
 
 import { NxsIconComponent } from './icon.component';
 
-/** The `label` below stands in for what a caller binds through its own translate pipe. */
+const componentDescription = `
+One icon, named by its Material Icons ligature — \`folder\`, \`description\`, \`collections_bookmark\`.
+
+It is decorative unless given a \`label\`. An icon beside text that already says the same thing is
+hidden from assistive technology; an icon that stands alone is announced as an image with that name.
+Its size comes from the \`--nxs-icon-size\` custom property (24px by default) and its colour from
+\`color\`. Both are inherited, so a host sets them on the icon or on any ancestor.
+
+**Inputs**
+
+- \`name\` — \`string\`, **required**. The Material Icons ligature.
+- \`label\` — \`string\`, optional, default \`''\`. What the icon means, already translated. Blank
+  makes it decorative.
+
+It emits nothing and calls nothing. The glyphs come from Google's Material Icons font, which the page
+loads. In these stories the label is plain text standing in for what a host translates.
+`;
+
 const meta: Meta<NxsIconComponent> = {
   title: 'Primitives/Icon',
   component: NxsIconComponent,
+  tags: ['autodocs'],
   args: { name: 'folder', label: '' },
-  argTypes: {
-    name: { control: 'text', description: 'A Material Icons ligature. Required.' },
-    label: {
-      control: 'text',
-      description: 'What the icon means, already translated. Blank makes it decorative.',
-    },
+  parameters: {
+    docs: { description: { component: componentDescription } },
   },
 };
 
