@@ -6981,6 +6981,10 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
  *
  * A story is a named export Storybook renders: the meta's `includeStories` and `excludeStories`
  * apply, as a list of names or a regex literal. One the guardrail cannot read is a failure.
+ *
+ * Every readable meta must also be tagged `autodocs`, so the file has a Docs page; that is checked
+ * here because this is where the meta is read. A missing tag fails the file; it does not change
+ * which components the file is counted as documenting.
  */
 function storiedComponents(storyFile, pathMaps) {
   const covered = new Set();
@@ -7070,6 +7074,29 @@ function storiedComponents(storyFile, pathMaps) {
     if (ts.isShorthandPropertyAssignment(property)) return unwrap(variables.get(name));
     return undefined;
   };
+
+  // Storybook builds a component's Docs page only for a meta tagged `autodocs`, so without it the
+  // file's stories render and the description, inputs and outputs are documented nowhere. Read for
+  // every story file, whether or not its meta names an exported component.
+  const tagsValue = metaProperty('tags');
+  const tags =
+    tagsValue && ts.isIdentifier(tagsValue) ? unwrap(variables.get(tagsValue.text)) : tagsValue;
+  if (!tags || !ts.isArrayLiteralExpression(tags) || !tags.elements.every(ts.isStringLiteralLike)) {
+    fail(
+      `${storyFile} has no \`tags\` list of string literals on its default-exported meta, so ` +
+        "whether it carries `autodocs` was not read. Add `tags: ['autodocs']` — Storybook builds " +
+        'the Docs page that documents the component only for a meta tagged `autodocs`.',
+    );
+  } else {
+    const names = tags.elements.map((element) => element.text);
+    if (!names.includes('autodocs') || names.includes('!autodocs')) {
+      fail(
+        `${storyFile} does not tag its meta \`autodocs\`, so Storybook builds no Docs page for ` +
+          "it and the component's description, inputs and outputs are documented nowhere. Add " +
+          "`'autodocs'` to the meta's `tags`.",
+      );
+    }
+  }
 
   // `includeStories` / `excludeStories` as Storybook applies them; `undefined` when unreadable.
   const storyFilter = (name) => {
@@ -7180,7 +7207,8 @@ function storybookStoryGlobs(main) {
  * without a story ships undocumented. Read from the barrel, because an exported component is a
  * published one. A story is a `*.stories.ts` under `src/` — the glob `.storybook/main.ts` loads,
  * which is checked too — whose meta names the class as `component:`; a file that only mentions the
- * class, or names it with no story exported, does not count.
+ * class, or names it with no story exported, does not count. Every story file's meta must carry
+ * the `autodocs` tag, so each one has a Docs page (see `storiedComponents`).
  */
 function checkSatoriComponentsHaveStories() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;

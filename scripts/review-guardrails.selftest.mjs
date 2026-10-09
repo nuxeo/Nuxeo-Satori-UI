@@ -6300,7 +6300,7 @@ expectGreen(
 const NXS_STORY = `${NXS_ROOT}/src/lib/thing/thing.stories.ts`;
 const nxsStory = ({
   imports = "import { NxsThingComponent } from './thing.component';",
-  meta = 'const meta: Meta<NxsThingComponent> = { component: NxsThingComponent };\nexport default meta;',
+  meta = "const meta: Meta<NxsThingComponent> = { component: NxsThingComponent, tags: ['autodocs'] };\nexport default meta;",
   stories = 'export const Basic: StoryObj<NxsThingComponent> = {};',
 } = {}) =>
   `import type { Meta, StoryObj } from '@storybook/angular';\n${imports}\n${meta}\n${stories}\n`;
@@ -6317,7 +6317,7 @@ expectGreen(
   'checkSatoriComponentsHaveStories',
   NXS_STORYBOOK({
     [NXS_STORY]: nxsStory({
-      meta: 'export default { component: NxsThingComponent } satisfies Meta<NxsThingComponent>;',
+      meta: "export default { component: NxsThingComponent, tags: ['autodocs'] } satisfies Meta<NxsThingComponent>;",
     }),
   }),
 );
@@ -6349,7 +6349,7 @@ expectGreen(
     [NXS_STORY]: nxsStory(),
     [`${NXS_ROOT}/src/lib/thing/other.stories.ts`]: nxsStory({
       imports: "import { NxsOtherComponent } from './thing.component';",
-      meta: 'export default { component: NxsOtherComponent } as Meta<NxsOtherComponent>;',
+      meta: "export default { component: NxsOtherComponent, tags: ['autodocs'] } as Meta<NxsOtherComponent>;",
       stories: 'export const Basic: StoryObj<NxsOtherComponent> = {};',
     }),
   }),
@@ -6391,7 +6391,7 @@ expectRed(
     [NXS_STORY]: nxsStory({
       imports:
         "import { NxsThingComponent } from './thing.component';\nimport { Other } from './other';",
-      meta: 'export default { component: Other, title: `${NxsThingComponent.name}` };',
+      meta: "export default { component: Other, title: `${NxsThingComponent.name}`, tags: ['autodocs'] };",
     }),
     [`${NXS_ROOT}/src/lib/thing/other.ts`]: 'export class Other {}\n',
   }),
@@ -6432,7 +6432,7 @@ expectRed(
 
 // A story is a named export Storybook renders, after the meta's `includeStories`/`excludeStories`.
 const filteredMeta = (filter) =>
-  `export default { component: NxsThingComponent, ${filter} } satisfies Meta<NxsThingComponent>;`;
+  `export default { component: NxsThingComponent, tags: ['autodocs'], ${filter} } satisfies Meta<NxsThingComponent>;`;
 
 expectRed(
   'a meta whose excludeStories filters out its only export',
@@ -6598,6 +6598,85 @@ expectGreen(
     [NXS_STORY]: nxsStory({
       meta: filteredMeta("['excludeStories']: ['fixture']"),
       stories: 'export const fixture = {};\nexport const Basic: StoryObj<NxsThingComponent> = {};',
+    }),
+  }),
+);
+
+// Every story file's meta carries `autodocs`, so each component has a Docs page.
+expectRed(
+  'a story meta with no tags',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: 'const meta: Meta<NxsThingComponent> = { component: NxsThingComponent };\nexport default meta;',
+    }),
+  }),
+  null,
+  /thing\.stories\.ts has no `tags` list of string literals on its default-exported meta/,
+);
+
+expectRed(
+  'a story meta whose tags leave out autodocs',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "export default { component: NxsThingComponent, tags: ['dev'] } satisfies Meta<NxsThingComponent>;",
+    }),
+  }),
+  null,
+  /thing\.stories\.ts does not tag its meta `autodocs`/,
+);
+
+expectRed(
+  'a story meta that tags autodocs and then removes it',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "export default { component: NxsThingComponent, tags: ['autodocs', '!autodocs'] } satisfies Meta<NxsThingComponent>;",
+    }),
+  }),
+  null,
+  /thing\.stories\.ts does not tag its meta `autodocs`/,
+);
+
+expectRed(
+  'a story meta whose tags the guardrail cannot read',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports:
+        "import { NxsThingComponent } from './thing.component';\nimport { TAGS } from './tags';",
+      meta: 'export default { component: NxsThingComponent, tags: TAGS } satisfies Meta<NxsThingComponent>;',
+    }),
+  }),
+  null,
+  /thing\.stories\.ts has no `tags` list of string literals on its default-exported meta/,
+);
+
+// The exported component is documented by a tagged file; a second, untagged one still fails.
+expectRed(
+  'an untagged story file beside a tagged one for the same component',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [`${NXS_ROOT}/src/lib/thing/thing-states.stories.ts`]: nxsStory({
+      meta: 'export default { component: NxsThingComponent } satisfies Meta<NxsThingComponent>;',
+    }),
+  }),
+  null,
+  /thing-states\.stories\.ts has no `tags` list of string literals/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story meta whose tags are a top-level constant, as a shorthand and by name',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "const tags = ['autodocs', 'dev'];\nexport default { component: NxsThingComponent, tags } satisfies Meta<NxsThingComponent>;",
+    }),
+    [`${NXS_ROOT}/src/lib/thing/thing-states.stories.ts`]: nxsStory({
+      meta: "const TAGS = ['autodocs'];\nexport default { component: NxsThingComponent, tags: TAGS } satisfies Meta<NxsThingComponent>;",
     }),
   }),
 );
