@@ -16,6 +16,8 @@
     "vite.config.mts",
     "vitest.config.ts",
     "vitest.config.mts",
-    "src/test-setup.ts"
+    "src/test-setup.ts",
+    "**/*.stories.ts",
+    "**/*.stories.js"
   ]
 }

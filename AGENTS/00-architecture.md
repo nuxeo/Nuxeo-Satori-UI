@@ -100,11 +100,28 @@ gate, also in CI):
 | No `@alfresco/*` and no `@hylandsoftware/*` — imported directly (even when a tsconfig alias maps the name to a workspace file), reached through any workspace import, or loaded by a stylesheet or inline `styles`. A type-only import counts. Stylesheet paths are read from the syntax tree; one the guardrail cannot read statically fails | `checkSatoriComponentsDependencies`        |
 | Reached only through `@nuxeo-satori/platform/components`: no subpath under it, no relative path into the library, no second alias in any tsconfig (a project's own `paths` included), and the alias and `libs/platform/components/ng-package.json` both name `src/index.ts`                                                                   | `checkSatoriComponentsEntryPoint`          |
 | Federation readiness: no `@NgModule`, every component, directive and pipe says `standalone: true`, and no `providedIn` of any value                                                                                                                                                                                                           | `checkSatoriComponentsFederationReadiness` |
+| Every component the barrel exports has a `*.stories.ts` under `src/` whose meta says `component: <Class>` and exports a story, and `.storybook/main.ts` loads `../src/**/*.stories.ts`                                                                                                                                                        | `checkSatoriComponentsHaveStories`         |
 
 Satori is to reach these components only through a later, separate `/components-satori` entry
 point that re-registers the same IDs, so that once Satori is an optional peer of the package (the
 plan's `satori-fallback` work), a customer without GitHub Packages access still gets the Material
 implementations.
+
+**Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library, one story per
+exported component:
+
+```bash
+npx nx run satori-components:storybook              # dev server on :6006
+npx nx run satori-components:build-storybook        # static build, dist/storybook/satori-components
+npx nx run satori-components:build-storybook:satori # the same under Satori's theme; needs the token
+```
+
+The default build needs **no GitHub Packages token**: it themes with plain `mat.theme`
+(`.storybook/material-theme.scss`), and `checkSatoriComponentsDependencies` covers `.storybook/*.ts`
+and the default configuration's `styles` as well as `src/`. Whenever the library is affected, CI
+builds it with `@hylandsoftware` and `@alfresco` removed from `node_modules`, so an accidental
+Satori import fails the build rather than compiling. Only the opt-in `:satori` configuration reaches `@hylandsoftware/satori-ui`, for its theme.
+`typecheck` type-checks the stories too. Where the static build is hosted is not decided.
 
 **Coverage: a hard 90% line floor** (`FLOORS` in `scripts/beta-harness/coverage-gate.mjs`), from
 the first commit rather than ratcheted, counted on distinct lines rather than statements. The
@@ -141,14 +158,17 @@ into the library to dodge the rule.
    `npx nx test satori-components --coverage.enabled=true`, then `npm run beta:coverage`.
 4. Export it from `src/index.ts`, run `npm run beta:api -- --update` and review the
    `docs/api/platform.api.md` diff, then `npm run beta:publishable`.
-5. A new runtime dependency is a `libs/platform/package.json` peer, or is listed in
+5. `src/lib/<name>/<name>.stories.ts` with `component: Nxs<Name>Component` in its meta and a story
+   per meaningful state; `checkSatoriComponentsHaveStories` fails an exported component without one.
+   Stories and `.storybook/` are outside the coverage floor and SonarCloud, like specs.
+6. A new runtime dependency is a `libs/platform/package.json` peer, or is listed in
    `allowedNonPeerDependencies`.
-6. Shared state is an `InjectionToken` with an exported `provide…()` function, never `providedIn`.
+7. Shared state is an `InjectionToken` with an exported `provide…()` function, never `providedIn`.
    A service only one component uses goes in that component's `providers`, as
    `NxsPermissionsService` does.
-7. Members only the template uses are `protected`, so the component's contract is its inputs and
+8. Members only the template uses are `protected`, so the component's contract is its inputs and
    outputs. Specs reach them by element access (`panel()['save']()`).
-8. A component that replaces packaged markup is registered by ID (`nxs.<group>.<name>`, exported as
+9. A component that replaces packaged markup is registered by ID (`nxs.<group>.<name>`, exported as
    a constant) and rendered through `lib-extension-outlet` with the component as the unresolved
    fallback, so a customer library can re-register the ID. `beta:reference` checks `nxs.*` IDs
    against `docs/extension-reference.md` as it does `app.*` ones.

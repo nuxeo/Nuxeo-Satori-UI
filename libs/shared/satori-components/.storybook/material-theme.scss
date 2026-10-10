@@ -1,0 +1,32 @@
+// The default Storybook theme: Angular Material's own, so the build needs no Satori token.
+//
+// Satori's `sat.theme` (apps/nuxeo-ui/src/styles.scss) is built on `mat.theme` and defines the
+// same `--mat-sys-*` tokens the components read, so a component renders here with the same
+// structure and token names it has in the product, in Material's colours rather than Satori's.
+// `nx run satori-components:build-storybook:satori` swaps in `satori-theme.scss` instead.
+@use '@angular/material' as mat;
+
+html {
+  color-scheme: light;
+  @include mat.theme(
+    (
+      color: (
+        theme-type: light,
+        primary: mat.$azure-palette,
+        tertiary: mat.$violet-palette,
+      ),
+      typography: (
+        plain-family: 'Roboto, Arial, sans-serif',
+        brand-family: 'Roboto, Arial, sans-serif',
+      ),
+      density: 0,
+    )
+  );
+}
+
+body {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+}
