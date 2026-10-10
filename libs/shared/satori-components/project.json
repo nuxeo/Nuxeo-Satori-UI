@@ -12,8 +12,9 @@
       "inputs": ["default", "^default"],
       "outputs": ["{workspaceRoot}/dist/out-tsc/libs/shared/satori-components"],
       "options": {
-        "command": "ngc -p libs/shared/satori-components/tsconfig.lib.json --outDir dist/out-tsc/libs/shared/satori-components"
-      }
+        "command": "ngc -p libs/shared/satori-components/tsconfig.lib.json --outDir dist/out-tsc/libs/shared/satori-components && tsc -p libs/shared/satori-components/.storybook/tsconfig.json --noEmit"
+      },
+      "$comment": "The second half type-checks the stories and `.storybook/preview.ts`, which `tsconfig.lib.json` excludes and Vitest never compiles."
     },
     "test": {
       "executor": "@nx/vitest:test",
@@ -24,6 +25,52 @@
     },
     "lint": {
       "executor": "@nx/eslint:lint"
+    },
+    "storybook": {
+      "executor": "@storybook/angular:start-storybook",
+      "options": {
+        "port": 6006,
+        "configDir": "libs/shared/satori-components/.storybook",
+        "browserTarget": "satori-components:build-storybook",
+        "compodoc": false
+      },
+      "configurations": {
+        "ci": {
+          "quiet": true
+        },
+        "satori": {
+          "browserTarget": "satori-components:build-storybook:satori"
+        }
+      }
+    },
+    "build-storybook": {
+      "executor": "@storybook/angular:build-storybook",
+      "outputs": ["{options.outputDir}"],
+      "inputs": [
+        "default",
+        "^production",
+        "{projectRoot}/.storybook/**/*",
+        "{workspaceRoot}/apps/nuxeo-ui/public/i18n/**/*"
+      ],
+      "options": {
+        "outputDir": "dist/storybook/satori-components",
+        "configDir": "libs/shared/satori-components/.storybook",
+        "browserTarget": "satori-components:build-storybook",
+        "tsConfig": "libs/shared/satori-components/.storybook/tsconfig.json",
+        "styles": ["libs/shared/satori-components/.storybook/material-theme.scss"],
+        "experimentalZoneless": true,
+        "compodoc": false
+      },
+      "configurations": {
+        "ci": {
+          "quiet": true
+        },
+        "satori": {
+          "outputDir": "dist/storybook/satori-components-satori-theme",
+          "styles": ["libs/shared/satori-components/.storybook/satori-theme.scss"]
+        }
+      },
+      "$comment": "The default configuration needs no GitHub Packages token: `checkSatoriComponentsDependencies` reads `options.styles` and the files under `.storybook/`, and CI builds it with `@hylandsoftware` and `@alfresco` removed from node_modules. `:satori` is the product theme and needs `@hylandsoftware/satori-ui` installed."
     }
   }
 }

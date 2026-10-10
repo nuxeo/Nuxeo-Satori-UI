@@ -685,8 +685,11 @@ async function findUnmeasured(root, data) {
   const out = [];
   for await (const f of walk(abs, ['node_modules', 'dist', 'coverage', '.nx'])) {
     if (!f.endsWith('.ts')) continue;
-    // Specs, type-only declarations and the test harness carry no shippable statements.
-    if (/\.spec\.ts$|\.d\.ts$|(^|\/)test-setup\.ts$/.test(f)) continue;
+    // Specs, type-only declarations, the test harness, stories and the Storybook config carry no
+    // shippable statements: each is excluded from the project's `tsconfig.lib.json`.
+    if (/\.spec\.ts$|\.d\.ts$|(^|\/)test-setup\.ts$|\.stories\.ts$|\/\.storybook\//.test(f)) {
+      continue;
+    }
     const n = statementsByFile.get(f);
     if (n === undefined) out.push({ file: relative(repoRoot, f), why: 'absent' });
     else if (n === 0) out.push({ file: relative(repoRoot, f), why: 'empty' });
