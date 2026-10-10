@@ -179,6 +179,31 @@ jobs:
       - name: Typecheck affected projects
         run: npx nx affected -t typecheck --base=$NX_BASE --head=$NX_HEAD
 
+      # The `nxs-` library's Storybook must build without a GitHub Packages token (NXSAT-308, plan
+      # section 9.4). Built here with `@hylandsoftware` and `@alfresco` REMOVED from node_modules,
+      # because with them installed an accidental Satori import compiles and the claim is untested.
+      # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
+      # proves it. About a minute, so only when the library is affected — and a skip says so.
+      - name: Storybook builds without GitHub Packages (satori-components)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Captured first, so a failing query fails the step instead of reading as "not affected".
+          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
+          if ! grep -qx satori-components <<<"$affected"; then
+            echo "satori-components is not affected: Storybook build NOT RUN"
+            exit 0
+          fi
+          hidden="$RUNNER_TEMP/github-packages-scopes"
+          mkdir -p "$hidden"
+          restore() { for scope in "$hidden"/@*; do if [ -e "$scope" ]; then mv "$scope" node_modules/; fi; done; }
+          trap restore EXIT
+          # A scope the tree no longer installs is already absent, which is what this build tests.
+          for scope in @hylandsoftware @alfresco; do
+            if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
+          done
+          npx nx run satori-components:build-storybook:ci --skip-nx-cache
+
       # The three checks that guard the published package. Run unconditionally rather
       # than only when affected: they are ~30s in total, and they are the checks that
       # catch the expensive class of defect — both of the ones below were configuration
