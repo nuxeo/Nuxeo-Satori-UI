@@ -41,44 +41,23 @@ const withDrive = (hasDriveToken: () => Observable<boolean>) => {
   return applicationConfig({ providers });
 };
 
-const componentDescription = `
-"Open with Nuxeo Drive", shown as a Material dialog. A host opens it with
-\`dialog.open(NxsDriveDialogComponent, { data: { folderPath } })\`.
-
-When it opens it asks Nuxeo, through the platform's \`NuxeoDriveService\`, whether the current user
-has a Nuxeo Drive token. With one, it hands Drive the folder through an \`nxdrive://direct-transfer\`
-link and closes itself. Without one — or when the check fails — it offers the Drive installers for
-Linux, macOS and Windows, and a Close button.
-
-**Inputs**
-
-None. It reads the dialog's data instead:
-
-- \`folderPath\` — \`string\`, optional. The repository folder Drive should open; the repository root
-  when absent.
-
-**What it calls**
-
-- \`NuxeoDriveService.hasDriveToken()\`, once, when it opens.
-- With a token: \`buildDirectTransferUrl(folderPath)\`, then \`openDriveUrl(…)\`, then
-  \`MatDialogRef.close()\`.
-- The Close button: \`MatDialogRef.close()\`.
-
-It emits nothing; the dialog reference is how it reports closing. Its title, labels and button are
-translated from the application's catalogue.
-
-**In these stories** the dialog is shown inline rather than over the page, and \`NuxeoDriveService\`
-and the dialog reference are fakes that never contact Nuxeo and close nothing. Every call they receive
-is logged in the **Actions** panel. With a token the dialog would close at once, so only the two
-states a user sees are shown.
-`;
-
 const meta: Meta<NxsDriveDialogComponent> = {
   title: 'Dialogs/Nuxeo Drive',
   component: NxsDriveDialogComponent,
   tags: ['autodocs'],
   parameters: {
-    docs: { description: { component: componentDescription } },
+    // The preview shows the dialog inline; a page opens it through MatDialog, so the code shown is
+    // that call rather than the preview's wrapper.
+    docs: {
+      // It has no inputs; the API page lists the dialog data it reads instead.
+      api: { types: ['NxsDriveDialogData'] },
+      source: {
+        language: 'typescript',
+        code: `this.dialog.open(NxsDriveDialogComponent, {
+  data: { folderPath: '/default-domain/workspaces/claims' },
+});`,
+      },
+    },
   },
   render: () => ({
     template: `

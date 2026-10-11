@@ -12,7 +12,7 @@ const meta: Meta<NxsTagComponent> = {
   title: 'Primitives/Tag',
   component: NxsTagComponent,
   tags: ['autodocs'],
-  args: { label: 'File', color: 'gray' },
+  args: { label: 'Invoice', color: 'purple' },
   argTypes: { color: { control: 'select', options: COLOURS } },
 };
 
@@ -22,16 +22,23 @@ type Story = StoryObj<NxsTagComponent>;
 
 export const Default: Story = {};
 
+/** Every colour. These examples show fixed markup. */
 export const Colours: Story = {
-  render: (args) => ({
-    props: { ...args, colours: COLOURS },
-    template: `
-      <div style="display: flex; flex-wrap: wrap; gap: 8px">
-        @for (colour of colours; track colour) {
-          <nxs-tag [label]="colour" [color]="colour" />
-        }
-      </div>
-    `,
+  parameters: { controls: { disable: true } },
+  render: () => ({
+    template: `<div style="display: flex; flex-wrap: wrap; gap: 8px">
+${COLOURS.map((colour) => `  <nxs-tag label="${colour}" color="${colour}" />`).join('\n')}
+</div>`,
+  }),
+};
+
+/** A label longer than the space it has is cut short with an ellipsis. */
+export const LongLabel: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => ({
+    template: `<div style="inline-size: 160px">
+  <nxs-tag label="Supplier contract renewal" color="teal" />
+</div>`,
   }),
 };
 
