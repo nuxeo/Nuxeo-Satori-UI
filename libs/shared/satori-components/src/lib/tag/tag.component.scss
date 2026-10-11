@@ -1,0 +1,62 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font: var(--mat-sys-label-medium);
+  background: var(--nxs-tag-background, var(--mat-sys-surface-container-high));
+  color: var(--nxs-tag-foreground, var(--mat-sys-on-surface-variant));
+}
+
+.nxs-tag__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:host(.nxs-tag--gray) {
+  --nxs-tag-background: var(--nxs-tag-gray-background, var(--mat-sys-surface-container-high));
+  --nxs-tag-foreground: var(--nxs-tag-gray-foreground, var(--mat-sys-on-surface-variant));
+}
+
+:host(.nxs-tag--blue) {
+  --nxs-tag-background: var(--nxs-tag-blue-background, var(--mat-sys-primary-container));
+  --nxs-tag-foreground: var(--nxs-tag-blue-foreground, var(--mat-sys-on-primary-container));
+}
+
+:host(.nxs-tag--purple) {
+  --nxs-tag-background: var(--nxs-tag-purple-background, var(--mat-sys-tertiary-container));
+  --nxs-tag-foreground: var(--nxs-tag-purple-foreground, var(--mat-sys-on-tertiary-container));
+}
+
+:host(.nxs-tag--teal) {
+  --nxs-tag-background: var(--nxs-tag-teal-background, var(--mat-sys-secondary-container));
+  --nxs-tag-foreground: var(--nxs-tag-teal-foreground, var(--mat-sys-on-secondary-container));
+}
+
+:host(.nxs-tag--green) {
+  --nxs-tag-background: var(--nxs-tag-green-background, var(--mat-sys-secondary-fixed));
+  --nxs-tag-foreground: var(--nxs-tag-green-foreground, var(--mat-sys-on-secondary-fixed));
+}
+
+:host(.nxs-tag--red) {
+  --nxs-tag-background: var(--nxs-tag-red-background, var(--mat-sys-error-container));
+  --nxs-tag-foreground: var(--nxs-tag-red-foreground, var(--mat-sys-on-error-container));
+}
+
+:host(.nxs-tag--pink) {
+  --nxs-tag-background: var(--nxs-tag-pink-background, var(--mat-sys-tertiary-fixed));
+  --nxs-tag-foreground: var(--nxs-tag-pink-foreground, var(--mat-sys-on-tertiary-fixed));
+}
+
+:host(.nxs-tag--orange) {
+  --nxs-tag-background: var(--nxs-tag-orange-background, var(--mat-sys-primary-fixed));
+  --nxs-tag-foreground: var(--nxs-tag-orange-foreground, var(--mat-sys-on-primary-fixed));
+}
+
+:host(.nxs-tag--yellow) {
+  --nxs-tag-background: var(--nxs-tag-yellow-background, var(--mat-sys-surface-container-highest));
+  --nxs-tag-foreground: var(--nxs-tag-yellow-foreground, var(--mat-sys-on-surface));
+}

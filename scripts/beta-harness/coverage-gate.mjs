@@ -127,6 +127,7 @@ const OUT_OF_SCOPE = Object.freeze({
  */
 const FLOORS = Object.freeze({
   'satori-components': TARGET,
+  'satori-components-satori': TARGET,
 });
 
 /** @param {string} project */
