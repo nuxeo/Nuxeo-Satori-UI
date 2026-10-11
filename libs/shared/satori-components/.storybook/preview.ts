@@ -11,6 +11,8 @@ import { applicationConfig, type Preview } from '@storybook/angular';
 import type { Observable } from 'rxjs';
 
 import documentation from '../documentation.json';
+import { ApiPage } from './api-page';
+import { compodoc } from './compodoc';
 
 /**
  * The application's catalogue, served at `i18n/` by `main.ts`. Composite components translate their
@@ -31,7 +33,7 @@ type ArgTypesEnhancer = NonNullable<Preview['argTypesEnhancers']>[number];
 
 /** Each component's `input.required()` inputs, as Compodoc reports them. */
 const requiredInputs = new Map(
-  documentation.components.map((component) => [
+  compodoc.components.map((component) => [
     component.name,
     new Set(
       (component.inputsClass ?? []).filter((input) => input.required).map((input) => input.name),
@@ -40,8 +42,8 @@ const requiredInputs = new Map(
 );
 
 /**
- * The Docs and Controls tables mark an input required from `argType.type.required`, which
- * Storybook's Compodoc reader never sets, so without this no input shows as required.
+ * The Controls table marks an input required from `argType.type.required`, which Storybook's
+ * Compodoc reader never sets, so without this no input shows as required.
  */
 const markRequiredInputs: ArgTypesEnhancer = ({ argTypes, component }) => {
   const required = requiredInputs.get(component?.name ?? '');
@@ -75,6 +77,36 @@ const preview: Preview = {
   parameters: {
     layout: 'centered',
     controls: { expanded: true },
+    docs: {
+      // The `autodocs` page, which `main.ts` names "API". Overview pages are MDX and keep their own.
+      page: ApiPage,
+      toc: { title: 'Table of contents', headingSelector: 'h2, h3' },
+      // Every live preview on a docs page shows its code, with Hide code and Copy beneath it, and
+      // the zoom tools above it.
+      canvas: { sourceState: 'shown', withToolbar: true },
+    },
+    options: {
+      // Read from this file's syntax tree, not run, so written out in full: each group's
+      // components list their Overview, then their API page, then their stories in file order.
+      storySort: {
+        includeNames: true,
+        order: [
+          'Getting started',
+          'Primitives',
+          ['*', ['Overview', 'API', '*']],
+          'States',
+          ['*', ['Overview', 'API', '*']],
+          'Tables',
+          ['*', ['Overview', 'API', '*']],
+          'Panels',
+          ['*', ['Overview', 'API', '*']],
+          'Dialogs',
+          ['*', ['Overview', 'API', '*']],
+          '*',
+          ['*', ['Overview', 'API', '*']],
+        ],
+      },
+    },
     // The panel observes; it does not judge. `docs/accessibility.md` gives the WCAG verdict to the
     // axe runtime layer alone, and `todo` reports a violation as a warning where `error` would
     // fail the story.

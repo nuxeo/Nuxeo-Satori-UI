@@ -1,0 +1,195 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ByIdStories from '../src/lib/primitives.stories';
+
+<Meta title="Getting started" name="Getting started" />
+
+# Getting started
+
+The `nxs-` components are the building blocks of the Nuxeo Satori UI: avatars, tags, breadcrumbs,
+empty and loading states, the column picker, the permissions panel and more. They are standalone
+Angular components built on Angular Material, and they follow the application's theme.
+
+Each component has three kinds of page in the sidebar:
+
+- **Overview** — what the component is, when to use it, how to add it to your application, a live
+  demo and examples with code you can copy, and notes on accessibility.
+- **API** — every input and output, with its type, whether it is required, its default and what it
+  does. It is generated from the component's source, so it always matches the code.
+- **Stories** — one per state. Change a story's inputs in the **Controls** tab. The **Actions** tab
+  lists what the component emits and, for components that call a service, every call it makes.
+
+## Install
+
+<Source language="bash" dark code="npm install @nuxeo-satori/platform" />
+
+The package needs Angular 20 (`core`, `common`, `forms`, `router` and `platform-browser`), Angular
+Material and CDK 20, ngx-translate 17 and RxJS 7. All of these come from the public npm registry.
+
+## Two entry points
+
+| Entry point                                | What it gives you                                                                     | What it needs                                     |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `@nuxeo-satori/platform/components`        | Every `nxs-` component, built on Angular Material                                     | Nothing beyond the public npm registry            |
+| `@nuxeo-satori/platform/components-satori` | Satori's own avatar, breadcrumbs, tag and rich tooltip, under the same registered IDs | `@hylandsoftware/satori-ui`, from GitHub Packages |
+
+There are two because Satori's component library, `@hylandsoftware/satori-ui`, is published on
+GitHub Packages, and installing from there needs credentials. The first entry point never imports
+it. An application without access installs everything from public npm, and every component works:
+the four components Satori also has render as built-in versions. An application with access adds
+the second entry point, and the same IDs render Satori's components instead. Nothing else changes.
+
+### Installing Satori's components
+
+This step is optional. Point the `@hylandsoftware` scope at GitHub Packages in your `.npmrc`, with a
+token that can read packages:
+
+<Source
+  language="text"
+  dark
+  code={`@hylandsoftware:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}`}
+/>
+
+<Source language="bash" dark code="npm install @hylandsoftware/satori-ui" />
+
+## Providers
+
+Add `provideNxsComponents()` to your application's providers. It registers the components that are
+addressed by ID. The components also need ngx-translate. Text you pass to a component arrives
+already translated, but some components translate their own labels and buttons.
+`providePlatformEnglishFallback()` supplies English for those labels when your catalogue does not.
+
+<Source
+  language="typescript"
+  dark
+  code={`import { provideHttpClient } from '@angular/common/http';
+import { ApplicationConfig } from '@angular/core';
+import { provideTranslateService } from '@ngx-translate/core';
+import { provideNxsComponents } from '@nuxeo-satori/platform/components';
+import { providePlatformEnglishFallback } from '@nuxeo-satori/platform/ui';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(),
+    provideTranslateService({
+      lang: 'en',
+      fallbackLang: 'en',
+      missingTranslationHandler: providePlatformEnglishFallback(),
+    }),
+    provideNxsComponents(),
+  ],
+};`}
+/>
+
+With Satori's components installed, add `provideNxsSatoriComponents()` **after**
+`provideNxsComponents()`. A later registration of the same ID wins. Satori's components also need
+Satori's theme and icons, from `provideSatori()`, and Satori's own translations in ngx-translate.
+`provideAndConfigureSatoriUITranslations()` loads them, or you can load them through your own
+translation loader.
+
+<Source
+  language="typescript"
+  dark
+  code={`import { provideSatori } from '@hylandsoftware/satori-ui/providers';
+import { provideAndConfigureSatoriUITranslations } from '@hylandsoftware/satori-ui/translations';
+import { provideNxsComponents } from '@nuxeo-satori/platform/components';
+import { provideNxsSatoriComponents } from '@nuxeo-satori/platform/components-satori';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideAndConfigureSatoriUITranslations({ fallbackLang: 'en' }),
+    provideSatori(),
+    provideNxsComponents(),
+    provideNxsSatoriComponents(),
+  ],
+};`}
+/>
+
+## Using a component
+
+Every component is standalone. Import it where you use it:
+
+<Source
+  language="typescript"
+  dark
+  code={`import { Component } from '@angular/core';
+import { TranslatePipe } from '@ngx-translate/core';
+import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+
+@Component({
+selector: 'acme-results',
+imports: [NxsSpinnerComponent, TranslatePipe],
+template: \`<nxs-spinner [label]="'acme.results.loading' | translate" />\`,
+})
+export class AcmeResultsComponent {}`}
+/>
+
+Pass text already translated, as above. The components ship no translations for the text you give
+them.
+
+## Registering by ID
+
+Some components are registered under an ID. A screen renders the ID rather than the component, so an
+application can replace the component everywhere it appears without changing those screens.
+
+| ID                                | Component         | Registered by                |
+| --------------------------------- | ----------------- | ---------------------------- |
+| `nxs.primitives.avatar`           | Avatar            | `provideNxsComponents()`     |
+| `nxs.primitives.breadcrumbs`      | Breadcrumbs       | `provideNxsComponents()`     |
+| `nxs.primitives.tag`              | Tag               | `provideNxsComponents()`     |
+| `nxs.primitives.richTooltip`      | Rich tooltip      | `provideNxsComponents()`     |
+| `nxs.components.permissionsPanel` | Permissions panel | The Nuxeo Satori application |
+
+The four `nxs.primitives.*` IDs are exported as `NXS_PRIMITIVE_IDS`, and the permissions panel's as
+`NXS_PERMISSIONS_PANEL_ID`. Render an ID with `lib-extension-outlet`, passing the component's inputs:
+
+<Source
+  language="typescript"
+  dark
+  code={`import { Component } from '@angular/core';
+import { NXS_PRIMITIVE_IDS } from '@nuxeo-satori/platform/components';
+import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+
+@Component({
+selector: 'acme-document-type',
+imports: [ExtensionOutletComponent],
+template: \`
+<lib-extension-outlet
+[componentId]="tagId"
+[componentInputs]="{ label: 'Invoice', color: 'purple' }"
+/>
+\`,
+})
+export class AcmeDocumentTypeComponent {
+protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
+}`}
+/>
+
+To replace a component, register your own under its ID, after the providers above. It takes the same
+inputs: for the four primitives, implement the matching interface (`NxsTagInputs` for the tag, and
+so on).
+
+<Source
+  language="typescript"
+  dark
+  code={`import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+
+providers: [
+provideNxsComponents(),
+provideSatoriExtensions({
+components: { 'nxs.primitives.tag': () => import('./acme-tag').then((m) => m.AcmeTagComponent) },
+}),
+];`}
+/>
+
+The four primitives below are rendered by ID. This Storybook is built without access to GitHub
+Packages, so each one shows its built-in version.
+
+<Canvas of={ByIdStories.MaterialRegistration} />
+
+## Reading the Accessibility tab
+
+Each story's **Accessibility** tab runs automated checks (axe) on the story as it is shown. Use it as
+a guide while you build. It does not replace testing your own screens, with a keyboard and a screen
+reader.

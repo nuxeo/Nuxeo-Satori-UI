@@ -40,6 +40,7 @@ export const Colours: Story = {
  * ID renders here — this Material component, or Satori's once `/components-satori` is provided.
  */
 export const ByRegisteredId: Story = {
+  name: 'By Registered ID',
   decorators: [
     applicationConfig({ providers: [provideTranslateService(), provideNxsComponents()] }),
     moduleMetadata({ imports: [ExtensionOutletComponent] }),

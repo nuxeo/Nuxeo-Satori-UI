@@ -39,9 +39,13 @@ let nextId = 0;
   },
 })
 export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
+  /** The panel's title, already translated. */
   readonly heading = input.required<string>();
+  /** The explanation under the title, already translated. Plain text. */
   readonly content = input.required<string>();
+  /** The trigger button's accessible name, already translated. The button shows only an icon. */
   readonly triggerLabel = input.required<string>();
+  /** The trigger's Material Icons ligature. */
   readonly icon = input('info');
 
   protected readonly open = signal(false);

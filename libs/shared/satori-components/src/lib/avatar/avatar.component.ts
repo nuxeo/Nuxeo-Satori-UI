@@ -24,9 +24,16 @@ import type { NxsAvatarColor, NxsAvatarInputs, NxsAvatarSize } from '../primitiv
   },
 })
 export class NxsAvatarComponent implements NxsAvatarInputs {
+  /** The person's initials. Up to two characters are shown, upper-cased. */
   readonly initials = input.required<string>();
+  /** The circle's colour: `purple`, `blue`, `pink`, `teal`, `yellow`, `green`, `red` or `orange`. */
   readonly color = input<NxsAvatarColor>('blue');
+  /** The diameter in pixels: `24`, `28`, `36`, `64`, `80` or `128`. */
   readonly size = input<NxsAvatarSize>('36');
+  /**
+   * The accessible name, usually the person's name, already translated. Blank makes the avatar
+   * decorative.
+   */
   readonly label = input('');
 
   protected readonly shownInitials = computed(() =>

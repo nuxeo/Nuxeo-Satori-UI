@@ -3,5 +3,5 @@
   "compilerOptions": {
     "emitDecoratorMetadata": true
   },
-  "include": ["../src/**/*.stories.ts", "preview.ts", "compodoc.d.ts"]
+  "include": ["../src/**/*.stories.ts", "preview.ts", "api-page.ts", "compodoc.ts"]
 }
