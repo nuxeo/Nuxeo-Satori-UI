@@ -33,6 +33,8 @@
     "docs:verify": "node scripts/verify-confluence.mjs",
     "docs:links-selftest": "node scripts/confluence-links.selftest.mjs",
     "docs:storage-selftest": "node scripts/confluence-storage.selftest.mjs",
+    "docs:satori-comparison:check": "node scripts/beta-harness/satori-comparison-doc.mjs",
+    "docs:satori-comparison:selftest": "node scripts/beta-harness/satori-comparison-doc.selftest.mjs",
     "ci:registry-auth": "node scripts/registry-auth-check.mjs",
     "ci:registry-auth-selftest": "node scripts/registry-auth-check.selftest.mjs",
     "beta:state": "node scripts/beta-harness/state-check.mjs",

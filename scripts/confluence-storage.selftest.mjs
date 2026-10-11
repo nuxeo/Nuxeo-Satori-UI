@@ -21,6 +21,11 @@ const CONTROLS = [
         '<ac:caption><p>Left: without. Right: with.</p></ac:caption></ac:image></p>',
   ],
   [
+    'a single-quoted caption, as Prettier writes it, is a caption too',
+    () => toStorage("![Alt](a.png 'Left (without). Right (with).')"),
+    (out) => out.includes('<ac:caption><p>Left (without). Right (with).</p></ac:caption>'),
+  ],
+  [
     'an image line directly under a paragraph is not swallowed into it',
     () => toStorage('Text above\n![Alt](a.png)'),
     (out) => out.startsWith('<p>Text above</p>\n<p><ac:image') && !out.includes('!['),

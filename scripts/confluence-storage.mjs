@@ -106,8 +106,18 @@ function panel(kind, body) {
   );
 }
 
-/** A Markdown image alone on its line: `![alt](file.png)` or `![alt](file.png "caption")`. */
-const IMAGE_LINE = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+"([^"]*)")?\)\s*$/;
+/**
+ * A Markdown image alone on its line — `![alt](file.png)`, or with a caption as its title in
+ * either quote, since Prettier rewrites `"…"` to `'…'` here — or `null`.
+ *
+ * @returns {{ alt: string, src: string, caption?: string } | null}
+ */
+export function parseImageLine(line) {
+  const m = /^!\[([^\]]*)\]\(([^)\s]+)(?:\s+(?:"([^"]*)"|'([^']*)'))?\)\s*$/.exec(line);
+  if (!m) return null;
+  const caption = m[3] ?? m[4];
+  return { alt: m[1], src: m[2], ...(caption ? { caption } : {}) };
+}
 
 /**
  * A page attachment rendered as an image, with an optional caption.
@@ -224,10 +234,9 @@ export function toStorage(md, { link, mermaid, image } = {}) {
       continue;
     }
 
-    const img = IMAGE_LINE.exec(line);
+    const img = parseImageLine(line);
     if (img) {
-      const spec = { alt: img[1], src: img[2], ...(img[3] ? { caption: img[3] } : {}) };
-      out.push(image ? image(spec) : imageMacro(spec));
+      out.push(image ? image(img) : imageMacro(img));
       i += 1;
       continue;
     }
