@@ -7524,7 +7524,8 @@ const SATORI_COMPONENTS_OVERVIEW_SECTIONS = [
  *
  * `namespaces` maps each `import * as X from '…'` to the file it resolves to (`null` when it names
  * none); `metas` lists each `<Meta … />` with its `of={X}` (`undefined` when `of` is not a plain
- * name) and `name`; `sections` lists the `##` headings; `references` lists every `of={X.Y}`.
+ * name) and `name`; `sections` lists the `##` headings; `references` lists every `of={X.Y}`;
+ * `tableRows` counts lines written as a Markdown table row (`| … |`).
  */
 function readMdxPage(mdxFile, pathMaps) {
   const text = read(mdxFile)
@@ -7545,7 +7546,8 @@ function readMdxPage(mdxFile, pathMaps) {
   const references = [...text.matchAll(/<(\w+)\b[^>]*?\bof=\{\s*(\w+)\.(\w+)\s*\}/g)].map(
     ([, block, namespace, story]) => ({ block, namespace, story }),
   );
-  return { namespaces, metas, sections, references };
+  const tableRows = text.split('\n').filter((line) => /^\s*\|.*\|\s*$/.test(line)).length;
+  return { namespaces, metas, sections, references, tableRows };
 }
 
 /**
@@ -7559,9 +7561,10 @@ function readMdxPage(mdxFile, pathMaps) {
  * page (see `storiedComponents`), so it needs an Overview of its own.
  *
  * Each Overview has the sections in `SATORI_COMPONENTS_OVERVIEW_SECTIONS` and at least one live
- * preview, `<Canvas of={Stories.Name} />`. Every `of={X.Y}` on any page under `src/` must name a
- * story the imported file exports: Storybook builds a page that names a missing one and shows an
- * error where its preview should be.
+ * preview, `<Canvas of={Stories.Name} />`. Two faults Storybook builds without complaint are read on
+ * every page under `src/` and `.storybook/`: an `of={X.Y}` naming a story the imported file does
+ * not export, which shows an error where the preview should be, and a Markdown table, which renders
+ * as a paragraph of pipes because the library's MDX has no GitHub-flavoured Markdown.
  */
 function checkSatoriComponentsHaveOverviews() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
@@ -7599,8 +7602,19 @@ function checkSatoriComponentsHaveOverviews() {
   }
 
   const sectionList = SATORI_COMPONENTS_OVERVIEW_SECTIONS.map((s) => `\`## ${s}\``).join(', ');
-  for (const page of walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) => path.endsWith('.mdx'))) {
-    const { namespaces, metas, sections, references } = readMdxPage(page, pathMaps);
+  const pages = [
+    ...walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) => path.endsWith('.mdx')),
+    ...walk(SATORI_COMPONENTS_STORYBOOK, (path) => path.endsWith('.mdx')),
+  ];
+  for (const page of pages) {
+    const { namespaces, metas, sections, references, tableRows } = readMdxPage(page, pathMaps);
+
+    if (tableRows > 0) {
+      fail(
+        `${page} writes a Markdown table, which this Storybook renders as a paragraph of pipes: ` +
+          'its MDX has no GitHub-flavoured Markdown. Write the table as `<table>` markup.',
+      );
+    }
 
     for (const { block, namespace, story } of references) {
       const file = namespaces.get(namespace);

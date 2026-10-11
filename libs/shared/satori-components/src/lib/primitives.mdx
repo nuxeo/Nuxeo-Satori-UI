@@ -31,12 +31,74 @@ The four IDs rendered through `lib-extension-outlet`, as a screen renders them.
 
 ## Usage
 
-| ID                           | Inputs                                       | Interface              | Satori component                  |
-| ---------------------------- | -------------------------------------------- | ---------------------- | --------------------------------- |
-| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`         | `NxsAvatarInputs`      | Avatar (`sat-avatar`)             |
-| `nxs.primitives.breadcrumbs` | `items`, `label`                             | `NxsBreadcrumbsInputs` | Breadcrumbs (`sat-breadcrumbs`)   |
-| `nxs.primitives.tag`         | `label`, `color`                             | `NxsTagInputs`         | Category tag (`sat-category-tag`) |
-| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon` | `NxsRichTooltipInputs` | Rich tooltip (`sat-rich-tooltip`) |
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Inputs</th>
+      <th>Interface</th>
+      <th>Satori component</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>nxs.primitives.avatar</code>
+      </td>
+      <td>
+        <code>initials</code>, <code>color</code>, <code>size</code>, <code>label</code>
+      </td>
+      <td>
+        <code>NxsAvatarInputs</code>
+      </td>
+      <td>
+        Avatar (<code>sat-avatar</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.breadcrumbs</code>
+      </td>
+      <td>
+        <code>items</code>, <code>label</code>
+      </td>
+      <td>
+        <code>NxsBreadcrumbsInputs</code>
+      </td>
+      <td>
+        Breadcrumbs (<code>sat-breadcrumbs</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tag</code>
+      </td>
+      <td>
+        <code>label</code>, <code>color</code>
+      </td>
+      <td>
+        <code>NxsTagInputs</code>
+      </td>
+      <td>
+        Category tag (<code>sat-category-tag</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.richTooltip</code>
+      </td>
+      <td>
+        <code>heading</code>, <code>content</code>, <code>triggerLabel</code>, <code>icon</code>
+      </td>
+      <td>
+        <code>NxsRichTooltipInputs</code>
+      </td>
+      <td>
+        Rich tooltip (<code>sat-rich-tooltip</code>)
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 The IDs are exported as `NXS_PRIMITIVE_IDS` from `@nuxeo-satori/platform/components`. Render one
 with `lib-extension-outlet` from `@nuxeo-satori/platform/extensions`:
@@ -107,9 +169,44 @@ provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTagComponent }
 
 ## Satori and the built-in versions
 
-| ID                           | What differs                                                                                                                      |
-| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `nxs.primitives.avatar`      | Satori's has a thin border and its own colours, and shows one initial at 24 pixels. The built-in one follows your Material theme. |
-| `nxs.primitives.breadcrumbs` | Satori's collapse a long trail into a menu. The built-in ones wrap onto further lines.                                            |
-| `nxs.primitives.tag`         | Satori's uses its own colours. The built-in one follows your Material theme.                                                      |
-| `nxs.primitives.richTooltip` | Satori's opens on hover and focus. The built-in one opens when its button is activated.                                           |
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>What differs</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>nxs.primitives.avatar</code>
+      </td>
+      <td>
+        Satori's has a thin border and its own colours, and shows one initial at 24 pixels. The
+        built-in one follows your Material theme.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.breadcrumbs</code>
+      </td>
+      <td>
+        Satori's collapse a long trail into a menu. The built-in ones wrap onto further lines.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tag</code>
+      </td>
+      <td>Satori's uses its own colours. The built-in one follows your Material theme.</td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.richTooltip</code>
+      </td>
+      <td>
+        Satori's opens on hover and focus. The built-in one opens when its button is activated.
+      </td>
+    </tr>
+  </tbody>
+</table>

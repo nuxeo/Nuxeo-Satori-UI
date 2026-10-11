@@ -28,10 +28,35 @@ Material and CDK 20, ngx-translate 17 and RxJS 7. All of these come from the pub
 
 ## Two entry points
 
-| Entry point                                | What it gives you                                                                     | What it needs                                     |
-| ------------------------------------------ | ------------------------------------------------------------------------------------- | ------------------------------------------------- |
-| `@nuxeo-satori/platform/components`        | Every `nxs-` component, built on Angular Material                                     | Nothing beyond the public npm registry            |
-| `@nuxeo-satori/platform/components-satori` | Satori's own avatar, breadcrumbs, tag and rich tooltip, under the same registered IDs | `@hylandsoftware/satori-ui`, from GitHub Packages |
+<table>
+  <thead>
+    <tr>
+      <th>Entry point</th>
+      <th>What it gives you</th>
+      <th>What it needs</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>@nuxeo-satori/platform/components</code>
+      </td>
+      <td>
+        Every <code>nxs-</code> component, built on Angular Material
+      </td>
+      <td>Nothing beyond the public npm registry</td>
+    </tr>
+    <tr>
+      <td>
+        <code>@nuxeo-satori/platform/components-satori</code>
+      </td>
+      <td>Satori's own avatar, breadcrumbs, tag and rich tooltip, under the same registered IDs</td>
+      <td>
+        <code>@hylandsoftware/satori-ui</code>, from GitHub Packages
+      </td>
+    </tr>
+  </tbody>
+</table>
 
 There are two because Satori's component library, `@hylandsoftware/satori-ui`, is published on
 GitHub Packages, and installing from there needs credentials. The first entry point never imports
@@ -133,13 +158,60 @@ them.
 Some components are registered under an ID. A screen renders the ID rather than the component, so an
 application can replace the component everywhere it appears without changing those screens.
 
-| ID                                | Component         | Registered by                |
-| --------------------------------- | ----------------- | ---------------------------- |
-| `nxs.primitives.avatar`           | Avatar            | `provideNxsComponents()`     |
-| `nxs.primitives.breadcrumbs`      | Breadcrumbs       | `provideNxsComponents()`     |
-| `nxs.primitives.tag`              | Tag               | `provideNxsComponents()`     |
-| `nxs.primitives.richTooltip`      | Rich tooltip      | `provideNxsComponents()`     |
-| `nxs.components.permissionsPanel` | Permissions panel | The Nuxeo Satori application |
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Component</th>
+      <th>Registered by</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>nxs.primitives.avatar</code>
+      </td>
+      <td>Avatar</td>
+      <td>
+        <code>provideNxsComponents()</code>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.breadcrumbs</code>
+      </td>
+      <td>Breadcrumbs</td>
+      <td>
+        <code>provideNxsComponents()</code>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tag</code>
+      </td>
+      <td>Tag</td>
+      <td>
+        <code>provideNxsComponents()</code>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.richTooltip</code>
+      </td>
+      <td>Rich tooltip</td>
+      <td>
+        <code>provideNxsComponents()</code>
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.components.permissionsPanel</code>
+      </td>
+      <td>Permissions panel</td>
+      <td>The Nuxeo Satori application</td>
+    </tr>
+  </tbody>
+</table>
 
 The four `nxs.primitives.*` IDs are exported as `NXS_PRIMITIVE_IDS`, and the permissions panel's as
 `NXS_PERMISSIONS_PANEL_ID`. Render an ID with `lib-extension-outlet`, passing the component's inputs:

@@ -7099,6 +7099,53 @@ expectRed(
   /by-id\.stories\.ts names no component, so it has no API page, and no Overview page attaches/,
 );
 
+// The library's MDX has no GitHub-flavoured Markdown, so a Markdown table renders as text.
+expectRed(
+  'a Markdown table on an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({ extra: '| Input | Type |\n| ----- | ---- |\n| a | b |' }),
+  }),
+  null,
+  /thing\.mdx writes a Markdown table/,
+);
+
+expectRed(
+  'a Markdown table on a page under .storybook/',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [`${NXS_ROOT}/.storybook/getting-started.mdx`]:
+      'import { Meta } from \'@storybook/addon-docs/blocks\';\n\n<Meta title="Getting started" />\n\n| a | b |\n| - | - |\n',
+  }),
+  null,
+  /\.storybook\/getting-started\.mdx writes a Markdown table/,
+);
+
+expectRed(
+  'a page under .storybook/ previewing a story the file does not export',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [`${NXS_ROOT}/.storybook/getting-started.mdx`]:
+      "import { Canvas, Meta } from '@storybook/addon-docs/blocks';\n\n" +
+      "import * as ThingStories from '../src/lib/thing/thing.stories';\n\n" +
+      '<Meta title="Getting started" />\n\n<Canvas of={ThingStories.Gone} />\n',
+  }),
+  null,
+  /getting-started\.mdx refers to `ThingStories\.Gone` in a <Canvas>, which .* does not export/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a table written as <table> markup, and pipes inside a code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      extra:
+        '<table>\n  <tr>\n    <td>a</td>\n  </tr>\n</table>\n\n<Source code={`| a | b |\n| - | - |`} />',
+    }),
+  }),
+);
+
 falsePositiveControls += 1;
 expectGreen(
   'a story file naming no component, with its own Overview',
