@@ -10,10 +10,11 @@ import { provideNxsComponents } from './provide-nxs-components';
  * The four `nxs.primitives.*` IDs resolved through `lib-extension-outlet`, as a host renders them,
  * with only `provideNxsComponents()` — what an application without Satori gets. The Satori
  * library's Storybook renders the same template with `provideNxsSatoriComponents()` added.
+ *
+ * It names no component, so it has no API page; `primitives.mdx` is its Overview.
  */
 const meta: Meta = {
   title: 'Primitives/By registered ID',
-  tags: ['autodocs'],
   decorators: [
     applicationConfig({
       providers: [

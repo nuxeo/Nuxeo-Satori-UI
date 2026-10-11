@@ -6929,6 +6929,189 @@ expectRed(
   /\.storybook\/main\.ts does not exist/,
 );
 
+// A meta that names no component has no inputs to list, so it needs no `autodocs` API page.
+const NXS_BY_ID_STORY = `${NXS_ROOT}/src/lib/by-id.stories.ts`;
+const NXS_BY_ID_STORY_SOURCE =
+  "import type { Meta, StoryObj } from '@storybook/angular';\n" +
+  "const meta: Meta = { title: 'By ID' };\nexport default meta;\n" +
+  'export const Registered: StoryObj = {};\n';
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story meta that names no component and has no tags',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory(), [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE }),
+);
+
+// checkSatoriComponentsHaveOverviews — the docs-coverage check
+
+const NXS_OVERVIEW = `${NXS_ROOT}/src/lib/thing/thing.mdx`;
+const NXS_OVERVIEW_SECTIONS = [
+  'Key features',
+  'Demo showcase',
+  'Usage',
+  'Examples',
+  'Accessibility',
+];
+const nxsOverview = ({
+  imports = "import * as Stories from './thing.stories';",
+  meta = '<Meta of={Stories} name="Overview" />',
+  sections = NXS_OVERVIEW_SECTIONS,
+  canvas = '<Canvas of={Stories.Basic} />',
+  extra = '',
+} = {}) =>
+  `import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';\n\n${imports}\n\n${meta}\n\n` +
+  `# Thing\n\n${sections.map((section) => `## ${section}\n\nText.\n`).join('\n')}\n${canvas}\n${extra}\n`;
+const NXS_DOCS_MAIN =
+  "export default { stories: ['../src/**/*.mdx', '../src/**/*.stories.ts'], framework: { name: '@storybook/angular', options: {} } };\n";
+const NXS_DOCS = (extra = {}) =>
+  NXS_STORYBOOK({
+    [NXS_STORYBOOK_MAIN]: NXS_DOCS_MAIN,
+    [NXS_STORY]: nxsStory(),
+    [NXS_OVERVIEW]: nxsOverview(),
+    ...extra,
+  });
+
+expectGreen(
+  'an exported component with an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(),
+);
+
+expectRed(
+  'an exported component with stories and no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_STORYBOOK({ [NXS_STORYBOOK_MAIN]: NXS_DOCS_MAIN, [NXS_STORY]: nxsStory() }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'a Storybook main.ts that does not load the MDX pages',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_STORYBOOK_MAIN]: "export default { stories: ['../src/**/*.stories.ts'] };\n" }),
+  null,
+  /main\.ts does not load `\.\.\/src\/\*\*\/\*\.mdx`/,
+);
+
+expectRed(
+  'an Overview with a section missing',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ sections: NXS_OVERVIEW_SECTIONS.slice(0, 4) }) }),
+  null,
+  /thing\.mdx is the Overview of .*thing\.stories\.ts and has no `## Accessibility` section/,
+);
+
+// Code samples are not page structure: a heading inside one is not a section.
+expectRed(
+  'an Overview whose missing section appears only inside a code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      sections: NXS_OVERVIEW_SECTIONS.slice(0, 4),
+      extra: '<Source code={`\n## Accessibility\n`} />\n\n```md\n## Accessibility\n```',
+    }),
+  }),
+  null,
+  /has no `## Accessibility` section/,
+);
+
+expectRed(
+  'an Overview with no live preview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ canvas: '' }) }),
+  null,
+  /thing\.mdx is the Overview of .* and shows none of its stories/,
+);
+
+expectRed(
+  'a preview of a story the file does not export',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ canvas: '<Canvas of={Stories.Missing} />' }) }),
+  null,
+  /refers to `Stories\.Missing` in a <Canvas>, which .*thing\.stories\.ts does not export/,
+);
+
+expectRed(
+  'a page attached under another name, which is not an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ meta: '<Meta of={Stories} name="Guide" />' }) }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'an Overview whose Meta is commented out',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({ meta: '{/* <Meta of={Stories} name="Overview" /> */}' }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'an Overview attached to a module that is not a story file',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({ imports: "import * as Stories from './thing.component';" }),
+  }),
+  null,
+  /thing\.mdx attaches to `Stories`, which is not a namespace import of a story file/,
+);
+
+expectRed(
+  'an Overview with two Meta blocks',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      meta: '<Meta of={Stories} name="Overview" />\n<Meta of={Stories} name="Other" />',
+    }),
+  }),
+  null,
+  /thing\.mdx has 2 <Meta> blocks/,
+);
+
+// The Overview counts for the component its story file's meta names, not for whatever is nearby.
+expectRed(
+  'an Overview of a story file that documents a different component',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_COMPONENT]:
+      nxsComponent() +
+      "@Component({ selector: 'nxs-other', standalone: true, template: '' })\n" +
+      'export class NxsOtherComponent {}\n',
+    [`${NXS_ROOT}/src/lib/thing/other.stories.ts`]: nxsStory({
+      imports: "import { NxsOtherComponent } from './thing.component';",
+      meta: "export default { component: NxsOtherComponent, tags: ['autodocs'] } satisfies Meta<NxsOtherComponent>;",
+    }),
+    [NXS_OVERVIEW]: nxsOverview({ imports: "import * as Stories from './other.stories';" }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'a story file naming no component, with no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE }),
+  null,
+  /by-id\.stories\.ts names no component, so it has no API page, and no Overview page attaches/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story file naming no component, with its own Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE,
+    [`${NXS_ROOT}/src/lib/by-id.mdx`]: nxsOverview({
+      imports: "import * as Stories from './by-id.stories';",
+      canvas: '<Canvas of={Stories.Registered} />',
+    }),
+  }),
+);
+
 // `/components-satori` — the one place in the family allowed to import @hylandsoftware/satori-ui
 
 const NXS_SAT_ROOT = 'libs/shared/satori-components-satori';
