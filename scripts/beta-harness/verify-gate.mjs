@@ -292,6 +292,19 @@ const ALL_GATES = [
     // Names which of its five checks are load-bearing; that belongs in the log.
     echoOnPass: true,
   },
+  // Publishable is not installable. Every gate above runs inside this monorepo, whose
+  // node_modules already holds `@hylandsoftware/satori-ui` from GitHub Packages; a customer's does
+  // not, and npm installs every non-optional peer. This installs the built tarball from public npm
+  // with no credentials, and re-runs it with the Satori peer made required, which must fail — the
+  // risk `docs/publish-readiness.md` §5 recorded as uncovered. Needs registry.npmjs.org.
+  {
+    id: 'peer-installability',
+    label: 'Installs without GitHub Packages',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/peer-installability.mjs'],
+    // The control's outcome is the evidence that the pass means anything.
+    echoOnPass: true,
+  },
   // Compiles the template against the **built** declarations instead of the source
   // tree, which is the only gate that sees the resolution a customer actually gets.
   // It is what found the platform package being compiled without `strictNullChecks`,

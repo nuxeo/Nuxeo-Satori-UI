@@ -15,7 +15,7 @@ of backwards compatibility.
 2 exported symbol(s).
 
 ```ts
-const PLATFORM_ENTRY_POINTS: readonly ["app-config", "components", "extensions", "nuxeo-client", "ui"];
+const PLATFORM_ENTRY_POINTS: readonly ["app-config", "components", "components-satori", "extensions", "nuxeo-client", "ui"];
 type PlatformEntryPoint = (typeof PLATFORM_ENTRY_POINTS)[number];
 ```
 
@@ -189,10 +189,56 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-13 exported symbol(s).
+27 exported symbol(s).
 
 ```ts
 const NXS_PERMISSIONS_PANEL_ID = "nxs.components.permissionsPanel";
+const NXS_PRIMITIVE_IDS: Readonly<{
+    readonly avatar: "nxs.primitives.avatar";
+    readonly breadcrumbs: "nxs.primitives.breadcrumbs";
+    readonly tag: "nxs.primitives.tag";
+    readonly richTooltip: "nxs.primitives.richTooltip";
+    }>;
+}
+type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
+class NxsAvatarComponent implements NxsAvatarInputs {
+    readonly initials: _angular_core.InputSignal<string>;
+    readonly color: _angular_core.InputSignal<NxsAvatarColor>;
+    readonly size: _angular_core.InputSignal<NxsAvatarSize>;
+    readonly label: _angular_core.InputSignal<string>;
+    protected readonly shownInitials: _angular_core.Signal<string>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsAvatarComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsAvatarComponent, "nxs-avatar", never, { "initials": { "alias": "initials"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; "size": { "alias": "size"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsAvatarInputs {
+    readonly initials: InputSignal<string>;
+    readonly color: InputSignal<NxsAvatarColor>;
+    readonly size: InputSignal<NxsAvatarSize>;
+    readonly label: InputSignal<string>;
+    }
+}
+type NxsAvatarSize = '128' | '24' | '28' | '36' | '64' | '80';
+interface NxsBreadcrumbItem {
+    readonly label: string;
+    readonly routerLink?: string | readonly (string | number)[];
+    readonly queryParams?: Readonly<Record<string, string | number | boolean>>;
+    readonly href?: string;
+    }
+}
+class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
+    readonly items: _angular_core.InputSignal<readonly NxsBreadcrumbItem[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    protected linkKind(item: NxsBreadcrumbItem): 'href' | 'router' | 'text';
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsBreadcrumbsComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsBreadcrumbsComponent, "nxs-breadcrumbs", never, { "items": { "alias": "items"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsBreadcrumbsInputs {
+    readonly items: InputSignal<readonly NxsBreadcrumbItem[]>;
+    readonly label: InputSignal<string>;
+    }
+}
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
     readonly columns: _angular_core.InputSignal<readonly NxsPickableColumn[]>;
     readonly required: _angular_core.InputSignal<readonly string[]>;
@@ -338,6 +384,27 @@ interface NxsPickableColumn {
     readonly visible: boolean;
     }
 }
+class NxsRichTooltipComponent implements NxsRichTooltipInputs {
+    readonly heading: _angular_core.InputSignal<string>;
+    readonly content: _angular_core.InputSignal<string>;
+    readonly triggerLabel: _angular_core.InputSignal<string>;
+    readonly icon: _angular_core.InputSignal<string>;
+    protected readonly open: _angular_core.WritableSignal<boolean>;
+    protected readonly panelId: string;
+    protected toggle(): void;
+    protected closeAndRefocus(): void;
+    protected onFocusOut(event: FocusEvent): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRichTooltipComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRichTooltipComponent, "nxs-rich-tooltip", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "content": { "alias": "content"; "required": true; "isSignal": true; }; "triggerLabel": { "alias": "triggerLabel"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsRichTooltipInputs {
+    readonly heading: InputSignal<string>;
+    readonly content: InputSignal<string>;
+    readonly triggerLabel: InputSignal<string>;
+    readonly icon: InputSignal<string>;
+    }
+}
 class NxsSpinnerComponent {
     readonly diameter: _angular_core.InputSignalWithTransform<number, unknown>;
     readonly label: _angular_core.InputSignal<string>;
@@ -346,6 +413,28 @@ class NxsSpinnerComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSpinnerComponent, "nxs-spinner", never, { "diameter": { "alias": "diameter"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
     }
 }
+type NxsTagColor = NxsAvatarColor | 'gray';
+class NxsTagComponent implements NxsTagInputs {
+    readonly label: _angular_core.InputSignal<string>;
+    readonly color: _angular_core.InputSignal<NxsTagColor>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTagComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagComponent, "nxs-tag", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsTagInputs {
+    readonly label: InputSignal<string>;
+    readonly color: InputSignal<NxsTagColor>;
+    }
+}
+function provideNxsComponents(): EnvironmentProviders;
+```
+
+## @nuxeo-satori/platform/components-satori
+
+1 exported symbol(s).
+
+```ts
+function provideNxsSatoriComponents(): EnvironmentProviders;
 ```
 
 ## @nuxeo-satori/platform/extensions

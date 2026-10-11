@@ -235,12 +235,12 @@ of them named the new IDs.
 
 ## 6. Where things live
 
-| What                                             | Where                                                                       |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| Every addressable ID, and each slot's real state | `extension-reference.md`                                                    |
-| The published API surface                        | `@nuxeo-satori/platform` type declarations                                  |
-| Entry points                                     | `@nuxeo-satori/platform/{extensions,app-config,components,nuxeo-client,ui}` |
-| Your contributions                               | your own library, `provideSatoriExtensions()`                               |
+| What                                             | Where                                                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Every addressable ID, and each slot's real state | `extension-reference.md`                                                                      |
+| The published API surface                        | `@nuxeo-satori/platform` type declarations                                                    |
+| Entry points                                     | `@nuxeo-satori/platform/{extensions,app-config,components,components-satori,nuxeo-client,ui}` |
+| Your contributions                               | your own library, `provideSatoriExtensions()`                                                 |
 
 ## 7. The `nxs-` components
 
@@ -275,3 +275,7 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
   deep import.
 - **It is new and growing.** The type declarations are the list of what exists; do not take
   a component's existence from this file.
+- **Satori is optional.** `provideNxsComponents()` registers the four `nxs.primitives.*` IDs on
+  Material. Only with GitHub Packages access, add `provideNxsSatoriComponents()` from
+  `@nuxeo-satori/platform/components-satori` after it to re-register them on Satori — the one entry
+  point that needs the optional `@hylandsoftware/satori-ui` peer. See `extension-reference.md` §6a.
