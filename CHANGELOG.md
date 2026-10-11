@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
 so the next publish has to be a minor. Nothing has been published yet.
 
+### Changed (`@nuxeo-satori/platform`) — `@hylandsoftware/satori-ui` is an optional peer
+
+- **`@hylandsoftware/satori-ui` is now an optional peer** (`peerDependenciesMeta`). npm installs
+  every non-optional peer, and Satori resolves only from GitHub Packages, so installing the package
+  without a token failed with `E404` on public npm. Only the new `/components-satori` entry point
+  imports Satori; install it, with GitHub Packages access, only if you import that entry point.
+  `npm run beta:installable` installs the built tarball from public npm with no credentials.
+
+### Added (`@nuxeo-satori/platform/components`, `@nuxeo-satori/platform/components-satori`)
+
+- `nxs-avatar`, `nxs-breadcrumbs`, `nxs-tag` and `nxs-rich-tooltip` on Material, registered as
+  `nxs.primitives.avatar`, `.breadcrumbs`, `.tag` and `.richTooltip` by `provideNxsComponents()`,
+  with their input contracts (`NxsAvatarInputs` and the rest) and `NXS_PRIMITIVE_IDS`.
+- A new entry point, `@nuxeo-satori/platform/components-satori`, whose
+  `provideNxsSatoriComponents()` re-registers the same four IDs on Satori. List it after
+  `provideNxsComponents()`; later registrations win.
+
 ### Removed (`@nuxeo-satori/platform`) — a peer dependency
 
 - **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine used three of

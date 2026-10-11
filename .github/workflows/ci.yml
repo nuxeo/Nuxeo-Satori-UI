@@ -196,9 +196,12 @@ jobs:
           fi
           hidden="$RUNNER_TEMP/github-packages-scopes"
           mkdir -p "$hidden"
-          restore() { for scope in "$hidden"/@*; do [ -e "$scope" ] && mv "$scope" node_modules/; done; }
+          restore() { for scope in "$hidden"/@*; do if [ -e "$scope" ]; then mv "$scope" node_modules/; fi; done; }
           trap restore EXIT
-          mv node_modules/@hylandsoftware node_modules/@alfresco "$hidden"/
+          # A scope the tree no longer installs is already absent, which is what this build tests.
+          for scope in @hylandsoftware @alfresco; do
+            if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
+          done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
 
       # The three checks that guard the published package. Run unconditionally rather
@@ -221,6 +224,12 @@ jobs:
           # `prepublishOnly` script. Phase 4 shipped a package that could not be
           # published at all, for want of `compilationMode: partial`.
           npm run beta:publishable
+          # Installs the built tarball into a scratch project with NO GitHub Packages credentials,
+          # from public npm, and requires it to succeed; then makes the Satori peer required again
+          # and requires the install to FAIL. Everything above runs against this monorepo's
+          # node_modules, which already holds @hylandsoftware/satori-ui, so none of it can see a
+          # customer's install 401 or 404 on a required peer.
+          npm run beta:installable
           # Compiles the template against the BUILT declarations instead of the source
           # tree — the resolution a customer actually gets. Found the platform being
           # compiled without `strictNullChecks`, shipping 27 wrong public types.

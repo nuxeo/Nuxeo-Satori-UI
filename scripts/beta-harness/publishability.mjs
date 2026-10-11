@@ -116,6 +116,7 @@ const fesm = [
   'nuxeo-satori-platform.mjs',
   'nuxeo-satori-platform-app-config.mjs',
   'nuxeo-satori-platform-components.mjs',
+  'nuxeo-satori-platform-components-satori.mjs',
   'nuxeo-satori-platform-extensions.mjs',
   'nuxeo-satori-platform-nuxeo-client.mjs',
   'nuxeo-satori-platform-ui.mjs',

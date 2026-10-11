@@ -25,6 +25,7 @@
     "beta:lockfile": "node scripts/beta-harness/lockfile-integrity.mjs",
     "beta:lockfile-selftest": "node scripts/beta-harness/lockfile-integrity.selftest.mjs",
     "beta:publishable": "node scripts/beta-harness/publishability.mjs",
+    "beta:installable": "node scripts/beta-harness/peer-installability.mjs",
     "beta:reference": "node scripts/beta-harness/extension-reference-drift.mjs",
     "beta:slides": "node tools/video/export-pptx.mjs",
     "docs:diagrams": "node scripts/render-mermaid.mjs",
