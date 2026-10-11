@@ -156,7 +156,10 @@ into the library to dodge the rule.
 **Adding a component, with every gate staying green:**
 
 1. `src/lib/<name>/<name>.component.{ts,html,scss,spec.ts}` — selector `nxs-<name>`, class
-   `Nxs<Name>Component`, `standalone: true`, `templateUrl`, theme tokens only.
+   `Nxs<Name>Component`, `standalone: true`, `templateUrl`, theme tokens only. A rule styling an
+   `<h1>`–`<h6>` doubles its class (`.nxs-x__heading.nxs-x__heading`): the app theme's
+   `html[data-app-theme] .mat-typography h2` (0-2-2) otherwise outranks it and renders the heading
+   at display size, as it did `nxs-error-state`'s and `nxs-empty-state`'s.
 2. Text inputs take already-translated strings; the library ships no catalogue.
    `checkNoProseInComponentInputs` scans `nxs-` elements, so a caller must bind them. A
    component's own chrome — headings, buttons, messages, accessible names — is translated with keys

@@ -698,6 +698,60 @@ expectRed(
   /maps it to an empty string/,
 );
 
+/**
+ * `[label]` on an `nxs-` component is an accessible name — `nxs-spinner`'s progressbar,
+ * `nxs-icon`'s image — so its key needs a fallback too. The binding pattern read only HTML
+ * attributes and passed this tree; the note image picker's spinner key was missing from the
+ * fallback for that reason until someone noticed by hand. Wrapped across lines, as spinners are.
+ */
+const NXS_LABEL_APP = {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': EN_JSON.replace(
+    '"title": "Hyland Nuxeo",',
+    '"title": "Hyland Nuxeo",\n    "loading": "Loading",',
+  ),
+  'libs/features/browse/src/lib/browse/browse.html':
+    '<nxs-spinner\n  diameter="36"\n  [label]="\'app.loading\' | translate"\n/>\n',
+};
+
+expectRed(
+  'an nxs- component label key missing from the fallback',
+  'checkAccessibleNameFallbacks',
+  NXS_LABEL_APP,
+  null,
+  /binds label to `app\.loading`.*omits/s,
+);
+
+expectRed(
+  'an nxs- component label key missing from the fallback, after a quoted ">"',
+  'checkAccessibleNameFallbacks',
+  {
+    ...NXS_LABEL_APP,
+    'libs/features/browse/src/lib/browse/browse.html':
+      '<nxs-spinner\n  [diameter]="size > 0 ? 36 : 24"\n  [label]="\'app.loading\' | translate"\n/>\n',
+  },
+  null,
+  /binds label to `app\.loading`.*omits/s,
+);
+
+expectGreen('an nxs- component label key in the fallback', 'checkAccessibleNameFallbacks', {
+  ...NXS_LABEL_APP,
+  'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK.replace(
+    '};',
+    "  'app.loading': 'Loading',\n};",
+  ),
+});
+
+expectGreen(
+  'a [label] on a non-nxs element is not an accessible name this gate owns',
+  'checkAccessibleNameFallbacks',
+  {
+    ...NXS_LABEL_APP,
+    'libs/features/browse/src/lib/browse/browse.html':
+      '<mat-tab [label]="\'app.loading\' | translate"></mat-tab>\n',
+  },
+);
+
 expectRed(
   'no accessible names bound at all must not read as a pass',
   'checkAccessibleNameFallbacks',
