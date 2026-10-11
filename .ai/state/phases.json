@@ -222,7 +222,7 @@
         "The api-surface gate records names, kinds and signatures only. It does not read Angular decorator metadata, so a changed component selector or input alias is invisible to it. A green run is not a promise of backwards compatibility.",
         "@nuxeo-satori/generators has neither a test nor a typecheck target, so the generator's own code is only exercised by running it."
       ],
-      "verifiedOnCi": "NOT yet verified on CI at the time of writing. ci.yml was extended in the same change to run `typecheck`, `api-surface` and `fork-simulation` \u2014 before that it ran 5 checks against the local gate's 11, so neither new gate could protect main. The next CI run on this branch is the authoritative verification; local gates run on Node 25 with a webstorage workaround and are not authoritative."
+      "verifiedOnCi": "CI run 38158501328, completed success on Node 20, 2026-10-11: its \"Verify the published package\" step, which runs unconditionally, passed api-surface, publishability, peer-installability (with its E404 control), fork-simulation and upgrade-rehearsal. That verifies those gates against the package as it is now, not the Phase 4 capture, which predates peer-installability. At sign-off: NOT yet verified on CI at the time of writing. ci.yml was extended in the same change to run `typecheck`, `api-surface` and `fork-simulation` \u2014 before that it ran 5 checks against the local gate's 11, so neither new gate could protect main. The next CI run on this branch is the authoritative verification; local gates run on Node 25 with a webstorage workaround and are not authoritative."
     },
     {
       "id": "phase-5-harness",

@@ -2,20 +2,20 @@
 title: Repository Guide
 parent: Engineering
 order: 3
-last_reviewed: 2026-10-09
-repo_commit: 156e658
+last_reviewed: 2026-10-11
+repo_commit: ad60a57
 audience: engineering
 ---
 
 # Repository Guide
 
-> **Last reviewed:** 2026-10-09 · **Repository:** `156e658` (`feature/nxsat-308-primitives-2`)
-> Only the `satori-components` row of "Shared libraries" and the `libs/platform` row of "The other
-> three" were re-verified at that commit; that heading's totals add the row to the 2026-08-24
-> figures. `feature/nxsat-308-permissions-panel` recounted the `satori-components` row, with the
-> permissions panel, on 2026-10-09. The `satori-components-satori` row, which the heading's
-> totals also add, and the entry-point count in the `libs/platform` row were verified at
-> `ad60a576`. The rest of the page as of 2026-08-24 · `77265f9`:
+> **Last reviewed:** 2026-10-11 · **Repository:** `ad60a57`
+> Only the `satori-components-satori` row of "Shared libraries" and the entry-point count in the
+> `libs/platform` row of "The other three" were verified at that commit. The `satori-components`
+> row and the rest of the `libs/platform` row were re-verified at `156e658`
+> (`feature/nxsat-308-primitives-2`), and `feature/nxsat-308-permissions-panel` recounted the
+> `satori-components` row, with the permissions panel, on 2026-10-09. That heading's totals add
+> both rows to the 2026-08-24 figures. The rest of the page as of 2026-08-24 · `77265f9`:
 > 992 tracked files · ~104k lines of TS/HTML/SCSS · ~20k lines of harness scripts ·
 > ~20.5k lines of Markdown
 
