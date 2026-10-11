@@ -252,7 +252,7 @@ const RAW_KEY = /\b(?:sat|satori-components|browse)\.[a-z][\w-]*(?:\.[\w-]+)+/i;
 
 /**
  * Load a story and let it settle. Reports page errors, and whether the Material Icons font loaded:
- * without it every icon renders as its ligature name, and the images would compare words.
+ * without it every ligature icon renders as its name, and the images would compare words.
  */
 async function open(page, url, selector) {
   const errors = [];
@@ -351,6 +351,11 @@ function inspect(page, selector) {
           : null,
         satElements: [...new Set(satElements)],
         satInside: [...new Set(satInside)],
+        icons: [...targets, ...panes]
+          .flatMap((el) => [...el.querySelectorAll('mat-icon, .material-icons')])
+          .filter(
+            (i) => !i.querySelector('svg') && /Material Icons/.test(getComputedStyle(i).fontFamily),
+          ).length,
         nxsSatoriHosts: [...document.querySelectorAll('*')].filter((el) =>
           el.tagName.toLowerCase().startsWith('nxs-satori-'),
         ).length,
@@ -508,7 +513,10 @@ try {
           `${seen.count} element(s)`,
         );
         record(subject, 'no page errors', errors.length === 0, errors.join(' | '));
-        record(subject, 'Material Icons font loaded', iconFont);
+        // The font loads only when something uses it, so it is asked of components with icons.
+        if (seen.icons > 0) {
+          record(subject, `its ${seen.icons} icon(s) render in the Material Icons font`, iconFont);
+        }
         record(
           subject,
           'no raw translation keys visible or announced',
