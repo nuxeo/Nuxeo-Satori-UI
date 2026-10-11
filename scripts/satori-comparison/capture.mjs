@@ -66,7 +66,7 @@ const OUT = resolve(option('out') ?? join(EVIDENCE_ROOT, 'satori-comparison'));
 const REUSE = option('storybooks') ? resolve(option('storybooks')) : null;
 const KEEP = flag('keep');
 
-/** The other agents' and the developer's Storybooks. Never probed, never bound. */
+/** The two libraries' `storybook` dev-server ports. Never probed, never bound. */
 const RESERVED_PORTS = new Set([6006, 6007]);
 const FIRST_PORT = 6008;
 
