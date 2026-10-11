@@ -93,6 +93,7 @@ jobs:
           set -euo pipefail
           npm run review:analysis-selftest
           npm run docs:links-selftest
+          npm run docs:storage-selftest
 
       # Static checks that `beta:gate` has run locally since Phase 5 and that had
       # never run here. They are seconds each and they close a specific hole: the local

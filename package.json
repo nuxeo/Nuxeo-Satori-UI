@@ -32,6 +32,7 @@
     "docs:publish": "node scripts/render-mermaid.mjs && node scripts/publish-confluence.mjs",
     "docs:verify": "node scripts/verify-confluence.mjs",
     "docs:links-selftest": "node scripts/confluence-links.selftest.mjs",
+    "docs:storage-selftest": "node scripts/confluence-storage.selftest.mjs",
     "ci:registry-auth": "node scripts/registry-auth-check.mjs",
     "ci:registry-auth-selftest": "node scripts/registry-auth-check.selftest.mjs",
     "beta:state": "node scripts/beta-harness/state-check.mjs",
