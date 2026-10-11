@@ -6236,6 +6236,31 @@ const SATORI_COMPONENTS_ROOT = 'libs/shared/satori-components';
 const SATORI_COMPONENTS_ENTRY = '@nuxeo-satori/platform/components';
 const SATORI_COMPONENTS_BARREL = `${SATORI_COMPONENTS_ROOT}/src/index.ts`;
 
+/**
+ * `@nuxeo-satori/platform/components-satori`: the same primitive IDs re-registered on Satori, and
+ * the one place in the library family allowed to import `@hylandsoftware/satori-ui` (plan section 3).
+ * Its own project, so the base library's no-Satori rule needs no exception carved into it.
+ */
+const SATORI_FALLBACK_ROOT = 'libs/shared/satori-components-satori';
+const SATORI_FALLBACK_ENTRY = '@nuxeo-satori/platform/components-satori';
+const SATORI_FALLBACK_BARREL = `${SATORI_FALLBACK_ROOT}/src/index.ts`;
+
+/** Each library in the family, with its entry point and the `ng-package.json` that publishes it. */
+const SATORI_LIBRARIES = [
+  {
+    root: SATORI_COMPONENTS_ROOT,
+    entry: SATORI_COMPONENTS_ENTRY,
+    barrel: SATORI_COMPONENTS_BARREL,
+    ngPackage: 'libs/platform/components/ng-package.json',
+  },
+  {
+    root: SATORI_FALLBACK_ROOT,
+    entry: SATORI_FALLBACK_ENTRY,
+    barrel: SATORI_FALLBACK_BARREL,
+    ngPackage: 'libs/platform/components-satori/ng-package.json',
+  },
+];
+
 const isTsconfig = (path) => /(^|\/)tsconfig[^/]*\.json$/.test(path);
 
 /**
@@ -6571,10 +6596,6 @@ function satoriComponentsStorybookStyles() {
  */
 function checkSatoriComponentsDependencies() {
   const sources = satoriComponentsSources();
-  const roots = [
-    ...sources,
-    ...walk(SATORI_COMPONENTS_STORYBOOK, (path) => /\.(ts|mts)$/.test(path)),
-  ];
   if (sources.length === 0) {
     fail(
       `${SATORI_COMPONENTS_ROOT} has no TypeScript sources, so the no-ADF / no-Satori rule for ` +
@@ -6582,35 +6603,89 @@ function checkSatoriComponentsDependencies() {
     );
     return;
   }
+  checkDependencyClosure({
+    root: SATORI_COMPONENTS_ROOT,
+    roots: [...sources, ...walk(SATORI_COMPONENTS_STORYBOOK, (path) => /\.(ts|mts)$/.test(path))],
+    styleRoots: satoriComponentsStorybookStyles(),
+    banned: (specifier) => {
+      const common = bannedForSatoriLibraries(specifier);
+      if (common) return common;
+      if (/^@hylandsoftware\//.test(specifier)) {
+        return (
+          'Satori may enter only through a separate `/components-satori` entry point, so this ' +
+          'library never needs the Satori package itself'
+        );
+      }
+      return null;
+    },
+  });
+}
 
+/** ADF and the HxCS client are out of the whole library family, the Satori entry point included. */
+function bannedForSatoriLibraries(specifier) {
+  if (/^@alfresco\//.test(specifier)) {
+    return 'ADF leaves the dependency tree in NXSAT-308, and nothing new may be built on it';
+  }
+  if (/^@hylandsoftware\/hxcs-js-client(\/|$)/.test(specifier)) {
+    return 'the HxCS client exists only for the adf-hx bridge and leaves with it';
+  }
+  return null;
+}
+
+/**
+ * `/components-satori` may import `@hylandsoftware/satori-ui` — exactly that package, and only here.
+ *
+ * It is the package's one optional peer from GitHub Packages, so nothing else from that registry
+ * may enter even through this library: `satori-tokens` or `satori-icons` imported directly would be
+ * a second, undeclared dependency a customer's install could not satisfy. Followed transitively,
+ * like the base library's rule, so it also holds for anything this library reaches.
+ */
+function checkSatoriFallbackDependencies() {
+  const sources = walk(`${SATORI_FALLBACK_ROOT}/src`, (path) => /\.(ts|mts)$/.test(path));
+  if (sources.length === 0) {
+    fail(
+      `${SATORI_FALLBACK_ROOT} has no TypeScript sources, so the rule that it alone may import ` +
+        '`@hylandsoftware/satori-ui` asserted nothing.',
+    );
+    return;
+  }
+  checkDependencyClosure({
+    root: SATORI_FALLBACK_ROOT,
+    roots: sources,
+    banned: (specifier) => {
+      const common = bannedForSatoriLibraries(specifier);
+      if (common) return common;
+      if (/^@hylandsoftware\/satori-ui(\/|$)/.test(specifier)) return null;
+      if (/^@hylandsoftware\//.test(specifier)) {
+        return (
+          'only `@hylandsoftware/satori-ui` is a peer of the package, and an optional one, so ' +
+          'nothing else from GitHub Packages may enter, even here'
+        );
+      }
+      return null;
+    },
+  });
+}
+
+/**
+ * Walk every import, stylesheet `@use` and component `styleUrl` reachable from `roots`, through
+ * workspace aliases and relative paths, and fail each external specifier `banned` names a reason for.
+ */
+function checkDependencyClosure({ root, roots, styleRoots = [], banned }) {
   const pathMaps = tsconfigPathMaps();
   const reportedFor = new Set();
-  const banned = (specifier) => {
-    if (/^@alfresco\//.test(specifier)) {
-      return 'ADF leaves the dependency tree in NXSAT-308, and nothing new may be built on it';
-    }
-    if (/^@hylandsoftware\/hxcs-js-client(\/|$)/.test(specifier)) {
-      return 'the HxCS client exists only for the adf-hx bridge and leaves with it';
-    }
-    if (/^@hylandsoftware\//.test(specifier)) {
-      return (
-        'Satori may enter only through a separate `/components-satori` entry point, so this ' +
-        'library never needs the Satori package itself'
-      );
-    }
-    return null;
-  };
+  const project = `${root}/project.json`;
   // One report per offending import, however many library files reach it.
   const report = (chain, specifier, why) => {
     const holder = chain[chain.length - 1];
     const key = `${holder}|${specifier}`;
     if (reportedFor.has(key)) return;
     reportedFor.add(key);
-    const outside = !holder.startsWith(`${SATORI_COMPONENTS_ROOT}/`);
+    const outside = !holder.startsWith(`${root}/`);
     fail(
       `${holder} imports \`${specifier}\`` +
         (outside ? `, and the library reaches that file through ${chain.join(' -> ')}` : '') +
-        `. ${SATORI_COMPONENTS_ROOT} may not depend on it: ${why}.` +
+        `. ${root} may not depend on it: ${why}.` +
         (outside
           ? '\n    The import is not in the library itself — move what you need behind a ' +
             'boundary that does not carry the package, or remove the package from that file.'
@@ -6644,15 +6719,15 @@ function checkSatoriComponentsDependencies() {
   };
 
   const storybookStyles = new Set();
-  for (const styleFile of satoriComponentsStorybookStyles()) {
+  for (const styleFile of styleRoots) {
     if (!fileExists(styleFile)) {
       fail(
-        `${SATORI_COMPONENTS_PROJECT} names \`${styleFile}\` in build-storybook's styles, and it ` +
+        `${project} names \`${styleFile}\` in build-storybook's styles, and it ` +
           'does not exist, so the token-free Storybook theme was not checked.',
       );
       continue;
     }
-    scanStyles(styleFile, [SATORI_COMPONENTS_PROJECT], storybookStyles);
+    scanStyles(styleFile, [project], storybookStyles);
   }
 
   for (const root of roots) {
@@ -6698,44 +6773,104 @@ function checkSatoriComponentsDependencies() {
 }
 
 /**
- * The library is reached through `@nuxeo-satori/platform/components` and nothing else.
+ * Each library is reached through its entry point and nothing else —
+ * `@nuxeo-satori/platform/components`, and `@nuxeo-satori/platform/components-satori`.
  *
  * A deep import into a library cannot be versioned — the reason the customer guardrail rejects
  * deep platform imports — and across a federation boundary it cannot be loaded at all. So: no
  * subpath under the entry specifier, no relative path into the library from outside it, no second
  * alias into it in any tsconfig — a project's own `paths` included — and the alias and the
- * published `ng-package.json` both name the barrel.
+ * published `ng-package.json` both name the barrel. The package root lists the subpath in
+ * `PLATFORM_ENTRY_POINTS`, which customers and the docs read as the set of entry points.
  */
 function checkSatoriComponentsEntryPoint() {
-  if (!fileExists(SATORI_COMPONENTS_BARREL)) {
+  checkLibraryEntryPoint(SATORI_LIBRARIES[0]);
+}
+
+/** `/components-satori` is held to the same single-entry-point rule as the base library. */
+function checkSatoriFallbackEntryPoint() {
+  checkLibraryEntryPoint(SATORI_LIBRARIES[1]);
+}
+
+const PLATFORM_INDEX = 'libs/platform/src/index.ts';
+
+/**
+ * The subpaths `PLATFORM_ENTRY_POINTS` lists, or `null` when the package root does not export it as
+ * a literal list of strings, optionally `as const` and wrapped in `Object.freeze(...)`.
+ */
+function platformEntryPoints() {
+  if (!fileExists(PLATFORM_INDEX)) return null;
+  const source = ts.createSourceFile(
+    PLATFORM_INDEX,
+    read(PLATFORM_INDEX),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const unwrap = (node) => {
+    let current = node;
+    while (
+      current &&
+      (ts.isAsExpression(current) ||
+        ts.isSatisfiesExpression(current) ||
+        ts.isParenthesizedExpression(current))
+    ) {
+      current = current.expression;
+    }
+    return current;
+  };
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if (!statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== 'PLATFORM_ENTRY_POINTS') {
+        continue;
+      }
+      let list = unwrap(declaration.initializer);
+      if (
+        list &&
+        ts.isCallExpression(list) &&
+        list.expression.getText(source) === 'Object.freeze' &&
+        list.arguments.length === 1
+      ) {
+        list = unwrap(list.arguments[0]);
+      }
+      if (!list || !ts.isArrayLiteralExpression(list)) return null;
+      if (!list.elements.every((element) => ts.isStringLiteralLike(element))) return null;
+      return list.elements.map((element) => element.text);
+    }
+  }
+  return null;
+}
+
+function checkLibraryEntryPoint({ root, entry, barrel, ngPackage }) {
+  if (!fileExists(barrel)) {
     fail(
-      `${SATORI_COMPONENTS_BARREL} does not exist, so the component library has no entry point ` +
+      `${barrel} does not exist, so the library has no entry point ` +
         'and the no-deep-imports rule asserted nothing.',
     );
     return;
   }
 
   const pathMaps = tsconfigPathMaps();
-  const inLibrary = (path) =>
-    path === SATORI_COMPONENTS_ROOT || path.startsWith(`${SATORI_COMPONENTS_ROOT}/`);
-  const isBarrelOnly = (targets) => targets.length === 1 && targets[0] === SATORI_COMPONENTS_BARREL;
+  const inLibrary = (path) => path === root || path.startsWith(`${root}/`);
+  const isBarrelOnly = (targets) => targets.length === 1 && targets[0] === barrel;
 
   const base = pathMaps.find((map) => map.declaredIn === 'tsconfig.base.json')?.paths ?? {};
-  const entryTargets = base[SATORI_COMPONENTS_ENTRY] ?? [];
+  const entryTargets = base[entry] ?? [];
   if (!isBarrelOnly(entryTargets)) {
     fail(
-      `tsconfig.base.json must map \`${SATORI_COMPONENTS_ENTRY}\` to exactly ` +
-        `\`${SATORI_COMPONENTS_BARREL}\`; it maps it to ${JSON.stringify(entryTargets)}.`,
+      `tsconfig.base.json must map \`${entry}\` to exactly ` +
+        `\`${barrel}\`; it maps it to ${JSON.stringify(entryTargets)}.`,
     );
   }
   for (const { declaredIn, paths } of pathMaps) {
     for (const [alias, targets] of Object.entries(paths)) {
-      if (alias === SATORI_COMPONENTS_ENTRY) {
+      if (alias === entry) {
         // A project that declares `paths` must re-declare the entry, and may — to the barrel.
         if (declaredIn !== 'tsconfig.base.json' && !isBarrelOnly(targets)) {
           fail(
-            `${declaredIn} maps \`${SATORI_COMPONENTS_ENTRY}\` to ${JSON.stringify(targets)}; ` +
-              `like tsconfig.base.json it must name exactly \`${SATORI_COMPONENTS_BARREL}\`.`,
+            `${declaredIn} maps \`${entry}\` to ${JSON.stringify(targets)}; ` +
+              `like tsconfig.base.json it must name exactly \`${barrel}\`.`,
           );
         }
         continue;
@@ -6743,17 +6878,16 @@ function checkSatoriComponentsEntryPoint() {
       const into = targets.filter(inLibrary);
       if (into.length > 0) {
         fail(
-          `${declaredIn} alias \`${alias}\` points into ${SATORI_COMPONENTS_ROOT} ` +
-            `(${into.join(', ')}). The library has one entry point, \`${SATORI_COMPONENTS_ENTRY}\`; ` +
+          `${declaredIn} alias \`${alias}\` points into ${root} ` +
+            `(${into.join(', ')}). The library has one entry point, \`${entry}\`; ` +
             'a second alias is a deep import with a name.',
         );
       }
     }
   }
 
-  const ngPackage = 'libs/platform/components/ng-package.json';
   if (!fileExists(ngPackage)) {
-    fail(`${ngPackage} is missing, so \`${SATORI_COMPONENTS_ENTRY}\` is not published.`);
+    fail(`${ngPackage} is missing, so \`${entry}\` is not published.`);
   } else {
     let entryFile;
     try {
@@ -6761,13 +6895,27 @@ function checkSatoriComponentsEntryPoint() {
     } catch {
       entryFile = undefined;
     }
-    const resolved = entryFile ? toPosixRel(join('libs/platform/components', entryFile)) : null;
-    if (resolved !== SATORI_COMPONENTS_BARREL) {
+    const resolved = entryFile ? toPosixRel(join(dirname(ngPackage), entryFile)) : null;
+    if (resolved !== barrel) {
       fail(
-        `${ngPackage} must publish \`${SATORI_COMPONENTS_BARREL}\`; its entryFile resolves to ` +
+        `${ngPackage} must publish \`${barrel}\`; its entryFile resolves to ` +
           `${resolved ?? '(none)'}.`,
       );
     }
+  }
+
+  const subpath = entry.slice('@nuxeo-satori/platform/'.length);
+  const listed = platformEntryPoints();
+  if (!listed) {
+    fail(
+      `${PLATFORM_INDEX} does not export \`PLATFORM_ENTRY_POINTS\` as a literal list of strings, ` +
+        `so whether it lists \`${subpath}\` was not checked.`,
+    );
+  } else if (!listed.includes(subpath)) {
+    fail(
+      `${PLATFORM_INDEX} does not list '${subpath}' in \`PLATFORM_ENTRY_POINTS\`, so the package ` +
+        `root does not advertise \`${entry}\`, which ${ngPackage} publishes.`,
+    );
   }
 
   const consumers = [
@@ -6776,9 +6924,9 @@ function checkSatoriComponentsEntryPoint() {
   ].filter((path) => !inLibrary(path));
   for (const file of consumers) {
     for (const specifier of importSpecifiers(read(file))) {
-      if (specifier === SATORI_COMPONENTS_ENTRY) continue;
+      if (specifier === entry) continue;
       let target = null;
-      if (specifier.startsWith(`${SATORI_COMPONENTS_ENTRY}/`)) {
+      if (specifier.startsWith(`${entry}/`)) {
         target = specifier;
       } else if (specifier.startsWith('.')) {
         const path = toPosixRel(join(dirname(file), specifier));
@@ -6788,9 +6936,9 @@ function checkSatoriComponentsEntryPoint() {
       }
       if (target) {
         fail(
-          `${file} imports \`${specifier}\`, which reaches into ${SATORI_COMPONENTS_ROOT} past its ` +
-            `entry point. Import from \`${SATORI_COMPONENTS_ENTRY}\`, and export what you need from ` +
-            `${SATORI_COMPONENTS_BARREL} if it is not there yet.`,
+          `${file} imports \`${specifier}\`, which reaches into ${root} past its ` +
+            `entry point. Import from \`${entry}\`, and export what you need from ` +
+            `${barrel} if it is not there yet.`,
         );
       }
     }
@@ -6809,10 +6957,12 @@ function checkSatoriComponentsEntryPoint() {
  *   `InjectionToken` with an explicit `provide…()` function, so host and remote can share one
  *   instance. Every `providedIn` value is refused, `'platform'` and `'any'` included.
  *
- * Specs are exempt: a test host is not part of the library.
+ * Specs are exempt: a test host is not part of the library. `/components-satori` ships in the same
+ * package and is held to the same rules; its absence is `checkSatoriFallbackDependencies`' to report.
  */
 function checkSatoriComponentsFederationReadiness() {
-  const sources = satoriComponentsSources().filter((path) => !/\.(spec|test)\.ts$/.test(path));
+  const nonSpec = (path) => /\.(ts|mts)$/.test(path) && !/\.(spec|test)\.ts$/.test(path);
+  const sources = satoriComponentsSources().filter(nonSpec);
   if (sources.length === 0) {
     fail(
       `${SATORI_COMPONENTS_ROOT} has no non-spec TypeScript sources, so the federation-readiness ` +
@@ -6821,7 +6971,7 @@ function checkSatoriComponentsFederationReadiness() {
     return;
   }
 
-  for (const file of sources) {
+  for (const file of [...sources, ...walk(`${SATORI_FALLBACK_ROOT}/src`, nonSpec)]) {
     const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
     const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
     const decoratorName = angularDecoratorNamer(source);
@@ -7281,6 +7431,73 @@ function checkSatoriComponentsHaveStories() {
   }
 }
 
+const NUXEO_UI_APP_CONFIG = 'apps/nuxeo-ui/src/app/app.config.ts';
+
+/**
+ * The product registers the primitives on Material, then on Satori (plan section 3).
+ *
+ * Registration layers in provider order and later wins, so the order is the whole mechanism: listed
+ * the other way round, Material silently replaces every Satori primitive and nothing else goes red.
+ * Read from the AST of the `providers` array — its element order is the provider order — so a call
+ * in a comment or a string counts for nothing.
+ */
+function checkSatoriPrimitivesRegisteredInOrder() {
+  if (!fileExists(NUXEO_UI_APP_CONFIG)) {
+    fail(
+      `${NUXEO_UI_APP_CONFIG} does not exist, so the primitive registration order was not checked.`,
+    );
+    return;
+  }
+  const source = ts.createSourceFile(
+    NUXEO_UI_APP_CONFIG,
+    read(NUXEO_UI_APP_CONFIG),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const calls = ['provideNxsComponents', 'provideNxsSatoriComponents'];
+  let positions = null;
+  const visit = (node) => {
+    if (positions) return;
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(source) === 'providers' &&
+      ts.isArrayLiteralExpression(node.initializer)
+    ) {
+      const names = node.initializer.elements.map((element) =>
+        ts.isCallExpression(element) && ts.isIdentifier(element.expression)
+          ? element.expression.text
+          : null,
+      );
+      positions = calls.map((call) => names.indexOf(call));
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  if (!positions) {
+    fail(
+      `${NUXEO_UI_APP_CONFIG} has no \`providers\` array, so the registration order was not checked.`,
+    );
+    return;
+  }
+  const [material, satori] = positions;
+  for (const [index, call] of calls.entries()) {
+    if (positions[index] === -1) {
+      fail(
+        `${NUXEO_UI_APP_CONFIG} does not call \`${call}()\` in its providers. The product includes ` +
+          'both registrations: Material from `/components`, re-registered on Satori by `/components-satori`.',
+      );
+    }
+  }
+  if (material !== -1 && satori !== -1 && satori < material) {
+    fail(
+      `${NUXEO_UI_APP_CONFIG} lists \`provideNxsSatoriComponents()\` before \`provideNxsComponents()\`. ` +
+        'Later registrations win, so Material replaces every Satori primitive. Swap them.',
+    );
+  }
+}
+
 const GUARDRAILS = [
   checkThemeTokens,
   checkDocsNumbering,
@@ -7322,6 +7539,9 @@ const GUARDRAILS = [
   checkSatoriComponentsEntryPoint,
   checkSatoriComponentsFederationReadiness,
   checkSatoriComponentsHaveStories,
+  checkSatoriFallbackDependencies,
+  checkSatoriFallbackEntryPoint,
+  checkSatoriPrimitivesRegisteredInOrder,
 ];
 
 /**

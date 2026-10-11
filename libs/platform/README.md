@@ -5,14 +5,15 @@ extensibility contract, the Nuxeo client, shared UI components, and bootstrap co
 
 ## Entry points
 
-| Import specifier                      | What it is                                                |
-| ------------------------------------- | --------------------------------------------------------- |
-| `@nuxeo-satori/platform`              | Package metadata and entry point list                     |
-| `@nuxeo-satori/platform/extensions`   | Layer 1/2 — slots, rules, actions, component registration |
-| `@nuxeo-satori/platform/app-config`   | Layer 0 — bootstrap config and runtime manifest           |
-| `@nuxeo-satori/platform/components`   | `nxs-` components, Material-backed, no Satori import      |
-| `@nuxeo-satori/platform/nuxeo-client` | Nuxeo REST services and document models                   |
-| `@nuxeo-satori/platform/ui`           | Shared components and dialogs                             |
+| Import specifier                           | What it is                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `@nuxeo-satori/platform`                   | Package metadata and entry point list                                                 |
+| `@nuxeo-satori/platform/extensions`        | Layer 1/2 — slots, rules, actions, component registration                             |
+| `@nuxeo-satori/platform/app-config`        | Layer 0 — bootstrap config and runtime manifest                                       |
+| `@nuxeo-satori/platform/components`        | `nxs-` components, Material-backed, no Satori import                                  |
+| `@nuxeo-satori/platform/components-satori` | The same primitive IDs on Satori; needs the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo-satori/platform/nuxeo-client`      | Nuxeo REST services and document models                                               |
+| `@nuxeo-satori/platform/ui`                | Shared components and dialogs                                                         |
 
 Sub-entry points are deliberate: importing the extension contract does not drag the Nuxeo
 client or Angular Material in with it.

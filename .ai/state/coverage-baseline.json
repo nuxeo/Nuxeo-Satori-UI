@@ -125,8 +125,8 @@
       "statements": 100,
       "branches": 100,
       "functions": 100,
-      "sTotal": 14,
-      "sCovered": 14
+      "sTotal": 124,
+      "sCovered": 124
     },
     "search": {
       "lines": 94.69,
@@ -199,6 +199,14 @@
       "functions": 89.36,
       "sTotal": 540,
       "sCovered": 528
+    },
+    "satori-components-satori": {
+      "lines": 100,
+      "statements": 100,
+      "branches": 100,
+      "functions": 100,
+      "sTotal": 95,
+      "sCovered": 95
     }
   }
 }

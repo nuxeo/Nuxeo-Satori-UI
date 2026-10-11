@@ -42,6 +42,9 @@
       "@nuxeo-satori/platform": ["libs/platform/src/index.ts"],
       "@nuxeo-satori/platform/app-config": ["libs/shared/app-config/src/index.ts"],
       "@nuxeo-satori/platform/components": ["libs/shared/satori-components/src/index.ts"],
+      "@nuxeo-satori/platform/components-satori": [
+        "libs/shared/satori-components-satori/src/index.ts"
+      ],
       "@nuxeo-satori/platform/extensions": ["libs/shared/extensions/src/index.ts"],
       "@nuxeo-satori/platform/nuxeo-client": ["libs/shared/nuxeo-client/src/index.ts"],
       "@nuxeo-satori/platform/ui": ["libs/shared/ui/src/index.ts"],

@@ -224,6 +224,12 @@ jobs:
           # `prepublishOnly` script. Phase 4 shipped a package that could not be
           # published at all, for want of `compilationMode: partial`.
           npm run beta:publishable
+          # Installs the built tarball into a scratch project with NO GitHub Packages credentials,
+          # from public npm, and requires it to succeed; then makes the Satori peer required again
+          # and requires the install to FAIL. Everything above runs against this monorepo's
+          # node_modules, which already holds @hylandsoftware/satori-ui, so none of it can see a
+          # customer's install 401 or 404 on a required peer.
+          npm run beta:installable
           # Compiles the template against the BUILT declarations instead of the source
           # tree — the resolution a customer actually gets. Found the platform being
           # compiled without `strictNullChecks`, shipping 27 wrong public types.

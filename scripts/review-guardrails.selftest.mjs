@@ -5370,6 +5370,13 @@ const nxsComponent = ({ imports = '', config = "selector: 'nxs-thing', standalon
   `@Component({\n  ${config}\n  templateUrl: './thing.component.html',\n` +
   `  styleUrl: './thing.component.scss',\n})\nexport class NxsThingComponent {}\n`;
 
+/** The package root, listing the given subpaths in `PLATFORM_ENTRY_POINTS`. */
+const PLATFORM_INDEX = 'libs/platform/src/index.ts';
+const platformIndex = (...subpaths) =>
+  `export const PLATFORM_ENTRY_POINTS = Object.freeze([${subpaths
+    .map((subpath) => `'${subpath}'`)
+    .join(', ')}] as const);\n`;
+
 /** A correct library: one standalone component behind its barrel, published and aliased. */
 const NXS_LIB = (extra = {}, paths = {}) => ({
   'tsconfig.base.json': `${JSON.stringify(
@@ -5387,6 +5394,7 @@ const NXS_LIB = (extra = {}, paths = {}) => ({
   )}\n`,
   'libs/platform/components/ng-package.json':
     '{ "lib": { "entryFile": "../../shared/satori-components/src/index.ts" } }\n',
+  [PLATFORM_INDEX]: platformIndex('components'),
   [`${NXS_ROOT}/src/index.ts`]:
     "export { NxsThingComponent } from './lib/thing/thing.component';\n",
   [NXS_COMPONENT]: nxsComponent(),
@@ -5474,7 +5482,7 @@ expectRed(
       "import type { SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';\n" +
         REAL_LIBS[AVATAR_COLORS],
     ),
-  /avatar-colors\.ts imports `@hylandsoftware\/satori-ui\/avatar`, and the library reaches that file through .* -> libs\/shared\/nuxeo-client\/src\/index\.ts -> libs\/shared\/nuxeo-client\/src\/lib\/constants\/avatar-colors\.ts\./,
+  /avatar-colors\.ts imports `@hylandsoftware\/satori-ui\/avatar`, and the library reaches that file through libs\/shared\/satori-components\/src\/.* -> libs\/shared\/nuxeo-client\/src\/index\.ts -> libs\/shared\/nuxeo-client\/src\/lib\/constants\/avatar-colors\.ts\./,
 );
 
 expectRed(
@@ -5486,7 +5494,7 @@ expectRed(
       EXTENSION_RULES,
       `import type { RuleContext } from '${ADF_EXTENSIONS}';\n` + REAL_LIBS[EXTENSION_RULES],
     ),
-  /extension-rules\.ts imports `@alfresco\/adf-extensions`, and the library reaches that file through .*probe\.ts -> libs\/shared\/extensions\/src\/index\.ts -> /,
+  /extension-rules\.ts imports `@alfresco\/adf-extensions`, and the library reaches that file through libs\/shared\/satori-components\/src\/.* -> libs\/shared\/extensions\/src\/index\.ts -> /,
 );
 
 expectRed(
@@ -6786,6 +6794,225 @@ expectRed(
   NXS_LIB({ [NXS_STORY]: nxsStory() }),
   null,
   /\.storybook\/main\.ts does not exist/,
+);
+
+// `/components-satori` — the one place in the family allowed to import @hylandsoftware/satori-ui
+
+const NXS_SAT_ROOT = 'libs/shared/satori-components-satori';
+const NXS_SAT_PROVIDER = `${NXS_SAT_ROOT}/src/lib/provide.ts`;
+const NXS_FALLBACK = (extra = {}, paths = {}) =>
+  NXS_LIB(
+    {
+      'libs/platform/components-satori/ng-package.json':
+        '{ "lib": { "entryFile": "../../shared/satori-components-satori/src/index.ts" } }\n',
+      [PLATFORM_INDEX]: platformIndex('components', 'components-satori'),
+      [`${NXS_SAT_ROOT}/src/index.ts`]: "export { provide } from './lib/provide';\n",
+      [NXS_SAT_PROVIDER]:
+        "import { SatTag } from '@hylandsoftware/satori-ui/tag';\n" +
+        "import { NxsThingComponent } from '@nuxeo-satori/platform/components';\n" +
+        'export const provide = () => [SatTag, NxsThingComponent];\n',
+      ...extra,
+    },
+    { '@nuxeo-satori/platform/components-satori': [`${NXS_SAT_ROOT}/src/index.ts`], ...paths },
+  );
+
+// checkSatoriFallbackDependencies
+
+expectGreen(
+  'the Satori entry point importing satori-ui and the base library',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK(),
+);
+
+expectRed(
+  'the Satori entry point importing another GitHub Packages package',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK({
+    [NXS_SAT_PROVIDER]:
+      "import { tokens } from '@hylandsoftware/satori-tokens';\nexport const provide = tokens;\n",
+  }),
+  null,
+  /provide\.ts imports `@hylandsoftware\/satori-tokens`\. .*only `@hylandsoftware\/satori-ui` is a peer/,
+);
+
+expectRed(
+  'the Satori entry point importing ADF',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK({
+    [NXS_SAT_PROVIDER]:
+      "import { FileSizePipe } from '@alfresco/adf-core';\nexport const provide = FileSizePipe;\n",
+  }),
+  null,
+  /provide\.ts imports `@alfresco\/adf-core`\. .*ADF leaves the dependency tree/,
+);
+
+expectRed(
+  'the Satori entry point reaching the HxCS client through a workspace library',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK({
+    [NXS_SAT_PROVIDER]:
+      "import { clean } from '@nuxeo-satori/platform/nuxeo-client';\nexport const provide = clean;\n",
+    'libs/shared/nuxeo-client/src/lib/clean.ts':
+      "import type { Document } from '@hylandsoftware/hxcs-js-client';\nexport const clean: Document | 1 = 1;\n",
+  }),
+  null,
+  /nuxeo-client\/src\/lib\/clean\.ts imports `@hylandsoftware\/hxcs-js-client`, and the library reaches that file through libs\/shared\/satori-components-satori/,
+);
+
+expectRed(
+  'no Satori entry point sources at all',
+  'checkSatoriFallbackDependencies',
+  NXS_LIB(),
+  null,
+  /satori-components-satori has no TypeScript sources, so the rule that it alone may import/,
+);
+
+// The base library must not reach Satori by importing the Satori entry point either.
+expectRed(
+  'the base library importing the Satori entry point',
+  'checkSatoriComponentsDependencies',
+  NXS_FALLBACK({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { provide } from '@nuxeo-satori/platform/components-satori';",
+    }),
+  }),
+  null,
+  /satori-components-satori\/src\/lib\/provide\.ts imports `@hylandsoftware\/satori-ui\/tag`, and the library reaches that file through .*thing\.component\.ts/,
+);
+
+// checkSatoriFallbackEntryPoint
+
+expectGreen(
+  'a consumer importing the Satori entry point by its specifier',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    [NXS_CONSUMER]: "import { provide } from '@nuxeo-satori/platform/components-satori';\n",
+  }),
+);
+
+expectRed(
+  'a deep import into the Satori entry point',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    [NXS_CONSUMER]:
+      "import { provide } from '@nuxeo-satori/platform/components-satori/lib/provide';\n",
+  }),
+  null,
+  /x\.ts imports `@nuxeo-satori\/platform\/components-satori\/lib\/provide`, which reaches into libs\/shared\/satori-components-satori past its entry point/,
+);
+
+expectRed(
+  'the Satori entry point published from somewhere other than its barrel',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    'libs/platform/components-satori/ng-package.json':
+      '{ "lib": { "entryFile": "../../shared/satori-components-satori/src/lib/provide.ts" } }\n',
+  }),
+  null,
+  /components-satori\/ng-package\.json must publish `libs\/shared\/satori-components-satori\/src\/index\.ts`/,
+);
+
+expectRed(
+  'the Satori entry point not aliased',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({}, { '@nuxeo-satori/platform/components-satori': [] }),
+  null,
+  /must map `@nuxeo-satori\/platform\/components-satori` to exactly/,
+);
+
+expectRed(
+  'the Satori entry point missing from PLATFORM_ENTRY_POINTS',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({ [PLATFORM_INDEX]: platformIndex('components') }),
+  null,
+  /libs\/platform\/src\/index\.ts does not list 'components-satori' in `PLATFORM_ENTRY_POINTS`/,
+);
+
+expectRed(
+  'PLATFORM_ENTRY_POINTS built from a variable the guardrail cannot read',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    [PLATFORM_INDEX]:
+      "const names = ['components', 'components-satori'] as const;\n" +
+      'export const PLATFORM_ENTRY_POINTS = Object.freeze(names);\n',
+  }),
+  null,
+  /does not export `PLATFORM_ENTRY_POINTS` as a literal list of strings, so whether it lists `components-satori` was not checked/,
+);
+
+expectRed(
+  'a package root that no longer declares PLATFORM_ENTRY_POINTS',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK(),
+  (write) => write(PLATFORM_INDEX, '// PLATFORM_ENTRY_POINTS moved elsewhere\n'),
+  /does not export `PLATFORM_ENTRY_POINTS` as a literal list of strings/,
+);
+
+// The base library's own entry-point rule is unaffected by a sibling whose name it prefixes.
+falsePositiveControls += 1;
+expectGreen(
+  'the base entry point check beside the Satori entry point',
+  'checkSatoriComponentsEntryPoint',
+  NXS_FALLBACK({
+    [NXS_CONSUMER]: "import { provide } from '@nuxeo-satori/platform/components-satori';\n",
+  }),
+);
+
+// checkSatoriComponentsFederationReadiness covers the Satori entry point too
+
+expectRed(
+  'a root-provided service in the Satori entry point',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_FALLBACK({
+    [`${NXS_SAT_ROOT}/src/lib/thing.service.ts`]:
+      "import { Injectable } from '@angular/core';\n" +
+      "@Injectable({ providedIn: 'root' })\nexport class ThingService {}\n",
+  }),
+  null,
+  /satori-components-satori\/src\/lib\/thing\.service\.ts:2 uses `providedIn`/,
+);
+
+// checkSatoriPrimitivesRegisteredInOrder
+
+const APP_CONFIG_FIXTURE = 'apps/nuxeo-ui/src/app/app.config.ts';
+const appConfig = (providers) =>
+  "import { ApplicationConfig } from '@angular/core';\n" +
+  `export const appConfig: ApplicationConfig = {\n  providers: [\n${providers
+    .map((p) => `    ${p},`)
+    .join('\n')}\n  ],\n};\n`;
+
+expectGreen('Material registration before Satori', 'checkSatoriPrimitivesRegisteredInOrder', {
+  [APP_CONFIG_FIXTURE]: appConfig([
+    'provideRouter([])',
+    'provideNxsComponents()',
+    'provideNxsSatoriComponents()',
+  ]),
+});
+
+expectRed(
+  'Satori registration before Material',
+  'checkSatoriPrimitivesRegisteredInOrder',
+  { [APP_CONFIG_FIXTURE]: appConfig(['provideNxsSatoriComponents()', 'provideNxsComponents()']) },
+  null,
+  /lists `provideNxsSatoriComponents\(\)` before `provideNxsComponents\(\)`\. Later registrations win/,
+);
+
+expectRed(
+  'no Satori registration in the product',
+  'checkSatoriPrimitivesRegisteredInOrder',
+  { [APP_CONFIG_FIXTURE]: appConfig(['provideNxsComponents()']) },
+  null,
+  /does not call `provideNxsSatoriComponents\(\)` in its providers/,
+);
+
+expectRed(
+  'the Material registration present only in a comment',
+  'checkSatoriPrimitivesRegisteredInOrder',
+  {
+    [APP_CONFIG_FIXTURE]: appConfig(['// provideNxsComponents()', 'provideNxsSatoriComponents()']),
+  },
+  null,
+  /does not call `provideNxsComponents\(\)` in its providers/,
 );
 
 // checkNoProseInComponentInputs scans `nxs-` elements too, or the library's own selector prefix

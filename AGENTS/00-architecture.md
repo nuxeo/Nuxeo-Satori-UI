@@ -74,6 +74,7 @@ libs/
     ke-client/                   ← Knowledge Enrichment client via Nuxeo CIC automation
     document-layouts/            ← Per-type layouts: package layout files or schema-generated (NXSAT-311); internal, not in the platform package
     satori-components/           ← nxs- component library, published as @nuxeo-satori/platform/components (NXSAT-308, below)
+    satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo-satori/platform/components-satori
     adf-hx-bridge/               ← HxPR bridge + hxp-* UI for adf-hx browse POC (see ARCHITECTURE.md)
 ```
 
@@ -101,11 +102,23 @@ gate, also in CI):
 | Reached only through `@nuxeo-satori/platform/components`: no subpath under it, no relative path into the library, no second alias in any tsconfig (a project's own `paths` included), and the alias and `libs/platform/components/ng-package.json` both name `src/index.ts`                                                                   | `checkSatoriComponentsEntryPoint`          |
 | Federation readiness: no `@NgModule`, every component, directive and pipe says `standalone: true`, and no `providedIn` of any value                                                                                                                                                                                                           | `checkSatoriComponentsFederationReadiness` |
 | Every component the barrel exports has a `*.stories.ts` under `src/` whose meta says `component: <Class>` and exports a story, and `.storybook/main.ts` loads `../src/**/*.stories.ts`                                                                                                                                                        | `checkSatoriComponentsHaveStories`         |
+| `libs/shared/satori-components-satori` may import `@hylandsoftware/satori-ui` and nothing else from GitHub Packages, no ADF and no HxCS client, followed transitively                                                                                                                                                                         | `checkSatoriFallbackDependencies`          |
+| It is reached only through `@nuxeo-satori/platform/components-satori`, by the same rules as the base library                                                                                                                                                                                                                                  | `checkSatoriFallbackEntryPoint`            |
+| `apps/nuxeo-ui` lists `provideNxsComponents()` before `provideNxsSatoriComponents()` in its providers                                                                                                                                                                                                                                         | `checkSatoriPrimitivesRegisteredInOrder`   |
 
-Satori is to reach these components only through a later, separate `/components-satori` entry
-point that re-registers the same IDs, so that once Satori is an optional peer of the package (the
-plan's `satori-fallback` work), a customer without GitHub Packages access still gets the Material
-implementations.
+**Satori if available, Material otherwise — by ID** (plan section 3). Four primitives overlap with
+Satori: avatar, breadcrumbs, tag and rich tooltip. `/components` implements each on Material and
+`provideNxsComponents()` registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`).
+`@nuxeo-satori/platform/components-satori` — its own project, `libs/shared/satori-components-satori`,
+same tags — re-registers the same IDs on Satori with `provideNxsSatoriComponents()`. Both go through
+`provideSatoriExtensions`, so later wins: the app lists both in that order, and an application
+without GitHub Packages access lists only the first. Each pair implements one `Nxs…Inputs`
+interface and a spec compares their declared inputs, so `componentInputs` mean the same thing
+whichever is registered. `@hylandsoftware/satori-ui` is an **optional** peer of the package, and
+`beta:installable` proves the built tarball installs without it. The IDs are in
+`docs/extension-reference.md` §6a; no packaged screen renders them yet. The base library's value
+unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
+`/components-satori`, since `/components` may not import Satori to check.
 
 **Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library, one story per
 exported component:
