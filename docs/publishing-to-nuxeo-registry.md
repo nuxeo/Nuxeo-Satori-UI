@@ -275,10 +275,12 @@ Everything except the network call:
 | The surface cannot drift unnoticed           | `npm run beta:api` — 2026 lines of signatures, watched failing          |
 | Peers declared                               | 10, all reachable specifiers accounted for                              |
 
-**Not proven — peer installability.** No test resolves `@angular/material` and the other
-nine peers from a clean registry at the versions we declare. `fork-simulation` covers
-type resolution offline; it says nothing about whether `npm install` succeeds. §5.5 is
-where that gets found out, which is why the first publish must be `alpha`.
+**Peer installability — proven for the required peers only.** `npm run beta:installable`
+installs the built tarball from public npm with no credentials, so `@angular/material` and the
+other required peers resolve at the versions we declare, and requires the same install to fail
+once the optional `@hylandsoftware/satori-ui` peer is made required. Not proven: that optional
+peer, which needs GitHub Packages access, and an install of a published version rather than the
+tarball. §5.5 is where that gets found out, which is why the first publish must be `alpha`.
 
 ---
 

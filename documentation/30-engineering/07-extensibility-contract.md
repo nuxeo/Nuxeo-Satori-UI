@@ -13,7 +13,8 @@ audience: engineering
 > Only the entry-point count and the `@nuxeo-satori/platform/components` row in §6 were
 > re-verified at that commit, and "Our rule context is deliberately not upstream's" in §5 at
 > `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure in §6 carries its own
-> date. The rest of the page as of 2026-08-24 · `77265f9`.
+> date. The entry-point count and the `@nuxeo-satori/platform/components-satori` row in §6 were
+> verified again at `ad60a576`. The rest of the page as of 2026-08-24 · `77265f9`.
 > Customer-facing companion: [`docs/extension-reference.md`](../../docs/extension-reference.md),
 > which is drift-gated by `npm run beta:reference`.
 
@@ -273,17 +274,18 @@ upstream's output.
 
 ## 6. Layer 2 — `@nuxeo-satori/platform`
 
-One publishable library, five secondary entry points; `npm pack --dry-run` on the build gives a
+One publishable library, six secondary entry points; `npm pack --dry-run` on the build gives a
 556 kB tarball of 70 files (measured 2026-10-08).
 
-| Entry point                           | Wraps                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| `@nuxeo-satori/platform`              | Root — `PLATFORM_ENTRY_POINTS`, shared types                          |
-| `@nuxeo-satori/platform/extensions`   | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent` |
-| `@nuxeo-satori/platform/app-config`   | Layer 0 loader and tokens                                             |
-| `@nuxeo-satori/platform/components`   | `nxs-` components — Material-backed, no ADF or Satori import          |
-| `@nuxeo-satori/platform/nuxeo-client` | Services and models                                                   |
-| `@nuxeo-satori/platform/ui`           | Shared presentational components                                      |
+| Entry point                                | Wraps                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@nuxeo-satori/platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
+| `@nuxeo-satori/platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
+| `@nuxeo-satori/platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
+| `@nuxeo-satori/platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo-satori/platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo-satori/platform/nuxeo-client`      | Services and models                                                                                                                              |
+| `@nuxeo-satori/platform/ui`                | Shared presentational components                                                                                                                 |
 
 ### One declarative object reaches four registries
 
