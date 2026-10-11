@@ -59,7 +59,7 @@ Leaving out `provideNxsSatoriComponents()` gives the built-in versions; nothing 
 
 ## Side by side
 
-Every component in the library, rendered from the same Storybook story with the same inputs: on the left without Satori (built-in components, Material theme), on the right with Satori. The four primitives render Satori's own component when Satori is registered; every other component is the same component under Satori's theme.
+Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The four primitives render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
 
 ### Avatar
 
@@ -142,7 +142,7 @@ The same Material Icons glyph in both; it takes the theme's primary colour.
 
 ![Document type icon: without Satori on the left, with Satori on the right](doc-type-icon-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same icon for each document type in both; only the theme's colours change.
+The same icon for each document type, and no visible difference: the icons take the surrounding text colour, which both themes keep near-black.
 
 ### Folder header
 
@@ -185,12 +185,12 @@ The same icon, heading, message and projected action in both; the theme sets the
 
 ### Spinner
 
-| Field           | Value                                 |
-| --------------- | ------------------------------------- |
-| Component       | `NxsSpinnerComponent`                 |
-| Registered ID   | —                                     |
-| With Satori     | Same component; theme only            |
-| Storybook story | `states-spinner--beside-visible-text` |
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| Component       | `NxsSpinnerComponent`      |
+| Registered ID   | —                          |
+| With Satori     | Same component; theme only |
+| Storybook story | `states-spinner--named`    |
 
 ![Spinner: without Satori on the left, with Satori on the right](spinner-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 

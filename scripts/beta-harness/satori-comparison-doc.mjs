@@ -305,7 +305,7 @@ export function forbiddenReferences(text) {
 export function checkComparison(inputs) {
   const problems = [...inputs.barrelProblems];
   const fail = (msg) => problems.push(msg);
-  if (inputs.doc == null) {
+  if (typeof inputs.doc !== 'string') {
     fail(`${DOC} does not exist`);
     return { problems, components: [] };
   }
