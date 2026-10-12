@@ -3,14 +3,14 @@ title: Repository Guide
 parent: Engineering
 order: 3
 last_reviewed: 2026-10-12
-repo_commit: 47a7d18
+repo_commit: ae4cfcc
 audience: engineering
 ---
 
 # Repository Guide
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `feature/nxsat-308-agent-surface`'s merge of
-> `47a7d18` (`integration/nxsat-308`)
+> **Last reviewed:** 2026-10-12 · **Repository:** `ae4cfcc` (`feature/nxsat-308-agent-surface`,
+> its merge of `integration/nxsat-308` at `47a7d18`)
 > Only the `satori-components` and `satori-components-satori` rows of "Shared libraries" and the
 > `libs/platform` row of "The other three" were re-verified at that commit, with the
 > `satori-component` generator's marker comments and `headingLevel`'s numeric Storybook control,

@@ -2,16 +2,18 @@
 title: Extensibility Contract
 parent: Engineering
 order: 7
-last_reviewed: 2026-10-11
-repo_commit: ad60a57
+last_reviewed: 2026-10-12
+repo_commit: 82c78bd
 audience: engineering
 ---
 
 # The Extensibility Contract — four layers
 
-> **Last reviewed:** 2026-10-11 · **Repository:** `ad60a57`
-> Only the entry-point count and the `@nuxeo-satori/platform/components-satori` row in §6 were
-> verified at that commit. The `@nuxeo-satori/platform/components` row in §6 was re-verified at
+> **Last reviewed:** 2026-10-12 · **Repository:** `82c78bd` (`feature/nxsat-308-agent-surface`)
+> Only "The six guardrail checks" was verified at that commit, against
+> `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
+> `@nuxeo-satori/platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
+> The `@nuxeo-satori/platform/components` row in §6 was re-verified at
 > `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
 > upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
 > in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.

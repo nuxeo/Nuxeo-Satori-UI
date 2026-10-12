@@ -376,5 +376,6 @@ the focused document as a `document` input. Their state and descriptor fields ar
 - **no spec names** — by its ID, the key expression it is registered under, or its class;
 - **uses another prefix's selector** — yours is `<owner>-`; `nxs-`, `lib-`, `app-` and `sat-`
   belong to the platform and collide on an upgrade;
-- **overrides an `nxs.primitives.*` ID without implementing its contract**, or one that does not
-  exist.
+- **overrides an `nxs.primitives.*` ID without implementing its contract** — the interface
+  imported from `@nuxeo-satori/platform/components`, not a same-named one of your own — or one that
+  does not exist.

@@ -271,6 +271,7 @@ describe('satori-component generator', () => {
   it('places a sidebar component behind a nav entry that opens a drawer', async () => {
     const message = await generate(tree, { name: 'claim-drawer', slot: 'sidebar' });
     expect(message).toContain('"hasDrawer": true');
+    expect(message).toContain('"path": "/claim-drawer"');
     expect(message.match(/"id": "acme\.navbar\.claimDrawer"/g)).toHaveLength(2);
     expect(message).toContain('"componentId": "nxs.sidebar.claimDrawer"');
   });

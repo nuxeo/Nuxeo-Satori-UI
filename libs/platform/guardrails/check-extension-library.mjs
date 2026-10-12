@@ -108,16 +108,28 @@ const rel = (f) => f.slice(ROOT.length + 1);
  *
  * Inferred rather than required as an argument so the check cannot be silenced by
  * passing the wrong owner. The most common prefix wins; anything else is reported.
+ * The platform's own prefixes never win: a library that only overrides `nxs.primitives.tag`
+ * would otherwise be "owned" by `nxs`, and the selector check would demand `nxs-`.
  */
+const PLATFORM_ID_PREFIXES = new Set(['app', 'nxs']);
 const idPattern = /['"`]([a-z][a-z0-9]*)\.([a-zA-Z]+)\.([a-zA-Z][a-zA-Z0-9]*)['"`]/g;
 const counts = new Map();
+let platformIds = 0;
 for (const [, text] of code) {
-  for (const m of text.matchAll(idPattern)) counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  for (const m of text.matchAll(idPattern)) {
+    if (PLATFORM_ID_PREFIXES.has(m[1])) platformIds += 1;
+    else counts.set(m[1], (counts.get(m[1]) ?? 0) + 1);
+  }
 }
 const owner = [...counts].sort((a, b) => b[1] - a[1])[0]?.[0];
 
 if (!owner) {
-  warn('No `<owner>.<surface>.<name>` IDs found. Does this library register anything?');
+  warn(
+    platformIds
+      ? 'Only platform IDs (`app.`, `nxs.`) found, so no owner prefix of your own was inferred. ' +
+          'Overriding one is fine; anything you add needs your own `<owner>.` prefix.'
+      : 'No `<owner>.<surface>.<name>` IDs found. Does this library register anything?',
+  );
 } else {
   for (const [file, text] of code) {
     for (const m of text.matchAll(idPattern)) {
@@ -371,16 +383,35 @@ for (const [file, text] of code) {
     const seenKeys = new Set();
     for (const m of body.matchAll(LAZY)) {
       seenKeys.add(m[1]);
-      contributions.push({ file, key: m[1], className: m[4], target: resolveRelative(file, m[2]), from: m[2] });
+      contributions.push({
+        file,
+        key: m[1],
+        className: m[4],
+        target: resolveRelative(file, m[2]),
+        from: m[2],
+      });
     }
     for (const m of body.matchAll(EAGER)) {
       if (seenKeys.has(m[1])) continue;
-      seenKeys.add(m[1]);
       const imported = new RegExp(
         String.raw`import\s*(?:type\s*)?\{[^}]*\b${m[2]}\b[^}]*\}\s*from\s*['"]([^'"]+)['"]`,
       ).exec(text);
-      if (!imported || !imported[1].startsWith('.')) continue; // a platform class, re-registered
-      contributions.push({ file, key: m[1], className: m[2], target: resolveRelative(file, imported[1]), from: imported[1] });
+      // Only a named import is read. A default or namespace import, a class declared in this file
+      // or one from another package stays unseen, so the warning below names it.
+      if (!imported) continue;
+      if (imported[1].startsWith('@nuxeo-satori/platform')) {
+        seenKeys.add(m[1]); // a platform class, re-registered
+        continue;
+      }
+      if (!imported[1].startsWith('.')) continue;
+      seenKeys.add(m[1]);
+      contributions.push({
+        file,
+        key: m[1],
+        className: m[2],
+        target: resolveRelative(file, imported[1]),
+        from: imported[1],
+      });
     }
     for (const m of body.matchAll(ANY_ENTRY)) {
       if (!seenKeys.has(m[1])) {
@@ -422,23 +453,36 @@ for (const { file, key, className, target, from } of contributions) {
     );
   }
   const selector = /selector\s*:\s*['"]([^'"]+)['"]/.exec(componentSource)?.[1];
-  if (owner && selector && !selector.startsWith(`${owner}-`) && !selector.startsWith(`[${owner}`)) {
+  const reserved = ['nxs', 'lib', 'app', 'sat'].some(
+    (prefix) => selector?.startsWith(`${prefix}-`) || selector?.startsWith(`[${prefix}`),
+  );
+  const notOwners =
+    owner && !selector?.startsWith(`${owner}-`) && !selector?.startsWith(`[${owner}`);
+  if (selector && (reserved || notOwners)) {
     fail(
-      `${rel(target)} declares selector \`${selector}\`. Use your owner prefix, \`${owner}-\`: ` +
+      `${rel(target)} declares selector \`${selector}\`. Use your owner prefix` +
+        `${owner ? `, \`${owner}-\`` : ''}: ` +
         '`nxs-` is the platform component library and `lib-`, `app-` and `sat-` its shell and ' +
         'design system, so a selector under them collides on an upgrade.',
     );
   }
-  const primitive = /nxs\.primitives\.(\w+)/.exec(keyText)?.[1] ?? /NXS_PRIMITIVE_IDS\.(\w+)/.exec(key)?.[1];
+  // Anchored, and the whole suffix kept: `nxs.primitives.tag.extra` is not the `tag` primitive.
+  const primitive =
+    /^nxs\.primitives\.(.+)$/.exec(keyText)?.[1] ??
+    /^\[\s*NXS_PRIMITIVE_IDS\.(\w+)\s*\]$/.exec(key)?.[1];
   const contract = primitive && PRIMITIVE_CONTRACTS[primitive];
+  const implementsContract =
+    contract &&
+    new RegExp(String.raw`class\s+${className}\b[^{]*\bimplements\b[^{]*\b${contract}\b`).test(
+      componentSource,
+    ) &&
+    // The platform's interface, not a same-named one declared locally or taken from elsewhere.
+    new RegExp(
+      String.raw`import\s*(?:type\s*)?\{[^}]*\b${contract}\b[^}]*\}\s*from\s*['"]@nuxeo-satori/platform/components['"]`,
+    ).test(componentSource);
   if (primitive && !contract) {
     fail(`${where}, but the platform has no \`nxs.primitives.${primitive}\` to override.`);
-  } else if (
-    contract &&
-    !new RegExp(String.raw`class\s+${className}\b[^{]*\bimplements\b[^{]*\b${contract}\b`).test(
-      componentSource,
-    )
-  ) {
+  } else if (contract && !implementsContract) {
     fail(
       `${where}, overriding a platform primitive, but \`${className}\` does not implement ` +
         `\`${contract}\` from '@nuxeo-satori/platform/components'. A host passes that interface's ` +

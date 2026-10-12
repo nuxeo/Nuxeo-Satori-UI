@@ -127,11 +127,13 @@ function placementFor(
         : slot === 'tabs'
           ? { tabs: [{ id: componentId, label: title, componentId }] }
           : {
+              // A path of its own: the shell tells drawers apart by `path`, and a packaged one
+              // (`/browse-adf-hx`) would toggle that entry's drawer and navigate to its page.
               navbar: [
                 {
                   id: `acme.navbar.${propertyName}`,
                   label: title,
-                  path: '/browse-adf-hx',
+                  path: `/${fileName}`,
                   icon: 'view_sidebar',
                   hasDrawer: true,
                 },

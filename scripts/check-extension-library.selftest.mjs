@@ -16,7 +16,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-const GUARDRAIL = resolve(import.meta.dirname, '../libs/platform/guardrails/check-extension-library.mjs');
+const GUARDRAIL = resolve(
+  import.meta.dirname,
+  '../libs/platform/guardrails/check-extension-library.mjs',
+);
 const failures = [];
 let negative = 0;
 let positive = 0;
@@ -39,17 +42,23 @@ function expectRed(label, files, reason) {
   negative += 1;
   const { code, out } = run(files);
   if (code === 0) failures.push(`${label}: passed, but the library is broken on purpose.`);
-  else if (!reason.test(out)) failures.push(`${label}: failed, not for /${reason.source}/:\n${out}`);
+  else if (!reason.test(out))
+    failures.push(`${label}: failed, not for /${reason.source}/:\n${out}`);
 }
 
 function expectGreen(label, files, also) {
   positive += 1;
   const { code, out } = run(files);
   if (code !== 0) failures.push(`${label}: failed on a correct library:\n${out}`);
-  else if (also && !also.test(out)) failures.push(`${label}: passed, but without /${also.source}/:\n${out}`);
+  else if (also && !also.test(out))
+    failures.push(`${label}: passed, but without /${also.source}/:\n${out}`);
 }
 
-const panel = ({ selector = 'acme-claims', className = 'AcmeClaimsComponent', implementsClause = '' } = {}) =>
+const panel = ({
+  selector = 'acme-claims',
+  className = 'AcmeClaimsComponent',
+  implementsClause = '',
+} = {}) =>
   "import { Component } from '@angular/core';\n" +
   `@Component({ selector: '${selector}', standalone: true, templateUrl: './claims.html' })\n` +
   `export class ${className}${implementsClause} {}\n`;
@@ -63,7 +72,8 @@ const extensions = (entry) =>
   `    components: {\n      ${entry}\n    },\n` +
   '  });\n';
 
-const LAZY = "'acme.panel.claims': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),";
+const LAZY =
+  "'acme.panel.claims': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),";
 
 const library = (overrides = {}) => ({
   'src/index.ts': "export { provideAcme } from './lib/extensions';\n",
@@ -77,7 +87,11 @@ const library = (overrides = {}) => ({
 
 // ---------------------------------------------------------------- positives ----
 
-expectGreen('a lazily registered, tested, prefixed component', library(), /1 component registration\(s\)/);
+expectGreen(
+  'a lazily registered, tested, prefixed component',
+  library(),
+  /1 component registration\(s\)/,
+);
 
 expectGreen(
   'an eagerly registered component imported from a relative path',
@@ -94,7 +108,9 @@ expectGreen(
   library({
     'src/lib/extensions.ts':
       "export const IDS = { components: ['acme.panel.claims'] } as const;\n" +
-      extensions("[IDS.components[0]]: () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),"),
+      extensions(
+        "[IDS.components[0]]: () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+      ),
     'src/lib/extensions.spec.ts':
       "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
       "it('registers', () => expect(r(ExtensionComponentRegistry).has(IDS.components[0])).toBe(true));\n",
@@ -117,7 +133,100 @@ expectGreen(
   }),
 );
 
+const overrideSpec = (id) =>
+  "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+  `it('overrides', () => expect(r(ExtensionComponentRegistry).peek('${id}')).toBe(AcmeClaimsComponent));\n`;
+const TAG_CONTRACT = "import type { NxsTagInputs } from '@nuxeo-satori/platform/components';\n";
+
+/** A library whose only ID is a platform primitive it overrides: no `acme.` ID to infer from. */
+const primitiveOnly = (claims) => ({
+  'src/index.ts': "export { provideAcme } from './lib/extensions';\n",
+  'src/lib/extensions.ts':
+    "import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';\n" +
+    'export const provideAcme = () =>\n' +
+    '  provideSatoriExtensions({\n' +
+    "    components: { 'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent) },\n" +
+    '  });\n',
+  'src/lib/claims/claims.ts': claims,
+  'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+});
+
+expectGreen(
+  'a library that only overrides a primitive keeps its own selector prefix',
+  primitiveOnly(
+    TAG_CONTRACT + panel({ selector: 'acme-tag', implementsClause: ' implements NxsTagInputs' }),
+  ),
+  /1 component registration\(s\)/,
+);
+
+expectGreen(
+  'an eager registration of a default-imported class is warned about, not skipped',
+  library({
+    'src/lib/extensions.ts':
+      "import AcmeClaimsComponent from './claims/claims';\n" +
+      extensions("'acme.panel.claims': AcmeClaimsComponent,"),
+  }),
+  /registers the component 'acme\.panel\.claims' in a shape this check does not read/,
+);
+
+expectGreen(
+  'an eager registration of a class declared in the same file is warned about, not skipped',
+  library({
+    'src/lib/extensions.ts':
+      'class AcmeInlineComponent {}\n' + extensions("'acme.panel.claims': AcmeInlineComponent,"),
+  }),
+  /registers the component 'acme\.panel\.claims' in a shape this check does not read/,
+);
+
 // ---------------------------------------------------------------- negatives ----
+
+expectRed(
+  'a library that only overrides a primitive, under the platform selector prefix',
+  primitiveOnly(
+    TAG_CONTRACT + panel({ selector: 'nxs-tag', implementsClause: ' implements NxsTagInputs' }),
+  ),
+  /declares selector `nxs-tag`\. Use your owner prefix:/,
+);
+
+expectRed(
+  'an override implementing a same-named interface declared locally',
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/claims.ts':
+      'interface NxsTagInputs {}\n' + panel({ implementsClause: ' implements NxsTagInputs' }),
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+  }),
+  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+);
+
+expectRed(
+  'an override implementing a same-named interface from another package',
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/claims.ts':
+      "import type { NxsTagInputs } from '@acme/design';\n" +
+      panel({ implementsClause: ' implements NxsTagInputs' }),
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+  }),
+  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+);
+
+expectRed(
+  "an override of an ID that only begins with a primitive's",
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag.extra': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/claims.ts':
+      TAG_CONTRACT + panel({ implementsClause: ' implements NxsTagInputs' }),
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag.extra'),
+  }),
+  /the platform has no `nxs\.primitives\.tag\.extra` to override/,
+);
 
 expectRed(
   'a lazy import of a file that does not exist',
