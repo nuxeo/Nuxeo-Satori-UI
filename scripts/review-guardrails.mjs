@@ -7253,11 +7253,14 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
  *
  * A module the barrel exports something other than a component from can still put a component on
  * screen: `NxsToastService` opens `NxsToastComponent` through `MatSnackBar`, and no host names the
- * component. Such a component is any `@Component` class one of those modules imports by value and
- * the barrel does not export. A module that declares an exported component is left out, whatever
- * else it exports: what it imports is part of that component, documented with it. Each comes with
- * the modules that open it — the ones its stories and Overview are reached through.
- * `satori-comparison-doc.mjs` follows the same edge for its page.
+ * component. Such a component is any `@Component` class one of those modules imports by value —
+ * by name, or through a namespace import of its module, which counts every component that module
+ * exports — and the barrel does not export. A default import from a module that exports components
+ * cannot be followed to a class, so it fails rather than reading as opening nothing. A module that
+ * declares an exported component is left out, whatever else it exports: what it imports is part of
+ * that component, documented with it. Each comes with the modules that open it — the ones its
+ * stories and Overview are reached through. `satori-comparison-doc.mjs` follows the same edge for
+ * its page.
  */
 function openedComponentClasses(barrel, pathMaps, exported) {
   const shipped = new Set(
@@ -7276,14 +7279,27 @@ function openedComponentClasses(barrel, pathMaps, exported) {
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
         continue;
-      const bindings = statement.importClause?.namedBindings;
-      if (statement.importClause?.isTypeOnly || !bindings || !ts.isNamedImports(bindings)) continue;
+      const clause = statement.importClause;
+      if (!clause || clause.isTypeOnly) continue;
       const target = resolveFile(module, statement.moduleSpecifier.text, pathMaps);
       if (!target) continue;
       const components = exportedComponentClasses(target, pathMaps);
-      for (const element of bindings.elements) {
-        if (element.isTypeOnly) continue;
-        const declared = components.get((element.propertyName ?? element.name).text);
+      if (clause.name && components.size > 0) {
+        fail(
+          `${module} imports the default export of ${target}, which exports components, so which ` +
+            'component it opens was not read. Import the component by name.',
+        );
+      }
+      const bindings = clause.namedBindings;
+      const imported = !bindings
+        ? []
+        : ts.isNamespaceImport(bindings)
+          ? [...components.keys()]
+          : bindings.elements
+              .filter((element) => !element.isTypeOnly)
+              .map((element) => (element.propertyName ?? element.name).text);
+      for (const name of imported) {
+        const declared = components.get(name);
         if (!declared) continue;
         const key = `${declared.file}#${declared.className}`;
         if (shipped.has(key)) continue;

@@ -7246,6 +7246,75 @@ expectGreen(
   }),
 );
 
+// A namespace import of a component module opens what it exports, as a named import does.
+const NXS_NOTICE_SERVICE_VIA = (importLine, use) => ({
+  [`${NXS_NOTICE}/notice.service.ts`]:
+    `import { Injectable } from '@angular/core';\n${importLine}\n` +
+    `@Injectable()\nexport class NxsNoticeService {\n  readonly content = ${use};\n}\n` +
+    'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+});
+
+expectRed(
+  'a component a service opens through a namespace import, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB(
+      NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+    ),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a component a service opens through a namespace import, with neither a story nor an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB(
+      NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+    ),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+expectGreen(
+  'a component a service opens through a namespace import, with a story importing the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      ...NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+    }),
+  }),
+);
+
+// A default import cannot be followed to the class it names, so it is refused, not read as nothing.
+expectRed(
+  'a service that imports the default export of a component module',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      ...NXS_NOTICE_SERVICE_VIA("import Notice from './notice.component';", 'Notice'),
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+    }),
+  }),
+  null,
+  /notice\.service\.ts imports the default export of .*notice\.component\.ts, which exports components, so which component it opens was not read/,
+);
+
 // A type-only import is erased, so a story that has one opens nothing.
 expectRed(
   'a component a service opens, whose only story imports the service as a type',
