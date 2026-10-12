@@ -160,8 +160,10 @@ branch or change history:
   `build-storybook` depend on. It reads `tsconfig.lib.json` and writes the gitignored
   `libs/shared/satori-components/documentation.json`, leaving out private, protected, `@internal`
   and lifecycle members and the source, templates and styles nothing reads. `.storybook/compodoc.ts`
-  types it; `typecheck` depends on the target because TypeScript resolves the relative JSON import
-  only to a file that exists. The dev server runs it once at start, so restart it to see new JSDoc.
+  types it, and `typecheck` depends on the target so that shape is checked against the JSON
+  Compodoc writes rather than a hand-written stand-in. Do not name a declaration file after a `.ts`
+  file beside it (`compodoc.d.ts` next to `compodoc.ts`): TypeScript treats it as that file's
+  output and skips it. The dev server runs it once at start, so restart it to see new JSDoc.
   `preview.ts` also marks an input required in the Controls table from Compodoc's `required`, which
   Storybook's Compodoc reader ignores.
 - **Code under a preview** is generated from the story's args for a story with none of its own

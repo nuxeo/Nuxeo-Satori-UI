@@ -14,7 +14,7 @@
       "options": {
         "command": "compodoc -p libs/shared/satori-components/tsconfig.lib.json -e json -d libs/shared/satori-components --disablePrivate --disableProtected --disableInternal --disableLifeCycleHooks --disableSourceCode --disableTemplateTab --disableStyleTab"
       },
-      "$comment": "Writes the gitignored `documentation.json` the API pages are read from, leaving out private, protected, `@internal` and lifecycle members and the source, templates and styles Storybook does not read. `typecheck`, `storybook` and `build-storybook` depend on it: `.storybook/compodoc.ts` and `preview.ts` import the JSON, and TypeScript resolves a relative import only to a file that exists."
+      "$comment": "Writes the gitignored `documentation.json` the API pages are read from, leaving out private, protected, `@internal` and lifecycle members and the source, templates and styles Storybook does not read. `typecheck`, `storybook` and `build-storybook` depend on it, so the arguments are written once and `typecheck` compares the shape in `.storybook/compodoc.ts` with the JSON Compodoc writes; no declaration stands in for a missing file."
     },
     "typecheck": {
       "executor": "nx:run-commands",
