@@ -137,7 +137,7 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
     const button = buttons.find(
       (candidate) => candidate.querySelector('mat-icon')?.textContent?.trim() === 'visibility',
     );
-    expect(button).withContext('expected Preview footer button').toBeDefined();
+    expect(button).withContext('expected Preview footer button').toBeTruthy();
     return button as HTMLButtonElement;
   }
 
@@ -145,7 +145,7 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
     const button = fixture.nativeElement.querySelector(
       '.viewer-footer-actions button[aria-label="Download"]',
     ) as HTMLButtonElement | null;
-    expect(button).withContext('expected Download footer button').not.toBeNull();
+    expect(button).withContext('expected Download footer button').toBeTruthy();
     return button!;
   }
 
