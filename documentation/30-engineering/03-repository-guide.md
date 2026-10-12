@@ -18,9 +18,11 @@ audience: engineering
 > `feature/nxsat-308-permissions-panel` recounted the `satori-components` row, with the permissions
 > panel, on 2026-10-09; `feature/nxsat-308-storybook-docs` recounted both rows on 2026-10-12, with
 > the toast and every component's Storybook Overview and stories, after merging
-> `integration/nxsat-308`; and `feature/nxsat-308-favourites` recounted the `satori-components` row
-> on 2026-10-12, with the favourite toggle, after merging `integration/nxsat-308` at `4df4b0a`. The
-> rest of the page as of 2026-08-24 · `77265f9`:
+> `integration/nxsat-308`; `feature/nxsat-308-favourites` recounted the `satori-components` row on
+> 2026-10-12, with the favourite toggle, after merging `integration/nxsat-308` at `4df4b0a`; and
+> `feature/nxsat-308-primitives-3` recounted it on 2026-10-12, with the error state and action menu,
+> after merging `integration/nxsat-308` at `371684c`. The rest of the page as of 2026-08-24 ·
+> `77265f9`:
 > 992 tracked files · ~104k lines of TS/HTML/SCSS · ~20k lines of harness scripts ·
 > ~20.5k lines of Markdown
 
@@ -126,7 +128,7 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 > their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%.
 > `core` has the same shape. Of 17 measured projects, 6 read as ≥90% and **3 genuinely are**.
 
-### Shared libraries — 13, 51,055 lines
+### Shared libraries — 13, 51,612 lines
 
 | Library                    |  Lines | Specs | Responsibility                                                                                                                                                           |
 | -------------------------- | -----: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -141,7 +143,7 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 | `ke-client`                |    734 |     1 | Knowledge Enrichment client                                                                                                                                              |
 | `ai-client`                |    457 | **0** | The 12 `AI.*` operations. Thin HTTP client                                                                                                                               |
 | `util`                     |    108 |     0 | Small helpers                                                                                                                                                            |
-| `satori-components`        | 10,655 |    20 | The `nxs-` components replacing adf-hx. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308; counted 2026-10-12)                                             |
+| `satori-components`        | 11,212 |    22 | The `nxs-` components replacing adf-hx. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308; counted 2026-10-12)                                             |
 | `satori-components-satori` |    520 |     1 | The same `nxs-` primitive IDs on Satori, and the platform package's only Satori import. **Published** as `@nuxeo-satori/platform/components-satori` (counted 2026-10-12) |
 
 ### The other three
