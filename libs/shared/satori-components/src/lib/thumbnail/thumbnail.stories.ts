@@ -85,9 +85,13 @@ export const UnderAPageCache: Story = {
   render: (args) => ({
     props: { ...args, ids: ['a', 'b', 'c', 'a', 'b', 'c'] },
     template: `
-      <div style="display: grid; grid-template-columns: repeat(3, 96px); gap: 8px">
+      <div style="display: flex; flex-wrap: wrap; gap: 8px; max-width: 304px">
         @for (id of ids; track $index) {
-          <nxs-thumbnail style="width: 96px; height: 72px; object-fit: cover" [documentId]="id" />
+          <nxs-thumbnail
+            style="width: 96px; height: 72px; object-fit: cover"
+            [documentId]="id"
+            [alt]="alt"
+          />
         }
       </div>
     `,

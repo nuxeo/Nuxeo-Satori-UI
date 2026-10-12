@@ -46,6 +46,9 @@ const meta: Meta<NxsDriveDialogComponent> = {
   component: NxsDriveDialogComponent,
   tags: ['autodocs'],
   parameters: {
+    // The dialog is `min(95vw, 460px)` wide, as it is in MatDialog's overlay, which has no padding
+    // around it; the centred layout's 16px each side would widen the page past the screen.
+    layout: 'fullscreen',
     // The preview shows the dialog inline; a page opens it through MatDialog, so the code shown is
     // that call rather than the preview's wrapper.
     docs: {
@@ -61,7 +64,9 @@ const meta: Meta<NxsDriveDialogComponent> = {
   },
   render: () => ({
     template: `
-      <div style="border-radius: 28px; background: var(--mat-sys-surface-container-high)">
+      <div
+        style="width: fit-content; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
+      >
         <nxs-drive-dialog />
       </div>
     `,
