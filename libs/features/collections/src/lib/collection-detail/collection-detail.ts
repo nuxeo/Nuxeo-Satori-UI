@@ -145,9 +145,18 @@ export class CollectionDetailComponent {
   private thumbnailGeneration = 0;
   /** Request token for the members load — see `loadMembers` for why the two are separate. */
   private memberGeneration = 0;
+  /**
+   * Request token for the collection read and its fallback. Without it a read for a collection
+   * navigated away from could land later and install its lock state, and `toggleLock()` would then
+   * send the wrong operation to the collection now on screen.
+   */
+  private collectionGeneration = 0;
+  /** Token of the lock request that owns `actionInProgress`; navigation invalidates it. */
+  private lockRequest = 0;
 
   readonly isLocked = signal(false);
   readonly lockOwner = signal<string | null>(null);
+  readonly lockCreated = signal<string | null>(null);
   readonly isSubscribed = signal(false);
   readonly actionInProgress = signal<string | null>(null);
   readonly clipboardDocs = signal<ClipboardDoc[]>(readClipboardDocs());
@@ -192,6 +201,19 @@ export class CollectionDetailComponent {
 
   readonly canEditCollection = computed(() => canShowWriteDocumentAction(this.collection()));
   readonly canDeleteCollection = computed(() => canShowRemoveDocumentAction(this.collection()));
+  /**
+   * Write holders may lock; anyone who can read a locked collection sees that it is, and by whom.
+   * Nuxeo's default lock policy takes Write on a locked document away from everyone but its owner
+   * and administrators, so `canEditCollection` also decides who may unlock. Never offered on a
+   * version, an immutable document or the repository root, as in Web UI.
+   */
+  readonly showsLockAction = computed(() => {
+    // Until the current read lands, `collection()` still holds the previous document.
+    if (this.loadState() !== 'loaded') return false;
+    const col = this.collection();
+    if (col?.facets?.includes('Immutable') || col?.type === 'Root') return false;
+    return this.isLocked() || this.canEditCollection();
+  });
 
   private readonly browseContext = inject(BrowseContextService);
 
@@ -263,6 +285,7 @@ export class CollectionDetailComponent {
     this.destroyRef.onDestroy(() => this.revokeThumbnails());
 
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
+      this.releaseLockRequest();
       this.collectionUid = params.get('uid') ?? '';
       this.historyLoaded = false;
       if (this.collectionUid) {
@@ -282,12 +305,20 @@ export class CollectionDetailComponent {
   }
 
   private loadCollection(): void {
+    const generation = ++this.collectionGeneration;
+    const requestedUid = this.collectionUid;
+    const isCurrent = (): boolean =>
+      generation === this.collectionGeneration && requestedUid === this.collectionUid;
     this.loadState.set('loading');
+    this.isLocked.set(false);
+    this.lockOwner.set(null);
+    this.lockCreated.set(null);
     this.detailService
-      .getFullDocument(this.collectionUid)
+      .getFullDocument(requestedUid)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (doc) => {
+          if (!isCurrent()) return;
           this.collection.set(doc);
           this.loadState.set('loaded');
           this.syncActionStates(doc);
@@ -296,13 +327,16 @@ export class CollectionDetailComponent {
           }
         },
         error: () => {
+          if (!isCurrent()) return;
           this.collectionService
-            .getById(this.collectionUid)
+            .getById(requestedUid)
             .pipe(takeUntilDestroyed(this.destroyRef))
             .subscribe({
               next: (doc) => {
+                if (!isCurrent()) return;
                 this.collection.set(doc);
                 this.loadState.set('loaded');
+                this.syncActionStates(doc);
                 if (this.activeTabIndex() === 2 && !this.historyLoaded) {
                   this.loadAuditLog();
                 }
@@ -312,6 +346,7 @@ export class CollectionDetailComponent {
               // permission failure the user can retry, and saying "does not exist" there would be
               // a guess. Either way the page must stop pretending it loaded something.
               error: (err: unknown) => {
+                if (!isCurrent()) return;
                 this.collection.set(null);
                 this.loadState.set(
                   (err as { status?: number } | null)?.status === 404 ? 'not-found' : 'error',
@@ -323,8 +358,9 @@ export class CollectionDetailComponent {
   }
 
   private syncActionStates(doc: NuxeoDocument): void {
-    this.isLocked.set(!!doc.lockOwner);
+    this.isLocked.set(!!(doc.lockOwner || doc.lockCreated));
     this.lockOwner.set(doc.lockOwner ?? null);
+    this.lockCreated.set(doc.lockCreated ?? null);
     const subs = doc.contextParameters?.subscribedNotifications;
     this.isSubscribed.set(Array.isArray(subs) && subs.length > 0);
   }
@@ -460,22 +496,37 @@ export class CollectionDetailComponent {
   }
 
   toggleLock(): void {
-    if (this.actionInProgress()) return;
+    if (this.actionInProgress() || !this.showsLockAction()) return;
+    if (!this.canEditCollection()) {
+      this.toast(
+        this.translate.instant(
+          this.isLocked() ? 'common.lock.locked-by-another-user' : PERMISSION_DENIED_KEY,
+        ),
+      );
+      return;
+    }
+    // Captured before the request: the page is reused across `:uid` changes, so when the response
+    // lands `collectionUid` and `isLocked()` may describe another collection.
+    const uid = this.collectionUid;
+    const wasLocked = this.isLocked();
+    const request = ++this.lockRequest;
     this.actionInProgress.set('lock');
-    const op = this.isLocked()
-      ? this.detailService.unlockDocument(this.collectionUid)
-      : this.detailService.lockDocument(this.collectionUid);
+    const op = wasLocked
+      ? this.detailService.unlockDocument(uid)
+      : this.detailService.lockDocument(uid);
 
-    op.subscribe({
-      next: () => {
-        const wasLocked = this.isLocked();
+    op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (updated) => {
+        if (request !== this.lockRequest) return;
+        this.actionInProgress.set(null);
+        if (uid !== this.collectionUid) return;
         this.isLocked.set(!wasLocked);
         // Nuxeo records the caller as the lock owner; naming a fixed account here would
-        // tell every user someone else held their own lock. Latent only because
-        // `lockOwner` is not rendered yet — the same line in document-detail was wrong
-        // for the same reason.
-        this.lockOwner.set(wasLocked ? null : (this.currentUsername() ?? null));
-        this.actionInProgress.set(null);
+        // tell every user someone else held their own lock.
+        this.lockOwner.set(
+          wasLocked ? null : (updated?.lockOwner ?? this.currentUsername() ?? null),
+        );
+        this.lockCreated.set(wasLocked ? null : (updated?.lockCreated ?? new Date().toISOString()));
         this.toast(
           this.translate.instant(
             wasLocked
@@ -484,11 +535,46 @@ export class CollectionDetailComponent {
           ),
         );
       },
-      error: () => {
+      error: (err: unknown) => {
+        if (request !== this.lockRequest) return;
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.action-failed'));
+        if (uid !== this.collectionUid) return;
+        this.toast(this.translate.instant(this.lockRefusalKey(err, wasLocked)));
       },
     });
+  }
+
+  /**
+   * On navigation, a lock request for the previous collection stops owning the busy flag, so the
+   * new one's controls are not held disabled by it, and its late response cannot clear a newer one.
+   */
+  private releaseLockRequest(): void {
+    this.lockRequest += 1;
+    if (this.actionInProgress() === 'lock') this.actionInProgress.set(null);
+  }
+
+  /** "Locked by {owner} on {date}", or null while unlocked. */
+  lockTooltip(): string | null {
+    const owner = this.lockOwner();
+    const created = this.lockCreated();
+    if (!this.isLocked() || !owner || !created) return null;
+    const date = new Date(created).toLocaleDateString(this.locale, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    return this.translate.instant('common.lock.locked-by', { owner, date });
+  }
+
+  private lockRefusalKey(err: unknown, wasLocked: boolean): string {
+    switch ((err as { status?: number } | null)?.status) {
+      case 403:
+        return wasLocked ? 'common.lock.unlock-no-permission' : 'common.lock.lock-no-permission';
+      case 409:
+        return wasLocked ? 'common.lock.locked-by-another-user' : 'common.lock.already-locked';
+      default:
+        return 'browse.message.action-failed';
+    }
   }
 
   toggleSubscription(): void {
