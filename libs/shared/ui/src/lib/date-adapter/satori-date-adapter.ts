@@ -2,7 +2,25 @@ import { LOCALE_ID, Provider, inject, isDevMode } from '@angular/core';
 import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
 import { MAT_DATE_LOCALE } from '@angular/material/core';
 import type { Locale } from 'date-fns';
-import { de, deAT, enGB, enUS, fr, frCA, ja, nl, nlBE, th, zhCN, zhTW } from 'date-fns/locale';
+import {
+  de,
+  enAU,
+  enCA,
+  enGB,
+  enIE,
+  enIN,
+  enNZ,
+  enUS,
+  enZA,
+  fr,
+  frCA,
+  frCH,
+  ja,
+  nl,
+  nlBE,
+  th,
+  zhCN,
+} from 'date-fns/locale';
 
 /**
  * A date-fns locale for every language the application ships a catalogue for, plus the regional
@@ -15,10 +33,25 @@ import { de, deAT, enGB, enUS, fr, frCA, ja, nl, nlBE, th, zhCN, zhTW } from 'da
  *
  * The regional entries are here for the **published** provider rather than for us. These
  * dialogs are exported from `@nuxeo-satori/platform/ui`, so a customer's `LOCALE_ID` reaches
- * this map, and `en-GB` reduced to `en` would be given `enUS` — month-first, which is the
- * original defect wearing a different locale id. Reducing `fr-CA` to `fr` is merely imprecise
- * (`dd/MM/yyyy` instead of `yy-MM-dd`); reducing `en-GB` to `en` is wrong in the same way the
- * bug was.
+ * this map unclamped, and a region can change the field order outright: six of the seven
+ * English regions date-fns ships are day-first or year-first, so reducing any of them to `en`
+ * hands them `enUS` — month-first, the original defect wearing a different locale id.
+ *
+ * The list is exactly **the regional variants whose date-fns `P` format differs from their base
+ * language**, enumerated rather than guessed:
+ *
+ * | variant | `P` | base `P` |
+ * | --- | --- | --- |
+ * | `en-AU` `en-GB` `en-IE` `en-IN` `en-NZ` | `dd/MM/yyyy` | `MM/dd/yyyy` |
+ * | `en-CA` | `yyyy-MM-dd` | `MM/dd/yyyy` |
+ * | `en-ZA` | `yyyy/MM/dd` | `MM/dd/yyyy` |
+ * | `fr-CA` | `yy-MM-dd` | `dd/MM/y` |
+ * | `fr-CH` | `dd.MM.y` | `dd/MM/y` |
+ * | `nl-BE` | `dd.MM.y` | `dd-MM-y` |
+ *
+ * `de-AT`, `zh-HK` and `zh-TW` are deliberately **absent**: their `P` is identical to their
+ * base, so an entry would add a locale to every consumer's bundle and change no behaviour. They
+ * resolve correctly through the bare-language fallback.
  *
  * `en` maps to `enUS` and is present here although `register-locale-data.ts` omits it: Angular
  * bundles `en-US` locale data so registering it there would be a no-op, whereas date-fns ships
@@ -26,17 +59,22 @@ import { de, deAT, enGB, enUS, fr, frCA, ja, nl, nlBE, th, zhCN, zhTW } from 'da
  */
 const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   en: enUS,
+  'en-au': enAU,
+  'en-ca': enCA,
   'en-gb': enGB,
+  'en-ie': enIE,
+  'en-in': enIN,
+  'en-nz': enNZ,
+  'en-za': enZA,
   fr,
   'fr-ca': frCA,
+  'fr-ch': frCH,
   de,
-  'de-at': deAT,
   ja,
   nl,
   'nl-be': nlBE,
   th,
   zh: zhCN,
-  'zh-tw': zhTW,
 };
 
 /** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */

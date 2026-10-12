@@ -5,8 +5,8 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo-satori/platform/app-config';
-import { de, enGB, enUS, fr, frCA } from 'date-fns/locale';
-import { describe, expect, it } from 'vitest';
+import { de, enGB, enUS, fr, frCA, zhCN } from 'date-fns/locale';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
   DATE_ADAPTER_LANGUAGES,
@@ -124,24 +124,81 @@ describe('provideSatoriDateAdapter', () => {
     expect(dateFnsLocaleFor('fr_CA')).toBe(frCA);
   });
 
-  // A region can change the field order outright, not just the separators. `en-GB` is the case
-  // that matters most: reduced to its base language it would get `enUS` — month-first — which
-  // is the original defect reappearing under a different locale id.
-  it('resolves an exact regional tag before falling back to the bare language', () => {
+  // A region can change the field order outright, not just the separators, and six of the seven
+  // English regions date-fns ships are day- or year-first. Reduced to their base language they
+  // would all get `enUS` — month-first — which is the original defect under a different id.
+  // Every variant whose `P` differs from its base is covered, with the parsed result asserted
+  // rather than just the locale object, so a wrong mapping cannot pass.
+  it.each([
+    { locale: 'en-GB', input: '03/04/2026', month: 3, date: 3 },
+    { locale: 'en-AU', input: '03/04/2026', month: 3, date: 3 },
+    { locale: 'en-IE', input: '03/04/2026', month: 3, date: 3 },
+    { locale: 'en-IN', input: '03/04/2026', month: 3, date: 3 },
+    { locale: 'en-NZ', input: '03/04/2026', month: 3, date: 3 },
+    { locale: 'en-CA', input: '2026-04-03', month: 3, date: 3 },
+    { locale: 'en-ZA', input: '2026/04/03', month: 3, date: 3 },
+    { locale: 'fr-CA', input: '26-04-03', month: 3, date: 3 },
+    { locale: 'fr-CH', input: '03.04.2026', month: 3, date: 3 },
+    { locale: 'nl-BE', input: '03.04.2026', month: 3, date: 3 },
+    { locale: 'en-US', input: '03/04/2026', month: 2, date: 4 },
+  ])('reads "$input" in $locale with that region\'s own order', ({ locale, input, month, date }) => {
+    const parsed = parseAsInput(locale, input);
+
+    expect(Number.isNaN(parsed?.getTime())).toBe(false);
+    expect([parsed?.getMonth(), parsed?.getDate()]).toEqual([month, date]);
+  });
+
+  it('resolves the exact regional tag rather than the bare language', () => {
     expect(dateFnsLocaleFor('en-GB')).toBe(enGB);
     expect(dateFnsLocaleFor('en-US')).toBe(enUS);
     expect(dateFnsLocaleFor('fr-CA')).toBe(frCA);
+  });
 
+  // `de-AT`, `zh-HK` and `zh-TW` have the same `P` as their base, so they are deliberately not
+  // in the map — an entry would add a locale to every bundle and change nothing. They must
+  // still resolve correctly through the fallback.
+  it('resolves a region identical to its base through the bare-language fallback', () => {
+    expect(dateFnsLocaleFor('de-AT')).toBe(de);
+    expect(dateFnsLocaleFor('zh-TW')).toBe(zhCN);
     expect([
-      parseAsInput('en-GB', '03/04/2026')?.getMonth(),
-      parseAsInput('en-GB', '03/04/2026')?.getDate(),
+      parseAsInput('de-AT', '03.04.2026')?.getMonth(),
+      parseAsInput('de-AT', '03.04.2026')?.getDate(),
     ]).toEqual([3, 3]);
   });
 
-  // A regional tag we ship no data for still has to work, and must not pretend it was exact.
-  it('falls back to the bare language for an unknown region, and says so in development', () => {
-    expect(dateFnsLocaleFor('de-CH')).toBe(de);
+  it('falls back to English for a language it has no locale for at all', () => {
     expect(dateFnsLocaleFor('pt-BR')).toBe(enUS);
+  });
+
+  // The warning is the only thing standing between a customer and a silently wrong date order
+  // for a region we ship no data for, so it is asserted rather than assumed. An earlier version
+  // of this test was named for the warning and checked only the returned locale, which means
+  // deleting the `console.warn` would have left it green — caught in review on PR #394.
+  it('warns in development when a regional tag falls back, naming the locale and the fallback', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      dateFnsLocaleFor('de-CH');
+
+      expect(warn).toHaveBeenCalledTimes(1);
+      const message = String(warn.mock.calls[0][0]);
+      expect(message).toContain('de-CH');
+      expect(message).toContain('"de"');
+      expect(message).toContain('misread');
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('does not warn for a tag it resolved exactly, or for a bare language', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      dateFnsLocaleFor('en-GB');
+      dateFnsLocaleFor('fr');
+
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   // NXSAT-629 review: the native adapter rendered Thai through `Intl`, which resolves `th` to

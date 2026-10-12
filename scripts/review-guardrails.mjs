@@ -6206,21 +6206,28 @@ function checkCatalogueValuesAreRenderable() {
  *
  * ## Why `common.date-mask` is exempt, by key
  *
- * `common.date-mask` is `mm/dd/yyyy` and is a date pattern by any test this gate could apply.
- * It is also a genuine user-facing string: the `[placeholder]` on nine date inputs, telling a
+ * `common.date-mask` holds a date pattern in every catalogue, and is one by any test this gate
+ * could apply. Since NXSAT-629 that pattern is **locale-specific** — `mm/dd/yyyy` in English,
+ * `jj/mm/aaaa` in French, `tt.mm.jjjj` in German, `yyyy/mm/dd` in Japanese, `yy-mm-dd` in
+ * Chinese — because the date inputs now parse in the active locale and a hint that disagreed
+ * with the parser would be worse than an English one. So the exemption has to cover a
+ * different pattern per language, not one known string.
+ *
+ * It is also a genuine user-facing string: the `[placeholder]` on the date inputs, telling a
  * person what to type. It is read by a human, never handed to `DatePipe` — Arm 2 is what
  * enforces that — so it is legitimately translatable and must stay in the catalogue.
  *
- * It is exempted by key rather than by a cleverer value test on purpose. No property of the
- * *string* `mm/dd/yyyy` distinguishes it from the patterns this gate exists to reject; only
- * its use does. A heuristic pretending otherwise would be a rule whose real behaviour nobody
- * could predict, and the next genuine placeholder would need the same escape hatch anyway.
- * A named exemption with a reason is honest about being a judgement.
+ * It is exempted by key rather than by a cleverer value test on purpose, and the per-locale
+ * values are the second reason for that. No property of these *strings* distinguishes them
+ * from the patterns this gate exists to reject; only their use does. A heuristic pretending
+ * otherwise would be a rule whose real behaviour nobody could predict, and it would now have
+ * to predict it across seven languages. A named exemption with a reason is honest about being
+ * a judgement.
  *
- * (It was on hold for translation for an unrelated reason — the date inputs parsed typed text
- * as US month/day/year in every locale, NXSAT-629. That is fixed: date inputs now parse in
- * the active locale, so the key is released for translation and its note carries the accepted
- * format per language. Either way it is a note to Crowdin, not something this gate asserts.)
+ * (It was on hold for translation until NXSAT-629 — while every locale parsed typed text as US
+ * month/day/year, a localized hint would have invited wrong dates. That is fixed, the key is
+ * released, and its translator note carries the accepted format per language. Either way that
+ * is a note to Crowdin, not something this gate asserts.)
  */
 function checkNoTranslatableDatePatterns() {
   /**
