@@ -366,8 +366,9 @@
   }
 }
 
-// NXENG-799 / NXENG-816 / NXENG-817 (IBM 922184956) — `style_focus_visible` reads `:focus` only;
-// keep this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
+// NXENG-799 / NXENG-816 / NXENG-817 / NXSAT-524 — image toolbar icon buttons (Zoom out, Zoom in,
+// Toggle fit, …); IBM 922184956, 2140832667. `style_focus_visible` reads `:focus` only — keep
+// this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
 .viewer-toolbar button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;
@@ -475,7 +476,7 @@
 
 .info-label {
   font-size: 12px;
-  /* NXENG-812 / NXSAT-493 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018); mat-sys-on-surface-variant fails in dark theme. */
+  /* NXENG-812 / NXSAT-493 / NXSAT-507 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018, IBM 1668870227); mat-sys-on-surface-variant fails in dark theme. Runtime axe (phase-6-a11y) owns WCAG clearance; this comment is audit trace only. */
   color: var(--document-viewer-muted-on-light-surface);
   min-width: 0;
   white-space: nowrap;

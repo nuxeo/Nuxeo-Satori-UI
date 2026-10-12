@@ -992,7 +992,6 @@
       "notifications-enabled": "通知已启用",
       "removed-from-clipboard": "已从剪贴板中删除"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "通知我",
     "remove-from-clipboard": "从剪贴板中删除",
     "share-fallback-title": "集合",
@@ -1431,7 +1430,6 @@
       "workflow-abandoned": "工作流程已放弃。",
       "workflow-started-successfully": "工作流程已成功启动"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "居中对齐",
       "align-left": "左对齐",

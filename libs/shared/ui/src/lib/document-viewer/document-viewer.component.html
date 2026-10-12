@@ -180,10 +180,12 @@
       <button
         mat-icon-button
         [matTooltip]="'shared-ui.document-viewer.preview' | translate"
-        [attr.aria-label]="'shared-ui.document-viewer.preview' | translate"
         (click)="previewClicked.emit()"
       >
-        <mat-icon>visibility</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'shared-ui.document-viewer.preview' | translate
+        }}</span>
+        <mat-icon aria-hidden="true">visibility</mat-icon>
       </button>
       <button
         mat-icon-button
