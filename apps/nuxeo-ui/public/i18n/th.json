@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "ยกเลิก",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "เอกสารถูกล็อกโดยผู้ใช้อื่นแล้ว โปรดรีเฟรชหน้า",
+      "lock-no-permission": "คุณไม่มีสิทธิ์ล็อกเอกสารนี้",
+      "locked-by": "ล็อกโดย {{ owner }} เมื่อ {{ date }}",
+      "locked-by-another-user": "คุณไม่สามารถปลดล็อกเอกสารนี้ได้ เนื่องจากถูกล็อกโดยผู้ใช้อื่น",
+      "unlock-no-permission": "คุณไม่มีสิทธิ์ปลดล็อกเอกสารนี้"
+    },
     "ok": "ตกลง",
     "page-number": "หน้า {{ page }}",
     "page-of": "หน้า {{ page }} จาก {{ total }}",

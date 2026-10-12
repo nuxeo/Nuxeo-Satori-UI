@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Abandonner",
     "email-example": "nom@entreprise.com",
+    "lock": {
+      "already-locked": "Document déjà verrouillé par un autre utilisateur, veuillez rafraîchir votre page.",
+      "lock-no-permission": "Vous n'avez pas l'autorisation de verrouiller ce document.",
+      "locked-by": "Verrouillé par {{ owner }} le {{ date }}",
+      "locked-by-another-user": "Vous ne pouvez pas déverrouiller ce document car il est verrouillé par un autre utilisateur.",
+      "unlock-no-permission": "Vous n'avez pas l'autorisation de déverrouiller ce document."
+    },
     "ok": "OK",
     "page-number": "Page {{ page }}",
     "page-of": "Page {{ page }} sur {{ total }}",
