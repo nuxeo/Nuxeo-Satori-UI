@@ -1,8 +1,9 @@
 /**
- * NXENG-781 / NXENG-786 / NXENG-800 — additional-format download icon buttons (e.g. Download
- * Small, IBM 368748540) must show a keyboard focus indicator on the fixed light `.picture-cards`
- * strip (IBM `style_focus_visible`, WCAG 2.4.7 / 1.4.11). Karma loads `apps/nuxeo-ui/src/styles.scss`,
- * so `data-app-theme` resolves real tokens.
+ * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 — additional-format download icon buttons
+ * (e.g. Download Thumbnail / Download Small, IBM 1635062655 / 368748540) must show a keyboard
+ * focus indicator on the fixed light `.picture-cards` strip (IBM `style_focus_visible`, WCAG
+ * 2.4.7 / 1.4.11). Karma loads `apps/nuxeo-ui/src/styles.scss`, so `data-app-theme` resolves
+ * real tokens.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -96,7 +97,7 @@ function assertFocusRingContrast(
     .toBeGreaterThanOrEqual(WCAG_FOCUS_INDICATOR);
 }
 
-describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-786, NXENG-800)', () => {
+describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-786, NXENG-800, NXSAT-505)', () => {
   let fixture: ComponentFixture<DocumentViewerComponent>;
   let originalTheme: string | null;
 
@@ -122,6 +123,14 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
       weight: '8 KB',
     });
     fixture.componentRef.setInput('pictureViews', [
+      {
+        title: 'Thumbnail',
+        width: 100,
+        height: 100,
+        fileSize: '512 Bytes',
+        format: 'JPEG',
+        downloadUrl: '/nuxeo/thumbnail',
+      },
       {
         title: 'Small',
         width: 480,
@@ -156,6 +165,38 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
     } else {
       document.documentElement.setAttribute('data-app-theme', originalTheme);
     }
+  });
+
+  it('focuses the Download Thumbnail control with IBM-readable outline (NXSAT-505)', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
+    const thumbRow = rows.find((row) => row.textContent?.includes('Thumbnail'));
+    expect(thumbRow).withContext('expected Thumbnail format row').toBeTruthy();
+    const button = thumbRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    if (!button) return;
+
+    expect(button.getAttribute('aria-label')).toBe('Download Thumbnail');
+    const cards = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement | null;
+    expect(cards).not.toBeNull();
+    if (!cards) return;
+
+    assertFocusRingContrast(button, cards, 'Download Thumbnail (NXSAT-505)');
+  });
+
+  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible)', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
+    const thumbRow = rows.find((row) => row.textContent?.includes('Thumbnail'));
+    const button = thumbRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    if (!button) return;
+
+    button.focus({ focusVisible: false } as FocusOptions);
+    expect(button.matches(':focus')).toBe(true);
+    expect(button.matches(':focus-visible')).toBe(false);
+
+    const style = getComputedStyle(button);
+    expect(style.outlineStyle).withContext('IBM :focus path').not.toBe('none');
+    expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
   });
 
   it('focuses the Download Small control with IBM-readable outline (NXENG-800)', () => {
