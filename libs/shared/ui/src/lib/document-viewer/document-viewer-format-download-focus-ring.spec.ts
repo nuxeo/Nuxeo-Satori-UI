@@ -1,6 +1,7 @@
 /**
  * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / NXSAT-527 — additional-format download icon
- * buttons (e.g. Download Thumbnail / Download OriginalJpeg, IBM 1635062655 / 2294099067) must show
+ * buttons (e.g. Download Thumbnail / Download Small / Download OriginalJpeg; IBM 1635062655 /
+ * 368748540 / 2294099067) must show
  * a keyboard focus indicator (IBM `style_focus_visible`, WCAG 2.4.7). Material suppresses the default ring.
  *
  * Computed focus visibility and per-theme contrast: `apps/nuxeo-ui/.../document-viewer-format-download-focus-ring.spec.ts`.
