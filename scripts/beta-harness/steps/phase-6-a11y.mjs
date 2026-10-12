@@ -430,6 +430,7 @@ async function findPictureWithPictureCardsUid(page, baseUrl) {
         pageSize: '20',
         currentPageIndex: String(pageIndex),
       },
+      headers: { 'X-NXproperties': '*' },
     });
     if (!response.ok()) {
       return null;
@@ -447,7 +448,7 @@ async function findPictureWithPictureCardsUid(page, baseUrl) {
       }
       const doc = await page.request.get(`${baseUrl}/nuxeo/api/v1/id/${uid}`, {
         failOnStatusCode: false,
-        params: { properties: '*' },
+        headers: { 'X-NXproperties': '*' },
       });
       if (!doc.ok()) {
         continue;
