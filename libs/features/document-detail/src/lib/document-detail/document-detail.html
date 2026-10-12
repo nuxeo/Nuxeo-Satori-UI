@@ -1,4 +1,4 @@
-@if (loading()) {
+﻿@if (loading()) {
   <div class="detail-loading">
     <mat-spinner
       diameter="40"
@@ -22,7 +22,7 @@
       (click)="goBack()"
       [attr.aria-label]="'document-detail.document-detail.go-back' | translate"
     >
-      <!-- NXENG-826: empty mat-icon + CSS codepoint (legacy Material Icons font — fontIcon needs a class set). -->
+      <!-- NXENG-826: empty mat-icon + CSS codepoint (legacy Material Icons font ΓÇö fontIcon needs a class set). -->
       <mat-icon aria-hidden="true" class="detail-header-go-back-icon"></mat-icon>
     </button>
     <div class="header-info">
@@ -165,22 +165,25 @@
           type="button"
           [attr.data-action-id]="action.id"
           [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
           [disabled]="!isToolbarActionEnabled(action)"
           disabledInteractive
           [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{ action | descriptorLabel }}</span>
+          <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }
       <button
         mat-icon-button
         [matMenuTriggerFor]="moreMenu"
         [matTooltip]="'document-detail.document-detail.more-actions' | translate"
-        [attr.aria-label]="'document-detail.document-detail.more-actions' | translate"
       >
-        <mat-icon>more_vert</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'document-detail.document-detail.more-actions' | translate
+        }}</span>
+        <mat-icon aria-hidden="true">more_vert</mat-icon>
       </button>
     </div>
 
@@ -250,7 +253,7 @@
     </div>
   }
 
-  <!-- Workflow info banner (yellow) — one per running workflow -->
+  <!-- Workflow info banner (yellow) ΓÇö one per running workflow -->
   @for (wf of documentWorkflows(); track wf.id) {
     <div class="workflow-banner">
       <mat-icon class="workflow-banner-icon">warning</mat-icon>
@@ -272,7 +275,7 @@
     </div>
   }
 
-  <!-- Task action banner (blue) — one per pending task -->
+  <!-- Task action banner (blue) ΓÇö one per pending task -->
   @for (task of documentTasks(); track task.id) {
     <div class="task-action-banner">
       <mat-icon class="task-action-icon">check_box</mat-icon>
@@ -1664,7 +1667,7 @@
                       {{ 'document-detail.document-detail.create-version' | translate }}
                     </button>
                   } @else {
-                    <span class="no-publications">—</span>
+                    <span class="no-publications">ΓÇö</span>
                   }
                 </span>
               </div>
@@ -1846,7 +1849,7 @@
                     <span class="tags-readonly-chip">{{ tag }}</span>
                   }
                   @if (tags().length === 0) {
-                    <span class="tags-empty">—</span>
+                    <span class="tags-empty">ΓÇö</span>
                   }
                 </div>
               }
@@ -2136,7 +2139,7 @@
                           ? ('document-detail.reply' | translate)
                           : ('document-detail.replies' | translate)
                       }}
-                      · Last reply
+                      ┬╖ Last reply
                       {{ lastReplyTime(comment.id) }}
                     </div>
                     <div class="replies-section">
