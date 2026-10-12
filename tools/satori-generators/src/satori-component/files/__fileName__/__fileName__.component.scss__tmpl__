@@ -4,9 +4,13 @@
   color: var(--mat-sys-on-surface);
 }
 
-.nxs-<%= fileName %>__heading {
+// Doubled to outrank the app theme's `html[data-app-theme] .mat-typography h1`–`h6`, which would
+// otherwise render this heading at display size.
+.nxs-<%= fileName %>__heading.nxs-<%= fileName %>__heading {
   margin: 0;
   font: var(--mat-sys-title-medium);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
 }<% if (isDocumentView) { %>
 
 .nxs-<%= fileName %>__title {

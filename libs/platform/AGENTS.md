@@ -304,7 +304,7 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 - **Import only the entry point.** A path past it fails the shipped guardrail like any other
   deep import.
 - **The type declarations are the list of what exists.** Do not take a component's existence
-  from this file; each one also has a story in the library's Storybook.
+  from this file; each one also has stories and an Overview page in the library's Storybook.
 
 ### Overridable — re-register an ID
 

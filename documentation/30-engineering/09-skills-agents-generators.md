@@ -168,17 +168,21 @@ the definitions disagree.
 
 ---
 
-## 5. Generators — 4 implemented, and they ship to customers
+## 5. Generators — 6 implemented, 5 of them ship to customers
 
 [`tools/satori-generators`](../../tools/satori-generators), Nx generators compiled into the
-published package.
+published package — all but `satori-component`, which `generators.json` marks
+`x-satori-internal` and `scripts/build-platform-generators.mjs` leaves out, because `nxs-` is our
+prefix.
 
-| Generator             | Produces                                                                                                                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extension-library`   | A complete Layer 2 library: project config, barrel, `extensions.ts` with marker comments, a rules service, a panel component, a spec asserting registry state, tsconfigs, vite config, README |
-| `extension-rule`      | A rule evaluator spliced into the existing library                                                                                                                                            |
-| `extension-action`    | An action handler                                                                                                                                                                             |
-| `extension-component` | A component + registration                                                                                                                                                                    |
+| Generator             | Produces                                                                                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension-library`   | A complete Layer 2 library: project config, barrel, `extensions.ts` with marker comments, a rules service, a panel component, a spec asserting registry state, tsconfigs, vite config, README                                                                                                  |
+| `extension-rule`      | A rule evaluator spliced into the existing library                                                                                                                                                                                                                                             |
+| `extension-action`    | An action handler                                                                                                                                                                                                                                                                              |
+| `extension-component` | A component + registration                                                                                                                                                                                                                                                                     |
+| `config-package`      | A Nuxeo Marketplace package carrying Layer 0 and Layer 1 fragments, with a build target that checks them and writes the installable zip                                                                                                                                                        |
+| `satori-component`    | **Internal.** An `nxs-` component in `libs/shared/satori-components`, registered by ID for a slot: spec rendering it as that slot's host does, story tagged `autodocs`, Overview page, barrel export, `provideNxsComponents()` entry, extension-reference row, with-and-without-Satori section |
 
 ### The splice bug, and why the post-condition assertion exists
 
@@ -256,7 +260,7 @@ the architecture.
 
 |                                                                 |                                                                                          Count |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------: |
-| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 4 generators + 13 skills** |
+| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 6 generators + 13 skills** |
 | Catalog entries that are context/procedure rather than an agent |                                                                                              8 |
 | Catalog entries not implemented at all                          | **8** (Broken Link, Performance, Refactoring Opportunity, and all six of Tier 4, less overlap) |
 

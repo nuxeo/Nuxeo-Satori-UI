@@ -356,17 +356,18 @@ node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs 
 > could not be run by its audience. Verified fixed by unpacking the tarball into
 > `node_modules` and generating a library from it.
 
-### The five guardrail checks, and what each one caught
+### The six guardrail checks, and what each one caught
 
-| #   | Check                                               | Origin                                                                                                                                                                      |
-| --- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Registered IDs carry the library's own owner prefix | An ID is a public contract                                                                                                                                                  |
-| 2   | No import reaches past a published entry point      | Deep paths break without being breaking changes                                                                                                                             |
-| 3   | A spec asserts **registry state**                   | Three generators once spliced every registration _inside a comment_, reported success, printed the IDs they had "registered" — and lint, typecheck and six specs all passed |
-| 4   | Gating rules are declared fail-closed               | An unregistered rule ID permits                                                                                                                                             |
-| 5   | No component exported from the barrel               | A host that can import the class depends on a name that should stay free to change                                                                                          |
+| #   | Check                                                                                                                                                          | Origin                                                                                                                                                                      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Registered IDs carry the library's own owner prefix                                                                                                            | An ID is a public contract                                                                                                                                                  |
+| 2   | No import reaches past a published entry point                                                                                                                 | Deep paths break without being breaking changes                                                                                                                             |
+| 3   | A spec asserts **registry state**                                                                                                                              | Three generators once spliced every registration _inside a comment_, reported success, printed the IDs they had "registered" — and lint, typecheck and six specs all passed |
+| 4   | Gating rules are declared fail-closed                                                                                                                          | An unregistered rule ID permits                                                                                                                                             |
+| 5   | No component exported from the barrel                                                                                                                          | A host that can import the class depends on a name that should stay free to change                                                                                          |
+| 6   | Each registered component resolves, is named by a spec, uses the owner's selector prefix, and implements the `Nxs…Inputs` contract of a primitive it overrides | The registry swallows a failed lazy load on purpose, so a misspelt path is a blank slot with no error anywhere; an override missing an input has it silently dropped        |
 
-Three of those five were once satisfiable **without doing the thing they check** — a comment
+Three of the first five were once satisfiable **without doing the thing they check** — a comment
 mentioning a registry counted as an assertion, a dynamic `import()` evaded check 2, and
 `export * from './leaky'` evaded check 5. All three probed and closed.
 

@@ -1,12 +1,32 @@
-import type { Meta, StoryObj } from '@storybook/angular';
+import type { Meta, StoryObj } from '@storybook/angular';<% if (isDocumentView) { %>
+import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';<% } %>
 
+import type { NxsHeadingLevel } from '../heading-level';
 import { <%= className %> } from './<%= fileName %>.component';
+
+/**
+ * Compodoc records `NxsHeadingLevel` as `"1" | … | "6"`, so the control Storybook infers from it
+ * sets a string: no `@case` matches it, and Update story writes it here as a type error.
+ */
+const HEADING_LEVELS: readonly NxsHeadingLevel[] = [1, 2, 3, 4, 5, 6];<% if (isDocumentView) { %>
+
+/** The document the `documentView` host would pass. */
+const DOCUMENT: NuxeoDocument = {
+  uid: 'claim-42',
+  title: 'Claim 42',
+  type: 'File',
+  path: '/default-domain/workspaces/Claims/Claim 42',
+  lastModified: '2026-01-01T00:00:00.000Z',
+  properties: {},
+};<% } %>
 
 /** `<%= componentId %>`. The text below stands in for what a caller binds through its translate pipe. */
 const meta: Meta<<%= className %>> = {
   title: 'Components/<%= title %>',
   component: <%= className %>,
-  args: { heading: '<%= title %>'<% if (isDocumentView) { %>, document: null<% } %> },
+  tags: ['autodocs'],
+  args: { heading: '<%= title %>'<% if (isDocumentView) { %>, document: DOCUMENT<% } %> },
+  argTypes: { headingLevel: { control: 'select', options: HEADING_LEVELS } },
 };
 
 export default meta;
@@ -14,3 +34,13 @@ export default meta;
 type Story = StoryObj<<%= className %>>;
 
 export const Default: Story = {};
+
+/** Inside a section whose heading is a level two, this heading is a level three. */
+export const InsideASection: Story = {
+  args: { headingLevel: 3 },
+};<% if (isDocumentView) { %>
+
+/** Until the host has a document to pass, only the heading renders. */
+export const WithoutADocument: Story = {
+  args: { document: null },
+};<% } %>

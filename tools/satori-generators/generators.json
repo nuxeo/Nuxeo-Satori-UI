@@ -26,7 +26,7 @@
     "satori-component": {
       "factory": "./src/satori-component/generator",
       "schema": "./src/satori-component/schema.json",
-      "description": "Add an nxs- component to the platform's own component library, registered by ID for a slot, with its spec, story, export and reference row. Internal: customers contribute with extension-component under their own prefix.",
+      "description": "Add an nxs- component to the platform's own component library, registered by ID for a slot, with its spec, story, Overview page, export, reference row and with-and-without-Satori section. Internal: customers contribute with extension-component under their own prefix.",
       "x-satori-internal": true
     },
     "config-package": {

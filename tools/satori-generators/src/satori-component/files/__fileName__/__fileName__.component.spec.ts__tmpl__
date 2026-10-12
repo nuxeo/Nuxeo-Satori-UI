@@ -1,12 +1,15 @@
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { <% if (!isRoute) { %>Component, <% } %>provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter<% if (isRoute) { %>, Router, withComponentInputBinding<% } %> } from '@angular/router';<% if (isRoute) { %>
+import { RouterTestingHarness } from '@angular/router/testing';<% } %>
 import {
-  ExtensionComponentRegistry,
-  ExtensionOutletComponent,
-  ExtensionSlotRegistry,
-  provideSatoriExtensions,
-  type ExtensionElement,
+  ExtensionComponentRegistry,<% if (!isRoute) { %>
+  ExtensionOutletComponent,<% } %>
+  ExtensionSlotRegistry,<% if (isRoute) { %>
+  extensionRoutes,<% } %>
+  provideSatoriExtensions,<% if (isRoute) { %>
+  type ExtensionRouteDescriptor,<% } else { %>
+  type ExtensionElement,<% } %>
 } from '@nuxeo-satori/platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 
@@ -18,7 +21,7 @@ const ID = '<%= componentId %>';
 describe('<%= className %>', () => {
   let fixture: ComponentFixture<<%= className %>>;
 
-  async function render(inputs: Record<string, unknown>): Promise<HTMLElement> {
+  async function render(inputs: Record<string, unknown> = {}): Promise<HTMLElement> {
     for (const [key, value] of Object.entries(inputs)) fixture.componentRef.setInput(key, value);
     fixture.detectChanges();
     await fixture.whenStable();
@@ -33,13 +36,20 @@ describe('<%= className %>', () => {
     fixture = TestBed.createComponent(<%= className %>);
   });
 
-  it('renders its heading', async () => {
-    const host = await render({ heading: 'Summary' });
-    expect(host.querySelector('.nxs-<%= fileName %>__heading')?.textContent?.trim()).toBe('Summary');
+  it('renders its heading as a level-two heading by default', async () => {
+    const heading = (await render({ heading: 'Summary' })).querySelector('.nxs-<%= fileName %>__heading');
+    expect(heading?.tagName).toBe('H2');
+    expect(heading?.textContent?.trim()).toBe('Summary');
   });
 
-  it('refuses to render without a heading', () => {
-    expect(() => fixture.detectChanges()).toThrow(/NG0950/);
+  it('renders the heading at the level it is given', async () => {
+    const host = await render({ heading: 'Summary', headingLevel: 4 });
+    expect(host.querySelector('.nxs-<%= fileName %>__heading')?.tagName).toBe('H4');
+  });
+
+  it('renders no heading element while the heading is blank', async () => {
+    expect((await render()).querySelector('.nxs-<%= fileName %>__heading')).toBeNull();
+    expect((await render({ heading: '   ' })).querySelector('.nxs-<%= fileName %>__heading')).toBeNull();
   });<% if (isDocumentView) { %>
 
   it('shows the focused document’s title', async () => {
@@ -52,14 +62,56 @@ describe('<%= className %>', () => {
     expect(host.querySelector('.nxs-<%= fileName %>__title')).toBeNull();
   });<% } %>
 });
+<% if (isRoute) { %>
+/** A `routes` descriptor naming the component — what a manifest contributes to place it. */
+const SLOT_ENTRY: ExtensionRouteDescriptor = {
+  id: ID,
+  path: '<%= fileName %>',
+  inputs: { heading: 'Rendered by ID' },
+};
 
+describe('<%= componentId %>', () => {
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([], withComponentInputBinding()),
+        provideNxsComponents(),
+        provideSatoriExtensions({ slots: { routes: [SLOT_ENTRY] } }),
+      ],
+    });
+  });
+
+  it('is registered by provideNxsComponents()', () => {
+    expect(TestBed.inject(ExtensionComponentRegistry).peek(ID)).toBe(<%= className %>);
+  });
+
+  // The routes the application builds from the slot, so the inputs arrive through route data.
+  it('renders at its path from the routes slot, with the entry’s inputs', async () => {
+    const entries = TestBed.inject(ExtensionSlotRegistry)
+      .resolve<ExtensionRouteDescriptor>('routes')
+      .filter((candidate) => candidate.id === ID);
+    expect(entries).toHaveLength(1);
+    TestBed.inject(Router).resetConfig(extensionRoutes(entries));
+
+    const harness = await RouterTestingHarness.create('/<%= fileName %>');
+    await harness.fixture.whenStable();
+    const rendered = harness.routeNativeElement?.querySelector('nxs-<%= fileName %>');
+    expect(rendered?.querySelector('.nxs-<%= fileName %>__heading')?.textContent?.trim()).toBe(
+      'Rendered by ID',
+    );
+  });
+});
+<% } else { %>
 /** A `<%= slot %>` descriptor naming the component — what a manifest contributes to place it. */
 interface SlotEntry extends ExtensionElement {
-  readonly componentId: string;
-  readonly path?: string;
+  readonly componentId: string;<% if (hostPassesInputs) { %>
+  readonly inputs?: Readonly<Record<string, unknown>>;<% } %>
 }
-const SLOT_ENTRY: SlotEntry = { id: ID, componentId: ID<% if (isRoute) { %>, path: '<%= fileName %>'<% } %> };
-
+const SLOT_ENTRY: SlotEntry = { id: ID, componentId: ID<% if (hostPassesInputs) { %>, inputs: { heading: 'Rendered by ID' }<% } %> };
+<% if (hostPassesInputs) { %>
+/** The document page's View tab: the entry's `inputs`, then the focused document over them. */
 @Component({
   standalone: true,
   imports: [ExtensionOutletComponent],
@@ -67,8 +119,17 @@ const SLOT_ENTRY: SlotEntry = { id: ID, componentId: ID<% if (isRoute) { %>, pat
 })
 class SlotHostComponent {
   componentId: string | null = null;
-  readonly inputs = { heading: 'Rendered by ID' };
-}
+  inputs: Record<string, unknown> = {};
+}<% } else { %>
+/** As the <%= slot %> host renders a placed component: by ID, with no inputs. */
+@Component({
+  standalone: true,
+  imports: [ExtensionOutletComponent],
+  template: `<lib-extension-outlet [componentId]="componentId" />`,
+})
+class SlotHostComponent {
+  componentId: string | null = null;
+}<% } %>
 
 describe('<%= componentId %>', () => {
   beforeEach(() => {
@@ -88,17 +149,30 @@ describe('<%= componentId %>', () => {
     expect(TestBed.inject(ExtensionComponentRegistry).peek(ID)).toBe(<%= className %>);
   });
 
-  it('renders from the <%= slot %> slot, resolved by ID', async () => {
+  it('renders from the <%= slot %> slot, resolved by ID, as its host does', async () => {
     const [entry] = TestBed.inject(ExtensionSlotRegistry)
       .resolve<SlotEntry>('<%= slot %>')
       .filter((candidate) => candidate.id === ID);
     expect(entry?.componentId).toBe(ID);
 
     const fixture = TestBed.createComponent(SlotHostComponent);
-    fixture.componentInstance.componentId = entry.componentId;
+    fixture.componentInstance.componentId = entry.componentId;<% if (hostPassesInputs) { %>
+    fixture.componentInstance.inputs = {
+      ...entry.inputs,
+      document: { uid: 'u1', title: 'Claim 42' },
+    };<% } %>
     fixture.detectChanges();
     await fixture.whenStable();
     const rendered = (fixture.nativeElement as HTMLElement).querySelector('nxs-<%= fileName %>');
-    expect(rendered?.textContent?.trim()).toBe('Rendered by ID');
+    expect(rendered).not.toBeNull();<% if (hostPassesInputs) { %>
+    expect(rendered?.querySelector('.nxs-<%= fileName %>__heading')?.textContent?.trim()).toBe(
+      'Rendered by ID',
+    );
+    expect(rendered?.querySelector('.nxs-<%= fileName %>__title')?.textContent?.trim()).toBe(
+      'Claim 42',
+    );<% } else { %>
+    // The host sets nothing, so nothing is required: a required input would throw NG0950 here.
+    expect(rendered?.querySelector('.nxs-<%= fileName %>__heading')).toBeNull();<% } %>
   });
 });
+<% } %>

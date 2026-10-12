@@ -208,17 +208,23 @@ If another library is refused, fix the file that carries the package, rather tha
 into the library to dodge the rule.
 
 **Adding a component, with every gate staying green.** Start from the generator, which does
-steps 1–5 for a component a slot will place:
+steps 1–5 and step 10's page edit for a component a slot will place:
 
 ```bash
 npx nx g ./tools/satori-generators:satori-component claim-summary --slot=documentView
 ```
 
-It writes the component, a spec that asserts the registration and renders it through the slot,
-a story, the barrel export, the `nxs.<slot>.<name>` registration in `provideNxsComponents()` and
-its row in `docs/extension-reference.md` §6a, each through a marker comment it refuses to guess
-past. It is internal (`x-satori-internal` in `generators.json`): `nxs-` is our prefix, so it is
-not shipped in the package; customers use `extension-component`. By hand, the steps are:
+It writes the component (an optional `heading` as a native heading at a typed `headingLevel`), a
+spec that asserts the registration and renders it the way its slot's host does — `tabs` and
+`sidebar` set no inputs, `documentView` sets the entry's `inputs` and the document, `routes` sets
+them from route data — a story tagged `autodocs` with `headingLevel`'s typed select, its Overview
+`.mdx`, the barrel export, the `nxs.<slot>.<name>` registration in `provideNxsComponents()`, its
+row in `docs/extension-reference.md` §6a, and its section and "All components" row on the
+with-and-without-Satori page. Each goes through a marker it refuses to guess past, and the output
+passes every check below unedited. What it cannot do is yours: make the component do its job,
+rewrite the Overview and the page section to say so, then capture and publish the page (step 10).
+It is internal (`x-satori-internal` in `generators.json`): `nxs-` is our prefix, so it is not
+shipped in the package; customers use `extension-component`. By hand, the steps are:
 
 1. `src/lib/<name>/<name>.component.{ts,html,scss,spec.ts}` — selector `nxs-<name>`, class
    `Nxs<Name>Component`, `standalone: true`, `templateUrl`, theme tokens only. A rule styling an
@@ -270,8 +276,8 @@ not shipped in the package; customers use `extension-component`. By hand, the st
       element its template renders, plus a second story from that library); and a story **of that
       component** — one whose Storybook meta names it, or that renders its registered ID through an
       outlet — then the image `<selector without nxs->-side-by-side.png`, and a row under
-      "All components". The two `<!-- satori:comparison:* -->` markers are where a generator splices
-      them, in the shape of `generatedComponent()` in
+      "All components". The two `<!-- satori:comparison:* -->` markers are where the
+      `satori-component` generator splices them, in the shape of `generatedComponent()` in
       `scripts/beta-harness/satori-comparison-doc.selftest.mjs`;
     - `npm run docs:satori-comparison:capture` renders every component both ways and writes the
       images to `$AGENTIC_UI_EVIDENCE_DIR/satori-comparison/`, outside the repository (needs
