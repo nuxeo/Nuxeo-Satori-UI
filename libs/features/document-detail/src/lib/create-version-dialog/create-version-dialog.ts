@@ -4,7 +4,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialogModule, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dialog';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import {
   DocumentDetailService,
@@ -12,6 +11,7 @@ import {
   PERMISSION_DENIED_KEY,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
 
 export interface CreateVersionDialogData {
   documentUid: string;
@@ -29,9 +29,9 @@ export interface CreateVersionDialogData {
     MatButtonModule,
     MatRadioModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     FormsModule,
   ],
+  providers: [provideNxsToast()],
   templateUrl: './create-version-dialog.html',
   styles: [
     `
@@ -102,7 +102,7 @@ export class CreateVersionDialogComponent {
   private readonly dialogRef = inject(MatDialogRef<CreateVersionDialogComponent>);
   private readonly translate = inject(TranslateService);
   private readonly detailService = inject(DocumentDetailService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   increment: 'Major' | 'Minor' = 'Major';
@@ -122,12 +122,10 @@ export class CreateVersionDialogComponent {
             this.increment === 'Major'
               ? `${this.data.currentMajor + 1}.0`
               : `${this.data.currentMajor}.${this.data.currentMinor + 1}`;
-          this.snackBar.open(
+          this.toast.show(
             this.translate.instant('document-detail.create-version-dialog.created', {
               version: label,
             }),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
           );
           this.dialogRef.close(doc);
         },
@@ -136,7 +134,7 @@ export class CreateVersionDialogComponent {
           const message = isPermissionDeniedError(err)
             ? this.translate.instant(PERMISSION_DENIED_KEY)
             : this.translate.instant('document-detail.message.failed-to-create-version');
-          this.snackBar.open(message, this.translate.instant('common.ok'), { duration: 3000 });
+          this.toast.error(message);
         },
       });
   }

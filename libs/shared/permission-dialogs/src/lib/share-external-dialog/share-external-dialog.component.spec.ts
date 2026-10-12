@@ -3,7 +3,6 @@ import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { TranslateService } from '@ngx-translate/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -13,16 +12,18 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { ShareExternalDialogComponent } from './share-external-dialog';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 describe('ShareExternalDialogComponent (NXSAT-159)', () => {
   let fixture: ComponentFixture<ShareExternalDialogComponent>;
   let closeSpy: ReturnType<typeof vi.fn>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let addExternalPermissionWithNotification: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     closeSpy = vi.fn();
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     addExternalPermissionWithNotification = vi
       .fn()
       .mockReturnValue(of({ document: { uid: 'doc-1' }, notificationSent: true }));
@@ -37,7 +38,6 @@ describe('ShareExternalDialogComponent (NXSAT-159)', () => {
           provide: DocumentDetailService,
           useValue: { addExternalPermissionWithNotification },
         },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(ShareExternalDialogComponent, {
@@ -70,11 +70,9 @@ describe('ShareExternalDialogComponent (NXSAT-159)', () => {
         end: '2026-12-31',
       }),
     );
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Permission added and notification sent',
-      'Dismiss',
-      { duration: 7000 },
-    );
+    expect(toast.show).toHaveBeenCalledWith('Permission added and notification sent', {
+      duration: 7000,
+    });
     expect(closeSpy).toHaveBeenCalledWith(true);
   });
 
@@ -89,9 +87,8 @@ describe('ShareExternalDialogComponent (NXSAT-159)', () => {
 
     fixture.componentInstance.create(false);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.show).toHaveBeenCalledWith(
       'Permission was added, but the notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'Dismiss',
       { duration: 7000 },
     );
     expect(closeSpy).toHaveBeenCalledWith(true);
@@ -105,7 +102,8 @@ describe('ShareExternalDialogComponent (NXSAT-159)', () => {
       }),
     );
 
-    snackBarOpenSpy.mockClear();
+    toast.show.mockClear();
+    toast.error.mockClear();
 
     fixture.componentInstance.create(false);
 
@@ -113,7 +111,7 @@ describe('ShareExternalDialogComponent (NXSAT-159)', () => {
     // `successMessage` return null, so nothing should be announced — but the dialog still closes
     // with `true`, exactly as it does on success. Asserting only the close leaves this test green
     // if a regression starts reporting success for an email that was never sent.
-    expect(snackBarOpenSpy).not.toHaveBeenCalled();
+    expect([...toast.show.mock.calls, ...toast.error.mock.calls]).toEqual([]);
     expect(closeSpy).toHaveBeenCalledWith(true);
   });
 
@@ -147,12 +145,9 @@ describe('ShareExternalDialogComponent (NXSAT-159)', () => {
 
     fixture.componentInstance.create(false);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Permission could not be created. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'Dismiss',
-      {
-        duration: 7000,
-      },
+      { duration: 7000 },
     );
     expect(closeSpy).not.toHaveBeenCalled();
   });

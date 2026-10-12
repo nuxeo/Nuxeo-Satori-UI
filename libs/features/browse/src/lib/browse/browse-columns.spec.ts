@@ -2,7 +2,6 @@ import { TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -89,7 +88,6 @@ describe('BrowseComponent — documentList slot', () => {
         { provide: DirectoryService, useValue: stub.directory },
         { provide: TagService, useValue: stub.tag },
         { provide: SelectionService, useValue: stub.selection },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -215,7 +213,6 @@ describe('BrowseComponent — documentList slot', () => {
         { provide: DirectoryService, useValue: stub.directory },
         { provide: TagService, useValue: stub.tag },
         { provide: SelectionService, useValue: stub.selection },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) } },
         { provide: AppConfigService, useValue: { manifest } },
       ],

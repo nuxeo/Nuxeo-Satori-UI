@@ -3,7 +3,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -17,6 +16,7 @@ import {
   CreateVersionDialogComponent,
   type CreateVersionDialogData,
 } from './create-version-dialog';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 function docWith(overrides: Partial<NuxeoDocument> = {}): NuxeoDocument {
   return {
@@ -34,9 +34,7 @@ const mockDialogRef = {
   close: vi.fn(),
 };
 
-const mockSnackBar = {
-  open: vi.fn(),
-};
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const mockDetailService = {
   createVersion: vi.fn((_uid: string, _increment: 'Major' | 'Minor'): Observable<NuxeoDocument> =>
@@ -63,6 +61,8 @@ describe('CreateVersionDialogComponent', () => {
     // one test would otherwise be the implementation for every test after it.
     mockDetailService.createVersion.mockReturnValue(of(versionDoc));
 
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), CreateVersionDialogComponent],
       providers: [
@@ -70,7 +70,6 @@ describe('CreateVersionDialogComponent', () => {
         { provide: MatDialogRef, useValue: mockDialogRef },
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: DocumentDetailService, useValue: mockDetailService },
-        { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     })
       .overrideComponent(CreateVersionDialogComponent, {
@@ -95,9 +94,7 @@ describe('CreateVersionDialogComponent', () => {
 
     expect(mockDetailService.createVersion).toHaveBeenCalledWith('doc-1', 'Major');
     // 2.4 -> 3.0, not 3.4: a major bump resets the minor.
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Version 3.0 created', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Version 3.0 created');
     expect(mockDialogRef.close).toHaveBeenCalledWith(versionDoc);
     expect(component.saving()).toBe(false);
   });
@@ -108,9 +105,7 @@ describe('CreateVersionDialogComponent', () => {
     component.create();
 
     expect(mockDetailService.createVersion).toHaveBeenCalledWith('doc-1', 'Minor');
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Version 2.5 created', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Version 2.5 created');
     expect(mockDialogRef.close).toHaveBeenCalledWith(versionDoc);
   });
 
@@ -127,12 +122,8 @@ describe('CreateVersionDialogComponent', () => {
 
     component.create();
 
-    expect(mockSnackBar.open).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 3000,
-      },
     );
     // Releasing `saving` is what allows a retry; leaving it set disables the button for good.
     expect(component.saving()).toBe(false);
@@ -144,9 +135,7 @@ describe('CreateVersionDialogComponent', () => {
 
     component.create();
 
-    expect(mockSnackBar.open).toHaveBeenCalledWith('Failed to create version', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to create version');
     expect(component.saving()).toBe(false);
     expect(mockDialogRef.close).not.toHaveBeenCalled();
   });

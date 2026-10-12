@@ -933,21 +933,24 @@ L10n directories (`l10nsubjects`, `l10ncoverage`) use `label_en` instead of `lab
 | **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
 | **Methods**     | `addToFavorites(uid)` / `removeFromFavorites(uid)`                                               |
 | **HTTP Method** | `POST`                                                                                           |
-| **Endpoints**   | `/nuxeo/api/v1/id/{uid}/@op/Document.AddToFavorites` / `Document.RemoveFromFavorites`            |
+| **Endpoints**   | `/nuxeo/api/v1/automation/Document.AddToFavorites` / `Document.RemoveFromFavorites`              |
 
 **Request Payload:**
 
 ```json
-{ "params": {}, "context": {} }
+{ "params": {}, "context": {}, "input": "{uid}" }
 ```
 
 **Response (200 OK):** Updated `NuxeoDocument` entity (gains `CollectionMember` facet when added).
 
 **State Detection:** Via the `favorites` enricher: `contextParameters.favorites.isFavorite` (`true`/`false`).
 
-**Used by:**
+**Used by:** `nxsToggleFavorite()` in `@nuxeo-satori/platform/components`, the one caller of both,
+which also fires the `favorites-changed` window event the shell's Favorites views re-read on:
 
-- **Document detail page** — Star/Favorite toggle button in header toolbar
+- **`nxs-favorite-toggle`** — the star on search result cards and list rows
+- **Document detail page** — **More actions → Add to Favorites / Remove from Favorites**
+  (`app.toolbar.addToFavorites`, `app.toolbar.removeFromFavorites`)
 
 ---
 

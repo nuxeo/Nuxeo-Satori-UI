@@ -11,7 +11,6 @@ import {
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
@@ -27,6 +26,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { CollectionDetailComponent } from './collection-detail';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 const TEST_USERNAME = 'jdoe';
 
@@ -87,9 +87,7 @@ const mockDialog = {
   })),
 };
 
-const mockSnackBar = {
-  open: vi.fn(),
-};
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const mockCollection: NuxeoDocument = {
   uid: 'collection-1',
@@ -223,6 +221,8 @@ describe('CollectionDetailComponent', () => {
     // one and drove the unhandled error above.
     mockDetailService.fetchThumbnail.mockReturnValue(of(null));
 
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), CollectionDetailComponent],
       providers: [
@@ -241,7 +241,6 @@ describe('CollectionDetailComponent', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     })
       .overrideComponent(CollectionDetailComponent, {
@@ -670,7 +669,7 @@ describe('CollectionDetailComponent', () => {
       component.editPermission(ace);
       await new Promise((r) => setTimeout(r, 10));
       expect(mockDetailService.getFullDocument).toHaveBeenCalled();
-      expect(mockSnackBar.open).toHaveBeenCalled();
+      expect([...toast.show.mock.calls, ...toast.error.mock.calls].length).toBeGreaterThan(0);
     });
 
     it('should not reload when the edit dialog was dismissed', () => {
@@ -820,7 +819,7 @@ describe('CollectionDetailComponent', () => {
     });
   });
 
-  describe('thumbnail blob lifecycle', () => {
+  describe('member thumbnails', () => {
     const members: NuxeoDocument[] = [
       docWith({ uid: 'doc1', title: 'Doc 1', type: 'File' }),
       docWith({ uid: 'doc2', title: 'Doc 2', type: 'File' }),
@@ -834,54 +833,28 @@ describe('CollectionDetailComponent', () => {
       );
     });
 
-    it('should create one blob URL per member and expose it as a SafeUrl', () => {
+    /**
+     * Each member's `nxs-thumbnail` fetches, shows and revokes its own image, so the page must not
+     * mint an object URL for one: the blob-URL rule is held in one place.
+     */
+    it('mints no object URL for a member thumbnail', () => {
       component.loadMembers();
 
-      expect(created.length).toBe(2);
-      const map = component.thumbnailMap();
-      expect(Object.keys(map).sort()).toEqual(['doc1', 'doc2']);
+      expect(component.members()).toHaveLength(2);
+      expect(mockDetailService.fetchThumbnail).not.toHaveBeenCalled();
+      expect(created).toEqual([]);
     });
 
-    it('should revoke the previous batch before loading a new one', () => {
-      component.loadMembers();
-      const firstBatch = [...created];
-      expect(firstBatch.length).toBe(2);
-
-      component.loadMembers();
-
-      // Every URL from the first batch must be revoked. Without this the map was simply
-      // reset to {} and the old blobs stayed alive for the life of the document — one leaked
-      // batch per navigation between collections.
-      for (const url of firstBatch) {
-        expect(revoked, `blob ${url} was never revoked`).toContain(url);
-      }
-    });
-
-    it('should revoke every outstanding blob URL on destroy', () => {
-      component.loadMembers();
-      const outstanding = [...created];
-      expect(outstanding.length).toBeGreaterThan(0);
-
-      fixture.destroy();
-
-      for (const url of outstanding) {
-        expect(revoked, `blob ${url} survived component destruction`).toContain(url);
-      }
-    });
-
-    it('should not create a blob URL when the thumbnail request yields nothing', () => {
-      mockDetailService.fetchThumbnail.mockReturnValue(of(null));
-      component.loadMembers();
-      expect(created.length).toBe(0);
-      expect(component.thumbnailMap()).toEqual({});
-    });
-
-    it('should survive a thumbnail request that errors', () => {
-      mockDetailService.fetchThumbnail.mockReturnValue(throwError(() => new Error('404')));
-
-      // The component catches per-thumbnail so one bad blob cannot empty the listing.
-      expect(() => component.loadMembers()).not.toThrow();
-      expect(component.members().length).toBe(2);
+    it('asks for a thumbnail only for content documents', () => {
+      expect(component['canLoadThumbnail'](docWith({ uid: 'f', title: 'F', type: 'File' }))).toBe(
+        true,
+      );
+      expect(
+        component['canLoadThumbnail'](docWith({ uid: 'w', title: 'W', type: 'Workspace' })),
+      ).toBe(false);
+      expect(component['canLoadThumbnail'](docWith({ uid: 'x', title: 'X', type: '  ' }))).toBe(
+        false,
+      );
     });
   });
 
@@ -1204,11 +1177,8 @@ describe('CollectionDetailComponent', () => {
   /**
    * A stale members response must not replace a newer collection's.
    *
-   * The thumbnail generation does not cover this: it is minted from *inside* the members response, so
-   * it orders thumbnail batches against each other and leaves the members request itself unguarded.
    * Navigating A -> B starts two member requests; with B resolving first, A's late response overwrote
-   * `members` and `totalSize`, and its `loadThumbnails` then took the newest thumbnail generation and
-   * discarded B's images too — so the older collection won outright.
+   * `members` and `totalSize`, so the older collection won outright.
    */
   describe('overlapping member requests', () => {
     function docs(...uids: string[]): NuxeoDocument[] {

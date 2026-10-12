@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -22,6 +21,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
   return {
@@ -100,12 +100,13 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 describe('BrowseComponent — permissions tab', () => {
   let component: BrowseComponent;
   let fixture: ComponentFixture<BrowseComponent>;
-  let snackBar: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let dialogOpen: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    snackBar = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(undefined) }));
     // `vi.clearAllMocks()` clears recorded calls but keeps implementations, and the
     // component issues its first folder request from the constructor — so without
@@ -140,7 +141,6 @@ describe('BrowseComponent — permissions tab', () => {
             hasAdministrationAccess: () => false,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBar } },
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -230,7 +230,7 @@ describe('BrowseComponent — permissions tab', () => {
 
     expect(component.permissionsLoading()).toBe(false);
     expect(component.permissionsLoaded()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('Failed to load permissions', 'OK', { duration: 4000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to load permissions');
   });
 
   it('does not issue a second permissions request while the first is in flight', () => {
@@ -257,7 +257,7 @@ describe('BrowseComponent — permissions tab', () => {
     const data = dialogData<{ permissionLabel: string; timeFrameLabel: string }>();
     expect(data.permissionLabel).toBe('Edit');
     expect(data.timeFrameLabel).toContain('Until');
-    expect(snackBar).toHaveBeenCalledWith('Permission deleted', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Permission deleted');
   });
 
   it('deletePermission leaves the ACLs alone when the confirmation is dismissed', () => {
@@ -267,7 +267,7 @@ describe('BrowseComponent — permissions tab', () => {
     component.deletePermission(ace({ id: 'l-1' }));
 
     expect(detail.getDocumentPermissions).not.toHaveBeenCalled();
-    expect(snackBar).not.toHaveBeenCalled();
+    expect([...toast.show.mock.calls, ...toast.error.mock.calls]).toEqual([]);
   });
 
   it('shareWithExternal reloads the ACLs only when a share was created', () => {
@@ -280,7 +280,7 @@ describe('BrowseComponent — permissions tab', () => {
 
     dialogOpen.mockReturnValue({ afterClosed: () => of(true) });
     component.shareWithExternal();
-    expect(snackBar).toHaveBeenCalledWith('Shared with external user', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Shared with external user');
   });
 
   it('editExternalPermission marks the dialog as external', () => {
@@ -322,13 +322,10 @@ describe('BrowseComponent — permissions tab', () => {
     component.sendNotificationEmail(ace({ id: 'l-1' }));
 
     expect(component.actionInProgress()).toBeNull();
-    expect(snackBar).toHaveBeenCalledWith('Failed to send notification', 'OK', { duration: 7000 });
-    expect(snackBar).not.toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith('Failed to send notification', { duration: 7000 });
+    expect(toast.error).not.toHaveBeenCalledWith(
       'Notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'OK',
-      {
-        duration: 7000,
-      },
+      { duration: 7000 },
     );
   });
 

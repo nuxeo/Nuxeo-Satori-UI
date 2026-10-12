@@ -15,7 +15,7 @@ of backwards compatibility.
 2 exported symbol(s).
 
 ```ts
-const PLATFORM_ENTRY_POINTS: readonly ["app-config", "components", "extensions", "nuxeo-client", "ui"];
+const PLATFORM_ENTRY_POINTS: readonly ["app-config", "components", "components-satori", "extensions", "nuxeo-client", "ui"];
 type PlatformEntryPoint = (typeof PLATFORM_ENTRY_POINTS)[number];
 ```
 
@@ -189,10 +189,19 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-18 exported symbol(s).
+43 exported symbol(s).
 
 ```ts
+const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
 const NXS_PERMISSIONS_PANEL_ID = "nxs.components.permissionsPanel";
+const NXS_PRIMITIVE_IDS: Readonly<{
+    readonly avatar: "nxs.primitives.avatar";
+    readonly breadcrumbs: "nxs.primitives.breadcrumbs";
+    readonly tag: "nxs.primitives.tag";
+    readonly richTooltip: "nxs.primitives.richTooltip";
+    }>;
+}
+const NXS_TOAST_DURATION = 4000;
 class NxsActionMenuComponent {
     readonly actions: _angular_core.InputSignal<readonly NxsMenuAction[]>;
     readonly label: _angular_core.InputSignal<string>;
@@ -200,6 +209,45 @@ class NxsActionMenuComponent {
     readonly selected: _angular_core.OutputEmitterRef<NxsMenuAction>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsActionMenuComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsActionMenuComponent, "nxs-action-menu", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, never, true, never>;
+    }
+}
+type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
+class NxsAvatarComponent implements NxsAvatarInputs {
+    readonly initials: _angular_core.InputSignal<string>;
+    readonly color: _angular_core.InputSignal<NxsAvatarColor>;
+    readonly size: _angular_core.InputSignal<NxsAvatarSize>;
+    readonly label: _angular_core.InputSignal<string>;
+    protected readonly shownInitials: _angular_core.Signal<string>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsAvatarComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsAvatarComponent, "nxs-avatar", never, { "initials": { "alias": "initials"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; "size": { "alias": "size"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsAvatarInputs {
+    readonly initials: InputSignal<string>;
+    readonly color: InputSignal<NxsAvatarColor>;
+    readonly size: InputSignal<NxsAvatarSize>;
+    readonly label: InputSignal<string>;
+    }
+}
+type NxsAvatarSize = '128' | '24' | '28' | '36' | '64' | '80';
+interface NxsBreadcrumbItem {
+    readonly label: string;
+    readonly routerLink?: string | readonly (string | number)[];
+    readonly queryParams?: Readonly<Record<string, string | number | boolean>>;
+    readonly href?: string;
+    }
+}
+class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
+    readonly items: _angular_core.InputSignal<readonly NxsBreadcrumbItem[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    protected linkKind(item: NxsBreadcrumbItem): 'href' | 'router' | 'text';
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsBreadcrumbsComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsBreadcrumbsComponent, "nxs-breadcrumbs", never, { "items": { "alias": "items"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsBreadcrumbsInputs {
+    readonly items: InputSignal<readonly NxsBreadcrumbItem[]>;
+    readonly label: InputSignal<string>;
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
@@ -273,6 +321,19 @@ class NxsErrorStateComponent {
     }
 }
 type NxsErrorStatus = 401 | 403 | 404 | 500;
+class NxsFavoriteToggleComponent {
+    readonly documentId: _angular_core.InputSignal<string>;
+    readonly favorite: _angular_core.ModelSignal<boolean>;
+    readonly disabled: _angular_core.InputSignal<boolean>;
+    readonly changed: _angular_core.OutputEmitterRef<boolean>;
+    readonly failed: _angular_core.OutputEmitterRef<unknown>;
+    protected readonly busy: _angular_core.Signal<boolean>;
+    toggle(): void;
+    protected press(event: Event): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "favorite": { "alias": "favorite"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "favorite": "favoriteChange"; "changed": "changed"; "failed": "failed"; }, never, never, true, never>;
+    }
+}
 class NxsFolderHeaderComponent {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
@@ -367,6 +428,27 @@ interface NxsPickableColumn {
     readonly visible: boolean;
     }
 }
+class NxsRichTooltipComponent implements NxsRichTooltipInputs {
+    readonly heading: _angular_core.InputSignal<string>;
+    readonly content: _angular_core.InputSignal<string>;
+    readonly triggerLabel: _angular_core.InputSignal<string>;
+    readonly icon: _angular_core.InputSignal<string>;
+    protected readonly open: _angular_core.WritableSignal<boolean>;
+    protected readonly panelId: string;
+    protected toggle(): void;
+    protected closeAndRefocus(): void;
+    protected onFocusOut(event: FocusEvent): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRichTooltipComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRichTooltipComponent, "nxs-rich-tooltip", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "content": { "alias": "content"; "required": true; "isSignal": true; }; "triggerLabel": { "alias": "triggerLabel"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsRichTooltipInputs {
+    readonly heading: InputSignal<string>;
+    readonly content: InputSignal<string>;
+    readonly triggerLabel: InputSignal<string>;
+    readonly icon: InputSignal<string>;
+    }
+}
 class NxsSpinnerComponent {
     readonly diameter: _angular_core.InputSignalWithTransform<number, unknown>;
     readonly label: _angular_core.InputSignal<string>;
@@ -375,7 +457,63 @@ class NxsSpinnerComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSpinnerComponent, "nxs-spinner", never, { "diameter": { "alias": "diameter"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
     }
 }
+type NxsTagColor = NxsAvatarColor | 'gray';
+class NxsTagComponent implements NxsTagInputs {
+    readonly label: _angular_core.InputSignal<string>;
+    readonly color: _angular_core.InputSignal<NxsTagColor>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTagComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagComponent, "nxs-tag", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsTagInputs {
+    readonly label: InputSignal<string>;
+    readonly color: InputSignal<NxsTagColor>;
+    }
+}
+class NxsThumbnailComponent {
+    readonly documentId: _angular_core.InputSignal<string>;
+    readonly alt: _angular_core.InputSignal<string>;
+    protected readonly url: _angular_core.WritableSignal<string | null>;
+    constructor();
+    protected broken(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsThumbnailComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsThumbnailComponent, "nxs-thumbnail", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "alt": { "alias": "alt"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    }
+}
+interface NxsToastAction {
+    readonly label: string;
+    readonly run: () => void;
+    }
+}
+interface NxsToastErrorOptions extends NxsToastOptions {
+    readonly retry?: () => void;
+    }
+}
+interface NxsToastOptions {
+    readonly duration?: number;
+    readonly action?: NxsToastAction;
+    }
+}
+class NxsToastService {
+    show(message: string, options?: NxsToastOptions): void;
+    error(message: string, options?: NxsToastErrorOptions): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsToastService, never>;
+    static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
+    }
+}
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
+function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
+function provideNxsComponents(): EnvironmentProviders;
+function provideNxsThumbnailCache(): Provider;
+function provideNxsToast(): Provider;
+```
+
+## @nuxeo-satori/platform/components-satori
+
+1 exported symbol(s).
+
+```ts
+function provideNxsSatoriComponents(): EnvironmentProviders;
 ```
 
 ## @nuxeo-satori/platform/extensions

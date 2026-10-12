@@ -3,7 +3,6 @@ import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { TranslateService } from '@ngx-translate/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -13,12 +12,13 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { AddPermissionDialogComponent } from './add-permission-dialog';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 describe('AddPermissionDialogComponent (NXSAT-159)', () => {
   let fixture: ComponentFixture<AddPermissionDialogComponent>;
   let component: AddPermissionDialogComponent;
   let closeSpy: ReturnType<typeof vi.fn>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let addPermissionWithNotification: ReturnType<typeof vi.fn>;
 
   const selectedUser = {
@@ -30,7 +30,8 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
 
   beforeEach(async () => {
     closeSpy = vi.fn();
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     addPermissionWithNotification = vi
       .fn()
       .mockReturnValue(of({ document: { uid: 'doc-1' }, notificationSent: true }));
@@ -48,7 +49,6 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
             addPermissionWithNotification,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(AddPermissionDialogComponent, {
@@ -80,11 +80,9 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
         comment: 'Please review this document',
       }),
     );
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Permission added and notification sent',
-      'Dismiss',
-      { duration: 7000 },
-    );
+    expect(toast.show).toHaveBeenCalledWith('Permission added and notification sent', {
+      duration: 7000,
+    });
     expect(closeSpy).toHaveBeenCalledWith(true);
   });
 
@@ -100,7 +98,7 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
       'doc-1',
       expect.objectContaining({ notify: false, comment: '' }),
     );
-    expect(snackBarOpenSpy).not.toHaveBeenCalled();
+    expect([...toast.show.mock.calls, ...toast.error.mock.calls]).toEqual([]);
     expect(closeSpy).toHaveBeenCalledWith(true);
   });
 
@@ -115,9 +113,8 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
 
     component.create(false);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.show).toHaveBeenCalledWith(
       'Permission was added, but the notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'Dismiss',
       { duration: 7000 },
     );
     expect(closeSpy).toHaveBeenCalledWith(true);
@@ -126,11 +123,9 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
   it('resets form and shows snackbar on create-and-add-another', () => {
     component.create(true);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Permission added and notification sent',
-      'Dismiss',
-      { duration: 7000 },
-    );
+    expect(toast.show).toHaveBeenCalledWith('Permission added and notification sent', {
+      duration: 7000,
+    });
     expect(component.selectedUser).toBeNull();
     expect(component.notifyComment).toBe('');
     expect(closeSpy).not.toHaveBeenCalled();
@@ -145,12 +140,9 @@ describe('AddPermissionDialogComponent (NXSAT-159)', () => {
 
     component.create(false);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Permission could not be created. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'Dismiss',
-      {
-        duration: 7000,
-      },
+      { duration: 7000 },
     );
     expect(closeSpy).not.toHaveBeenCalled();
   });

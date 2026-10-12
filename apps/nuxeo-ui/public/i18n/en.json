@@ -1983,6 +1983,11 @@
         "message": "Sign in again to continue."
       }
     },
+    "favorite-toggle": {
+      "add": "Add to favorites",
+      "label": "Favorite",
+      "remove": "Remove from favorites"
+    },
     "permissions-panel": {
       "add": "Add",
       "column": {
@@ -2096,6 +2101,10 @@
       "unverified": {
         "heading": "The changes were sent, but reading the permissions back failed, so the panel cannot confirm them. Reload to see what the server holds."
       }
+    },
+    "toast": {
+      "dismiss": "Dismiss",
+      "retry": "Retry"
     }
   },
   "search": {

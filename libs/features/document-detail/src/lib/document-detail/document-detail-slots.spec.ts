@@ -4,7 +4,6 @@ import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -238,7 +237,6 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
           useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })), get: nuxeoGet },
         },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(undefined) })) },

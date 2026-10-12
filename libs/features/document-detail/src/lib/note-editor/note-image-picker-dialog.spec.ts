@@ -281,21 +281,37 @@ describe('NoteImagePickerDialogComponent', () => {
   });
 
   describe('thumbnails', () => {
-    it('shows a thumbnail per result and does not refetch one it already has', () => {
+    /** Lets each result's `nxs-thumbnail` start its request and draw the answer. */
+    async function settle(): Promise<void> {
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    function images(): string[] {
+      return [...(fixture.nativeElement as HTMLElement).querySelectorAll('img')].map(
+        (img) => img.getAttribute('src') ?? '',
+      );
+    }
+
+    it('shows a thumbnail per result and does not refetch one it already has', async () => {
       mockSearch.searchDocumentPicker.mockReturnValue(
         of({ entries: [picture('a'), picture('b')], totalSize: 2 }),
       );
       build();
+      await settle();
 
-      expect(Object.keys(component.thumbnailMap()).sort()).toEqual(['a', 'b']);
+      expect(images()).toEqual(created);
+      expect(created).toHaveLength(2);
       expect(mockDetailService.fetchThumbnail).toHaveBeenCalledTimes(2);
 
       component.search();
+      await settle();
 
       expect(mockDetailService.fetchThumbnail).toHaveBeenCalledTimes(2);
     });
 
-    it('skips a result whose thumbnail cannot be fetched and keeps the rest', () => {
+    it('keeps the placeholder for a result whose thumbnail cannot be fetched', async () => {
       mockSearch.searchDocumentPicker.mockReturnValue(
         of({ entries: [picture('a'), picture('b')], totalSize: 2 }),
       );
@@ -304,15 +320,20 @@ describe('NoteImagePickerDialogComponent', () => {
       );
 
       build();
+      await settle();
 
-      expect(Object.keys(component.thumbnailMap())).toEqual(['b']);
+      expect(images()).toHaveLength(1);
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelectorAll('.note-image-picker__placeholder'),
+      ).toHaveLength(1);
     });
 
-    it('frees every thumbnail URL it created when the dialog closes', () => {
+    it('frees every thumbnail URL when the dialog closes', async () => {
       mockSearch.searchDocumentPicker.mockReturnValue(
         of({ entries: [picture('a'), picture('b')], totalSize: 2 }),
       );
       build();
+      await settle();
       const outstanding = [...created];
       expect(outstanding.length).toBeGreaterThan(0);
 

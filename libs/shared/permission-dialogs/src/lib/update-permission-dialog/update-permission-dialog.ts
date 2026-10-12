@@ -12,7 +12,6 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
 import { switchMap } from 'rxjs';
 import {
@@ -24,6 +23,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
 
 export interface UpdatePermissionDialogData {
   documentUid: string;
@@ -54,9 +54,8 @@ const PERMISSION_OPTIONS = [
     MatCheckboxModule,
     MatDatepickerModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './update-permission-dialog.html',
   styles: [
     `
@@ -134,7 +133,7 @@ export class UpdatePermissionDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly data = inject<UpdatePermissionDialogData>(MAT_DIALOG_DATA);
   private readonly detailService = inject(DocumentDetailService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   readonly saving = signal(false);
@@ -189,19 +188,13 @@ export class UpdatePermissionDialogComponent {
           this.saving.set(false);
           const message = this.successMessage(result.notificationSent, result.notificationErrorKey);
           if (message) {
-            this.snackBar.open(message, this.translate.instant('common.dismiss'), {
-              duration: 7000,
-            });
+            this.toast.show(message, { duration: 7000 });
           }
           this.dialogRef.close(true);
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
-            this.permissionErrorMessage(err),
-            this.translate.instant('common.dismiss'),
-            { duration: 7000 },
-          );
+          this.toast.error(this.permissionErrorMessage(err), { duration: 7000 });
         },
       });
   }
@@ -234,19 +227,13 @@ export class UpdatePermissionDialogComponent {
           this.saving.set(false);
           const message = this.successMessage(result.notificationSent, result.notificationErrorKey);
           if (message) {
-            this.snackBar.open(message, this.translate.instant('common.dismiss'), {
-              duration: 7000,
-            });
+            this.toast.show(message, { duration: 7000 });
           }
           this.dialogRef.close(true);
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
-            this.permissionErrorMessage(err),
-            this.translate.instant('common.dismiss'),
-            { duration: 7000 },
-          );
+          this.toast.error(this.permissionErrorMessage(err), { duration: 7000 });
         },
       });
   }
