@@ -25,7 +25,7 @@
       "options": {
         "command": "ngc -p libs/shared/satori-components/tsconfig.lib.json --outDir dist/out-tsc/libs/shared/satori-components && tsc -p libs/shared/satori-components/.storybook/tsconfig.json --noEmit"
       },
-      "$comment": "The second half type-checks the stories and the `.storybook/` sources, which `tsconfig.lib.json` excludes and Vitest never compiles."
+      "$comment": "The second half type-checks the stories and the `.storybook/` sources, which `tsconfig.lib.json` excludes. Vitest runs `.storybook/api-members.spec.ts` and the helper it imports, but strips their types rather than checking them."
     },
     "test": {
       "executor": "@nx/vitest:test",

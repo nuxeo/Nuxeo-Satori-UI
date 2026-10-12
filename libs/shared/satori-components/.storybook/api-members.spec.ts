@@ -45,7 +45,9 @@ describe('the API page', () => {
     });
 
     it('describes every input and output from Compodoc', () => {
-      const undocumented = [...inputs, ...outputs].filter((binding) => !binding.doc);
+      const undocumented = [...inputs, ...outputs].filter(
+        (binding) => !binding.doc?.rawdescription?.trim(),
+      );
       expect(undocumented.map((binding) => binding.name)).toEqual([]);
     });
   });
