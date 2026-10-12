@@ -4031,18 +4031,25 @@ expectRed(
 );
 
 // The attribute's own double quotes must not be read as a literal: the expression inside them
-// uses `'`, and only the ACTIVE delimiter closes. Without that, tracking `"` would swallow the
-// binding and turn the most common shape in the codebase into a false negative.
+// uses `'`, and only the ACTIVE delimiter closes.
+//
+// The format is parenthesized on purpose. Written as `date: 'longDate'` this control was inert —
+// `DATE_FORMAT_OPEN` needs a `(`, so the scan never ran and the control stayed green with
+// `matchingParen` deleted outright. It reaches the matcher now. What it asserts is bounded, and
+// worth saying plainly: a broken scan fails by missing a violation, so no GREEN control can
+// prove the matcher works. This one proves the attribute's quotes do not manufacture one; the
+// red controls above are what prove the matcher still bites.
 falsePositiveControls += 1;
 expectGreen('a single-quoted key inside a double-quoted attribute', 'checkNoTranslatableDatePatterns', {
   ...APP,
   'libs/features/x/src/lib/x.html':
-    '<span [title]="entry.eventDate | date: \'longDate\'">{{ entry.name }}</span>\n',
+    '<span [title]="entry.eventDate | date: (\'longDate\')">{{ entry.name }}</span>\n',
 });
 
 // The exemption must not become a loophole. `common.date-mask` is allowed to BE a date pattern;
-// it is not allowed to be USED as one. Arm 2 is what makes that distinction real, so it gets its
-// own control rather than being argued for in a comment.
+// it is not allowed to be USED as one in a template. Arm 2 is what makes that distinction real
+// there, so it gets its own control rather than being argued for in a comment — and the limit is
+// recorded next to the arm: a key resolved in TypeScript and bound as a variable is out of reach.
 expectRed(
   'the exempt date-mask key bound as a DatePipe format',
   'checkNoTranslatableDatePatterns',

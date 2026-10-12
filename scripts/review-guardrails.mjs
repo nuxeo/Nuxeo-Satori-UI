@@ -6375,7 +6375,20 @@ function checkNoTranslatableDatePatterns() {
     }
   }
 
-  // ---- arm 2: a DatePipe format that comes from the catalogue ----
+  // ---- arm 2: a DatePipe format that comes from the catalogue, IN A TEMPLATE ----
+  //
+  // The scope is the template, and the contract is no wider than that. A component can resolve
+  // a key in TypeScript — `this.translate.instant('common.date-mask')` — and bind the result as
+  // `| date: dateFormat`, and neither arm sees it: arm 1 skips the exempt key, and there is no
+  // `date: (` or `| translate` in the HTML for this arm to match.
+  //
+  // So this arm does NOT make the `common.date-mask` exemption airtight in general; it closes
+  // the template path, which is the one both real call sites used and the one a translator's
+  // key reaches by default. Catching the TypeScript path means deciding whether an arbitrary
+  // string variable holds a translated date pattern, which is a different and much weaker kind
+  // of check — a name-matching heuristic over `.instant(` call sites. Saying so is better than
+  // a guarantee that reads as total and is not: the exemption is narrow, and server-side
+  // behaviour does not depend on it.
 
   const templates = [
     ...walk('apps', (path) => /\.html$/.test(path)),
@@ -6395,7 +6408,7 @@ function checkNoTranslatableDatePatterns() {
   // And the span is not `[^)]*`, which stops at the FIRST close paren and so could not see
   // `date: (formatKey() | translate)` — the inner `()` ended the match before `translate` was
   // reached. A format supplied by a method or a signal is the same defect wearing a call, and
-  // the arm claims to hold "regardless of key or value", so depth counting it is.
+  // within a template the arm holds regardless of key or value, so depth counting it is.
   const DATE_FORMAT_OPEN = /\|\s*date:\s*\(/g;
   const TRANSLATE_IN_SPAN = /\|\s*translate\b/;
 
