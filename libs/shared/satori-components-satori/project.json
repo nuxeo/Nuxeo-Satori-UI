@@ -32,8 +32,10 @@
         "port": 6007,
         "configDir": "libs/shared/satori-components-satori/.storybook",
         "browserTarget": "satori-components-satori:build-storybook",
+        "experimentalZoneless": true,
         "compodoc": false
-      }
+      },
+      "$comment": "`experimentalZoneless` is read from this target's own options, not from `browserTarget`; without it the dev server loads Zone.js under the zoneless providers in `preview.ts` (NG0914)."
     },
     "build-storybook": {
       "executor": "@storybook/angular:build-storybook",
