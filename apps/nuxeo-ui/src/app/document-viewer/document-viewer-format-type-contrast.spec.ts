@@ -168,17 +168,22 @@ describe('DocumentViewer format-type contrast by theme (NXENG-768, NXENG-760, NX
     }
   });
 
-  it('wires format-type colour through --document-viewer-muted-on-light-surface on the viewer host', () => {
+  it('wires format-type and format-size through --document-viewer-muted-on-light-surface on the viewer host', () => {
     const formatLabel = fixture.nativeElement.querySelector('.format-type') as HTMLElement | null;
+    const formatSize = fixture.nativeElement.querySelector('.format-size') as HTMLElement | null;
     expect(formatLabel).withContext('expected .format-type').not.toBeNull();
-    if (!formatLabel) return;
+    expect(formatSize).withContext('expected .format-size (NXSAT-494)').not.toBeNull();
+    if (!formatLabel || !formatSize) return;
 
     const host = fixture.nativeElement as HTMLElement;
     const sentinel = 'rgb(1, 2, 3)';
     host.style.setProperty('--document-viewer-muted-on-light-surface', sentinel);
     fixture.detectChanges();
 
-    expect(getComputedStyle(formatLabel).color).toBe(sentinel);
+    expect(getComputedStyle(formatLabel).color).withContext('format-type').toBe(sentinel);
+    expect(getComputedStyle(formatSize).color)
+      .withContext('format-size (NXSAT-494)')
+      .toBe(sentinel);
   });
 
   it(`meets ${WCAG_AA_NORMAL_TEXT}:1 for authored SCSS fallbacks when root theme tokens are unset`, () => {

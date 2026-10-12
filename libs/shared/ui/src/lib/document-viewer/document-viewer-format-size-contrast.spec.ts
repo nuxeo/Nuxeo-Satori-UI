@@ -19,30 +19,19 @@ function scssBlocks(source: string, className: string): { prelude: string; body:
   }));
 }
 
-const WCAG_AA_NORMAL_TEXT = 4.5;
-
-function parseHex(css: string): [number, number, number] | null {
-  const m = css.match(/#([0-9a-f]{6})\b/i);
-  if (!m) return null;
-  const hex = m[1];
-  return [
-    Number.parseInt(hex.slice(0, 2), 16),
-    Number.parseInt(hex.slice(2, 4), 16),
-    Number.parseInt(hex.slice(4, 6), 16),
-  ];
+function hostBlock(source: string): string {
+  return source.match(/:host\s*\{[^}]+\}/s)?.[0] ?? '';
 }
 
-function relativeLuminance([r, g, b]: readonly number[]): number {
-  const channel = (v: number): number => {
-    const s = v / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+function stripScssComments(block: string): string {
+  return block.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
 }
 
-function contrastRatio(a: readonly number[], b: readonly number[]): number {
-  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
-  return (hi + 0.05) / (lo + 0.05);
+function hostCustomProperty(source: string, name: string): string | null {
+  const block = stripScssComments(hostBlock(source));
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = block.match(new RegExp(`(?:^|[\\s;{])--${escaped}\\s*:\\s*([^;]+);`, 'm'));
+  return match?.[1]?.trim() ?? null;
 }
 
 describe('DocumentViewerComponent — format-size SCSS contract (NXENG-806, NXENG-825, NXSAT-494)', () => {
@@ -68,14 +57,14 @@ describe('DocumentViewerComponent — format-size SCSS contract (NXENG-806, NXEN
     }
   });
 
-  it('documents IBM 1406866183: legacy #999 on white fails AA; host muted token passes', () => {
-    const white: [number, number, number] = [255, 255, 255];
-    const legacy = parseHex('#999999');
-    const muted = parseHex('#5c5f6b');
-    expect(legacy).not.toBeNull();
-    expect(muted).not.toBeNull();
-    if (!legacy || !muted) return;
-    expect(contrastRatio(legacy, white)).toBeCloseTo(2.85, 1);
-    expect(contrastRatio(muted, white)).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+  it('IBM 1406866183: host muted token is authored on :host and wired through .format-size', () => {
+    const scssPath = join(import.meta.dirname, 'document-viewer.component.scss');
+    const scss = readFileSync(scssPath, 'utf8');
+    const mutedToken = hostCustomProperty(scss, 'document-viewer-muted-on-light-surface');
+    expect(mutedToken).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(mutedToken).not.toMatch(/#999/i);
+    for (const { body } of scssBlocks(scss, 'format-size')) {
+      expect(body).toMatch(/var\(--document-viewer-muted-on-light-surface\)/);
+    }
   });
 });

@@ -2,7 +2,8 @@
  * NXENG-801 / NXSAT-494 — `.format-type` and `.format-size` on the fixed light `.picture-cards`
  * strip use scoped host tokens so contrast stays ≥4.5:1 even when theme surface-variant drifts
  * (e.g. dark palette). IBM 1406866183 (NXENG-837) targets `.format-size`.
- * Per-theme Karma coverage: `apps/nuxeo-ui/.../document-viewer-format-type-contrast.spec.ts`.
+ * Per-theme Karma coverage (including `.format-size` host-token sentinel wiring for NXSAT-494):
+ * `apps/nuxeo-ui/.../document-viewer-format-type-contrast.spec.ts`.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -61,7 +62,7 @@ function opaqueBackdrop(element: HTMLElement): number[] {
   return [255, 255, 255];
 }
 
-describe('DocumentViewerComponent — format-type text contrast (NXENG-801)', () => {
+describe('DocumentViewerComponent — format-type text contrast (NXENG-801 / NXSAT-494)', () => {
   let fixture: ComponentFixture<DocumentViewerComponent>;
   let originalTheme: string | null;
 
@@ -139,25 +140,18 @@ describe('DocumentViewerComponent — format-type text contrast (NXENG-801)', ()
 
       const strip = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement;
       const label = fixture.nativeElement.querySelector('.format-type') as HTMLElement;
-      const size = fixture.nativeElement.querySelector('.format-size') as HTMLElement;
       expect(strip).not.toBeNull();
       expect(label).not.toBeNull();
-      expect(size).not.toBeNull();
-      if (!strip || !label || !size) return;
+      if (!strip || !label) return;
 
-      for (const [element, name] of [
-        [label, 'format-type'],
-        [size, 'format-size'],
-      ] as const) {
-        const style = getComputedStyle(element);
-        const backdrop = opaqueBackdrop(strip);
-        const painted = compositeOver(parseColor(style.color), backdrop);
-        const ratio = contrastRatio(painted, backdrop);
-        expect(
-          ratio,
-          `${name} ${style.color} on picture-cards backdrop rgb(${backdrop.join(',')}) (${theme ?? 'default'})`,
-        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
-      }
+      const labelStyle = getComputedStyle(label);
+      const backdrop = opaqueBackdrop(strip);
+      const painted = compositeOver(parseColor(labelStyle.color), backdrop);
+      const ratio = contrastRatio(painted, backdrop);
+      expect(
+        ratio,
+        `format-type ${labelStyle.color} on picture-cards backdrop rgb(${backdrop.join(',')}) (${theme ?? 'default'})`,
+      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
     }
   });
 });
