@@ -3,16 +3,16 @@ title: Dev Harness & Gates
 parent: Engineering
 order: 8
 last_reviewed: 2026-10-12
-repo_commit: b7db1b50
+repo_commit: 9c438365
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `b7db1b50` (`fix/nxsat-628`) for the
+> **Last reviewed:** 2026-10-12 · **Repository:** `9c438365` (`fix/nxsat-628`) for the
 > `checkNoTranslatableDatePatterns` row of §2 **only** — added by NXSAT-628 and verified against
 > `GUARDRAILS` and its **21** controls (13 negative, 8 positive) in
-> `review-guardrails.selftest.mjs` at that commit. `b7db1b50` is cited rather than the revision
+> `review-guardrails.selftest.mjs` at that commit. `9c438365` is cited rather than the revision
 > that first added the row, because the row's guarantee was not fully enforced until the
 > single-field, multiline, non-ASCII, long-pattern, quoted-literal, nested-call, digit-in-literal
 > and quoted-parenthesis cases were closed — the last of these in both the single- and
@@ -148,7 +148,7 @@ stopped at the general-purpose checks and every i18n and packaging check was add
 | `checkNoHardcodedImperativeUiText`            | No hard-coded snackbar, toast or error text built in TypeScript                                                           |
 | `checkTranslateIsInjectedWhereUsed`           | A class using `this.translate` injects `TranslateService` — otherwise a runtime crash on the first error path             |
 | `checkCatalogueValuesAreRenderable`           | A catalogue value is the text a user sees — no HTML entities or markup copied from a template                             |
-| `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern — every alphabetic run one letter repeated, one of them twice or more — and no `DatePipe` format comes from `translate` |
+| `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern — every alphabetic run one letter repeated, one of them twice or more — and no template binds a `DatePipe` format that comes from `translate` |
 | `checkNoStaleAgnosticClaim`                   | A comment saying a library has no dependency on something is still true of that library                                   |
 | `checkTranslationCatalogues`                  | Every `i18n/<locale>.json` parses to an object of keys and ends with a newline                                            |
 | `checkCataloguesAreTranslated`                | A non-English catalogue translates something, rather than being a copy of `en.json`                                       |
