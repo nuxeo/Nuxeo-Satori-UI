@@ -1,7 +1,10 @@
 /**
  * NXSAT-496 — Document viewer footer icon buttons (Preview, Download, …) must show a keyboard
  * focus indicator on the fixed light footer strip (IBM `style_focus_visible` / 1425495611,
- * WCAG 2.4.7 / 1.4.11).
+ * WCAG 2.4.7 / 1.4.11). Karma loads theme tokens and compiled styles like production.
+ * Standalone `:focus` selector shape and SCSS token wiring are owned by
+ * `document-viewer-footer-focus-ring.spec.ts` (shared/ui Vitest); this suite owns computed
+ * outline geometry, per-theme contrast, and the `--document-viewer-focus-on-light-surface` hook.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -159,34 +162,6 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
     button.focus();
 
     expect(getComputedStyle(button).outlineColor).toBe(sentinel);
-  });
-
-  it('declares a standalone :focus rule that IBM style_focus_visible can read', () => {
-    const focusSelectors: string[] = [];
-    for (const sheet of Array.from(document.styleSheets)) {
-      let sheetRules: CSSRuleList;
-      try {
-        sheetRules = sheet.cssRules;
-      } catch {
-        continue;
-      }
-      for (const rule of Array.from(sheetRules)) {
-        const selector = (rule as CSSStyleRule).selectorText;
-        if (
-          selector?.includes('.viewer-footer-actions') &&
-          selector.includes('.mat-mdc-icon-button') &&
-          selector.includes(':focus')
-        ) {
-          focusSelectors.push(selector);
-        }
-      }
-    }
-
-    const canonical = focusSelectors.map((selector) =>
-      selector.replace(/\[_ngcontent-[^\]]+\]/g, '').trim(),
-    );
-    expect(canonical).toContain('.viewer-footer-actions button.mat-mdc-icon-button:focus');
-    expect(canonical.some((selector) => selector.includes(':focus,'))).toBeFalse();
   });
 
   for (const theme of [...COMPILED_THEME_BASES, null] as const) {
