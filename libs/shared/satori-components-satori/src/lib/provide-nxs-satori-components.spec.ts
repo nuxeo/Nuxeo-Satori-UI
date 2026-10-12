@@ -107,7 +107,7 @@ describe('the Satori primitives, rendered by ID', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  /** What assistive technology is offered as an image: `role="img"` outside any `aria-hidden`. */
+  /** Elements with `role="img"` that no `aria-hidden` subtree hides. */
   const exposedImages = (root: HTMLElement) =>
     Array.from(root.querySelectorAll('[role="img"]')).filter(
       (image) => !image.closest('[aria-hidden="true"]'),

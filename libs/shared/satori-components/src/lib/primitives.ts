@@ -43,7 +43,10 @@ export interface NxsAvatarInputs {
   readonly initials: InputSignal<string>;
   readonly color: InputSignal<NxsAvatarColor>;
   readonly size: InputSignal<NxsAvatarSize>;
-  /** The accessible name, usually the person's name. Blank makes the avatar decorative. */
+  /**
+   * The accessible name, usually the person's name. Blank, or only whitespace, makes the avatar
+   * decorative.
+   */
   readonly label: InputSignal<string>;
 }
 
@@ -51,8 +54,8 @@ export interface NxsAvatarInputs {
 export interface NxsBreadcrumbsInputs {
   readonly items: InputSignal<readonly NxsBreadcrumbItem[]>;
   /**
-   * The accessible name of the navigation landmark. The Satori implementation names its landmark
-   * from Satori's own catalogue and does not read this.
+   * The accessible name of the navigation landmark. When it is blank, the Satori implementation
+   * keeps the name Satori's own catalogue gives it.
    */
   readonly label: InputSignal<string>;
 }
