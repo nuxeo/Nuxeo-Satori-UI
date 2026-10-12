@@ -366,8 +366,9 @@
   }
 }
 
-// NXENG-799 / NXENG-816 / NXENG-817 (IBM 922184956) — `style_focus_visible` reads `:focus` only;
-// keep this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
+// NXENG-799 / NXENG-816 / NXENG-817 / NXSAT-524 — image toolbar icon buttons (Zoom out, Zoom in,
+// Toggle fit, …); IBM 922184956, 2140832667. `style_focus_visible` reads `:focus` only — keep
+// this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
 .viewer-toolbar button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;
