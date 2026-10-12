@@ -18,7 +18,8 @@ empty table or a blank area, so the user knows the place is empty on purpose and
   component as content, so they and what they do stay yours.
 - **A real heading.** The heading is a native `<h1>` to `<h6>`, at the level you choose, so heading
   navigation stays in order.
-- **Announced when it appears.** It is a status region.
+- **A status region.** It has the `status` role, so a change to its text can be announced without
+  moving focus.
 
 ## Demo showcase
 
@@ -67,8 +68,9 @@ Set `headingLevel` one below the heading of the section it sits in. The default 
 
 ## Accessibility
 
-- **Announced.** The component has the `status` role, so assistive technology reads it when it
-  appears — after a search returns nothing, for example — without moving focus.
+- **Status role.** The component has the `status` role, a polite live region. Screen readers
+  announce a change to its text without moving focus; whether one announces the empty state when it
+  first appears varies, so do not rely on it as the only signal that a search returned nothing.
 - **Heading.** The heading is a native heading element at `headingLevel`. Choose the level that fits
   the page outline.
 - **Icon.** The icon is decorative and hidden from assistive technology. The heading says what it

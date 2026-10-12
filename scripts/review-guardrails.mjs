@@ -7458,8 +7458,9 @@ function storybookStoryGlobs(main) {
  * without a story ships undocumented. Read from the barrel, because an exported component is a
  * published one. A story is a `*.stories.ts` under `src/` — the glob `.storybook/main.ts` loads,
  * which is checked too — whose meta names the class as `component:`; a file that only mentions the
- * class, or names it with no story exported, does not count. Every story file's meta must carry
- * the `autodocs` tag, so each one has a Docs page (see `storiedComponents`).
+ * class, or names it with no story exported, does not count. Every story meta that names a
+ * component must carry the `autodocs` tag, so the component has its API page (see
+ * `storiedComponents`).
  */
 function checkSatoriComponentsHaveStories() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;

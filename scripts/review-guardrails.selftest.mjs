@@ -6698,7 +6698,7 @@ expectGreen(
   }),
 );
 
-// Every story file's meta carries `autodocs`, so each component has a Docs page.
+// Every story meta that names a component carries `autodocs`, so the component has its API page.
 expectRed(
   'a story meta with no tags',
   'checkSatoriComponentsHaveStories',
