@@ -628,6 +628,41 @@ describe('BrowseService', () => {
     expect(result.entries[0].title).toBe('My Favorites');
   });
 
+  it.each([403, 404, 500])(
+    'getBrowseFolderContents keeps Nuxeo’s %i when a folder below the root fails to load',
+    async (status) => {
+      const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain/private'));
+
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/path/default-domain/private')
+        .flush('refused', { status, statusText: 'refused' });
+
+      await expect(result$).rejects.toMatchObject({ status });
+      httpMock.expectNone((r) => r.url.includes('@children'));
+    },
+  );
+
+  it('getBrowseFolderContents keeps the status when the folder loads but its children fail', async () => {
+    const result$ = firstValueFrom(
+      service.getBrowseFolderContents('/default-domain/workspaces/ws'),
+    );
+
+    httpMock
+      .expectOne((r) => r.url === '/nuxeo/api/v1/path/default-domain/workspaces/ws')
+      .flush({
+        uid: 'ws-uid',
+        title: 'ws',
+        type: 'Workspace',
+        path: '/default-domain/workspaces/ws',
+        properties: {},
+      });
+    httpMock
+      .expectOne((r) => r.url === '/nuxeo/api/v1/path/default-domain/workspaces/ws/@children')
+      .flush('refused', { status: 403, statusText: 'Forbidden' });
+
+    await expect(result$).rejects.toMatchObject({ status: 403 });
+  });
+
   it('getNavTreeChildren loads user workspace children via @children (Favorites + Collections)', async () => {
     const workspace: NuxeoDocument = {
       uid: 'ws-uid',

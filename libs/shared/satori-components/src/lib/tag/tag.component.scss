@@ -1,6 +1,7 @@
 :host {
   display: inline-flex;
   align-items: center;
+  box-sizing: border-box;
   max-inline-size: 100%;
   padding: 2px 8px;
   border-radius: 4px;

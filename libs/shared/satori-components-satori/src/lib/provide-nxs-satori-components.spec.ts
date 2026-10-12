@@ -126,6 +126,20 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(avatar?.hasAttribute('role')).toBe(false);
   });
 
+  // `sat-avatar` at size 24 reads `initials()[0]`; blank initials are valid in the contract.
+  it.each(['', '   '])(
+    'renders blank initials %j at size 24 as Material does: an empty circle',
+    async (initials) => {
+      const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials, size: '24' });
+      expect(host.querySelector('nxs-satori-avatar sat-avatar')?.textContent?.trim()).toBe('');
+    },
+  );
+
+  it('shows the initials Material shows: trimmed, upper-cased, at most two', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: ' nkx ' });
+    expect(host.querySelector('nxs-satori-avatar sat-avatar')?.textContent?.trim()).toBe('NK');
+  });
+
   it('renders the tag on sat-category-tag with its label', async () => {
     const host = await renderById(NXS_PRIMITIVE_IDS.tag, { label: 'Invoice', color: 'teal' });
     expect(host.querySelector('nxs-satori-tag sat-category-tag')?.textContent?.trim()).toBe(

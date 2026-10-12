@@ -3,14 +3,12 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, Observable, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { forkJoin, Observable } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatSortModule, Sort } from '@angular/material/sort';
@@ -80,15 +78,27 @@ import {
   UpdatePermissionDialogData,
 } from '@agentic-ui/shared-permission-dialogs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsFolderHeaderComponent, NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import {
+  NxsErrorStateComponent,
+  NxsFolderHeaderComponent,
+  NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  NxsToastService,
+  provideNxsToast,
+  type NxsErrorStatus,
+} from '@nuxeo-satori/platform/components';
 
 @Component({
   selector: 'lib-collection-detail',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
+    NxsErrorStateComponent,
     NxsFolderHeaderComponent,
     NxsSpinnerComponent,
+    NxsThumbnailComponent,
     TranslatePipe,
     DatePipe,
     FormsModule,
@@ -97,7 +107,6 @@ import { NxsFolderHeaderComponent, NxsSpinnerComponent } from '@nuxeo-satori/pla
     MatTabsModule,
     MatTooltipModule,
     MatMenuModule,
-    MatSnackBarModule,
     MatDialogModule,
     MatTableModule,
     MatSortModule,
@@ -122,7 +131,7 @@ export class CollectionDetailComponent {
   private readonly collectionService = inject(CollectionService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly directoryService = inject(DirectoryService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly currentUsername = inject(CURRENT_USERNAME);
@@ -140,11 +149,10 @@ export class CollectionDetailComponent {
   readonly members = signal<NuxeoDocument[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  /** Which error state `error` shows: the status of the member request that failed. */
+  readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly totalSize = signal(0);
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
-  /** Batch token for thumbnail loads, so a superseded response cannot write. */
-  private thumbnailGeneration = 0;
-  /** Request token for the members load — see `loadMembers` for why the two are separate. */
+  /** Request token for the members load — see `loadMembers`. */
   private memberGeneration = 0;
 
   readonly isLocked = signal(false);
@@ -261,8 +269,6 @@ export class CollectionDetailComponent {
   });
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.revokeThumbnails());
-
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.collectionUid = params.get('uid') ?? '';
       this.historyLoaded = false;
@@ -333,11 +339,8 @@ export class CollectionDetailComponent {
   loadMembers(): void {
     // Claimed at request start, and checked on BOTH callbacks.
     //
-    // The thumbnail generation below does not cover this, because it is minted from *inside* the
-    // members response — so it orders thumbnail batches against each other and leaves the members
-    // request itself unguarded. Navigating A -> B starts two member requests; if B resolves first and
-    // A lands afterwards, A overwrote `members` and `totalSize` with the previous collection's data
-    // and its `loadThumbnails` then took the newest thumbnail generation, discarding B's images too.
+    // Navigating A -> B starts two member requests; if B resolves first and A lands afterwards, A
+    // overwrote `members` and `totalSize` with the previous collection's data.
     //
     // The uid is captured as well as the counter: the route can change between request and response,
     // and the uid is what the user is actually looking at.
@@ -355,13 +358,13 @@ export class CollectionDetailComponent {
           this.members.set(res.entries);
           this.totalSize.set(res.totalSize);
           this.loading.set(false);
-          this.loadThumbnails(res.entries);
         },
-        error: () => {
+        error: (err: unknown) => {
           // Guarded too, and it has to clear `loading` only for the request that still owns it — a
           // stale failure would otherwise show an error over a newer collection's results. The
           // superseding call already set `loading` true for itself.
           if (generation !== this.memberGeneration || requestedUid !== this.collectionUid) return;
+          this.errorStatus.set(nxsErrorStatus(err));
           this.error.set(
             this.translate.instant('collections.message.failed-to-load-collection-contents'),
           );
@@ -370,48 +373,8 @@ export class CollectionDetailComponent {
       });
   }
 
-  private loadThumbnails(docs: NuxeoDocument[]): void {
-    // Same guard as the Search, Trash, Assets and Browse loaders: a request started for the previous
-    // collection could otherwise resolve after the reset below and insert stale data.
-    const generation = ++this.thumbnailGeneration;
-    // The reset that made the leak unbounded: `thumbnailMap.set({})` dropped the last
-    // batch's URLs without revoking the blobs behind them, so every navigation to
-    // another collection pinned another batch in memory for the life of the document.
-    this.revokeThumbnails();
-    this.thumbnailMap.set({});
-    for (const doc of docs) {
-      if (!this.canLoadThumbnail(doc)) continue;
-      this.detailService
-        .fetchThumbnail(doc.uid)
-        .pipe(
-          catchError(() => of(null)),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((blob) => {
-          // Drop a response from a superseded batch. Without this a thumbnail request started for the
-          // previous collection could resolve after the reset above and reinsert a stale blob URL —
-          // and the map is also the revocation ledger, so the leaked URL is then never revoked.
-          if (!blob || generation !== this.thumbnailGeneration) return;
-          const url = URL.createObjectURL(blob);
-          this.thumbnailMap.update((m) => {
-            const previous = m[doc.uid];
-            if (previous && previous !== url) URL.revokeObjectURL(previous);
-            return {
-              ...m,
-              [doc.uid]: url,
-            };
-          });
-        });
-    }
-  }
-
-  private revokeThumbnails(): void {
-    for (const url of Object.values(this.thumbnailMap())) {
-      if (url) URL.revokeObjectURL(url);
-    }
-  }
-
-  private canLoadThumbnail(doc: NuxeoDocument): boolean {
+  /** Whether the document type has a content thumbnail worth requesting. */
+  protected canLoadThumbnail(doc: NuxeoDocument): boolean {
     const normalizedType = doc.type.trim().toLowerCase();
     return normalizedType.length > 0 && !NON_CONTENT_DOCUMENT_TYPES.has(normalizedType);
   }
@@ -439,7 +402,7 @@ export class CollectionDetailComponent {
     const col = this.collection();
     if (!col) return;
     if (hasDocumentPermissionsEnricher(col) && !canWriteDocument(col)) {
-      this.toast(this.translate.instant(PERMISSION_DENIED_KEY));
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
 
@@ -455,7 +418,7 @@ export class CollectionDetailComponent {
         if (updatedDoc) {
           this.collection.set(updatedDoc);
           this.browseContext.requestTreeRefresh();
-          this.toast(this.translate.instant('browse.message.collection-updated'));
+          this.toast.show(this.translate.instant('browse.message.collection-updated'));
         }
       });
   }
@@ -477,7 +440,7 @@ export class CollectionDetailComponent {
         // for the same reason.
         this.lockOwner.set(wasLocked ? null : (this.currentUsername() ?? null));
         this.actionInProgress.set(null);
-        this.toast(
+        this.toast.show(
           this.translate.instant(
             wasLocked
               ? 'collections.message.collection-unlocked'
@@ -487,7 +450,7 @@ export class CollectionDetailComponent {
       },
       error: () => {
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.action-failed'));
+        this.toast.error(this.translate.instant('browse.message.action-failed'));
       },
     });
   }
@@ -504,7 +467,7 @@ export class CollectionDetailComponent {
         const wasSub = this.isSubscribed();
         this.isSubscribed.set(!wasSub);
         this.actionInProgress.set(null);
-        this.toast(
+        this.toast.show(
           this.translate.instant(
             wasSub
               ? 'collections.message.notifications-disabled'
@@ -514,7 +477,7 @@ export class CollectionDetailComponent {
       },
       error: () => {
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.action-failed'));
+        this.toast.error(this.translate.instant('browse.message.action-failed'));
       },
     });
   }
@@ -523,7 +486,7 @@ export class CollectionDetailComponent {
     const col = this.collection();
     if (this.actionInProgress()) return;
     if (col && hasDocumentPermissionsEnricher(col) && !canRemoveDocument(col)) {
-      this.toast(this.translate.instant(PERMISSION_DENIED_KEY));
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -547,7 +510,7 @@ export class CollectionDetailComponent {
           .subscribe({
             next: () => {
               this.actionInProgress.set(null);
-              this.toast(this.translate.instant('browse.message.collection-moved-to-trash'));
+              this.toast.show(this.translate.instant('browse.message.collection-moved-to-trash'));
               this.browseContext.requestTreeRefresh();
               const col = this.collection();
               const redirectUrl = col?.path ? postTrashBrowseRouterUrl(col.path) : '/collections';
@@ -555,7 +518,7 @@ export class CollectionDetailComponent {
             },
             error: (err) => {
               this.actionInProgress.set(null);
-              this.toast(
+              this.toast.error(
                 isPermissionDeniedError(err)
                   ? this.translate.instant(PERMISSION_DENIED_KEY)
                   : this.translate.instant('browse.message.failed-to-delete-collection'),
@@ -574,12 +537,12 @@ export class CollectionDetailComponent {
       const updated = current.filter((c) => c.uid !== this.collectionUid);
       this.clipboardDocs.set(updated);
       writeClipboardDocs(updated);
-      this.toast(this.translate.instant('collections.message.removed-from-clipboard'));
+      this.toast.show(this.translate.instant('collections.message.removed-from-clipboard'));
     } else {
       const updated = [...current, { uid: col.uid, title: col.title, type: col.type }];
       this.clipboardDocs.set(updated);
       writeClipboardDocs(updated);
-      this.toast(this.translate.instant('collections.message.added-to-clipboard'));
+      this.toast.show(this.translate.instant('collections.message.added-to-clipboard'));
     }
     window.dispatchEvent(new Event('clipboard-changed'));
   }
@@ -640,7 +603,7 @@ export class CollectionDetailComponent {
     dialogRef.afterClosed().subscribe((created: boolean | undefined) => {
       if (created) {
         this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-added'));
+        this.toast.show(this.translate.instant('browse.message.permission-added'));
       }
     });
   }
@@ -654,7 +617,7 @@ export class CollectionDetailComponent {
     dialogRef.afterClosed().subscribe((updated: boolean | undefined) => {
       if (updated) {
         this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-updated'));
+        this.toast.show(this.translate.instant('browse.message.permission-updated'));
       }
     });
   }
@@ -673,7 +636,7 @@ export class CollectionDetailComponent {
     dialogRef.afterClosed().subscribe((deleted: boolean | undefined) => {
       if (deleted) {
         this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-deleted'));
+        this.toast.show(this.translate.instant('browse.message.permission-deleted'));
       }
     });
   }
@@ -695,7 +658,7 @@ export class CollectionDetailComponent {
     dialogRef.afterClosed().subscribe((updated: boolean | undefined) => {
       if (updated) {
         this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-updated'));
+        this.toast.show(this.translate.instant('browse.message.permission-updated'));
       }
     });
   }
@@ -707,11 +670,11 @@ export class CollectionDetailComponent {
     this.detailService.sendNotificationEmailForPermission(this.collectionUid, ace.id).subscribe({
       next: () => {
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.notification-email-sent'));
+        this.toast.show(this.translate.instant('browse.message.notification-email-sent'));
       },
       error: (err) => {
         this.actionInProgress.set(null);
-        this.toast(
+        this.toast.error(
           isMailSendError(err)
             ? mailSendFailureMessage('send', (key) => this.translate.instant(key))
             : this.translate.instant('collections.message.failed-to-send-notification'),
@@ -729,7 +692,7 @@ export class CollectionDetailComponent {
     dialogRef.afterClosed().subscribe((created: boolean | undefined) => {
       if (created) {
         this.loadCollection();
-        this.toast(this.translate.instant('browse.message.shared-with-external-user'));
+        this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
       }
     });
   }
@@ -747,7 +710,7 @@ export class CollectionDetailComponent {
       next: () => {
         this.actionInProgress.set(null);
         this.loadCollection();
-        this.toast(
+        this.toast.show(
           this.translate.instant(
             blocked
               ? 'collections.message.inheritance-unblocked'
@@ -757,7 +720,7 @@ export class CollectionDetailComponent {
       },
       error: () => {
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.action-failed'));
+        this.toast.error(this.translate.instant('browse.message.action-failed'));
       },
     });
   }
@@ -895,12 +858,4 @@ export class CollectionDetailComponent {
   }
 
   avatarColor = avatarColor;
-
-  private toast(message: string): void {
-    this.snackBar.open(message, this.translate.instant('common.ok'), {
-      duration: 3000,
-      horizontalPosition: 'center',
-      verticalPosition: 'bottom',
-    });
-  }
 }

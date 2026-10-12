@@ -62,19 +62,23 @@ describe('NxsRichTooltipComponent', () => {
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 
-  it('opens a dialog labelled by its heading, which the trigger controls', async () => {
+  // A live region is announced when content enters it, so it must exist, empty, before the panel.
+  it('opens its panel inside a live region, which the trigger controls, and keeps focus on the trigger', async () => {
+    const live = required<HTMLElement>('.nxs-rich-tooltip__live');
+    expect(live.getAttribute('role')).toBe('status');
+    expect(live.textContent?.trim()).toBe('');
+    trigger().focus();
     trigger().click();
     await settle();
-    const opened = required<HTMLElement>('.nxs-rich-tooltip__panel');
-    expect(opened.getAttribute('role')).toBe('dialog');
+    const opened = required<HTMLElement>('.nxs-rich-tooltip__panel', live);
+    expect(opened.hasAttribute('role')).toBe(false);
     expect(trigger().getAttribute('aria-expanded')).toBe('true');
     expect(trigger().getAttribute('aria-controls')).toBe(opened.id);
-    const heading = required('.nxs-rich-tooltip__heading', opened);
-    expect(opened.getAttribute('aria-labelledby')).toBe(heading.id);
-    expect(heading.textContent?.trim()).toBe('Versioning');
+    expect(required('.nxs-rich-tooltip__heading', opened).textContent?.trim()).toBe('Versioning');
     expect(opened.querySelector('.nxs-rich-tooltip__content')?.textContent?.trim()).toBe(
       'A new version is created each time you check in.',
     );
+    expect(document.activeElement).toBe(trigger());
   });
 
   it('closes on a second click', async () => {

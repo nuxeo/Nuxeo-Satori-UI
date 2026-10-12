@@ -107,11 +107,9 @@
                 </span>
               }
 
-              @if (thumbnailMap()[doc.uid]; as thumb) {
-                <img [src]="thumb" alt="" />
-              } @else {
+              <nxs-thumbnail class="note-image-picker__image" [documentId]="doc.uid">
                 <mat-icon class="note-image-picker__placeholder">image</mat-icon>
-              }
+              </nxs-thumbnail>
             </div>
 
             <span class="note-image-picker__title">{{ displayFileName(doc) }}</span>

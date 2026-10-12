@@ -21,24 +21,8 @@
 }
 
 .detail-error {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
   flex: 1;
-  gap: 12px;
-  color: #ef5350;
-
-  .error-icon {
-    font-size: 48px;
-    width: 48px;
-    height: 48px;
-  }
-
-  p {
-    font-size: 14px;
-    margin: 0;
-  }
+  justify-content: center;
 }
 
 // Header

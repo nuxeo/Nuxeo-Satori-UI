@@ -27,9 +27,10 @@
  *    `@hylandsoftware/`, so importing them can never need Satori; and the `components-satori`
  *    bundle does, so check 3 is not passing over an empty or misnamed file.
  * 4. **Negative control, every run.** The same tarball with `peerDependenciesMeta` removed must
- *    FAIL to install, naming `@hylandsoftware/satori-ui`. If it installs, this environment cannot
- *    tell an optional peer from a required one — a registry mirror that proxies GitHub Packages,
- *    say — and check 1's pass means nothing, so the gate fails.
+ *    FAIL to install with `E404`, naming `@hylandsoftware/satori-ui`. If it installs, this
+ *    environment cannot tell an optional peer from a required one — a registry mirror that proxies
+ *    GitHub Packages, say — and check 1's pass means nothing, so the gate fails. Any other failure
+ *    (`ERESOLVE`, a timeout) does not show the package is missing from public npm, and fails too.
  *
  * Load-bearing: 1 and 4 together. 2 and 3 name the cause when 1 goes red, and catch a Satori import
  * leaking into a base entry point while the install still succeeds.
@@ -244,6 +245,7 @@ try {
       delete manifest.peerDependenciesMeta?.[SATORI];
     }),
   );
+  const reason = required.output.match(/npm (?:error|ERR!) (?:code )?(E\d+|[A-Z_]+)/)?.[1];
   if (required.status === 0) {
     fail(
       `With ${SATORI} a REQUIRED peer, the install still succeeded. This environment cannot tell an ` +
@@ -253,12 +255,15 @@ try {
     fail(
       `The required-peer control failed, but not because of ${SATORI}:\n    ${required.output.slice(0, 400)}`,
     );
-  } else {
-    const reason =
-      required.output.match(/npm (?:error|ERR!) (?:code )?(E\d+|[A-Z_]+)/)?.[1] ?? 'error';
-    notes.push(
-      `control: with the peer required, the same install fails (${reason}) naming ${SATORI}`,
+  } else if (reason !== 'E404') {
+    // Only E404 says public npm does not have the package. ERESOLVE, a timeout or a network error
+    // can name it too, and prove nothing about what a customer without access can install.
+    fail(
+      `The required-peer control failed with ${reason ?? 'no npm error code'}, not E404, so it ` +
+        `did not show ${SATORI} is missing from public npm:\n    ${required.output.slice(0, 400)}`,
     );
+  } else {
+    notes.push(`control: with the peer required, the same install fails (E404) naming ${SATORI}`);
   }
 } finally {
   rmSync(work, { recursive: true, force: true });

@@ -72,7 +72,7 @@ getByPath(nuxeoPath: string): Observable<NuxeoDocument>
 getUserWorkspace(): Observable<NuxeoDocument>  // POST automation/User.GetUserWorkspace (Web UI)
 getRepositoryRoot(): Observable<NuxeoDocument>  // falls back to NXQL when GET /path/ is denied
 getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>  // root + top-level folders for all permission profiles
-getBrowseFolderContents(nuxeoPath: string, pageSize?: number): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks
+getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: { currentPageIndex?: number; sort?: { sortBy: string; sortOrder: 'ASC' | 'DESC' }[] }): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks; `page` is the bridge's server paging and sort; below the root a failure is Nuxeo's own HttpErrorResponse, so map it with nxsErrorStatus()
 getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // Favorites / Collection member listing
 getFolderContext(nuxeoPath: string): Observable<NuxeoDocument>  // includes @subtypes enricher
 getCreatableSubtypes(nuxeoPath: string): Observable<string[]>  // parsed allowed child types
@@ -458,6 +458,20 @@ Layer 0/1 configuration, loaded once at startup. Import: `@nuxeo-satori/platform
 
 Removed in NXSAT-312, with no replacement: `loadBootstrap()`, `loadManifest()`, `resetManifest()`,
 `diagnostics().manifestAttempt`, and `parseRuntimeManifest`.
+
+---
+
+## NxsToastService (`libs/shared/satori-components/src/lib/toast/toast.service.ts`)
+
+The core slice's one toast (NXSAT-308), over Material's `MatSnackBar`. Import:
+`@nuxeo-satori/platform/components`. Not provided in root: list `provideNxsToast()` in the
+component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, { useValue })`.
+
+| Member                                                         | Notes                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show(message: string, options?: NxsToastOptions): void`       | Something happened. Announced politely. `message` is already translated; a blank one opens nothing.                                                                                                                                                             |
+| `error(message: string, options?: NxsToastErrorOptions): void` | Something the user asked for did not happen. Announced assertively. `retry` adds a translated Retry button running it.                                                                                                                                          |
+| `NxsToastOptions`                                              | `duration` in ms: below `NXS_TOAST_DURATION` (4000, Web UI's) it is raised to it, `0` keeps the toast until dismissed. `action: { label, run }` adds one button; a toast with an action defaults to `0`. Every toast has a Dismiss button and closes on Escape. |
 
 ---
 

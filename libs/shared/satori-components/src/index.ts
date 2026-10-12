@@ -1,4 +1,8 @@
 export {
+  NxsActionMenuComponent,
+  type NxsMenuAction,
+} from './lib/action-menu/action-menu.component';
+export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
 } from './lib/column-picker/column-picker.component';
@@ -9,6 +13,13 @@ export {
   type NxsDriveDialogData,
 } from './lib/drive-dialog/drive-dialog.component';
 export { NxsEmptyStateComponent } from './lib/empty-state/empty-state.component';
+export { NxsErrorStateComponent } from './lib/error-state/error-state.component';
+export { type NxsErrorStatus, nxsErrorStatus } from './lib/error-state/error-status';
+export { NxsFavoriteToggleComponent } from './lib/favorite-toggle/favorite-toggle.component';
+export {
+  NXS_FAVORITES_CHANGED_EVENT,
+  nxsToggleFavorite,
+} from './lib/favorite-toggle/toggle-favorite';
 export { NxsFolderHeaderComponent } from './lib/folder-header/folder-header.component';
 export type { NxsHeadingLevel } from './lib/heading-level';
 export { NxsIconComponent } from './lib/icon/icon.component';
@@ -17,6 +28,16 @@ export {
   NxsPermissionsPanelComponent,
 } from './lib/permissions-panel/permissions-panel.component';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
+export { provideNxsThumbnailCache } from './lib/thumbnail/thumbnail-cache';
+export { NxsThumbnailComponent } from './lib/thumbnail/thumbnail.component';
+export {
+  NXS_TOAST_DURATION,
+  NxsToastService,
+  provideNxsToast,
+  type NxsToastAction,
+  type NxsToastErrorOptions,
+  type NxsToastOptions,
+} from './lib/toast/toast.service';
 export { NxsAvatarComponent } from './lib/avatar/avatar.component';
 export { NxsBreadcrumbsComponent } from './lib/breadcrumbs/breadcrumbs.component';
 export { NxsTagComponent } from './lib/tag/tag.component';

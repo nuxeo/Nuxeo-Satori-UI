@@ -138,9 +138,11 @@ export class BrowseService {
           map((page) => ({ folder, ...page })),
         ),
       ),
-      catchError(() => {
+      catchError((error: unknown) => {
+        // Nuxeo's own error, so a caller can tell "may not read this" (403) from "not there" (404)
+        // from a failure; a replacement Error carried no status.
         if (safePath !== '/') {
-          return throwError(() => new Error(`Unable to load folder at ${safePath}`));
+          return throwError(() => error);
         }
         return this.getNavTreeBootstrap(pageSize).pipe(
           map(({ root, entries }) => ({

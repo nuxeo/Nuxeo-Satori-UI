@@ -21,7 +21,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { catchError, of, switchMap } from 'rxjs';
 import {
@@ -45,7 +44,11 @@ import { NoteImagePickerDialogComponent } from './note-image-picker-dialog';
 import { buildNoteImagesInsertHtml } from './note-image-insert';
 import { notePictureInsertUrl } from './note-image-url';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import {
+  NxsSpinnerComponent,
+  NxsToastService,
+  provideNxsToast,
+} from '@nuxeo-satori/platform/components';
 
 @Component({
   selector: 'lib-note-editor',
@@ -58,9 +61,9 @@ import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
     MatDialogModule,
     MatIconModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     MatTooltipModule,
   ],
+  providers: [provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   encapsulation: ViewEncapsulation.None,
   templateUrl: './note-editor.html',
@@ -72,7 +75,7 @@ export class NoteEditorComponent {
   private readonly injector = inject(Injector);
   private readonly sanitizer = inject(DomSanitizer);
   private readonly dialog = inject(MatDialog);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly documentImportService = inject(DocumentImportService);
   private readonly documentDetailService = inject(DocumentDetailService);
 
@@ -231,14 +234,10 @@ export class NoteEditorComponent {
           .map((doc) => notePictureInsertUrl(doc))
           .filter((url): url is string => !!url);
         if (!urls.length) {
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant(
               'document-detail.message.selected-documents-have-no-insertable-image-url',
             ),
-            this.translate.instant('common.ok'),
-            {
-              duration: 4000,
-            },
           );
           return;
         }
@@ -431,12 +430,10 @@ export class NoteEditorComponent {
     const parentPath = this.uploadParentPath();
     if (!editorQuill || this.imageUploading()) return;
     if (!parentPath) {
-      this.snackBar.open(
+      this.toast.error(
         this.translate.instant(
           'document-detail.message.cannot-upload-image-parent-folder-is-unknown',
         ),
-        this.translate.instant('common.ok'),
-        { duration: 4000 },
       );
       return;
     }
@@ -461,19 +458,15 @@ export class NoteEditorComponent {
       .subscribe((doc) => {
         this.imageUploading.set(false);
         if (!doc || !this.quill) {
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant('document-detail.message.failed-to-upload-image'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
           return;
         }
         const url = notePictureInsertUrl(doc);
         if (!url) {
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant('document-detail.message.uploaded-image-has-no-display-url-yet'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
           return;
         }

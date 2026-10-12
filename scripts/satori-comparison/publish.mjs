@@ -1,0 +1,380 @@
+#!/usr/bin/env node
+/**
+ * Publish `docs/satori-components/with-and-without-satori.md` to its Confluence page, in place,
+ * then read the page back and verify it.
+ *
+ * The page named by `docs/satori-components/with-and-without-satori.confluence.json` is updated
+ * with a version bump — never created, never moved, never renamed. Images come from the capture's
+ * output (`npm run docs:satori-comparison:capture`) and are uploaded as attachments named after
+ * their content, so an upload never changes what the live page shows: the one page update switches
+ * every image at once, and a failure before it leaves the page as it was. The conversion is
+ * `confluence-storage.mjs`'s, shared with `publish-confluence.mjs`.
+ *
+ * Refuses to run:
+ *   - in CI (it writes to Confluence with a person's credentials);
+ *   - against any space but the one in ALLOWED_SPACE_ID, checked in the config **and** on the page
+ *     Confluence returns, so editing the config cannot redirect it;
+ *   - when the page fails `docs:satori-comparison:check`, or an image it references was not
+ *     captured, or the converted page carries a ticket key, PR reference or branch name.
+ *
+ * Credentials from CONFLUENCE_EMAIL and CONFLUENCE_TOKEN (or CONFLUENCE_TOKEN_FILE), else from
+ * ~/.jira_email and ~/.jira_token. Never printed.
+ *
+ * Refuses, too, a capture that is not of the repository as it is: `manifest.json` must record a
+ * clean run whose input digest (`sources.mjs`) matches the current sources and sections, and the
+ * sha256 of every image as it is on disk now.
+ *
+ * The read-back — after publishing, or alone with `--verify` — fails unless the version went up by
+ * one (publishing only), the images the page references are exactly this capture's attachments —
+ * each downloading byte for byte as the capture has it — Confluence renders each, the headings are
+ * the ones sent, and no forbidden reference appears. `--verify` against a page published from an
+ * older capture fails on that comparison, rather than reporting a page it did not check.
+ *
+ * Usage:
+ *   npm run docs:satori-comparison:publish                 # upload, update, read back
+ *   npm run docs:satori-comparison:publish -- --dry-run    # convert and check locally; no network
+ *   npm run docs:satori-comparison:publish -- --verify     # read back and verify only
+ *   npm run docs:satori-comparison:publish -- --images <dir>
+ */
+
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { captureInputs } from './sources.mjs';
+import { imageMacro, toStorage, uploadAttachment } from '../confluence-storage.mjs';
+import {
+  DOC,
+  ROOT,
+  forbiddenReferences,
+  imageReferences,
+  loadComparison,
+  parseDoc,
+} from '../beta-harness/satori-comparison-doc.mjs';
+
+const BASE = 'https://hyland.atlassian.net/wiki';
+/** The only space this command writes to. */
+const ALLOWED_SPACE_ID = '3624665219';
+const CONFIG = 'docs/satori-components/with-and-without-satori.confluence.json';
+const PNG_MAGIC = '89504e470d0a1a0a';
+/** Display width on the page; a click opens the full-size image. */
+const MAX_DISPLAY_WIDTH = 900;
+
+const args = process.argv.slice(2);
+const dryRun = args.includes('--dry-run');
+const verifyOnly = args.includes('--verify');
+const imagesArg = args.includes('--images') ? args[args.indexOf('--images') + 1] : null;
+const IMAGES = resolve(imagesArg ?? join(EVIDENCE_ROOT, 'satori-comparison'));
+
+function refuse(message) {
+  console.error(`\nsatori-comparison publish: ${message}\n`);
+  process.exit(2);
+}
+
+/* ---------------------------------------------------------------------- preconditions ---- */
+
+if (process.env['CI'] || process.env['GITHUB_ACTIONS']) {
+  refuse('refusing to run in CI: publishing writes to Confluence with a person’s credentials.');
+}
+
+const config = JSON.parse(readFileSync(join(ROOT, CONFIG), 'utf8'));
+if (config.source !== DOC) refuse(`${CONFIG} names ${config.source}, not ${DOC}.`);
+if (!/^\d+$/.test(config.pageId ?? '')) refuse(`${CONFIG} has no numeric pageId.`);
+if (config.spaceId !== ALLOWED_SPACE_ID) {
+  refuse(
+    `${CONFIG} names space ${config.spaceId}; this command writes only to ${ALLOWED_SPACE_ID}.`,
+  );
+}
+
+let doc;
+let components;
+try {
+  ({ doc, components } = loadComparison(ROOT));
+} catch (error) {
+  refuse(error.message);
+}
+
+/* ------------------------------------------------------------------------ conversion ---- */
+
+const pngInfo = (file) => {
+  const buf = readFileSync(file);
+  return {
+    bytes: buf,
+    png: buf.subarray(0, 8).toString('hex') === PNG_MAGIC,
+    width: buf.readUInt32BE(16),
+  };
+};
+
+/**
+ * The attachment an image is uploaded as: its file name with a digest of its content.
+ *
+ * Not the page's own file name, because replacing an attachment the live page references changes
+ * what that page shows the moment the upload lands — before, and whether or not, the page body
+ * that describes it is updated. An upload or the page update failing part-way would leave the live
+ * page showing new screenshots under old text, with nothing to roll back to. Named by content, an
+ * upload only ever adds (or rewrites with identical bytes), and the single page update switches
+ * every image at once; a failure before it leaves the live page exactly as it was.
+ */
+const attachmentFor = (name, bytes) =>
+  `${name.replace(/\.png$/, '')}-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}.png`;
+
+const referenced = [...new Set(imageReferences(doc).map((r) => r.src))];
+const missing = referenced.filter((name) => !existsSync(join(IMAGES, name)));
+if (missing.length) {
+  refuse(
+    `${missing.length} image(s) the page references are not in ${IMAGES}:\n  ${missing.join('\n  ')}\n` +
+      'Run `npm run docs:satori-comparison:capture` first.',
+  );
+}
+// The capture must be of what is in the repository now: a clean run, over the same inputs.
+const manifestFile = join(IMAGES, 'manifest.json');
+if (!existsSync(manifestFile)) refuse(`no capture manifest in ${IMAGES}; run the capture first.`);
+const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+if (manifest.summary?.failed !== 0) {
+  refuse(
+    `the capture in ${IMAGES} failed ${manifest.summary?.failed ?? '?'} check(s); fix and re-capture.`,
+  );
+}
+if (manifest.inputs?.digest !== captureInputs(ROOT, components).digest) {
+  refuse(
+    `the capture in ${IMAGES} (${manifest.capturedAt}) is stale: a component, story, theme, ` +
+      'catalogue, Satori version or the page sections changed since. Run the capture again.',
+  );
+}
+const digestOf = (name) =>
+  createHash('sha256')
+    .update(readFileSync(join(IMAGES, name)))
+    .digest('hex');
+const uncaptured = referenced.filter((name) => manifest.images?.[name] !== digestOf(name));
+if (uncaptured.length) {
+  refuse(
+    `not as that capture wrote them (missing from it, or replaced since): ${uncaptured.join(', ')}`,
+  );
+}
+
+const local = new Map(referenced.map((name) => [name, pngInfo(join(IMAGES, name))]));
+const notPng = referenced.filter((name) => !local.get(name).png);
+if (notPng.length) refuse(`not PNG files: ${notPng.join(', ')}`);
+/** Attachment name → the captured image it carries. */
+const uploads = new Map(
+  referenced.map((name) => [attachmentFor(name, local.get(name).bytes), name]),
+);
+
+const storage = toStorage(doc, {
+  image: (img) =>
+    imageMacro({
+      ...img,
+      src: attachmentFor(img.src, local.get(img.src).bytes),
+      width: Math.min(local.get(img.src).width, MAX_DISPLAY_WIDTH),
+    }),
+});
+const leaks = forbiddenReferences(storage);
+if (leaks.length) {
+  refuse(`the converted page carries ${leaks.map((l) => `${l.what} ("${l.match}")`).join(', ')}.`);
+}
+
+const { h2: wantH2, sections } = parseDoc(doc);
+const wantH3 = sections.map((s) => s.heading);
+const commit = (() => {
+  try {
+    return execFileSync('git', ['rev-parse', '--short', 'HEAD'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    }).trim();
+  } catch {
+    return null;
+  }
+})();
+
+console.log(
+  `satori-comparison publish: ${DOC} → page ${config.pageId} (space ${config.spaceId})\n` +
+    `  ${storage.length} storage chars, ${wantH2.length} sections, ${wantH3.length} component(s), ` +
+    `${referenced.length} image(s) from ${IMAGES}`,
+);
+
+if (dryRun) {
+  const out = join(IMAGES, 'publish-storage.html');
+  writeFileSync(out, storage);
+  console.log(`  dry run: nothing sent. Storage written to ${out}`);
+  process.exit(0);
+}
+
+/* ----------------------------------------------------------------------- credentials ---- */
+
+function credential(envName, fileEnv, homeFile) {
+  if (process.env[envName]) return process.env[envName].trim();
+  const file = (fileEnv && process.env[fileEnv]) || join(homedir(), homeFile);
+  return existsSync(file) ? readFileSync(file, 'utf8').trim() : null;
+}
+const email = credential('CONFLUENCE_EMAIL', null, '.jira_email');
+const token = credential('CONFLUENCE_TOKEN', 'CONFLUENCE_TOKEN_FILE', '.jira_token');
+if (!email || !token) {
+  refuse(
+    'no credentials. Set CONFLUENCE_EMAIL and CONFLUENCE_TOKEN (or CONFLUENCE_TOKEN_FILE), ' +
+      'or write them to ~/.jira_email and ~/.jira_token.',
+  );
+}
+const auth = 'Basic ' + Buffer.from(`${email}:${token}`).toString('base64');
+
+async function api(path, init = {}) {
+  const res = await fetch(`${BASE}${path}`, {
+    ...init,
+    headers: {
+      Authorization: auth,
+      Accept: 'application/json',
+      ...(init.body ? { 'Content-Type': 'application/json' } : {}),
+    },
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(`${init.method ?? 'GET'} ${path} → ${res.status} ${text.slice(0, 300)}`);
+  }
+  return text ? JSON.parse(text) : null;
+}
+
+/* -------------------------------------------------------------------------- publish ---- */
+
+const page = await api(`/api/v2/pages/${config.pageId}`);
+if (String(page.spaceId) !== ALLOWED_SPACE_ID) {
+  refuse(
+    `page ${config.pageId} is in space ${page.spaceId}; this command writes only to ${ALLOWED_SPACE_ID}.`,
+  );
+}
+if (page.title !== config.title) {
+  refuse(
+    `page ${config.pageId} is titled "${page.title}", not "${config.title}" as ${CONFIG} says.`,
+  );
+}
+const before = page.version.number;
+
+if (!verifyOnly) {
+  // Content-named, so this only ever adds an attachment or rewrites one with the same bytes: the
+  // live page keeps showing the images its current body names until the page update below.
+  for (const [attachment, name] of uploads) {
+    const how = await uploadAttachment({
+      base: BASE,
+      auth,
+      pageId: config.pageId,
+      filename: attachment,
+      absPath: join(IMAGES, name),
+    });
+    console.log(`  ${how.padEnd(8)} ${attachment}`);
+  }
+  await api(`/api/v2/pages/${config.pageId}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      id: config.pageId,
+      status: 'current',
+      title: config.title,
+      body: { representation: 'storage', value: storage },
+      version: {
+        number: before + 1,
+        message:
+          `Published from ${DOC}${commit ? ` at ${commit}` : ''}; ` +
+          `screenshots captured ${manifest.capturedAt}`,
+      },
+    }),
+  });
+  console.log(`  updated  page ${config.pageId}: version ${before} → ${before + 1}`);
+}
+
+/* ------------------------------------------------------------------------- read back ---- */
+
+const problems = [];
+const fail = (msg) => problems.push(msg);
+
+const after = await api(`/api/v2/pages/${config.pageId}?body-format=storage`);
+const body = after.body.storage.value;
+const expectVersion = verifyOnly ? before : before + 1;
+if (after.version.number !== expectVersion) {
+  fail(`version is ${after.version.number}, expected ${expectVersion}`);
+}
+if (String(after.spaceId) !== ALLOWED_SPACE_ID) fail(`page moved to space ${after.spaceId}`);
+if (after.title !== config.title) fail(`title is "${after.title}"`);
+
+const attachments = new Map();
+let next = `/rest/api/content/${config.pageId}/child/attachment?limit=100`;
+while (next) {
+  const r = await api(next);
+  for (const a of r.results ?? []) attachments.set(a.title, a);
+  next = r._links?.next ?? null;
+}
+const refs = [...body.matchAll(/ri:filename="([^"]+)"/g)].map((m) => m[1]);
+if (JSON.stringify([...new Set(refs)].sort()) !== JSON.stringify([...uploads.keys()].sort())) {
+  fail(
+    `the page references ${new Set(refs).size} image(s), the capture ${uploads.size}` +
+      (verifyOnly ? ': the live page was published from another capture' : ''),
+  );
+}
+for (const attachment of new Set(refs)) {
+  const a = attachments.get(attachment);
+  if (!a) {
+    fail(`image ${attachment} is not an attachment of the page`);
+    continue;
+  }
+  const res = await fetch(`${BASE}${a._links.download}`, {
+    headers: { Authorization: auth },
+    redirect: 'follow',
+  });
+  const buf = Buffer.from(await res.arrayBuffer());
+  const name = uploads.get(attachment) ?? null;
+  if (!res.ok) fail(`image ${attachment} does not download (${res.status})`);
+  else if (buf.subarray(0, 8).toString('hex') !== PNG_MAGIC)
+    fail(`image ${attachment} is not a PNG`);
+  else if (!name) fail(`image ${attachment} is not one of this capture's`);
+  else if (!buf.equals(local.get(name).bytes)) {
+    fail(`image ${attachment} differs from ${name} in ${IMAGES}`);
+  }
+}
+
+const view = (await api(`/api/v2/pages/${config.pageId}?body-format=view`)).body.view.value;
+const rendered = (view.match(/<img[^>]*confluence-embedded-image/g) ?? []).length;
+if (rendered < refs.length) fail(`Confluence renders ${rendered} image(s) of ${refs.length}`);
+if (/data-width="0"|data-height="0"/.test(view)) fail('an image renders with a zero dimension');
+if (/class="[^"]*(createlink|unresolved-link)/.test(view)) fail('a link renders unresolved');
+if (/&amp;(amp|lt|gt|quot);/.test(view)) fail('a double-escaped entity is visible');
+if (body.includes('@@CODE') || /\|\s*-{3,}\s*\|/.test(body)) fail('raw Markdown in the body');
+
+// Headings as sent against headings as stored, markup and all: nothing is stripped, so nothing a
+// strip would miss can hide a difference. Confluence may store an apostrophe either way.
+const headings = (html, level) =>
+  [...html.matchAll(new RegExp(`<h${level}>(.*?)</h${level}>`, 'g'))].map((m) =>
+    m[1].replace(/&#39;|&rsquo;/g, "'"),
+  );
+for (const [level, want, what] of [
+  [2, wantH2, 'sections'],
+  [3, wantH3, 'component sections'],
+]) {
+  const sent = headings(storage, level);
+  const stored = headings(body, level);
+  if (sent.length !== want.length)
+    fail(`converted ${sent.length} ${what}, the Markdown has ${want.length}`);
+  if (JSON.stringify(stored) !== JSON.stringify(sent)) {
+    fail(`${what} differ from what was sent: ${JSON.stringify(stored)}`);
+  }
+}
+for (const { what, match } of forbiddenReferences(`${after.title}\n${body}`)) {
+  fail(`the published page carries ${what} ("${match}")`);
+}
+
+const stale = [...attachments.keys()].filter((name) => !refs.includes(name));
+
+console.log(
+  `\n  read back: version ${after.version.number}, ${headings(body, 2).length} sections, ` +
+    `${headings(body, 3).length} component sections, ${new Set(refs).size} image(s) — ` +
+    `${rendered} rendered, all downloaded and compared`,
+);
+if (stale.length) {
+  // Earlier captures. Left in place deliberately: older versions of the page still render them.
+  console.log(`  ${stale.length} attachment(s) from earlier captures, left in place`);
+}
+console.log(`  ${config.url}`);
+if (problems.length) {
+  console.error(`\nsatori-comparison publish: FAIL — ${problems.length} problem(s)`);
+  for (const p of problems) console.error(`  ${p}`);
+  process.exit(1);
+}
+console.log('\nsatori-comparison publish: pass');

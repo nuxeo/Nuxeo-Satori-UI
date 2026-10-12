@@ -3,7 +3,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -30,6 +29,7 @@ import {
 import type { ExportDialogData } from '@nuxeo-satori/platform/ui';
 
 import { BrowseComponent } from './browse';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 /** A complete `NuxeoDocument`, so a fixture states only the fields its test is about. */
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
@@ -143,7 +143,7 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 describe('BrowseComponent — actions', () => {
   let component: BrowseComponent;
   let fixture: ComponentFixture<BrowseComponent>;
-  let snackBar: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let dialogOpen: ReturnType<typeof vi.fn>;
   let anchorClicks: { href: string; download: string }[];
   let originalAnchorClick: () => void;
@@ -153,7 +153,8 @@ describe('BrowseComponent — actions', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    snackBar = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(undefined) }));
     // `vi.clearAllMocks()` clears recorded calls but keeps implementations, and the
     // component issues its first folder request from the constructor — so without
@@ -209,7 +210,6 @@ describe('BrowseComponent — actions', () => {
             hasAdministrationAccess: () => false,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBar } },
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -247,7 +247,7 @@ describe('BrowseComponent — actions', () => {
     expect(anchorClicks).toEqual([{ href: 'blob:mock/0', download: 'Q3 Workspace.csv' }]);
     expect(revoked).toEqual(['blob:mock/0']);
     expect(component.csvExporting()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('CSV exported successfully', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('CSV exported successfully');
   });
 
   it('exportCsv clears the exporting flag when the bulk action fails, so the user can retry', () => {
@@ -258,7 +258,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(component.csvExporting()).toBe(false);
     expect(anchorClicks).toEqual([]);
-    expect(snackBar).toHaveBeenCalledWith('CSV export failed.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('CSV export failed.');
   });
 
   it('exportCsv clears the exporting flag when polling for the result fails', () => {
@@ -269,7 +269,7 @@ describe('BrowseComponent — actions', () => {
     component.exportCsv();
 
     expect(component.csvExporting()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('CSV export failed.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('CSV export failed.');
   });
 
   it('exportCsv does nothing without a browsed document', () => {
@@ -310,7 +310,7 @@ describe('BrowseComponent — actions', () => {
     component.downloadAll();
 
     expect(anchorClicks).toEqual([]);
-    expect(snackBar).toHaveBeenCalledWith('Download failed.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Download failed.');
   });
 
   it('downloadAll does nothing without a browsed document', () => {
@@ -392,7 +392,7 @@ describe('BrowseComponent — actions', () => {
     expect(detail.subscribe).toHaveBeenCalledWith('ws-1');
     expect(detail.unsubscribe).not.toHaveBeenCalled();
     expect(component.isSubscribed()).toBe(true);
-    expect(snackBar).toHaveBeenCalledWith('Subscribed to notifications', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Subscribed to notifications');
   });
 
   it('toggleNotify unsubscribes an already-subscribed folder and announces that', () => {
@@ -407,7 +407,7 @@ describe('BrowseComponent — actions', () => {
     expect(detail.unsubscribe).toHaveBeenCalledWith('ws-1');
     expect(detail.subscribe).not.toHaveBeenCalled();
     expect(component.isSubscribed()).toBeFalsy();
-    expect(snackBar).toHaveBeenCalledWith('Unsubscribed', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Unsubscribed');
   });
 
   it('toggleNotify leaves the subscription state untouched when the call fails', () => {
@@ -418,9 +418,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(browse.getByPath).not.toHaveBeenCalled();
     expect(component.isSubscribed()).toBeFalsy();
-    expect(snackBar).toHaveBeenCalledWith('Failed to update notifications', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to update notifications');
   });
 
   it('toggleNotify does nothing without a browsed document', () => {
@@ -438,9 +436,7 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Open a folder to create or import content.', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Open a folder to create or import content.');
   });
 
   it('openCreateImportDialog refuses a folder the user cannot add children to', () => {
@@ -451,10 +447,8 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -472,9 +466,8 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.show).toHaveBeenCalledWith(
       'Open Sections, Templates, or Workspaces, then create content inside those folders.',
-      'OK',
       { duration: 6000 },
     );
   });
@@ -559,9 +552,7 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Open a folder to create or import content.', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Open a folder to create or import content.');
   });
 
   // ── Metadata edit ──
@@ -633,10 +624,8 @@ describe('BrowseComponent — actions', () => {
     component.openEditDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -693,7 +682,7 @@ describe('BrowseComponent — actions', () => {
     expect(browse.restoreDocument).toHaveBeenCalledWith('del-1');
     expect(browse.getTrashedChildren).toHaveBeenCalled();
     expect(load).toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('"Deleted.txt" restored', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('"Deleted.txt" restored');
   });
 
   it('restoreDocument leaves the listing alone when the untrash operation fails', () => {
@@ -705,7 +694,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(load).not.toHaveBeenCalled();
     expect(browse.getTrashedChildren).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to restore document.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to restore document.');
   });
 
   // ── Tags ──
@@ -727,7 +716,7 @@ describe('BrowseComponent — actions', () => {
     expect(component.tagInput).toBe('');
     expect(component.tagSearchResults()).toEqual([]);
     expect(component.showCreateOption()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('Tag "legal" added', 'OK', { duration: 2000 });
+    expect(toast.show).toHaveBeenCalledWith('Tag "legal" added');
   });
 
   it('keeps the typed tag in the input when adding it fails', () => {
@@ -739,7 +728,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(component.tagInput).toBe('legal');
     expect(browse.getByPath).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to add tag', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to add tag');
   });
 
   it('createTag applies the trimmed input and ignores a blank one', () => {
@@ -780,7 +769,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(component.tags()).toEqual(['legal']);
     expect(browse.getByPath).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to remove tag', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to remove tag');
   });
 
   it('does not attempt to tag anything without a browsed document', () => {

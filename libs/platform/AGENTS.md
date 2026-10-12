@@ -272,6 +272,35 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 - **`nxs-empty-state` renders its heading as an `<h2>` by default.** Bind `[headingLevel]` to
   one below the heading of the section it sits in, so screen-reader heading navigation stays in
   order.
+- **A load failure is `nxs-error-state`, chosen by status.** Map the request's error with
+  `nxsErrorStatus(err)` and bind the result to `[status]`, so a 403 says the user lacks access and
+  a 404 says the item is gone instead of both reading as a breakage. Retry appears only for a
+  server error, and only with `retryable`.
+- **An action slot rendered as a menu is `nxs-action-menu`.** Resolve the slot's descriptors into
+  `NxsMenuAction` entries yourself (labels translated, enabled rules evaluated) and run the one it
+  emits; with no entries it renders no trigger.
+- **Show a document's thumbnail with `nxs-thumbnail`.** `<nxs-thumbnail [documentId]="doc.uid">`
+  fetches the rendition with the platform's credentials and revokes its blob URL itself; put the
+  fallback (a type icon) inside it, and size it with your own class on the element. A page
+  listing many lists `provideNxsThumbnailCache()` in its `providers`.
+- **Toast through `NxsToastService`, not `MatSnackBar`.** List `provideNxsToast()` in your
+  component's `providers`, then `show(message)` or `error(message, { retry })` with text you have
+  translated. It keeps the core slice's timing and announcements: four seconds or longer, a
+  Dismiss button, Escape to close, errors announced assertively.
+- **Favourite a document with `nxs-favorite-toggle`.** It is the star; it runs the request and
+  reports the outcome, and your component says what to the user. To offer the same operation as a
+  menu entry, call `nxsToggleFavorite(documentDetailService, id, favorite)`, which emits the new
+  state.
+
+```html
+<nxs-favorite-toggle
+  [documentId]="doc.uid"
+  [(favorite)]="isFavorite"
+  (changed)="onFavoriteChanged($event)"
+  (failed)="onFavoriteFailed($event)"
+/>
+```
+
 - **Import only the entry point.** A path past it fails the shipped guardrail like any other
   deep import.
 - **The type declarations are the list of what exists.** Do not take a component's existence

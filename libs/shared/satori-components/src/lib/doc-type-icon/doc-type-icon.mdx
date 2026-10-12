@@ -1,0 +1,73 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DocTypeIconStories from './doc-type-icon.stories';
+
+<Meta of={DocTypeIconStories} name="Overview" />
+
+# Document type icon
+
+The document type icon shows the icon for a Nuxeo document type — `Folder`, `File`, `Picture`,
+`Collection` and so on. Use it wherever documents are listed or titled, so every screen shows the
+same icon for the same type.
+
+## Key features
+
+- **One table for every screen.** The type-to-icon table is `docTypeIcon()` from
+  `@nuxeo-satori/platform/nuxeo-client`, so a document type looks the same everywhere.
+- **Never blank.** A type the table does not know, such as a custom type, gets the generic file
+  icon.
+- **No request.** The table is part of the library; the icon needs no call to the server.
+- **Decorative unless labelled**, because it almost always sits beside the type's name or the
+  document's title.
+- **Sized and coloured like the icon.** It renders an `nxs-icon`, so `--nxs-icon-size` and `color`
+  apply.
+
+## Demo showcase
+
+<Canvas of={DocTypeIconStories.Folder} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsDocTypeIconComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-doc-type-icon [type]="document.type" />
+<span>{{ document.title }}</span>`}
+/>
+
+Only `type` is required: the document's type as Nuxeo names it. Used directly, it needs no
+providers.
+
+## Examples
+
+### Across types
+
+The types the table knows include `File`, `Note`, `Picture`, `Video`, `Audio`, `Folder`,
+`OrderedFolder`, `Workspace`, `WorkspaceRoot`, `Domain`, `Collection`, `Section`, `SectionRoot` and
+`TemplateRoot`.
+
+<Canvas of={DocTypeIconStories.AcrossTypes} />
+
+### An unknown type
+
+<Canvas of={DocTypeIconStories.UnknownType} />
+
+### Named
+
+Give it a `label` only where no text beside it names the type.
+
+<Canvas of={DocTypeIconStories.Named} />
+
+## Accessibility
+
+- **Decorative.** With a blank `label` the icon is hidden from assistive technology, and the type's
+  name or the document's title beside it is what is read.
+- **Named.** With a `label` it has the `img` role and the label as its accessible name. Pass the
+  type's name, translated.
+- **Keyboard.** It is not interactive and takes no focus.

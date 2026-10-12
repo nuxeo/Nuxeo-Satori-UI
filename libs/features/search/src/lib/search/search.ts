@@ -9,7 +9,6 @@ import {
   tap,
   map,
   combineLatest,
-  finalize,
   Subject,
   debounceTime,
   distinctUntilChanged,
@@ -21,7 +20,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
@@ -52,8 +50,16 @@ import {
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsColumnPickerComponent,
+  NxsErrorStateComponent,
+  NxsFavoriteToggleComponent,
   NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  type NxsErrorStatus,
   type NxsPickableColumn,
+  NxsToastService,
+  provideNxsToast,
 } from '@nuxeo-satori/platform/components';
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -176,7 +182,10 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   standalone: true,
   imports: [
     NxsColumnPickerComponent,
+    NxsErrorStateComponent,
+    NxsFavoriteToggleComponent,
     NxsSpinnerComponent,
+    NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
     TranslatePipe,
@@ -186,11 +195,11 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     MatCheckboxModule,
     MatProgressSpinnerModule,
     MatSelectModule,
-    MatSnackBarModule,
     MatMenuModule,
     MatAutocompleteModule,
     FormsModule,
   ],
+  providers: [provideNxsToast(), provideNxsThumbnailCache()],
   templateUrl: './search.html',
   styleUrl: './search.scss',
 })
@@ -198,7 +207,7 @@ export class SearchComponent {
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly searchService = inject(SearchService);
@@ -209,8 +218,6 @@ export class SearchComponent {
   readonly featureFlags = inject(AiFeatureFlagService);
   readonly selectionService = inject(SelectionService);
 
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
-  private thumbnailGeneration = 0;
   /**
    * Sequence for the whole AI request lifecycle — `nlToNxql` *and* the `nxqlSearch` it triggers.
    *
@@ -280,23 +287,29 @@ export class SearchComponent {
   readonly sortColumn = signal<string | null>(null);
   readonly sortDirection = signal<SortDirection>(null);
   readonly favoriteIds = signal<Set<string>>(new Set());
-  readonly favoritePendingIds = signal<Set<string>>(new Set());
   readonly selectedSavedSearchId = this.searchAggregationService.selectedSavedSearchId;
   readonly selectedSavedSearchTitle = this.searchAggregationService.selectedSavedSearchTitle;
+
+  /** Which error state `error` shows: the status of the search request that failed. */
+  readonly errorStatus = signal<NxsErrorStatus>(500);
+  /**
+   * The standard search's failure, while its results are the ones on screen. `error` belongs to the
+   * standard pipeline and outlives an AI search, whose results must not be hidden behind it.
+   */
+  readonly resultsError = computed(() =>
+    this.aiSearchMode() && this.aiSearchExecuted() ? null : this.error(),
+  );
+  /** Bumped by Retry, so the same query and filters run again. */
+  private readonly searchAttempt = signal(0);
 
   private readonly results$ = combineLatest([
     this.route.queryParamMap,
     toObservable(this.searchAggregationService.drawerFilters),
+    toObservable(this.searchAttempt),
   ]).pipe(
     tap(() => {
       this.loading.set(true);
       this.error.set(null);
-      // Only invalidate the thumbnail batch if the standard results are going to own the displayed
-      // thumbnails. This was unconditional, and the response path below deliberately skips
-      // `loadThumbnails` while AI results are on screen — so a query-param or drawer-filter change
-      // during a completed AI search bumped the generation, killed every AI thumbnail request still in
-      // flight, and then loaded nothing to replace them. The thumbnails simply disappeared.
-      if (this.standardResultsOwnThumbnails()) this.beginThumbnailBatch();
     }),
     switchMap(([params, drawerFilters]) => {
       const quickFilters = params.get('quickFilters') ?? '';
@@ -378,15 +391,11 @@ export class SearchComponent {
           );
         }),
         map((response) => response.items),
-        tap((items) => {
-          this.loading.set(false);
-          if (this.standardResultsOwnThumbnails()) {
-            this.loadThumbnails(items);
-          }
-        }),
-        catchError(() => {
+        tap(() => this.loading.set(false)),
+        catchError((err: unknown) => {
           this.searchAggregationService.aggregations.set({});
           this.searchAggregationService.items.set([]);
+          this.errorStatus.set(nxsErrorStatus(err));
           this.error.set(this.translate.instant('search.message.failed-to-load-search-results'));
           this.loading.set(false);
           return of<SearchResultItem[]>([]);
@@ -396,6 +405,11 @@ export class SearchComponent {
   );
 
   readonly results = toSignal(this.results$, { initialValue: [] as SearchResultItem[] });
+
+  /** Run the failed search again, with the same query and filters. */
+  retrySearch(): void {
+    this.searchAttempt.update((attempt) => attempt + 1);
+  }
 
   readonly visibleColumns = computed(() =>
     ALL_COLUMNS.filter((c) => this.visibleColumnKeys().includes(c.key)),
@@ -485,7 +499,7 @@ export class SearchComponent {
 
   toggleSelection(id: string): void {
     const row = this.displayResults().find((r) => r.id === id);
-    this.selectionService.toggle(id, row?.name ?? id, this.thumbnailMap()[id] ?? null);
+    this.selectionService.toggle(id, row?.name ?? id);
   }
 
   toggleAll(): void {
@@ -494,15 +508,12 @@ export class SearchComponent {
     } else {
       const rows = this.displayResults();
       const labels: Record<string, string> = {};
-      const previews: Record<string, string | null> = {};
       rows.forEach((row) => {
         labels[row.id] = row.name;
-        previews[row.id] = this.thumbnailMap()[row.id] ?? null;
       });
       this.selectionService.selectAll(
         rows.map((r) => r.id),
         labels,
-        previews,
       );
     }
   }
@@ -648,51 +659,24 @@ export class SearchComponent {
     img.src = FALLBACK_ART_URL;
   }
 
-  toggleFavorite(id: string, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    if (!id || this.favoritePendingIds().has(id)) return;
-
-    const isCurrentlyFavorite = this.favoriteIds().has(id);
-    this.favoritePendingIds.update((current) => new Set(current).add(id));
-
-    const op = isCurrentlyFavorite
-      ? this.documentDetailService.removeFromFavorites(id)
-      : this.documentDetailService.addToFavorites(id);
-
-    op.pipe(
-      finalize(() => {
-        this.favoritePendingIds.update((current) => {
-          const next = new Set(current);
-          next.delete(id);
-          return next;
-        });
-      }),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe({
-      next: () => {
-        this.favoriteIds.update((current) => {
-          const next = new Set(current);
-          if (isCurrentlyFavorite) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-        window.dispatchEvent(new Event('favorites-changed'));
-      },
-      error: (err) => {
-        this.snackBar.open(
-          this.getApiErrorMessage(
-            err,
-            this.translate.instant('search.message.failed-to-update-favorites'),
-          ),
-          this.translate.instant('common.dismiss'),
-          {
-            duration: 5000,
-          },
-        );
-      },
+  /** A result's star confirmed a change: keep the page's view of it in step. */
+  onFavoriteChanged(id: string, favorite: boolean): void {
+    this.favoriteIds.update((current) => {
+      const next = new Set(current);
+      if (favorite) next.add(id);
+      else next.delete(id);
+      return next;
     });
+  }
+
+  onFavoriteFailed(error: unknown): void {
+    this.toast.error(
+      this.getApiErrorMessage(
+        error,
+        this.translate.instant('search.message.failed-to-update-favorites'),
+      ),
+      { duration: 5000 },
+    );
   }
 
   private getApiErrorMessage(err: unknown, fallback: string): string {
@@ -737,15 +721,12 @@ export class SearchComponent {
           URL.revokeObjectURL(objectUrl);
         },
         error: (err) => {
-          this.snackBar.open(
+          this.toast.error(
             this.getApiErrorMessage(
               err,
               this.translate.instant('search.message.failed-to-download-document'),
             ),
-            this.translate.instant('common.dismiss'),
-            {
-              duration: 5000,
-            },
+            { duration: 5000 },
           );
         },
       });
@@ -857,18 +838,14 @@ export class SearchComponent {
                 this.readSavedSearchTitle(saved) || trimmedTitle,
               );
               this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
+              this.toast.show(
                 this.translate.instant('common.search-saved', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                { duration: 3000 },
               );
             },
             error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-save-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
+              this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
+                duration: 5000,
+              });
             },
           });
       });
@@ -898,18 +875,12 @@ export class SearchComponent {
         next: () => {
           this.searchAggregationService.selectedSavedSearchTitle.set(currentTitle);
           this.searchAggregationService.markSavedSearchDirty();
-          this.snackBar.open(
-            this.translate.instant('common.search-updated', { name: currentTitle }),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('common.search-updated', { name: currentTitle }));
         },
         error: () => {
-          this.snackBar.open(
-            this.translate.instant('assets.message.failed-to-save-search'),
-            this.translate.instant('common.dismiss'),
-            { duration: 5000 },
-          );
+          this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
+            duration: 5000,
+          });
         },
       });
   }
@@ -941,20 +912,14 @@ export class SearchComponent {
             next: () => {
               this.searchAggregationService.selectedSavedSearchTitle.set(trimmedTitle);
               this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
+              this.toast.show(
                 this.translate.instant('common.search-updated', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                {
-                  duration: 3000,
-                },
               );
             },
             error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-update-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
+              this.toast.error(this.translate.instant('assets.message.failed-to-update-search'), {
+                duration: 5000,
+              });
             },
           });
       });
@@ -1035,8 +1000,6 @@ export class SearchComponent {
   }
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.clearThumbnails());
-
     this.aiSuggestSubject
       .pipe(
         debounceTime(400),
@@ -1057,16 +1020,14 @@ export class SearchComponent {
     this.aiSearchMode.set(next);
     if (!next) {
       // Invalidate any in-flight AI request before restoring standard state. Without this a late
-      // `nlToNxql` or `nxqlSearch` response re-enabled `aiSearchExecuted` and overwrote the standard
-      // thumbnail batch loaded just below, while the UI was already back in standard mode.
+      // `nlToNxql` or `nxqlSearch` response re-enabled `aiSearchExecuted` and put AI results back on
+      // screen while the UI was already back in standard mode.
       //
       // Via `supersedeAiRequest` rather than a bare increment, because the invalidation alone left
       // `loading` set by a pending `runNxqlQuery` — so leaving AI mode restored the standard results
       // behind a spinner that would never clear.
       this.supersedeAiRequest();
       this.resetAiSearchState();
-      this.beginThumbnailBatch();
-      this.loadThumbnails(this.results());
     }
   }
 
@@ -1093,19 +1054,6 @@ export class SearchComponent {
    * both of these call sites. Each time the guard was added and the release was not. Stating it once
    * here is the only version that stops the fourth.
    */
-  /**
-   * Whether the standard search results are what the user is looking at.
-   *
-   * One predicate for two sites that must agree: the `tap` that invalidates the thumbnail batch, and
-   * the response handler that loads it. They were written as separate expressions — an unconditional
-   * `beginThumbnailBatch()` and a guarded `loadThumbnails` — so a standard search fired while AI results
-   * were displayed invalidated the AI thumbnails and then loaded no replacement. Invalidating a batch
-   * nobody is going to refill is strictly worse than leaving it alone.
-   */
-  private standardResultsOwnThumbnails(): boolean {
-    return !this.aiSearchMode() || !this.aiSearchExecuted();
-  }
-
   private supersedeAiRequest(): number {
     const generation = ++this.aiRequestGeneration;
     // Only AI-owned flags. `loading` belongs to the standard pipeline; clearing it here hid the
@@ -1159,13 +1107,6 @@ export class SearchComponent {
   private runNxqlQuery(nxql: string, generation: number): void {
     // `aiNxqlLoading`, not `loading` — this request does not own the standard pipeline's flag.
     this.aiNxqlLoading.set(true);
-    // Deliberately does NOT claim the thumbnail batch. The standard results stay on screen until this
-    // request succeeds, and `loadThumbnails` mints its own generation when it does — so claiming here
-    // only mattered if the request FAILED, in which case every standard thumbnail response still in
-    // flight was discarded by the generation check and the error path reloaded none of them. Permanent
-    // missing thumbnails, from invalidating a batch this method might never refill.
-    //
-    // Same rule as the standard tap above: only invalidate a batch you are going to own.
     this.nuxeoApi
       .nxqlSearch(nxql, 40, {
         properties: 'dublincore,file,common',
@@ -1200,7 +1141,6 @@ export class SearchComponent {
           this.aiSearchExecuted.set(true);
           this.aiNxqlLoading.set(false);
           this.aiLoading.set(false);
-          this.loadThumbnails(items);
         },
         error: () => {
           // Guarded too: a stale failure would otherwise replace a newer query's results with an
@@ -1215,49 +1155,6 @@ export class SearchComponent {
           this.aiLoading.set(false);
         },
       });
-  }
-
-  private loadThumbnails(items: SearchResultItem[]): void {
-    // Mint a new generation rather than reading the current one. Reading it let two loaders share
-    // a generation — a standard search and an AI search can both resolve under the same
-    // `beginThumbnailBatch()` — so the first load's in-flight callbacks still matched
-    // `this.thumbnailGeneration` after the second call's `clearThumbnails()` and repopulated the
-    // map with thumbnails belonging to the previous result set.
-    const generation = ++this.thumbnailGeneration;
-    this.clearThumbnails();
-    for (const item of items) {
-      this.documentDetailService
-        .fetchThumbnail(item.id)
-        .pipe(
-          catchError(() => of(null)),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((blob) => {
-          if (!blob || generation !== this.thumbnailGeneration) return;
-          const url = URL.createObjectURL(blob);
-          this.thumbnailMap.update((m) => {
-            const previous = m[item.id];
-            if (previous && previous !== url) URL.revokeObjectURL(previous);
-            return {
-              ...m,
-              [item.id]: url,
-            };
-          });
-        });
-    }
-  }
-
-  private beginThumbnailBatch(): void {
-    this.thumbnailGeneration += 1;
-  }
-
-  private clearThumbnails(): void {
-    // Drop the selection layer's copies FIRST. It retains these exact strings and binds them into
-    // `<img [src]>` in the shell topbar, and selection survives a new search — so revoking without
-    // this leaves selected items pointing at revoked blob URLs. See `SelectionService.forgetPreviews`.
-    this.selectionService.forgetPreviews();
-    for (const url of Object.values(this.thumbnailMap())) if (url) URL.revokeObjectURL(url);
-    this.thumbnailMap.set({});
   }
 
   private resetAiSearchState(): void {

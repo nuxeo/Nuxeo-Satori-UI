@@ -2,18 +2,11 @@ import type { Meta, StoryObj } from '@storybook/angular';
 
 import { NxsIconComponent } from './icon.component';
 
-/** The `label` below stands in for what a caller binds through its own translate pipe. */
 const meta: Meta<NxsIconComponent> = {
   title: 'Primitives/Icon',
   component: NxsIconComponent,
+  tags: ['autodocs'],
   args: { name: 'folder', label: '' },
-  argTypes: {
-    name: { control: 'text', description: 'A Material Icons ligature. Required.' },
-    label: {
-      control: 'text',
-      description: 'What the icon means, already translated. Blank makes it decorative.',
-    },
-  },
 };
 
 export default meta;
@@ -28,13 +21,21 @@ export const Named: Story = { args: { name: 'folder_shared', label: 'Shared fold
 
 /** `--nxs-icon-size` and `color` are inherited, so a host sets them on the icon or any ancestor. */
 export const SizedAndColoured: Story = {
-  args: { name: 'collections_bookmark' },
-  render: (args) => ({
-    props: args,
-    template: `
-      <span style="--nxs-icon-size: 48px; color: var(--mat-sys-primary)">
-        <nxs-icon [name]="name" [label]="label" />
-      </span>
-    `,
+  parameters: { controls: { disable: true } },
+  render: () => ({
+    template: `<span style="--nxs-icon-size: 48px; color: var(--mat-sys-primary)">
+  <nxs-icon name="collections_bookmark" />
+</span>`,
+  }),
+};
+
+/** Beside a visible label, the icon is decorative and the text is what is read. */
+export const BesideText: Story = {
+  parameters: { controls: { disable: true } },
+  render: () => ({
+    template: `<span style="display: inline-flex; align-items: center; gap: 8px">
+  <nxs-icon name="description" />
+  <span>Contract.pdf</span>
+</span>`,
   }),
 };

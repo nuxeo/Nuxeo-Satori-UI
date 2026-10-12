@@ -1,6 +1,8 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { defer, of, throwError, type Observable } from 'rxjs';
+import { action } from 'storybook/actions';
+import { fn } from 'storybook/test';
 
 import {
   DocumentDetailService,
@@ -154,17 +156,36 @@ function inMemoryDocuments(
   });
 
   return {
-    getDocumentPermissions: read,
-    addPermission: (uid, params) => written(uid, () => (local = [...local, entry(params)])),
-    replacePermission: (uid, params) =>
+    getDocumentPermissions: logged('getDocumentPermissions', read),
+    addPermission: logged('addPermission', (uid, params) =>
+      written(uid, () => (local = [...local, entry(params)])),
+    ),
+    replacePermission: logged('replacePermission', (uid, params) =>
       written(uid, () => (local = local.map((e) => (e.id === params.id ? entry(params) : e)))),
-    removePermissionById: (uid, id) =>
+    ),
+    removePermissionById: logged('removePermissionById', (uid, id) =>
       written(uid, () => (local = local.filter((e) => e.id !== id))),
-    blockPermissionInheritance: (uid) => written(uid, () => (local = [...local, BLOCK])),
-    unblockPermissionInheritance: (uid) =>
+    ),
+    blockPermissionInheritance: logged('blockPermissionInheritance', (uid) =>
+      written(uid, () => (local = [...local, BLOCK])),
+    ),
+    unblockPermissionInheritance: logged('unblockPermissionInheritance', (uid) =>
       written(uid, () => (local = local.filter((e) => e.id !== BLOCK.id))),
-    searchUsersGroups: (term) =>
+    ),
+    searchUsersGroups: logged('searchUsersGroups', (term) =>
       of(PRINCIPALS.filter((p) => p.displayLabel.toLowerCase().includes(term.toLowerCase()))),
+    ),
+  };
+}
+
+/** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
+function logged<A extends unknown[], R>(
+  name: string,
+  method: (...args: A) => R,
+): (...args: A) => R {
+  return (...args) => {
+    action(name)(...args);
+    return method(...args);
   };
 }
 
@@ -184,27 +205,20 @@ const SHARED: Fixture = {
   permissions: EVERYTHING,
 };
 
-/**
- * A document's permissions, read from and written to Nuxeo through `DocumentDetailService`. These
- * stories hold the ACL in memory instead, so add, edit, remove, Save and blocking inheritance all
- * work here and reset on reload.
- */
 const meta: Meta<NxsPermissionsPanelComponent> = {
   title: 'Panels/Permissions panel',
   component: NxsPermissionsPanelComponent,
-  args: { documentId: 'claims-2026' },
+  tags: ['autodocs'],
+  args: { documentId: 'claims-2026', permissionsChanged: fn() },
   argTypes: {
-    documentId: {
-      control: false,
-      description: 'The uid of the document whose permissions to show. Required.',
-    },
-    permissionsChanged: {
-      control: false,
-      description:
-        'Called after a write that may have changed the ACL, so a host can read what it derives again.',
-    },
+    documentId: { control: false },
+    permissionsChanged: { control: false },
   },
   parameters: { layout: 'padded' },
+  render: (args) => ({
+    props: args,
+    template: `<nxs-permissions-panel [documentId]="documentId" [permissionsChanged]="permissionsChanged" />`,
+  }),
 };
 
 export default meta;

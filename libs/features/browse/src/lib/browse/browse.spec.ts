@@ -4,7 +4,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { vi } from 'vitest';
 import { EMPTY, of, throwError } from 'rxjs';
@@ -23,6 +22,7 @@ import {
   PERMISSION_DENIED_KEY,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { trashSelectedDocumentsConfirmData } from '@nuxeo-satori/platform/ui';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 /**
  * Each mock is annotated with the real method's return type.
@@ -117,11 +117,12 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 describe('BrowseComponent', () => {
   let component: BrowseComponent;
   let fixture: ComponentFixture<BrowseComponent>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let dialogOpenSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     dialogOpenSpy = vi.fn(() => ({ afterClosed: () => of(false) }));
     vi.clearAllMocks();
     mockDocumentDetailService.getDocumentPermissions.mockReturnValue(EMPTY);
@@ -144,7 +145,6 @@ describe('BrowseComponent', () => {
             hasAdministrationAccess: () => false,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
         { provide: MatDialog, useValue: { open: dialogOpenSpy } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -382,9 +382,8 @@ describe('BrowseComponent', () => {
     component.deleteDocument();
 
     expect(dialogOpenSpy).not.toHaveBeenCalled();
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -414,9 +413,8 @@ describe('BrowseComponent', () => {
     component.deleteDocument();
 
     expect(dialogOpenSpy).not.toHaveBeenCalled();
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -465,9 +463,8 @@ describe('BrowseComponent', () => {
 
     expect(mockBrowseService.hasChildCollections).toHaveBeenCalledWith('cols-root');
     expect(dialogOpenSpy).not.toHaveBeenCalled();
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -589,12 +586,8 @@ describe('BrowseComponent', () => {
 
     component.openEditCollectionDialog(collection);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
     expect(dialogOpenSpy).not.toHaveBeenCalled();
   });
@@ -619,12 +612,8 @@ describe('BrowseComponent', () => {
 
     component.deleteCollectionEntry(collection);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
   });
 
@@ -644,12 +633,8 @@ describe('BrowseComponent', () => {
 
     component.deleteDocument();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
   });
 
@@ -739,11 +724,11 @@ describe('BrowseComponent', () => {
 
     component.deleteDocument();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Skipped 1 item that could not be loaded', 'OK', {
+    expect(toast.error).toHaveBeenCalledWith('Skipped 1 item that could not be loaded', {
       duration: 5000,
     });
     expect(mockDocumentDetailService.trashDocument).toHaveBeenCalledWith('doc-1');
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Moved to trash', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Moved to trash');
   });
 
   it('deleteSelectedDocuments blocks when all selected documents fail to load', () => {
@@ -757,11 +742,9 @@ describe('BrowseComponent', () => {
 
     component.deleteDocument();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Failed to load selected documents for deletion',
-      'OK',
-      { duration: 5000 },
-    );
+    expect(toast.error).toHaveBeenCalledWith('Failed to load selected documents for deletion', {
+      duration: 5000,
+    });
     expect(mockDocumentDetailService.trashDocument).not.toHaveBeenCalled();
   });
 
@@ -794,9 +777,7 @@ describe('BrowseComponent', () => {
       'doc-1',
       'ace-1',
     );
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Notification email sent', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Notification email sent');
   });
 
   it('sendNotificationEmail shows SMTP guidance on mail failure (NXSAT-159)', () => {
@@ -824,12 +805,9 @@ describe('BrowseComponent', () => {
       status: 'effective',
     });
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'OK',
-      {
-        duration: 7000,
-      },
+      { duration: 7000 },
     );
   });
 

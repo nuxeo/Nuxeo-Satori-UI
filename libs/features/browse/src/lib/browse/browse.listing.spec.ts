@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
@@ -188,7 +187,6 @@ describe('BrowseComponent — rendered document list', () => {
           },
         },
         { provide: TagService, useValue: { searchTags: vi.fn(() => of([])) } },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) },
@@ -270,7 +268,11 @@ describe('BrowseComponent — rendered document list', () => {
 
     expect(component.loading()).toBe(false);
     expect(component.error()).toBe('Failed to load folder contents.');
-    expect(query('.browse-error p')?.textContent).toContain('Failed to load folder contents.');
+    expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+    expect(query('nxs-error-state .nxs-error-state__heading')?.textContent).toContain(
+      'Failed to load folder contents.',
+    );
+    expect(query('nxs-error-state button')?.textContent).toContain('Retry');
     expect(query('.browse-loading')).toBeNull();
   });
 
@@ -278,27 +280,43 @@ describe('BrowseComponent — rendered document list', () => {
     browse.getBrowseFolderContents.mockReturnValueOnce(throwError(() => new Error('network down')));
 
     const component = await render();
-    expect(query('.browse-error')).not.toBeNull();
+    expect(query('nxs-error-state')).not.toBeNull();
 
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Recovered.pdf' })], totalSize: 1 }),
     );
-    const retry = query('.browse-error button') as HTMLButtonElement;
+    const retry = query('nxs-error-state button') as HTMLButtonElement;
     retry.click();
     await settle();
 
     expect(component.error()).toBeNull();
+    expect(query('nxs-error-state')).toBeNull();
     expect(rowTitles()).toEqual(['Recovered.pdf']);
   });
 
-  it('leaves a permission-denied folder load in the retryable error state, not stuck loading', async () => {
+  it('says a forbidden folder is forbidden, without a Retry that would get the same answer', async () => {
     browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
 
     const component = await render();
 
     expect(component.loading()).toBe(false);
-    expect(component.error()).toBe('Failed to load folder contents.');
-    expect(query('.browse-error button')).not.toBeNull();
+    expect(component.errorStatus()).toBe(403);
+    expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+    expect(query('nxs-error-state .nxs-error-state__message')?.textContent).toContain(
+      'You do not have permission to see this.',
+    );
+    expect(query('nxs-error-state button')).toBeNull();
+  });
+
+  it('says a folder that no longer exists was not found', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 404 })));
+
+    await render();
+
+    expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('404');
+    expect(query('nxs-error-state .nxs-error-state__message')?.textContent).toContain(
+      'It may have been moved or deleted',
+    );
   });
 
   it('follows a single-entry root redirect instead of rendering the bootstrap listing', async () => {
@@ -328,12 +346,14 @@ describe('BrowseComponent — rendered document list', () => {
     );
     detail.fetchThumbnail.mockReturnValue(of(new Blob(['x'], { type: 'image/png' })));
 
-    const component = await render();
+    await render();
+    await settle();
 
-    const img = query('.browse-row img.doc-thumb') as HTMLImageElement | null;
+    // The row's nxs-thumbnail owns the URL: it fetched the rendition, minted the URL and draws it.
+    const img = query('.browse-row nxs-thumbnail.doc-thumb img') as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img?.getAttribute('src')).toBe(createdObjectUrls[0]);
-    expect(Object.keys(component.thumbnailMap())).toEqual(['c-1']);
+    expect(createdObjectUrls).toHaveLength(1);
 
     fixture.destroy();
     expect(revokedObjectUrls).toContain(createdObjectUrls[0]);
@@ -345,11 +365,12 @@ describe('BrowseComponent — rendered document list', () => {
     );
     detail.fetchThumbnail.mockReturnValue(throwError(() => ({ status: 404 })));
 
-    const component = await render();
+    await render();
+    await settle();
 
-    expect(component.thumbnailMap()).toEqual({});
-    expect(query('.browse-row img.doc-thumb')).toBeNull();
-    expect(query('.browse-row mat-icon.doc-icon')).not.toBeNull();
+    expect(createdObjectUrls).toEqual([]);
+    expect(query('.browse-row nxs-thumbnail img')).toBeNull();
+    expect(query('.browse-row nxs-thumbnail mat-icon.doc-icon')).not.toBeNull();
   });
 
   it('navigates into a folder row and to the document view for a file row', async () => {

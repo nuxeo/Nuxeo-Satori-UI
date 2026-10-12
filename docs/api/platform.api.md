@@ -189,9 +189,10 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-27 exported symbol(s).
+43 exported symbol(s).
 
 ```ts
+const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
 const NXS_PERMISSIONS_PANEL_ID = "nxs.components.permissionsPanel";
 const NXS_PRIMITIVE_IDS: Readonly<{
     readonly avatar: "nxs.primitives.avatar";
@@ -199,6 +200,17 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly tag: "nxs.primitives.tag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     }>;
+}
+const NXS_TOAST_DURATION = 4000;
+class NxsActionMenuComponent {
+    readonly actions: _angular_core.InputSignal<readonly NxsMenuAction[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly icon: _angular_core.InputSignal<string>;
+    readonly selected: _angular_core.OutputEmitterRef<NxsMenuAction>;
+    protected readonly ownLabel: _angular_core.Signal<string>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsActionMenuComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsActionMenuComponent, "nxs-action-menu", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, never, true, never>;
+    }
 }
 type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
 class NxsAvatarComponent implements NxsAvatarInputs {
@@ -297,6 +309,33 @@ class NxsEmptyStateComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "message": { "alias": "message"; "required": false; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
     }
 }
+class NxsErrorStateComponent {
+    readonly status: _angular_core.InputSignal<NxsErrorStatus>;
+    readonly heading: _angular_core.InputSignal<string>;
+    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
+    readonly retryable: _angular_core.InputSignalWithTransform<boolean, unknown>;
+    readonly retry: _angular_core.OutputEmitterRef<void>;
+    protected readonly variant: _angular_core.Signal<Variant>;
+    protected readonly ownHeading: _angular_core.Signal<string>;
+    protected readonly canRetry: _angular_core.Signal<boolean>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsErrorStateComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsErrorStateComponent, "nxs-error-state", never, { "status": { "alias": "status"; "required": false; "isSignal": true; }; "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "retryable": { "alias": "retryable"; "required": false; "isSignal": true; }; }, { "retry": "retry"; }, never, ["*"], true, never>;
+    }
+}
+type NxsErrorStatus = 401 | 403 | 404 | 500;
+class NxsFavoriteToggleComponent {
+    readonly documentId: _angular_core.InputSignal<string>;
+    readonly favorite: _angular_core.ModelSignal<boolean>;
+    readonly disabled: _angular_core.InputSignal<boolean>;
+    readonly changed: _angular_core.OutputEmitterRef<boolean>;
+    readonly failed: _angular_core.OutputEmitterRef<unknown>;
+    protected readonly busy: _angular_core.Signal<boolean>;
+    toggle(): void;
+    protected press(event: Event): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "favorite": { "alias": "favorite"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "favorite": "favoriteChange"; "changed": "changed"; "failed": "failed"; }, never, never, true, never>;
+    }
+}
 class NxsFolderHeaderComponent {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
@@ -313,6 +352,13 @@ class NxsIconComponent {
     protected readonly accessibleName: _angular_core.Signal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsIconComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsIconComponent, "nxs-icon", never, { "name": { "alias": "name"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsMenuAction {
+    readonly id: string;
+    readonly label: string;
+    readonly icon?: string;
+    readonly disabled?: boolean;
     }
 }
 class NxsPermissionsPanelComponent {
@@ -391,7 +437,6 @@ class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     readonly icon: _angular_core.InputSignal<string>;
     protected readonly open: _angular_core.WritableSignal<boolean>;
     protected readonly panelId: string;
-    protected readonly headingId: string;
     protected toggle(): void;
     protected closeAndRefocus(): void;
     protected onFocusOut(event: FocusEvent): void;
@@ -427,7 +472,42 @@ interface NxsTagInputs {
     readonly color: InputSignal<NxsTagColor>;
     }
 }
+class NxsThumbnailComponent {
+    readonly documentId: _angular_core.InputSignal<string>;
+    readonly alt: _angular_core.InputSignal<string>;
+    protected readonly url: _angular_core.WritableSignal<string | null>;
+    constructor();
+    protected broken(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsThumbnailComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsThumbnailComponent, "nxs-thumbnail", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "alt": { "alias": "alt"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    }
+}
+interface NxsToastAction {
+    readonly label: string;
+    readonly run: () => void;
+    }
+}
+interface NxsToastErrorOptions extends NxsToastOptions {
+    readonly retry?: () => void;
+    }
+}
+interface NxsToastOptions {
+    readonly duration?: number;
+    readonly action?: NxsToastAction;
+    }
+}
+class NxsToastService {
+    show(message: string, options?: NxsToastOptions): void;
+    error(message: string, options?: NxsToastErrorOptions): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsToastService, never>;
+    static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
+    }
+}
+function nxsErrorStatus(error: unknown): NxsErrorStatus;
+function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
 function provideNxsComponents(): EnvironmentProviders;
+function provideNxsThumbnailCache(): Provider;
+function provideNxsToast(): Provider;
 ```
 
 ## @nuxeo-satori/platform/components-satori

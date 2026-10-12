@@ -339,6 +339,25 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/extension-reference-drift.mjs'],
   },
+  // The same question for the page that shows each `nxs-` component with and without Satori: it
+  // lives on Confluence, so a component added without a section there is missed in review. Fails
+  // on a barrel component with no section, a section with no component, and a section whose ID,
+  // story or image disagrees with the code.
+  {
+    id: 'nxs-comparison',
+    label: 'Satori comparison page covers every nxs- component',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/satori-comparison-doc.mjs'],
+  },
+  // Its negative controls, in memory and under `os.tmpdir()`, so safe to run beside anything.
+  {
+    id: 'nxs-comparison-selftest',
+    label: 'Satori comparison page controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/satori-comparison-doc.selftest.mjs'],
+    // The negative/positive split is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:

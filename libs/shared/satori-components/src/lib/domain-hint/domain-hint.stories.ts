@@ -2,17 +2,14 @@ import type { Meta, StoryObj } from '@storybook/angular';
 
 import { NxsDomainHintComponent } from './domain-hint.component';
 
-/**
- * The note's text comes from the application's catalogue (`preview.ts`). A host places the hint
- * unconditionally and passes what it is showing; the hint decides whether to render.
- */
 const meta: Meta<NxsDomainHintComponent> = {
   title: 'States/Domain hint',
   component: NxsDomainHintComponent,
+  tags: ['autodocs'],
   args: { documentType: 'Domain', path: '/default-domain' },
   argTypes: {
-    documentType: { control: 'text', description: 'The type of the document being shown.' },
-    path: { control: 'text', description: 'The repository path being shown.' },
+    documentType: { control: 'text' },
+    path: { control: 'text' },
   },
   parameters: { layout: 'padded' },
 };
