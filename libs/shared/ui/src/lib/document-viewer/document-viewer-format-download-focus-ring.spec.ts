@@ -27,7 +27,9 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
 
   it('declares a standalone :focus ring on .format-download-btn.mat-mdc-icon-button (IBM style_focus_visible)', () => {
     expect(scss).toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus\s*\{/);
+    // Comma lists are not resolved by the IBM scanner — reject both `:focus, …` and `…, :focus`.
     expect(scss).not.toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus,\s/);
+    expect(scss).not.toMatch(/,\s*\.format-download-btn\.mat-mdc-icon-button:focus\s*\{/);
 
     const focusRule = formatDownloadBtnFocusRule();
     expect(focusRule).toMatch(/outline:\s*2px\s+solid/);
