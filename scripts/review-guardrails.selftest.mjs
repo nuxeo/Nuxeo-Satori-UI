@@ -7246,6 +7246,22 @@ expectGreen(
   }),
 );
 
+// A type-only import is erased, so a story that has one opens nothing.
+expectRed(
+  'a component a service opens, whose only story imports the service as a type',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import type { NxsNoticeService } from './notice.service';",
+      ),
+    }),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
 // A story of another component that happens to use the service does not document what it opens.
 expectRed(
   'a component a service opens, whose only story names another component',
@@ -7329,6 +7345,21 @@ expectGreen(
       [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
     }),
   ),
+);
+
+expectRed(
+  'a component a service opens, whose Overview attaches to a story importing the service as a type',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { type NxsNoticeService } from './notice.service';",
+      ),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
 );
 
 // An Overview counts for what its own story file opens, not for whatever sits beside it.

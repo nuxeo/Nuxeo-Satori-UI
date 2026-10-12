@@ -7296,10 +7296,14 @@ function openedComponentClasses(barrel, pathMaps, exported) {
   return opened;
 }
 
-/** The opened components (see `openedComponentClasses`) a story file reaches through its imports. */
+/**
+ * The opened components (see `openedComponentClasses`) a story file reaches through its value
+ * imports. A type-only import is erased, so it opens nothing.
+ */
 function openedThrough(imports, opened, pathMaps) {
   const keys = new Set();
-  for (const { file, name } of imports.values()) {
+  for (const { file, name, typeOnly } of imports.values()) {
+    if (typeOnly) continue;
     const origin = valueExportOrigins(file, pathMaps).get(name);
     if (!origin) continue;
     for (const [key, { openers }] of opened) if (openers.has(origin)) keys.add(key);
@@ -7324,7 +7328,8 @@ const openedVia = (openers) =>
  * the key is a method or an accessor. With `resolveIdentifier`, a value that is a bare name is
  * replaced by the top-level constant it names (`tags: TAGS`).
  *
- * `imports` maps each named import to the file it resolves to and the name it is exported under;
+ * `imports` maps each named import to the file it resolves to, the name it is exported under and
+ * whether it is type-only;
  * `namedExports` lists the file's named exports, under the names they are exported as.
  */
 function readStoryFile(storyFile, pathMaps) {
@@ -7357,6 +7362,7 @@ function readStoryFile(storyFile, pathMaps) {
         imports.set(element.name.text, {
           file: target,
           name: (element.propertyName ?? element.name).text,
+          typeOnly: Boolean(statement.importClause.isTypeOnly || element.isTypeOnly),
         });
       }
     } else if (ts.isVariableStatement(statement)) {
