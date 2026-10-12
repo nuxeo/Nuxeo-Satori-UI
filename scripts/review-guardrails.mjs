@@ -7709,15 +7709,15 @@ function checkSatoriComponentsHaveStories() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
   const pathMaps = tsconfigPathMaps();
   const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
-  if (exported.size === 0) return;
   const opened = openedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps, exported);
+  if (exported.size === 0 && opened.size === 0) return;
 
   const STORY_GLOB = '../src/**/*.stories.ts';
   const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;
   if (!fileExists(main)) {
     fail(
-      `${main} does not exist, so the ${exported.size} component(s) ${SATORI_COMPONENTS_BARREL} ` +
-        'exports have no Storybook to be documented in.',
+      `${main} does not exist, so the ${exported.size + opened.size} component(s) ` +
+        `${SATORI_COMPONENTS_BARREL} ships have no Storybook to be documented in.`,
     );
   } else {
     const globs = storybookStoryGlobs(main);
@@ -7827,8 +7827,8 @@ function checkSatoriComponentsHaveOverviews() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
   const pathMaps = tsconfigPathMaps();
   const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
-  if (exported.size === 0) return;
   const opened = openedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps, exported);
+  if (exported.size === 0 && opened.size === 0) return;
 
   const OVERVIEW_GLOB = '../src/**/*.mdx';
   const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;

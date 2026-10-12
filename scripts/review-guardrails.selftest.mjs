@@ -7249,6 +7249,41 @@ expectGreen(
   }),
 );
 
+// A library whose only components are ones a service opens is held to the same rule.
+const NXS_SERVICE_ONLY_BARREL = {
+  [`${NXS_ROOT}/src/index.ts`]:
+    'export {\n  NxsNoticeService,\n  provideNxsNotice,\n  NXS_NOTICE_DURATION,\n' +
+    "} from './lib/notice/notice.service';\n",
+};
+
+expectRed(
+  'a library that exports no component and ships one through a service, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK(NXS_NOTICE_LIB(NXS_SERVICE_ONLY_BARREL)),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a library that exports no component and ships one through a service, with no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(NXS_NOTICE_LIB({ ...NXS_SERVICE_ONLY_BARREL, [NXS_NOTICE_STORY]: nxsNoticeStory() })),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+expectGreen(
+  'a library that exports no component and ships one through a service, storied and documented',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      ...NXS_SERVICE_ONLY_BARREL,
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+);
+
 // A namespace import of a component module opens what it exports, as a named import does.
 const NXS_NOTICE_SERVICE_VIA = (importLine, use) => ({
   [`${NXS_NOTICE}/notice.service.ts`]:
