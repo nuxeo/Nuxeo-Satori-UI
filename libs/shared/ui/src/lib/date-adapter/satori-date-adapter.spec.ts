@@ -2,8 +2,10 @@ import { Component, LOCALE_ID, provideZonelessChangeDetection } from '@angular/c
 import { TestBed } from '@angular/core/testing';
 import { DateAdapter, MAT_DATE_FORMATS, MatDateFormats, MatNativeDateModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
 import { DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo-satori/platform/app-config';
-import { enUS, fr } from 'date-fns/locale';
+import { de, enGB, enUS, fr, frCA } from 'date-fns/locale';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -115,11 +117,47 @@ describe('provideSatoriDateAdapter', () => {
 
   // Named for what it does. That the provider actually *consumes* `LOCALE_ID` is asserted by
   // the parse cases above, which set it and get locale-specific parsing back; this one covers
-  // only the mapping, including the region subtag a customer's `defaultLanguage` may carry.
-  it('maps an Angular locale id to a date-fns locale, tolerating a region subtag', () => {
+  // only the mapping, including the region subtag a customer's `LOCALE_ID` may carry.
+  it('maps an Angular locale id to a date-fns locale, case and separator insensitively', () => {
     expect(dateFnsLocaleFor('fr')).toBe(fr);
-    expect(dateFnsLocaleFor('fr-CA')).toBe(fr);
     expect(dateFnsLocaleFor('FR')).toBe(fr);
+    expect(dateFnsLocaleFor('fr_CA')).toBe(frCA);
+  });
+
+  // A region can change the field order outright, not just the separators. `en-GB` is the case
+  // that matters most: reduced to its base language it would get `enUS` — month-first — which
+  // is the original defect reappearing under a different locale id.
+  it('resolves an exact regional tag before falling back to the bare language', () => {
+    expect(dateFnsLocaleFor('en-GB')).toBe(enGB);
+    expect(dateFnsLocaleFor('en-US')).toBe(enUS);
+    expect(dateFnsLocaleFor('fr-CA')).toBe(frCA);
+
+    expect([
+      parseAsInput('en-GB', '03/04/2026')?.getMonth(),
+      parseAsInput('en-GB', '03/04/2026')?.getDate(),
+    ]).toEqual([3, 3]);
+  });
+
+  // A regional tag we ship no data for still has to work, and must not pretend it was exact.
+  it('falls back to the bare language for an unknown region, and says so in development', () => {
+    expect(dateFnsLocaleFor('de-CH')).toBe(de);
+    expect(dateFnsLocaleFor('pt-BR')).toBe(enUS);
+  });
+
+  // NXSAT-629 review: the native adapter rendered Thai through `Intl`, which resolves `th` to
+  // the Buddhist calendar, so it showed 3 April 2026 as `03/04/2569` — a string its own
+  // `Date.parse` then read back as 4 March 2569. Angular's `DatePipe` has always shown the
+  // Gregorian year for `th` (it never calls `Intl`, and the locale data has no calendar), so
+  // Gregorian here makes the picker agree with every other date in the application.
+  it('renders Thai with the Gregorian year, matching every other date surface', () => {
+    const { adapter, formats } = adapterFor('th');
+
+    expect(adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput)).toBe(
+      '03/04/2026',
+    );
+    expect(adapter.format(adapter.createDate(2026, 3, 3), formats.display.dateInput)).not.toContain(
+      '2569',
+    );
   });
 
   it('falls back to English for a language it has no locale for, rather than failing to start', () => {
@@ -143,9 +181,9 @@ describe('provideSatoriDateAdapter', () => {
   it('overrides an adapter a component imports MatNativeDateModule for', () => {
     @Component({
       standalone: true,
-      imports: [MatDatepickerModule, MatNativeDateModule],
+      imports: [MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatInputModule],
       providers: [provideSatoriDateAdapter()],
-      template: '<div></div>',
+      templateUrl: './satori-date-adapter.host.html',
     })
     class HostWithNativeDateModule {}
 

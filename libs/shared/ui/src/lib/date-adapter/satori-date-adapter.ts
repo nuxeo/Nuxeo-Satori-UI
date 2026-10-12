@@ -1,37 +1,75 @@
-import { LOCALE_ID, Provider, inject } from '@angular/core';
+import { LOCALE_ID, Provider, inject, isDevMode } from '@angular/core';
 import { provideDateFnsAdapter } from '@angular/material-date-fns-adapter';
 import { MAT_DATE_LOCALE } from '@angular/material/core';
 import type { Locale } from 'date-fns';
-import { de, enUS, fr, ja, nl, th, zhCN } from 'date-fns/locale';
+import { de, deAT, enGB, enUS, fr, frCA, ja, nl, nlBE, th, zhCN, zhTW } from 'date-fns/locale';
 
 /**
- * A date-fns locale for every language the application ships a catalogue for.
+ * A date-fns locale for every language the application ships a catalogue for, plus the regional
+ * variants date-fns ships for those languages.
  *
- * Keyed by the two-letter language id this application uses — the same ids as
- * `availableLanguages`, because the whole point is that one setting drives translation,
- * number formatting, date *display* and now date *parsing*. A test asserts the two lists
- * match, so adding a language cannot quietly leave its dates being parsed as English.
+ * Keyed by the Angular locale id, lowercased. The seven bare language ids are the ones this
+ * application can actually produce — `resolveFormattingLocale` clamps `LOCALE_ID` to
+ * `REGISTERED_LOCALES` — and a test asserts they match `availableLanguages`, so adding a
+ * language cannot quietly leave its dates being parsed as English.
  *
- * `en` is present here but absent from `register-locale-data.ts`'s list: Angular bundles
- * `en-US` locale data, so registering it there would be a no-op, whereas date-fns ships no
- * region-less English and the adapter needs `enUS` named explicitly.
+ * The regional entries are here for the **published** provider rather than for us. These
+ * dialogs are exported from `@nuxeo-satori/platform/ui`, so a customer's `LOCALE_ID` reaches
+ * this map, and `en-GB` reduced to `en` would be given `enUS` — month-first, which is the
+ * original defect wearing a different locale id. Reducing `fr-CA` to `fr` is merely imprecise
+ * (`dd/MM/yyyy` instead of `yy-MM-dd`); reducing `en-GB` to `en` is wrong in the same way the
+ * bug was.
+ *
+ * `en` maps to `enUS` and is present here although `register-locale-data.ts` omits it: Angular
+ * bundles `en-US` locale data so registering it there would be a no-op, whereas date-fns ships
+ * no region-less English and the adapter needs one named.
  */
-const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = { en: enUS, fr, de, ja, nl, th, zh: zhCN };
+const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
+  en: enUS,
+  'en-gb': enGB,
+  fr,
+  'fr-ca': frCA,
+  de,
+  'de-at': deAT,
+  ja,
+  nl,
+  'nl-be': nlBE,
+  th,
+  zh: zhCN,
+  'zh-tw': zhTW,
+};
 
-/** The language ids above, for the test that keeps this map and `availableLanguages` in step. */
-export const DATE_ADAPTER_LANGUAGES: readonly string[] = Object.keys(DATE_FNS_LOCALES);
+/** The bare language ids above, for the test that keeps this map and `availableLanguages` in step. */
+export const DATE_ADAPTER_LANGUAGES: readonly string[] = Object.keys(DATE_FNS_LOCALES).filter(
+  (id) => !id.includes('-'),
+);
 
 /**
- * The date-fns locale for an Angular locale id, falling back to English.
+ * The date-fns locale for an Angular locale id.
  *
- * Region subtags are tolerated and reduced (`fr-CA` → `fr`) because `LOCALE_ID` is whatever
- * Layer 0's `defaultLanguage` was set to, and a customer can set it to anything. An id we
- * have no locale for falls back to English rather than throwing: a wrong date order is a
- * correctness defect, but an application that will not start is worse.
+ * Resolution order is exact tag, then bare language, then English. The exact tag comes first
+ * because a region can change the field order outright, not just the separators, and silently
+ * parsing one region's dates with another's order is the defect this file exists to remove.
+ *
+ * A regional tag we have no data for still falls back rather than throwing — an application
+ * that will not start is worse than one that formats in the wrong region — but it says so in
+ * development, because the fallback is the one case here that can be wrong without any symptom.
  */
 export function dateFnsLocaleFor(localeId: string): Locale {
-  const language = (localeId ?? '').toLowerCase().split(/[-_]/)[0];
-  return DATE_FNS_LOCALES[language] ?? enUS;
+  const tag = (localeId ?? '').toLowerCase().replace(/_/g, '-');
+  const exact = DATE_FNS_LOCALES[tag];
+  if (exact) return exact;
+
+  const language = tag.split('-')[0];
+  const base = DATE_FNS_LOCALES[language];
+  if (tag !== language && isDevMode()) {
+    console.warn(
+      `[satori-date-adapter] No date-fns locale for "${localeId}"; dates will be parsed and ` +
+        `formatted as "${base ? language : 'en'}". If that region orders or separates date ` +
+        'fields differently, typed dates will be misread. Add it to DATE_FNS_LOCALES.',
+    );
+  }
+  return base ?? enUS;
 }
 
 /**
@@ -59,6 +97,22 @@ export function dateFnsLocaleFor(localeId: string): Locale {
  * `defaultLanguage`. Deriving the parsing locale from the same token is what makes "the
  * calendar, the selected date and the typed input all agree" true by construction rather than
  * by two settings being kept in step by hand.
+ *
+ * ## Thai dates become Gregorian here, deliberately
+ *
+ * `Intl.DateTimeFormat('th')` resolves to the **Buddhist** calendar, so the native adapter
+ * showed 3 April 2026 as `03/04/2569`. date-fns' `th` locale is Gregorian and shows
+ * `03/04/2026`. That is a real change, and it is the right way round for two reasons.
+ *
+ * Angular's `DatePipe` never calls `Intl` and `@angular/common/locales/th` carries no calendar
+ * system, so every other date in a Thai deployment — the document list, the audit table,
+ * document detail — has always rendered the Gregorian year. Only the date picker disagreed.
+ *
+ * And the Buddhist display was not even round-trippable by the field that produced it:
+ * `Date.parse('03/04/2569')` is 4 March 2569, so a Thai user who retyped what the picker had
+ * just shown them got the wrong month *and* a year 543 years out. Showing the Gregorian year
+ * removes the only thing that invited that. Asserted by the `th` case in the parse table and
+ * by the explicit Buddhist-year test.
  *
  * ## Why every component provides it, rather than the app root
  *
