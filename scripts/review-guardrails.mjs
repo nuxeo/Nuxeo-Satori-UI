@@ -7223,7 +7223,9 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
         ? resolveFile(file, statement.moduleSpecifier.text, pathMaps)
         : null;
     if (!statement.exportClause) {
-      if (target) for (const [name, origin] of valueExportOrigins(target, pathMaps, seen)) found.set(name, origin);
+      if (target)
+        for (const [name, origin] of valueExportOrigins(target, pathMaps, seen))
+          found.set(name, origin);
       continue;
     }
     if (!ts.isNamedExports(statement.exportClause)) continue;
@@ -7232,13 +7234,13 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
       const local = (element.propertyName ?? element.name).text;
       let origin = null;
       if (statement.moduleSpecifier) {
-        origin = target ? valueExportOrigins(target, pathMaps, seen).get(local) ?? null : null;
+        origin = target ? (valueExportOrigins(target, pathMaps, seen).get(local) ?? null) : null;
       } else if (declared.has(local)) {
         origin = file;
       } else if (imported.has(local)) {
         const { specifier, name } = imported.get(local);
         const from = resolveFile(file, specifier, pathMaps);
-        origin = from ? valueExportOrigins(from, pathMaps, seen).get(name) ?? null : null;
+        origin = from ? (valueExportOrigins(from, pathMaps, seen).get(name) ?? null) : null;
       }
       if (origin) found.set(element.name.text, origin);
     }
@@ -7252,22 +7254,28 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
  * A module the barrel exports something other than a component from can still put a component on
  * screen: `NxsToastService` opens `NxsToastComponent` through `MatSnackBar`, and no host names the
  * component. Such a component is any `@Component` class one of those modules imports by value and
- * the barrel does not export. Each comes with the modules that open it — the ones its stories and
- * Overview are reached through. `satori-comparison-doc.mjs` follows the same edge for its page.
+ * the barrel does not export. A module that declares an exported component is left out, whatever
+ * else it exports: what it imports is part of that component, documented with it. Each comes with
+ * the modules that open it — the ones its stories and Overview are reached through.
+ * `satori-comparison-doc.mjs` follows the same edge for its page.
  */
 function openedComponentClasses(barrel, pathMaps, exported) {
-  const shipped = new Set([...exported.values()].map(({ file, className }) => `${file}#${className}`));
+  const shipped = new Set(
+    [...exported.values()].map(({ file, className }) => `${file}#${className}`),
+  );
   const exportedNames = new Set(exported.keys());
+  const componentModules = new Set([...exported.values()].map(({ file }) => file));
   const openers = new Map();
   for (const [name, origin] of valueExportOrigins(barrel, pathMaps)) {
-    if (exportedNames.has(name)) continue;
+    if (exportedNames.has(name) || componentModules.has(origin)) continue;
     openers.set(origin, [...(openers.get(origin) ?? []), name]);
   }
   const opened = new Map();
   for (const [module, names] of openers) {
     const source = ts.createSourceFile(module, read(module), ts.ScriptTarget.Latest, true);
     for (const statement of source.statements) {
-      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) continue;
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
+        continue;
       const bindings = statement.importClause?.namedBindings;
       if (statement.importClause?.isTypeOnly || !bindings || !ts.isNamedImports(bindings)) continue;
       const target = resolveFile(module, statement.moduleSpecifier.text, pathMaps);

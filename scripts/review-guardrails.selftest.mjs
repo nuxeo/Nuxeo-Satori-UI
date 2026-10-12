@@ -7277,6 +7277,25 @@ expectGreen(
   }),
 );
 
+// Exporting a constant beside the component does not make the component's module an opener.
+falsePositiveControls += 1;
+expectGreen(
+  "a component imported by an exported component's module that also exports a constant",
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [`${NXS_ROOT}/src/index.ts`]:
+      "export { NXS_THING_ID, NxsThingComponent } from './lib/thing/thing.component';\n",
+    [NXS_COMPONENT]:
+      nxsComponent({ imports: "import { NxsPartComponent } from './part';" }) +
+      "export const NXS_THING_ID = 'nxs.components.thing';\n",
+    [`${NXS_ROOT}/src/lib/thing/part.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-part', standalone: true, template: '' })\n" +
+      'export class NxsPartComponent {}\n',
+  }),
+);
+
 falsePositiveControls += 1;
 expectGreen(
   'a service that imports a component only as a type',
