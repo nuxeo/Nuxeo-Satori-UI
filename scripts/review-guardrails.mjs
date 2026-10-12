@@ -6299,6 +6299,22 @@ function checkNoTranslatableDatePatterns() {
    * and `L'élément` have one quote and are left intact, so they are still read as prose.
    * `L'ami d'Henri` has two, so `'ami d'` is stripped — and `L` and `Henri` are still prose,
    * so it is still not flagged.
+   *
+   * **Two pattern shapes are knowingly out of reach**, and the rule is stated as "every word is
+   * one letter repeated, one of them twice or more" rather than "no date pattern survives",
+   * because the stronger claim would not be true:
+   *
+   * - adjacent fields with no separator (`yyyyMMdd`), because a word of several distinct
+   *   letters is what tells `Address` from a pattern;
+   * - every field one character long (`M/d/y`), because the two-character floor is what tells
+   *   `N/A` and `e.g.` from a pattern.
+   *
+   * The obvious remedy — tokenize only the letters Angular recognizes as fields — is worse than
+   * the gap. `j` is not an Angular field, so `jj/mm/aaaa` would stop being flagged, and a
+   * translator localizing the letters is the defect this gate was written for (NXSAT-628); the
+   * selftest has that exact control. `May` is `M`+`a`+`y`, all three recognized, so admitting
+   * adjacent single-character fields flags it. Both shapes are absent from every catalogue and
+   * template here, and arm 2 still catches either one the moment it is bound as a format.
    */
   const QUOTED_LITERAL = /'[^']*'/g;
 
@@ -6390,24 +6406,27 @@ function checkNoTranslatableDatePatterns() {
    * at the `)` inside the key of `date: ('x)' | translate)`, which leaves `| translate` outside
    * the inspected text and passes a binding this arm exists to reject.
    *
-   * Only the single quote is tracked, and that is deliberate rather than an omission: an Angular
-   * expression in an attribute binding is itself delimited by the double quotes of the attribute,
-   * so treating `"` as a string delimiter here would read the attribute's own closing quote as an
-   * opening one and swallow the rest of the file — turning the most common binding shape into a
-   * false negative. Inside an expression a string can only be single-quoted.
+   * BOTH quote styles count, and only the ACTIVE delimiter closes the literal it opened. An
+   * expression is usually written inside a double-quoted attribute and so uses `'` — but a text
+   * interpolation, or an expression in a single-quoted attribute, may legally use `"`, and
+   * `date: ("x)" | translate)` hides the same `)` just as well. Tracking only one style left
+   * the other shape passing.
+   *
+   * Tracking the active delimiter is what makes that safe: a `"` inside a single-quoted string
+   * does not open anything, so the attribute's own quotes cannot be mistaken for a literal.
    */
   const matchingParen = (text, open) => {
     let depth = 0;
-    let inLiteral = false;
+    let delimiter = null;
     for (let at = open; at < text.length; at += 1) {
       const character = text[at];
-      if (inLiteral) {
+      if (delimiter) {
         // A backslash escapes the next character, so `\'` does not end the literal.
         if (character === '\\') at += 1;
-        else if (character === "'") inLiteral = false;
+        else if (character === delimiter) delimiter = null;
         continue;
       }
-      if (character === "'") inLiteral = true;
+      if (character === "'" || character === '"') delimiter = character;
       else if (character === '(') depth += 1;
       else if (character === ')') {
         depth -= 1;

@@ -4016,6 +4016,30 @@ expectRed(
   /passes a translated string to `DatePipe` as its format/,
 );
 
+// A text interpolation may use a double-quoted literal, where the same `)` hides just as well.
+// Tracking one quote style and not the other left this shape passing.
+expectRed(
+  'a translated DatePipe format whose double-quoted key contains a close paren',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write(
+      'libs/features/x/src/lib/x.html',
+      '<span>{{ entry.eventDate | date: ("x.mmmm-d-yyyy)" | translate) }}</span>\n',
+    ),
+  /passes a translated string to `DatePipe` as its format/,
+);
+
+// The attribute's own double quotes must not be read as a literal: the expression inside them
+// uses `'`, and only the ACTIVE delimiter closes. Without that, tracking `"` would swallow the
+// binding and turn the most common shape in the codebase into a false negative.
+falsePositiveControls += 1;
+expectGreen('a single-quoted key inside a double-quoted attribute', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'libs/features/x/src/lib/x.html':
+    '<span [title]="entry.eventDate | date: \'longDate\'">{{ entry.name }}</span>\n',
+});
+
 // The exemption must not become a loophole. `common.date-mask` is allowed to BE a date pattern;
 // it is not allowed to be USED as one. Arm 2 is what makes that distinction real, so it gets its
 // own control rather than being argued for in a comment.
