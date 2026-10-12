@@ -115,8 +115,19 @@ try {
   precondition(error.message);
 }
 const { components } = comparison;
+
+/** Written beside a build, so that reusing it records what it was built from. */
+const KEPT_INPUTS = 'inputs.json';
+function keptInputs(dir) {
+  const file = join(dir, KEPT_INPUTS);
+  return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : { digest: null, files: 0 };
+}
 // Taken before the builds, so it describes what was built rather than what is on disk afterwards.
-const inputs = captureInputs(ROOT, components);
+// A reused build is described by what it recorded, so publish refuses it once anything has changed.
+const inputs = REUSE ? keptInputs(REUSE) : captureInputs(ROOT, components);
+if (REUSE && inputs.digest !== captureInputs(ROOT, components).digest) {
+  console.log(`  note   ${REUSE} predates the current sources; publish will refuse this capture`);
+}
 
 /* ------------------------------------------------------------- cleanup of what we own ---- */
 
@@ -164,6 +175,7 @@ function buildStorybooks() {
     }
     console.log(`${Math.round((Date.now() - started) / 1000)}s`);
   }
+  writeFileSync(join(dir, KEPT_INPUTS), JSON.stringify(inputs));
   return dir;
 }
 
@@ -482,6 +494,9 @@ const record = (subject, name, pass, detail, kind = 'load-bearing') => {
 let exitCode = 0;
 try {
   console.log(`satori-comparison capture: ${components.length} component(s) → ${OUT}`);
+  // Otherwise a run that stops before writing its own would leave the last run's manifest
+  // vouching for whatever images this one had already overwritten.
+  rmSync(join(OUT, 'manifest.json'), { force: true });
   const dir = REUSE ?? buildStorybooks();
   mkdirSync(join(OUT, 'raw'), { recursive: true });
   const indexes = Object.fromEntries(Object.keys(STORYBOOKS).map((n) => [n, storyIndex(dir, n)]));
