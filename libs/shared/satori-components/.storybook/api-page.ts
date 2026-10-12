@@ -1,7 +1,12 @@
 import { Markdown, Source, Title, useOf } from '@storybook/addon-docs/blocks';
 import { createElement as h, Fragment, type ReactElement, type ReactNode } from 'react';
 
-import { compodoc, type CompodocInterface, type CompodocMember } from './compodoc';
+import {
+  compodoc,
+  type CompodocInterface,
+  type CompodocMember,
+  type CompodocMethod,
+} from './compodoc';
 
 /** Every component documented here is imported from this entry point. */
 const ENTRY_POINT = '@nuxeo-satori/platform/components';
@@ -93,6 +98,49 @@ function interfaceSection(type: CompodocInterface): ReactElement {
         description(property),
       ]),
     ),
+  );
+}
+
+const signature = (method: CompodocMethod): string =>
+  `${method.name}(${(method.args ?? [])
+    .map(
+      (arg) =>
+        `${arg.name}${arg.optional ? '?' : ''}: ${arg.type ?? 'unknown'}` +
+        (arg.defaultValue !== undefined ? ` = ${arg.defaultValue}` : ''),
+    )
+    .join(', ')}): ${method.returnType ?? 'void'}`;
+
+const missing = (what: string): ReactElement =>
+  h(
+    'p',
+    null,
+    `Compodoc has no entry for ${what}, so it cannot be listed. Storybook runs Compodoc first when ` +
+      'it is started or built through Nx.',
+  );
+
+/**
+ * A service's public methods, read from Compodoc: each with its signature, defaults included, and
+ * its JSDoc. For an Overview page whose component is reached through a service, such as the toast.
+ */
+export function CompodocService({ name }: { readonly name: string }): ReactElement {
+  const service = (compodoc.injectables ?? []).find((candidate) => candidate.name === name);
+  if (!service) return missing(`\`${name}\``);
+  return table(
+    ['Method', 'Description'],
+    (service.methods ?? []).map((method) => [code(signature(method)), description(method)]),
+  );
+}
+
+/** The named library interfaces, each as a table of its properties, read from Compodoc. */
+export function CompodocTypes({ names }: { readonly names: readonly string[] }): ReactElement {
+  const known = new Map((compodoc.interfaces ?? []).map((type) => [type.name, type]));
+  return h(
+    Fragment,
+    null,
+    names.map((name) => {
+      const type = known.get(name);
+      return type ? interfaceSection(type) : h(Fragment, { key: name }, missing(`\`${name}\``));
+    }),
   );
 }
 
