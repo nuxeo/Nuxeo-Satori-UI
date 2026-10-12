@@ -8,11 +8,12 @@
   "targets": {
     "test": {
       "executor": "@nx/vitest:test",
-      "$comment": "config-package-schema.spec.ts reads the generator's schema templates by path. Naming them as inputs is what makes an edit to one hash this target and select it under `nx affected`; the import graph has no edge to them.",
+      "$comment": "config-package-schema.spec.ts reads the generator's schema templates by path, and satori-beta-fragment.spec.ts the Beta's bootstrap fragment. Naming them as inputs is what makes an edit to one hash this target and select it under `nx affected`; the import graph has no edge to them.",
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/tools/satori-generators/src/config-package/files/schema/*"
+        "{workspaceRoot}/tools/satori-generators/src/config-package/files/schema/*",
+        "{workspaceRoot}/config-packages/satori-beta/bundle/agentic-ui-config/bootstrap.json"
       ],
       "outputs": ["{options.reportsDirectory}"],
       "options": {
