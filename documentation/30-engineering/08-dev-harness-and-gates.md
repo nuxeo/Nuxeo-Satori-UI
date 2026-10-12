@@ -3,20 +3,21 @@ title: Dev Harness & Gates
 parent: Engineering
 order: 8
 last_reviewed: 2026-10-12
-repo_commit: 56231e18
+repo_commit: 67f53038
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `56231e18` (`fix/nxsat-628`) for the
+> **Last reviewed:** 2026-10-12 · **Repository:** `67f53038` (`fix/nxsat-628`) for the
 > `checkNoTranslatableDatePatterns` row of §2 **only** — added by NXSAT-628 and verified against
-> `GUARDRAILS` and its **13** controls (8 negative, 5 positive) in
-> `review-guardrails.selftest.mjs` at that commit. `56231e18` is cited rather than the revision
+> `GUARDRAILS` and its **17** controls (10 negative, 7 positive) in
+> `review-guardrails.selftest.mjs` at that commit. `67f53038` is cited rather than the revision
 > that first added the row, because the row's guarantee was not fully enforced until the
-> single-field, multiline, non-ASCII and long-pattern cases were closed — a stamp naming the
-> earlier commit would have vouched for a gate that did not yet hold. Nothing else on this page
-> was re-read at that revision, so the two entries below still stand for the rest of it.
+> single-field, multiline, non-ASCII, long-pattern, quoted-literal and nested-call cases were
+> closed — a stamp naming an earlier commit would have vouched for a gate that did not yet hold.
+> Nothing else on this page was re-read at that revision, so the two entries below still stand
+> for the rest of it.
 >
 > §3, §8, the `supply-chain` and `guardrails` rows of §2 and the CI-only rows of §7 were reviewed
 > on 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`), re-verified against
