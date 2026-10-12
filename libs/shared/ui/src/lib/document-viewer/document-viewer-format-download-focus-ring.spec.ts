@@ -23,10 +23,24 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     const selector = '.format-download-btn.mat-mdc-icon-button:focus';
     const selectorIndex = scss.indexOf(selector);
     expect(selectorIndex).toBeGreaterThan(-1);
-    const prefix = scss.slice(0, selectorIndex).replace(/[ \t\r\n]+$/, '');
-    const comment = prefix.match(/(?:(?:\/\/[^\n]*(?:\r?\n|$))+|\/\*[\s\S]*?\*\/\s*)+$/)?.[0];
-    expect(comment).toBeTruthy();
-    return comment!;
+    const lines = scss.slice(0, selectorIndex).split(/\r?\n/);
+    const commentLines: string[] = [];
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const trimmed = lines[i].trim();
+      if (trimmed === '') {
+        if (commentLines.length > 0) {
+          break;
+        }
+        continue;
+      }
+      if (trimmed.startsWith('//')) {
+        commentLines.unshift(lines[i]);
+        continue;
+      }
+      break;
+    }
+    expect(commentLines.length).toBeGreaterThan(0);
+    return commentLines.join('\n');
   }
 
   it('declares a light-strip focus token and routes the ring through it', () => {
