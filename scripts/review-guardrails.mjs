@@ -6280,9 +6280,14 @@ function checkNoTranslatableDatePatterns() {
    * was never load-bearing either: prose cannot satisfy the word-shape rule at any length,
    * because every alphabetic word would have to be one letter repeated.
    *
-   * **A digit disqualifies.** A format pattern has no literal digits — `2026` in a value
-   * means it is a rendered date or ordinary text, not a pattern. This was implicit while the
-   * rule was ASCII-only; it has to be explicit now that literals are allowed through.
+   * **A digit in the unquoted residue disqualifies.** An unquoted `2026` means the value is a
+   * rendered date or ordinary text, not a pattern. This was implicit while the rule was
+   * ASCII-only; it has to be explicit now that literals are allowed through.
+   *
+   * It is tested against the residue, not the raw value, because a quoted literal may legally
+   * contain a digit: `yyyy 'Q1'` is as much a pattern as `d 'de' MMMM 'de' y`. Run against the
+   * raw value — as it first was — the digit rule and the quoted-literal rule below contradicted
+   * each other, and the digit won, so any pattern carrying a quoted digit left the gate silently.
    *
    * **Quoted runs are literals, not words.** Angular escapes literal text in a pattern with
    * single quotes — `d 'de' MMMM 'de' y` is the Spanish long date, `d 'at' HH:mm` a common
@@ -6298,8 +6303,8 @@ function checkNoTranslatableDatePatterns() {
   const QUOTED_LITERAL = /'[^']*'/g;
 
   const isBareDatePattern = (value) => {
-    if (/\d/.test(value)) return false;
     const bare = value.replace(QUOTED_LITERAL, ' ');
+    if (/\d/.test(bare)) return false;
     const words = bare.split(/[^A-Za-z]+/).filter(Boolean);
     const separators = bare.split(/[A-Za-z]+/).filter(Boolean);
     if (words.length === 0) return false;
@@ -6378,12 +6383,33 @@ function checkNoTranslatableDatePatterns() {
   const DATE_FORMAT_OPEN = /\|\s*date:\s*\(/g;
   const TRANSLATE_IN_SPAN = /\|\s*translate\b/;
 
-  /** The index just past the `)` matching the `(` at `open`, or -1 if it never closes. */
+  /**
+   * The index of the `)` matching the `(` at `open`, or -1 if it never closes.
+   *
+   * Parentheses are only counted OUTSIDE a string literal. A naive depth count closes the span
+   * at the `)` inside the key of `date: ('x)' | translate)`, which leaves `| translate` outside
+   * the inspected text and passes a binding this arm exists to reject.
+   *
+   * Only the single quote is tracked, and that is deliberate rather than an omission: an Angular
+   * expression in an attribute binding is itself delimited by the double quotes of the attribute,
+   * so treating `"` as a string delimiter here would read the attribute's own closing quote as an
+   * opening one and swallow the rest of the file — turning the most common binding shape into a
+   * false negative. Inside an expression a string can only be single-quoted.
+   */
   const matchingParen = (text, open) => {
     let depth = 0;
+    let inLiteral = false;
     for (let at = open; at < text.length; at += 1) {
-      if (text[at] === '(') depth += 1;
-      else if (text[at] === ')') {
+      const character = text[at];
+      if (inLiteral) {
+        // A backslash escapes the next character, so `\'` does not end the literal.
+        if (character === '\\') at += 1;
+        else if (character === "'") inLiteral = false;
+        continue;
+      }
+      if (character === "'") inLiteral = true;
+      else if (character === '(') depth += 1;
+      else if (character === ')') {
         depth -= 1;
         if (depth === 0) return at;
       }

@@ -3939,6 +3939,17 @@ expectRed(
   /is a date format pattern rather than text a user reads/,
 );
 
+// A quoted literal may itself contain a digit — `yyyy 'Q1'` is as much a pattern as
+// `d 'de' MMMM 'de' y`. The digit test used to run against the raw value, before the quotes
+// were stripped, so the two rules contradicted each other and the digit won.
+expectRed(
+  'a date pattern with a digit inside a quoted literal',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', '{\n  "a": "yyyy \'Q1\'"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
 // `[^)]*` stopped at the inner `()`, so a format supplied by a method or signal was invisible
 // to an arm that claims to hold regardless of key or value.
 expectRed(
@@ -3986,6 +3997,21 @@ expectRed(
     write(
       'libs/features/x/src/lib/x.html',
       "<span>{{ entry.eventDate | date: ('x.mmmm-d-yyyy' | translate) }}</span>\n",
+    ),
+  /passes a translated string to `DatePipe` as its format/,
+);
+
+// Counting parentheses without reading quotes ends the span at the `)` inside the key, which
+// leaves `| translate` outside it and passes the arm. The span has to know where the string
+// literal is.
+expectRed(
+  'a translated DatePipe format whose key contains a close paren',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write(
+      'libs/features/x/src/lib/x.html',
+      "<span>{{ entry.eventDate | date: ('x.mmmm-d-yyyy)' | translate) }}</span>\n",
     ),
   /passes a translated string to `DatePipe` as its format/,
 );
