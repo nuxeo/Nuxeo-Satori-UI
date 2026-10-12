@@ -40,8 +40,10 @@
  *
  * ## What this capture does and does not cover
  *
- * Fifteen cases: eight routes, plus view-mode and column-panel states that a single visit per route
- * does not reach. Three of the seven rule classes were only visible in those extra states.
+ * Sixteen cases: eight routes, plus view-mode and column-panel states that a single visit per route
+ * does not reach, and a Picture document whose `.picture-cards` metadata strip is not reached by
+ * opening an arbitrary File blob. Three of the seven rule classes were only visible in those extra
+ * states.
  *
  * The **login surface is still not covered**, and that is a harness limitation rather than a choice:
  * the runner sets `httpCredentials`, so the app authenticates before the login page can render. The
@@ -197,6 +199,33 @@ export default async function run(page, h) {
       'exists short of patching upstream DOM.',
   );
   await h.screenshot('a11y-browse-adf-hx');
+
+  h.step(
+    'Document detail — Picture metadata strip (NXENG-812 / NXSAT-493 / WCAG 1.4.3 on .info-label)',
+  );
+  const pictureUid = await findPictureWithPictureCardsUid(page);
+  h.check(
+    'a Picture with picture:info and picture:views exists',
+    pictureUid !== null,
+    'repository query returned no Picture whose metadata strip renders — .picture-cards was NOT scanned',
+  );
+  if (pictureUid) {
+    await h.goToDoc(pictureUid);
+    await h.expectVisible('document detail rendered', 'lib-document-detail');
+    await h.expectVisible('document viewer rendered', 'lib-document-viewer');
+    const infoLabel = page.locator('lib-document-viewer .picture-cards .info-label').first();
+    await infoLabel.waitFor({ state: 'visible', timeout: 30_000 });
+    h.check(
+      'picture metadata .info-label is visible on the light strip',
+      (await infoLabel.count()) > 0,
+      'lib-document-viewer has no .picture-cards .info-label — picture:info may be incomplete',
+    );
+    await h.expectNoA11yViolations(
+      'document detail (picture metadata strip): no WCAG 2.1 AA violations',
+      { ignore: KNOWN_VIOLATIONS },
+    );
+    await h.screenshot('a11y-document-detail-picture-metadata');
+  }
 
   h.step(
     'Document detail — Replace main file with tooltip open (NXENG-771 / WCAG 2.5.3 label-in-name)',
@@ -380,6 +409,59 @@ const FILE_WITH_MAIN_BLOB_NXQL =
   "SELECT * FROM File WHERE ecm:mixinType <> 'HiddenInNavigation' " +
   'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND file:content/name IS NOT NULL ' +
   'ORDER BY dc:created';
+
+const PICTURE_WITH_METADATA_NXQL =
+  "SELECT * FROM Picture WHERE ecm:mixinType <> 'HiddenInNavigation' " +
+  'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND picture:info/width > 0 ' +
+  'AND picture:info/height > 0 ORDER BY dc:created';
+
+/**
+ * First Picture uid with hydrated `picture:info` and `picture:views`, paging NXQL until exhausted.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @returns {Promise<string | null>}
+ */
+async function findPictureWithPictureCardsUid(page) {
+  for (let pageIndex = 0; ; pageIndex++) {
+    const response = await page.request.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
+      params: {
+        query: PICTURE_WITH_METADATA_NXQL,
+        pageSize: '20',
+        currentPageIndex: String(pageIndex),
+      },
+    });
+    if (!response.ok()) {
+      return null;
+    }
+    const body = await response.json();
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    const isNextPageAvailable = body.isNextPageAvailable === true;
+    if (entries.length === 0 && isNextPageAvailable) {
+      return null;
+    }
+    for (const entry of entries) {
+      const uid = entry?.uid;
+      if (typeof uid !== 'string') {
+        continue;
+      }
+      const doc = await page.request.get(`/nuxeo/api/v1/id/${uid}`, { failOnStatusCode: false });
+      if (!doc.ok()) {
+        continue;
+      }
+      const payload = await doc.json();
+      const info = payload?.properties?.['picture:info'];
+      const views = payload?.properties?.['picture:views'];
+      const width = Number(info?.width ?? 0);
+      const height = Number(info?.height ?? 0);
+      if (width > 0 && height > 0 && Array.isArray(views) && views.length > 0) {
+        return uid;
+      }
+    }
+    if (!isNextPageAvailable) {
+      return null;
+    }
+  }
+}
 
 /**
  * First File uid whose main blob responds on `@blob/file:content`, paging NXQL until exhausted.
