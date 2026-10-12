@@ -116,6 +116,23 @@ When the read is refused, the panel says so rather than showing an empty list.
 
 <Canvas of={PermissionsPanelStories.AccessDenied} />
 
+### Loading, failures and validation
+
+Each of these is a story of its own under **Panels/Permissions panel**, answered by the same
+in-memory server:
+
+- **Loading.** The read has not answered: a spinner in a `status` region, and no table yet.
+- **No Local Entries.** Nothing is set on the document itself. The inherited entries are still
+  listed.
+- **Read Failed.** The read failed for a reason other than permission, so the panel offers
+  **Retry**. In the story the next read succeeds.
+- **Save Failed.** The server refuses the write. The panel says which entry it was and how many
+  changes were saved before it, and keeps the refused change to save again.
+- **Invalid Entry.** **Add** without choosing a user or group: the form says so, and nothing is
+  staged.
+- **Slow Server.** Every read and write answers after a second and a half, so the spinner shows
+  while the panel loads, and **Save** stays disabled while it writes.
+
 ## Accessibility
 
 - **Structure.** Each list of entries is a table with column headers, named by the heading of its

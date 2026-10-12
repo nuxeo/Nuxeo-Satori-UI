@@ -1,8 +1,8 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
-import { defer, of, throwError, type Observable } from 'rxjs';
+import { defer, NEVER, of, switchMap, throwError, timer, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { fn } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 
 import {
   DocumentDetailService,
@@ -98,6 +98,14 @@ interface Fixture {
   readonly permissions: readonly string[];
   /** The HTTP status every read fails with, when set. */
   readonly readFails?: number;
+  /** How many reads fail with `readFails` before one succeeds; every one when unset. */
+  readonly failedReads?: number;
+  /** The HTTP status every write fails with, when set. */
+  readonly writeFails?: number;
+  /** Reads never answer, so the panel stays loading. */
+  readonly readsHang?: boolean;
+  /** How long every read and write takes to answer, in milliseconds. */
+  readonly delay?: number;
 }
 
 /**
@@ -117,9 +125,17 @@ function inMemoryDocuments(
   | 'searchUsersGroups'
 > {
   let local = [...fixture.local];
+  let reads = 0;
+  // `timer`, not `delay`: `delay` holds back values but passes an error straight through.
+  const answer = <T>(source: () => Observable<T>): Observable<T> =>
+    fixture.delay ? timer(fixture.delay).pipe(switchMap(source)) : defer(source);
   const read = (uid: string): Observable<NuxeoDocument> =>
-    defer(() => {
-      if (fixture.readFails) return throwError(() => ({ status: fixture.readFails }));
+    answer(() => {
+      if (fixture.readsHang) return NEVER;
+      reads += 1;
+      if (fixture.readFails && reads <= (fixture.failedReads ?? Infinity)) {
+        return throwError(() => ({ status: fixture.readFails }));
+      }
       const blocked = local.some((entry) => entry.id === BLOCK.id);
       const acls: NuxeoAcl[] = [{ name: 'local', aces: local }];
       if (!blocked) acls.push({ name: 'inherited', aces: [...fixture.inherited] });
@@ -139,7 +155,8 @@ function inMemoryDocuments(
       return of(doc);
     });
   const written = (uid: string, change: () => void): Observable<NuxeoDocument> =>
-    defer(() => {
+    answer(() => {
+      if (fixture.writeFails) return throwError(() => ({ status: fixture.writeFails }));
       change();
       return read(uid);
     });
@@ -240,3 +257,86 @@ export const InheritanceBlocked: Story = {
 
 /** The read is refused: the panel says so rather than showing an empty ACL. */
 export const AccessDenied: Story = { decorators: [withDocument({ ...SHARED, readFails: 403 })] };
+
+/** The read has not answered: a spinner, in a `status` region, and no table yet. */
+export const Loading: Story = {
+  decorators: [withDocument({ ...SHARED, readsHang: true })],
+  // `findBy`: the catalogue the spinner's name comes from is still loading when the play starts.
+  play: async ({ canvas }) => {
+    const spinner = await canvas.findByRole('progressbar', { name: 'Loading permissions' });
+    await expect(canvas.getByRole('status')).toContainElement(spinner);
+    await expect(canvas.queryByRole('table')).toBeNull();
+  },
+};
+
+/** Nothing is set on the document itself; what it inherits is still listed. */
+export const NoLocalEntries: Story = {
+  name: 'No Local Entries',
+  decorators: [withDocument({ ...SHARED, local: [] })],
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByText('No permissions are set on this document itself.'),
+    ).toBeVisible();
+    await expect(canvas.getAllByRole('table')).toHaveLength(1);
+  },
+};
+
+/**
+ * The read failed for a reason other than permission, so the panel offers Retry. The next read
+ * succeeds: select Retry to see the permissions load.
+ */
+export const ReadFailed: Story = {
+  decorators: [withDocument({ ...SHARED, readFails: 500, failedReads: 1 })],
+  play: async ({ canvas }) => {
+    const alert = await canvas.findByRole('alert');
+    await waitFor(() => expect(alert).toHaveTextContent('The permissions could not be loaded.'));
+    await expect(canvas.getByRole('button', { name: 'Retry' })).toBeVisible();
+    await expect(canvas.queryByRole('table')).toBeNull();
+  },
+};
+
+/**
+ * The server refuses the write. The panel says which entry it was and how many changes were saved
+ * before it, and keeps the refused change staged to save again.
+ */
+export const SaveFailed: Story = {
+  decorators: [withDocument({ ...SHARED, writeFails: 500 })],
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole('button', { name: /^Remove .* for jdoe$/ }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    const alert = await canvas.findByRole('alert');
+    await expect(alert).toHaveTextContent('Saved 0 of 1 changes. The server refused the next one:');
+    await expect(alert).toHaveTextContent('jdoe');
+    await expect(alert).toHaveTextContent('HTTP 500');
+    await expect(canvas.getByText('1 unsaved change')).toBeVisible();
+    await expect(args.permissionsChanged).not.toHaveBeenCalled();
+  },
+};
+
+/** Add without choosing a user or group: the form says so, and nothing is staged. */
+export const InvalidEntry: Story = {
+  decorators: [withDocument(SHARED)],
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(await canvas.findByRole('button', { name: 'Add' }));
+    const form = await canvas.findByRole('form', { name: 'Add a permission' });
+    await userEvent.click(within(form).getByRole('button', { name: 'Add' }));
+    await expect(within(form).getByRole('alert')).toHaveTextContent(
+      'Choose a user or group from the list.',
+    );
+    await expect(canvas.queryByText(/unsaved change/)).toBeNull();
+  },
+};
+
+/**
+ * Every read and write answers after a second and a half, so the spinner shows while the panel
+ * loads, and Save stays disabled while it writes.
+ */
+export const SlowServer: Story = {
+  decorators: [withDocument({ ...SHARED, delay: 1500 })],
+  play: async ({ canvas }) => {
+    await expect(
+      await canvas.findByRole('progressbar', { name: 'Loading permissions' }),
+    ).toBeVisible();
+    await waitFor(() => expect(canvas.getAllByRole('table')).toHaveLength(2), { timeout: 5000 });
+  },
+};
