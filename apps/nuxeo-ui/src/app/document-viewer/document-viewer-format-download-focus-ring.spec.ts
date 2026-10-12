@@ -1,7 +1,7 @@
 /**
- * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 — additional-format download icon buttons
- * (e.g. Download Thumbnail / Download Small, IBM 1635062655 / 368748540) must show a keyboard
- * focus indicator on the fixed light `.picture-cards` strip (IBM `style_focus_visible`, WCAG
+ * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / NXSAT-527 — additional-format download icon
+ * buttons (e.g. Download Thumbnail / Download OriginalJpeg, IBM 1635062655 / 2294099067) must
+ * show a keyboard focus indicator on the fixed light `.picture-cards` strip (IBM `style_focus_visible`, WCAG
  * 2.4.7 / 1.4.11). Karma loads `apps/nuxeo-ui/src/styles.scss`, so `data-app-theme` resolves
  * real tokens. Published focus-visibility verdicts are a11y-scout-owned (`docs/accessibility.md`);
  * this suite cross-checks compiled tokens and IBM `:focus`-only behaviour, not a second gate.
@@ -148,6 +148,14 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
         format: 'JPEG',
         downloadUrl: '/nuxeo/fullhd',
       },
+      {
+        title: 'OriginalJpeg',
+        width: 1920,
+        height: 1080,
+        fileSize: '8792 Bytes',
+        format: 'JPEG',
+        downloadUrl: '/nuxeo/originaljpeg',
+      },
     ]);
     fixture.detectChanges();
   });
@@ -182,6 +190,22 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
     const style = getComputedStyle(button);
     expect(style.outlineStyle).withContext('IBM :focus path').not.toBe('none');
     expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('focuses the Download OriginalJpeg control with IBM-readable outline (NXSAT-527 / IBM 2294099067)', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
+    const originalRow = rows.find((row) => row.textContent?.includes('OriginalJpeg'));
+    expect(originalRow).withContext('expected OriginalJpeg format row').toBeTruthy();
+    const button = originalRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    if (!button) return;
+
+    expect(button.getAttribute('aria-label')).toBe('Download OriginalJpeg');
+    const cards = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement | null;
+    expect(cards).not.toBeNull();
+    if (!cards) return;
+
+    assertFocusRingContrast(button, cards, 'NXSAT-527 — Download OriginalJpeg (Preview tab)');
   });
 
   it('focuses the Download Small control with IBM-readable outline (NXENG-800)', () => {

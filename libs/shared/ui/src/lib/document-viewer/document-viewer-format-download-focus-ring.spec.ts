@@ -1,7 +1,7 @@
 /**
- * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 — additional-format download icon buttons
- * (e.g. Download Thumbnail / Download Small, IBM 1635062655 / 368748540) must show a keyboard
- * focus indicator (IBM `style_focus_visible`, WCAG 2.4.7). Material suppresses the default ring.
+ * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / NXSAT-527 — additional-format download icon
+ * buttons (e.g. Download Thumbnail / Download OriginalJpeg, IBM 1635062655 / 2294099067) must show
+ * a keyboard focus indicator (IBM `style_focus_visible`, WCAG 2.4.7). Material suppresses the default ring.
  *
  * Computed focus visibility and per-theme contrast: `apps/nuxeo-ui/.../document-viewer-format-download-focus-ring.spec.ts`.
  */
@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505)', () => {
+describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / NXSAT-527)', () => {
   const scss = readFileSync(join(import.meta.dirname, 'document-viewer.component.scss'), 'utf8');
 
   function formatDownloadBtnFocusRule(): string {
@@ -35,5 +35,7 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     expect(focusRule).toMatch(/outline:\s*2px\s+solid/);
     expect(focusRule).toMatch(/outline-offset:\s*2px/);
     expect(scss).toMatch(/NXSAT-505/);
+    expect(scss).toMatch(/NXSAT-527/);
+    expect(scss).toMatch(/2294099067/);
   });
 });
