@@ -12,14 +12,28 @@ import { describe, expect, it } from 'vitest';
 describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505)', () => {
   const scss = readFileSync(join(import.meta.dirname, 'document-viewer.component.scss'), 'utf8');
 
+  function formatDownloadBtnFocusRule(): string {
+    const rule = scss.match(/\.format-download-btn\.mat-mdc-icon-button:focus\s*\{[^}]+\}/)?.[0];
+    expect(rule).toBeTruthy();
+    return rule!;
+  }
+
+  function formatDownloadBtnFocusVisibleRule(): string {
+    const rule = scss.match(
+      /\.format-download-btn\.mat-mdc-icon-button:focus-visible\s*\{[^}]+\}/,
+    )?.[0];
+    expect(rule).toBeTruthy();
+    return rule!;
+  }
+
   it('declares a light-strip focus token and routes the ring through it', () => {
     expect(scss).toMatch(/--document-viewer-focus-on-light-surface:\s*#[0-9a-f]{6}/i);
-    expect(scss).toMatch(
-      /\.format-download-btn\.mat-mdc-icon-button:focus[\s\S]*var\(--document-viewer-focus-on-light-surface\)/,
-    );
-    expect(scss).not.toMatch(
-      /\.format-download-btn\.mat-mdc-icon-button:focus[\s\S]*--mat-sys-primary/,
-    );
+    const focusRule = formatDownloadBtnFocusRule();
+    expect(focusRule).toMatch(/var\(--document-viewer-focus-on-light-surface\)/);
+    expect(focusRule).not.toMatch(/--mat-sys-primary/);
+    const focusVisibleRule = formatDownloadBtnFocusVisibleRule();
+    expect(focusVisibleRule).toMatch(/var\(--document-viewer-focus-on-light-surface\)/);
+    expect(focusVisibleRule).not.toMatch(/--mat-sys-primary/);
   });
 
   it('declares standalone :focus and :focus-visible rings on .format-download-btn.mat-mdc-icon-button', () => {
@@ -27,12 +41,13 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     expect(scss).toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus\s*\{/);
     expect(scss).not.toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus,\s/);
     expect(scss).not.toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus-visible,\s/);
-    expect(scss).toMatch(
-      /\.format-download-btn\.mat-mdc-icon-button:focus[\s\S]*outline:\s*2px\s+solid/,
-    );
-    expect(scss).toMatch(
-      /\.format-download-btn\.mat-mdc-icon-button:focus[\s\S]*outline-offset:\s*2px/,
-    );
-    expect(scss).toMatch(/NXSAT-505/);
+
+    const focusRule = formatDownloadBtnFocusRule();
+    expect(focusRule).toMatch(/outline:\s*2px\s+solid/);
+    expect(focusRule).toMatch(/outline-offset:\s*2px/);
+
+    const focusVisibleRule = formatDownloadBtnFocusVisibleRule();
+    expect(focusVisibleRule).toMatch(/outline:\s*2px\s+solid/);
+    expect(focusVisibleRule).toMatch(/outline-offset:\s*2px/);
   });
 });

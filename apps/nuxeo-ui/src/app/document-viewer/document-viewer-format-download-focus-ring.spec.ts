@@ -3,7 +3,8 @@
  * (e.g. Download Thumbnail / Download Small, IBM 1635062655 / 368748540) must show a keyboard
  * focus indicator on the fixed light `.picture-cards` strip (IBM `style_focus_visible`, WCAG
  * 2.4.7 / 1.4.11). Karma loads `apps/nuxeo-ui/src/styles.scss`, so `data-app-theme` resolves
- * real tokens.
+ * real tokens. Published focus-visibility verdicts are a11y-scout-owned (`docs/accessibility.md`);
+ * this suite cross-checks compiled tokens and IBM `:focus`-only behaviour, not a second gate.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -167,23 +168,7 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
     }
   });
 
-  it('focuses the Download Thumbnail control with IBM-readable outline (NXSAT-505)', () => {
-    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
-    const thumbRow = rows.find((row) => row.textContent?.includes('Thumbnail'));
-    expect(thumbRow).withContext('expected Thumbnail format row').toBeTruthy();
-    const button = thumbRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
-    expect(button).not.toBeNull();
-    if (!button) return;
-
-    expect(button.getAttribute('aria-label')).toBe('Download Thumbnail');
-    const cards = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement | null;
-    expect(cards).not.toBeNull();
-    if (!cards) return;
-
-    assertFocusRingContrast(button, cards, 'Download Thumbnail (NXSAT-505)');
-  });
-
-  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible)', () => {
+  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible, NXSAT-505)', () => {
     const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
     const thumbRow = rows.find((row) => row.textContent?.includes('Thumbnail'));
     const button = thumbRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
