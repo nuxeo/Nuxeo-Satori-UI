@@ -1,6 +1,7 @@
 /**
- * NXSAT-496 — footer icon buttons (Preview, Download, …) must show a keyboard focus indicator
- * on the fixed light `.viewer-footer` strip (IBM `style_focus_visible` / 1425495611, WCAG 2.4.7).
+ * NXSAT-496 / NXSAT-520 — footer icon buttons (Preview, Download, …) must show a keyboard focus
+ * indicator on the fixed light `.viewer-footer` strip (IBM `style_focus_visible` / 1425495611,
+ * 1924385914, WCAG 2.4.7).
  *
  * Runtime focus visibility and per-theme contrast:
  * `apps/nuxeo-ui/.../document-viewer-footer-focus-ring.spec.ts`.

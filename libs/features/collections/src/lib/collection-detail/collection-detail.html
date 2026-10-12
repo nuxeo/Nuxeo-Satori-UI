@@ -88,6 +88,29 @@
         >
           <mat-icon>download</mat-icon>
         </button>
+        @if (showsLockAction()) {
+          <!-- An icon button rather than a menu item: `disabledInteractive` keeps a reader's
+               disabled Unlock focusable, so "Locked by …" is reachable from the keyboard, which a
+               disabled menu item is not. -->
+          <button
+            mat-icon-button
+            type="button"
+            data-testid="collection-lock-toggle"
+            (click)="toggleLock()"
+            [disabled]="actionInProgress() === 'lock' || !canEditCollection()"
+            disabledInteractive
+            [class.lock-toggle--active]="isLocked() && canEditCollection()"
+            [matTooltip]="
+              lockTooltip() ??
+              (isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate))
+            "
+            [attr.aria-label]="
+              isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate)
+            "
+          >
+            <mat-icon>{{ isLocked() ? 'lock' : 'lock_open' }}</mat-icon>
+          </button>
+        }
         <button
           mat-icon-button
           [matMenuTriggerFor]="moreMenu"
@@ -128,12 +151,6 @@
             isInClipboard()
               ? ('collections.remove-from-clipboard' | translate)
               : ('collections.add-to-clipboard' | translate)
-          }}</span>
-        </button>
-        <button mat-menu-item (click)="toggleLock()" [disabled]="actionInProgress() === 'lock'">
-          <mat-icon>{{ isLocked() ? 'lock_open' : 'lock' }}</mat-icon>
-          <span>{{
-            isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate)
           }}</span>
         </button>
         <button

@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Dismiss",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "Document already locked by another user, please refresh your page.",
+      "lock-no-permission": "You don't have permission to lock this document.",
+      "locked-by": "Locked by {{ owner }} on {{ date }}",
+      "locked-by-another-user": "You can't unlock this document because it is locked by another user.",
+      "unlock-no-permission": "You don't have permission to unlock this document."
+    },
     "ok": "OK",
     "page-number": "Page {{ page }}",
     "page-of": "Page {{ page }} of {{ total }}",
