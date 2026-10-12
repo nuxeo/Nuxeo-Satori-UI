@@ -2,5 +2,5 @@
 // WCAG 2.5.3 label-in-name). Material Icons font, same approach as detail-header-go-back-icon.
 .prop-field--tags .tags-suggestion-field button[matChipRemove] mat-icon.detail-tag-chip-remove-icon::before {
   content: '\e5c9';
-  font: 14px/1 'Material Icons';
+  font: 14px/1 'Material Icons', sans-serif;
 }
