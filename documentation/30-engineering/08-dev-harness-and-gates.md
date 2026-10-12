@@ -3,19 +3,20 @@ title: Dev Harness & Gates
 parent: Engineering
 order: 8
 last_reviewed: 2026-10-12
-repo_commit: 67f53038
+repo_commit: 014e2dea
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `67f53038` (`fix/nxsat-628`) for the
+> **Last reviewed:** 2026-10-12 · **Repository:** `014e2dea` (`fix/nxsat-628`) for the
 > `checkNoTranslatableDatePatterns` row of §2 **only** — added by NXSAT-628 and verified against
-> `GUARDRAILS` and its **17** controls (10 negative, 7 positive) in
-> `review-guardrails.selftest.mjs` at that commit. `67f53038` is cited rather than the revision
+> `GUARDRAILS` and its **19** controls (12 negative, 7 positive) in
+> `review-guardrails.selftest.mjs` at that commit. `014e2dea` is cited rather than the revision
 > that first added the row, because the row's guarantee was not fully enforced until the
-> single-field, multiline, non-ASCII, long-pattern, quoted-literal and nested-call cases were
-> closed — a stamp naming an earlier commit would have vouched for a gate that did not yet hold.
+> single-field, multiline, non-ASCII, long-pattern, quoted-literal, nested-call, digit-in-literal
+> and quoted-parenthesis cases were closed — a stamp naming an earlier commit would have vouched
+> for a gate that did not yet hold.
 > Nothing else on this page was re-read at that revision, so the two entries below still stand
 > for the rest of it.
 >
