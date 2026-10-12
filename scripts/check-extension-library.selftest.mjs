@@ -178,7 +178,121 @@ expectGreen(
   /registers the component 'acme\.panel\.claims' in a shape this check does not read/,
 );
 
+const BARREL_LAZY =
+  "'acme.panel.claims': () => import('./claims').then((m) => m.AcmeClaimsComponent),";
+
+expectGreen(
+  'a lazy import of a barrel that re-exports the class',
+  library({
+    'src/lib/extensions.ts': extensions(BARREL_LAZY),
+    'src/lib/claims/index.ts': "export { AcmeClaimsComponent } from './claims';\n",
+  }),
+  /1 component registration\(s\)/,
+);
+
+expectGreen(
+  "an eager import through a barrel's `export *`",
+  library({
+    'src/lib/extensions.ts':
+      "import { AcmeClaimsComponent } from './claims';\n" +
+      extensions("'acme.panel.claims': AcmeClaimsComponent,"),
+    'src/lib/claims/index.ts': "export * from './claims';\n",
+  }),
+  /1 component registration\(s\)/,
+);
+
+expectGreen(
+  'an eager import under an alias',
+  library({
+    'src/lib/extensions.ts':
+      "import { ClaimsPanelComponent as AcmeClaimsComponent } from './claims/claims';\n" +
+      extensions("'acme.panel.claims': AcmeClaimsComponent,"),
+    'src/lib/claims/claims.ts': panel({ className: 'ClaimsPanelComponent' }),
+  }),
+  /1 component registration\(s\)/,
+);
+
+expectGreen(
+  'a components object with plain keys is not read as registrations',
+  library({
+    'src/lib/layout.ts':
+      "import { AcmeHeaderComponent } from './header';\n" +
+      'export const LAYOUT = { components: { header: AcmeHeaderComponent } };\n',
+    'src/lib/header.ts': panel({ selector: 'app-header', className: 'AcmeHeaderComponent' }),
+  }),
+  /1 component registration\(s\)/,
+);
+
 // ---------------------------------------------------------------- negatives ----
+
+expectRed(
+  'a typed contributions constant in a file of its own, with a wrong path',
+  library({
+    'src/lib/contributions.ts':
+      "import type { SatoriExtensionContributions } from '@nuxeo-satori/platform/extensions';\n" +
+      'export const ACME_CONTRIBUTIONS: SatoriExtensionContributions = {\n' +
+      "  rules: { 'acme.rules.isLegal': () => false },\n" +
+      "  failClosedRules: ['acme.rules.isLegal'],\n" +
+      "  components: { 'acme.panel.claims': () => import('./claim/claims').then((m) => m.AcmeClaimsComponent) },\n" +
+      '};\n',
+    'src/lib/extensions.ts':
+      "import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ACME_CONTRIBUTIONS } from './contributions';\n" +
+      'export const provideAcme = () => provideSatoriExtensions(ACME_CONTRIBUTIONS);\n',
+  }),
+  /contributions\.ts registers 'acme\.panel\.claims' from '\.\/claim\/claims', which is not a file/,
+);
+
+expectRed(
+  'a component re-exported through a barrel, under the platform selector prefix',
+  library({
+    'src/lib/extensions.ts': extensions(BARREL_LAZY),
+    'src/lib/claims/index.ts': "export { AcmeClaimsComponent } from './claims';\n",
+    'src/lib/claims/claims.ts': panel({ selector: 'nxs-claims' }),
+  }),
+  /claims\/claims\.ts declares selector `nxs-claims`/,
+);
+
+expectRed(
+  'an aliased import of a name the file does not export',
+  library({
+    'src/lib/extensions.ts':
+      "import { AcmeClaimComponent as AcmeClaimsComponent } from './claims/claims';\n" +
+      extensions("'acme.panel.claims': AcmeClaimsComponent,"),
+  }),
+  /as `AcmeClaimComponent`, which .*claims\.ts does not export/,
+);
+
+expectRed(
+  'a barrel that re-exports the class as a type only',
+  library({
+    'src/lib/extensions.ts': extensions(BARREL_LAZY),
+    'src/lib/claims/index.ts': "export type { AcmeClaimsComponent } from './claims';\n",
+  }),
+  /as `AcmeClaimsComponent`, which .*claims\/index\.ts does not export/,
+);
+
+expectRed(
+  'a cycle of star re-exports that never reaches the class',
+  library({
+    'src/lib/extensions.ts': extensions(BARREL_LAZY),
+    'src/lib/claims/index.ts': "export * from './more';\n",
+    'src/lib/claims/more.ts': "export * from './index';\n",
+  }),
+  /as `AcmeClaimsComponent`, which .*claims\/index\.ts does not export/,
+);
+
+expectRed(
+  'an override re-exported through a barrel that does not implement its contract',
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag': () => import('./claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/index.ts': "export { AcmeClaimsComponent } from './claims';\n",
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+  }),
+  /but `AcmeClaimsComponent` does not implement `NxsTagInputs`/,
+);
 
 expectRed(
   'a library that only overrides a primitive, under the platform selector prefix',

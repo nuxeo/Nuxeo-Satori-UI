@@ -368,7 +368,11 @@ the focused document as a `document` input. Their state and descriptor fields ar
 
 ### What the guardrail checks about a component you contribute
 
-`check-extension-library.mjs` (§4) fails a component registration that:
+`check-extension-library.mjs` (§4) reads a registration written as
+`'id': () => import('./x').then((m) => m.X)`, or as `'id': X` with `X` imported by name — aliased
+or not — from a relative path. `X` may come through your own `index.ts` re-exports. It reads every
+`components: { … }` object in your library, including one whose keys are quoted but which is
+not a registration, so give an object like that plain keys. It fails a registration it reads that:
 
 - **does not resolve** — an `import()` path that is not a file in your library, or a class name
   the file does not export. The registry swallows a failed load, so this is otherwise a blank
@@ -379,3 +383,7 @@ the focused document as a `document` input. Their state and descriptor fields ar
 - **overrides an `nxs.primitives.*` ID without implementing its contract** — the interface
   imported from `@nuxeo-satori/platform/components`, not a same-named one of your own — or one that
   does not exist.
+
+Any other shape — a class declared in the same file, a default or namespace import, a class from
+another package — gets a warning that **none of these checks ran on it**, and the command still
+exits 0. Treat that warning as a failure, or rewrite the registration in one of the two shapes.

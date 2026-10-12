@@ -36,7 +36,8 @@
  *    depends on a name that should stay free to change.
  * 6. **Each registered component resolves, is named by a spec, uses the owner's selector
  *    prefix, and implements the contract of any `nxs.primitives.*` ID it overrides.** The
- *    registry swallows a failed load, so a wrong path is a blank slot with no error.
+ *    registry swallows a failed load, so a wrong path is a blank slot with no error. A
+ *    registration in a shape it does not read is a warning, and none of those checks runs on it.
  *
  * Exit code 0 = pass, 1 = at least one failure. Warnings do not fail.
  */
@@ -333,8 +334,15 @@ if (!barrel) {
  *   that does not `implements` the interface renders with the wrong inputs, and nothing fails.
  *
  * Registrations are read from each `components: { … }` object literal, in the two shapes the
- * contract uses: `'id': () => import('./x').then((m) => m.X)` and `'id': X` with `X` imported
- * from a relative path. A registration in neither shape is a warning, so it is seen, not skipped.
+ * contract uses: `'id': () => import('./x').then((m) => m.X)` and `'id': X` with `X` imported by
+ * name, aliased or not, from a relative path. A registration in neither shape is a warning, so it
+ * is seen, not skipped — but none of these checks runs on it.
+ *
+ * Every such object, not only the one written inside `provideSatoriExtensions(…)`: contributions
+ * are as often a typed `SatoriExtensionContributions` constant declared in a file of their own,
+ * and a scan scoped to the call would skip those without a word. The cost is that an unrelated
+ * `components` object with quoted keys is read as registrations, loudly; one with plain keys, the
+ * usual way to write it, is not read at all.
  */
 const PRIMITIVE_CONTRACTS = {
   avatar: 'NxsAvatarInputs',
@@ -369,6 +377,50 @@ function resolveRelative(fromFile, specifier) {
   return null;
 }
 
+/**
+ * The class `name`, as `file` exports it: `{ file, name }` where it is declared, or `null`.
+ *
+ * Follows what a barrel does to a class on its way out — `export { X } from`, `export { Y as X }
+ * from`, `export * from` and a local `export { Y as X }` — so a registration through an `index.ts`
+ * is checked against the class itself, and its selector and contract are read from the file that
+ * declares it. A type-only export is not a value, so it is not followed. Bounded, so a cycle ends.
+ */
+function declaration(file, name, depth = 0) {
+  const text = sources.get(file);
+  if (text === undefined || depth > 8) return null;
+  if (new RegExp(String.raw`export\s+class\s+${name}\b`).test(text)) {
+    return { file, name };
+  }
+  for (const m of text.matchAll(/export\s*\{([^}]*)\}(?:\s*from\s*['"]([^'"]+)['"])?/g)) {
+    const binding = bindings(m[1]).find(({ local }) => local === name);
+    if (!binding) continue;
+    if (!m[2]) {
+      const local = new RegExp(String.raw`\bclass\s+${binding.imported}\b`).test(text);
+      return local ? { file, name: binding.imported } : null;
+    }
+    const next = m[2].startsWith('.') ? resolveRelative(file, m[2]) : null;
+    return next && declaration(next, binding.imported, depth + 1);
+  }
+  for (const m of text.matchAll(/export\s+\*\s+from\s+['"](\.[^'"]*)['"]/g)) {
+    const next = resolveRelative(file, m[1]);
+    const found = next && declaration(next, name, depth + 1);
+    if (found) return found;
+  }
+  return null;
+}
+
+/** `A, B as C, type D` → `[{ imported: 'A', local: 'A' }, { imported: 'B', local: 'C' }]`. */
+function bindings(clause) {
+  return clause
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part && !/^type\s/.test(part))
+    .map((part) => {
+      const [imported, local = imported] = part.split(/\s+as\s+/).map((s) => s.trim());
+      return { imported, local };
+    });
+}
+
 const KEY = String.raw`(\[(?:[^\[\]]|\[[^\]]*\])+\]|['"\x60][^'"\x60]+['"\x60])`;
 const LAZY = new RegExp(
   String.raw`${KEY}\s*:\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)\s*\.then\(\s*\(?\s*(\w+)\s*\)?\s*=>\s*\3\.(\w+)\s*\)`,
@@ -387,6 +439,7 @@ for (const [file, text] of code) {
         file,
         key: m[1],
         className: m[4],
+        exported: m[4],
         target: resolveRelative(file, m[2]),
         from: m[2],
       });
@@ -394,23 +447,25 @@ for (const [file, text] of code) {
     for (const m of body.matchAll(EAGER)) {
       if (seenKeys.has(m[1])) continue;
       const imported = new RegExp(
-        String.raw`import\s*(?:type\s*)?\{[^}]*\b${m[2]}\b[^}]*\}\s*from\s*['"]([^'"]+)['"]`,
+        String.raw`import\s*(?:type\s*)?\{([^}]*\b${m[2]}\b[^}]*)\}\s*from\s*['"]([^'"]+)['"]`,
       ).exec(text);
+      const binding = imported && bindings(imported[1]).find(({ local }) => local === m[2]);
       // Only a named import is read. A default or namespace import, a class declared in this file
       // or one from another package stays unseen, so the warning below names it.
-      if (!imported) continue;
-      if (imported[1].startsWith('@nuxeo-satori/platform')) {
+      if (!binding) continue;
+      if (imported[2].startsWith('@nuxeo-satori/platform')) {
         seenKeys.add(m[1]); // a platform class, re-registered
         continue;
       }
-      if (!imported[1].startsWith('.')) continue;
+      if (!imported[2].startsWith('.')) continue;
       seenKeys.add(m[1]);
       contributions.push({
         file,
         key: m[1],
         className: m[2],
-        target: resolveRelative(file, imported[1]),
-        from: imported[1],
+        exported: binding.imported,
+        target: resolveRelative(file, imported[2]),
+        from: imported[2],
       });
     }
     for (const m of body.matchAll(ANY_ENTRY)) {
@@ -425,7 +480,7 @@ for (const [file, text] of code) {
 }
 
 const specText = specs.map(([, text]) => text).join('\n');
-for (const { file, key, className, target, from } of contributions) {
+for (const { file, key, className, exported, target, from } of contributions) {
   const where = `${rel(file)} registers ${key}`;
   if (!target) {
     fail(
@@ -434,16 +489,17 @@ for (const { file, key, className, target, from } of contributions) {
     );
     continue;
   }
-  const componentSource = sources.get(target) ?? '';
-  if (!new RegExp(String.raw`export\s+class\s+${className}\b`).test(componentSource)) {
+  const declared = declaration(target, exported);
+  if (!declared) {
     fail(
-      `${where} as \`${className}\`, which ${rel(target)} does not export. The registry swallows ` +
+      `${where} as \`${exported}\`, which ${rel(target)} does not export. The registry swallows ` +
         'the failed load, so the slot renders nothing and nothing reports it.',
     );
     continue;
   }
+  const componentSource = sources.get(declared.file);
   const keyText = key.replace(/^['"\x60]|['"\x60]$/g, '');
-  const named = [keyText, key.replace(/^\[|\]$/g, ''), className].some(
+  const named = [keyText, key.replace(/^\[|\]$/g, ''), className, declared.name].some(
     (token) => token && specText.includes(token),
   );
   if (!named) {
@@ -460,7 +516,7 @@ for (const { file, key, className, target, from } of contributions) {
     owner && !selector?.startsWith(`${owner}-`) && !selector?.startsWith(`[${owner}`);
   if (selector && (reserved || notOwners)) {
     fail(
-      `${rel(target)} declares selector \`${selector}\`. Use your owner prefix` +
+      `${rel(declared.file)} declares selector \`${selector}\`. Use your owner prefix` +
         `${owner ? `, \`${owner}-\`` : ''}: ` +
         '`nxs-` is the platform component library and `lib-`, `app-` and `sat-` its shell and ' +
         'design system, so a selector under them collides on an upgrade.',
@@ -473,7 +529,7 @@ for (const { file, key, className, target, from } of contributions) {
   const contract = primitive && PRIMITIVE_CONTRACTS[primitive];
   const implementsContract =
     contract &&
-    new RegExp(String.raw`class\s+${className}\b[^{]*\bimplements\b[^{]*\b${contract}\b`).test(
+    new RegExp(String.raw`class\s+${declared.name}\b[^{]*\bimplements\b[^{]*\b${contract}\b`).test(
       componentSource,
     ) &&
     // The platform's interface, not a same-named one declared locally or taken from elsewhere.
@@ -484,7 +540,7 @@ for (const { file, key, className, target, from } of contributions) {
     fail(`${where}, but the platform has no \`nxs.primitives.${primitive}\` to override.`);
   } else if (contract && !implementsContract) {
     fail(
-      `${where}, overriding a platform primitive, but \`${className}\` does not implement ` +
+      `${where}, overriding a platform primitive, but \`${declared.name}\` does not implement ` +
         `\`${contract}\` from '@nuxeo-satori/platform/components'. A host passes that interface's ` +
         'inputs and the outlet drops any the component does not declare, so it would render with ' +
         'the wrong inputs and nothing would fail.',

@@ -296,6 +296,24 @@ describe('satori-component generator', () => {
     ).rejects.toThrow(/nxs\.tabs\.claimSummary is already registered/);
   });
 
+  it('refuses a name whose class another slot already registers, changing nothing', async () => {
+    await generate(tree, { name: 'foo-1', slot: 'tabs' });
+    const before = [PROVIDER, BARREL, REFERENCE, COMPARISON].map((file) => read(tree, file));
+    await expect(satoriComponentGenerator(tree, { name: 'foo1', slot: 'sidebar' })).rejects.toThrow(
+      /already names NxsFoo1Component/,
+    );
+    expect([PROVIDER, BARREL, REFERENCE, COMPARISON].map((file) => read(tree, file))).toEqual(
+      before,
+    );
+    expect(tree.exists(`${ROOT}/src/lib/foo1`)).toBe(false);
+  });
+
+  it('refuses a name whose class the library already has', async () => {
+    await expect(satoriComponentGenerator(tree, { name: 'tag', slot: 'tabs' })).rejects.toThrow(
+      `${PROVIDER} already names NxsTagComponent`,
+    );
+  });
+
   it('refuses a workspace without the nxs- library, pointing a customer elsewhere', async () => {
     const empty = createTreeWithEmptyWorkspace();
     await expect(satoriComponentGenerator(empty, { name: 'x', slot: 'tabs' })).rejects.toThrow(

@@ -210,6 +210,16 @@ export default async function satoriComponentGenerator(tree: Tree, options: Sato
   if (tree.exists(dir)) {
     throw new Error(`${dir} already exists. Choose another name, or delete the directory.`);
   }
+  // `foo-1` and `foo1` share a class name. In different slots their IDs and directories differ,
+  // so neither check above sees the second import of the same class.
+  for (const file of [provider, barrel]) {
+    if (new RegExp(String.raw`\b${className}\b`).test(tree.read(file, 'utf-8') ?? '')) {
+      throw new Error(
+        `${file} already names ${className}, and "${options.name}" would import it a second ` +
+          'time, so the library would not typecheck. Choose another name.',
+      );
+    }
+  }
 
   generateFiles(tree, join(__dirname, 'files'), `${root}/src/lib`, {
     ...name,
