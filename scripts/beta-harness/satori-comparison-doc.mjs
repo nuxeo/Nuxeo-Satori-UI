@@ -9,15 +9,18 @@
  * ships. Both are easy to miss in review, because the page lives outside the repository.
  *
  * So this reads the barrel, the registrations and the stories, and fails when:
- *   - a component exported from `libs/shared/satori-components/src/index.ts` has no section, or a
- *     section names a component the barrel does not export;
+ *   - a component the barrel `libs/shared/satori-components/src/index.ts` ships has no section, or a
+ *     section names a component it does not ship. It ships a component by exporting it, or by
+ *     exporting a module that opens it — `NxsToastService` opens `NxsToastComponent`, which no
+ *     template names;
  *   - a Satori variant registered by `provideNxsSatoriComponents()` is not named by a section, or a
  *     section says "Satori's own component" for a component Satori does not re-register;
  *   - a section's registered ID is not the ID something registers *that* component under — every
  *     registration of an exported component is read, `provideNxsComponents()` and the
  *     application's alike, and a component nothing registers must say "—";
- *   - a section's story is not a story *of* that component: either its Storybook meta names the
- *     component, or it renders the component's registered ID through an extension outlet;
+ *   - a section's story is not a story *of* that component: its Storybook meta names the component,
+ *     it renders the component's registered ID through an extension outlet, or it imports the
+ *     module that opens it;
  *   - a section says Satori renders an element its wrapper's template does not;
  *   - a section's image file name disagrees with the code;
  *   - the "All components" table and the sections disagree;
@@ -107,7 +110,8 @@ const isSeparator = (row) => row.every((c) => /^:?-{2,}:?$/.test(c));
 /* ------------------------------------------------------------------- the code side ---- */
 
 /**
- * The value exports of the barrel whose names end in `Component`, with the module each comes from.
+ * The value exports of the barrel whose names end in `Component`, with the module each comes from,
+ * and the modules of its other value exports, which can ship a component the barrel never names.
  * `export *` is refused rather than followed: it would hide components from this check.
  */
 export function barrelComponents(source) {
@@ -116,6 +120,7 @@ export function barrelComponents(source) {
     problems.push(`${BARREL} uses \`export *\`; export components by name so this check sees them`);
   }
   const components = [];
+  const otherModules = new Set();
   for (const m of source.matchAll(/export\s+(type\s+)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g)) {
     if (m[1]) continue;
     for (const raw of m[2].split(',')) {
@@ -126,14 +131,55 @@ export function barrelComponents(source) {
         .pop()
         .trim();
       if (/Component$/.test(name)) components.push({ name, from: m[3] });
+      else otherModules.add(m[3]);
     }
   }
-  return { components, problems };
+  return { components, otherModules: [...otherModules], problems };
 }
 
 function read(root, rel) {
   const abs = join(root, rel);
   return existsSync(abs) ? readFileSync(abs, 'utf8') : null;
+}
+
+/**
+ * The relative modules a file imports values from, as `module path from the root → names`.
+ * `import type` and `type` specifiers are left out: a type cannot open a component.
+ */
+function relativeImports(file, source) {
+  const found = new Map();
+  for (const m of (source ?? '').matchAll(
+    /import\s+(type\s+)?\{([^}]*)\}\s*from\s*['"](\.\.?\/[^'"]+)['"]/g,
+  )) {
+    if (m[1]) continue;
+    const names = m[2]
+      .split(',')
+      .map((s) => s.trim())
+      .filter((s) => s && !s.startsWith('type '))
+      .map((s) => s.split(/\s+as\s+/)[0].trim());
+    const module = join(dirname(file), m[3]);
+    found.set(module, [...(found.get(module) ?? []), ...names]);
+  }
+  return found;
+}
+
+/**
+ * The components a barrel module ships without the barrel naming them: the `Nxs…Component` classes
+ * it imports. `NxsToastService` opens `NxsToastComponent` this way, and a page never names it.
+ */
+function openedComponents(root, otherModules, named) {
+  const seen = new Set(named.map((c) => c.name));
+  const opened = [];
+  for (const from of otherModules) {
+    const via = join(dirname(BARREL), from);
+    for (const [module, names] of relativeImports(via, read(root, `${via}.ts`))) {
+      for (const name of names.filter((n) => /^Nxs\w+Component$/.test(n) && !seen.has(n))) {
+        seen.add(name);
+        opened.push({ name, from: relative(dirname(BARREL), module), via });
+      }
+    }
+  }
+  return opened;
 }
 
 function walk(root, rel, keep) {
@@ -219,8 +265,9 @@ function renderedIds(source, ids) {
 
 /**
  * Every story a library's Storybook serves, by the ID Storybook computes, with what the story is
- * *of*: the component its meta names, and the registered IDs it renders through an outlet. A story
- * ID that merely exists says nothing about which component a section's screenshot will show.
+ * *of*: the component its meta names, the registered IDs it renders through an outlet, and the
+ * modules it imports. A story ID that merely exists says nothing about which component a section's
+ * screenshot will show.
  */
 function stories(root, src, ids) {
   const found = new Map();
@@ -236,6 +283,7 @@ function stories(root, src, ids) {
     const of = {
       component: /\bcomponent:\s*(\w+Component)\b/.exec(meta)?.[1] ?? null,
       renders: renderedIds(source, ids),
+      imports: new Set(relativeImports(file, source).keys()),
       file,
     };
     for (const m of source.matchAll(/^export const (\w+)\s*[:=]/gm)) {
@@ -256,7 +304,8 @@ export function readInputs(root = ROOT, overrides = {}) {
   const barrel = overrides.barrel ?? read(root, BARREL) ?? '';
   const doc = overrides.doc ?? read(root, DOC);
   const ids = idConstants(root);
-  const { components, problems: barrelProblems } = barrelComponents(barrel);
+  const { components: named, otherModules, problems: barrelProblems } = barrelComponents(barrel);
+  const components = [...named, ...openedComponents(root, otherModules, named)];
   const selectors = new Map();
   for (const c of components) {
     const file = resolve(root, dirname(BARREL), `${c.from}.ts`);
@@ -486,7 +535,10 @@ export function checkComparison(inputs) {
       continue;
     }
     if (!exported.has(component)) {
-      fail(`${where} names ${component}, which ${BARREL} does not export — remove the section`);
+      fail(
+        `${where} names ${component}, which ${BARREL} does not export, nor open through a module ` +
+          'it exports — remove the section',
+      );
       continue;
     }
     if (documented.has(component)) {
@@ -555,9 +607,10 @@ export function checkComparison(inputs) {
     const [story = null, satoriStory = null, ...extraStories] = ticks(
       s.fields.get('Storybook story') ?? '',
     );
-    // A story *of* this component: its Storybook meta names it, or it renders the ID the component
-    // is registered under. A story ID that merely exists would picture some other component.
-    const storyProblem = (id, src, served, wanted) => {
+    // A story *of* this component: its Storybook meta names it, it renders the ID the component
+    // is registered under, or it imports the module that opens it. A story ID that merely exists
+    // would picture some other component.
+    const storyProblem = (id, src, served, wanted, via = null) => {
       const of = served.get(id);
       if (!of) return `story ${id} is not a story in ${src}`;
       if (of.component) {
@@ -566,13 +619,17 @@ export function checkComparison(inputs) {
           : `story ${id} renders ${of.component}, not ${wanted}`;
       }
       if (registeredId && of.renders.has(registeredId)) return null;
+      if (via && of.imports.has(via)) return null;
+      if (via) {
+        return `story ${id} names no component of its own and does not import ${via}, which opens ${wanted}`;
+      }
       return (
         `story ${id} names no component of its own and renders ` +
         (registeredId ? `no ${registeredId}` : 'by registered ID, which this section has none of')
       );
     };
     const storyFault = story
-      ? storyProblem(story, BASE_SRC, inputs.baseStories, component)
+      ? storyProblem(story, BASE_SRC, inputs.baseStories, component, exported.get(component).via)
       : `story (none) is not a story in ${BASE_SRC}`;
     if (storyFault) fail(`${where} ${storyFault}`);
     if (own) {
@@ -626,7 +683,8 @@ export function checkComparison(inputs) {
   for (const c of inputs.components) {
     if (!documented.has(c.name)) {
       fail(
-        `${c.name} is exported from ${BARREL} but has no section in ${DOC}. Add one under ` +
+        `${c.name} is exported from ${BARREL}${c.via ? `, opened by ${c.via},` : ''} ` +
+          `but has no section in ${DOC}. Add one under ` +
           `"## ${COMPONENTS_HEADING}" and a row under "## ${SUMMARY_HEADING}", then run ` +
           '`npm run docs:satori-comparison:capture` and `npm run docs:satori-comparison:publish`.',
       );

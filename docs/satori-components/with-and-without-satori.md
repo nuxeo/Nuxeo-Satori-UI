@@ -6,9 +6,9 @@ title: 'Satori components: with and without Satori access'
 Source of the Confluence page of the same title; docs/satori-components/with-and-without-satori.confluence.json
 names the page. Publishing replaces the page, so edit here, never there.
 
-Every component exported from libs/shared/satori-components/src/index.ts needs a section under
-"Side by side" and a row under "All components"; `npm run docs:satori-comparison:check` fails CI
-otherwise. The images are not committed: `npm run docs:satori-comparison:capture` renders them
+Every component exported from libs/shared/satori-components/src/index.ts, or opened by something
+it exports (the toast, through NxsToastService), needs a section under "Side by side" and a row
+under "All components"; `npm run docs:satori-comparison:check` fails CI otherwise. The images are not committed: `npm run docs:satori-comparison:capture` renders them
 into the evidence folder, and `npm run docs:satori-comparison:publish` attaches them to the page.
 On GitHub they show as missing images, by design.
 -->
@@ -209,6 +209,21 @@ The same icon, heading, message and projected action in both; the theme sets the
 
 The same Material progress spinner in both, in the theme's primary colour. The capture stops its animation, so it shows as a still arc.
 
+### Toast
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsToastComponent`              |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `states-toast--error-with-retry` |
+
+![Toast: without Satori on the left, with Satori on the right](toast-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same toast in both: the message, a Retry button and a Dismiss button. A page never places it in a template; it calls `NxsToastService`, which is what the library exports, and the toast opens at the bottom of the window. The theme sets its colours, type and button styles.
+
+This is the error toast. Because it carries a button it stays until dismissed, and screen readers announce it straight away; a toast without a button closes after four seconds.
+
 ### Column picker
 
 | Field           | Value                                       |
@@ -315,6 +330,7 @@ The components in the library today:
 | Domain hint        | —                                                                                                                       | Same component; theme only   |
 | Empty state        | —                                                                                                                       | Same component; theme only   |
 | Spinner            | —                                                                                                                       | Same component; theme only   |
+| Toast              | —                                                                                                                       | Same component; theme only   |
 | Column picker      | —                                                                                                                       | Same component; theme only   |
 | Permissions panel  | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
 | Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |

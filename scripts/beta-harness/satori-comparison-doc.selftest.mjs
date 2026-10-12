@@ -94,6 +94,27 @@ const NEGATIVE = [
     /names NxsIconComponent, which .* does not export/,
   ],
   [
+    'a component an exported service opens, with no section',
+    { doc: withoutSection(doc, 'Toast') },
+    /NxsToastComponent is exported from .*, opened by .*toast\.service, but has no section/,
+  ],
+  [
+    'a section for a component whose opening service the barrel no longer exports',
+    { barrel: barrel.replace(/export \{[^}]*\} from '\.\/lib\/toast\/toast\.service';\n/, '') },
+    /names NxsToastComponent, which .* does not export, nor open/,
+  ],
+  [
+    'a story that neither names nor opens the component a service opens',
+    {
+      doc: swap(
+        doc,
+        '`states-toast--error-with-retry`',
+        '`primitives-by-registered-id--material-registration`',
+      ),
+    },
+    /names no component of its own and does not import .*toast\.service, which opens NxsToastComponent/,
+  ],
+  [
     'a Satori variant no section names',
     { doc: withoutSection(doc, 'Avatar') },
     /Satori variant NxsSatoriAvatarComponent .* is not named/,
