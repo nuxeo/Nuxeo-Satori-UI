@@ -223,7 +223,7 @@
     <div class="results-loading">
       <nxs-spinner diameter="32" [label]="'search.search.loading' | translate" />
     </div>
-  } @else if (error(); as message) {
+  } @else if (resultsError(); as message) {
     <nxs-error-state
       [status]="errorStatus()"
       [heading]="message"
@@ -232,7 +232,7 @@
     />
   }
 
-  @if (!busy() && !error() && viewMode() === 'grid') {
+  @if (!busy() && !resultsError() && viewMode() === 'grid') {
     <div class="grid-container">
       <div class="grid-action-bar">
         <div class="grid-actions-left">
@@ -326,7 +326,7 @@
     </div>
   }
 
-  @if (!busy() && !error() && viewMode() === 'table') {
+  @if (!busy() && !resultsError() && viewMode() === 'table') {
     <div class="list-wrapper">
       @if (columnPanelOpen()) {
         <nxs-column-picker
@@ -422,7 +422,7 @@
     </div>
   }
 
-  @if (!busy() && !error() && viewMode() === 'list') {
+  @if (!busy() && !resultsError() && viewMode() === 'list') {
     <div class="list-action-bar">
       <div class="list-actions-left">
         <mat-select

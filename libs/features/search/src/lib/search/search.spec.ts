@@ -1062,6 +1062,36 @@ describe('SearchComponent', () => {
       expect((fixture.nativeElement as HTMLElement).querySelector('nxs-error-state')).toBeNull();
     });
 
+    it("shows a successful AI search's results over the standard search that failed", async () => {
+      mockSearchService.search.mockReturnValue(throwError(() => ({ status: 500 })));
+      await renderPage();
+      const el = fixture.nativeElement as HTMLElement;
+      expect(el.querySelector('nxs-error-state')).not.toBeNull();
+
+      mockAiGatewayService.nlToNxql.mockReturnValue(
+        of({ nxql: 'SELECT * FROM Document', explanation: 'Every document' }),
+      );
+      mockNuxeoApiBase.nxqlSearch.mockReturnValue(
+        of({ entries: [{ uid: 'ai-hit', title: 'Found by AI' }] }),
+      );
+      component.toggleAiSearch();
+      component.aiQuery.set('every document');
+      component.executeAiSearch();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(component.aiSearchExecuted()).toBe(true);
+      expect(el.querySelector('nxs-error-state')).toBeNull();
+      expect(el.textContent).toContain('Found by AI');
+
+      // The standard results are still the ones that failed, so leaving AI mode shows that again.
+      component.toggleAiSearch();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(el.querySelector('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+    });
+
     it('sends only the drawer filters that have a value', async () => {
       mockSearchAggregationService.drawerFilters.set({
         q: '  hello  ',

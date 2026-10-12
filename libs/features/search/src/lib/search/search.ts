@@ -292,6 +292,13 @@ export class SearchComponent {
 
   /** Which error state `error` shows: the status of the search request that failed. */
   readonly errorStatus = signal<NxsErrorStatus>(500);
+  /**
+   * The standard search's failure, while its results are the ones on screen. `error` belongs to the
+   * standard pipeline and outlives an AI search, whose results must not be hidden behind it.
+   */
+  readonly resultsError = computed(() =>
+    this.aiSearchMode() && this.aiSearchExecuted() ? null : this.error(),
+  );
   /** Bumped by Retry, so the same query and filters run again. */
   private readonly searchAttempt = signal(0);
 
