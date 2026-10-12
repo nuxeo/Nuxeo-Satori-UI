@@ -121,12 +121,8 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
   });
 
   afterEach(() => {
-    for (const label of ['Preview', 'Download']) {
-      const button = fixture.nativeElement.querySelector(
-        `.viewer-footer-actions button[aria-label="${label}"]`,
-      ) as HTMLButtonElement | null;
-      button?.blur();
-    }
+    previewButton()?.blur();
+    downloadButton()?.blur();
     fixture.nativeElement.remove();
     if (originalTheme === null) {
       document.documentElement.removeAttribute('data-app-theme');
@@ -136,18 +132,21 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
   });
 
   function previewButton(): HTMLButtonElement {
-    const button = fixture.nativeElement.querySelector(
-      '.viewer-footer-actions button[aria-label="Preview"]',
-    ) as HTMLButtonElement | null;
-    expect(button).withContext('expected Preview footer button').not.toBeNull();
-    return button!;
+    const buttons = [
+      ...fixture.nativeElement.querySelectorAll('.viewer-footer-actions button'),
+    ] as HTMLButtonElement[];
+    const button = buttons.find(
+      (candidate) => candidate.querySelector('mat-icon')?.textContent?.trim() === 'visibility',
+    );
+    expect(button).withContext('expected Preview footer button').toBeTruthy();
+    return button as HTMLButtonElement;
   }
 
   function downloadButton(): HTMLButtonElement {
     const button = fixture.nativeElement.querySelector(
       '.viewer-footer-actions button[aria-label="Download"]',
     ) as HTMLButtonElement | null;
-    expect(button).withContext('expected Download footer button').not.toBeNull();
+    expect(button).withContext('expected Download footer button').toBeTruthy();
     return button!;
   }
 
