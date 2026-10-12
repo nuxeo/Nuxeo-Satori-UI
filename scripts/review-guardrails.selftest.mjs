@@ -3884,6 +3884,81 @@ expectGreen('an ampersand stored as itself', 'checkCatalogueValuesAreRenderable'
   'apps/nuxeo-ui/public/i18n/en.json': '{\n  "a": "Users & Groups"\n}\n',
 });
 
+/* ---------------- a date format pattern is not a translatable string ---------------- */
+
+// NXSAT-628. Both arms need controls, and so does the exemption: a rule with a named escape
+// hatch and no control over it is a rule nobody can tell is still load-bearing.
+
+expectRed(
+  'an Angular date pattern stored as a catalogue value',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', '{\n  "a": "MMMM d, yyyy"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
+// The translated form is the one that actually reaches a customer: Crowdin sends the pattern
+// out, a translator localizes the letters in good faith, and the pipe renders literal `j`s.
+expectRed(
+  'a translated date pattern in a non-English catalogue',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/fr.json', '{\n  "a": "jj/mm/aaaa"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
+expectRed(
+  'a translated string passed to DatePipe as its format',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write(
+      'libs/features/x/src/lib/x.html',
+      "<span>{{ entry.eventDate | date: ('x.mmmm-d-yyyy' | translate) }}</span>\n",
+    ),
+  /passes a translated string to `DatePipe` as its format/,
+);
+
+// The exemption must not become a loophole. `common.date-mask` is allowed to BE a date pattern;
+// it is not allowed to be USED as one. Arm 2 is what makes that distinction real, so it gets its
+// own control rather than being argued for in a comment.
+expectRed(
+  'the exempt date-mask key bound as a DatePipe format',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write(
+      'libs/features/x/src/lib/x.html',
+      "<span>{{ entry.eventDate | date: ('common.date-mask' | translate) }}</span>\n",
+    ),
+  /passes a translated string to `DatePipe` as its format/,
+);
+
+// A short legitimate string must survive. `Address` is the one that breaks the obvious
+// implementation of this rule — every character of it is a date-pattern character, and it even
+// has two doubled letters — and `May`, `OK` and `N/A` break the next three.
+falsePositiveControls += 1;
+expectGreen('short prose made of date-pattern characters', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json':
+    '{\n  "a": "Address",\n  "b": "May",\n  "c": "OK",\n  "d": "N/A",\n  "e": "e.g.",\n' +
+    '  "f": "All",\n  "g": "Up to date",\n  "h": "Settings"\n}\n',
+});
+
+falsePositiveControls += 1;
+expectGreen('the exempt date-mask placeholder', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': '{\n  "common": { "date-mask": "mm/dd/yyyy" }\n}\n',
+});
+
+falsePositiveControls += 1;
+expectGreen('a named DatePipe format and a translated label', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'libs/features/x/src/lib/x.html':
+    "<span>{{ entry.eventDate | date: 'longDate' }}</span>\n" +
+    "<span>{{ 'x.title' | translate }}</span>\n",
+});
+
 /* ---------------- the contract marker, not the prose around it ---------------- */
 
 // The first version of this gate matched a sentence, and the commit that added it reworded that

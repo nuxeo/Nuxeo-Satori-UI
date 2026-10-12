@@ -3246,7 +3246,8 @@ function checkAccessibleNameFallbacks() {
 
     function initializerFullyResolved(expr, scope) {
       if (!expr) return false;
-      if (ts.isParenthesizedExpression(expr)) return initializerFullyResolved(expr.expression, scope);
+      if (ts.isParenthesizedExpression(expr))
+        return initializerFullyResolved(expr.expression, scope);
       if (ts.isStringLiteral(expr) && keyShape.test(expr.text)) return true;
       if (ts.isConditionalExpression(expr)) {
         return (
@@ -3262,7 +3263,8 @@ function checkAccessibleNameFallbacks() {
 
     function expressionFullyResolved(expr, scope) {
       if (!expr) return false;
-      if (ts.isParenthesizedExpression(expr)) return expressionFullyResolved(expr.expression, scope);
+      if (ts.isParenthesizedExpression(expr))
+        return expressionFullyResolved(expr.expression, scope);
       if (ts.isStringLiteral(expr) && keyShape.test(expr.text)) return true;
       if (ts.isConditionalExpression(expr)) {
         return (
@@ -3303,7 +3305,10 @@ function checkAccessibleNameFallbacks() {
 
     function walkScopedStatements(statements, scope) {
       for (const stmt of statements) {
-        if (ts.isVariableStatement(stmt) && (stmt.declarationList.flags & ts.NodeFlags.Const) !== 0) {
+        if (
+          ts.isVariableStatement(stmt) &&
+          (stmt.declarationList.flags & ts.NodeFlags.Const) !== 0
+        ) {
           for (const decl of stmt.declarationList.declarations) bindConstDeclaration(scope, decl);
         } else if (ts.isReturnStatement(stmt)) {
           if (!expressionFullyResolved(stmt.expression, scope)) partialReturn = true;
@@ -3470,10 +3475,7 @@ function checkAccessibleNameFallbacks() {
     }
     const tsSource = read(tsPath);
     for (const [, methodName] of methodBindings) {
-      const { keys: methodKeys, partial } = translationKeysReturnedByMethod(
-        tsSource,
-        methodName,
-      );
+      const { keys: methodKeys, partial } = translationKeysReturnedByMethod(tsSource, methodName);
       if (partial || methodKeys.length === 0) {
         const attr = `${methodName}()`;
         if (!unresolvedMethodBindings.has(attr)) {
@@ -6169,6 +6171,166 @@ function checkCatalogueValuesAreRenderable() {
 }
 
 /**
+ * A date format pattern is not a translatable string.
+ *
+ * ## The defect
+ *
+ * `collections.mmmm-d-yyyy` and `document-detail.mmmm-d-yyyy` both held `MMMM d, yyyy`, and
+ * both were bound as the `DatePipe` format:
+ *
+ *     {{ entry.eventDate | date: ('collections.mmmm-d-yyyy' | translate) }}
+ *
+ * `M`, `d` and `y` are **locale-independent** tokens in Angular. Translating them cannot
+ * localize anything: the French catalogue rendered `octobre 12, 2026` — a French month name
+ * in the English field order — and a plausible translation such as `jj/mm/aaaa` would render
+ * literal `j`s. Meanwhile the two keys were pushed to Crowdin and the translation crew was
+ * billed to translate a format string. Reported by the translators, not by us (NXSAT-628).
+ *
+ * The fix is Angular's named formats (`longDate`, `mediumDate`, …), which read the registered
+ * locale data. Nothing stopped the keys being created, though: the extraction codemod slugs a
+ * key from its value, and `mmmm-d-yyyy` is the codemod recording that it took `MMMM d, yyyy`
+ * for prose. So this gate exists to stop the class returning the same way.
+ *
+ * ## Two arms, because either alone has a hole
+ *
+ * **Arm 1 — a catalogue value that is nothing but a date pattern.** This is the arm that
+ * satisfies the reporter: a pattern sitting in `en.json` is pushed to Crowdin whether or not
+ * anything renders it, so scoping only to values the templates use would leave the complaint
+ * unaddressed.
+ *
+ * **Arm 2 — a `date:` format that comes from `translate`.** Arm 1 has one exemption (below),
+ * and an exemption with nothing behind it is a loophole: binding the exempted key as a
+ * `DatePipe` format would reintroduce exactly this bug past a green Arm 1. Arm 2 fails on the
+ * *shape* of the binding and does not care which key or value is involved, so it closes that
+ * and also catches a pattern assembled at runtime.
+ *
+ * ## Why `common.date-mask` is exempt, by key
+ *
+ * `common.date-mask` is `mm/dd/yyyy` and is a date pattern by any test this gate could apply.
+ * It is also a genuine user-facing string: the `[placeholder]` on nine date inputs, telling a
+ * person what to type. It is read by a human, never handed to `DatePipe` — Arm 2 is what
+ * enforces that — so it is legitimately translatable and must stay in the catalogue.
+ *
+ * It is exempted by key rather than by a cleverer value test on purpose. No property of the
+ * *string* `mm/dd/yyyy` distinguishes it from the patterns this gate exists to reject; only
+ * its use does. A heuristic pretending otherwise would be a rule whose real behaviour nobody
+ * could predict, and the next genuine placeholder would need the same escape hatch anyway.
+ * A named exemption with a reason is honest about being a judgement.
+ *
+ * (It is on hold for translation for an unrelated reason — the date inputs parse typed text
+ * as US month/day/year in every locale, NXSAT-629 — which its translator note records. That
+ * is a note to Crowdin, not something this gate asserts.)
+ */
+function checkNoTranslatableDatePatterns() {
+  /**
+   * Keys whose value is a date pattern but which are genuine user-facing text.
+   * Keep this list at zero or one entries; every addition needs the reason written here.
+   */
+  const EXEMPT_KEYS = new Set([
+    // Placeholder text on a date input — read by a person, never a `DatePipe` format.
+    'common.date-mask',
+  ]);
+
+  /** `/ - . , :` and space are the only things allowed between a pattern's fields. */
+  const FIELD_SEPARATORS = /^[/\-.,: ]+$/;
+
+  /**
+   * A value is a bare date pattern when every one of its alphabetic runs is a single letter
+   * repeated — `MMMM`, `d`, `yyyy`, `jj`, `aaaa` — and everything between those runs is a
+   * date separator.
+   *
+   * That shape is what makes this safe to run over ~14,000 catalogue entries. Testing for
+   * "contains only date-pattern characters" flags `Address` (`dd`, `ss`) and `May`; requiring
+   * each *word* to be one repeated letter does not, because a word of prose almost never is.
+   * Two words minimum, one of them at least two characters, so `OK`, `N/A` and `e.g.` are not
+   * reachable. Verified against every shipped catalogue: three hits, all three real.
+   */
+  const isBareDatePattern = (value) => {
+    if (value.length > 24) return false;
+    if (!/^[A-Za-z/\-.,: ]+$/.test(value)) return false;
+    const words = value.split(/[^A-Za-z]+/).filter(Boolean);
+    const separators = value.split(/[A-Za-z]+/).filter(Boolean);
+    if (!separators.every((separator) => FIELD_SEPARATORS.test(separator))) return false;
+    if (words.length < 2) return false;
+    if (!words.every((word) => new Set(word.toLowerCase()).size === 1)) return false;
+    return words.some((word) => word.length >= 2);
+  };
+
+  // ---- arm 1: catalogue values ----
+
+  const isCatalogue = (path) =>
+    /(^|\/)i18n\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path);
+  const catalogues = [...walk('apps', isCatalogue), ...walk('libs', isCatalogue)].filter(
+    (path) => !/^apps\/nuxeo-satori-template\//.test(path),
+  );
+  if (catalogues.length === 0) {
+    fail('No catalogues were found, so the date-pattern gate asserted nothing.');
+    return;
+  }
+
+  for (const file of catalogues) {
+    let parsed;
+    try {
+      parsed = JSON.parse(read(file));
+    } catch {
+      continue; // checkTranslationCatalogues reports malformed JSON, and names the file.
+    }
+
+    const entries = [];
+    const collect = (node, prefix) => {
+      for (const [key, value] of Object.entries(node)) {
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (value && typeof value === 'object') collect(value, path);
+        else entries.push([path, value]);
+      }
+    };
+    collect(parsed, '');
+
+    for (const [key, value] of entries) {
+      if (typeof value !== 'string') continue;
+      if (EXEMPT_KEYS.has(key)) continue;
+      if (!isBareDatePattern(value)) continue;
+      fail(
+        `${file} maps \`${key}\` to "${value}", which is a date format pattern rather than ` +
+          'text a user reads.\n' +
+          "    Angular's `M`, `d` and `y` are locale-INDEPENDENT tokens, so translating them " +
+          'cannot localize a date — it renders the English field order with a translated ' +
+          'month name, or literal letters. Use a named format (`longDate`, `mediumDate`, ' +
+          '`short`), which reads the locale data registered in `register-locale-data.ts`, and ' +
+          'delete the key so Crowdin stops charging to translate it.',
+      );
+    }
+  }
+
+  // ---- arm 2: a DatePipe format that comes from the catalogue ----
+
+  const templates = [
+    ...walk('apps', (path) => /\.html$/.test(path)),
+    ...walk('libs', (path) => /\.html$/.test(path)),
+  ];
+  if (templates.length === 0) {
+    fail('No templates were found, so the date-pipe half of this gate asserted nothing.');
+    return;
+  }
+
+  // `| date:` followed by anything containing `| translate` before the interpolation closes.
+  const TRANSLATED_DATE_FORMAT = /\|\s*date:\s*\([^)]*\|\s*translate[^)]*\)/;
+
+  for (const file of templates) {
+    const lines = read(file).split('\n');
+    for (const [index, line] of lines.entries()) {
+      if (!TRANSLATED_DATE_FORMAT.test(line)) continue;
+      fail(
+        `${file}:${index + 1} passes a translated string to \`DatePipe\` as its format.\n` +
+          '    The format argument is a pattern, not prose: its tokens are the same in every ' +
+          'language, so routing it through `translate` can only break the render. Use a named ' +
+          "format — `| date: 'longDate'` — and let the registered locale data choose the order.",
+      );
+    }
+  }
+}
+
+/**
  * A class that uses `this.translate` must actually inject it.
  *
  * Five classes reached CI using `this.translate.instant(...)` with no
@@ -6234,6 +6396,7 @@ const GUARDRAILS = [
   checkNoHardcodedImperativeUiText,
   checkTranslateIsInjectedWhereUsed,
   checkCatalogueValuesAreRenderable,
+  checkNoTranslatableDatePatterns,
   checkNoStaleAgnosticClaim,
   checkTranslationCatalogues,
   checkCataloguesAreTranslated,

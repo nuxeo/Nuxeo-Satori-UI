@@ -992,7 +992,6 @@
       "notifications-enabled": "通知が有効になりました",
       "removed-from-clipboard": "クリップボードから削除しました"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "通知を受け取る",
     "remove-from-clipboard": "クリップボードから削除",
     "share-fallback-title": "コレクション",
@@ -1424,7 +1423,6 @@
       "workflow-abandoned": "ワークフローを中止しました。",
       "workflow-started-successfully": "ワークフローを開始しました"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "中央揃え",
       "align-left": "左揃え",

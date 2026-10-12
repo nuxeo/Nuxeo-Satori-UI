@@ -135,6 +135,7 @@ stopped at the general-purpose checks and every i18n and packaging check was add
 | `checkNoHardcodedImperativeUiText`            | No hard-coded snackbar, toast or error text built in TypeScript                                                           |
 | `checkTranslateIsInjectedWhereUsed`           | A class using `this.translate` injects `TranslateService` — otherwise a runtime crash on the first error path             |
 | `checkCatalogueValuesAreRenderable`           | A catalogue value is the text a user sees — no HTML entities or markup copied from a template                             |
+| `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern, and no `DatePipe` format comes from `translate`                                |
 | `checkNoStaleAgnosticClaim`                   | A comment saying a library has no dependency on something is still true of that library                                   |
 | `checkTranslationCatalogues`                  | Every `i18n/<locale>.json` parses to an object of keys and ends with a newline                                            |
 | `checkCataloguesAreTranslated`                | A non-English catalogue translates something, rather than being a copy of `en.json`                                       |
