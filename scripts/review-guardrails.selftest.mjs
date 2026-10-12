@@ -3907,6 +3907,27 @@ expectRed(
   /is a date format pattern rather than text a user reads/,
 );
 
+// `yyyy年MM月dd日` is the ordinary Japanese date pattern. An ASCII-only detector was blind in
+// exactly the three catalogues where a translator is most likely to write one.
+expectRed(
+  'a date pattern with non-ASCII literals between its fields',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/ja.json', '{\n  "a": "yyyy年MM月dd日"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
+// A longer pattern is a more complete one, so the 24-character cap rejected the candidates
+// the rule should have been surest about.
+expectRed(
+  'a date pattern longer than the old length ceiling',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write('apps/nuxeo-ui/public/i18n/en.json', '{\n  "a": "EEEE, dd MMMM yyyy HH:mm:ss"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
 // Prettier wraps a long interpolation, and both real call sites were indented deeply enough
 // to be candidates. A line-scoped scan missed this shape entirely.
 expectRed(
@@ -3970,6 +3991,24 @@ expectGreen('short prose made of date-pattern characters', 'checkNoTranslatableD
     '{\n  "a": "Address",\n  "b": "May",\n  "c": "OK",\n  "d": "N/A",\n  "e": "e.g.",\n' +
     '  "f": "All",\n  "g": "Up to date",\n  "h": "Settings",\n  "i": "A",\n  "j": "I",\n' +
     '  "k": "Off"\n}\n',
+});
+
+// Allowing non-ASCII literals through is the change most able to start flagging real prose,
+// so the CJK and Thai catalogues get their own control rather than being assumed safe.
+falsePositiveControls += 1;
+expectGreen('non-ASCII prose in a translated catalogue', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/ja.json':
+    '{\n  "a": "ダウンロード",\n  "b": "PDF をダウンロード"\n}\n',
+  'apps/nuxeo-ui/public/i18n/zh.json': '{\n  "a": "设置"\n}\n',
+  'apps/nuxeo-ui/public/i18n/th.json': '{\n  "a": "การตั้งค่า"\n}\n',
+});
+
+// A rendered date is not a pattern, and must not be read as one.
+falsePositiveControls += 1;
+expectGreen('a rendered date containing digits', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': '{\n  "a": "12 octobre 2026",\n  "b": "2026年10月12日"\n}\n',
 });
 
 falsePositiveControls += 1;

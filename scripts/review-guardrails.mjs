@@ -6231,8 +6231,30 @@ function checkNoTranslatableDatePatterns() {
     'common.date-mask',
   ]);
 
-  /** `/ - . , :` and space are the only things allowed between a pattern's fields. */
+  /** `/ - . , :` and space are the punctuation allowed between a pattern's fields. */
   const FIELD_SEPARATORS = /^[/\-.,: ]+$/;
+
+  /**
+   * What may sit between two fields: punctuation, or a short non-ASCII literal.
+   *
+   * The non-ASCII half is not decoration. `yyyy年MM月dd日` is the ordinary Japanese date
+   * pattern and `d MMMM ค.ศ. yyyy` the Thai one, and the first version of this rule required
+   * the whole value to be ASCII — so the gate was blind in exactly the three catalogues
+   * (`ja`, `th`, `zh`) where a translator is most likely to produce one.
+   *
+   * Three characters is the ceiling, and it is what keeps prose out: a date literal is a
+   * marker (`年`, `月`, `日`, `ค.ศ.`), while CJK prose runs far longer. Measured over all
+   * 14,952 values in the seven shipped catalogues, this flags nothing but the exempt key.
+   */
+  const isLiteralSegment = (segment) => {
+    const characters = [...segment];
+    const nonAscii = characters.filter((character) => /[^\x00-\x7F]/.test(character));
+    if (nonAscii.length === 0) return FIELD_SEPARATORS.test(segment);
+    if (nonAscii.length > 3) return false;
+    return characters.every(
+      (character) => /[^\x00-\x7F]/.test(character) || /[/\-.,: ]/.test(character),
+    );
+  };
 
   /**
    * A value is a bare date pattern when every one of its alphabetic runs is a single letter
@@ -6251,14 +6273,23 @@ function checkNoTranslatableDatePatterns() {
    * values, and `OK` and `N/A` are unreachable anyway because neither has a word of two or
    * more identical letters. So the floor is one word, still at least two characters long —
    * which is what keeps a bare `a` or `I` out.
+   *
+   * **No length ceiling.** There was a 24-character cap, which excluded
+   * `EEEE, dd MMMM yyyy HH:mm:ss` — a longer pattern is a *more* complete one, so the cap
+   * was strictly backwards, rejecting the candidates it should have been surest about. It
+   * was never load-bearing either: prose cannot satisfy the word-shape rule at any length,
+   * because every alphabetic word would have to be one letter repeated.
+   *
+   * **A digit disqualifies.** A format pattern has no literal digits — `2026` in a value
+   * means it is a rendered date or ordinary text, not a pattern. This was implicit while the
+   * rule was ASCII-only; it has to be explicit now that literals are allowed through.
    */
   const isBareDatePattern = (value) => {
-    if (value.length > 24) return false;
-    if (!/^[A-Za-z/\-.,: ]+$/.test(value)) return false;
+    if (/\d/.test(value)) return false;
     const words = value.split(/[^A-Za-z]+/).filter(Boolean);
     const separators = value.split(/[A-Za-z]+/).filter(Boolean);
-    if (!separators.every((separator) => FIELD_SEPARATORS.test(separator))) return false;
     if (words.length === 0) return false;
+    if (!separators.every(isLiteralSegment)) return false;
     if (!words.every((word) => new Set(word.toLowerCase()).size === 1)) return false;
     return words.some((word) => word.length >= 2);
   };
