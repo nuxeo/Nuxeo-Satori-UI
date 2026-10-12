@@ -40,7 +40,7 @@ import {
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
 import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
-import { DocumentViewerComponent } from '@nuxeo-satori/platform/ui';
+import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo-satori/platform/ui';
 
 import { DocumentDetailComponent } from './document-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -290,6 +290,16 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       const panel = fixture.nativeElement.querySelector('aside.properties-panel') as HTMLElement;
       expect(panel).toBeTruthy();
       expect(panel.getAttribute('aria-label')).toBe('Document properties');
+    });
+
+    it('sets data-satori-tablist-keydown on the detail tablist (NXENG-821)', async () => {
+      await render({});
+
+      const tabList = fixture.nativeElement.querySelector(
+        'mat-tab-group.detail-tabs .mat-mdc-tab-list[role="tablist"]',
+      ) as HTMLElement | null;
+
+      expect(tabList?.getAttribute(MAT_TAB_LIST_KEYDOWN_ATTR)).toBe('true');
     });
   });
 

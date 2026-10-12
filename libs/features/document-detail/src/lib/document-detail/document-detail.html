@@ -21,7 +21,8 @@
       (click)="goBack()"
       [attr.aria-label]="'document-detail.document-detail.go-back' | translate"
     >
-      <mat-icon>arrow_back</mat-icon>
+      <!-- NXENG-826: empty mat-icon + CSS codepoint (legacy Material Icons font — fontIcon needs a class set). -->
+      <mat-icon aria-hidden="true" class="detail-header-go-back-icon"></mat-icon>
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
@@ -355,6 +356,7 @@
       <div class="tabs-header-row">
         <mat-tab-group
           #detailTabGroup
+          libMatTabListKeydown
           class="detail-tabs"
           animationDuration="0ms"
           (selectedIndexChange)="onTabChange($event)"

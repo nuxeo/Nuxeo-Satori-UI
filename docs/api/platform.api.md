@@ -1955,7 +1955,7 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 
 ## @nuxeo-satori/platform/ui
 
-41 exported symbol(s).
+46 exported symbol(s).
 
 ```ts
 class ConfirmDialogComponent {
@@ -2140,6 +2140,14 @@ interface IptcData {
     [key: string]: string | undefined;
     }
 }
+const MAT_TAB_LIST_IBM_ONKEYDOWN = "void(0)";
+const MAT_TAB_LIST_KEYDOWN_ATTR = "data-satori-tablist-keydown";
+class MatTabListKeydownDirective {
+    constructor();
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<MatTabListKeydownDirective, never>;
+    static ɵdir: _angular_core.ɵɵDirectiveDeclaration<MatTabListKeydownDirective, "mat-tab-group[libMatTabListKeydown]", never, {}, {}, never, never, true, never>;
+    }
+}
 const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>>;
 const PLATFORM_MISSING_TRANSLATION_NEXT: InjectionToken<MissingTranslationHandler>;
 interface PermissionEntry {
@@ -2303,6 +2311,7 @@ class WidgetGridComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<WidgetGridComponent, "lib-widget-grid", never, { "columns": { "alias": "columns"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
     }
 }
+function observeMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 function observeStripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): MutationObserver | null;
 function openDocumentCompareDialog(dialog: MatDialog, items: DocumentCompareDialogData['items']): void;
 function providePlatformEnglishFallback(): Provider;
@@ -2310,4 +2319,5 @@ function provideTranslatedDatepickerIntl(): Provider;
 function stripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): void;
 function trashDocumentConfirmData(title: string, translate: TranslateFn): ConfirmDialogData;
 function trashSelectedDocumentsConfirmData(count: number, translate: TranslateFn): ConfirmDialogData;
+function wireMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 ```

@@ -1,4 +1,5 @@
-// NXENG-808 / IBM 673904446 — header extension mat-icon-button focus (global: component SCSS at budget).
+// NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504 — header toolbar mat-icon-button focus
+// (global: component SCSS at budget).
 .detail-header .header-actions button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--agentic-document-detail-header-focus-outline);
   outline-offset: 2px;

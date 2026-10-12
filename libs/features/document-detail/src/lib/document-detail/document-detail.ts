@@ -176,6 +176,7 @@ import {
   type VideoInfo,
   type VideoSource,
   provideTranslatedDatepickerIntl,
+  MatTabListKeydownDirective,
 } from '@nuxeo-satori/platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
 import {
@@ -297,6 +298,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatButtonModule,
     MatProgressSpinnerModule,
     MatTabsModule,
+    MatTabListKeydownDirective,
     MatTooltipModule,
     MatMenuModule,
     MatSnackBarModule,
@@ -321,7 +323,11 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   ],
   providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter()],
   templateUrl: './document-detail.html',
-  styleUrls: ['./document-detail.scss', './document-detail-panel-close-focus.scss'],
+  styleUrls: [
+    './document-detail.scss',
+    './document-detail-go-back-icon.scss',
+    './document-detail-panel-close-focus.scss',
+  ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly translate = inject(TranslateService);

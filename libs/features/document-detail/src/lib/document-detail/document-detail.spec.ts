@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { provideHttpClient } from '@angular/common/http';
@@ -715,5 +717,20 @@ describe('DocumentDetailComponent', () => {
         replaceUrl: true,
       });
     });
+  });
+});
+
+describe('DocumentDetailComponent — tablist keydown wiring (NXENG-821)', () => {
+  const dir = import.meta.dirname;
+
+  it('binds libMatTabListKeydown on the main detail tab group in document-detail.html', () => {
+    const html = readFileSync(join(dir, 'document-detail.html'), 'utf8');
+    expect(html).toMatch(/<mat-tab-group[\s\S]*?libMatTabListKeydown[\s\S]*?class="detail-tabs"/);
+  });
+
+  it('imports MatTabListKeydownDirective on DocumentDetailComponent', () => {
+    const source = readFileSync(join(dir, 'document-detail.ts'), 'utf8');
+    expect(source).toContain('MatTabListKeydownDirective');
+    expect(source).toMatch(/imports:[\s\S]*MatTabListKeydownDirective/);
   });
 });
