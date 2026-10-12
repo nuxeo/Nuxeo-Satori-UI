@@ -21,6 +21,7 @@ const favorites = (answer: () => Observable<NuxeoDocument>): Provider => ({
 const meta: Meta<NxsFavoriteToggleComponent> = {
   title: 'Actions/Favorite toggle',
   component: NxsFavoriteToggleComponent,
+  tags: ['autodocs'],
   args: { documentId: 'claims-2026', favorite: false, disabled: false },
   argTypes: {
     documentId: { control: false, description: 'The document to add or remove. Required.' },

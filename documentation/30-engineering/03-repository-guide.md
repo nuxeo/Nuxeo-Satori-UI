@@ -126,7 +126,7 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 > their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%.
 > `core` has the same shape. Of 17 measured projects, 6 read as ≥90% and **3 genuinely are**.
 
-### Shared libraries — 13, 51,054 lines
+### Shared libraries — 13, 51,055 lines
 
 | Library                    |  Lines | Specs | Responsibility                                                                                                                                                           |
 | -------------------------- | -----: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -141,7 +141,7 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 | `ke-client`                |    734 |     1 | Knowledge Enrichment client                                                                                                                                              |
 | `ai-client`                |    457 | **0** | The 12 `AI.*` operations. Thin HTTP client                                                                                                                               |
 | `util`                     |    108 |     0 | Small helpers                                                                                                                                                            |
-| `satori-components`        | 10,654 |    20 | The `nxs-` components replacing adf-hx. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308; counted 2026-10-12)                                             |
+| `satori-components`        | 10,655 |    20 | The `nxs-` components replacing adf-hx. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308; counted 2026-10-12)                                             |
 | `satori-components-satori` |    520 |     1 | The same `nxs-` primitive IDs on Satori, and the platform package's only Satori import. **Published** as `@nuxeo-satori/platform/components-satori` (counted 2026-10-12) |
 
 ### The other three

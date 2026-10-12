@@ -1,0 +1,134 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as FavoriteToggleStories from './favorite-toggle.stories';
+
+<Meta of={FavoriteToggleStories} name="Overview" />
+
+# Favorite toggle
+
+The favorite toggle is the star that adds a document to the user's favorites or removes it, as Web
+UI's `nuxeo-favorites-toggle-button` does. It sends the request itself and tells your component how
+it went; your component decides what to tell the user. Use it wherever a document is listed or shown
+and the user may want to find it again from Favorites: a search result's row or card, or a document
+page's header.
+
+## Key features
+
+- **Changes only once the server agrees.** The star fills, and `favorite` turns true, when the server
+  confirms the change, not when the button is pressed.
+- **Reports, does not announce.** It emits `changed` with the new state, or `failed` with the error,
+  and shows no message of its own. Your component says what happened, for example with
+  `NxsToastService`.
+- **Tells the rest of the app.** After a confirmed change it dispatches the `favorites-changed`
+  window event (`NXS_FAVORITES_CHANGED_EVENT`), so the shell's Favorites drawer and page read the
+  list again.
+- **One press at a time.** While a request for its document is in flight, the button stays focusable
+  and ignores presses.
+- **Safe in a reused row.** Bound to another document before the answer arrives, it drops the late
+  answer, so the star now shown is never changed by a request for the one before.
+- **Stays in its row.** A press does not reach the row or card the star sits in.
+- **Also without the button.** `nxsToggleFavorite()` runs the same operation for a host that offers it
+  as a menu entry instead of a star.
+
+## Demo showcase
+
+Press the star: it fills once the in-memory server confirms.
+
+<Canvas of={FavoriteToggleStories.NotAFavorite} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsFavoriteToggleComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-favorite-toggle
+  [documentId]="document.uid"
+  [(favorite)]="isFavorite"
+  (changed)="onFavoriteChanged($event)"
+  (failed)="onFavoriteFailed($event)"
+/>`}
+/>
+
+`documentId` is the only required input: the uid of the document. `favorite` is whether it is a
+favorite now; bind it two-way and the toggle updates it once the server confirms. `disabled` shows
+the star without letting it be pressed. `changed` carries the new state and `failed` carries the
+error, with `favorite` left as it was.
+
+The toggle needs `HttpClient` and the platform's `DocumentDetailService`, which an application using
+`@nuxeo-satori/platform/nuxeo-client` already has; it needs no providers of its own. Its name and
+tooltips are translated with ngx-translate, under `satori-components.favorite-toggle.*`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not. It has no
+registered ID: place it in a template by its selector. A favorite star takes the theme's primary
+colour; set `--nxs-favorite-toggle-active-color` to change it.
+
+### As a menu entry
+
+`nxsToggleFavorite(documentDetailService, documentId, favorite)` runs the same request, dispatches the
+same event, and emits the state the server now holds:
+
+<Source
+  language="typescript"
+  dark
+  code={`import { nxsToggleFavorite } from '@nuxeo-satori/platform/components';
+
+nxsToggleFavorite(this.documents, document.uid, this.isFavorite())
+  .pipe(takeUntilDestroyed(this.destroyRef))
+  .subscribe({
+    next: (favorite) => this.isFavorite.set(favorite),
+    error: () => this.toast.error(this.translate.instant('my-page.favorite-failed')),
+  });`}
+/>
+
+## Where its data comes from
+
+The toggle does not read whether a document is a favorite: your component passes that in as
+`favorite`, usually from the `favorites` enricher's `isFavorite` on the document or search result it
+already loaded. A press calls the platform's `DocumentDetailService.addToFavorites` or
+`removeFromFavorites`, which run Nuxeo's `Document.AddToFavorites` and `Document.RemoveFromFavorites`
+operations with the application's sign-in. Nuxeo checks the request whatever the star shows.
+
+**In these stories** `DocumentDetailService` is an in-memory fake: it confirms at once, confirms
+after a delay, or refuses, and nothing is sent to a server.
+
+## Examples
+
+### A favorite
+
+<Canvas of={FavoriteToggleStories.AFavorite} />
+
+### A slow server
+
+The star stays focusable and ignores presses until the answer arrives.
+
+<Canvas of={FavoriteToggleStories.SlowServer} />
+
+### Refused
+
+The server refuses: the star stays as it was, and `failed` carries the error for your component to
+report.
+
+<Canvas of={FavoriteToggleStories.Refused} />
+
+### Disabled
+
+<Canvas of={FavoriteToggleStories.Disabled} />
+
+## Accessibility
+
+- **A toggle button.** Its name stays "Favorite" and `aria-pressed` says whether the document is
+  one, so a screen reader announces a toggle button that is pressed or not pressed. The star icon is
+  hidden from assistive technology.
+- **Tooltip.** On hover and focus it says what a press will do: "Add to favorites" or "Remove from
+  favorites".
+- **Keyboard.** A native button: reached with **Tab**, pressed with **Enter** or **Space**.
+- **Busy.** While a request is in flight it sets `aria-busy` and keeps focus, so a second press does
+  nothing rather than moving focus away.
+- **Disabled.** With `disabled` it is a disabled button, which **Tab** skips.
+- **Outcome.** The toggle announces nothing itself. Report a failure, and a change if your page needs
+  to, with `NxsToastService`, which announces errors straight away.
