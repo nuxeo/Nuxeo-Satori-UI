@@ -65,6 +65,9 @@ export {
   TranslatedDatepickerIntl,
   provideTranslatedDatepickerIntl,
 } from './lib/datepicker-intl/translated-datepicker-intl';
+// Only the provider. `dateFnsLocaleFor` returns a date-fns `Locale`, and a date-fns type in the
+// published surface would make a customer's install depend on our choice of date library.
+export { provideSatoriDateAdapter } from './lib/date-adapter/satori-date-adapter';
 export { PLATFORM_EN_TRANSLATIONS } from './lib/i18n/platform-en';
 export {
   PLATFORM_MISSING_TRANSLATION_NEXT,

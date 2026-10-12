@@ -6217,9 +6217,10 @@ function checkCatalogueValuesAreRenderable() {
  * could predict, and the next genuine placeholder would need the same escape hatch anyway.
  * A named exemption with a reason is honest about being a judgement.
  *
- * (It is on hold for translation for an unrelated reason — the date inputs parse typed text
- * as US month/day/year in every locale, NXSAT-629 — which its translator note records. That
- * is a note to Crowdin, not something this gate asserts.)
+ * (It was on hold for translation for an unrelated reason — the date inputs parsed typed text
+ * as US month/day/year in every locale, NXSAT-629. That is fixed: date inputs now parse in
+ * the active locale, so the key is released for translation and its note carries the accepted
+ * format per language. Either way it is a note to Crowdin, not something this gate asserts.)
  */
 function checkNoTranslatableDatePatterns() {
   /**

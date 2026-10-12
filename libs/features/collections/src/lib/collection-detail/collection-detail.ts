@@ -20,7 +20,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 
 import {
   NuxeoDocument,
@@ -68,6 +67,7 @@ import {
   ConfirmDialogData,
   EditCollectionDialogComponent,
   EditCollectionDialogData,
+  provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo-satori/platform/ui';
 import {
@@ -85,7 +85,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 @Component({
   selector: 'lib-collection-detail',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
     TranslatePipe,
     DatePipe,
@@ -105,7 +105,6 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     SatAvatarModule,
     SatBreadcrumbsComponent,
     SatTagModule,

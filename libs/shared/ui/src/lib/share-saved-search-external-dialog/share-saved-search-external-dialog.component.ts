@@ -7,12 +7,12 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { catchError, of } from 'rxjs';
 
 import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
+import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
 export interface ShareSavedSearchExternalDialogData {
   savedSearchId: string;
@@ -46,7 +46,7 @@ const RIGHT_OPTIONS = [
     MatButtonModule,
     MatDatepickerModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   templateUrl: './share-saved-search-external-dialog.component.html',
   styleUrl: './share-saved-search-external-dialog.component.scss',
 })

@@ -6,7 +6,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -26,12 +25,12 @@ import {
   AuditFilterResponse,
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { provideSatoriDateAdapter, provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
 
 @Component({
   selector: 'lib-admin-audit-page',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
     TranslatePipe,
     DatePipe,
@@ -41,7 +40,6 @@ import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatTableModule,
     MatIconModule,
     MatProgressSpinnerModule,

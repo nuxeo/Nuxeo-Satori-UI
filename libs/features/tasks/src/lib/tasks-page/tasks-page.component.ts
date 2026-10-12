@@ -11,7 +11,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -34,6 +33,7 @@ import {
 
 import {
   DocumentViewerComponent,
+  provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo-satori/platform/ui';
 import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
@@ -57,7 +57,7 @@ const DUE_LABEL_KEYS = {
 @Component({
   selector: 'lib-tasks-page',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
     TranslatePipe,
     FormsModule,
@@ -68,7 +68,6 @@ const DUE_LABEL_KEYS = {
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatSnackBarModule,
     MatTooltipModule,
     MatTabsModule,

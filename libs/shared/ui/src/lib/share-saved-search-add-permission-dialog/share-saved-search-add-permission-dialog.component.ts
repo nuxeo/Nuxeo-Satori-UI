@@ -11,7 +11,6 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatIconModule } from '@angular/material/icon';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
@@ -20,6 +19,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
+import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
 export interface ShareSavedSearchAddPermissionDialogData {
   title?: string;
@@ -63,7 +63,7 @@ const RIGHT_OPTIONS = [
     MatAutocompleteModule,
     MatIconModule,
   ],
-  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter()],
+  providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './share-saved-search-add-permission-dialog.component.html',
   styleUrl: './share-saved-search-add-permission-dialog.component.scss',
 })

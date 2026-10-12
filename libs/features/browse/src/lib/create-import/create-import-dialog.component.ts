@@ -19,7 +19,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule, provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -64,7 +63,7 @@ import {
   isCollectionDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { provideSatoriDateAdapter, provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -170,7 +169,6 @@ const DIALOG_SIZE = {
     MatSelectModule,
     MatChipsModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatProgressSpinnerModule,
     MatProgressBarModule,
     MatSnackBarModule,
@@ -178,7 +176,7 @@ const DIALOG_SIZE = {
     MatCheckboxModule,
     FormsModule,
   ],
-  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter()],
+  providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './create-import-dialog.component.html',
   styleUrl: './create-import-dialog.component.scss',
 })
