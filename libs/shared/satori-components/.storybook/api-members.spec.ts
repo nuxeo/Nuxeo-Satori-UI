@@ -9,9 +9,10 @@ import { compodoc, type CompodocComponent, type CompodocMember } from './compodo
  * name, as the API page reads it in Storybook. Under Vitest's transform a decorated class can be
  * renamed (`NxsActionMenuComponent2`), so `component.name` is not used here.
  */
-const COMPONENTS = Object.entries(library).filter(
-  (entry): entry is [string, Type<unknown>] =>
-    typeof entry[1] === 'function' && reflectComponentType(entry[1] as Type<unknown>) !== null,
+const COMPONENTS = Object.entries(library).flatMap(([name, value]): [string, Type<unknown>][] =>
+  typeof value === 'function' && reflectComponentType(value as Type<unknown>) !== null
+    ? [[name, value as Type<unknown>]]
+    : [],
 );
 
 function entryFor(name: string): CompodocComponent {
