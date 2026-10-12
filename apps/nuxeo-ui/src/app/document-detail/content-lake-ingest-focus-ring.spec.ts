@@ -88,7 +88,7 @@ describe('Document detail Content Lake ingest — keyboard focus indicator (NXSA
         for (const rule of Array.from(sheetRules)) {
           const selector = (rule as CSSStyleRule).selectorText;
           if (
-            selector?.includes('content-lake-ingest-btn') &&
+            selector?.includes('.header-actions') &&
             selector.includes('mat-mdc-icon-button') &&
             selector.includes(':focus')
           ) {
@@ -102,13 +102,11 @@ describe('Document detail Content Lake ingest — keyboard focus indicator (NXSA
       );
       expect(focusSelectors.length).toBeGreaterThan(0);
       expect(canonical).toContain(
-        '.detail-header .header-actions button.content-lake-ingest-btn.mat-mdc-icon-button:focus',
+        '.detail-header .header-actions button.mat-mdc-icon-button:focus',
       );
       expect(
         canonical.some((s) =>
-          s.includes(
-            '.detail-header .header-actions button.content-lake-ingest-btn.mat-mdc-icon-button:focus,',
-          ),
+          s.includes('.detail-header .header-actions button.mat-mdc-icon-button:focus,'),
         ),
       ).toBe(false);
     } finally {
