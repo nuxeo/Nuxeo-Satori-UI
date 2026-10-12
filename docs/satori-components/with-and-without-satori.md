@@ -196,6 +196,21 @@ The same note in both; the theme sets its colours and type.
 
 The same icon, heading, message and projected action in both; the theme sets the type, the colours and the button's style.
 
+### Error state
+
+| Field           | Value                                         |
+| --------------- | --------------------------------------------- |
+| Component       | `NxsErrorStateComponent`                      |
+| Registered ID   | —                                             |
+| With Satori     | Same component; theme only                    |
+| Storybook story | `states-error-state--server-error-with-retry` |
+
+![Error state: without Satori on the left, with Satori on the right](error-state-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A folder listing the server failed to answer: the same icon, heading, explanation and Retry button in both. The theme sets the type, the icon's error colour and the button's style.
+
+It has four variants, chosen by the status of the request that failed: the session has ended, the user has no access, the item is not there, or something went wrong. Retry appears only for the last, because asking again after the first three gets the same answer. Satori has its own error states for the same four cases; this component is not registered under an ID, so Satori's do not replace it.
+
 ### Spinner
 
 | Field           | Value                      |
@@ -276,6 +291,21 @@ The same dialog content in both; the theme sets the type, the colours and the bu
 
 The same star button in both, for a document that is already a favorite. A favorite's star takes the theme's primary colour, blue under Material and purple under Satori; a document that is not a favorite shows an outlined grey star. Pressing it adds the document to the user's favorites or removes it, and the page that shows the star decides what message to give.
 
+### Action menu
+
+| Field           | Value                                           |
+| --------------- | ----------------------------------------------- |
+| Component       | `NxsActionMenuComponent`                        |
+| Registered ID   | —                                               |
+| With Satori     | Same component; theme only                      |
+| Storybook story | `actions-action-menu--opened-from-the-keyboard` |
+
+![Action menu: without Satori on the left, with Satori on the right](action-menu-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs, opened from the keyboard.')
+
+The folder header's "More actions" button with its menu open, opened with Enter from the keyboard, so the first entry has focus: Share and Notify Me can be chosen, and Export is shown disabled. The same button and menu in both; the theme sets the type, the menu's surface and the highlight on the focused entry.
+
+The page gives the menu its entries and runs the one chosen. An entry that is not allowed is shown disabled; one hidden by the configuration is not listed, and with none left, no button renders.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -342,12 +372,14 @@ The components in the library today:
 | Folder header      | —                                                                                                                       | Same component; theme only   |
 | Domain hint        | —                                                                                                                       | Same component; theme only   |
 | Empty state        | —                                                                                                                       | Same component; theme only   |
+| Error state        | —                                                                                                                       | Same component; theme only   |
 | Spinner            | —                                                                                                                       | Same component; theme only   |
 | Toast              | —                                                                                                                       | Same component; theme only   |
 | Column picker      | —                                                                                                                       | Same component; theme only   |
 | Permissions panel  | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
 | Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
 | Favorite toggle    | —                                                                                                                       | Same component; theme only   |
+| Action menu        | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 
