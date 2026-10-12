@@ -28,7 +28,9 @@ describe('DocumentViewerComponent — footer focus ring (NXSAT-496)', () => {
 
   it('declares a standalone :focus ring on .viewer-footer-actions button.mat-mdc-icon-button', () => {
     expect(scss).toMatch(/\.viewer-footer-actions button\.mat-mdc-icon-button:focus\s*\{/);
+    // Comma lists are not resolved by the IBM scanner — reject both `:focus, …` and `…, :focus`.
     expect(scss).not.toMatch(/\.viewer-footer-actions button\.mat-mdc-icon-button:focus,\s/);
+    expect(scss).not.toMatch(/,\s*\.viewer-footer-actions button\.mat-mdc-icon-button:focus\s*\{/);
     const rule = footerIconButtonFocusRule();
     expect(rule).toMatch(/outline:\s*2px\s+solid/);
     expect(rule).toMatch(/outline-offset:\s*2px/);
