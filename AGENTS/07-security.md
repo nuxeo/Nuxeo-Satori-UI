@@ -44,6 +44,9 @@ fetch(`/nuxeo/api/v1/id/${uid}/@rendition/thumbnail`); // no auth header
 <img [src]="doc.contextParameters['thumbnail']?.url" />
 ```
 
+A document's thumbnail is `<nxs-thumbnail [documentId]="doc.uid">`, which fetches it this way and
+owns the blob URL: the core slice no longer creates or revokes a thumbnail URL anywhere else.
+
 - NEVER call Nuxeo URLs with the native `fetch()` API
 - NEVER add `Authorization` headers manually in components — use the interceptor
 - NEVER put credentials in query string parameters

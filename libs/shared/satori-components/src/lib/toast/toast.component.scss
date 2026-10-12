@@ -1,0 +1,20 @@
+:host {
+  display: flex;
+  align-items: center;
+}
+
+.nxs-toast__message {
+  flex: 1 1 auto;
+}
+
+.nxs-toast__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+// Material colours the snack-bar's action buttons through `matSnackBarAction`; the Dismiss icon
+// takes the message's colour so it reads as part of the toast rather than as a second action.
+.nxs-toast__dismiss {
+  color: var(--mat-snack-bar-supporting-text-color, var(--mat-sys-inverse-on-surface));
+}

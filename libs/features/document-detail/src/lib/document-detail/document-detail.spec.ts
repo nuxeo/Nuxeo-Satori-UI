@@ -12,7 +12,6 @@ import {
 } from '@angular/router';
 import { Observable, of, throwError } from 'rxjs';
 import { vi, type MockInstance } from 'vitest';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { DocumentDetailComponent } from './document-detail';
 import {
   ARenderService,
@@ -39,6 +38,7 @@ import {
   type KeEnrichmentResult,
 } from '@agentic-ui/shared/ke-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 const STUB_DOC: NuxeoDocument = {
   uid: 'doc-uid-1',
@@ -148,10 +148,11 @@ const mockNuxeoApiBase = {
 describe('DocumentDetailComponent', () => {
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     mockBrowseService.updateDocument.mockReturnValue(of(STUB_DOC));
     await TestBed.configureTestingModule({
       imports: [DocumentDetailComponent],
@@ -184,7 +185,6 @@ describe('DocumentDetailComponent', () => {
         { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
         { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(DocumentDetailComponent, {
@@ -221,11 +221,7 @@ describe('DocumentDetailComponent', () => {
         'doc-uid-1',
         'ace-1',
       );
-      expect(snackBarOpenSpy).toHaveBeenCalledWith('Notification email sent', 'OK', {
-        duration: 3000,
-        horizontalPosition: 'center',
-        verticalPosition: 'bottom',
-      });
+      expect(toast.show).toHaveBeenCalledWith('Notification email sent');
     });
 
     it('shows SMTP guidance when resend fails due to mail', () => {
@@ -235,14 +231,8 @@ describe('DocumentDetailComponent', () => {
 
       component.sendPermissionNotification(ace);
 
-      expect(snackBarOpenSpy).toHaveBeenCalledWith(
+      expect(toast.error).toHaveBeenCalledWith(
         'Notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-        'OK',
-        {
-          duration: 3000,
-          horizontalPosition: 'center',
-          verticalPosition: 'bottom',
-        },
       );
     });
   });
@@ -470,10 +460,8 @@ describe('DocumentDetailComponent', () => {
       component.saveNote('updated body');
 
       expect(updateSpy).not.toHaveBeenCalled();
-      expect(snackBarOpenSpy).toHaveBeenCalledWith(
+      expect(toast.error).toHaveBeenCalledWith(
         TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-        'OK',
-        expect.objectContaining({ duration: 3000 }),
       );
     });
 
@@ -484,10 +472,8 @@ describe('DocumentDetailComponent', () => {
       component.openCreateVersionDialog();
 
       expect(dialogSpy).not.toHaveBeenCalled();
-      expect(snackBarOpenSpy).toHaveBeenCalledWith(
+      expect(toast.error).toHaveBeenCalledWith(
         TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-        'OK',
-        expect.objectContaining({ duration: 3000 }),
       );
     });
 
@@ -497,10 +483,8 @@ describe('DocumentDetailComponent', () => {
 
       component.submitComment();
 
-      expect(snackBarOpenSpy).toHaveBeenCalledWith(
+      expect(toast.error).toHaveBeenCalledWith(
         TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-        'OK',
-        expect.objectContaining({ duration: 3000 }),
       );
     });
   });
@@ -568,11 +552,7 @@ describe('DocumentDetailComponent', () => {
 
       expect(mockDocumentDetailService.deleteComment).toHaveBeenCalledWith('doc-uid-1', 'reply-1');
       expect(component.repliesMap()['comment-1']).toEqual([]);
-      expect(snackBarOpenSpy).toHaveBeenCalledWith('Reply deleted', 'OK', {
-        duration: 3000,
-        horizontalPosition: 'center',
-        verticalPosition: 'bottom',
-      });
+      expect(toast.show).toHaveBeenCalledWith('Reply deleted');
     });
   });
 
@@ -662,7 +642,8 @@ describe('DocumentDetailComponent', () => {
       );
 
       await TestBed.resetTestingModule();
-      snackBarOpenSpy = vi.fn();
+      toast = { show: vi.fn(), error: vi.fn() };
+      TestBed.overrideProvider(NxsToastService, { useValue: toast });
       await TestBed.configureTestingModule({
         // The reset above discards what test-setup.ts provides globally.
         imports: [DocumentDetailComponent, testTranslateModule()],
@@ -695,7 +676,6 @@ describe('DocumentDetailComponent', () => {
           { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
           { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
           { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-          { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
         ],
       })
         .overrideComponent(DocumentDetailComponent, {

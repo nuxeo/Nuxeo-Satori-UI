@@ -1,7 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -99,7 +98,6 @@ describe('CollectionDetailComponent — unresolved collection', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: MatDialog, useValue: { open: vi.fn() } },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
 

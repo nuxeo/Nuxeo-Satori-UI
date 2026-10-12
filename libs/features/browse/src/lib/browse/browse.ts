@@ -32,7 +32,6 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
@@ -151,8 +150,12 @@ import {
   NxsFolderHeaderComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  provideNxsThumbnailCache,
   type NxsDriveDialogData,
   type NxsPickableColumn,
+  NxsToastService,
+  provideNxsToast,
 } from '@nuxeo-satori/platform/components';
 
 /**
@@ -173,12 +176,13 @@ const FALLBACK_COLUMN_DESCRIPTORS: readonly ExtensionColumnDescriptor[] = ALL_CO
 @Component({
   selector: 'lib-browse',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
     NxsColumnPickerComponent,
     NxsDomainHintComponent,
     NxsFolderHeaderComponent,
     NxsSpinnerComponent,
+    NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
     TranslatePipe,
@@ -195,7 +199,6 @@ const FALLBACK_COLUMN_DESCRIPTORS: readonly ExtensionColumnDescriptor[] = ALL_CO
     MatMenuModule,
     MatTooltipModule,
     MatDialogModule,
-    MatSnackBarModule,
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
@@ -226,13 +229,11 @@ export class BrowseComponent {
   private readonly directoryService = inject(DirectoryService);
   private readonly tagService = inject(TagService);
   readonly selectionService = inject(SelectionService);
-  /** Batch token for thumbnail loads, so a superseded response cannot write. */
-  private thumbnailGeneration = 0;
   private readonly extensions = inject(AppExtensionsService);
   private readonly ruleContext = inject(ExtensionRuleContextService);
   private readonly actionRegistry = inject(ExtensionActionRegistry);
   private readonly dialog = inject(MatDialog);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly adminAccess = inject(ADMIN_ACCESS_CHECKS);
 
@@ -242,7 +243,6 @@ export class BrowseComponent {
   readonly error = signal<string | null>(null);
   readonly currentDoc = signal<NuxeoDocument | null>(null);
   readonly totalSize = signal(0);
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
   private currentNuxeoPath = '/';
   /** Skips the initial contentRefreshTick effect run to avoid duplicate folder loads. */
   private lastSeenContentRefreshTick = -1;
@@ -719,7 +719,6 @@ export class BrowseComponent {
         this.totalSize.set(totalSize === entries.length ? totalSize + pendingCount : totalSize);
         this.loading.set(false);
         this.syncClipboardTarget(folder, payload.nuxeoPath);
-        this.loadThumbnails(this.entries());
         if (folder.uid && folder.uid !== 'virtual-root') {
           this.loadActivity(folder.uid);
         }
@@ -771,12 +770,6 @@ export class BrowseComponent {
 
     this.destroyRef.onDestroy(() => {
       this.clipboardTargetService.clear();
-      // SelectionService is root-scoped and outlives this component, so its retained previews would
-      // dangle past teardown too.
-      this.selectionService.forgetPreviews();
-      for (const url of Object.values(this.thumbnailMap())) {
-        if (url) URL.revokeObjectURL(url);
-      }
     });
 
     this.tagSearch$
@@ -860,7 +853,6 @@ export class BrowseComponent {
       if (previousTotalSize === previousEntryCount) {
         this.totalSize.update((count) => count + added);
       }
-      this.loadThumbnails(additions, false);
     }
   }
 
@@ -885,50 +877,6 @@ export class BrowseComponent {
       const additions = pending.filter((doc) => doc.uid && !currentUids.has(doc.uid));
       return additions.length > 0 ? [...current, ...additions] : current;
     });
-  }
-
-  private loadThumbnails(docs: NuxeoDocument[], reset = true): void {
-    // Only a RESETTING load invalidates the batch. An additive load — an optimistic paste, or the
-    // Trash tab appending a page — must SHARE the current generation, because it is adding to the
-    // batch rather than replacing it.
-    //
-    // Minting unconditionally was an over-correction on my part: an additive call while the folder's
-    // own requests were still in flight bumped the token, so every one of those callbacks returned at
-    // the guard and the folder's thumbnails never appeared at all.
-    const generation = reset ? ++this.thumbnailGeneration : this.thumbnailGeneration;
-    if (reset) {
-      // Drop the selection layer's copies first: it retains these exact strings and the shell
-      // topbar binds them into `<img [src]>`, and selection survives a folder change.
-      // See `SelectionService.forgetPreviews`.
-      this.selectionService.forgetPreviews();
-      for (const url of Object.values(this.thumbnailMap())) {
-        if (url) URL.revokeObjectURL(url);
-      }
-      this.thumbnailMap.set({});
-    }
-    for (const doc of docs) {
-      this.detailService
-        .fetchThumbnail(doc.uid)
-        .pipe(
-          catchError(() => of(null)),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((blob) => {
-          // Drop a response from a superseded batch. Without this a thumbnail request started for the
-          // previous folder could resolve after the reset above and reinsert a stale blob URL —
-          // and the map is also the revocation ledger, so the leaked URL is then never revoked.
-          if (!blob || generation !== this.thumbnailGeneration) return;
-          const url = URL.createObjectURL(blob);
-          this.thumbnailMap.update((m) => {
-            const previous = m[doc.uid];
-            if (previous && previous !== url) URL.revokeObjectURL(previous);
-            return {
-              ...m,
-              [doc.uid]: url,
-            };
-          });
-        });
-    }
   }
 
   // ── Details side panel ──
@@ -994,18 +942,9 @@ export class BrowseComponent {
         this.browseService.getByPath(this.currentNuxeoPath).subscribe({
           next: (d) => this.currentDoc.set(d),
         });
-        this.snackBar.open(
-          this.translate.instant('common.tag-added', { name: label }),
-          this.translate.instant('common.ok'),
-          { duration: 2000 },
-        );
+        this.toast.show(this.translate.instant('common.tag-added', { name: label }));
       },
-      error: () =>
-        this.snackBar.open(
-          this.translate.instant('browse.message.failed-to-add-tag'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
+      error: () => this.toast.error(this.translate.instant('browse.message.failed-to-add-tag')),
     });
   }
 
@@ -1018,12 +957,7 @@ export class BrowseComponent {
           next: (d) => this.currentDoc.set(d),
         });
       },
-      error: () =>
-        this.snackBar.open(
-          this.translate.instant('browse.message.failed-to-remove-tag'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
+      error: () => this.toast.error(this.translate.instant('browse.message.failed-to-remove-tag')),
     });
   }
 
@@ -1126,7 +1060,6 @@ export class BrowseComponent {
         this.trashedDocs.set(res.entries);
         this.trashLoading.set(false);
         this.trashLoaded = true;
-        this.loadThumbnails(res.entries, false);
       },
       error: () => this.trashLoading.set(false),
     });
@@ -1135,18 +1068,12 @@ export class BrowseComponent {
   restoreDocument(doc: NuxeoDocument): void {
     this.browseService.restoreDocument(doc.uid).subscribe({
       next: () => {
-        this.snackBar.open(`"${doc.title}" restored`, this.translate.instant('common.ok'), {
-          duration: 3000,
-        });
+        this.toast.show(`"${doc.title}" restored`);
         this.loadTrash();
         this.loadContent();
       },
       error: () =>
-        this.snackBar.open(
-          this.translate.instant('browse.message.failed-to-restore-document'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
+        this.toast.error(this.translate.instant('browse.message.failed-to-restore-document')),
     });
   }
 
@@ -1190,9 +1117,7 @@ export class BrowseComponent {
     if (!doc || this.csvExporting()) return;
 
     this.csvExporting.set(true);
-    this.snackBar.open(this.translate.instant('browse.message.starting-csv-export'), undefined, {
-      duration: 2000,
-    });
+    this.toast.show(this.translate.instant('browse.message.starting-csv-export'));
 
     this.browseService
       .startCsvExport(doc.uid)
@@ -1206,19 +1131,11 @@ export class BrowseComponent {
           a.click();
           URL.revokeObjectURL(url);
           this.csvExporting.set(false);
-          this.snackBar.open(
-            this.translate.instant('browse.message.csv-exported-successfully'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('browse.message.csv-exported-successfully'));
         },
         error: () => {
           this.csvExporting.set(false);
-          this.snackBar.open(
-            this.translate.instant('browse.message.csv-export-failed'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.error(this.translate.instant('browse.message.csv-export-failed'));
         },
       });
   }
@@ -1279,31 +1196,15 @@ export class BrowseComponent {
   openCreateImportDialog(): void {
     const doc = this.currentDoc();
     if (!doc || !this.isBrowseFolderish(doc)) {
-      this.snackBar.open(
-        this.translate.instant('browse.message.open-a-folder-to-create-or-import'),
-        this.translate.instant('common.ok'),
-        { duration: 4000 },
-      );
+      this.toast.show(this.translate.instant('browse.message.open-a-folder-to-create-or-import'));
       return;
     }
     if (!canAddChildren(doc)) {
-      this.snackBar.open(
-        this.translate.instant(PERMISSION_DENIED_KEY),
-        this.translate.instant('common.ok'),
-        {
-          duration: 4000,
-        },
-      );
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
     if (isDomainParentType(doc.type) || isRestrictedImportParentPath(doc.path)) {
-      this.snackBar.open(
-        this.translate.instant(DOMAIN_CONTAINER_GUIDANCE_KEY),
-        this.translate.instant('common.ok'),
-        {
-          duration: 6000,
-        },
-      );
+      this.toast.show(this.translate.instant(DOMAIN_CONTAINER_GUIDANCE_KEY), { duration: 6000 });
       return;
     }
     this.dialog
@@ -1364,13 +1265,7 @@ export class BrowseComponent {
     const doc = this.currentDoc();
     if (!doc) return;
     if (!canWriteDocument(doc)) {
-      this.snackBar.open(
-        this.translate.instant(PERMISSION_DENIED_KEY),
-        this.translate.instant('common.ok'),
-        {
-          duration: 4000,
-        },
-      );
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
     const data: EditMetadataDialogData = {
@@ -1431,13 +1326,7 @@ export class BrowseComponent {
       .subscribe({
         next: (fullDoc) => {
           if (!canWriteDocument(fullDoc)) {
-            this.snackBar.open(
-              this.translate.instant(PERMISSION_DENIED_KEY),
-              this.translate.instant('common.ok'),
-              {
-                duration: 4000,
-              },
-            );
+            this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
             return;
           }
           const ref = this.dialog.open(EditCollectionDialogComponent, {
@@ -1451,21 +1340,15 @@ export class BrowseComponent {
               if (updatedDoc) {
                 this.browseContext.requestTreeRefresh();
                 this.loadContent();
-                this.snackBar.open(
-                  this.translate.instant('browse.message.collection-updated'),
-                  this.translate.instant('common.ok'),
-                  { duration: 3000 },
-                );
+                this.toast.show(this.translate.instant('browse.message.collection-updated'));
               }
             });
         },
         error: (err) =>
-          this.snackBar.open(
+          this.toast.error(
             isPermissionDeniedError(err)
               ? this.translate.instant(PERMISSION_DENIED_KEY)
               : this.translate.instant('browse.message.failed-to-load-collection'),
-            this.translate.instant('common.ok'),
-            { duration: isPermissionDeniedError(err) ? 4000 : 3000 },
           ),
       });
   }
@@ -1477,13 +1360,7 @@ export class BrowseComponent {
       .subscribe({
         next: (fullDoc) => {
           if (!canRemoveDocument(fullDoc)) {
-            this.snackBar.open(
-              this.translate.instant(PERMISSION_DENIED_KEY),
-              this.translate.instant('common.ok'),
-              {
-                duration: 4000,
-              },
-            );
+            this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
             return;
           }
           const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -1508,30 +1385,24 @@ export class BrowseComponent {
                     this.selectionService.clear();
                     this.browseContext.requestTreeRefresh();
                     this.loadContent();
-                    this.snackBar.open(
+                    this.toast.show(
                       this.translate.instant('browse.message.collection-moved-to-trash'),
-                      this.translate.instant('common.ok'),
-                      { duration: 3000 },
                     );
                   },
                   error: (err) =>
-                    this.snackBar.open(
+                    this.toast.error(
                       isPermissionDeniedError(err)
                         ? this.translate.instant(PERMISSION_DENIED_KEY)
                         : this.translate.instant('browse.message.failed-to-delete-collection'),
-                      this.translate.instant('common.ok'),
-                      { duration: isPermissionDeniedError(err) ? 4000 : 3000 },
                     ),
                 });
             });
         },
         error: (err) =>
-          this.snackBar.open(
+          this.toast.error(
             isPermissionDeniedError(err)
               ? this.translate.instant(PERMISSION_DENIED_KEY)
               : this.translate.instant('browse.message.failed-to-load-collection'),
-            this.translate.instant('common.ok'),
-            { duration: isPermissionDeniedError(err) ? 4000 : 3000 },
           ),
       });
   }
@@ -1583,35 +1454,24 @@ export class BrowseComponent {
           this.proceedToTrashDocument(doc);
         },
         error: () =>
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant('browse.message.failed-to-verify-folder-contents'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
           ),
       });
   }
 
   private proceedToTrashDocument(doc: NuxeoDocument): void {
     if (!canRemoveDocument(doc)) {
-      this.snackBar.open(
-        this.translate.instant(PERMISSION_DENIED_KEY),
-        this.translate.instant('common.ok'),
-        {
-          duration: 4000,
-        },
-      );
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
     this.openTrashConfirmDialog(doc);
   }
 
   private showCollectionsFolderDeleteBlockedMessage(): void {
-    this.snackBar.open(
+    this.toast.error(
       this.translate.instant('browse.message.remove-all-collections-from-this-folder-before'),
-      this.translate.instant('common.ok'),
-      {
-        duration: 5000,
-      },
+      { duration: 5000 },
     );
   }
 
@@ -1640,22 +1500,16 @@ export class BrowseComponent {
           .pipe(takeUntilDestroyed(this.destroyRef))
           .subscribe({
             next: () => {
-              this.snackBar.open(
-                this.translate.instant('browse.message.moved-to-trash'),
-                this.translate.instant('common.ok'),
-                { duration: 3000 },
-              );
+              this.toast.show(this.translate.instant('browse.message.moved-to-trash'));
               this.browseContext.resetContext();
               this.browseContext.requestTreeRefresh();
               void this.router.navigateByUrl(postTrashBrowseRouterUrl(doc.path));
             },
             error: (err) =>
-              this.snackBar.open(
+              this.toast.error(
                 isPermissionDeniedError(err)
                   ? this.translate.instant(PERMISSION_DENIED_KEY)
                   : this.translate.instant('browse.message.failed-to-delete'),
-                this.translate.instant('common.ok'),
-                { duration: isPermissionDeniedError(err) ? 4000 : 3000 },
               ),
           });
       });
@@ -1687,7 +1541,7 @@ export class BrowseComponent {
 
           if (allowed.length === 0) {
             if (loadFailedCount > 0) {
-              this.snackBar.open(
+              this.toast.error(
                 resolved.length === 0
                   ? this.translate.instant(
                       'browse.message.failed-to-load-selected-documents-for-deletion',
@@ -1698,49 +1552,36 @@ export class BrowseComponent {
                         : 'common.count.skipped-unloadable-many',
                       { count: loadFailedCount },
                     ),
-                this.translate.instant('common.ok'),
                 { duration: 5000 },
               );
             }
             if (resolved.length > 0) {
-              this.snackBar.open(
-                this.translate.instant(PERMISSION_DENIED_KEY),
-                this.translate.instant('common.ok'),
-                {
-                  duration: 4000,
-                },
-              );
+              this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
             }
             return EMPTY;
           }
 
           if (loadFailedCount > 0) {
-            this.snackBar.open(
+            this.toast.error(
               this.translate.instant(
                 loadFailedCount === 1
                   ? 'common.count.skipped-unloadable-one'
                   : 'common.count.skipped-unloadable-many',
                 { count: loadFailedCount },
               ),
-              this.translate.instant('common.ok'),
-              {
-                duration: 5000,
-              },
+              { duration: 5000 },
             );
           }
 
           if (denied.length > 0) {
-            this.snackBar.open(
+            this.toast.error(
               this.translate.instant(
                 denied.length === 1
                   ? 'common.count.skipped-no-permission-one'
                   : 'common.count.skipped-no-permission-many',
                 { count: denied.length },
               ),
-              this.translate.instant('common.ok'),
-              {
-                duration: 5000,
-              },
+              { duration: 5000 },
             );
           }
 
@@ -1782,44 +1623,30 @@ export class BrowseComponent {
       .subscribe({
         next: ({ docs, trashed }) => {
           if (trashed === 0) {
-            this.snackBar.open(
-              this.translate.instant('browse.message.failed-to-delete'),
-              this.translate.instant('common.ok'),
-              { duration: 3000 },
-            );
+            this.toast.error(this.translate.instant('browse.message.failed-to-delete'));
             return;
           }
           this.selectionService.clear();
-          this.snackBar.open(
+          this.toast.show(
             trashed === 1
               ? this.translate.instant('browse.message.moved-to-trash')
               : `${trashed} documents moved to trash`,
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
           );
           if (trashed < docs.length) {
-            this.snackBar.open(
+            this.toast.error(
               this.translate.instant(
                 docs.length - trashed === 1
                   ? 'common.count.delete-failed-one'
                   : 'common.count.delete-failed-many',
                 { count: docs.length - trashed },
               ),
-              this.translate.instant('common.ok'),
-              {
-                duration: 5000,
-              },
+              { duration: 5000 },
             );
           }
           this.browseContext.requestTreeRefresh();
           this.loadContent();
         },
-        error: () =>
-          this.snackBar.open(
-            this.translate.instant('browse.message.failed-to-delete'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          ),
+        error: () => this.toast.error(this.translate.instant('browse.message.failed-to-delete')),
       });
   }
 
@@ -1835,12 +1662,7 @@ export class BrowseComponent {
         a.click();
         URL.revokeObjectURL(url);
       },
-      error: () =>
-        this.snackBar.open(
-          this.translate.instant('browse.message.download-failed'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
+      error: () => this.toast.error(this.translate.instant('browse.message.download-failed')),
     });
   }
 
@@ -1867,22 +1689,14 @@ export class BrowseComponent {
         this.browseService.getByPath(this.currentNuxeoPath).subscribe({
           next: (d) => this.currentDoc.set(d),
         });
-        this.snackBar.open(
+        this.toast.show(
           wasSubscribed
             ? this.translate.instant('browse.message.unsubscribed')
             : this.translate.instant('browse.message.subscribed-to-notifications'),
-          this.translate.instant('common.ok'),
-          {
-            duration: 3000,
-          },
         );
       },
       error: () =>
-        this.snackBar.open(
-          this.translate.instant('browse.message.failed-to-update-notifications'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
+        this.toast.error(this.translate.instant('browse.message.failed-to-update-notifications')),
     });
   }
 
@@ -1958,7 +1772,7 @@ export class BrowseComponent {
 
   toggleSelection(id: string): void {
     const doc = this.filteredEntries().find((d) => d.uid === id);
-    this.selectionService.toggle(id, doc?.title ?? id, this.thumbnailMap()[id] ?? null, doc?.type);
+    this.selectionService.toggle(id, doc?.title ?? id, null, doc?.type);
   }
 
   onRowClick(doc: NuxeoDocument): void {
@@ -2036,11 +1850,7 @@ export class BrowseComponent {
         },
         error: () => {
           this.permissionsLoading.set(false);
-          this.snackBar.open(
-            this.translate.instant('browse.message.failed-to-load-permissions'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
-          );
+          this.toast.error(this.translate.instant('browse.message.failed-to-load-permissions'));
         },
       });
   }
@@ -2076,11 +1886,7 @@ export class BrowseComponent {
       .subscribe((deleted: boolean | undefined) => {
         if (deleted) {
           this.reloadPermissions();
-          this.snackBar.open(
-            this.translate.instant('browse.message.permission-deleted'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('browse.message.permission-deleted'));
         }
       });
   }
@@ -2098,11 +1904,7 @@ export class BrowseComponent {
       .subscribe((created: boolean | undefined) => {
         if (created) {
           this.reloadPermissions();
-          this.snackBar.open(
-            this.translate.instant('browse.message.shared-with-external-user'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
         }
       });
   }
@@ -2120,11 +1922,7 @@ export class BrowseComponent {
       .subscribe((updated: boolean | undefined) => {
         if (updated) {
           this.reloadPermissions();
-          this.snackBar.open(
-            this.translate.instant('browse.message.permission-updated'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('browse.message.permission-updated'));
         }
       });
   }
@@ -2139,18 +1937,14 @@ export class BrowseComponent {
       .subscribe({
         next: () => {
           this.actionInProgress.set(null);
-          this.snackBar.open(
-            this.translate.instant('browse.message.notification-email-sent'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('browse.message.notification-email-sent'));
         },
         error: (err) => {
           this.actionInProgress.set(null);
           const message = isMailSendError(err)
             ? mailSendFailureMessage('send', (key) => this.translate.instant(key))
             : this.translate.instant('browse.message.failed-to-send-notification');
-          this.snackBar.open(message, this.translate.instant('common.ok'), { duration: 7000 });
+          this.toast.error(message, { duration: 7000 });
         },
       });
   }

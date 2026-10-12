@@ -181,7 +181,10 @@ into the library to dodge the rule.
    `allowedNonPeerDependencies`.
 7. Shared state is an `InjectionToken` with an exported `provide…()` function, never `providedIn`.
    A service only one component uses goes in that component's `providers`, as
-   `NxsPermissionsService` does.
+   `NxsPermissionsService` does. A stateless service many components use is listed in each
+   consumer's `providers` through its `provide…()` function, as `NxsToastService` is
+   (`provideNxsToast()`); a spec replaces it with `TestBed.overrideProvider`, which reaches a
+   component's own providers where a root-level `{ provide, useValue }` does not.
 8. Members only the template uses are `protected`, so the component's contract is its inputs and
    outputs. Specs reach them by element access (`panel()['save']()`).
 9. A component that replaces packaged markup is registered by ID (`nxs.<group>.<name>`, exported as

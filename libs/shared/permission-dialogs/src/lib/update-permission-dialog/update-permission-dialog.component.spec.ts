@@ -2,7 +2,6 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -13,6 +12,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { UpdatePermissionDialogComponent } from './update-permission-dialog';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 const ace: NuxeoAce = {
   id: 'ace-1',
@@ -29,14 +29,15 @@ const ace: NuxeoAce = {
 describe('UpdatePermissionDialogComponent (NXSAT-159)', () => {
   let fixture: ComponentFixture<UpdatePermissionDialogComponent>;
   let closeSpy: ReturnType<typeof vi.fn>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let replacePermissionWithNotification: ReturnType<typeof vi.fn>;
   let removePermission: ReturnType<typeof vi.fn>;
   let addExternalPermissionWithNotification: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     closeSpy = vi.fn();
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     replacePermissionWithNotification = vi
       .fn()
       .mockReturnValue(of({ document: { uid: 'doc-1' }, notificationSent: true }));
@@ -62,7 +63,6 @@ describe('UpdatePermissionDialogComponent (NXSAT-159)', () => {
             addExternalPermissionWithNotification,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(UpdatePermissionDialogComponent, {
@@ -91,11 +91,9 @@ describe('UpdatePermissionDialogComponent (NXSAT-159)', () => {
         comment: 'Updated access',
       }),
     );
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Permission updated and notification sent',
-      'Dismiss',
-      { duration: 7000 },
-    );
+    expect(toast.show).toHaveBeenCalledWith('Permission updated and notification sent', {
+      duration: 7000,
+    });
     expect(closeSpy).toHaveBeenCalledWith(true);
   });
 
@@ -110,9 +108,8 @@ describe('UpdatePermissionDialogComponent (NXSAT-159)', () => {
 
     fixture.componentInstance.update();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.show).toHaveBeenCalledWith(
       'Permission was updated, but the notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'Dismiss',
       { duration: 7000 },
     );
   });
@@ -126,12 +123,9 @@ describe('UpdatePermissionDialogComponent (NXSAT-159)', () => {
 
     fixture.componentInstance.update();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Permission could not be updated. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'Dismiss',
-      {
-        duration: 7000,
-      },
+      { duration: 7000 },
     );
     expect(closeSpy).not.toHaveBeenCalled();
   });
@@ -140,14 +134,15 @@ describe('UpdatePermissionDialogComponent (NXSAT-159)', () => {
 describe('UpdatePermissionDialogComponent external (NXSAT-159)', () => {
   let fixture: ComponentFixture<UpdatePermissionDialogComponent>;
   let closeSpy: ReturnType<typeof vi.fn>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let replacePermissionWithNotification: ReturnType<typeof vi.fn>;
   let removePermission: ReturnType<typeof vi.fn>;
   let addExternalPermissionWithNotification: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     closeSpy = vi.fn();
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     replacePermissionWithNotification = vi
       .fn()
       .mockReturnValue(of({ document: { uid: 'doc-1' }, notificationSent: true }));
@@ -177,7 +172,6 @@ describe('UpdatePermissionDialogComponent external (NXSAT-159)', () => {
             addExternalPermissionWithNotification,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(UpdatePermissionDialogComponent, {
@@ -202,10 +196,8 @@ describe('UpdatePermissionDialogComponent external (NXSAT-159)', () => {
         comment: 'External invite',
       }),
     );
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Permission updated and notification sent',
-      'Dismiss',
-      { duration: 7000 },
-    );
+    expect(toast.show).toHaveBeenCalledWith('Permission updated and notification sent', {
+      duration: 7000,
+    });
   });
 });

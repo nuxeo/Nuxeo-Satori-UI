@@ -198,8 +198,10 @@
                   @for (doc of members(); track doc.uid) {
                     <tr class="member-row" (click)="onRowClick(doc)">
                       <td class="cell-title">
-                        @if (thumbnailMap()[doc.uid]; as thumb) {
-                          <img [src]="thumb" alt="" class="doc-thumb" />
+                        @if (canLoadThumbnail(doc)) {
+                          <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
+                            <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
+                          </nxs-thumbnail>
                         } @else {
                           <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
                         }

@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { EMPTY, of } from 'rxjs';
@@ -123,7 +122,6 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
             forgetPreviews: vi.fn(),
           },
         },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) },
