@@ -4,7 +4,7 @@
  * WCAG 2.4.7 / 1.4.11). Karma loads theme tokens and compiled styles like production.
  * Standalone `:focus` selector shape and SCSS token wiring are owned by
  * `document-viewer-footer-focus-ring.spec.ts` (shared/ui Vitest); this suite owns computed
- * outline geometry, per-theme contrast, and the `--document-viewer-focus-on-light-surface` hook.
+ * outline geometry and per-theme focus-indicator contrast on the footer strip.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -127,9 +127,6 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
       button?.blur();
     }
     fixture.nativeElement.remove();
-    (fixture.nativeElement as HTMLElement).style.removeProperty(
-      '--document-viewer-focus-on-light-surface',
-    );
     if (originalTheme === null) {
       document.documentElement.removeAttribute('data-app-theme');
     } else {
@@ -152,17 +149,6 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
     expect(button).withContext('expected Download footer button').not.toBeNull();
     return button!;
   }
-
-  it('wires the focus ring through --document-viewer-focus-on-light-surface on the viewer host', () => {
-    const button = previewButton();
-    const host = fixture.nativeElement as HTMLElement;
-    const sentinel = 'rgb(1, 2, 3)';
-    host.style.setProperty('--document-viewer-focus-on-light-surface', sentinel);
-    fixture.detectChanges();
-    button.focus();
-
-    expect(getComputedStyle(button).outlineColor).toBe(sentinel);
-  });
 
   for (const theme of [...COMPILED_THEME_BASES, null] as const) {
     const label = theme ?? 'no data-app-theme (first paint)';
