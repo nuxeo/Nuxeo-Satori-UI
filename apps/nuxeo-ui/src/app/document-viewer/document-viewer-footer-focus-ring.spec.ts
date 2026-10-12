@@ -1,7 +1,8 @@
 /**
- * NXSAT-496 — Document viewer footer icon buttons (Preview, Download, …) must show a keyboard
- * focus indicator on the fixed light footer strip (IBM `style_focus_visible` / 1425495611,
- * WCAG 2.4.7 / 1.4.11). Karma loads theme tokens and compiled styles like production.
+ * NXSAT-496 / NXSAT-520 — Document viewer footer icon buttons (Preview, Download, …) must show a
+ * keyboard focus indicator on the fixed light footer strip (IBM `style_focus_visible` /
+ * 1425495611, 1924385914, WCAG 2.4.7 / 1.4.11). Karma loads theme tokens and compiled styles
+ * like production.
  * Standalone `:focus` selector shape and SCSS token wiring are owned by
  * `document-viewer-footer-focus-ring.spec.ts` (shared/ui Vitest); this suite owns computed
  * outline geometry and per-theme focus-indicator contrast on the footer strip.
@@ -149,6 +150,16 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
     expect(button).withContext('expected Download footer button').not.toBeNull();
     return button!;
   }
+
+  it('focuses the Download footer control with IBM-readable outline (NXSAT-520 / IBM 1924385914)', () => {
+    const footer = fixture.nativeElement.querySelector('.viewer-footer') as HTMLElement | null;
+    expect(footer).withContext('expected .viewer-footer strip').not.toBeNull();
+    if (!footer) return;
+
+    const button = downloadButton();
+    expect(button.getAttribute('aria-label')).toBe('Download');
+    assertFocusRingContrast(button, footer, 'NXSAT-520 — Download (Preview tab footer)');
+  });
 
   for (const theme of [...COMPILED_THEME_BASES, null] as const) {
     const label = theme ?? 'no data-app-theme (first paint)';
