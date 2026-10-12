@@ -3928,6 +3928,31 @@ expectRed(
   /is a date format pattern rather than text a user reads/,
 );
 
+// Angular escapes literal text in a pattern with single quotes. `d 'de' MMMM 'de' y` is the
+// Spanish long date and is entirely a pattern, but reads as prose unless the quotes are
+// understood.
+expectRed(
+  'a date pattern containing quoted literals',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', '{\n  "a": "d \'de\' MMMM \'de\' y"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
+// `[^)]*` stopped at the inner `()`, so a format supplied by a method or signal was invisible
+// to an arm that claims to hold regardless of key or value.
+expectRed(
+  'a translated DatePipe format behind a nested call',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write(
+      'libs/features/x/src/lib/x.html',
+      '<span>{{ entry.eventDate | date: (formatKey() | translate) }}</span>\n',
+    ),
+  /passes a translated string to `DatePipe` as its format/,
+);
+
 // Prettier wraps a long interpolation, and both real call sites were indented deeply enough
 // to be candidates. A line-scoped scan missed this shape entirely.
 expectRed(
@@ -4023,6 +4048,23 @@ expectGreen('a named DatePipe format and a translated label', 'checkNoTranslatab
   'libs/features/x/src/lib/x.html':
     "<span>{{ entry.eventDate | date: 'longDate' }}</span>\n" +
     "<span>{{ 'x.title' | translate }}</span>\n",
+});
+
+// Stripping quoted runs must not swallow an apostrophe. One quote is punctuation, not a
+// literal — only a balanced pair is stripped — so French and English contractions stay prose.
+falsePositiveControls += 1;
+expectGreen('apostrophes in ordinary prose', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json':
+    '{\n  "a": "Don\'t",\n  "b": "L\'ami d\'Henri",\n  "c": "can\'t open"\n}\n',
+});
+
+// A date format that happens to sit next to a translated argument elsewhere in the same
+// interpolation is not this defect; only the format argument itself matters.
+falsePositiveControls += 1;
+expectGreen('a method-supplied format that is not translated', 'checkNoTranslatableDatePatterns', {
+  ...APP,
+  'libs/features/x/src/lib/x.html': '<span>{{ entry.eventDate | date: formatKey() }}</span>\n',
 });
 
 /* ---------------- the contract marker, not the prose around it ---------------- */

@@ -6283,11 +6283,25 @@ function checkNoTranslatableDatePatterns() {
    * **A digit disqualifies.** A format pattern has no literal digits — `2026` in a value
    * means it is a rendered date or ordinary text, not a pattern. This was implicit while the
    * rule was ASCII-only; it has to be explicit now that literals are allowed through.
+   *
+   * **Quoted runs are literals, not words.** Angular escapes literal text in a pattern with
+   * single quotes — `d 'de' MMMM 'de' y` is the Spanish long date, `d 'at' HH:mm` a common
+   * shape. Read naively, `de` and `at` are ordinary words, which fails the one-repeated-letter
+   * test and let a value that is *entirely* a date pattern through. They are stripped before
+   * the shape test, so they are judged as separators.
+   *
+   * Only BALANCED quotes are stripped, which is what keeps an apostrophe out of it: `Don't`
+   * and `L'élément` have one quote and are left intact, so they are still read as prose.
+   * `L'ami d'Henri` has two, so `'ami d'` is stripped — and `L` and `Henri` are still prose,
+   * so it is still not flagged.
    */
+  const QUOTED_LITERAL = /'[^']*'/g;
+
   const isBareDatePattern = (value) => {
     if (/\d/.test(value)) return false;
-    const words = value.split(/[^A-Za-z]+/).filter(Boolean);
-    const separators = value.split(/[A-Za-z]+/).filter(Boolean);
+    const bare = value.replace(QUOTED_LITERAL, ' ');
+    const words = bare.split(/[^A-Za-z]+/).filter(Boolean);
+    const separators = bare.split(/[A-Za-z]+/).filter(Boolean);
     if (words.length === 0) return false;
     if (!separators.every(isLiteralSegment)) return false;
     if (!words.every((word) => new Set(word.toLowerCase()).size === 1)) return false;
@@ -6351,18 +6365,42 @@ function checkNoTranslatableDatePatterns() {
     return;
   }
 
-  // `| date:` followed by anything containing `| translate` before the interpolation closes.
+  // `| date: (` — then the matching close paren, found by counting depth.
   //
-  // Matched against the whole file, not line by line. Prettier wraps a long interpolation
-  // across lines, so the line-scoped version missed exactly the bindings most likely to exist
-  // — the deeply indented ones, which is what both of the real call sites were. `[^)]` already
-  // spans newlines; it was splitting the file first that broke it. The line number comes from
-  // the match offset instead.
-  const TRANSLATED_DATE_FORMAT = /\|\s*date:\s*\([^)]*\|\s*translate[^)]*\)/g;
+  // Two things this is deliberately NOT. It is not line-scoped: Prettier wraps a long
+  // interpolation, so the line-scoped first version missed exactly the bindings most likely
+  // to exist — the deeply indented ones, which is what both of the real call sites were.
+  //
+  // And the span is not `[^)]*`, which stops at the FIRST close paren and so could not see
+  // `date: (formatKey() | translate)` — the inner `()` ended the match before `translate` was
+  // reached. A format supplied by a method or a signal is the same defect wearing a call, and
+  // the arm claims to hold "regardless of key or value", so depth counting it is.
+  const DATE_FORMAT_OPEN = /\|\s*date:\s*\(/g;
+  const TRANSLATE_IN_SPAN = /\|\s*translate\b/;
+
+  /** The index just past the `)` matching the `(` at `open`, or -1 if it never closes. */
+  const matchingParen = (text, open) => {
+    let depth = 0;
+    for (let at = open; at < text.length; at += 1) {
+      if (text[at] === '(') depth += 1;
+      else if (text[at] === ')') {
+        depth -= 1;
+        if (depth === 0) return at;
+      }
+      // An unbalanced `(` would otherwise run to end of file and swallow every later
+      // binding into one span. An interpolation cannot cross `}}`, so stop there.
+      else if (text.startsWith('}}', at)) return -1;
+    }
+    return -1;
+  };
 
   for (const file of templates) {
     const text = read(file);
-    for (const match of text.matchAll(TRANSLATED_DATE_FORMAT)) {
+    for (const match of text.matchAll(DATE_FORMAT_OPEN)) {
+      const open = match.index + match[0].length - 1;
+      const close = matchingParen(text, open);
+      if (close === -1) continue;
+      if (!TRANSLATE_IN_SPAN.test(text.slice(open, close))) continue;
       const line = text.slice(0, match.index).split('\n').length;
       fail(
         `${file}:${line} passes a translated string to \`DatePipe\` as its format.\n` +
