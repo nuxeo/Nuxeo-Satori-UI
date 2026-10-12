@@ -3,21 +3,13 @@ title: Repository Guide
 parent: Engineering
 order: 3
 last_reviewed: 2026-10-12
-<<<<<<< HEAD
-repo_commit: 72c94d6
-=======
 repo_commit: de2530c
->>>>>>> origin/integration/nxsat-308
 audience: engineering
 ---
 
 # Repository Guide
 
-<<<<<<< HEAD
-> **Last reviewed:** 2026-10-12 · **Repository:** `72c94d6` (`integration/nxsat-308`)
-=======
 > **Last reviewed:** 2026-10-12 · **Repository:** `de2530c` (`feature/nxsat-308-thumbnail`)
->>>>>>> origin/integration/nxsat-308
 > Only the `satori-components` and `satori-components-satori` rows of "Shared libraries" and the
 > `libs/platform` row of "The other three" were re-verified at that commit, each library counted as
 > every tracked `.ts`, `.html` and `.scss` file in its folder — the measure of the TS/HTML/SCSS
@@ -130,11 +122,7 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 > their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%.
 > `core` has the same shape. Of 17 measured projects, 6 read as ≥90% and **3 genuinely are**.
 
-<<<<<<< HEAD
-### Shared libraries — 13, 49,100 lines
-=======
 ### Shared libraries — 13, 49,959 lines
->>>>>>> origin/integration/nxsat-308
 
 | Library                    |  Lines | Specs | Responsibility                                                                                                                                                           |
 | -------------------------- | -----: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
@@ -149,11 +137,7 @@ It also carries the reference Layer 0/1/2 customisation the upgrade rehearsal st
 | `ke-client`                |    734 |     1 | Knowledge Enrichment client                                                                                                                                              |
 | `ai-client`                |    457 | **0** | The 12 `AI.*` operations. Thin HTTP client                                                                                                                               |
 | `util`                     |    108 |     0 | Small helpers                                                                                                                                                            |
-<<<<<<< HEAD
-| `satori-components`        |  8,700 |    17 | The `nxs-` components replacing adf-hx. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308; counted 2026-10-12)                                             |
-=======
 | `satori-components`        |  9,559 |    19 | The `nxs-` components replacing adf-hx. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308; counted 2026-10-12)                                             |
->>>>>>> origin/integration/nxsat-308
 | `satori-components-satori` |    520 |     1 | The same `nxs-` primitive IDs on Satori, and the platform package's only Satori import. **Published** as `@nuxeo-satori/platform/components-satori` (counted 2026-10-12) |
 
 ### The other three
