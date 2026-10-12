@@ -285,16 +285,18 @@ export const NoLocalEntries: Story = {
 };
 
 /**
- * The read failed for a reason other than permission, so the panel offers Retry. The next read
- * succeeds: select Retry to see the permissions load.
+ * The read failed for a reason other than permission, so the panel offers Retry. The play selects
+ * it and the next read succeeds; step back in the Interactions panel to see the failure.
  */
 export const ReadFailed: Story = {
   decorators: [withDocument({ ...SHARED, readFails: 500, failedReads: 1 })],
-  play: async ({ canvas }) => {
+  play: async ({ canvas, userEvent }) => {
     const alert = await canvas.findByRole('alert');
     await waitFor(() => expect(alert).toHaveTextContent('The permissions could not be loaded.'));
-    await expect(canvas.getByRole('button', { name: 'Retry' })).toBeVisible();
     await expect(canvas.queryByRole('table')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(canvas.getAllByRole('table')).toHaveLength(2));
+    await expect(canvas.queryByRole('alert')).toBeNull();
   },
 };
 
