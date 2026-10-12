@@ -26,10 +26,9 @@ export class NxsEmptyStateComponent {
    * The heading's level in the page outline, rendered as the native `<h1>`–`<h6>`. Set it to fit
    * where the component sits — one below the heading of the section it empties — so heading
    * navigation stays in order.
-   *
-   * Annotated rather than inferred: an inferred union is declared in the compiler's type order,
-   * which moves with unrelated code and broke the published API snapshot on every such change.
    */
+  // Annotated rather than inferred: an inferred union is declared in the compiler's type order,
+  // which moves with unrelated code and would change the published API snapshot each time.
   readonly headingLevel: InputSignal<NxsHeadingLevel> = input<NxsHeadingLevel>(2);
   /** An optional second line — usually what to do next. Not rendered when blank. */
   readonly message = input('');

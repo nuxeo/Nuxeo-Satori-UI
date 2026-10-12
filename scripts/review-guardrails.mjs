@@ -7176,19 +7176,20 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
 }
 
 /**
- * The component classes a story file documents: `{ file, className }` keys, as `file#className`.
+ * A story file's default-exported meta and its top-level names, read from its syntax tree.
  *
- * A story counts when its default-exported meta names the class as `component:`, the class is
- * imported from the module that declares it, and the file exports at least one story. The meta may
- * be the default export itself or a variable it names, optionally behind `satisfies` or `as`.
+ * `meta` is the object literal Storybook reads — the default export itself, a variable it names, or
+ * `export { meta as default }`, behind `satisfies`, `as` or parentheses — or `null` when there is no
+ * object literal to read. `metaProperty(name)` is one of its keys' value: the last one, as JavaScript
+ * keeps it when a key repeats, and for a shorthand (`{ excludeStories }`) the file's top-level
+ * constant of that name. `null` when the key is absent; `undefined` when there is nothing to read, or
+ * the key is a method or an accessor. With `resolveIdentifier`, a value that is a bare name is
+ * replaced by the top-level constant it names (`tags: TAGS`).
  *
- * A story is a named export Storybook renders — `export const`, `export function` or a local
- * `export { … }`, under the name it is exported as: the meta's `includeStories` and
- * `excludeStories` apply, as a list of names or a regex literal. One the guardrail cannot read is a
- * failure.
+ * `imports` maps each named import to the file it resolves to and the name it is exported under;
+ * `namedExports` lists the file's named exports, under the names they are exported as.
  */
-function storiedComponents(storyFile, pathMaps) {
-  const covered = new Set();
+function readStoryFile(storyFile, pathMaps) {
   const source = ts.createSourceFile(storyFile, read(storyFile), ts.ScriptTarget.Latest, true);
 
   const imports = new Map();
@@ -7260,7 +7261,49 @@ function storiedComponents(storyFile, pathMaps) {
   if (defaultExport && ts.isIdentifier(defaultExport)) {
     defaultExport = unwrap(variables.get(defaultExport.text));
   }
-  if (!defaultExport || !ts.isObjectLiteralExpression(defaultExport)) return covered;
+  const meta = defaultExport && ts.isObjectLiteralExpression(defaultExport) ? defaultExport : null;
+  const metaProperty = (name, { resolveIdentifier = false } = {}) => {
+    if (!meta) return null;
+    const property = meta.properties.findLast((p) => staticPropertyKey(p) === name);
+    if (!property) return null;
+    let value;
+    if (ts.isPropertyAssignment(property)) value = unwrap(property.initializer);
+    else if (ts.isShorthandPropertyAssignment(property)) value = unwrap(variables.get(name));
+    else return undefined;
+    return resolveIdentifier && value && ts.isIdentifier(value)
+      ? unwrap(variables.get(value.text))
+      : value;
+  };
+  return { meta, imports, namedExports, metaProperty };
+}
+
+/**
+ * The component classes a story file documents: `{ file, className }` keys, as `file#className`.
+ *
+ * A story counts when its default-exported meta names the class as `component:`, the class is
+ * imported from the module that declares it, and the file exports at least one story. The meta may
+ * be the default export itself or a variable it names, optionally behind `satisfies` or `as`.
+ *
+ * A story is a named export Storybook renders — `export const`, `export function` or a local
+ * `export { … }`, under the name it is exported as: the meta's `includeStories` and
+ * `excludeStories` apply, as a list of names or a regex literal. One the guardrail cannot read is a
+ * failure.
+ *
+ * Every readable meta that names a component must also be tagged `autodocs`, so the component has
+ * its API page; that is checked here because this is where the meta is read. A missing tag fails
+ * the file; it does not change which components the file is counted as documenting. A meta that
+ * names no component has no inputs or outputs to list, so it needs no API page — it is documented
+ * by an Overview instead, which `checkSatoriComponentsHaveOverviews` requires.
+ */
+function storiedComponents(storyFile, pathMaps) {
+  const covered = new Set();
+  const {
+    meta: defaultExport,
+    imports,
+    namedExports,
+    metaProperty,
+  } = readStoryFile(storyFile, pathMaps);
+  if (!defaultExport) return covered;
   // A spread can carry `excludeStories` this cannot see, so the file counts no story.
   if (defaultExport.properties.some(ts.isSpreadAssignment)) {
     fail(
@@ -7277,16 +7320,34 @@ function storiedComponents(storyFile, pathMaps) {
     );
     return covered;
   }
-  // A property's value — the last one, as JavaScript keeps it when a key repeats. A shorthand
-  // (`{ excludeStories }`) is the file's top-level constant of that name; `undefined` when there is
-  // none to read, or the key is a method or an accessor.
-  const metaProperty = (name) => {
-    const property = defaultExport.properties.findLast((p) => staticPropertyKey(p) === name);
-    if (!property) return null;
-    if (ts.isPropertyAssignment(property)) return unwrap(property.initializer);
-    if (ts.isShorthandPropertyAssignment(property)) return unwrap(variables.get(name));
-    return undefined;
-  };
+  // Storybook generates a component's API page from a meta tagged `autodocs`: `main.ts` names that
+  // page "API" and `preview.ts` renders it from Compodoc. Without the tag the component's inputs and
+  // outputs are listed nowhere. A meta that names no component has none to list, so it is left to
+  // its Overview. Read for every story file, whether or not the component is an exported one.
+  if (metaProperty('component') !== null) {
+    const tags = metaProperty('tags', { resolveIdentifier: true });
+    if (
+      !tags ||
+      !ts.isArrayLiteralExpression(tags) ||
+      !tags.elements.every(ts.isStringLiteralLike)
+    ) {
+      fail(
+        `${storyFile} has no \`tags\` list of string literals on its default-exported meta, so ` +
+          "whether it carries `autodocs` was not read. Add `tags: ['autodocs']` — Storybook " +
+          'generates the API page that lists the component’s inputs and outputs from a meta ' +
+          'tagged `autodocs`.',
+      );
+    } else {
+      const names = tags.elements.map((element) => element.text);
+      if (!names.includes('autodocs') || names.includes('!autodocs')) {
+        fail(
+          `${storyFile} does not tag its meta \`autodocs\`, so Storybook generates no API page ` +
+            "for it and the component's inputs and outputs are not listed. Add `'autodocs'` to " +
+            "the meta's `tags`.",
+        );
+      }
+    }
+  }
 
   // `includeStories` / `excludeStories` as Storybook applies them; `undefined` when unreadable.
   const storyFilter = (name) => {
@@ -7397,7 +7458,9 @@ function storybookStoryGlobs(main) {
  * without a story ships undocumented. Read from the barrel, because an exported component is a
  * published one. A story is a `*.stories.ts` under `src/` — the glob `.storybook/main.ts` loads,
  * which is checked too — whose meta names the class as `component:`; a file that only mentions the
- * class, or names it with no story exported, does not count.
+ * class, or names it with no story exported, does not count. Every story meta that names a
+ * component must carry the `autodocs` tag, so the component has its API page (see
+ * `storiedComponents`).
  */
 function checkSatoriComponentsHaveStories() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
@@ -7441,6 +7504,189 @@ function checkSatoriComponentsHaveStories() {
         `a \`*.stories.ts\` beside it whose default-exported meta says \`component: ${className}\`, ` +
         'with at least one story exported — Storybook is the library’s documentation and the ' +
         'agent’s usage reference.',
+    );
+  }
+}
+
+/** The sections every Overview page has, as `##` headings, in any order. */
+const SATORI_COMPONENTS_OVERVIEW_SECTIONS = [
+  'Key features',
+  'Demo showcase',
+  'Usage',
+  'Examples',
+  'Accessibility',
+];
+
+/**
+ * An MDX page's structure, read from its text once code and comments are taken out: fenced code
+ * blocks, `{/* … *\/}` comments and every template literal inside braces (`code={`…`}`), which is
+ * where the pages put their code samples. What is left is the page's imports, its blocks and its
+ * headings.
+ *
+ * `namespaces` maps each `import * as X from '…'` to the file it resolves to (`null` when it names
+ * none); `metas` lists each `<Meta … />` with its `of={X}` (`undefined` when `of` is not a plain
+ * name) and `name`; `sections` lists the `##` headings; `references` lists every `of={X.Y}`;
+ * `tableRows` counts lines written as a Markdown table row (`| … |`).
+ */
+function readMdxPage(mdxFile, pathMaps) {
+  const text = read(mdxFile)
+    .replace(/^```[\s\S]*?^```/gm, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/\{\s*`(?:\\[\s\S]|[^`\\])*`\s*\}/g, '{}');
+  const namespaces = new Map();
+  for (const [, name, , specifier] of text.matchAll(
+    /^import\s+\*\s+as\s+(\w+)\s+from\s+(['"])(.+?)\2;?\s*$/gm,
+  )) {
+    namespaces.set(name, resolveFile(mdxFile, specifier, pathMaps));
+  }
+  const metas = [...text.matchAll(/<Meta\b([^>]*?)\/>/g)].map(([, attributes]) => ({
+    of: /\bof=/.test(attributes) ? /\bof=\{\s*(\w+)\s*\}/.exec(attributes)?.[1] : null,
+    name: /\bname="([^"]*)"/.exec(attributes)?.[1] ?? null,
+  }));
+  const sections = [...text.matchAll(/^##\s+(.+?)\s*$/gm)].map(([, heading]) => heading);
+  const references = [...text.matchAll(/<(\w+)\b[^>]*?\bof=\{\s*(\w+)\.(\w+)\s*\}/g)].map(
+    ([, block, namespace, story]) => ({ block, namespace, story }),
+  );
+  const tableRows = text.split('\n').filter((line) => /^\s*\|.*\|\s*$/.test(line)).length;
+  return { namespaces, metas, sections, references, tableRows };
+}
+
+/**
+ * Every component the library exports has an Overview page (the docs-coverage check).
+ *
+ * The API page is generated, so it cannot be missing; what a component is for, how to use it and
+ * how it behaves for assistive technology has to be written. An Overview is an `*.mdx` under `src/`
+ * — the glob `.storybook/main.ts` loads, which is checked too — that namespace-imports a story file
+ * and attaches to it with `<Meta of={Stories} name="Overview" />`. It counts for the component that
+ * story file's meta names as `component:`. A story file whose meta names no component has no API
+ * page (see `storiedComponents`), so it needs an Overview of its own.
+ *
+ * Each Overview has the sections in `SATORI_COMPONENTS_OVERVIEW_SECTIONS` and at least one live
+ * preview, `<Canvas of={Stories.Name} />`. Two faults Storybook builds without complaint are read on
+ * every page under `src/` and `.storybook/`: an `of={X.Y}` naming a story the imported file does
+ * not export, which shows an error where the preview should be, and a Markdown table, which renders
+ * as a paragraph of pipes because the library's MDX has no GitHub-flavoured Markdown.
+ */
+function checkSatoriComponentsHaveOverviews() {
+  if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
+  const pathMaps = tsconfigPathMaps();
+  const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
+  if (exported.size === 0) return;
+
+  const OVERVIEW_GLOB = '../src/**/*.mdx';
+  const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;
+  const globs = fileExists(main) ? storybookStoryGlobs(main) : null;
+  if (!globs?.includes(OVERVIEW_GLOB)) {
+    fail(
+      `${main} does not load \`${OVERVIEW_GLOB}\` (or could not be read), so the Overview pages ` +
+        'this check counts are not the ones Storybook renders.',
+    );
+  }
+
+  // What each story file documents: a `file#className`, `null` for a meta naming no component,
+  // `undefined` when the meta is not readable or names something the library does not declare.
+  const storyFiles = new Map();
+  for (const story of walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) =>
+    path.endsWith('.stories.ts'),
+  )) {
+    const { meta, imports, namedExports, metaProperty } = readStoryFile(story, pathMaps);
+    let documents;
+    const value = metaProperty('component');
+    if (!meta) documents = undefined;
+    else if (value === null) documents = null;
+    else if (value && ts.isIdentifier(value) && imports.has(value.text)) {
+      const origin = imports.get(value.text);
+      const declared = exportedComponentClasses(origin.file, pathMaps).get(origin.name);
+      documents = declared ? `${declared.file}#${declared.className}` : undefined;
+    }
+    storyFiles.set(story, { documents, exports: new Set(namedExports), overview: false });
+  }
+
+  const sectionList = SATORI_COMPONENTS_OVERVIEW_SECTIONS.map((s) => `\`## ${s}\``).join(', ');
+  const pages = [
+    ...walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) => path.endsWith('.mdx')),
+    ...walk(SATORI_COMPONENTS_STORYBOOK, (path) => path.endsWith('.mdx')),
+  ];
+  for (const page of pages) {
+    const { namespaces, metas, sections, references, tableRows } = readMdxPage(page, pathMaps);
+
+    if (tableRows > 0) {
+      fail(
+        `${page} writes a Markdown table, which this Storybook renders as a paragraph of pipes: ` +
+          'its MDX has no GitHub-flavoured Markdown. Write the table as `<table>` markup.',
+      );
+    }
+
+    for (const { block, namespace, story } of references) {
+      const file = namespaces.get(namespace);
+      const target = file ? storyFiles.get(file) : undefined;
+      if (!target) {
+        fail(
+          `${page} refers to \`${namespace}.${story}\` in a <${block}>, and \`${namespace}\` is ` +
+            'not a namespace import of a story file under src/, so the reference was not checked.',
+        );
+      } else if (!target.exports.has(story)) {
+        fail(
+          `${page} refers to \`${namespace}.${story}\` in a <${block}>, which ${file} does not ` +
+            'export, so the page shows an error where that preview should be.',
+        );
+      }
+    }
+
+    const overviews = metas.filter((meta) => meta.name === 'Overview');
+    if (overviews.length === 0) continue;
+    if (metas.length !== 1 || !overviews[0].of) {
+      fail(
+        `${page} has ${metas.length} <Meta> blocks, or attaches to something other than a plain ` +
+          'namespace name, so which story file it is the Overview of was not read. Write one ' +
+          '`<Meta of={Stories} name="Overview" />`.',
+      );
+      continue;
+    }
+    const attached = overviews[0].of;
+    const file = namespaces.get(attached);
+    const target = file ? storyFiles.get(file) : undefined;
+    if (!target) {
+      fail(
+        `${page} attaches to \`${attached}\`, which is not a namespace import of a story file ` +
+          'under src/, so it is the Overview of nothing this check counts.',
+      );
+      continue;
+    }
+    const missing = SATORI_COMPONENTS_OVERVIEW_SECTIONS.filter((s) => !sections.includes(s));
+    if (missing.length) {
+      fail(
+        `${page} is the Overview of ${file} and has no ${missing.map((s) => `\`## ${s}\``).join(', ')} ` +
+          `section. Every Overview has ${sectionList}.`,
+      );
+    }
+    if (!references.some((ref) => ref.block === 'Canvas' && ref.namespace === attached)) {
+      fail(
+        `${page} is the Overview of ${file} and shows none of its stories. Add at least one ` +
+          `\`<Canvas of={${attached}.<Story>} />\`, the live preview with its code.`,
+      );
+    }
+    target.overview = true;
+  }
+
+  const documented = new Set(
+    [...storyFiles.values()].filter((s) => s.overview && s.documents).map((s) => s.documents),
+  );
+  for (const [name, { file, className }] of exported) {
+    if (documented.has(`${file}#${className}`)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} exports \`${name}\` (${file}), and no Overview page documents ` +
+        `it. Add an \`*.mdx\` beside its stories that does \`import * as Stories from ` +
+        `'./<name>.stories'\` and \`<Meta of={Stories} name="Overview" />\`, whose story file's ` +
+        `meta says \`component: ${className}\`, with ${sectionList} and at least one ` +
+        '`<Canvas of={Stories.<Story>} />`.',
+    );
+  }
+  for (const [story, { documents, overview }] of storyFiles) {
+    if (documents !== null || overview) continue;
+    fail(
+      `${story} names no component, so it has no API page, and no Overview page attaches to it. ` +
+        'Add an `*.mdx` beside it with `<Meta of={Stories} name="Overview" />`.',
     );
   }
 }
@@ -7553,6 +7799,7 @@ const GUARDRAILS = [
   checkSatoriComponentsEntryPoint,
   checkSatoriComponentsFederationReadiness,
   checkSatoriComponentsHaveStories,
+  checkSatoriComponentsHaveOverviews,
   checkSatoriFallbackDependencies,
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,

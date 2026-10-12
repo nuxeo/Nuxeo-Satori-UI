@@ -1,0 +1,70 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as IconStories from './icon.stories';
+
+<Meta of={IconStories} name="Overview" />
+
+# Icon
+
+An icon shows one Material Icons symbol, named by its ligature — `folder`, `description`,
+`collections_bookmark`. Use it to help people recognise something quickly, beside the text that
+names it, or on its own where the meaning is clear and the icon has a label.
+
+## Key features
+
+- **Any Material Icons symbol**, by name.
+- **Decorative or named.** Without a `label` it is hidden from assistive technology. With one it is
+  announced as an image with that name.
+- **Sized and coloured by inheritance.** The size comes from the `--nxs-icon-size` custom property,
+  24 pixels by default, and the colour from `color`. Set them on the icon or on any ancestor.
+
+## Demo showcase
+
+<Canvas of={IconStories.Decorative} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsIconComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source language="html" dark code={`<nxs-icon name="folder" />`} />
+
+Only `name` is required. The symbols come from Google's Material Icons font, which your page must
+load — Angular Material applications usually already do:
+
+<Source
+  language="html"
+  dark
+  code={`<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />`}
+/>
+
+## Examples
+
+### Named
+
+An icon that stands alone, with no text beside it, needs a `label`.
+
+<Canvas of={IconStories.Named} />
+
+### Beside text
+
+Next to text that says the same thing, leave `label` blank so the meaning is read once.
+
+<Canvas of={IconStories.BesideText} />
+
+### Sized and coloured
+
+<Canvas of={IconStories.SizedAndColoured} />
+
+## Accessibility
+
+- **Decorative.** With a blank `label` the icon is hidden from assistive technology. A label of only
+  spaces counts as blank.
+- **Named.** With a `label` the icon has the `img` role and the label as its accessible name. Say
+  what the icon means here, such as "Shared folder", not what it shows.
+- **Keyboard.** The icon is not interactive and takes no focus. For an icon button, use a button
+  with its own accessible name and put the icon inside it, decorative.
+- **Colour.** Do not use colour alone to carry meaning.

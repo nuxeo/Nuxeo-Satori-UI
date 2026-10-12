@@ -1,0 +1,64 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as SpinnerStories from './spinner.stories';
+
+<Meta of={SpinnerStories} name="Overview" />
+
+# Spinner
+
+The spinner is a loading indicator for a region waiting on data — a list, a tab, a panel or a dialog
+body. It spins until you remove it and shows no progress value. Use it when loading takes long enough
+to notice and you cannot say how far it has got.
+
+## Key features
+
+- **Named or decorative, never neither.** With a `label` it is announced as a progress bar with that
+  name. Without one it is hidden from assistive technology.
+- **Any size.** `diameter` sets it in pixels, 32 by default. A static attribute such as
+  `diameter="24"` works too.
+- **Follows your theme.** It is Angular Material's progress spinner, in your theme's primary colour.
+
+## Demo showcase
+
+<Canvas of={SpinnerStories.Named} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`@if (loading()) {
+  <nxs-spinner [label]="'acme.documents.loading' | translate" />
+}`}
+/>
+
+Both inputs are optional. Used directly, the spinner needs no providers.
+
+## Examples
+
+### Beside visible text
+
+Where text next to the spinner already says what is loading, leave `label` blank so it is read once.
+
+<Canvas of={SpinnerStories.BesideVisibleText} />
+
+### Large
+
+<Canvas of={SpinnerStories.Large} />
+
+## Accessibility
+
+- **Name.** With a `label` the spinner is a `progressbar` with that accessible name. Say what is
+  loading, such as "Loading documents". A progress bar with no name fails automated checks.
+- **Decorative.** With a blank `label` (or only spaces) it is hidden from assistive technology. Use it
+  this way only beside visible text that says what is loading.
+- **Keyboard.** It is not interactive and takes no focus.
+- **Inside a button.** Do not put it inside a button: it changes the button's width while it shows.
+  Rotate the button's own icon instead.
+- **Motion.** It animates for as long as it is shown. Remove it as soon as the data arrives.
