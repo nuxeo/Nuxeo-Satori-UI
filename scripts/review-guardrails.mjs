@@ -7176,9 +7176,10 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
 }
 
 /**
- * The module that declares each value a module exports, by public name, following re-exports:
- * `export class|function|const|let|var|enum X`, `export { a as b } from './m'`, `export * from './m'`
- * and a bare `export { X }` of a local declaration or an import. Type-only exports are left out.
+ * Where each value a module exports is declared, by public name, as `{ file, name }` — the module
+ * and the name it is declared under there — following re-exports: `export class|function|const|
+ * let|var|enum X`, `export { a as b } from './m'`, `export * from './m'` and a bare `export { X }`
+ * of a local declaration or an import. Type-only exports are left out.
  */
 function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
   const found = new Map();
@@ -7203,8 +7204,9 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
     } else if (ts.isVariableStatement(statement)) {
       for (const declaration of statement.declarationList.declarations) {
         if (!ts.isIdentifier(declaration.name)) continue;
-        declared.add(declaration.name.text);
-        if (isExported(statement)) found.set(declaration.name.text, file);
+        const name = declaration.name.text;
+        declared.add(name);
+        if (isExported(statement)) found.set(name, { file, name });
       }
     } else if (
       (ts.isClassDeclaration(statement) ||
@@ -7212,8 +7214,9 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
         ts.isEnumDeclaration(statement)) &&
       statement.name
     ) {
-      declared.add(statement.name.text);
-      if (isExported(statement)) found.set(statement.name.text, file);
+      const name = statement.name.text;
+      declared.add(name);
+      if (isExported(statement)) found.set(name, { file, name });
     }
   }
   for (const statement of source.statements) {
@@ -7236,7 +7239,7 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
       if (statement.moduleSpecifier) {
         origin = target ? (valueExportOrigins(target, pathMaps, seen).get(local) ?? null) : null;
       } else if (declared.has(local)) {
-        origin = file;
+        origin = { file, name: local };
       } else if (imported.has(local)) {
         const { specifier, name } = imported.get(local);
         const from = resolveFile(file, specifier, pathMaps);
@@ -7258,9 +7261,13 @@ function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
  * exports — and the barrel does not export. A default import from a module that exports components
  * cannot be followed to a class, so it fails rather than reading as opening nothing. A module that
  * declares an exported component is left out, whatever else it exports: what it imports is part of
- * that component, documented with it. Each comes with the modules that open it — the ones its
- * stories and Overview are reached through. `satori-comparison-doc.mjs` follows the same edge for
- * its page.
+ * that component, documented with it.
+ *
+ * Each comes with the exports that open it, per module: those whose declaration reaches the
+ * component's import, directly or through the module's other declarations — `provideNxsToast()`
+ * returns `NxsToastService`, which opens the toast — and not a sibling such as
+ * `NXS_TOAST_DURATION`. Its stories and Overview are reached through one of those.
+ * `satori-comparison-doc.mjs` follows the same edge for its page, by module.
  */
 function openedComponentClasses(barrel, pathMaps, exported) {
   const shipped = new Set(
@@ -7268,14 +7275,18 @@ function openedComponentClasses(barrel, pathMaps, exported) {
   );
   const exportedNames = new Set(exported.keys());
   const componentModules = new Set([...exported.values()].map(({ file }) => file));
+  // Opener module → the names it declares that the barrel exports → their public names.
   const openers = new Map();
   for (const [name, origin] of valueExportOrigins(barrel, pathMaps)) {
-    if (exportedNames.has(name) || componentModules.has(origin)) continue;
-    openers.set(origin, [...(openers.get(origin) ?? []), name]);
+    if (exportedNames.has(name) || componentModules.has(origin.file)) continue;
+    const declarations = openers.get(origin.file) ?? new Map();
+    declarations.set(origin.name, [...(declarations.get(origin.name) ?? []), name]);
+    openers.set(origin.file, declarations);
   }
   const opened = new Map();
-  for (const [module, names] of openers) {
+  for (const [module, declarations] of openers) {
     const source = ts.createSourceFile(module, read(module), ts.ScriptTarget.Latest, true);
+    const reach = localReach(source);
     for (const statement of source.statements) {
       if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
         continue;
@@ -7290,21 +7301,28 @@ function openedComponentClasses(barrel, pathMaps, exported) {
             'component it opens was not read. Import the component by name.',
         );
       }
+      // Each imported component, with the local name the module's declarations refer to it by.
       const bindings = clause.namedBindings;
       const imported = !bindings
         ? []
         : ts.isNamespaceImport(bindings)
-          ? [...components.keys()]
+          ? [...components.keys()].map((name) => [name, bindings.name.text])
           : bindings.elements
               .filter((element) => !element.isTypeOnly)
-              .map((element) => (element.propertyName ?? element.name).text);
-      for (const name of imported) {
+              .map((element) => [(element.propertyName ?? element.name).text, element.name.text]);
+      for (const [name, local] of imported) {
         const declared = components.get(name);
         if (!declared) continue;
         const key = `${declared.file}#${declared.className}`;
         if (shipped.has(key)) continue;
+        const through = [...declarations].filter(([declaration]) =>
+          reach.get(declaration)?.has(local),
+        );
+        if (through.length === 0) continue;
         const entry = opened.get(key) ?? { ...declared, openers: new Map() };
-        entry.openers.set(module, names);
+        const byModule = entry.openers.get(module) ?? new Map();
+        for (const [declaration, names] of through) byModule.set(declaration, names);
+        entry.openers.set(module, byModule);
         opened.set(key, entry);
       }
     }
@@ -7313,8 +7331,56 @@ function openedComponentClasses(barrel, pathMaps, exported) {
 }
 
 /**
+ * The names each top-level declaration of a module reaches: every identifier in it, and every one
+ * the module's other declarations it names reach in turn. Generous on purpose — a property or a
+ * type that happens to share a name counts — so a component is never missed, only over-counted.
+ */
+function localReach(source) {
+  const direct = new Map();
+  const identifiers = (node, into) => {
+    if (ts.isIdentifier(node)) into.add(node.text);
+    // `forEachChild` stops at the first callback that returns something truthy.
+    ts.forEachChild(node, (child) => {
+      identifiers(child, into);
+    });
+    return into;
+  };
+  for (const statement of source.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          direct.set(declaration.name.text, identifiers(declaration, new Set()));
+        }
+      }
+    } else if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    ) {
+      direct.set(statement.name.text, identifiers(statement, new Set()));
+    }
+  }
+  const reach = new Map();
+  for (const name of direct.keys()) {
+    const seen = new Set();
+    const queue = [name];
+    while (queue.length > 0) {
+      for (const next of direct.get(queue.pop()) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        if (direct.has(next)) queue.push(next);
+      }
+    }
+    reach.set(name, seen);
+  }
+  return reach;
+}
+
+/**
  * The opened components (see `openedComponentClasses`) a story file reaches through its value
- * imports. A type-only import is erased, so it opens nothing.
+ * imports: an import counts when it is one of the exports that open the component. A type-only
+ * import is erased, so it opens nothing.
  */
 function openedThrough(imports, opened, pathMaps) {
   const keys = new Set();
@@ -7322,7 +7388,9 @@ function openedThrough(imports, opened, pathMaps) {
     if (typeOnly) continue;
     const origin = valueExportOrigins(file, pathMaps).get(name);
     if (!origin) continue;
-    for (const [key, { openers }] of opened) if (openers.has(origin)) keys.add(key);
+    for (const [key, { openers }] of opened) {
+      if (openers.get(origin.file)?.has(origin.name)) keys.add(key);
+    }
   }
   return keys;
 }
@@ -7330,7 +7398,13 @@ function openedThrough(imports, opened, pathMaps) {
 /** How a component the barrel ships only through `openers` is reached, for a failure message. */
 const openedVia = (openers) =>
   [...openers]
-    .map(([module, names]) => `${names.map((n) => `\`${n}\``).join(', ')} (${module})`)
+    .map(
+      ([module, declarations]) =>
+        `${[...declarations.values()]
+          .flat()
+          .map((n) => `\`${n}\``)
+          .join(', ')} (${module})`,
+    )
     .join(' or ');
 
 /**

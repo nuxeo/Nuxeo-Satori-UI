@@ -7197,10 +7197,12 @@ const nxsNoticeStory = (imports = "import { NxsNoticeService } from './notice.se
   `import type { Meta, StoryObj } from '@storybook/angular';\n${imports}\n` +
   "const meta: Meta = { title: 'States/Notice' };\nexport default meta;\n" +
   'export const Shown: StoryObj = { render: () => ({ props: { open: NxsNoticeService } }) };\n';
+// The service module also exports a constant that opens nothing, as `NXS_TOAST_DURATION` does.
 const NXS_NOTICE_LIB = (extra = {}) => ({
   [`${NXS_ROOT}/src/index.ts`]:
     "export { NxsThingComponent } from './lib/thing/thing.component';\n" +
-    "export { NxsNoticeService, provideNxsNotice } from './lib/notice/notice.service';\n",
+    'export {\n  NxsNoticeService,\n  provideNxsNotice,\n  NXS_NOTICE_DURATION,\n' +
+    "} from './lib/notice/notice.service';\n",
   [`${NXS_NOTICE}/notice.component.ts`]:
     "import { Component } from '@angular/core';\n" +
     "@Component({ selector: 'nxs-notice', standalone: true, template: '' })\n" +
@@ -7208,6 +7210,7 @@ const NXS_NOTICE_LIB = (extra = {}) => ({
   [`${NXS_NOTICE}/notice.service.ts`]:
     "import { Injectable } from '@angular/core';\n" +
     "import { NxsNoticeComponent } from './notice.component';\n" +
+    'export const NXS_NOTICE_DURATION = 4000;\n' +
     '@Injectable()\nexport class NxsNoticeService {\n  readonly content = NxsNoticeComponent;\n}\n' +
     'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
   ...extra,
@@ -7250,9 +7253,51 @@ expectGreen(
 const NXS_NOTICE_SERVICE_VIA = (importLine, use) => ({
   [`${NXS_NOTICE}/notice.service.ts`]:
     `import { Injectable } from '@angular/core';\n${importLine}\n` +
+    'export const NXS_NOTICE_DURATION = 4000;\n' +
     `@Injectable()\nexport class NxsNoticeService {\n  readonly content = ${use};\n}\n` +
     'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
 });
+
+// What opens the component is the export whose declaration reaches it, not any sibling export.
+expectRed(
+  'a component a service opens, whose only story imports a constant that opens nothing',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory("import { NXS_NOTICE_DURATION } from './notice.service';"),
+    }),
+  }),
+  null,
+  /ships `NxsNoticeComponent` \(.*\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no story documents it/,
+);
+
+expectRed(
+  'a component a service opens, whose Overview attaches to a story importing a constant that opens nothing',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { NXS_NOTICE_DURATION } from '@nuxeo-satori/platform/components';",
+      ),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, with a story importing only the provider that returns the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory("import { provideNxsNotice } from './notice.service';"),
+    }),
+  }),
+);
 
 expectRed(
   'a component a service opens through a namespace import, with no story',
