@@ -366,6 +366,11 @@ single argument for PermissionsPanel being one component.
 30 files inject `MatSnackBar` directly and make 173 `.open(` calls. There is no shared toast service.
 `app-shell.component.ts` injects it and never calls it.
 
+**Status, 2026-10-09:** the 14 NXSAT-308 files below are on `nxs-toast` (`NxsToastService`), including
+`document-detail.ts` and `collection-detail.ts`'s private `toast()` helpers, whose call sites the table's
+`.open(` count does not show. No core-slice library injects `MatSnackBar` now. The rows marked
+NXSAT-326 to NXSAT-329, admin, DAM, KD and app are unchanged and still inject it.
+
 | File                                                                                                  | Scope             | `inject(MatSnackBar)` at   | `.open(` calls |
 | ----------------------------------------------------------------------------------------------------- | ----------------- | -------------------------- | -------------- |
 | `libs/features/browse/src/lib/browse/browse.ts`                                                       | NXSAT-308         | 229                        | 45             |

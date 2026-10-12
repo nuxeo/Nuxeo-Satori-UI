@@ -267,6 +267,10 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 - **`nxs-empty-state` renders its heading as an `<h2>` by default.** Bind `[headingLevel]` to
   one below the heading of the section it sits in, so screen-reader heading navigation stays in
   order.
+- **Toast through `NxsToastService`, not `MatSnackBar`.** List `provideNxsToast()` in your
+  component's `providers`, then `show(message)` or `error(message, { retry })` with text you have
+  translated. It keeps the core slice's timing and announcements: four seconds or longer, a
+  Dismiss button, Escape to close, errors announced assertively.
 - **Replace a packaged panel by its ID.** `nxs-permissions-panel` is registered as
   `NXS_PERMISSIONS_PANEL_ID` (`nxs.components.permissionsPanel`). Register your own component
   under it and both Permissions tabs render yours, with `documentId` and `permissionsChanged`, a

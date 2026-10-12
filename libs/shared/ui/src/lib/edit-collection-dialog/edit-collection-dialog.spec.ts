@@ -3,7 +3,6 @@ import { TranslateService } from '@ngx-translate/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -17,6 +16,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { EditCollectionDialogComponent } from './edit-collection-dialog';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 function l10n(id: string, parent: string, labelEn: string): L10nDirectoryEntry {
   return {
@@ -54,7 +54,7 @@ const mockCollectionService = {
       of({} as NuxeoDocument),
   ),
 };
-const snackBarOpenSpy = vi.fn();
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const document: NuxeoDocument = {
   uid: 'col-1',
@@ -77,6 +77,7 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), EditCollectionDialogComponent],
       providers: [
@@ -85,7 +86,6 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
         { provide: MAT_DIALOG_DATA, useValue: { document } },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: CollectionService, useValue: mockCollectionService },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(EditCollectionDialogComponent, {
@@ -366,12 +366,8 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
 
     component.save();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
     expect(component.saving()).toBe(false);
     expect(mockDialogRef.close).not.toHaveBeenCalled();
@@ -383,9 +379,7 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
 
     component.save();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Failed to update collection', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to update collection');
     expect(component.saving()).toBe(false);
   });
 
@@ -395,6 +389,7 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
     mockDirectoryService.getAllL10nEntries.mockReturnValue(of([]));
 
     await TestBed.resetTestingModule();
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), EditCollectionDialogComponent],
       providers: [
@@ -403,7 +398,6 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
         { provide: MAT_DIALOG_DATA, useValue: { document } },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: CollectionService, useValue: mockCollectionService },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(EditCollectionDialogComponent, {
@@ -415,8 +409,6 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
     failureFixture.detectChanges();
     await flushAsync();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Failed to load vocabulary options', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to load vocabulary options');
   });
 });

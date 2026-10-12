@@ -21,7 +21,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
@@ -54,6 +53,8 @@ import {
   NxsColumnPickerComponent,
   NxsSpinnerComponent,
   type NxsPickableColumn,
+  NxsToastService,
+  provideNxsToast,
 } from '@nuxeo-satori/platform/components';
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -186,11 +187,11 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     MatCheckboxModule,
     MatProgressSpinnerModule,
     MatSelectModule,
-    MatSnackBarModule,
     MatMenuModule,
     MatAutocompleteModule,
     FormsModule,
   ],
+  providers: [provideNxsToast()],
   templateUrl: './search.html',
   styleUrl: './search.scss',
 })
@@ -198,7 +199,7 @@ export class SearchComponent {
   private readonly translate = inject(TranslateService);
   private readonly route = inject(ActivatedRoute);
   private readonly router = inject(Router);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly searchService = inject(SearchService);
@@ -681,15 +682,12 @@ export class SearchComponent {
         window.dispatchEvent(new Event('favorites-changed'));
       },
       error: (err) => {
-        this.snackBar.open(
+        this.toast.error(
           this.getApiErrorMessage(
             err,
             this.translate.instant('search.message.failed-to-update-favorites'),
           ),
-          this.translate.instant('common.dismiss'),
-          {
-            duration: 5000,
-          },
+          { duration: 5000 },
         );
       },
     });
@@ -737,15 +735,12 @@ export class SearchComponent {
           URL.revokeObjectURL(objectUrl);
         },
         error: (err) => {
-          this.snackBar.open(
+          this.toast.error(
             this.getApiErrorMessage(
               err,
               this.translate.instant('search.message.failed-to-download-document'),
             ),
-            this.translate.instant('common.dismiss'),
-            {
-              duration: 5000,
-            },
+            { duration: 5000 },
           );
         },
       });
@@ -857,18 +852,14 @@ export class SearchComponent {
                 this.readSavedSearchTitle(saved) || trimmedTitle,
               );
               this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
+              this.toast.show(
                 this.translate.instant('common.search-saved', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                { duration: 3000 },
               );
             },
             error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-save-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
+              this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
+                duration: 5000,
+              });
             },
           });
       });
@@ -898,18 +889,12 @@ export class SearchComponent {
         next: () => {
           this.searchAggregationService.selectedSavedSearchTitle.set(currentTitle);
           this.searchAggregationService.markSavedSearchDirty();
-          this.snackBar.open(
-            this.translate.instant('common.search-updated', { name: currentTitle }),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('common.search-updated', { name: currentTitle }));
         },
         error: () => {
-          this.snackBar.open(
-            this.translate.instant('assets.message.failed-to-save-search'),
-            this.translate.instant('common.dismiss'),
-            { duration: 5000 },
-          );
+          this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
+            duration: 5000,
+          });
         },
       });
   }
@@ -941,20 +926,14 @@ export class SearchComponent {
             next: () => {
               this.searchAggregationService.selectedSavedSearchTitle.set(trimmedTitle);
               this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
+              this.toast.show(
                 this.translate.instant('common.search-updated', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                {
-                  duration: 3000,
-                },
               );
             },
             error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-update-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
+              this.toast.error(this.translate.instant('assets.message.failed-to-update-search'), {
+                duration: 5000,
+              });
             },
           });
       });

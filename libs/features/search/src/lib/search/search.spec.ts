@@ -7,7 +7,6 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -22,6 +21,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 
@@ -131,7 +131,7 @@ const mockDialog = {
   })),
 };
 
-const snackOpen = vi.fn();
+const toast = { show: vi.fn(), error: vi.fn() };
 
 describe('SearchComponent', () => {
   let component: SearchComponent;
@@ -190,6 +190,7 @@ describe('SearchComponent', () => {
 
   /** Rebuild the TestBed with a given query-param map. */
   async function configure(queryParams: Record<string, string> = {}): Promise<void> {
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       // `resetTestingModule()` in three of these tests discards what test-setup.ts provides
       // globally, and the component now injects TranslateService for the saved-search dialog
@@ -210,7 +211,6 @@ describe('SearchComponent', () => {
         { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
         { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: { open: snackOpen } },
       ],
     })
       .overrideComponent(SearchComponent, {
@@ -232,6 +232,8 @@ describe('SearchComponent', () => {
     mockSearchAggregationService.drawerFilters.set({});
     mockSearchAggregationService.aggregations.set({});
     mockSearchAggregationService.items.set([]);
+
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
 
     await TestBed.configureTestingModule({
       // `resetTestingModule()` in three of these tests discards what test-setup.ts provides
@@ -255,7 +257,6 @@ describe('SearchComponent', () => {
         { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
         { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: { open: snackOpen } },
       ],
     })
       .overrideComponent(SearchComponent, {
@@ -1523,7 +1524,7 @@ describe('SearchComponent', () => {
 
       component.downloadDocument('d1', 'report');
 
-      expect(snackOpen).toHaveBeenCalledWith('Blob is gone', 'Dismiss', { duration: 5000 });
+      expect(toast.error).toHaveBeenCalledWith('Blob is gone', { duration: 5000 });
     });
 
     it('falls back to a generic message when the error carries none', () => {
@@ -1532,9 +1533,7 @@ describe('SearchComponent', () => {
 
       component.downloadDocument('d1', 'report');
 
-      expect(snackOpen).toHaveBeenCalledWith('Failed to download document.', 'Dismiss', {
-        duration: 5000,
-      });
+      expect(toast.error).toHaveBeenCalledWith('Failed to download document.', { duration: 5000 });
     });
 
     it('stops the click from also opening the document', () => {

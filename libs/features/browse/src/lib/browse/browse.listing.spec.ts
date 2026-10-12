@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
@@ -188,7 +187,6 @@ describe('BrowseComponent — rendered document list', () => {
           },
         },
         { provide: TagService, useValue: { searchTags: vi.fn(() => of([])) } },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) },
