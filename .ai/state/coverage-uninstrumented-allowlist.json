@@ -292,6 +292,9 @@
     "libs/shared/satori-components/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
+    "libs/shared/satori-components-satori/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
     "libs/shared/satori-components/src/lib/heading-level.ts": {
       "reason": "No executable statements to measure: one exported type alias. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },

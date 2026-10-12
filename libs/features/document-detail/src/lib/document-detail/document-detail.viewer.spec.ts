@@ -12,7 +12,6 @@ import {
 } from '@angular/router';
 import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -48,6 +47,7 @@ import {
 } from '@nuxeo-satori/platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 /**
  * The viewer: storyboards, renditions, the metadata refresh poll and the ARender
@@ -183,7 +183,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let http: HttpTestingController;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   /** A subject rather than `of`, so a test can navigate to a second document. */
   let routeParams: BehaviorSubject<ParamMap>;
 
@@ -260,7 +260,8 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({ uid: 'doc-1' }));
     installDefaults();
 
@@ -319,7 +320,6 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -1097,7 +1097,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
       component.saveNote('changed');
 
       expect(component.noteSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to save note', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to save note');
     });
 
     it('reports a permission failure distinctly from a generic one', async () => {
@@ -1108,7 +1108,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
       component.saveNote('changed');
 
-      expect(snack).not.toHaveBeenCalledWith('Failed to save note', 'OK', expect.anything());
+      expect(toast.error).not.toHaveBeenCalledWith('Failed to save note');
       expect(component.noteSaving()).toBe(false);
     });
 

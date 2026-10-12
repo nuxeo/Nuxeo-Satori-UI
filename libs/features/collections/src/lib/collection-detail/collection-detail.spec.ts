@@ -11,7 +11,6 @@ import {
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
@@ -27,6 +26,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { CollectionDetailComponent } from './collection-detail';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 const TEST_USERNAME = 'jdoe';
 
@@ -87,9 +87,7 @@ const mockDialog = {
   })),
 };
 
-const mockSnackBar = {
-  open: vi.fn(),
-};
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const mockCollection: NuxeoDocument = {
   uid: 'collection-1',
@@ -223,6 +221,8 @@ describe('CollectionDetailComponent', () => {
     // one and drove the unhandled error above.
     mockDetailService.fetchThumbnail.mockReturnValue(of(null));
 
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), CollectionDetailComponent],
       providers: [
@@ -241,7 +241,6 @@ describe('CollectionDetailComponent', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     })
       .overrideComponent(CollectionDetailComponent, {
@@ -670,7 +669,7 @@ describe('CollectionDetailComponent', () => {
       component.editPermission(ace);
       await new Promise((r) => setTimeout(r, 10));
       expect(mockDetailService.getFullDocument).toHaveBeenCalled();
-      expect(mockSnackBar.open).toHaveBeenCalled();
+      expect([...toast.show.mock.calls, ...toast.error.mock.calls].length).toBeGreaterThan(0);
     });
 
     it('should not reload when the edit dialog was dismissed', () => {

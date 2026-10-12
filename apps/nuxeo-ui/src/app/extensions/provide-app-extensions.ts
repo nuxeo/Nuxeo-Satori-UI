@@ -26,6 +26,10 @@ import {
   type ExtensionActionHandler,
 } from '@nuxeo-satori/platform/extensions';
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import {
+  NXS_PERMISSIONS_PANEL_ID,
+  NxsPermissionsPanelComponent,
+} from '@nuxeo-satori/platform/components';
 import { SelectionService } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { AuthService } from '../auth/auth.service';
@@ -156,10 +160,10 @@ function provideAppContributions(): EnvironmentProviders {
           ),
 
         // The local and inherited half of the document-detail and browse Permissions tabs.
-        // Re-registering this ID replaces the panel in both. The literal, rather than the
-        // library's `NXS_PERMISSIONS_PANEL_ID`, keeps the library out of the initial bundle.
-        'nxs.components.permissionsPanel': () =>
-          import('@nuxeo-satori/platform/components').then((m) => m.NxsPermissionsPanelComponent),
+        // Re-registering this ID replaces the panel in both. By class, not behind `import()`:
+        // `app.config.ts` imports the library eagerly for `provideNxsComponents()`, so a lazy
+        // import of it would load nothing later, and the module-boundary rule rejects the mix.
+        [NXS_PERMISSIONS_PANEL_ID]: NxsPermissionsPanelComponent,
       },
     };
   });

@@ -21,7 +21,6 @@ import { MatChipsModule } from '@angular/material/chips';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule, provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { FormsModule, NgModel } from '@angular/forms';
@@ -63,7 +62,12 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
-import { NxsDocTypeIconComponent, NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import {
+  NxsDocTypeIconComponent,
+  NxsSpinnerComponent,
+  NxsToastService,
+  provideNxsToast,
+} from '@nuxeo-satori/platform/components';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -171,12 +175,11 @@ const DIALOG_SIZE = {
     MatDatepickerModule,
     MatNativeDateModule,
     MatProgressBarModule,
-    MatSnackBarModule,
     MatSlideToggleModule,
     MatCheckboxModule,
     FormsModule,
   ],
-  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter()],
+  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter(), provideNxsToast()],
   templateUrl: './create-import-dialog.component.html',
   styleUrl: './create-import-dialog.component.scss',
 })
@@ -194,7 +197,7 @@ export class CreateImportDialogComponent implements OnInit {
   private readonly importService = inject(DocumentImportService);
   private readonly browse = inject(BrowseService);
   private readonly directoryService = inject(DirectoryService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
 
   private folderContextRequestId = 0;
   private locationSuggestionsRequestId = 0;
@@ -997,15 +1000,13 @@ export class CreateImportDialogComponent implements OnInit {
       )
       .subscribe({
         next: (docs) => {
-          this.snackBar.open(
+          this.toast.show(
             this.translate.instant(
               docs.length === 1
                 ? 'common.count.created-document-one'
                 : 'common.count.created-document-many',
               { count: docs.length },
             ),
-            this.translate.instant('common.close'),
-            { duration: 4000 },
           );
           this.dialogRef.close({
             refreshed: true,
@@ -1192,13 +1193,11 @@ export class CreateImportDialogComponent implements OnInit {
   ): void {
     this.mainFile.set(null);
     if (!hadFile) {
-      this.snackBar.open(
+      this.toast.show(
         this.translate.instant('browse.create-import-dialog.created-named', {
           type: docTypeName,
           title,
         }),
-        this.translate.instant('common.close'),
-        { duration: 4000 },
       );
     }
     this.dialogRef.close({
@@ -1400,15 +1399,13 @@ export class CreateImportDialogComponent implements OnInit {
       )
       .subscribe({
         next: (docs) => {
-          this.snackBar.open(
+          this.toast.show(
             this.translate.instant(
               docs.length === 1
                 ? 'common.count.created-file-one'
                 : 'common.count.created-file-many',
               { count: docs.length },
             ),
-            this.translate.instant('common.close'),
-            { duration: 4000 },
           );
           this.dialogRef.close({
             refreshed: true,

@@ -9,7 +9,8 @@
     "shared-app-config",
     "nuxeo-client",
     "ui",
-    "satori-components"
+    "satori-components",
+    "satori-components-satori"
   ],
   "targets": {
     "lint": {

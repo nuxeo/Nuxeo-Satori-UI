@@ -15,9 +15,12 @@
   color: var(--mat-sys-outline);
 }
 
-.nxs-empty-state__heading {
+// Doubled to outrank the app theme's `html[data-app-theme] .mat-typography h1`–`h6`, which would
+// otherwise render this heading at display size — 45px against title-medium's 16px, measured.
+.nxs-empty-state__heading.nxs-empty-state__heading {
   margin: 0;
   font: var(--mat-sys-title-medium);
+  letter-spacing: normal;
   color: var(--mat-sys-on-surface);
 }
 

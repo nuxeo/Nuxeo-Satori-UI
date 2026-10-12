@@ -1,0 +1,29 @@
+<nav class="nxs-breadcrumbs__nav" [attr.aria-label]="label() || null">
+  <ol class="nxs-breadcrumbs__list">
+    @for (item of items(); track $index; let last = $last) {
+      <li class="nxs-breadcrumbs__item">
+        @switch (linkKind(item)) {
+          @case ('router') {
+            <a
+              class="nxs-breadcrumbs__link"
+              [routerLink]="item.routerLink"
+              [queryParams]="item.queryParams"
+              >{{ item.label }}</a
+            >
+          }
+          @case ('href') {
+            <a class="nxs-breadcrumbs__link" [href]="item.href">{{ item.label }}</a>
+          }
+          @default {
+            <span class="nxs-breadcrumbs__text" [attr.aria-current]="last ? 'page' : null">{{
+              item.label
+            }}</span>
+          }
+        }
+        @if (!last) {
+          <mat-icon class="nxs-breadcrumbs__separator" aria-hidden="true">chevron_right</mat-icon>
+        }
+      </li>
+    }
+  </ol>
+</nav>

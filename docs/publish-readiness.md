@@ -163,10 +163,11 @@ than pushing to a scope we might not own.
 - **Version is not automated.** No changesets, no semantic-release. With one package and
   a hand-written changelog that is fine; it stops being fine with three.
 - **No real `npm install` of the template against the tarball.** `fork-simulation`
-  covers type resolution offline; a full install needs every Angular peer plus a
-  GitHub Packages token for `@hylandsoftware/satori-ui`, so it cannot run in a fork's CI
-  without secrets. The remaining uncovered risk is peer _installability_, not type
-  correctness.
+  covers type resolution offline. Peer _installability_, the risk this bullet once called
+  uncovered, is now checked: `@hylandsoftware/satori-ui` is an optional peer that only
+  `/components-satori` imports, and `npm run beta:installable` (a `beta:gate` gate and a CI step)
+  installs the built tarball from public npm with no credentials, then proves the same install
+  fails with the peer made required. What it does not do is build the template from that install.
 
 ## References
 

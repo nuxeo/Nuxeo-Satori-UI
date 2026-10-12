@@ -1,0 +1,37 @@
+:host {
+  display: block;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-breadcrumbs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nxs-breadcrumbs__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.nxs-breadcrumbs__link {
+  color: var(--mat-sys-primary);
+  text-decoration: underline;
+}
+
+.nxs-breadcrumbs__text[aria-current='page'] {
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-breadcrumbs__separator {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+  color: var(--mat-sys-outline);
+}

@@ -8,7 +8,6 @@ import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
   SearchAggregationService,
@@ -23,6 +22,7 @@ import {
 import { SavedSearchDialogComponent } from '@nuxeo-satori/platform/ui';
 import { SearchQueueComponent } from '../search-queue/search-queue.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
 
 interface CountOption {
   key: string;
@@ -52,10 +52,10 @@ type DrawerViewMode = 'filter' | 'queue';
     MatButtonModule,
     MatCheckboxModule,
     MatDividerModule,
-    MatSnackBarModule,
     MatTooltipModule,
     SearchQueueComponent,
   ],
+  providers: [provideNxsToast()],
   templateUrl: './search-filters-drawer.component.html',
   styleUrl: './search-filters-drawer.component.scss',
 })
@@ -65,7 +65,7 @@ export class SearchFiltersDrawerComponent {
   private readonly searchService = inject(SearchService);
   private readonly router = inject(Router);
   private readonly dialog = inject(MatDialog);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly activatedRoute = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -459,18 +459,14 @@ export class SearchFiltersDrawerComponent {
           .subscribe({
             next: () => {
               this.searchAggregationService.markSavedSearchDirty();
-              this.snackBar.open(
+              this.toast.show(
                 this.translate.instant('common.search-saved', { name: trimmedTitle }),
-                this.translate.instant('common.ok'),
-                { duration: 3000 },
               );
             },
             error: () => {
-              this.snackBar.open(
-                this.translate.instant('assets.message.failed-to-save-search'),
-                this.translate.instant('common.dismiss'),
-                { duration: 5000 },
-              );
+              this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
+                duration: 5000,
+              });
             },
           });
       });
