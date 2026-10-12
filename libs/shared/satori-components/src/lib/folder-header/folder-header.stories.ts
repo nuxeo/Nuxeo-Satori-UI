@@ -2,7 +2,14 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 
+import type { NxsHeadingLevel } from '../heading-level';
 import { NxsFolderHeaderComponent } from './folder-header.component';
+
+/**
+ * Compodoc records `NxsHeadingLevel` as `"1" | … | "6"`, so the control Storybook infers from it
+ * sets a string: no `@case` matches it, and Update story writes it here as a type error.
+ */
+const HEADING_LEVELS: readonly NxsHeadingLevel[] = [1, 2, 3, 4, 5, 6];
 
 const meta: Meta<NxsFolderHeaderComponent> = {
   title: 'Panels/Folder header',
@@ -14,6 +21,7 @@ const meta: Meta<NxsFolderHeaderComponent> = {
     subheading: 'Folder',
     documentType: 'Folder',
   },
+  argTypes: { headingLevel: { control: 'select', options: HEADING_LEVELS } },
   decorators: [moduleMetadata({ imports: [MatButtonModule, MatIconModule] })],
   parameters: { layout: 'padded' },
   render: (args) => ({
