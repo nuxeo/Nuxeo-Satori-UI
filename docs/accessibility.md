@@ -95,6 +95,32 @@ verdict.
 | Content quality — meaningless `alt`, vague headings, generic link text | a11y-scout (AI) | Needs a real LLM; skipped in mock mode, so empty means _not measured_                                              |
 | Screen-reader output, cognitive load, focus _appropriateness_          | Manual          | No tool decides these                                                                                              |
 
+### Component specs are a declared cross-check, not a fifth layer
+
+Vitest specs across the repository assert accessibility properties directly — nine in
+`libs/shared/ui/src/lib/document-viewer/` alone, covering label-in-name, focus rings, label
+contrast and frame titles. They are **not** in the table above and must not be read into it.
+The split is:
+
+- **The four layers own the verdict.** The WCAG 2.1 AA number this product publishes comes from
+  the axe runtime layer and nowhere else. A component spec never contributes to it.
+- **A component spec owns a code invariant** — that a named key is bound at a named site and
+  resolves to real words. It runs without a browser, so it cannot judge conformance and does not
+  claim to.
+
+That is an overlap in _observation_, which this standard permits and which is kept here
+deliberately, for a reason the `frame-title` case demonstrates: **the runtime layer cannot reach
+the state the defect lives in.** The viewer's ARender frame renders only when
+`integrations.arender` is in the served configuration. No CI run configures it, so axe has never
+had the node to judge, and the frame went untitled through every green accessibility gate —
+`frame-title` was enabled in both tag sets the whole time. "Extend the owner instead" was not
+available: a check added to the phase-6 harness for that frame would never execute.
+
+The rule this implies, and the one to apply to the next such spec: a component spec is
+justified when the owning layer **structurally cannot** reach the state, and it must assert the
+invariant rather than restate the conformance verdict. If the owning layer can reach it, extend
+the owner.
+
 ## Baselines and suppression
 
 Three mechanisms exist today. The standard is **one shape**, and it is the one
@@ -173,6 +199,13 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   renders a DOM attribute literally named `attr.aria-label`, leaving the control unnamed. None
   of the eleven template rules catches it; verified against the one instance in this repo.
 - **Screen-reader output.** No layer tests it.
+- **The viewer's ARender annotation frame.** It renders only when `integrations.arender` is in
+  the served configuration, which no CI run sets, so no runtime layer has ever scanned it. This
+  is how it went untitled past `frame-title` in both tag sets; a component spec now asserts the
+  title, but the frame itself remains unscanned by axe. The viewer's `pdf`, `pdfRendition` and
+  `srcdoc` note frames are reachable in principle, but neither phase-6 visit targets them: one
+  opens a Picture, the other any File with a main blob, so whether a `pdf` frame is ever scanned
+  depends on what the test repository happens to hold rather than on anything the journey asserts.
 - **Seven routes no runtime layer visits:** `/#/contracts`, `/#/search-adf-hx` and the five
   `/#/settings/*` pages (Nuxeo Drive, profile, authorized applications, cloud services, themes).
   Contracts was dropped from the journey on purpose — see "Fifteen screens" below.
