@@ -134,6 +134,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "rendition.thumbnail": "Thumbnail",
   "rendition.xml": "XML Export",
   "rendition.zip": "ZIP Export",
+  "satori-components.action-menu.more-actions": "More actions",
   "satori-components.column-picker.close": "Close column picker",
   "satori-components.column-picker.done": "Done",
   "satori-components.column-picker.reset": "Reset",

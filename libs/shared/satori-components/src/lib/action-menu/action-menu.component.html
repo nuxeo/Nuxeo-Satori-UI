@@ -1,11 +1,12 @@
 @if (actions().length > 0) {
+  @let name = ownLabel() || ('satori-components.action-menu.more-actions' | translate);
   <button
     mat-icon-button
     type="button"
     class="nxs-action-menu__trigger"
     [matMenuTriggerFor]="menu"
-    [matTooltip]="label()"
-    [attr.aria-label]="label()"
+    [matTooltip]="name"
+    [attr.aria-label]="name"
   >
     <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
   </button>

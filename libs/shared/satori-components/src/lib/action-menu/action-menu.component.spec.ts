@@ -1,5 +1,7 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { MatTooltip } from '@angular/material/tooltip';
+import { By } from '@angular/platform-browser';
 
 import { NxsActionMenuComponent, type NxsMenuAction } from './action-menu.component';
 
@@ -15,7 +17,7 @@ const ACTIONS: readonly NxsMenuAction[] = [
   template: `
     <nxs-action-menu
       [actions]="actions()"
-      [label]="'More actions'"
+      [label]="label()"
       [icon]="icon()"
       (selected)="chosen.push($event.id)"
     />
@@ -23,6 +25,7 @@ const ACTIONS: readonly NxsMenuAction[] = [
 })
 class HostComponent {
   readonly actions = signal<readonly NxsMenuAction[]>(ACTIONS);
+  readonly label = signal('Folder actions');
   readonly icon = signal('more_vert');
   readonly chosen: string[] = [];
 }
@@ -62,10 +65,23 @@ describe('NxsActionMenuComponent', () => {
     await render();
   });
 
+  const tooltip = (): string =>
+    fixture.debugElement.query(By.directive(MatTooltip)).injector.get(MatTooltip).message;
+
   it('names its trigger, which is the only way to tell what an icon button does', () => {
-    expect(trigger()?.getAttribute('aria-label')).toBe('More actions');
+    expect(trigger()?.getAttribute('aria-label')).toBe('Folder actions');
+    expect(tooltip()).toBe('Folder actions');
     expect(trigger()?.getAttribute('aria-haspopup')).toBe('menu');
     expect(trigger()?.textContent?.trim()).toBe('more_vert');
+  });
+
+  it('names a trigger whose label is only whitespace "More actions", rather than leaving it unnamed', async () => {
+    host.label.set(' \n\t ');
+    await render();
+
+    expect(trigger()).not.toBeNull();
+    expect(trigger()?.getAttribute('aria-label')).toBe('More actions');
+    expect(tooltip()).toBe('More actions');
   });
 
   it('uses the icon it is given', async () => {

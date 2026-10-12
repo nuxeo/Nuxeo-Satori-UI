@@ -1950,6 +1950,9 @@
     }
   },
   "satori-components": {
+    "action-menu": {
+      "more-actions": "More actions"
+    },
     "column-picker": {
       "close": "Close column picker",
       "done": "Done",

@@ -22,7 +22,11 @@ const meta: Meta<NxsActionMenuComponent> = {
   args: { actions: BROWSE_HEADER, label: 'More actions', icon: 'more_vert', selected: fn() },
   argTypes: {
     actions: { description: 'The entries, in order, already translated. Required.' },
-    label: { control: 'text', description: 'The trigger’s accessible name and tooltip. Required.' },
+    label: {
+      control: 'text',
+      description:
+        'The trigger’s accessible name and tooltip. Required; blank falls back to “More actions”.',
+    },
     icon: { control: 'text', description: 'The trigger’s Material icon.' },
     selected: { control: false, description: 'The entry chosen. Never a disabled one.' },
   },

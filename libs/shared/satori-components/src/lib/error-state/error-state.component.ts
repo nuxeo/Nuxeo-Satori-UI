@@ -66,7 +66,7 @@ const VARIANTS: Readonly<Record<NxsErrorStatus, Variant>> = {
 export class NxsErrorStateComponent {
   /** Which variant: the HTTP status the failure stands for. */
   readonly status = input<NxsErrorStatus>(500);
-  /** What failed, already translated. Blank shows the variant's own heading. */
+  /** What failed, already translated. Blank, or only whitespace, shows the variant's own heading. */
   readonly heading = input('');
   /**
    * The heading's level in the page outline, rendered as the native `<h1>`–`<h6>`: one below the
@@ -80,5 +80,7 @@ export class NxsErrorStateComponent {
   readonly retry = output<void>();
 
   protected readonly variant = computed(() => VARIANTS[this.status()]);
+  /** The host's heading as a reader gets it: whitespace alone is no heading. */
+  protected readonly ownHeading = computed(() => this.heading().trim());
   protected readonly canRetry = computed(() => this.retryable() && this.status() === 500);
 }

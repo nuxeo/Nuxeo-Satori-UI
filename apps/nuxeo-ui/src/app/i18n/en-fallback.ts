@@ -303,6 +303,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'nav.loading': 'Loading',
   'nav.refresh': 'Refresh',
   'nav.tree.toggle': 'Toggle {{ name }}',
+  'satori-components.action-menu.more-actions': 'More actions',
   'satori-components.column-picker.close': 'Close column picker',
   'satori-components.column-picker.done': 'Done',
   'satori-components.column-picker.reset': 'Reset',

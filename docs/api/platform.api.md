@@ -207,6 +207,7 @@ class NxsActionMenuComponent {
     readonly label: _angular_core.InputSignal<string>;
     readonly icon: _angular_core.InputSignal<string>;
     readonly selected: _angular_core.OutputEmitterRef<NxsMenuAction>;
+    protected readonly ownLabel: _angular_core.Signal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsActionMenuComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsActionMenuComponent, "nxs-action-menu", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, never, true, never>;
     }
@@ -315,6 +316,7 @@ class NxsErrorStateComponent {
     readonly retryable: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly retry: _angular_core.OutputEmitterRef<void>;
     protected readonly variant: _angular_core.Signal<Variant>;
+    protected readonly ownHeading: _angular_core.Signal<string>;
     protected readonly canRetry: _angular_core.Signal<boolean>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsErrorStateComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsErrorStateComponent, "nxs-error-state", never, { "status": { "alias": "status"; "required": false; "isSignal": true; }; "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "retryable": { "alias": "retryable"; "required": false; "isSignal": true; }; }, { "retry": "retry"; }, never, ["*"], true, never>;

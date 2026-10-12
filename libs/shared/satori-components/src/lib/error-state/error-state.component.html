@@ -1,5 +1,5 @@
 <mat-icon class="nxs-error-state__icon" aria-hidden="true">{{ variant().icon }}</mat-icon>
-@let title = heading() || (variant().heading | translate);
+@let title = ownHeading() || (variant().heading | translate);
 @switch (headingLevel()) {
   @case (1) {
     <h1 class="nxs-error-state__heading">{{ title }}</h1>

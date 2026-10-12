@@ -76,11 +76,15 @@ if (action) this.registry.execute(action, this.ruleContext.context());
 />
 
 `actions` and `label` are required. `label` is the button's accessible name and tooltip, already
-translated. `icon` is the button's Material icon, `more_vert` by default. `selected` carries the
-entry chosen, never a disabled one.
+translated. A blank one, or one that is only whitespace, is a mistake in the calling code; the
+button is then named "More actions" rather than left with no name, and the entries stay reachable.
+`icon` is the button's Material icon, `more_vert` by default. `selected` carries the entry chosen,
+never a disabled one.
 
-The action menu needs no providers and no translations of its own: every word it shows is one you
-pass. It has no registered ID: place it in a template by its selector.
+The action menu needs no providers. Every word it shows is one you pass, except that fallback name,
+which is translated with ngx-translate under `satori-components.action-menu.more-actions`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not. It has no
+registered ID: place it in a template by its selector.
 
 ## Where its data comes from
 
@@ -115,7 +119,8 @@ No entries: nothing renders.
 
 ## Accessibility
 
-- **A menu button.** The button is named by `label` and says it opens a menu
+- **A menu button.** The button is named by `label`, or "More actions" when `label` is blank, so
+  it is never an unnamed icon button. It says it opens a menu
   (`aria-haspopup="menu"`, with `aria-expanded` while it is open). The entries are `menuitem`s in a
   `menu`. Icons are hidden from assistive technology; each entry is named by its label.
 - **Keyboard.** **Tab** reaches the button, and **Enter** or **Space** opens the menu with focus on

@@ -103,6 +103,14 @@ describe('NxsErrorStateComponent', () => {
     expect(text('.nxs-error-state__message')).toContain('You do not have permission to see this.');
   });
 
+  it("falls back to the variant's heading when the host's is only whitespace", async () => {
+    host.status.set(404);
+    host.heading.set(' \n\t ');
+    await render();
+
+    expect(heading()?.textContent?.trim()).toBe('Not found');
+  });
+
   it('renders the heading as an h2 by default', () => {
     expect(heading()?.tagName).toBe('H2');
   });
