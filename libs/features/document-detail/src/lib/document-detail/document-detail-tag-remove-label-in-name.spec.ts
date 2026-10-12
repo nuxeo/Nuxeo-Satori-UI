@@ -1,6 +1,7 @@
 /**
  * NXSAT-526 / IBM 2190538001 — inline tag chip remove must not expose the cancel ligature as
  * visible label text competing with aria-label (WCAG 2.5.3 label-in-name).
+ * Computed ::before glyph: `apps/nuxeo-ui/.../document-detail-tag-chip-remove-icon.spec.ts`.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
