@@ -1,10 +1,14 @@
 /**
  * NXSAT-516 / IBM 1808686844 — document-detail header Go back `mat-icon-button` keyboard focus
- * indicator (WCAG 2.1 SC 2.4.7). Material icon buttons suppress the default ring; the control
- * sits outside `.header-actions`, so it is styled via component `document-detail-go-back-focus.scss`.
+ * styling contract. Material icon buttons suppress the default ring; the control sits outside
+ * `.header-actions`, so it is styled via `document-detail-go-back-focus.scss` (same path as prod).
  *
  * Same IBM `style_focus_visible` constraints as NXENG-808 / NXENG-773: standalone `:focus`
  * selector on the focused control, token wiring, and outline width/style when focused.
+ *
+ * What these tests do NOT cover: focus visibility on a live document-detail route. That verdict
+ * belongs to a11y-scout (`docs/accessibility.md` §28–33); this Karma suite only asserts SCSS
+ * wiring and computed outline geometry on a synthetic host.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
