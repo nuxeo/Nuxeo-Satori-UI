@@ -269,11 +269,9 @@
               ></mat-checkbox>
             </div>
             <div class="result-card-thumbnail">
-              @if (thumbnailMap()[row.id]; as thumb) {
-                <img class="result-thumbnail-image" [src]="thumb" alt="" />
-              } @else {
+              <nxs-thumbnail class="result-thumbnail-image" [documentId]="row.id">
                 <mat-icon class="result-icon">{{ row.icon }}</mat-icon>
-              }
+              </nxs-thumbnail>
             </div>
             <div class="result-card-body">
               <div class="result-head">
@@ -392,11 +390,9 @@
             @for (col of visibleColumns(); track col.key) {
               @if (col.key === 'name') {
                 <span class="col-name">
-                  @if (thumbnailMap()[row.id]; as thumb) {
-                    <img class="row-thumbnail-image" [src]="thumb" alt="" />
-                  } @else {
+                  <nxs-thumbnail class="row-thumbnail-image" [documentId]="row.id">
                     <mat-icon class="row-icon">{{ row.icon }}</mat-icon>
-                  }
+                  </nxs-thumbnail>
                   <button
                     type="button"
                     class="row-name-text"
@@ -460,11 +456,9 @@
       @for (row of displayResults(); track row.id) {
         <div class="simple-list-item" [class.selected]="isSelected(row.id)">
           <div class="simple-list-thumb-wrap">
-            @if (thumbnailMap()[row.id]; as thumb) {
-              <img class="simple-list-thumb" [src]="thumb" alt="" />
-            } @else {
+            <nxs-thumbnail class="simple-list-thumb" [documentId]="row.id">
               <mat-icon class="simple-list-icon">{{ row.icon }}</mat-icon>
-            }
+            </nxs-thumbnail>
             <span class="simple-list-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(row.id)"

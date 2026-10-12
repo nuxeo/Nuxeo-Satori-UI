@@ -17,23 +17,27 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { catchError, from, mergeMap, of } from 'rxjs';
+import { catchError, of } from 'rxjs';
 
 import {
-  DocumentDetailService,
   NuxeoDocument,
   SearchService,
   SelectionService,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { extractMainBlobFileName } from './note-image-url';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import {
+  NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  provideNxsThumbnailCache,
+} from '@nuxeo-satori/platform/components';
 
 @Component({
   selector: 'lib-note-image-picker-dialog',
   standalone: true,
   imports: [
     NxsSpinnerComponent,
+    NxsThumbnailComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -46,6 +50,7 @@ import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
     MatTooltipModule,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
+  providers: [provideNxsThumbnailCache()],
   templateUrl: './note-image-picker-dialog.html',
   styleUrl: './note-image-picker-dialog.scss',
 })
@@ -56,10 +61,8 @@ export class NoteImagePickerDialogComponent implements OnInit {
     MatDialogRef<NoteImagePickerDialogComponent, NuxeoDocument[]>,
   );
   private readonly searchService = inject(SearchService);
-  private readonly documentDetailService = inject(DocumentDetailService);
   readonly selectionService = inject(SelectionService);
 
-  private readonly blobUrls: string[] = [];
   private selectionSnapshot: {
     ids: Set<string>;
     labels: Map<string, string>;
@@ -72,7 +75,6 @@ export class NoteImagePickerDialogComponent implements OnInit {
   readonly searchError = signal<string | null>(null);
   readonly results = signal<NuxeoDocument[]>([]);
   readonly totalSize = signal(0);
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
   private readonly selectedDocByUid = signal<Map<string, NuxeoDocument>>(new Map());
 
   readonly resultsLabel = computed(() => {
@@ -102,9 +104,6 @@ export class NoteImagePickerDialogComponent implements OnInit {
     this.destroyRef.onDestroy(() => {
       this.selectionService.setClearOnlyMode(false);
       this.restoreSelectionSnapshot();
-      for (const url of this.blobUrls) {
-        URL.revokeObjectURL(url);
-      }
     });
   }
 
@@ -130,12 +129,7 @@ export class NoteImagePickerDialogComponent implements OnInit {
   }
 
   toggleSelection(doc: NuxeoDocument): void {
-    this.selectionService.toggle(
-      doc.uid,
-      this.displayFileName(doc),
-      this.thumbnailMap()[doc.uid] ?? null,
-      doc.type,
-    );
+    this.selectionService.toggle(doc.uid, this.displayFileName(doc), null, doc.type);
     if (this.selectionService.isSelected(doc.uid)) {
       this.rememberSelectedDoc(doc);
     } else {
@@ -159,12 +153,7 @@ export class NoteImagePickerDialogComponent implements OnInit {
 
     for (const doc of visible) {
       if (!this.selectionService.isSelected(doc.uid)) {
-        this.selectionService.toggle(
-          doc.uid,
-          this.displayFileName(doc),
-          this.thumbnailMap()[doc.uid] ?? null,
-          doc.type,
-        );
+        this.selectionService.toggle(doc.uid, this.displayFileName(doc), null, doc.type);
         this.rememberSelectedDoc(doc);
       }
     }
@@ -199,7 +188,6 @@ export class NoteImagePickerDialogComponent implements OnInit {
         const entries = res.entries ?? [];
         this.results.set(entries);
         this.totalSize.set(res.totalSize ?? res.resultsCount ?? entries.length);
-        this.loadThumbnails(entries);
       });
   }
 
@@ -241,35 +229,5 @@ export class NoteImagePickerDialogComponent implements OnInit {
       Object.fromEntries(snapshot.previews),
       Object.fromEntries(snapshot.types),
     );
-  }
-
-  private loadThumbnails(docs: NuxeoDocument[]): void {
-    const pending = docs.filter((doc) => !this.thumbnailMap()[doc.uid]);
-    if (pending.length === 0) return;
-
-    from(pending)
-      .pipe(
-        mergeMap(
-          (doc) =>
-            this.documentDetailService.fetchThumbnail(doc.uid).pipe(
-              catchError(() => of(null)),
-              mergeMap((blob) => {
-                if (!blob) return of(null);
-                const url = URL.createObjectURL(blob);
-                this.blobUrls.push(url);
-                return of({ uid: doc.uid, url });
-              }),
-            ),
-          4,
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((result) => {
-        if (!result) return;
-        this.thumbnailMap.update((map) => ({
-          ...map,
-          [result.uid]: result.url,
-        }));
-      });
   }
 }

@@ -316,16 +316,14 @@
                             <td [ngClass]="'cell-' + col.key">
                               @if (col.key === 'title') {
                                 <div class="cell-name-inner">
-                                  @if (thumbnailMap()[doc.uid]; as thumb) {
-                                    <img [src]="thumb" alt="" class="doc-thumb" />
-                                  } @else {
+                                  <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
                                     <mat-icon
                                       class="doc-icon"
                                       [class.folder-icon]="isFolderish(doc)"
                                     >
                                       {{ docIcon(doc) }}
                                     </mat-icon>
-                                  }
+                                  </nxs-thumbnail>
                                   <span class="doc-title" [title]="doc.path">{{ doc.title }}</span>
                                 </div>
                               } @else if (col.key === 'type') {
@@ -403,11 +401,9 @@
                     </div>
                     <button class="doc-card" type="button" (click)="onRowClick(doc)">
                       <div class="card-thumb">
-                        @if (thumbnailMap()[doc.uid]; as thumb) {
-                          <img [src]="thumb" alt="" class="card-thumb-img" />
-                        } @else {
+                        <nxs-thumbnail class="card-thumb-img" [documentId]="doc.uid">
                           <mat-icon class="card-thumb-icon">{{ docIcon(doc) }}</mat-icon>
-                        }
+                        </nxs-thumbnail>
                       </div>
                       <div class="card-body">
                         <span class="card-title">{{ doc.title }}</span>
@@ -764,11 +760,9 @@
                       @for (doc of trashedDocs(); track doc.uid) {
                         <tr class="browse-row">
                           <td class="cell-name-inner">
-                            @if (thumbnailMap()[doc.uid]; as thumb) {
-                              <img [src]="thumb" alt="" class="doc-thumb" />
-                            } @else {
+                            <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
                               <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
-                            }
+                            </nxs-thumbnail>
                             <span class="doc-title">{{ doc.title }}</span>
                           </td>
                           <td>

@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-33 exported symbol(s).
+35 exported symbol(s).
 
 ```ts
 const NXS_PERMISSIONS_PANEL_ID = "nxs.components.permissionsPanel";
@@ -427,6 +427,16 @@ interface NxsTagInputs {
     readonly color: InputSignal<NxsTagColor>;
     }
 }
+class NxsThumbnailComponent {
+    readonly documentId: _angular_core.InputSignal<string>;
+    readonly alt: _angular_core.InputSignal<string>;
+    protected readonly url: _angular_core.WritableSignal<string | null>;
+    constructor();
+    protected broken(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsThumbnailComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsThumbnailComponent, "nxs-thumbnail", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "alt": { "alias": "alt"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    }
+}
 interface NxsToastAction {
     readonly label: string;
     readonly run: () => void;
@@ -449,6 +459,7 @@ class NxsToastService {
     }
 }
 function provideNxsComponents(): EnvironmentProviders;
+function provideNxsThumbnailCache(): Provider;
 function provideNxsToast(): Provider;
 ```
 
