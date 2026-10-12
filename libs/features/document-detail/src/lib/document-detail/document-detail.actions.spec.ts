@@ -11,7 +11,6 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { NEVER, Observable, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -50,6 +49,7 @@ import {
 } from '@nuxeo-satori/platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 /**
  * Toolbar behaviour, document actions, and the dialogs they open.
@@ -187,7 +187,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let ruleContext: ExtensionRuleContextService;
   let actionRegistry: ExtensionActionRegistry;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   const revoked: string[] = [];
   let seq = 0;
@@ -265,7 +265,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     vi.clearAllMocks();
     revoked.length = 0;
     localStorage.removeItem(CLIPBOARD_STORAGE_KEY);
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     installDefaults();
 
     await TestBed.configureTestingModule({
@@ -335,7 +336,6 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
         },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -360,7 +360,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
       expect(component.isLocked()).toBe(true);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Document locked', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Document locked');
     });
 
     it('offers Unlock rather than Lock once the document is locked', async () => {
@@ -448,7 +448,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.toggleLock();
 
       expect(component.lockOwner()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Document unlocked', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Document unlocked');
     });
 
     it('leaves the lock state untouched and releases the flag when the call fails', async () => {
@@ -459,7 +459,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.isLocked()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to toggle lock', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to toggle lock');
     });
 
     it('refuses to lock a document the user cannot write', async () => {
@@ -521,7 +521,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.isFavorite()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to update favorites', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to update favorites');
     });
   });
 
@@ -533,7 +533,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(mockDetailService.subscribe).toHaveBeenCalledWith('doc-1');
       expect(component.isSubscribed()).toBe(true);
-      expect(snack).toHaveBeenCalledWith('Notifications enabled', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Notifications enabled');
     });
 
     it('unsubscribes a document that already has notifications', async () => {
@@ -558,7 +558,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.isSubscribed()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to update notifications', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to update notifications');
     });
   });
 
@@ -663,7 +663,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.doc()?.title).toBe('Renamed');
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Document updated', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Document updated');
     });
 
     it('leaves the document alone when the dialog is dismissed', async () => {
@@ -673,7 +673,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.onEditClick();
 
       expect(component.doc()?.title).toBe('Original');
-      expect(snack).not.toHaveBeenCalledWith('Document updated', 'OK', expect.anything());
+      expect(toast.show).not.toHaveBeenCalledWith('Document updated');
     });
 
     it('refuses to open for a document the user cannot write', async () => {
@@ -695,7 +695,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(mockDetailService.addToCollection).toHaveBeenCalledWith('doc-1', 'col-9');
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Added to collection', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Added to collection');
     });
 
     it('does nothing when no collection is chosen', async () => {
@@ -715,7 +715,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.openAddToCollectionDialog();
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to add to collection', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to add to collection');
     });
   });
 
@@ -820,7 +820,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       component.download();
 
-      expect(snack).toHaveBeenCalledWith('Failed to download document', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to download document');
     });
   });
 
@@ -899,7 +899,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.versionDropdownOpen()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Restored to version 3.1', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Restored to version 3.1');
     });
 
     it('releases the in-progress flag when the restore fails', async () => {
@@ -909,7 +909,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.restoreVersion(version(1, 0));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to restore version', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to restore version');
     });
 
     it('refuses to restore a version without the write permission', async () => {
@@ -1057,7 +1057,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(component.showStartProcessPanel()).toBe(true);
       expect(component.startingWorkflow()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to start workflow', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to start workflow');
     });
 
     it('refreshes the workflow list after abandoning one', async () => {
@@ -1080,7 +1080,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       component.abandonWorkflow(workflow());
 
       expect(component.abandoningWorkflow()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to abandon workflow.', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to abandon workflow.');
     });
 
     it('turns an i18n task key into a readable label', async () => {

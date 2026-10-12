@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ElementRef, provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
@@ -21,6 +20,7 @@ import {
 
 import { CreateImportDialogComponent } from './create-import-dialog.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 const PARENT_PATH = '/default-domain/workspaces/ws';
 
@@ -114,7 +114,6 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -414,7 +413,6 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -626,7 +624,6 @@ describe('CreateImportDialogComponent CSV', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
 
@@ -839,7 +836,6 @@ describe('CreateImportDialogComponent domain create (NXSAT-199)', () => {
         { provide: DocumentImportService, useValue: mockImportService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
 
@@ -988,7 +984,7 @@ interface LocalMocks {
   importCsvFile: ReturnType<typeof vi.fn<DocumentImportService['importCsvFile']>>;
   close: ReturnType<typeof vi.fn>;
   updateSize: ReturnType<typeof vi.fn>;
-  snackOpen: ReturnType<typeof vi.fn>;
+  toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 }
 
 describe('CreateImportDialogComponent location, vocabularies and file handling', () => {
@@ -1034,7 +1030,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       importCsvFile: vi.fn<DocumentImportService['importCsvFile']>(() => of('<p>ok</p>')),
       close: vi.fn(),
       updateSize: vi.fn(),
-      snackOpen: vi.fn(),
+      toast: { show: vi.fn(), error: vi.fn() },
     };
   }
 
@@ -1045,6 +1041,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
     TestBed.resetTestingModule();
     m = makeMocks();
     tweak(m);
+    TestBed.overrideProvider(NxsToastService, { useValue: m.toast });
 
     await TestBed.configureTestingModule({
       imports: [CreateImportDialogComponent, testTranslateModule()],
@@ -1072,7 +1069,6 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
           provide: DirectoryService,
           useValue: { getEntries: m.getEntries, getAllL10nEntries: m.getAllL10nEntries },
         },
-        { provide: MatSnackBar, useValue: { open: m.snackOpen } },
       ],
     })
       .overrideComponent(CreateImportDialogComponent, {
@@ -1878,9 +1874,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
       expect(m.close).toHaveBeenCalledWith(
         expect.objectContaining({ freshNote: true, navigateToUid: 'note-1' }),
       );
-      expect(m.snackOpen).toHaveBeenCalledWith('Created Note “Minutes”', 'Close', {
-        duration: 4000,
-      });
+      expect(m.toast.show).toHaveBeenCalledWith('Created Note “Minutes”');
     });
 
     it('refuses to create a blob type with no file attached', async () => {
@@ -2173,7 +2167,7 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
         component.uploadFiles(),
         expect.objectContaining({ onProgress: expect.any(Function) }),
       );
-      expect(m.snackOpen).toHaveBeenCalledWith('Created 1 file.', 'Close', { duration: 4000 });
+      expect(m.toast.show).toHaveBeenCalledWith('Created 1 file.');
       expect(m.close).toHaveBeenCalledWith({
         refreshed: true,
         path: WS_PATH,

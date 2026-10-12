@@ -14,7 +14,6 @@ import { MatChipInputEvent } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -44,6 +43,7 @@ import {
 } from '@nuxeo-satori/platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 /**
  * The load chain, actually running.
@@ -184,7 +184,7 @@ describe('DocumentDetailComponent — load chain', () => {
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let router: Router;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   /**
    * jsdom provides neither `URL.createObjectURL` nor `revokeObjectURL`, and this component
@@ -219,7 +219,8 @@ describe('DocumentDetailComponent — load chain', () => {
     vi.clearAllMocks();
     created.length = 0;
     revoked.length = 0;
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
 
     // `clearAllMocks` clears call history but NOT implementations installed with
     // `mockReturnValue`, so anything a test overrides must be restored explicitly here or it
@@ -260,7 +261,6 @@ describe('DocumentDetailComponent — load chain', () => {
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: mockNuxeoApi },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         // The tab strip is resolved from Layer 1 now, and `onTabChange` keys its
         // lazy loads off the resolved id rather than a literal index. Without the
@@ -915,7 +915,7 @@ describe('DocumentDetailComponent — load chain', () => {
       component.addInlineTagFromChip(chipInput('nope'));
 
       expect(component.tagAdding()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to add tag', 'Dismiss', { duration: 3000 });
+      expect(toast.error).toHaveBeenCalledWith('Failed to add tag');
     });
 
     it('removes a tag from the document', async () => {
@@ -935,7 +935,7 @@ describe('DocumentDetailComponent — load chain', () => {
 
       component.removeInlineTag('keep');
 
-      expect(snack).toHaveBeenCalledWith('Failed to remove tag', 'Dismiss', { duration: 3000 });
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove tag');
       const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
       expect(tags.map((t) => t.label)).toEqual(['keep']);
     });

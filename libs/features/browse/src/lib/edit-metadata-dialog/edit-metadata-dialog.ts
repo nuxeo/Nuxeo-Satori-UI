@@ -9,7 +9,6 @@ import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatNativeDateModule } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 
@@ -29,6 +28,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
 
 export interface EditMetadataDialogData {
   uid: string;
@@ -43,7 +43,7 @@ export interface EditMetadataDialogData {
 @Component({
   selector: 'lib-edit-metadata-dialog',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideTranslatedDatepickerIntl(), provideNxsToast()],
   imports: [
     TranslatePipe,
     FormsModule,
@@ -55,7 +55,6 @@ export interface EditMetadataDialogData {
     MatDatepickerModule,
     MatNativeDateModule,
     MatProgressSpinnerModule,
-    MatSnackBarModule,
     MatChipsModule,
     MatIconModule,
   ],
@@ -153,7 +152,7 @@ export class EditMetadataDialogComponent {
   private readonly data = inject<EditMetadataDialogData>(MAT_DIALOG_DATA);
   private readonly browseService = inject(BrowseService);
   private readonly directoryService = inject(DirectoryService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   title = this.data.title;
@@ -324,20 +323,12 @@ export class EditMetadataDialogComponent {
       .subscribe({
         next: (doc) => {
           this.saving.set(false);
-          this.snackBar.open(
-            this.translate.instant('browse.message.document-updated'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.show(this.translate.instant('browse.message.document-updated'));
           this.dialogRef.close(doc);
         },
         error: () => {
           this.saving.set(false);
-          this.snackBar.open(
-            this.translate.instant('browse.message.failed-to-update-document'),
-            this.translate.instant('common.ok'),
-            { duration: 3000 },
-          );
+          this.toast.error(this.translate.instant('browse.message.failed-to-update-document'));
         },
       });
   }
