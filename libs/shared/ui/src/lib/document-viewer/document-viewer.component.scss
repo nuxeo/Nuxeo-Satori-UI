@@ -425,6 +425,13 @@
   }
 }
 
+// NXSAT-496 / IBM 1425495611 — `style_focus_visible` reads `:focus` only; keep this selector
+// separate from `:focus-visible` (comma lists are not resolved by the scanner).
+.viewer-footer-actions button.mat-mdc-icon-button:focus {
+  outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
+  outline-offset: 2px;
+}
+
 /* ─── Picture metadata cards ─── */
 .picture-cards {
   display: grid;
