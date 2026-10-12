@@ -383,12 +383,28 @@ not a registration, so give an object like that plain keys. It fails a registrat
   class, each as a whole: a spec that names only `acme.panel.claimsExtra` or
   `AcmeClaimsComponentFake` does not name `acme.panel.claims` or `AcmeClaimsComponent`;
 - **uses another prefix's selector** — the selector in that class's own `@Component`, not another
-  in the same file. Yours is `<owner>-`; `nxs-`, `lib-`, `app-` and `sat-` belong to the platform
-  and collide on an upgrade. A component with no selector is allowed;
+  in the same file, and every selector in a comma-separated list: `'acme-claims, nxs-claims'`
+  fails on `nxs-claims`. Yours is `<owner>-` (or `[acmeClaims]` for an attribute, and
+  `button[acme-button]` counts); `nxs-`, `lib-`, `app-` and `sat-` belong to the platform and
+  collide on an upgrade, as an element, an attribute or a class. A component with no selector is
+  allowed;
 - **overrides an `nxs.primitives.*` ID without implementing its contract** — the interface
   imported from `@nuxeo-satori/platform/components`, under whatever name you import it, not a
-  same-named one of your own — or one that does not exist.
+  same-named one of your own — or one that does not exist. The ID may be written as
+  `'nxs.primitives.tag'` or as `[NXS_PRIMITIVE_IDS.tag]`, under any name you import that by.
 
 Any other shape — a class declared in the same file, a default or namespace import, a class from
-another package — gets a warning that **none of these checks ran on it**, and the command still
-exits 0. Treat that warning as a failure, or rewrite the registration in one of the two shapes.
+another package (`@nuxeo-satori/platform-extras` is another package) — gets a warning that **none
+of these checks ran on it**, and the command still exits 0. So does `components: SOME_CONSTANT`, a
+`...spread` inside `components`, and a selector that is not a string literal. Treat each warning
+as a failure, or rewrite it in one of the shapes above.
+
+**What it cannot see: whether a contract member is a real Angular input.** The override check
+reads your class's `implements` clause. TypeScript accepts the interface from a field that is not
+an Angular input — `declare readonly label: InputSignal<string>` — and the outlet then drops that
+input as silently as a missing one, with the guardrail green. Telling a real `input()` or
+`@Input()` from a lookalike takes Angular's compiler, which a static check does not run, and your
+typecheck passes it too, because the contract's members are typed `InputSignal<…>`. What catches
+it is a spec that renders the override with the contract's inputs — through
+`lib-extension-outlet`, as a host does — and asserts they arrive. The generators do not write that
+spec for you (`extensions.spec.ts` asserts the registration), so write one for each override.
