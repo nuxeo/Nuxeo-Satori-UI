@@ -18,36 +18,20 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     return rule!;
   }
 
-  function formatDownloadBtnFocusVisibleRule(): string {
-    const rule = scss.match(
-      /\.format-download-btn\.mat-mdc-icon-button:focus-visible\s*\{[^}]+\}/,
-    )?.[0];
-    expect(rule).toBeTruthy();
-    return rule!;
-  }
-
   it('declares a light-strip focus token and routes the ring through it', () => {
     expect(scss).toMatch(/--document-viewer-focus-on-light-surface:\s*#[0-9a-f]{6}/i);
     const focusRule = formatDownloadBtnFocusRule();
     expect(focusRule).toMatch(/var\(--document-viewer-focus-on-light-surface\)/);
     expect(focusRule).not.toMatch(/--mat-sys-primary/);
-    const focusVisibleRule = formatDownloadBtnFocusVisibleRule();
-    expect(focusVisibleRule).toMatch(/var\(--document-viewer-focus-on-light-surface\)/);
-    expect(focusVisibleRule).not.toMatch(/--mat-sys-primary/);
   });
 
-  it('declares standalone :focus and :focus-visible rings on .format-download-btn.mat-mdc-icon-button', () => {
-    expect(scss).toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus-visible\s*\{/);
+  it('declares a standalone :focus ring on .format-download-btn.mat-mdc-icon-button (IBM style_focus_visible)', () => {
     expect(scss).toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus\s*\{/);
     expect(scss).not.toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus,\s/);
-    expect(scss).not.toMatch(/\.format-download-btn\.mat-mdc-icon-button:focus-visible,\s/);
 
     const focusRule = formatDownloadBtnFocusRule();
     expect(focusRule).toMatch(/outline:\s*2px\s+solid/);
     expect(focusRule).toMatch(/outline-offset:\s*2px/);
-
-    const focusVisibleRule = formatDownloadBtnFocusVisibleRule();
-    expect(focusVisibleRule).toMatch(/outline:\s*2px\s+solid/);
-    expect(focusVisibleRule).toMatch(/outline-offset:\s*2px/);
+    expect(scss).toMatch(/NXSAT-505/);
   });
 });
