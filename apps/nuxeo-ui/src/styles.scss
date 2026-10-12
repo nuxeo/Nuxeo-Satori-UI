@@ -168,9 +168,8 @@ html:not([data-app-theme]) body.mat-typography sat-platform-nav h2.sat-platform-
  * a customer who set `--sat-platform-nav-outline` in their theme would silently stop
  * controlling the ring. Asserted in `platform-nav-focus-ring.spec.ts`.
  *
- * The token also feeds the nav list's scrollbar thumb — the only other thing Satori reads it
- * for — which the rule below suppresses: measured as no rendered scrollbar in Chromium,
- * Firefox and WebKit.
+ * The token also feeds the nav list's scrollbar thumb, making overflow discoverable on
+ * shorter screens (NXSAT-213).
  *
  * Global rather than in `app-shell.component.scss` so the guarantee is testable: the Karma
  * target loads this stylesheet into the page, which is what lets
@@ -290,18 +289,21 @@ html body sat-platform-nav nav.sat-platform-nav-list {
   overflow-y: auto;
   overflow-x: hidden;
   scroll-padding-block-end: var(--sat-platform-nav-height-high, 48px);
-  scrollbar-width: none;
-  -ms-overflow-style: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--sat-platform-nav-outline) transparent;
+}
 
-  &::-webkit-scrollbar {
-    display: none;
-  }
+/* NXSAT-213: Satori reserves 48px above a list without an app switcher.
+   This shell has no switcher; retain the title's own 12px margin as the spacing. */
+html body sat-platform-nav .sat-platform-nav-title-container + nav.sat-platform-nav-list {
+  padding-top: 0;
 }
 
 html body sat-platform-nav nav.sat-platform-nav-list:hover,
 html body sat-platform-nav nav.sat-platform-nav-list:focus-within {
   overflow-y: auto;
   overflow-x: hidden;
+  padding-right: 4px;
 }
 
 /* Long page titles must not squeeze the trailing logo + actions (avoids clipped "HYLAND" / settings). */
