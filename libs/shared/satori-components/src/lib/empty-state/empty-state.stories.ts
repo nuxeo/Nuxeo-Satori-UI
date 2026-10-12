@@ -1,7 +1,14 @@
 import { MatButtonModule } from '@angular/material/button';
 import { moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 
+import type { NxsHeadingLevel } from '../heading-level';
 import { NxsEmptyStateComponent } from './empty-state.component';
+
+/**
+ * Compodoc records `NxsHeadingLevel` as `"1" | … | "6"`, so the control Storybook infers from it
+ * sets a string: no `@case` matches it, and Update story writes it here as a type error.
+ */
+const HEADING_LEVELS: readonly NxsHeadingLevel[] = [1, 2, 3, 4, 5, 6];
 
 const meta: Meta<NxsEmptyStateComponent> = {
   title: 'States/Empty state',
@@ -12,6 +19,7 @@ const meta: Meta<NxsEmptyStateComponent> = {
     message: '',
     icon: '',
   },
+  argTypes: { headingLevel: { control: 'select', options: HEADING_LEVELS } },
 };
 
 export default meta;

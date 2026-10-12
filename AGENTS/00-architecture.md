@@ -166,6 +166,13 @@ branch or change history:
   output and skips it. The dev server runs it once at start, so restart it to see new JSDoc.
   `preview.ts` also marks an input required in the Controls table from Compodoc's `required`, which
   Storybook's Compodoc reader ignores.
+- **A numeric union needs its own control.** Compodoc writes a numeric literal as a quoted string —
+  `NxsHeadingLevel`'s `1 | … | 6` becomes `"1" | … | "6"`, the same as a real string union such as
+  `NxsAvatarSize` — so the control Storybook infers offers strings. Give the input a `select` whose
+  `options` are typed as the union, as `headingLevel` has in the folder header and empty state
+  stories. Without one, choosing a value renders the default, and the dev server's **Update story**
+  writes the string into the story file, which `typecheck` and `build-storybook` then reject. Update
+  story and Create new story edit the working tree: read the diff before committing it.
 - **Code under a preview** is generated from the story's args for a story with none of its own
   markup, so it follows the Controls; a story with a `template` shows that template. Galleries
   (every size, every colour) are written as fixed markup with Controls disabled, so the code is
