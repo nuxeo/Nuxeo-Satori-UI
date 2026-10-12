@@ -137,8 +137,8 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
     const button = buttons.find(
       (candidate) => candidate.querySelector('mat-icon')?.textContent?.trim() === 'visibility',
     );
-    expect(button).withContext('expected Preview footer button').not.toBeNull();
-    return button!;
+    expect(button).withContext('expected Preview footer button').toBeDefined();
+    return button as HTMLButtonElement;
   }
 
   function downloadButton(): HTMLButtonElement {
