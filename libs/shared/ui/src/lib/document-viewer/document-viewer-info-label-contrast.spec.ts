@@ -20,6 +20,7 @@ describe('DocumentViewerComponent — info-label SCSS contract (NXENG-812 / NXSA
     const scssPath = join(import.meta.dirname, 'document-viewer.component.scss');
     const scss = readFileSync(scssPath, 'utf8');
     const label = scssBlock(scss, 'info-label');
+    expect(label.length).toBeGreaterThan(0);
     expect(label).toMatch(/NXSAT-493/);
     expect(label).toMatch(/NXSAT-507/);
     expect(label).toMatch(/1390196018/);
