@@ -150,6 +150,8 @@ import {
   NxsFolderHeaderComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
+  NxsThumbnailComponent,
+  provideNxsThumbnailCache,
   type NxsDriveDialogData,
   type NxsPickableColumn,
   NxsToastService,
@@ -174,12 +176,13 @@ const FALLBACK_COLUMN_DESCRIPTORS: readonly ExtensionColumnDescriptor[] = ALL_CO
 @Component({
   selector: 'lib-browse',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl(), provideNxsToast()],
+  providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
     NxsColumnPickerComponent,
     NxsDomainHintComponent,
     NxsFolderHeaderComponent,
     NxsSpinnerComponent,
+    NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
     TranslatePipe,
@@ -226,8 +229,6 @@ export class BrowseComponent {
   private readonly directoryService = inject(DirectoryService);
   private readonly tagService = inject(TagService);
   readonly selectionService = inject(SelectionService);
-  /** Batch token for thumbnail loads, so a superseded response cannot write. */
-  private thumbnailGeneration = 0;
   private readonly extensions = inject(AppExtensionsService);
   private readonly ruleContext = inject(ExtensionRuleContextService);
   private readonly actionRegistry = inject(ExtensionActionRegistry);
@@ -242,7 +243,6 @@ export class BrowseComponent {
   readonly error = signal<string | null>(null);
   readonly currentDoc = signal<NuxeoDocument | null>(null);
   readonly totalSize = signal(0);
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
   private currentNuxeoPath = '/';
   /** Skips the initial contentRefreshTick effect run to avoid duplicate folder loads. */
   private lastSeenContentRefreshTick = -1;
@@ -719,7 +719,6 @@ export class BrowseComponent {
         this.totalSize.set(totalSize === entries.length ? totalSize + pendingCount : totalSize);
         this.loading.set(false);
         this.syncClipboardTarget(folder, payload.nuxeoPath);
-        this.loadThumbnails(this.entries());
         if (folder.uid && folder.uid !== 'virtual-root') {
           this.loadActivity(folder.uid);
         }
@@ -771,12 +770,6 @@ export class BrowseComponent {
 
     this.destroyRef.onDestroy(() => {
       this.clipboardTargetService.clear();
-      // SelectionService is root-scoped and outlives this component, so its retained previews would
-      // dangle past teardown too.
-      this.selectionService.forgetPreviews();
-      for (const url of Object.values(this.thumbnailMap())) {
-        if (url) URL.revokeObjectURL(url);
-      }
     });
 
     this.tagSearch$
@@ -860,7 +853,6 @@ export class BrowseComponent {
       if (previousTotalSize === previousEntryCount) {
         this.totalSize.update((count) => count + added);
       }
-      this.loadThumbnails(additions, false);
     }
   }
 
@@ -885,50 +877,6 @@ export class BrowseComponent {
       const additions = pending.filter((doc) => doc.uid && !currentUids.has(doc.uid));
       return additions.length > 0 ? [...current, ...additions] : current;
     });
-  }
-
-  private loadThumbnails(docs: NuxeoDocument[], reset = true): void {
-    // Only a RESETTING load invalidates the batch. An additive load — an optimistic paste, or the
-    // Trash tab appending a page — must SHARE the current generation, because it is adding to the
-    // batch rather than replacing it.
-    //
-    // Minting unconditionally was an over-correction on my part: an additive call while the folder's
-    // own requests were still in flight bumped the token, so every one of those callbacks returned at
-    // the guard and the folder's thumbnails never appeared at all.
-    const generation = reset ? ++this.thumbnailGeneration : this.thumbnailGeneration;
-    if (reset) {
-      // Drop the selection layer's copies first: it retains these exact strings and the shell
-      // topbar binds them into `<img [src]>`, and selection survives a folder change.
-      // See `SelectionService.forgetPreviews`.
-      this.selectionService.forgetPreviews();
-      for (const url of Object.values(this.thumbnailMap())) {
-        if (url) URL.revokeObjectURL(url);
-      }
-      this.thumbnailMap.set({});
-    }
-    for (const doc of docs) {
-      this.detailService
-        .fetchThumbnail(doc.uid)
-        .pipe(
-          catchError(() => of(null)),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((blob) => {
-          // Drop a response from a superseded batch. Without this a thumbnail request started for the
-          // previous folder could resolve after the reset above and reinsert a stale blob URL —
-          // and the map is also the revocation ledger, so the leaked URL is then never revoked.
-          if (!blob || generation !== this.thumbnailGeneration) return;
-          const url = URL.createObjectURL(blob);
-          this.thumbnailMap.update((m) => {
-            const previous = m[doc.uid];
-            if (previous && previous !== url) URL.revokeObjectURL(previous);
-            return {
-              ...m,
-              [doc.uid]: url,
-            };
-          });
-        });
-    }
   }
 
   // ── Details side panel ──
@@ -1112,7 +1060,6 @@ export class BrowseComponent {
         this.trashedDocs.set(res.entries);
         this.trashLoading.set(false);
         this.trashLoaded = true;
-        this.loadThumbnails(res.entries, false);
       },
       error: () => this.trashLoading.set(false),
     });
@@ -1825,7 +1772,7 @@ export class BrowseComponent {
 
   toggleSelection(id: string): void {
     const doc = this.filteredEntries().find((d) => d.uid === id);
-    this.selectionService.toggle(id, doc?.title ?? id, this.thumbnailMap()[id] ?? null, doc?.type);
+    this.selectionService.toggle(id, doc?.title ?? id, null, doc?.type);
   }
 
   onRowClick(doc: NuxeoDocument): void {

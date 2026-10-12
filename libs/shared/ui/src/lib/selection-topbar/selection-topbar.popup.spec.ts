@@ -2,8 +2,11 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
+import { of, throwError, type Observable } from 'rxjs';
+
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import { ExtensionRuleContextService } from '@nuxeo-satori/platform/extensions';
+import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { SelectionTopbarComponent } from './selection-topbar.component';
 
@@ -39,6 +42,11 @@ describe('SelectionTopbarComponent — selection popup', () => {
   // No `extensions` registered on purpose: `bulkActions()` resolves to an empty slot, so the
   // action row renders nothing and cannot interfere with the focus assertions below.
   const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
+  /**
+   * The popup's `nxs-thumbnail`s fetch through this. An empty rendition by default, which shows the
+   * placeholder and mints nothing; the preview test answers doc-1 with an image.
+   */
+  const fetchThumbnail = vi.fn((_id: string): Observable<Blob> => of(new Blob([])));
 
   async function render(items: SelectedItem[] = []): Promise<void> {
     manifest.set({ extensionLayers: [] });
@@ -47,6 +55,7 @@ describe('SelectionTopbarComponent — selection popup', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: AppConfigService, useValue: { manifest } },
+        { provide: DocumentDetailService, useValue: { fetchThumbnail } },
       ],
     }).compileComponents();
 
@@ -154,13 +163,22 @@ describe('SelectionTopbarComponent — selection popup', () => {
     expect(document.activeElement).toBe(panel);
   });
 
-  it('renders one row per selected item, with a preview image only where there is a preview', async () => {
+  it('renders one row per selected item, drawing each preview itself, by document id', async () => {
+    // jsdom implements neither, so they are installed for this test and removed after it.
+    const createObjectURL = vi.fn(() => 'blob:popup-1');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: vi.fn() });
+    fetchThumbnail.mockImplementation((id: string) =>
+      id === 'doc-2' ? throwError(() => new Error('404')) : of(new Blob(['png'])),
+    );
     await render([
-      item({ id: 'doc-1', name: 'Report.pdf', preview: 'blob:preview-1' }),
+      // A preview a caller has since revoked: the popup must not bind it.
+      item({ id: 'doc-1', name: 'Report.pdf', preview: 'blob:revoked-elsewhere' }),
       item({ id: 'doc-2', name: 'Notes.txt', preview: null }),
     ]);
 
     component.openSelectionPopup();
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
     await flushMicrotasks();
 
@@ -169,11 +187,18 @@ describe('SelectionTopbarComponent — selection popup', () => {
     expect(
       rows.map((row) => row.querySelector('.selection-item-name')?.textContent?.trim()),
     ).toEqual(['Report.pdf', 'Notes.txt']);
-    expect(rows[0].querySelector('img.selection-item-preview')).not.toBeNull();
+    expect(fetchThumbnail).toHaveBeenCalledWith('doc-1');
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(
+      rows[0].querySelector('nxs-thumbnail.selection-item-preview img')?.getAttribute('src'),
+    ).toBe('blob:popup-1');
     // The placeholder branch, asserted as a positive: the element is present and is the
     // placeholder, rather than merely "no img".
-    expect(rows[1].querySelector('img.selection-item-preview')).toBeNull();
+    expect(rows[1].querySelector('img')).toBeNull();
     expect(rows[1].querySelector('.selection-item-preview--placeholder')).not.toBeNull();
+    fixture.destroy();
+    Object.assign(URL, { createObjectURL: undefined, revokeObjectURL: undefined });
+    fetchThumbnail.mockImplementation(() => of(new Blob([])));
   });
 
   it('restores focus to the element that opened it when closed from the close button', async () => {

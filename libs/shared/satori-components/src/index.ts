@@ -17,6 +17,8 @@ export {
   NxsPermissionsPanelComponent,
 } from './lib/permissions-panel/permissions-panel.component';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
+export { provideNxsThumbnailCache } from './lib/thumbnail/thumbnail-cache';
+export { NxsThumbnailComponent } from './lib/thumbnail/thumbnail.component';
 export {
   NXS_TOAST_DURATION,
   NxsToastService,
