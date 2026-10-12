@@ -4,7 +4,7 @@ import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { EMPTY, Subject, of, throwError } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
@@ -511,7 +511,7 @@ describe('BrowseComponent — listing state', () => {
     expect(component.showHeaderDelete()).toBe(true);
   });
 
-  it('toggleSelection carries the fetched thumbnail into the selection preview', () => {
+  it('toggleSelection hands the selection no preview: the popup draws its own', () => {
     const entry = doc({ uid: 'a', title: 'Alpha', type: 'Note' });
     component.entries.set([entry]);
     detail.fetchThumbnail.mockReturnValue(of(new Blob(['x'])));
@@ -524,7 +524,7 @@ describe('BrowseComponent — listing state', () => {
     expect(selection.selectedItems()[0]).toEqual({
       id: 'a',
       name: 'Alpha',
-      preview: component.thumbnailMap()['a'],
+      preview: null,
       type: 'Note',
     });
   });
@@ -690,20 +690,22 @@ describe('BrowseComponent — listing state', () => {
     expect(component.totalSize()).toBe(0);
   });
 
-  it('revokes the previous thumbnails when the folder listing is reloaded', () => {
+  /**
+   * Each row's `nxs-thumbnail` fetches, shows and revokes its own image, so the page must not mint
+   * an object URL for one: the blob-URL rule is held in one place.
+   */
+  it('mints no object URL for a listing thumbnail, on load or on reload', () => {
     const entry = doc({ uid: 'a', title: 'Alpha' });
     detail.fetchThumbnail.mockReturnValue(of(new Blob(['x'])));
     browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries: [entry], totalSize: 1 }));
     browse.getFolderContext.mockReturnValue(of(folder));
 
     component.loadContent();
-    const first = component.thumbnailMap()['a'];
-    expect(first).toBeDefined();
-
     component.loadContent();
 
-    expect(revoked).toEqual(['blob:mock/0']);
-    expect(component.thumbnailMap()['a']).not.toBe(first);
+    expect(detail.fetchThumbnail).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(revoked).toEqual([]);
   });
 
   // ── Bulk delete ──
@@ -1019,52 +1021,5 @@ describe('BrowseComponent — listing state', () => {
     component.deleteCollectionEntry(doc({ uid: 'col-1', type: 'Collection' }));
 
     expect(toast.error).toHaveBeenCalledWith('Failed to load collection');
-  });
-
-  /**
-   * An additive thumbnail load must not cancel the resetting batch it is adding to.
-   *
-   * `loadThumbnails(docs, false)` is used by the optimistic paste path and by the Trash tab appending a
-   * page. Minting a new generation there — which is what I did when first adding the guard — bumped the
-   * token while the folder's own requests were still in flight, so every one of those callbacks
-   * returned at the guard and the folder's thumbnails never appeared at all.
-   */
-  describe('thumbnail batch generations', () => {
-    it('lets an additive load share the resetting batch generation', () => {
-      const pending = new Subject<Blob | null>();
-      detail.fetchThumbnail.mockReturnValue(
-        pending.asObservable() as DetailReturn<'fetchThumbnail'>,
-      );
-
-      // The folder's own batch starts and its request is still in flight.
-      component['loadThumbnails']([doc({ uid: 'doc1' })]);
-
-      // An additive load runs while that is pending.
-      detail.fetchThumbnail.mockReturnValue(EMPTY);
-      component['loadThumbnails']([doc({ uid: 'doc2' })], false);
-
-      // The folder's response arrives late and must still be accepted.
-      pending.next(new Blob(['thumb']));
-      pending.complete();
-
-      expect(component.thumbnailMap()['doc1']).toBeTruthy();
-    });
-
-    it('still lets a resetting load supersede an in-flight batch', () => {
-      // The positive control, so the fix above does not become "never invalidate anything".
-      const pending = new Subject<Blob | null>();
-      detail.fetchThumbnail.mockReturnValue(
-        pending.asObservable() as DetailReturn<'fetchThumbnail'>,
-      );
-      component['loadThumbnails']([doc({ uid: 'doc1' })]);
-
-      detail.fetchThumbnail.mockReturnValue(EMPTY);
-      component['loadThumbnails']([doc({ uid: 'doc2' })]);
-
-      pending.next(new Blob(['stale']));
-      pending.complete();
-
-      expect(component.thumbnailMap()['doc1']).toBeUndefined();
-    });
   });
 });

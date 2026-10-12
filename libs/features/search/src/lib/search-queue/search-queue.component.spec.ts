@@ -12,13 +12,10 @@ import {
 import { SearchQueueComponent } from './search-queue.component';
 
 /**
- * Covers the object-URL ledger, which is the only thing in this component that can misbehave silently.
- *
- * The effect that fetches thumbnails only ever ADDED: `objectUrls` and `thumbnailMap` kept every id
- * they had ever seen until `onDestroy`, and this queue stays mounted across searches. So every prior
- * result's thumbnail blob was retained for the lifetime of the page, growing without bound. The
- * per-id revoke-before-replace already there only covers re-fetching the *same* id; it never saw an id
- * that simply stopped being in the results.
+ * Covers the queue's thumbnails, which `nxs-thumbnail` now fetches and revokes per result. The queue
+ * stays mounted across searches, so the case that matters is a result leaving the list: its URL must
+ * be revoked then — once the cache's grace period runs out — not at teardown — an earlier ledger in this component only ever added, and kept
+ * every thumbnail ever fetched for the life of the page.
  *
  * Create and revoke are asserted as a PAIR. Counting only creates cannot detect a leak, and counting
  * only revokes cannot detect over-revocation — the two failure modes are opposite and both matter. *
@@ -28,9 +25,8 @@ import { SearchQueueComponent } from './search-queue.component';
  * nothing here, adds fidelity, and leaves no convention question to argue about. I should have tried it
  * before defending the stub.
  */
-describe('SearchQueueComponent — thumbnail object URL lifecycle', () => {
+describe('SearchQueueComponent — thumbnails', () => {
   let fixture: ComponentFixture<SearchQueueComponent>;
-  let component: SearchQueueComponent;
 
   const items = signal<SearchResultItem[]>([]);
   /**
@@ -50,6 +46,9 @@ describe('SearchQueueComponent — thumbnail object URL lifecycle', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    // The queue's thumbnail cache keeps a URL briefly after its result leaves, for a view switch to
+    // reuse; these tests run that grace period out rather than wait for it.
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     created.length = 0;
     revoked.length = 0;
     seq = 0;
@@ -75,111 +74,183 @@ describe('SearchQueueComponent — thumbnail object URL lifecycle', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(SearchQueueComponent);
-    component = fixture.componentInstance;
   });
 
-  /** Publishes a result set and lets the effect run. */
-  function withResults(...ids: string[]): void {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Lets the cache's grace period for results that left the list run out. */
+  function graceElapses(): void {
+    vi.runOnlyPendingTimers();
+  }
+
+  /** Publishes a result set and lets each thumbnail request start and answer. */
+  async function withResults(...ids: string[]): Promise<void> {
     items.set(ids.map(item));
+    await settle();
+  }
+
+  async function settle(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
     fixture.detectChanges();
   }
 
-  it('mints a thumbnail URL per result', () => {
-    withResults('doc1', 'doc2');
+  /** The image each result shows, by result id; absent while it shows its type icon. */
+  function shown(): Record<string, string> {
+    const host = fixture.nativeElement as HTMLElement;
+    return Object.fromEntries(
+      [...host.querySelectorAll('.queue-item')].flatMap((row) => {
+        const img = row.querySelector('img');
+        const title = row.querySelector('.queue-item-title')?.textContent?.trim() ?? '';
+        return img ? [[title, img.getAttribute('src') ?? '']] : [];
+      }),
+    );
+  }
+
+  it('shows a thumbnail per result, from a blob URL, named by the title', async () => {
+    await withResults('doc1', 'doc2');
 
     expect(created).toHaveLength(2);
-    expect(component.thumbnailMap()['doc1']).toBe(created[0]);
-    expect(component.thumbnailMap()['doc2']).toBe(created[1]);
+    expect(shown()).toEqual({ doc1: created[0], doc2: created[1] });
+    const img = (fixture.nativeElement as HTMLElement).querySelector('.queue-item img');
+    expect(img?.getAttribute('alt')).toBe('doc1');
     expect(revoked).toHaveLength(0);
   });
 
-  it('revokes and forgets the URL of a result that left the list', () => {
-    withResults('doc1', 'doc2');
+  it('revokes the URL of a result that left the list', async () => {
+    await withResults('doc1', 'doc2');
     const [urlOne, urlTwo] = created;
 
-    // A second search returns only doc2. Before the fix, doc1's URL stayed in both maps until the
-    // drawer was destroyed, so repeated searches retained every thumbnail ever fetched.
-    withResults('doc2');
+    // A second search returns only doc2.
+    await withResults('doc2');
+    expect(revoked).toEqual([]);
+    graceElapses();
 
     expect(revoked).toContain(urlOne);
     expect(revoked).not.toContain(urlTwo);
-    expect(component.thumbnailMap()['doc1']).toBeUndefined();
-    expect(component.thumbnailMap()['doc2']).toBe(urlTwo);
+    expect(shown()).toEqual({ doc2: urlTwo });
   });
 
-  it('does not accumulate across repeated disjoint searches', () => {
+  it('does not accumulate across repeated disjoint searches', async () => {
     // The unbounded-growth case stated directly: three searches with no overlap must leave exactly one
     // live URL, not three.
-    withResults('a');
-    withResults('b');
-    withResults('c');
+    await withResults('a');
+    await withResults('b');
+    await withResults('c');
+    graceElapses();
 
     expect(created).toHaveLength(3);
     expect(revoked).toHaveLength(2);
-    expect(Object.keys(component.thumbnailMap())).toEqual(['c']);
+    expect(Object.keys(shown())).toEqual(['c']);
   });
 
-  it('keeps a result that survives a search, without re-fetching or re-minting it', () => {
+  it('keeps a result that survives a search, without re-fetching or re-minting it', async () => {
     // The positive control. Reconciliation must not revoke something still on screen, which would show
     // a broken image, and must not re-fetch it either.
-    withResults('doc1', 'doc2');
+    await withResults('doc1', 'doc2');
     expect(created).toHaveLength(2);
-    const survivor = component.thumbnailMap()['doc2'];
+    const survivor = shown()['doc2'];
 
-    withResults('doc2', 'doc3');
+    await withResults('doc2', 'doc3');
 
-    expect(component.thumbnailMap()['doc2']).toBe(survivor);
+    expect(shown()['doc2']).toBe(survivor);
+    expect(fetchThumbnail.mock.calls.filter(([id]) => id === 'doc2')).toHaveLength(1);
     expect(revoked).not.toContain(survivor);
     expect(created).toHaveLength(3);
   });
 
-  it('drops a late response for a result that already left the list', () => {
-    // The guard this exercises could not be reached before: with a synchronous `of(...)` the callback
-    // runs inside the effect, while the id is still active. Only a pending request can arrive after its
-    // item has gone, which is the case that mints an orphaned URL — one nothing renders and nothing
-    // revokes until teardown.
+  it('does not keep a URL for a result that left the list, even when its response is late', async () => {
+    // Only a pending request can arrive after its item has gone, which is the case that would mint an
+    // orphaned URL — one nothing renders and nothing revokes until teardown.
     const pending = new Subject<Blob | null>();
     fetchThumbnail.mockImplementation((uid?: string) =>
       uid === 'slow' ? pending.asObservable() : of(new Blob(['thumb'])),
     );
 
-    withResults('slow');
+    await withResults('slow');
     expect(created).toHaveLength(0);
 
     // A new search drops 'slow' while its thumbnail is still in flight.
-    withResults('other');
+    await withResults('other');
     expect(created).toHaveLength(1);
 
     pending.next(new Blob(['late']));
     pending.complete();
+    await settle();
+    graceElapses();
 
-    // No URL minted for the departed id, and nothing added to the map.
-    expect(created).toHaveLength(1);
-    expect(component.thumbnailMap()['slow']).toBeUndefined();
-    expect(Object.keys(component.thumbnailMap())).toEqual(['other']);
+    // Whatever the late answer minted is revoked; only the result on screen keeps one.
+    expect(Object.keys(shown())).toEqual(['other']);
+    expect(created.filter((url) => !revoked.includes(url))).toEqual([shown()['other']]);
   });
 
-  it('still accepts a response that arrives while its result is present', () => {
+  it('still accepts a response that arrives while its result is present', async () => {
     // The positive control for the same path: a pending request whose id is STILL active must be
     // honoured, or the guard would just be dropping everything asynchronous.
     const pending = new Subject<Blob | null>();
     fetchThumbnail.mockImplementation(() => pending.asObservable());
 
-    withResults('doc1');
+    await withResults('doc1');
     expect(created).toHaveLength(0);
 
     pending.next(new Blob(['late but valid']));
     pending.complete();
+    await settle();
 
     expect(created).toHaveLength(1);
-    expect(component.thumbnailMap()['doc1']).toBe(created[0]);
+    expect(shown()).toEqual({ doc1: created[0] });
   });
 
-  it('revokes everything still held on destroy', () => {
-    withResults('doc1', 'doc2');
+  it('revokes everything still held on destroy', async () => {
+    await withResults('doc1', 'doc2');
 
     fixture.destroy();
 
     for (const url of created) expect(revoked).toContain(url);
+  });
+});
+
+describe('SearchQueueComponent — outputs', () => {
+  let fixture: ComponentFixture<SearchQueueComponent>;
+  const items = signal<SearchResultItem[]>([
+    { id: 'doc1', title: 'doc1', type: 'File' } as unknown as SearchResultItem,
+  ]);
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [SearchQueueComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: SearchAggregationService, useValue: { items } },
+        { provide: DocumentDetailService, useValue: { fetchThumbnail: () => of(null) } },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(SearchQueueComponent);
+    fixture.componentRef.setInput('activeFilters', [
+      { label: 'PDF', value: 'pdf', selected: false },
+    ]);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  });
+
+  it('reports a press on a result and on a quick filter, and a switch to the filters', () => {
+    const queue = fixture.componentInstance;
+    const host = fixture.nativeElement as HTMLElement;
+    const selected: string[] = [];
+    const toggled: string[] = [];
+    let switched = 0;
+    queue.itemSelected.subscribe((item) => selected.push(item.id));
+    queue.quickFilterToggled.subscribe((value) => toggled.push(value));
+    queue.switchToFilter.subscribe(() => (switched += 1));
+
+    host.querySelector<HTMLButtonElement>('.queue-item')?.click();
+    host.querySelector<HTMLButtonElement>('.quick-filter-btn')?.click();
+    queue.onSwitchToFilter();
+
+    expect(selected).toEqual(['doc1']);
+    expect(toggled).toEqual(['pdf']);
+    expect(switched).toBe(1);
   });
 });

@@ -266,19 +266,21 @@ dispatch, `setup-node` with `registry-url` + `scope`, `NODE_AUTH_TOKEN` from
 
 Everything except the network call:
 
-| Claim                                        | Evidence                                                                |
-| -------------------------------------------- | ----------------------------------------------------------------------- |
-| Builds a real package                        | `npx nx build platform` → `dist/libs/platform`                          |
-| All 5 subpaths resolve via the `exports` map | `npm pack` → scratch install → `require.resolve` each                   |
-| Published types are consumable               | customer-shaped `probe.ts` typechecks against the **installed** `.d.ts` |
-| A real app compiles against published types  | `npm run beta:fork`                                                     |
-| The surface cannot drift unnoticed           | `npm run beta:api` — 2026 lines of signatures, watched failing          |
-| Peers declared                               | 10, all reachable specifiers accounted for                              |
+| Claim                                       | Evidence                                                                                                                                                                                                                                                                                                          |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Builds a real package                       | `npx nx build platform` → `dist/libs/platform`                                                                                                                                                                                                                                                                    |
+| Every `exports` subpath resolves            | `npm run beta:publishable` finds every `exports` target in the packed copy, all 8 subpaths including `/components-satori`; `npm run beta:installable` resolves the root and five entry points in a scratch install with no credentials, but not `/components-satori`, whose import needs the optional Satori peer |
+| Published types are consumable              | customer-shaped `probe.ts` typechecks against the **installed** `.d.ts`                                                                                                                                                                                                                                           |
+| A real app compiles against published types | `npm run beta:fork`                                                                                                                                                                                                                                                                                               |
+| The surface cannot drift unnoticed          | `npm run beta:api` — 2026 lines of signatures, watched failing                                                                                                                                                                                                                                                    |
+| Peers declared                              | 10, all reachable specifiers accounted for                                                                                                                                                                                                                                                                        |
 
-**Not proven — peer installability.** No test resolves `@angular/material` and the other
-nine peers from a clean registry at the versions we declare. `fork-simulation` covers
-type resolution offline; it says nothing about whether `npm install` succeeds. §5.5 is
-where that gets found out, which is why the first publish must be `alpha`.
+**Peer installability — proven for the required peers only.** `npm run beta:installable`
+installs the built tarball from public npm with no credentials, so `@angular/material` and the
+other required peers resolve at the versions we declare, and requires the same install to fail
+once the optional `@hylandsoftware/satori-ui` peer is made required. Not proven: that optional
+peer, which needs GitHub Packages access, and an install of a published version rather than the
+tarball. §5.5 is where that gets found out, which is why the first publish must be `alpha`.
 
 ---
 

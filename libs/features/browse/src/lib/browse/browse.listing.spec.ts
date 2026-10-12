@@ -326,12 +326,14 @@ describe('BrowseComponent — rendered document list', () => {
     );
     detail.fetchThumbnail.mockReturnValue(of(new Blob(['x'], { type: 'image/png' })));
 
-    const component = await render();
+    await render();
+    await settle();
 
-    const img = query('.browse-row img.doc-thumb') as HTMLImageElement | null;
+    // The row's nxs-thumbnail owns the URL: it fetched the rendition, minted the URL and draws it.
+    const img = query('.browse-row nxs-thumbnail.doc-thumb img') as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img?.getAttribute('src')).toBe(createdObjectUrls[0]);
-    expect(Object.keys(component.thumbnailMap())).toEqual(['c-1']);
+    expect(createdObjectUrls).toHaveLength(1);
 
     fixture.destroy();
     expect(revokedObjectUrls).toContain(createdObjectUrls[0]);
@@ -343,11 +345,12 @@ describe('BrowseComponent — rendered document list', () => {
     );
     detail.fetchThumbnail.mockReturnValue(throwError(() => ({ status: 404 })));
 
-    const component = await render();
+    await render();
+    await settle();
 
-    expect(component.thumbnailMap()).toEqual({});
-    expect(query('.browse-row img.doc-thumb')).toBeNull();
-    expect(query('.browse-row mat-icon.doc-icon')).not.toBeNull();
+    expect(createdObjectUrls).toEqual([]);
+    expect(query('.browse-row nxs-thumbnail img')).toBeNull();
+    expect(query('.browse-row nxs-thumbnail mat-icon.doc-icon')).not.toBeNull();
   });
 
   it('navigates into a folder row and to the document view for a file row', async () => {
