@@ -3,20 +3,21 @@ title: Dev Harness & Gates
 parent: Engineering
 order: 8
 last_reviewed: 2026-10-12
-repo_commit: 014e2dea
+repo_commit: b7db1b50
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `014e2dea` (`fix/nxsat-628`) for the
+> **Last reviewed:** 2026-10-12 · **Repository:** `b7db1b50` (`fix/nxsat-628`) for the
 > `checkNoTranslatableDatePatterns` row of §2 **only** — added by NXSAT-628 and verified against
-> `GUARDRAILS` and its **19** controls (12 negative, 7 positive) in
-> `review-guardrails.selftest.mjs` at that commit. `014e2dea` is cited rather than the revision
+> `GUARDRAILS` and its **21** controls (13 negative, 8 positive) in
+> `review-guardrails.selftest.mjs` at that commit. `b7db1b50` is cited rather than the revision
 > that first added the row, because the row's guarantee was not fully enforced until the
 > single-field, multiline, non-ASCII, long-pattern, quoted-literal, nested-call, digit-in-literal
-> and quoted-parenthesis cases were closed — a stamp naming an earlier commit would have vouched
-> for a gate that did not yet hold.
+> and quoted-parenthesis cases were closed — the last of these in both the single- and
+> double-quoted form — so a stamp naming an earlier commit would have vouched for a gate that did
+> not yet hold.
 > Nothing else on this page was re-read at that revision, so the two entries below still stand
 > for the rest of it.
 >
@@ -147,7 +148,7 @@ stopped at the general-purpose checks and every i18n and packaging check was add
 | `checkNoHardcodedImperativeUiText`            | No hard-coded snackbar, toast or error text built in TypeScript                                                           |
 | `checkTranslateIsInjectedWhereUsed`           | A class using `this.translate` injects `TranslateService` — otherwise a runtime crash on the first error path             |
 | `checkCatalogueValuesAreRenderable`           | A catalogue value is the text a user sees — no HTML entities or markup copied from a template                             |
-| `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern, and no `DatePipe` format comes from `translate`                                |
+| `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern — every alphabetic run one letter repeated, one of them twice or more — and no `DatePipe` format comes from `translate` |
 | `checkNoStaleAgnosticClaim`                   | A comment saying a library has no dependency on something is still true of that library                                   |
 | `checkTranslationCatalogues`                  | Every `i18n/<locale>.json` parses to an object of keys and ends with a newline                                            |
 | `checkCataloguesAreTranslated`                | A non-English catalogue translates something, rather than being a copy of `en.json`                                       |
