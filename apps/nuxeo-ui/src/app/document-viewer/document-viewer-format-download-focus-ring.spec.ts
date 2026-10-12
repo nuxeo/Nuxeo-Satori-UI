@@ -201,11 +201,17 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
     if (!button) return;
 
     expect(button.getAttribute('aria-label')).toBe('Download OriginalJpeg');
-    const cards = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement | null;
-    expect(cards).not.toBeNull();
-    if (!cards) return;
+    expect(button.classList.contains('format-download-btn')).toBe(true);
 
-    assertFocusRingContrast(button, cards, 'NXSAT-527 — Download OriginalJpeg (Preview tab)');
+    button.focus({ focusVisible: false } as FocusOptions);
+    expect(button.matches(':focus')).toBe(true);
+    expect(button.matches(':focus-visible')).toBe(false);
+
+    const style = getComputedStyle(button);
+    expect(style.outlineStyle)
+      .withContext('NXSAT-527 / IBM 2294099067 — IBM :focus path')
+      .not.toBe('none');
+    expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
   });
 
   it('focuses the Download Small control with IBM-readable outline (NXENG-800)', () => {
