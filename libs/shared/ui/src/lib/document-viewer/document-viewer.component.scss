@@ -474,7 +474,7 @@
 
 .info-label {
   font-size: 12px;
-  /* NXENG-812 — #777 was 4.48:1 on the light strip (IBM 716638997); mat-sys-on-surface-variant fails in dark theme. */
+  /* NXENG-812 / NXSAT-493 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018); mat-sys-on-surface-variant fails in dark theme. */
   color: var(--document-viewer-muted-on-light-surface);
   min-width: 0;
   white-space: nowrap;
