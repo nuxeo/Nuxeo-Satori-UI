@@ -3897,6 +3897,31 @@ expectRed(
   /is a date format pattern rather than text a user reads/,
 );
 
+// A one-field pattern is still a pattern. The first version of this rule required two words,
+// so `yyyy` and `MMMM` walked straight past the gate written to reject patterns.
+expectRed(
+  'a single-field date pattern as a catalogue value',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) => write('apps/nuxeo-ui/public/i18n/en.json', '{\n  "a": "yyyy"\n}\n'),
+  /is a date format pattern rather than text a user reads/,
+);
+
+// Prettier wraps a long interpolation, and both real call sites were indented deeply enough
+// to be candidates. A line-scoped scan missed this shape entirely.
+expectRed(
+  'a translated DatePipe format split across lines by the formatter',
+  'checkNoTranslatableDatePatterns',
+  APP,
+  (write) =>
+    write(
+      'libs/features/x/src/lib/x.html',
+      '<td>\n  {{\n    entry.eventDate\n      | date: ' +
+        "('x.mmmm-d-yyyy' | translate)\n  }}\n</td>\n",
+    ),
+  /passes a translated string to `DatePipe` as its format/,
+);
+
 // The translated form is the one that actually reaches a customer: Crowdin sends the pattern
 // out, a translator localizes the letters in good faith, and the pipe renders literal `j`s.
 expectRed(
@@ -3936,13 +3961,15 @@ expectRed(
 
 // A short legitimate string must survive. `Address` is the one that breaks the obvious
 // implementation of this rule — every character of it is a date-pattern character, and it even
-// has two doubled letters — and `May`, `OK` and `N/A` break the next three.
+// has two doubled letters — and `May`, `OK` and `N/A` break the next three. `A` and `I` are
+// here because dropping the two-word floor made a one-word value reachable.
 falsePositiveControls += 1;
 expectGreen('short prose made of date-pattern characters', 'checkNoTranslatableDatePatterns', {
   ...APP,
   'apps/nuxeo-ui/public/i18n/en.json':
     '{\n  "a": "Address",\n  "b": "May",\n  "c": "OK",\n  "d": "N/A",\n  "e": "e.g.",\n' +
-    '  "f": "All",\n  "g": "Up to date",\n  "h": "Settings"\n}\n',
+    '  "f": "All",\n  "g": "Up to date",\n  "h": "Settings",\n  "i": "A",\n  "j": "I",\n' +
+    '  "k": "Off"\n}\n',
 });
 
 falsePositiveControls += 1;

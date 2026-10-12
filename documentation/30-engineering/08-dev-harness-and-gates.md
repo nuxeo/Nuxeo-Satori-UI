@@ -2,16 +2,23 @@
 title: Dev Harness & Gates
 parent: Engineering
 order: 8
-last_reviewed: 2026-10-08
-repo_commit: 2898046
+last_reviewed: 2026-10-12
+repo_commit: a496163
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> for §3, §8, the `supply-chain` and `guardrails` rows of §2 and the CI-only rows of §7, re-verified
-> against `GUARDRAILS`, `supply-chain.mjs` and `.github/workflows/` at that commit. The rest was last reviewed on 2026-10-05 at `b32d4c8`, the
+> **Last reviewed:** 2026-10-12 · **Repository:** `a496163` (`fix/nxsat-628`) for the
+> `checkNoTranslatableDatePatterns` row of §2 **only** — added by NXSAT-628 and verified against
+> `GUARDRAILS` and its seven controls in `review-guardrails.selftest.mjs` at that commit. Nothing
+> else on this page was re-read at that revision, so the two entries below still stand for the
+> rest of it.
+>
+> §3, §8, the `supply-chain` and `guardrails` rows of §2 and the CI-only rows of §7 were reviewed
+> on 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`), re-verified against
+> `GUARDRAILS`, `supply-chain.mjs` and `.github/workflows/` at that commit. The rest was last
+> reviewed on 2026-10-05 at `b32d4c8`, the
 > revision that implements the 24-gate set and the 23-control lockfile suite described below.
 > This is the **development-time** harness. For the customer-facing runtime AI features see
 > [Runtime AI Features](10-runtime-ai-features.md).

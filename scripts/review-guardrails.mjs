@@ -6242,8 +6242,15 @@ function checkNoTranslatableDatePatterns() {
    * That shape is what makes this safe to run over ~14,000 catalogue entries. Testing for
    * "contains only date-pattern characters" flags `Address` (`dd`, `ss`) and `May`; requiring
    * each *word* to be one repeated letter does not, because a word of prose almost never is.
-   * Two words minimum, one of them at least two characters, so `OK`, `N/A` and `e.g.` are not
-   * reachable. Verified against every shipped catalogue: three hits, all three real.
+   * `OK`, `N/A`, `e.g.`, `All` and `Up to date` all survive on that rule alone.
+   *
+   * **A single field counts.** This required two words at first, which let a one-field pattern
+   * — `yyyy`, `MMMM`, `dd` — through the gate that exists to reject patterns, and nothing else
+   * would have caught it. The worry behind the two-word rule was prose: a lone word of one
+   * repeated letter. Measured across all seven shipped catalogues, there are **zero** such
+   * values, and `OK` and `N/A` are unreachable anyway because neither has a word of two or
+   * more identical letters. So the floor is one word, still at least two characters long —
+   * which is what keeps a bare `a` or `I` out.
    */
   const isBareDatePattern = (value) => {
     if (value.length > 24) return false;
@@ -6251,7 +6258,7 @@ function checkNoTranslatableDatePatterns() {
     const words = value.split(/[^A-Za-z]+/).filter(Boolean);
     const separators = value.split(/[A-Za-z]+/).filter(Boolean);
     if (!separators.every((separator) => FIELD_SEPARATORS.test(separator))) return false;
-    if (words.length < 2) return false;
+    if (words.length === 0) return false;
     if (!words.every((word) => new Set(word.toLowerCase()).size === 1)) return false;
     return words.some((word) => word.length >= 2);
   };
@@ -6314,14 +6321,20 @@ function checkNoTranslatableDatePatterns() {
   }
 
   // `| date:` followed by anything containing `| translate` before the interpolation closes.
-  const TRANSLATED_DATE_FORMAT = /\|\s*date:\s*\([^)]*\|\s*translate[^)]*\)/;
+  //
+  // Matched against the whole file, not line by line. Prettier wraps a long interpolation
+  // across lines, so the line-scoped version missed exactly the bindings most likely to exist
+  // — the deeply indented ones, which is what both of the real call sites were. `[^)]` already
+  // spans newlines; it was splitting the file first that broke it. The line number comes from
+  // the match offset instead.
+  const TRANSLATED_DATE_FORMAT = /\|\s*date:\s*\([^)]*\|\s*translate[^)]*\)/g;
 
   for (const file of templates) {
-    const lines = read(file).split('\n');
-    for (const [index, line] of lines.entries()) {
-      if (!TRANSLATED_DATE_FORMAT.test(line)) continue;
+    const text = read(file);
+    for (const match of text.matchAll(TRANSLATED_DATE_FORMAT)) {
+      const line = text.slice(0, match.index).split('\n').length;
       fail(
-        `${file}:${index + 1} passes a translated string to \`DatePipe\` as its format.\n` +
+        `${file}:${line} passes a translated string to \`DatePipe\` as its format.\n` +
           '    The format argument is a pattern, not prose: its tokens are the same in every ' +
           'language, so routing it through `translate` can only break the render. Use a named ' +
           "format — `| date: 'longDate'` — and let the registered locale data choose the order.",
