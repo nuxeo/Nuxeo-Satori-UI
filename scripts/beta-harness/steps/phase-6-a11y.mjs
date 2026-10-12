@@ -91,7 +91,10 @@ const ADF_HX_UPSTREAM = ['aria-required-children'];
 export default async function run(page, h) {
   h.step('Precondition: a backend is reachable, so data-bearing screens can be scanned');
   const probe = await page.request
-    .get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false })
+    .get(`${h.baseUrl}/nuxeo/api/v1/me`, {
+      failOnStatusCode: false,
+      headers: nuxeoApiRequestHeaders(),
+    })
     .catch(() => null);
   h.requirePrecondition(
     'Nuxeo API answers through the dev proxy',
@@ -419,20 +422,20 @@ const PICTURE_WITH_METADATA_NXQL =
  * Explicit Basic auth for `page.request` calls to `/nuxeo/api/*`.
  *
  * Context `httpCredentials` cover same-origin UI navigation; absolute API URLs through the dev
- * proxy (especially hosted beta) still need an `Authorization` header — see `phase-3-search.mjs`
- * and `apps/nuxeo-ui-e2e/src/fixtures.ts`.
+ * proxy (especially hosted beta) still need an `Authorization` header — see
+ * `phase-runner.mjs` (defaults) and `apps/nuxeo-ui-e2e/src/fixtures.ts` (Nuxeo does not
+ * challenge unauthenticated API calls).
  *
  * @param {Record<string, string>} [extra]
  * @returns {Record<string, string>}
  */
 function nuxeoApiRequestHeaders(extra = {}) {
-  const user = process.env['NUXEO_USER'];
-  const pass = process.env['NUXEO_PASS'];
-  const headers = { ...extra };
-  if (user && pass) {
-    headers.Authorization = `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
-  }
-  return headers;
+  const user = process.env['NUXEO_USER'] ?? 'Administrator';
+  const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
+  return {
+    ...extra,
+    Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
+  };
 }
 
 /**
