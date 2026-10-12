@@ -13,10 +13,12 @@ of users, on a comment or task, in a header — or on its own where there is no 
 
 - **Six sizes**, from 24 to 128 pixels, each with a matching type size.
 - **Eight colours**: `purple`, `blue`, `pink`, `teal`, `yellow`, `green`, `red` and `orange`.
-- **Named or decorative.** With a `label` it is announced as an image with that name. Without one it
-  is hidden from assistive technology, for use next to the visible name.
+- **Named or decorative.** With a `label` it is announced as an image with that name. Without one —
+  or with one that is only spaces — it is hidden from assistive technology, for use next to the
+  visible name.
 - **Follows your theme.** Each colour is one of your Angular Material theme's colours, so it adapts
-  to dark mode. Set `--nxs-avatar-<colour>-background` and `--nxs-avatar-<colour>-foreground` to
+  to dark mode. Teal, which no theme colour is, is a teal blended with your theme's surface and text,
+  so it adapts too. Set `--nxs-avatar-<colour>-background` and `--nxs-avatar-<colour>-foreground` to
   give a colour your own hue.
 - **Replaceable by ID.** It is registered as `nxs.primitives.avatar`, so Satori's avatar or your own
   can take its place without changing the screens that show it.
@@ -95,12 +97,14 @@ under `nxs.primitives.avatar` appears here.
 - **Name.** With a `label`, the avatar has the `img` role and the label is its accessible name. Use
   the person's full name, not their initials.
 - **Decorative.** With a blank `label`, the whole avatar is hidden from assistive technology. Use it
-  this way only next to the visible name.
+  this way only next to the visible name. A label of only spaces counts as blank, and the spaces
+  around a name are not announced.
 - **Initials.** The initials are never announced on their own; the label is.
 - **Keyboard.** The avatar is not interactive and takes no focus. To make it open a profile, wrap it
   in a link or button and give that the accessible name.
 - **Contrast.** Each colour pairs a theme container colour with its matching text colour, which
-  Material designs to contrast. If you set your own colours, check the contrast of the pair.
+  Material designs to contrast. Teal's pair holds 4.5:1 on Material's light and dark themes. If you
+  set your own colours, check the contrast of the pair.
 
 ## Satori and the built-in avatar
 
@@ -114,7 +118,7 @@ What looks different:
 - Satori's avatar has a thin border around the circle. The built-in avatar has none.
 - Satori's colours come from Satori's theme, one distinct hue per name. The built-in colours come
   from your Material theme, so the names are labels rather than exact hues: `orange`, for example,
-  is a light shade of your theme's primary colour.
+  is a light shade of your theme's primary colour. Teal is the exception, and is always a teal.
 - At 24 pixels, Satori's avatar shows only the first initial. The built-in avatar shows up to two at
   every size.
 

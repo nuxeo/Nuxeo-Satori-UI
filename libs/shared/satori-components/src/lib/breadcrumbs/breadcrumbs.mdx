@@ -107,13 +107,14 @@ What looks and behaves differently:
 
 - **Long trails.** Satori's breadcrumbs collapse the middle of a trail that does not fit into a menu.
   The built-in breadcrumbs wrap onto further lines instead.
-- **Landmark name.** Satori's breadcrumbs name the landmark from Satori's own translations and do not
-  read `label`. The built-in breadcrumbs use `label`.
+- **Landmark name.** Both name the landmark from `label`. Without one, Satori's breadcrumbs use
+  Satori's own translation and the built-in breadcrumbs leave the landmark unnamed.
 - **Styling.** Satori's breadcrumbs use Satori's type, colours and chevron icon. The built-in
   breadcrumbs use your Material theme.
 
 Satori's breadcrumbs need `provideSatori()` for their icon and Satori's translations loaded in
-ngx-translate; without the translations the landmark's name shows as a raw key.
+ngx-translate; without the translations the "Show more breadcrumbs" button's name, and the
+landmark's name when `label` is blank, show as raw keys.
 
 This Storybook is built without access to GitHub Packages, so every example here shows the built-in
 breadcrumbs. Satori's breadcrumbs are shown in Satori's documentation.
