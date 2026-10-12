@@ -536,8 +536,9 @@
   }
 }
 
-// NXENG-781 / NXENG-786 / NXENG-800 — IBM `style_focus_visible` (e.g. 368748540) reads `:focus`
-// only; keep this selector separate from `:focus-visible` (comma lists are not resolved).
+// NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / IBM 1635062655 (Download Thumbnail) —
+// IBM `style_focus_visible` reads `:focus` only; keep this selector separate from `:focus-visible`
+// (comma lists are not resolved by the scanner).
 .format-download-btn.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;
