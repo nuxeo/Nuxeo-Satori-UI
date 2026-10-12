@@ -144,6 +144,19 @@ The same Material Icons glyph in both; it takes the theme's primary colour.
 
 The same icon for each document type, and no visible difference: the icons take the surrounding text colour, which both themes keep near-black.
 
+### Thumbnail
+
+| Field           | Value                          |
+| --------------- | ------------------------------ |
+| Component       | `NxsThumbnailComponent`        |
+| Registered ID   | —                              |
+| With Satori     | Same component; theme only     |
+| Storybook story | `primitives-thumbnail--loaded` |
+
+![Thumbnail: without Satori on the left, with Satori on the right](thumbnail-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same thumbnail in both. It draws nothing of its own beyond the image: the caller sizes it and rounds its corners, so the theme changes nothing visible. Until the image arrives, or when there is none, the projected content shows instead, usually the document-type icon.
+
 ### Folder header
 
 | Field           | Value                               |
@@ -297,6 +310,7 @@ The components in the library today:
 | Rich tooltip       | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
 | Icon               | —                                                                                                                       | Same component; theme only   |
 | Document type icon | —                                                                                                                       | Same component; theme only   |
+| Thumbnail          | —                                                                                                                       | Same component; theme only   |
 | Folder header      | —                                                                                                                       | Same component; theme only   |
 | Domain hint        | —                                                                                                                       | Same component; theme only   |
 | Empty state        | —                                                                                                                       | Same component; theme only   |
