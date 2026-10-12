@@ -270,18 +270,23 @@ if (/class="[^"]*(createlink|unresolved-link)/.test(view)) fail('a link renders 
 if (/&amp;(amp|lt|gt|quot);/.test(view)) fail('a double-escaped entity is visible');
 if (body.includes('@@CODE') || /\|\s*-{3,}\s*\|/.test(body)) fail('raw Markdown in the body');
 
-const headings = (level) =>
-  [...body.matchAll(new RegExp(`<h${level}>(.*?)</h${level}>`, 'g'))].map((m) =>
-    m[1]
-      .replace(/<[^>]+>/g, '')
-      .replace(/&#39;|&rsquo;/g, "'")
-      .replace(/&amp;/g, '&'),
+// Headings as sent against headings as stored, markup and all: nothing is stripped, so nothing a
+// strip would miss can hide a difference. Confluence may store an apostrophe either way.
+const headings = (html, level) =>
+  [...html.matchAll(new RegExp(`<h${level}>(.*?)</h${level}>`, 'g'))].map((m) =>
+    m[1].replace(/&#39;|&rsquo;/g, "'"),
   );
-if (JSON.stringify(headings(2)) !== JSON.stringify(wantH2)) {
-  fail(`sections differ from the Markdown: ${JSON.stringify(headings(2))}`);
-}
-if (JSON.stringify(headings(3)) !== JSON.stringify(wantH3)) {
-  fail(`component sections differ from the Markdown: ${JSON.stringify(headings(3))}`);
+for (const [level, want, what] of [
+  [2, wantH2, 'sections'],
+  [3, wantH3, 'component sections'],
+]) {
+  const sent = headings(storage, level);
+  const stored = headings(body, level);
+  if (sent.length !== want.length)
+    fail(`converted ${sent.length} ${what}, the Markdown has ${want.length}`);
+  if (JSON.stringify(stored) !== JSON.stringify(sent)) {
+    fail(`${what} differ from what was sent: ${JSON.stringify(stored)}`);
+  }
 }
 for (const { what, match } of forbiddenReferences(`${after.title}\n${body}`)) {
   fail(`the published page carries ${what} ("${match}")`);
@@ -290,8 +295,8 @@ for (const { what, match } of forbiddenReferences(`${after.title}\n${body}`)) {
 const stale = [...attachments.keys()].filter((name) => !refs.includes(name));
 
 console.log(
-  `\n  read back: version ${after.version.number}, ${headings(2).length} sections, ` +
-    `${headings(3).length} component sections, ${new Set(refs).size} image(s) — ` +
+  `\n  read back: version ${after.version.number}, ${headings(body, 2).length} sections, ` +
+    `${headings(body, 3).length} component sections, ${new Set(refs).size} image(s) — ` +
     `${rendered} rendered, all downloaded and compared`,
 );
 if (stale.length) {

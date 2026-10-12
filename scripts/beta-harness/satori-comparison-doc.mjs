@@ -285,12 +285,22 @@ export function imageReferences(md) {
 /** The image a component's section must reference: its selector without `nxs-`. */
 export const imageNameFor = (selector) => `${selector.replace(/^nxs-/, '')}-side-by-side.png`;
 
-/** Forbidden references in text a reader sees, i.e. outside HTML comments. */
+/**
+ * Forbidden references in text a reader sees, i.e. outside HTML comments. Matches are made on the
+ * whole text and those inside a comment skipped, rather than deleting comments first: nothing here
+ * is rendered, and a scan that edits its input is one more thing that can hide a match.
+ */
 export function forbiddenReferences(text) {
-  const visible = text.replace(/<!--[\s\S]*?-->/g, '');
+  const comments = [...text.matchAll(/<!--[\s\S]*?-->/g)].map((m) => [
+    m.index,
+    m.index + m[0].length,
+  ]);
+  const inComment = (at) => comments.some(([start, end]) => at >= start && at < end);
   const found = [];
   for (const [re, what] of FORBIDDEN) {
-    for (const m of visible.matchAll(re)) found.push({ what, match: m[0].trim() });
+    for (const m of text.matchAll(re)) {
+      if (!inComment(m.index)) found.push({ what, match: m[0].trim() });
+    }
   }
   return found;
 }

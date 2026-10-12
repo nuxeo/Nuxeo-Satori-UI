@@ -254,6 +254,16 @@ console.log('\nPositive controls — each must pass:');
     problems.join(' | '),
   );
 }
+{
+  const { problems } = checkComparison(
+    readInputs(ROOT, { doc: swap(doc, MARKERS.summary, `${MARKERS.summary}\n<!-- NXSAT-308 -->`) }),
+  );
+  report(
+    problems.length === 0,
+    'a ticket key inside an HTML comment is not on the page',
+    problems.join(' | '),
+  );
+}
 
 const tmp = mkdtempSync(join(tmpdir(), 'satori-comparison-selftest-'));
 try {
@@ -321,11 +331,11 @@ try {
   rmSync(tmp, { recursive: true, force: true });
 }
 
-const total = NEGATIVE.length + 4;
+const total = NEGATIVE.length + 5;
 console.log();
 if (failed === 0) {
   console.log(
-    `satori-comparison-doc selftest: pass — ${NEGATIVE.length} negative, 4 positive control(s).`,
+    `satori-comparison-doc selftest: pass — ${NEGATIVE.length} negative, 5 positive control(s).`,
   );
 } else {
   console.error(`satori-comparison-doc selftest: FAIL — ${failed} of ${total} control(s).`);

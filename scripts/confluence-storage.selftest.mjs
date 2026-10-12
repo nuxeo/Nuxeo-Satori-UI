@@ -54,7 +54,7 @@ const CONTROLS = [
     'a relative link goes through the resolver it is given',
     () =>
       toStorage('See [the file](../x.md).', {
-        link: (href) => ({ kind: 'url', url: `https://example.test/${href.replace('../', '')}` }),
+        link: (href) => ({ kind: 'url', url: `https://example.test/${href.split('/').pop()}` }),
       }),
     (out) => out === '<p>See <a href="https://example.test/x.md">the file</a>.</p>',
   ],
