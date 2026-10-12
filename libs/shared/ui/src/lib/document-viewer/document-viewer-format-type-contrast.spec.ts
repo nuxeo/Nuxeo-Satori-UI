@@ -1,6 +1,7 @@
 /**
- * NXENG-801 — `.format-type` on the fixed light `.picture-cards` strip uses a scoped host token so
- * contrast stays ≥4.5:1 even when theme surface-variant drifts (e.g. dark palette).
+ * NXENG-801 / NXSAT-494 — `.format-type` and `.format-size` on the fixed light `.picture-cards`
+ * strip use scoped host tokens so contrast stays ≥4.5:1 even when theme surface-variant drifts
+ * (e.g. dark palette). IBM 1406866183 (NXENG-837) targets `.format-size`.
  * Per-theme Karma coverage: `apps/nuxeo-ui/.../document-viewer-format-type-contrast.spec.ts`.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -138,18 +139,25 @@ describe('DocumentViewerComponent — format-type text contrast (NXENG-801)', ()
 
       const strip = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement;
       const label = fixture.nativeElement.querySelector('.format-type') as HTMLElement;
+      const size = fixture.nativeElement.querySelector('.format-size') as HTMLElement;
       expect(strip).not.toBeNull();
       expect(label).not.toBeNull();
-      if (!strip || !label) return;
+      expect(size).not.toBeNull();
+      if (!strip || !label || !size) return;
 
-      const labelStyle = getComputedStyle(label);
-      const backdrop = opaqueBackdrop(strip);
-      const painted = compositeOver(parseColor(labelStyle.color), backdrop);
-      const ratio = contrastRatio(painted, backdrop);
-      expect(
-        ratio,
-        `format-type ${labelStyle.color} on picture-cards backdrop rgb(${backdrop.join(',')}) (${theme ?? 'default'})`,
-      ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      for (const [element, name] of [
+        [label, 'format-type'],
+        [size, 'format-size'],
+      ] as const) {
+        const style = getComputedStyle(element);
+        const backdrop = opaqueBackdrop(strip);
+        const painted = compositeOver(parseColor(style.color), backdrop);
+        const ratio = contrastRatio(painted, backdrop);
+        expect(
+          ratio,
+          `${name} ${style.color} on picture-cards backdrop rgb(${backdrop.join(',')}) (${theme ?? 'default'})`,
+        ).toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      }
     }
   });
 });
