@@ -246,10 +246,12 @@ into the library to dodge the rule.
 10. Put it on the with-and-without-Satori page. `docs/satori-components/with-and-without-satori.md`
     is the source of the Confluence page that shows every component without and with Satori:
     - add a `### <Name>` section under "Side by side" with its `| Field | Value |` table — the
-      class, the registered ID or `—`, `Same component; theme only` (or, for a component
-      `libs/shared/satori-components-satori` re-registers, `Satori's own component:` naming the
-      `NxsSatori…Component` and a second story from that library), and the Storybook story it is
-      captured from — then the image `<selector without nxs->-side-by-side.png`, and a row under
+      class; the ID something registers the component under, or `—` when nothing does;
+      `Same component; theme only` (or, for a component `libs/shared/satori-components-satori`
+      re-registers, `Satori's own component:` naming the `NxsSatori…Component` and the `<sat-…>`
+      element its template renders, plus a second story from that library); and a story **of that
+      component** — one whose Storybook meta names it, or that renders its registered ID through an
+      outlet — then the image `<selector without nxs->-side-by-side.png`, and a row under
       "All components". The two `<!-- satori:comparison:* -->` markers are where a generator splices
       them, in the shape of `generatedComponent()` in
       `scripts/beta-harness/satori-comparison-doc.selftest.mjs`;

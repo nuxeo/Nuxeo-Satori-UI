@@ -566,11 +566,13 @@ try {
             'negative',
           );
         } else if (c.own) {
+          // The element the section documents, not any `sat-*`: a wrapper rendering something else
+          // would otherwise pass a check named after Satori's component.
           record(
             subject,
-            `Satori's own component inside <${h.selector}>`,
-            seen.satInside.length > 0,
-            seen.satInside.join(', '),
+            `Satori's <${c.satElement}> inside <${h.selector}>`,
+            seen.satInside.includes(c.satElement),
+            seen.satInside.length ? `rendered: ${seen.satInside.join(', ')}` : 'no sat-* element',
           );
         }
       } catch (error) {

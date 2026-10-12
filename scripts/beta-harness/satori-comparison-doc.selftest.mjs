@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  APP_PROVIDER,
   BARREL,
   DOC,
   MARKERS,
@@ -107,6 +108,34 @@ const NEGATIVE = [
     /registers NxsAvatarComponent as nxs\.primitives\.avatar, not nxs\.primitives\.tag/,
   ],
   [
+    'an ID that exists, but registered to another component',
+    {
+      doc: swap(
+        doc,
+        sectionOf(doc, 'Icon'),
+        sectionOf(doc, 'Icon').replace(
+          '| Registered ID   | —',
+          '| Registered ID   | `nxs.components.permissionsPanel`',
+        ),
+      ),
+    },
+    /names ID nxs\.components\.permissionsPanel, but nothing registers NxsIconComponent/,
+  ],
+  [
+    'an ID the application registers, left out of its section',
+    {
+      doc: swap(
+        doc,
+        sectionOf(doc, 'Permissions panel'),
+        sectionOf(doc, 'Permissions panel').replace(
+          '| Registered ID   | `nxs.components.permissionsPanel`',
+          '| Registered ID   | —',
+        ),
+      ),
+    },
+    /registers NxsPermissionsPanelComponent as nxs\.components\.permissionsPanel, not —/,
+  ],
+  [
     'a Satori-backed component described as theme only',
     {
       doc: swap(
@@ -135,6 +164,33 @@ const NEGATIVE = [
     'a story that does not exist',
     { doc: swap(doc, '`primitives-icon--sized-and-coloured`', '`primitives-icon--no-such-story`') },
     /story primitives-icon--no-such-story is not a story/,
+  ],
+  [
+    "a story that is another component's",
+    { doc: swap(doc, '`primitives-icon--sized-and-coloured`', '`primitives-thumbnail--loaded`') },
+    /story primitives-thumbnail--loaded renders NxsThumbnailComponent, not NxsIconComponent/,
+  ],
+  [
+    'a by-registered-ID story for a component it does not render',
+    {
+      doc: swap(
+        doc,
+        '`primitives-icon--sized-and-coloured`',
+        '`primitives-by-registered-id--material-registration`',
+      ),
+    },
+    /names no component of its own and renders by registered ID, which this section has none of/,
+  ],
+  [
+    'a Satori element the wrapper does not render',
+    {
+      doc: swap(
+        doc,
+        '`NxsSatoriTagComponent` renders `<sat-category-tag>`',
+        '`NxsSatoriTagComponent` renders `<sat-tag>`',
+      ),
+    },
+    /must name the element NxsSatoriTagComponent renders, as `<sat-category-tag>`, not `<sat-tag>`/,
   ],
   [
     'an image whose name does not follow the selector',
@@ -295,6 +351,10 @@ try {
   ]) {
     cpSync(join(ROOT, dir), join(tmp, dir), { recursive: true });
   }
+  // The application registers a library component by ID, so the copy needs it to read as the
+  // repository does.
+  mkdirSync(join(tmp, 'apps/nuxeo-ui/src/app/extensions'), { recursive: true });
+  cpSync(join(ROOT, APP_PROVIDER), join(tmp, APP_PROVIDER));
   mkdirSync(join(tmp, 'docs/satori-components'), { recursive: true });
 
   const spec = {
@@ -312,7 +372,9 @@ try {
   );
   writeFileSync(
     join(lib, 'lib/claim-summary/claim-summary.stories.ts'),
-    `const meta = { title: 'Components/${spec.title}' };\nexport default meta;\nexport const Default = {};\n`,
+    `import { ${spec.className} } from './claim-summary.component';\n` +
+      `const meta = {\n  title: 'Components/${spec.title}',\n  component: ${spec.className},\n};\n` +
+      'export default meta;\nexport const Default = {};\n',
   );
   writeFileSync(
     join(lib, 'index.ts'),

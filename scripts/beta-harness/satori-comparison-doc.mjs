@@ -8,12 +8,18 @@
  * and a section left behind after a component is removed describes something that no longer
  * ships. Both are easy to miss in review, because the page lives outside the repository.
  *
- * So this reads the barrel, the Satori registrations and the stories, and fails when:
+ * So this reads the barrel, the registrations and the stories, and fails when:
  *   - a component exported from `libs/shared/satori-components/src/index.ts` has no section, or a
  *     section names a component the barrel does not export;
  *   - a Satori variant registered by `provideNxsSatoriComponents()` is not named by a section, or a
  *     section says "Satori's own component" for a component Satori does not re-register;
- *   - a section's registered ID, Storybook story or image file name disagrees with the code;
+ *   - a section's registered ID is not the ID something registers *that* component under — every
+ *     registration of an exported component is read, `provideNxsComponents()` and the
+ *     application's alike, and a component nothing registers must say "—";
+ *   - a section's story is not a story *of* that component: either its Storybook meta names the
+ *     component, or it renders the component's registered ID through an extension outlet;
+ *   - a section says Satori renders an element its wrapper's template does not;
+ *   - a section's image file name disagrees with the code;
  *   - the "All components" table and the sections disagree;
  *   - the page text carries a ticket key, a pull-request reference or a branch name.
  *
@@ -39,6 +45,17 @@ const SATORI_SRC = 'libs/shared/satori-components-satori/src';
 const BASE_PROVIDER = `${BASE_SRC}/lib/provide-nxs-components.ts`;
 const SATORI_PROVIDER = `${SATORI_SRC}/lib/provide-nxs-satori-components.ts`;
 const PRIMITIVE_IDS = `${BASE_SRC}/lib/primitives.ts`;
+/**
+ * The application's own registrations. Read because a library component can be registered by the
+ * host rather than by `provideNxsComponents()` — `nxs.components.permissionsPanel` is — and a
+ * section claiming an ID has to be checked against every registration there is, not against the
+ * IDs the library happens to spell somewhere.
+ */
+export const APP_PROVIDER = 'apps/nuxeo-ui/src/app/extensions/provide-app-extensions.ts';
+const REGISTRARS = [
+  [BASE_PROVIDER, 'provideNxsComponents()'],
+  [APP_PROVIDER, APP_PROVIDER],
+];
 
 /** The section every component lives under, and the table that summarises them. */
 export const COMPONENTS_HEADING = 'Side by side';
@@ -133,33 +150,99 @@ function walk(root, rel, keep) {
 
 const selectorOf = (source) => /selector:\s*['"]([^'"]+)['"]/.exec(source ?? '')?.[1] ?? null;
 
-/** `[NXS_PRIMITIVE_IDS.avatar]: NxsAvatarComponent` and `'nxs.x.y': NxsYComponent`, as class → ID. */
-function registrations(source, primitiveIds) {
+/** A component's template: its `templateUrl` file, or its inline `template`. */
+function templateOf(root, file, source) {
+  const url = /templateUrl:\s*['"]([^'"]+)['"]/.exec(source)?.[1] ?? null;
+  if (url) return read(root, join(dirname(file), url)) ?? '';
+  return /template:\s*`([\s\S]*?)`/.exec(source)?.[1] ?? '';
+}
+
+/**
+ * The `nxs.…` IDs the base library names, keyed by the expression a registration writes them with:
+ * `NXS_PRIMITIVE_IDS.avatar` for a member of the frozen map, `NXS_PERMISSIONS_PANEL_ID` for an
+ * exported constant. A registration file in another project writes the constant, not the string.
+ */
+function idConstants(root) {
+  const byExpression = new Map();
+  const primitives = read(root, PRIMITIVE_IDS) ?? '';
+  for (const m of primitives.matchAll(/^\s*(\w+):\s*['"](nxs\.[\w.]+)['"]/gm)) {
+    byExpression.set(`NXS_PRIMITIVE_IDS.${m[1]}`, m[2]);
+  }
+  for (const file of walk(root, BASE_SRC, (n) => n.endsWith('.ts') && !n.endsWith('.spec.ts'))) {
+    for (const m of read(root, file).matchAll(/export const (\w+)\s*=\s*['"](nxs\.[\w.]+)['"]/g)) {
+      byExpression.set(m[1], m[2]);
+    }
+  }
+  return byExpression;
+}
+
+/**
+ * The components a registration file registers, as class → ID.
+ *
+ * Both forms a registration takes: a computed key — `[NXS_PRIMITIVE_IDS.avatar]`, or any other ID
+ * constant the base library exports — and a string literal.
+ */
+function registrations(source, ids) {
   const byClass = new Map();
   if (!source) return byClass;
-  for (const m of source.matchAll(/\[NXS_PRIMITIVE_IDS\.(\w+)\]\s*:\s*(\w+Component)/g)) {
-    if (primitiveIds.has(m[1])) byClass.set(m[2], primitiveIds.get(m[1]));
+  for (const m of source.matchAll(/\[([\w.]+)\]\s*:\s*(\w+Component)\b/g)) {
+    if (ids.has(m[1])) byClass.set(m[2], ids.get(m[1]));
   }
-  for (const m of source.matchAll(/['"](nxs\.[\w.]+)['"]\s*:\s*(\w+Component)/g)) {
+  for (const m of source.matchAll(/['"](nxs\.[\w.]+)['"]\s*:\s*(\w+Component)\b/g)) {
     byClass.set(m[2], m[1]);
   }
   return byClass;
 }
 
-/** Every story ID a library's Storybook serves, computed the way Storybook computes it. */
-function storyIds(root, src) {
-  const ids = new Set();
-  for (const file of walk(root, src, (n) => n.endsWith('.stories.ts'))) {
-    const source = read(root, file);
-    // The meta's title, not the first `title:` in the file: fixtures have titles too.
-    const meta = source.search(/\bconst meta\b|export default\s*\{/);
-    const title = meta === -1 ? null : /\btitle:\s*['"]([^'"]+)['"]/.exec(source.slice(meta))?.[1];
-    if (!title) continue;
-    for (const m of source.matchAll(/^export const (\w+)\s*[:=]/gm)) {
-      ids.add(toId(title, storyNameFromExport(m[1])));
+/**
+ * The registered IDs a story renders through `lib-extension-outlet`, for the stories that name no
+ * component of their own: `[componentId]="ids.avatar"` with `ids: NXS_PRIMITIVE_IDS` among its
+ * props, or a literal ID.
+ */
+function renderedIds(source, ids) {
+  const found = new Set();
+  const prop = /(\w+):\s*NXS_PRIMITIVE_IDS\b/.exec(source)?.[1] ?? null;
+  for (const m of source.matchAll(/\[componentId\]="([^"]*)"/g)) {
+    const expression = m[1].trim();
+    const literal = /^'(nxs\.[\w.]+)'$/.exec(expression)?.[1] ?? null;
+    if (literal) {
+      found.add(literal);
+      continue;
+    }
+    const member = prop ? new RegExp(`^${prop}\\.(\\w+)$`).exec(expression)?.[1] : null;
+    if (member && ids.has(`NXS_PRIMITIVE_IDS.${member}`)) {
+      found.add(ids.get(`NXS_PRIMITIVE_IDS.${member}`));
     }
   }
-  return ids;
+  return found;
+}
+
+/**
+ * Every story a library's Storybook serves, by the ID Storybook computes, with what the story is
+ * *of*: the component its meta names, and the registered IDs it renders through an outlet. A story
+ * ID that merely exists says nothing about which component a section's screenshot will show.
+ */
+function stories(root, src, ids) {
+  const found = new Map();
+  for (const file of walk(root, src, (n) => n.endsWith('.stories.ts'))) {
+    const source = read(root, file);
+    // The meta's title and component, not the first `title:` in the file: fixtures have titles too.
+    const start = source.search(/\bconst meta\b|export default\s*\{/);
+    if (start === -1) continue;
+    const end = source.indexOf('\n};', start);
+    const meta = source.slice(start, end === -1 ? undefined : end);
+    const title = /\btitle:\s*['"]([^'"]+)['"]/.exec(meta)?.[1] ?? null;
+    if (!title) continue;
+    const of = {
+      component: /\bcomponent:\s*(\w+Component)\b/.exec(meta)?.[1] ?? null,
+      renders: renderedIds(source, ids),
+      file,
+    };
+    for (const m of source.matchAll(/^export const (\w+)\s*[:=]/gm)) {
+      found.set(toId(title, storyNameFromExport(m[1])), of);
+    }
+  }
+  return found;
 }
 
 /**
@@ -172,11 +255,7 @@ function storyIds(root, src) {
 export function readInputs(root = ROOT, overrides = {}) {
   const barrel = overrides.barrel ?? read(root, BARREL) ?? '';
   const doc = overrides.doc ?? read(root, DOC);
-  const primitiveIds = new Map(
-    [...(read(root, PRIMITIVE_IDS) ?? '').matchAll(/^\s*(\w+):\s*['"](nxs\.[\w.]+)['"]/gm)].map(
-      (m) => [m[1], m[2]],
-    ),
-  );
+  const ids = idConstants(root);
   const { components, problems: barrelProblems } = barrelComponents(barrel);
   const selectors = new Map();
   for (const c of components) {
@@ -186,17 +265,19 @@ export function readInputs(root = ROOT, overrides = {}) {
   const satoriVariants = new Map();
   for (const file of walk(root, `${SATORI_SRC}/lib`, (n) => n.endsWith('.component.ts'))) {
     const source = read(root, file);
+    const elements = [
+      ...new Set([...templateOf(root, file, source).matchAll(/<(sat-[\w-]+)/g)].map((m) => m[1])),
+    ];
     for (const m of source.matchAll(/export class (\w+Component)\b/g)) {
-      satoriVariants.set(m[1], { selector: selectorOf(source), file });
+      satoriVariants.set(m[1], { selector: selectorOf(source), elements, file });
     }
   }
-  const idLiterals = new Set();
-  for (const file of walk(
-    root,
-    BASE_SRC,
-    (n) => n.endsWith('.ts') && !n.endsWith('.spec.ts') && !n.endsWith('.stories.ts'),
-  )) {
-    for (const m of read(root, file).matchAll(/['"](nxs\.[\w.]+)['"]/g)) idLiterals.add(m[1]);
+  /** Every registration of a component, as class → the ID and the file that registers it. */
+  const registeredBy = new Map();
+  for (const [file, label] of REGISTRARS) {
+    for (const [cls, id] of registrations(read(root, file), ids)) {
+      registeredBy.set(cls, [...(registeredBy.get(cls) ?? []), { id, by: label }]);
+    }
   }
   return {
     doc,
@@ -204,11 +285,10 @@ export function readInputs(root = ROOT, overrides = {}) {
     barrelProblems,
     selectors,
     satoriVariants,
-    baseRegistrations: registrations(read(root, BASE_PROVIDER), primitiveIds),
-    satoriRegistrations: registrations(read(root, SATORI_PROVIDER), primitiveIds),
-    idLiterals,
-    baseStories: storyIds(root, BASE_SRC),
-    satoriStories: storyIds(root, SATORI_SRC),
+    registeredBy,
+    satoriRegistrations: registrations(read(root, SATORI_PROVIDER), ids),
+    baseStories: stories(root, BASE_SRC, ids),
+    satoriStories: stories(root, SATORI_SRC, ids),
   };
 }
 
@@ -409,14 +489,20 @@ export function checkComparison(inputs) {
     if (!registeredId && idCell !== '—') {
       fail(`${where} "Registered ID" must be one \`nxs.…\` ID or "—"`);
     }
-    const baseId = inputs.baseRegistrations.get(component) ?? null;
-    if (baseId && registeredId !== baseId) {
+    // Against every registration of *this* component, not against the IDs the library spells
+    // somewhere: an ID that exists is not an ID this component answers to.
+    const registeredAs = inputs.registeredBy.get(component) ?? [];
+    if (registeredAs.length && !registeredAs.some((r) => r.id === registeredId)) {
       fail(
-        `${where} provideNxsComponents() registers ${component} as ${baseId}, not ${registeredId ?? '—'}`,
+        `${where} ${registeredAs.map((r) => `${r.by} registers ${component} as ${r.id}`).join(', ')}` +
+          `, not ${registeredId ?? '—'}`,
       );
     }
-    if (registeredId && !inputs.idLiterals.has(registeredId)) {
-      fail(`${where} names ID ${registeredId}, which ${BASE_SRC} does not define`);
+    if (!registeredAs.length && registeredId) {
+      fail(
+        `${where} names ID ${registeredId}, but nothing registers ${component} — not ` +
+          `${REGISTRARS.map(([, by]) => by).join(', not ')}. Its "Registered ID" must be "—"`,
+      );
     }
 
     const withSatori = s.fields.get('With Satori') ?? '';
@@ -425,14 +511,26 @@ export function checkComparison(inputs) {
       fail(`${where} "With Satori" must start with "${OWN}" or be "${THEME_ONLY}"`);
     }
     const variant = ticks(withSatori).find((t) => /^Nxs\w*Component$/.test(t)) ?? null;
+    // `<sat-category-tag>`: the element the capture then requires inside the rendered wrapper, so
+    // a wrapper rendering something else cannot pass a check named after Satori's component.
+    const satElement =
+      ticks(withSatori)
+        .find((t) => /^<sat-[\w-]+>$/.test(t))
+        ?.slice(1, -1) ?? null;
     const reRegistered = registeredId ? (satoriClassById.get(registeredId) ?? null) : null;
     if (own) {
+      const renders = variant ? (inputs.satoriVariants.get(variant)?.elements ?? []) : [];
       if (!variant || !inputs.satoriVariants.has(variant)) {
         fail(`${where} says "${OWN}" but names no Satori variant class from ${SATORI_SRC}`);
       } else if (satoriIdByClass.get(variant) !== registeredId) {
         fail(
           `${where} provideNxsSatoriComponents() registers ${variant} as ` +
             `${satoriIdByClass.get(variant) ?? 'nothing'}, not ${registeredId ?? '—'}`,
+        );
+      } else if (satElement !== renders[0]) {
+        fail(
+          `${where} must name the element ${variant} renders, as \`<${renders[0] ?? 'sat-…'}>\`` +
+            (satElement ? `, not \`<${satElement}>\`` : ''),
         );
       } else {
         namedVariants.set(variant, s.lineNo);
@@ -446,13 +544,31 @@ export function checkComparison(inputs) {
     const [story = null, satoriStory = null, ...extraStories] = ticks(
       s.fields.get('Storybook story') ?? '',
     );
-    if (!story || !inputs.baseStories.has(story)) {
-      fail(`${where} story ${story ?? '(none)'} is not a story in ${BASE_SRC}`);
-    }
-    if (own && (!satoriStory || !inputs.satoriStories.has(satoriStory))) {
-      fail(
-        `${where} needs a second story from ${SATORI_SRC}; ${satoriStory ?? '(none)'} is not one`,
+    // A story *of* this component: its Storybook meta names it, or it renders the ID the component
+    // is registered under. A story ID that merely exists would picture some other component.
+    const storyProblem = (id, src, served, wanted) => {
+      const of = served.get(id);
+      if (!of) return `story ${id} is not a story in ${src}`;
+      if (of.component) {
+        return of.component === wanted
+          ? null
+          : `story ${id} renders ${of.component}, not ${wanted}`;
+      }
+      if (registeredId && of.renders.has(registeredId)) return null;
+      return (
+        `story ${id} names no component of its own and renders ` +
+        (registeredId ? `no ${registeredId}` : 'by registered ID, which this section has none of')
       );
+    };
+    const storyFault = story
+      ? storyProblem(story, BASE_SRC, inputs.baseStories, component)
+      : `story (none) is not a story in ${BASE_SRC}`;
+    if (storyFault) fail(`${where} ${storyFault}`);
+    if (own) {
+      const satoriFault = satoriStory
+        ? storyProblem(satoriStory, SATORI_SRC, inputs.satoriStories, variant)
+        : `needs a second story from ${SATORI_SRC}; (none) is not one`;
+      if (satoriFault) fail(`${where} ${satoriFault}`);
     }
     if ((!own && satoriStory) || extraStories.length) {
       fail(`${where} "Storybook story" names more stories than it can use`);
@@ -487,6 +603,7 @@ export function checkComparison(inputs) {
       own,
       variant: own ? variant : null,
       satoriSelector,
+      satElement: own ? satElement : null,
       registeredId,
       story,
       satoriStory: own ? satoriStory : null,

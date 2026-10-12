@@ -5,9 +5,10 @@
  *
  * The page named by `docs/satori-components/with-and-without-satori.confluence.json` is updated
  * with a version bump — never created, never moved, never renamed. Images come from the capture's
- * output (`npm run docs:satori-comparison:capture`) and are uploaded by file name, replacing the
- * attachment of the same name. The conversion is `confluence-storage.mjs`'s, shared with
- * `publish-confluence.mjs`.
+ * output (`npm run docs:satori-comparison:capture`) and are uploaded as attachments named after
+ * their content, so an upload never changes what the live page shows: the one page update switches
+ * every image at once, and a failure before it leaves the page as it was. The conversion is
+ * `confluence-storage.mjs`'s, shared with `publish-confluence.mjs`.
  *
  * Refuses to run:
  *   - in CI (it writes to Confluence with a person's credentials);
@@ -23,9 +24,10 @@
  * clean run whose input digest (`sources.mjs`) matches the current sources and sections.
  *
  * The read-back — after publishing, or alone with `--verify` — fails unless the version went up by
- * one (publishing only), every image the page references is an attachment of the page that
- * downloads byte for byte as the capture has it, Confluence renders each, the headings are the ones
- * sent, and no forbidden reference appears.
+ * one (publishing only), the images the page references are exactly this capture's attachments —
+ * each downloading byte for byte as the capture has it — Confluence renders each, the headings are
+ * the ones sent, and no forbidden reference appears. `--verify` against a page published from an
+ * older capture fails on that comparison, rather than reporting a page it did not check.
  *
  * Usage:
  *   npm run docs:satori-comparison:publish                 # upload, update, read back
@@ -35,6 +37,7 @@
  */
 
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -98,11 +101,24 @@ try {
 const pngInfo = (file) => {
   const buf = readFileSync(file);
   return {
+    bytes: buf,
     png: buf.subarray(0, 8).toString('hex') === PNG_MAGIC,
     width: buf.readUInt32BE(16),
-    bytes: buf.length,
   };
 };
+
+/**
+ * The attachment an image is uploaded as: its file name with a digest of its content.
+ *
+ * Not the page's own file name, because replacing an attachment the live page references changes
+ * what that page shows the moment the upload lands — before, and whether or not, the page body
+ * that describes it is updated. An upload or the page update failing part-way would leave the live
+ * page showing new screenshots under old text, with nothing to roll back to. Named by content, an
+ * upload only ever adds (or rewrites with identical bytes), and the single page update switches
+ * every image at once; a failure before it leaves the live page exactly as it was.
+ */
+const attachmentFor = (name, bytes) =>
+  `${name.replace(/\.png$/, '')}-${createHash('sha256').update(bytes).digest('hex').slice(0, 12)}.png`;
 
 const referenced = [...new Set(imageReferences(doc).map((r) => r.src))];
 const missing = referenced.filter((name) => !existsSync(join(IMAGES, name)));
@@ -133,10 +149,18 @@ if (uncaptured.length) refuse(`not written by that capture: ${uncaptured.join(',
 const local = new Map(referenced.map((name) => [name, pngInfo(join(IMAGES, name))]));
 const notPng = referenced.filter((name) => !local.get(name).png);
 if (notPng.length) refuse(`not PNG files: ${notPng.join(', ')}`);
+/** Attachment name → the captured image it carries. */
+const uploads = new Map(
+  referenced.map((name) => [attachmentFor(name, local.get(name).bytes), name]),
+);
 
 const storage = toStorage(doc, {
   image: (img) =>
-    imageMacro({ ...img, width: Math.min(local.get(img.src).width, MAX_DISPLAY_WIDTH) }),
+    imageMacro({
+      ...img,
+      src: attachmentFor(img.src, local.get(img.src).bytes),
+      width: Math.min(local.get(img.src).width, MAX_DISPLAY_WIDTH),
+    }),
 });
 const leaks = forbiddenReferences(storage);
 if (leaks.length) {
@@ -218,15 +242,17 @@ if (page.title !== config.title) {
 const before = page.version.number;
 
 if (!verifyOnly) {
-  for (const name of referenced) {
+  // Content-named, so this only ever adds an attachment or rewrites one with the same bytes: the
+  // live page keeps showing the images its current body names until the page update below.
+  for (const [attachment, name] of uploads) {
     const how = await uploadAttachment({
       base: BASE,
       auth,
       pageId: config.pageId,
-      filename: name,
+      filename: attachment,
       absPath: join(IMAGES, name),
     });
-    console.log(`  ${how.padEnd(8)} ${name}`);
+    console.log(`  ${how.padEnd(8)} ${attachment}`);
   }
   await api(`/api/v2/pages/${config.pageId}`, {
     method: 'PUT',
@@ -268,13 +294,16 @@ while (next) {
   next = r._links?.next ?? null;
 }
 const refs = [...body.matchAll(/ri:filename="([^"]+)"/g)].map((m) => m[1]);
-if (JSON.stringify([...new Set(refs)].sort()) !== JSON.stringify([...referenced].sort())) {
-  fail(`the page references ${new Set(refs).size} image(s), the Markdown ${referenced.length}`);
+if (JSON.stringify([...new Set(refs)].sort()) !== JSON.stringify([...uploads.keys()].sort())) {
+  fail(
+    `the page references ${new Set(refs).size} image(s), the capture ${uploads.size}` +
+      (verifyOnly ? ': the live page was published from another capture' : ''),
+  );
 }
-for (const name of new Set(refs)) {
-  const a = attachments.get(name);
+for (const attachment of new Set(refs)) {
+  const a = attachments.get(attachment);
   if (!a) {
-    fail(`image ${name} is not an attachment of the page`);
+    fail(`image ${attachment} is not an attachment of the page`);
     continue;
   }
   const res = await fetch(`${BASE}${a._links.download}`, {
@@ -282,10 +311,14 @@ for (const name of new Set(refs)) {
     redirect: 'follow',
   });
   const buf = Buffer.from(await res.arrayBuffer());
-  const want = readFileSync(join(IMAGES, name));
-  if (!res.ok) fail(`image ${name} does not download (${res.status})`);
-  else if (buf.subarray(0, 8).toString('hex') !== PNG_MAGIC) fail(`image ${name} is not a PNG`);
-  else if (!buf.equals(want)) fail(`image ${name} differs from the capture in ${IMAGES}`);
+  const name = uploads.get(attachment) ?? null;
+  if (!res.ok) fail(`image ${attachment} does not download (${res.status})`);
+  else if (buf.subarray(0, 8).toString('hex') !== PNG_MAGIC)
+    fail(`image ${attachment} is not a PNG`);
+  else if (!name) fail(`image ${attachment} is not one of this capture's`);
+  else if (!buf.equals(local.get(name).bytes)) {
+    fail(`image ${attachment} differs from ${name} in ${IMAGES}`);
+  }
 }
 
 const view = (await api(`/api/v2/pages/${config.pageId}?body-format=view`)).body.view.value;
@@ -326,7 +359,8 @@ console.log(
     `${rendered} rendered, all downloaded and compared`,
 );
 if (stale.length) {
-  console.log(`  attachments no longer referenced (left in place): ${stale.join(', ')}`);
+  // Earlier captures. Left in place deliberately: older versions of the page still render them.
+  console.log(`  ${stale.length} attachment(s) from earlier captures, left in place`);
 }
 console.log(`  ${config.url}`);
 if (problems.length) {
