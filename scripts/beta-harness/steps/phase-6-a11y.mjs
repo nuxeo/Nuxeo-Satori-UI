@@ -416,6 +416,26 @@ const PICTURE_WITH_METADATA_NXQL =
   'AND picture:info/height > 0 ORDER BY dc:created';
 
 /**
+ * Explicit Basic auth for `page.request` calls to `/nuxeo/api/*`.
+ *
+ * Context `httpCredentials` cover same-origin UI navigation; absolute API URLs through the dev
+ * proxy (especially hosted beta) still need an `Authorization` header — see `phase-3-search.mjs`
+ * and `apps/nuxeo-ui-e2e/src/fixtures.ts`.
+ *
+ * @param {Record<string, string>} [extra]
+ * @returns {Record<string, string>}
+ */
+function nuxeoApiRequestHeaders(extra = {}) {
+  const user = process.env['NUXEO_USER'];
+  const pass = process.env['NUXEO_PASS'];
+  const headers = { ...extra };
+  if (user && pass) {
+    headers.Authorization = `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`;
+  }
+  return headers;
+}
+
+/**
  * First Picture uid with hydrated `picture:info` and `picture:views`, paging NXQL until exhausted.
  *
  * @param {import('@playwright/test').Page} page
@@ -430,7 +450,7 @@ async function findPictureWithPictureCardsUid(page, baseUrl) {
         pageSize: '20',
         currentPageIndex: String(pageIndex),
       },
-      headers: { 'X-NXproperties': '*' },
+      headers: nuxeoApiRequestHeaders({ 'X-NXproperties': '*' }),
     });
     if (!response.ok()) {
       return null;
@@ -448,7 +468,7 @@ async function findPictureWithPictureCardsUid(page, baseUrl) {
       }
       const doc = await page.request.get(`${baseUrl}/nuxeo/api/v1/id/${uid}`, {
         failOnStatusCode: false,
-        headers: { 'X-NXproperties': '*' },
+        headers: nuxeoApiRequestHeaders({ 'X-NXproperties': '*' }),
       });
       if (!doc.ok()) {
         continue;
@@ -483,6 +503,7 @@ async function findFileWithMainBlobUid(page, baseUrl) {
         pageSize: '20',
         currentPageIndex: String(pageIndex),
       },
+      headers: nuxeoApiRequestHeaders(),
     });
     if (!response.ok()) {
       return null;
@@ -500,7 +521,7 @@ async function findFileWithMainBlobUid(page, baseUrl) {
       }
       const head = await page.request.head(
         `${baseUrl}/nuxeo/api/v1/id/${uid}/@blob/file:content`,
-        { failOnStatusCode: false },
+        { failOnStatusCode: false, headers: nuxeoApiRequestHeaders() },
       );
       if (head.ok()) {
         return uid;
