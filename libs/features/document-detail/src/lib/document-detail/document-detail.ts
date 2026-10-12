@@ -3243,7 +3243,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   // ── Document Actions ──
 
   toggleLock(): void {
-    if (this.actionInProgress() || !this.requireWritePermission()) return;
+    if (this.actionInProgress() || !this.isLockable() || !this.requireWritePermission()) return;
     // Captured before the request: the page is reused across `:uid` changes, so when the response
     // lands `docUid` and `isLocked()` may describe another document.
     const uid = this.docUid;
@@ -3621,6 +3621,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       updated,
       { treatEmptyEnricherAsAbsent: true },
     );
+  }
+
+  /**
+   * The packaged Lock/Unlock rules' Immutable/Root restriction, held here too because a manifest
+   * may clear those rules, and an administrator keeps Write on a version.
+   */
+  private isLockable(): boolean {
+    const d = this.doc();
+    return !d?.facets?.includes('Immutable') && d?.type !== 'Root';
   }
 
   private requireWritePermission(): boolean {

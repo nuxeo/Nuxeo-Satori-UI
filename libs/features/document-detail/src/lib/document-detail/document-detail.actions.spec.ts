@@ -471,6 +471,41 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.isLocked()).toBe(false);
     });
 
+    describe('when a manifest has cleared the Lock rule', () => {
+      /** What `rule: null` in an override leaves: the packaged descriptor, ungated. */
+      function ungated(id: string): ExtensionActionDescriptor {
+        const packaged = PACKAGED_DOCUMENT_TOOLBAR_ACTIONS.find((a) => a.id === id);
+        if (!packaged) throw new Error(`no packaged action "${id}"`);
+        const { rule: _cleared, ...rest } = packaged;
+        return rest;
+      }
+
+      it('still reaches the handler for an ordinary document', async () => {
+        await build();
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
+      });
+
+      it('refuses to lock a version, on which an administrator keeps Write', async () => {
+        await build(doc({ facets: ['Immutable', 'Versionable'] }));
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+        expect(component.isLocked()).toBe(false);
+      });
+
+      it('refuses to lock the repository root', async () => {
+        await build(doc({ type: 'Root' }));
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+      });
+    });
+
     it('ignores a second lock request while the first is still in flight', async () => {
       await build();
       mockDetailService.lockDocument.mockReturnValue(NEVER);
