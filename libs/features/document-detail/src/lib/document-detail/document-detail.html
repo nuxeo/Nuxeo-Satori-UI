@@ -22,7 +22,7 @@
       (click)="goBack()"
       [attr.aria-label]="'document-detail.document-detail.go-back' | translate"
     >
-      <!-- NXENG-826: empty mat-icon + CSS codepoint (legacy Material Icons font ΓÇö fontIcon needs a class set). -->
+      <!-- NXENG-826: empty mat-icon + CSS codepoint (legacy Material Icons font — fontIcon needs a class set). -->
       <mat-icon aria-hidden="true" class="detail-header-go-back-icon"></mat-icon>
     </button>
     <div class="header-info">
@@ -253,7 +253,7 @@
     </div>
   }
 
-  <!-- Workflow info banner (yellow) ΓÇö one per running workflow -->
+  <!-- Workflow info banner (yellow) — one per running workflow -->
   @for (wf of documentWorkflows(); track wf.id) {
     <div class="workflow-banner">
       <mat-icon class="workflow-banner-icon">warning</mat-icon>
@@ -275,7 +275,7 @@
     </div>
   }
 
-  <!-- Task action banner (blue) ΓÇö one per pending task -->
+  <!-- Task action banner (blue) — one per pending task -->
   @for (task of documentTasks(); track task.id) {
     <div class="task-action-banner">
       <mat-icon class="task-action-icon">check_box</mat-icon>
@@ -1667,7 +1667,7 @@
                       {{ 'document-detail.document-detail.create-version' | translate }}
                     </button>
                   } @else {
-                    <span class="no-publications">ΓÇö</span>
+                    <span class="no-publications">—</span>
                   }
                 </span>
               </div>
@@ -1849,7 +1849,7 @@
                     <span class="tags-readonly-chip">{{ tag }}</span>
                   }
                   @if (tags().length === 0) {
-                    <span class="tags-empty">ΓÇö</span>
+                    <span class="tags-empty">—</span>
                   }
                 </div>
               }
@@ -2139,7 +2139,7 @@
                           ? ('document-detail.reply' | translate)
                           : ('document-detail.replies' | translate)
                       }}
-                      ┬╖ Last reply
+                      · Last reply
                       {{ lastReplyTime(comment.id) }}
                     </div>
                     <div class="replies-section">
