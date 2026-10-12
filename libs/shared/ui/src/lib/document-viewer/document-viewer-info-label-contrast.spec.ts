@@ -19,11 +19,11 @@ describe('DocumentViewerComponent — info-label SCSS contract (NXENG-812 / NXSA
   it('pins .info-label to the light-strip muted token per NXENG-812 / NXSAT-493 / NXSAT-507', () => {
     const scssPath = join(import.meta.dirname, 'document-viewer.component.scss');
     const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(/NXSAT-493/);
-    expect(scss).toMatch(/NXSAT-507/);
-    expect(scss).toMatch(/1390196018/);
-    expect(scss).toMatch(/1668870227/);
     const label = scssBlock(scss, 'info-label');
+    expect(label).toMatch(/NXSAT-493/);
+    expect(label).toMatch(/NXSAT-507/);
+    expect(label).toMatch(/1390196018/);
+    expect(label).toMatch(/1668870227/);
     expect(label).toMatch(/var\(--document-viewer-muted-on-light-surface\)/);
     expect(label).not.toMatch(/color:\s*#777/i);
     expect(label).not.toMatch(/var\(--mat-sys-on-surface-variant/i);

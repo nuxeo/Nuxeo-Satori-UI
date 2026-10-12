@@ -1,7 +1,7 @@
 /**
  * NXENG-812 / NXSAT-493 / NXSAT-507 — `.info-label` on themed `.picture-cards` uses the light-strip
  * muted token (IBM 716638997, IBM 1390196018, IBM 1668870227). Per-theme cases verify **token wiring**
- * `--document-viewer-muted-on-light-surface`), not a WCAG 1.4.3 verdict — that is axe-owned
+ * on `--document-viewer-muted-on-light-surface`, not a WCAG 1.4.3 verdict — that is axe-owned
  * (`docs/accessibility.md` §87–91). Karma loads `apps/nuxeo-ui/src/styles.scss`.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
