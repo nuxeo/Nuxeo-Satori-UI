@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';
-import { fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { NxsActionMenuComponent, type NxsMenuAction } from './action-menu.component';
 
@@ -58,9 +58,15 @@ export const WithADisabledEntry: Story = {
  */
 export const OpenedFromTheKeyboard: Story = {
   args: WithADisabledEntry.args,
-  play: async ({ canvasElement }) => {
+  // Leaves the menu open: the with-and-without-Satori capture screenshots this story.
+  play: async ({ args, canvasElement }) => {
     within(canvasElement).getByRole('button', { name: 'More actions' }).focus();
     await userEvent.keyboard('{Enter}');
+    // The menu opens in the overlay container, outside the story's canvas.
+    const menu = within(await within(canvasElement.ownerDocument.body).findByRole('menu'));
+    await waitFor(() => expect(menu.getByRole('menuitem', { name: 'Share' })).toHaveFocus());
+    await expect(menu.getByRole('menuitem', { name: 'Export' })).toBeDisabled();
+    await expect(args.selected).not.toHaveBeenCalled();
   },
 };
 
