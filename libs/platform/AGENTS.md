@@ -235,12 +235,12 @@ of them named the new IDs.
 
 ## 6. Where things live
 
-| What                                             | Where                                                                       |
-| ------------------------------------------------ | --------------------------------------------------------------------------- |
-| Every addressable ID, and each slot's real state | `extension-reference.md`                                                    |
-| The published API surface                        | `@nuxeo-satori/platform` type declarations                                  |
-| Entry points                                     | `@nuxeo-satori/platform/{extensions,app-config,components,nuxeo-client,ui}` |
-| Your contributions                               | your own library, `provideSatoriExtensions()`                               |
+| What                                             | Where                                                                                         |
+| ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| Every addressable ID, and each slot's real state | `extension-reference.md`                                                                      |
+| The published API surface                        | `@nuxeo-satori/platform` type declarations                                                    |
+| Entry points                                     | `@nuxeo-satori/platform/{extensions,app-config,components,components-satori,nuxeo-client,ui}` |
+| Your contributions                               | your own library, `provideSatoriExtensions()`                                                 |
 
 ## 7. The `nxs-` components
 
@@ -267,6 +267,14 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 - **`nxs-empty-state` renders its heading as an `<h2>` by default.** Bind `[headingLevel]` to
   one below the heading of the section it sits in, so screen-reader heading navigation stays in
   order.
+- **Show a document's thumbnail with `nxs-thumbnail`.** `<nxs-thumbnail [documentId]="doc.uid">`
+  fetches the rendition with the platform's credentials and revokes its blob URL itself; put the
+  fallback (a type icon) inside it, and size it with your own class on the element. A page
+  listing many lists `provideNxsThumbnailCache()` in its `providers`.
+- **Toast through `NxsToastService`, not `MatSnackBar`.** List `provideNxsToast()` in your
+  component's `providers`, then `show(message)` or `error(message, { retry })` with text you have
+  translated. It keeps the core slice's timing and announcements: four seconds or longer, a
+  Dismiss button, Escape to close, errors announced assertively.
 - **Favourite a document with `nxs-favorite-toggle`.** It is the star; it runs the request and
   reports the outcome, and your component says what to the user. To offer the same operation as a
   menu entry, call `nxsToggleFavorite(documentDetailService, id, favorite)`, which emits the new
@@ -289,3 +297,7 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
   deep import.
 - **It is new and growing.** The type declarations are the list of what exists; do not take
   a component's existence from this file.
+- **Satori is optional.** `provideNxsComponents()` registers the four `nxs.primitives.*` IDs on
+  Material. Only with GitHub Packages access, add `provideNxsSatoriComponents()` from
+  `@nuxeo-satori/platform/components-satori` after it to re-register them on Satori — the one entry
+  point that needs the optional `@hylandsoftware/satori-ui` peer. See `extension-reference.md` §6a.

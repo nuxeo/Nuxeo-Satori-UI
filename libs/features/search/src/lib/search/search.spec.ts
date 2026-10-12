@@ -7,7 +7,6 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -22,6 +21,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 
@@ -131,7 +131,7 @@ const mockDialog = {
   })),
 };
 
-const snackOpen = vi.fn();
+const toast = { show: vi.fn(), error: vi.fn() };
 
 describe('SearchComponent', () => {
   let component: SearchComponent;
@@ -190,6 +190,7 @@ describe('SearchComponent', () => {
 
   /** Rebuild the TestBed with a given query-param map. */
   async function configure(queryParams: Record<string, string> = {}): Promise<void> {
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       // `resetTestingModule()` in three of these tests discards what test-setup.ts provides
       // globally, and the component now injects TranslateService for the saved-search dialog
@@ -210,7 +211,6 @@ describe('SearchComponent', () => {
         { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
         { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: { open: snackOpen } },
       ],
     })
       .overrideComponent(SearchComponent, {
@@ -232,6 +232,8 @@ describe('SearchComponent', () => {
     mockSearchAggregationService.drawerFilters.set({});
     mockSearchAggregationService.aggregations.set({});
     mockSearchAggregationService.items.set([]);
+
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
 
     await TestBed.configureTestingModule({
       // `resetTestingModule()` in three of these tests discards what test-setup.ts provides
@@ -255,7 +257,6 @@ describe('SearchComponent', () => {
         { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
         { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: { open: snackOpen } },
       ],
     })
       .overrideComponent(SearchComponent, {
@@ -271,93 +272,22 @@ describe('SearchComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  describe('thumbnail lifecycle', () => {
-    it('revokes the previous batch before loading a new one', () => {
-      mockDocumentDetailService.fetchThumbnail.mockReturnValue(of(new Blob(['thumb'])));
-
-      component['beginThumbnailBatch']();
-      component['loadThumbnails']([resultItem({ id: 'doc1' })]);
-      // Same reason as the destroy test below: `blobSeq` is not reset between tests, so the URLs are
-      // read back rather than named. This one passed only because it runs first.
-      const first = created[0];
-      expect(component.thumbnailMap()['doc1']).toBe(first);
-
-      component['beginThumbnailBatch']();
-      component['loadThumbnails']([resultItem({ id: 'doc2' })]);
-
-      const second = created[1];
-      expect(revoked).toContain(first);
-      expect(component.thumbnailMap()).toEqual({ doc2: second });
-    });
-
-    it('ignores stale thumbnail responses from an older batch', () => {
-      const thumbs = new Subject<Blob | null>();
-      mockDocumentDetailService.fetchThumbnail.mockReturnValue(thumbs.asObservable());
-
-      component['beginThumbnailBatch']();
-      component['loadThumbnails']([resultItem({ id: 'doc1' })]);
-      component['beginThumbnailBatch']();
-      component['loadThumbnails']([]);
-
-      thumbs.next(new Blob(['late']));
-      thumbs.complete();
-
-      expect(created).toHaveLength(0);
-      expect(component.thumbnailMap()).toEqual({});
-    });
-
+  describe('thumbnails', () => {
     /**
-     * The regression test for the shared-generation race. `loadThumbnails` used to read
-     * `this.thumbnailGeneration` instead of incrementing it, so two loaders invoked under a single
-     * `beginThumbnailBatch()` — which happens when a standard search and an AI search both resolve —
-     * captured the same value. The first loader's in-flight callbacks then still matched the current
-     * generation after the second loader's `clearThumbnails()`, and repopulated the map from the
-     * abandoned result set.
-     *
-     * Verified by reverting the `++` and watching this go red, per the repo rule that a guard is not
-     * evidence until it has been seen to fail.
+     * Thumbnails are `nxs-thumbnail`'s: the component fetches, shows and revokes them, so this page
+     * must not mint an object URL of its own for a result — the blob-URL rule is held in one place.
      */
-    it('drops a late response from an earlier loader in the same batch', () => {
-      const firstThumbs = new Subject<Blob | null>();
-      const secondThumbs = new Subject<Blob | null>();
-      mockDocumentDetailService.fetchThumbnail
-        .mockReturnValueOnce(firstThumbs.asObservable())
-        .mockReturnValueOnce(secondThumbs.asObservable());
-
-      component['beginThumbnailBatch']();
-      component['loadThumbnails']([resultItem({ id: 'doc1' })]);
-      component['loadThumbnails']([resultItem({ id: 'doc2' })]);
-
-      firstThumbs.next(new Blob(['stale']));
-      firstThumbs.complete();
-      expect(created).toHaveLength(0);
-      expect(component.thumbnailMap()).toEqual({});
-
-      // The positive control: the current loader is still honoured, so the guard is discriminating
-      // rather than rejecting everything — which is how this test would pass for the wrong reason.
-      secondThumbs.next(new Blob(['fresh']));
-      secondThumbs.complete();
-      expect(created).toHaveLength(1);
-      expect(component.thumbnailMap()).toEqual({ doc2: created[0] });
-    });
-
-    it('revokes tracked thumbnails on destroy', () => {
+    it('mints no object URL for a result thumbnail, even when the rendition answers', () => {
       mockDocumentDetailService.fetchThumbnail.mockReturnValue(of(new Blob(['thumb'])));
+      mockNuxeoApiBase.nxqlSearch.mockReturnValue(
+        of({ entries: [{ uid: 'doc1', title: 'Doc 1', type: 'Picture' }] }),
+      );
 
-      component['beginThumbnailBatch']();
-      component['loadThumbnails']([resultItem({ id: 'doc1' })]);
+      fixture.detectChanges();
+      component['runNxqlQuery']('SELECT * FROM Document', ++component['aiRequestGeneration']);
 
-      // Read the minted URL back rather than naming `blob:mock/1`. `created` and `revoked` are
-      // cleared in `beforeEach` but `blobSeq` is not, so the sequence number depends on how many
-      // URLs earlier tests minted — hardcoding it made this test pass only while it happened to run
-      // first, and it was already failing on arrival for exactly that reason.
-      expect(created).toHaveLength(1);
-      const url = created[0];
-      expect(component.thumbnailMap()['doc1']).toBe(url);
-
-      fixture.destroy();
-
-      expect(revoked).toContain(url);
+      expect(mockDocumentDetailService.fetchThumbnail).not.toHaveBeenCalled();
+      expect(created).toEqual([]);
     });
   });
 
@@ -438,7 +368,7 @@ describe('SearchComponent', () => {
     it('should toggle individual selection', () => {
       vi.spyOn(component, 'displayResults').mockReturnValue([row()]);
       component.toggleSelection('doc1');
-      expect(mockSelectionService.toggle).toHaveBeenCalledWith('doc1', 'Test Doc', null);
+      expect(mockSelectionService.toggle).toHaveBeenCalledWith('doc1', 'Test Doc');
     });
 
     it('should check if item is selected', () => {
@@ -454,11 +384,11 @@ describe('SearchComponent', () => {
         row({ id: 'doc2', name: 'Doc 2' }),
       ]);
       component.toggleAll();
-      expect(mockSelectionService.selectAll).toHaveBeenCalledWith(
-        ['doc1', 'doc2'],
-        { doc1: 'Doc 1', doc2: 'Doc 2' },
-        expect.any(Object),
-      );
+      // No previews: the selection popup draws its own with nxs-thumbnail.
+      expect(mockSelectionService.selectAll).toHaveBeenCalledWith(['doc1', 'doc2'], {
+        doc1: 'Doc 1',
+        doc2: 'Doc 2',
+      });
     });
 
     it('should clear selection when all selected', () => {
@@ -627,14 +557,12 @@ describe('SearchComponent', () => {
 
     it('reports the server’s message when a star’s request fails', () => {
       component.onFavoriteFailed({ error: { message: 'Not allowed' } });
-      expect(snackOpen).toHaveBeenCalledWith('Not allowed', 'Dismiss', { duration: 5000 });
+      expect(toast.error).toHaveBeenCalledWith('Not allowed', { duration: 5000 });
     });
 
     it('falls back to its own message when the server sends none', () => {
       component.onFavoriteFailed(new Error(''));
-      expect(snackOpen).toHaveBeenCalledWith('Failed to update favorites.', 'Dismiss', {
-        duration: 5000,
-      });
+      expect(toast.error).toHaveBeenCalledWith('Failed to update favorites.', { duration: 5000 });
     });
   });
 
@@ -897,56 +825,6 @@ describe('SearchComponent', () => {
         component.aiNxqlLoading.set(false);
         component.loading.set(true);
         expect(component.busy()).toBe(true);
-      });
-    });
-
-    /**
-     * A standard search must not invalidate thumbnails it is not going to reload.
-     *
-     * `beginThumbnailBatch()` ran on every query-param/drawer-filter change, while the response path
-     * deliberately skips `loadThumbnails` when AI results are displayed. So a filter change during a
-     * completed AI search killed every AI thumbnail request still in flight and loaded nothing to
-     * replace them — the thumbnails just vanished.
-     */
-    describe('thumbnail batch ownership', () => {
-      it('leaves the batch alone while AI results are displayed', () => {
-        component.aiSearchMode.set(true);
-        component.aiSearchExecuted.set(true);
-
-        const before = component['thumbnailGeneration'];
-        expect(component['standardResultsOwnThumbnails']()).toBe(false);
-        // Invalidating here would strand the AI thumbnails, because nothing reloads them.
-        if (component['standardResultsOwnThumbnails']()) component['beginThumbnailBatch']();
-
-        expect(component['thumbnailGeneration']).toBe(before);
-      });
-
-      it('does not claim the batch when starting an AI NXQL request', () => {
-        /**
-         * The standard results stay on screen until the AI request succeeds, and `loadThumbnails`
-         * mints its own generation when it does. Claiming here only mattered if the request FAILED:
-         * every standard thumbnail response still in flight was then discarded by the generation
-         * check, and the error path reloaded none of them — permanently missing thumbnails from
-         * invalidating a batch this method might never refill.
-         */
-        const pending = new Subject<{ entries: never[] }>();
-        mockNuxeoApiBase.nxqlSearch.mockReturnValue(pending.asObservable());
-
-        const before = component['thumbnailGeneration'];
-        component['runNxqlQuery']('SELECT * FROM Document', ++component['aiRequestGeneration']);
-
-        expect(component['thumbnailGeneration']).toBe(before);
-      });
-
-      it('claims the batch when the standard results are what is on screen', () => {
-        // The positive control, in both of the ways standard results can own the display.
-        component.aiSearchMode.set(false);
-        component.aiSearchExecuted.set(true);
-        expect(component['standardResultsOwnThumbnails']()).toBe(true);
-
-        component.aiSearchMode.set(true);
-        component.aiSearchExecuted.set(false);
-        expect(component['standardResultsOwnThumbnails']()).toBe(true);
       });
     });
 
@@ -1515,7 +1393,7 @@ describe('SearchComponent', () => {
 
       component.downloadDocument('d1', 'report');
 
-      expect(snackOpen).toHaveBeenCalledWith('Blob is gone', 'Dismiss', { duration: 5000 });
+      expect(toast.error).toHaveBeenCalledWith('Blob is gone', { duration: 5000 });
     });
 
     it('falls back to a generic message when the error carries none', () => {
@@ -1524,9 +1402,7 @@ describe('SearchComponent', () => {
 
       component.downloadDocument('d1', 'report');
 
-      expect(snackOpen).toHaveBeenCalledWith('Failed to download document.', 'Dismiss', {
-        duration: 5000,
-      });
+      expect(toast.error).toHaveBeenCalledWith('Failed to download document.', { duration: 5000 });
     });
 
     it('stops the click from also opening the document', () => {

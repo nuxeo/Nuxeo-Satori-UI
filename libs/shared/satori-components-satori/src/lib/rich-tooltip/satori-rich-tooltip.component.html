@@ -1,0 +1,13 @@
+<button
+  mat-icon-button
+  type="button"
+  class="nxs-satori-rich-tooltip__trigger"
+  [attr.aria-label]="triggerLabel()"
+  [satRichTooltipTriggerFor]="tooltip"
+>
+  <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
+</button>
+<sat-rich-tooltip #tooltip="satRichTooltip">
+  <sat-rich-tooltip-title>{{ heading() }}</sat-rich-tooltip-title>
+  <sat-rich-tooltip-content>{{ content() }}</sat-rich-tooltip-content>
+</sat-rich-tooltip>

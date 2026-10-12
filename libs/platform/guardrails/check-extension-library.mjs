@@ -138,6 +138,7 @@ const PUBLISHED = new Set([
   '@nuxeo-satori/platform/extensions',
   '@nuxeo-satori/platform/app-config',
   '@nuxeo-satori/platform/components',
+  '@nuxeo-satori/platform/components-satori',
   '@nuxeo-satori/platform/nuxeo-client',
   '@nuxeo-satori/platform/ui',
 ]);

@@ -461,6 +461,20 @@ Removed in NXSAT-312, with no replacement: `loadBootstrap()`, `loadManifest()`, 
 
 ---
 
+## NxsToastService (`libs/shared/satori-components/src/lib/toast/toast.service.ts`)
+
+The core slice's one toast (NXSAT-308), over Material's `MatSnackBar`. Import:
+`@nuxeo-satori/platform/components`. Not provided in root: list `provideNxsToast()` in the
+component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, { useValue })`.
+
+| Member                                                         | Notes                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show(message: string, options?: NxsToastOptions): void`       | Something happened. Announced politely. `message` is already translated; a blank one opens nothing.                                                                                                                                                             |
+| `error(message: string, options?: NxsToastErrorOptions): void` | Something the user asked for did not happen. Announced assertively. `retry` adds a translated Retry button running it.                                                                                                                                          |
+| `NxsToastOptions`                                              | `duration` in ms: below `NXS_TOAST_DURATION` (4000, Web UI's) it is raised to it, `0` keeps the toast until dismissed. `action: { label, run }` adds one button; a toast with an action defaults to `0`. Every toast has a Dismiss button and closes on Escape. |
+
+---
+
 ## DocumentLayoutService (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)
 
 Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports only the

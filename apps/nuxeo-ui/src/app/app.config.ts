@@ -7,6 +7,8 @@ import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo-satori/platform/nuxeo-client';
+import { provideNxsComponents } from '@nuxeo-satori/platform/components';
+import { provideNxsSatoriComponents } from '@nuxeo-satori/platform/components-satori';
 import { nuxeoAuthInterceptor } from './auth/nuxeo-auth.interceptor';
 import { AuthService } from './auth/auth.service';
 import { provideAppConfig } from './config/provide-app-config';
@@ -38,6 +40,11 @@ export const appConfig: ApplicationConfig = {
     // Must come before anything that reads configuration: this registers the
     // Layer 0 loader and repoints every configuration token at its result.
     ...provideAppConfig(),
+    // The `nxs.primitives.*` IDs on Material, then re-registered on Satori. Later wins, so this
+    // order is the Satori-if-available mechanism (`checkSatoriPrimitivesRegisteredInOrder`); a
+    // build without GitHub Packages access lists only the first.
+    provideNxsComponents(),
+    provideNxsSatoriComponents(),
     // Layer 1: registers the application's slot, rule and component IDs. Must
     // follow `provideAppConfig()`, which loads the manifest they are merged with.
     ...provideAppExtensions(),

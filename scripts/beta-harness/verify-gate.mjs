@@ -292,6 +292,19 @@ const ALL_GATES = [
     // Names which of its five checks are load-bearing; that belongs in the log.
     echoOnPass: true,
   },
+  // Publishable is not installable. Every gate above runs inside this monorepo, whose
+  // node_modules already holds `@hylandsoftware/satori-ui` from GitHub Packages; a customer's does
+  // not, and npm installs every non-optional peer. This installs the built tarball from public npm
+  // with no credentials, and re-runs it with the Satori peer made required, which must fail — the
+  // risk `docs/publish-readiness.md` §5 recorded as uncovered. Needs registry.npmjs.org.
+  {
+    id: 'peer-installability',
+    label: 'Installs without GitHub Packages',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/peer-installability.mjs'],
+    // The control's outcome is the evidence that the pass means anything.
+    echoOnPass: true,
+  },
   // Compiles the template against the **built** declarations instead of the source
   // tree, which is the only gate that sees the resolution a customer actually gets.
   // It is what found the platform package being compiled without `strictNullChecks`,
@@ -325,6 +338,25 @@ const ALL_GATES = [
     label: 'Extension reference drift',
     cmd: 'node',
     argv: ['scripts/beta-harness/extension-reference-drift.mjs'],
+  },
+  // The same question for the page that shows each `nxs-` component with and without Satori: it
+  // lives on Confluence, so a component added without a section there is missed in review. Fails
+  // on a barrel component with no section, a section with no component, and a section whose ID,
+  // story or image disagrees with the code.
+  {
+    id: 'nxs-comparison',
+    label: 'Satori comparison page covers every nxs- component',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/satori-comparison-doc.mjs'],
+  },
+  // Its negative controls, in memory and under `os.tmpdir()`, so safe to run beside anything.
+  {
+    id: 'nxs-comparison-selftest',
+    label: 'Satori comparison page controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/satori-comparison-doc.selftest.mjs'],
+    // The negative/positive split is the evidence, so surface it on a pass too.
+    echoOnPass: true,
   },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That

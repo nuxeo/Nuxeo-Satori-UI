@@ -1,0 +1,94 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TagStories from './tag.stories';
+
+<Meta of={TagStories} name="Overview" />
+
+# Tag
+
+A tag is a short, static label in a colour. Use it to show a category at a glance — a document type,
+a classification, a state that does not change while the user looks at it. A tag is not a button and
+not a filter chip: it does nothing when clicked.
+
+## Key features
+
+- **Nine colours**: `gray`, the default, plus the eight avatar colours.
+- **One line.** A label longer than the space it has is cut short with an ellipsis.
+- **Follows your theme.** Each colour is one of your Angular Material theme's colours. Set
+  `--nxs-tag-<colour>-background` and `--nxs-tag-<colour>-foreground` to give a colour your own hue.
+- **Replaceable by ID.** It is registered as `nxs.primitives.tag`, so Satori's tag or your own can
+  take its place.
+
+## Demo showcase
+
+<Canvas of={TagStories.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsTagComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-tag [label]="'acme.type.invoice' | translate" color="purple" />`}
+/>
+
+Only `label` is required, already translated. `color` defaults to `gray`. Used directly, the tag
+needs no providers.
+
+### By registered ID
+
+`provideNxsComponents()` registers the tag as `nxs.primitives.tag`, exported as
+`NXS_PRIMITIVE_IDS.tag`:
+
+<Source
+  language="html"
+  dark
+  code={`<lib-extension-outlet [componentId]="tagId" [componentInputs]="{ label: 'Invoice', color: 'purple' }" />`}
+/>
+
+## Examples
+
+### Colours
+
+Give each category its own colour and keep it the same everywhere. The colour is a visual aid only:
+the label must say what the tag means on its own.
+
+<Canvas of={TagStories.Colours} />
+
+### A long label
+
+<Canvas of={TagStories.LongLabel} />
+
+When a label is cut short, the full text is not shown anywhere else. Keep labels short, or show the
+full text beside the tag.
+
+### By registered ID
+
+<Canvas of={TagStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Name.** The tag is plain text: assistive technology reads the label. It has no role of its own.
+- **Colour.** A colour is never announced. Do not rely on it to carry meaning.
+- **Keyboard.** The tag is not interactive and takes no focus.
+- **Contrast.** Each colour pairs a theme container colour with its matching text colour. If you
+  set your own colours, check the contrast of the pair.
+
+## Satori and the built-in tag
+
+The same ID, `nxs.primitives.tag`, renders **Satori's category tag** when
+`@nuxeo-satori/platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+after `provideNxsComponents()`. Otherwise it renders the **built-in tag** shown on this page. Both
+take the same inputs and the same nine colour names.
+
+What looks different: Satori's tag uses Satori's own colours and type, one distinct hue per name.
+The built-in tag uses your Material theme's colours, so the names are labels rather than exact hues
+— `orange`, for example, is a light shade of your theme's primary colour.
+
+This Storybook is built without access to GitHub Packages, so every example here shows the built-in
+tag. Satori's tag is shown in Satori's documentation.

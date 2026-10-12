@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';
+import { fn } from 'storybook/test';
 
 import { NxsColumnPickerComponent, type NxsPickableColumn } from './column-picker.component';
 
@@ -8,14 +9,10 @@ const column = (key: string, label: string, visible = true): NxsPickableColumn =
   visible,
 });
 
-/**
- * Column labels arrive already translated, so plain strings stand in for them here; the panel's
- * own chrome comes from the application's catalogue (`preview.ts`). The panel hangs from the
- * top-right corner of its nearest positioned ancestor, so each story renders it inside one.
- */
 const meta: Meta<NxsColumnPickerComponent> = {
   title: 'Tables/Column picker',
   component: NxsColumnPickerComponent,
+  tags: ['autodocs'],
   args: {
     columns: [
       column('title', 'Title'),
@@ -25,19 +22,20 @@ const meta: Meta<NxsColumnPickerComponent> = {
     ],
     required: ['title'],
     defaults: ['title', 'modified'],
-  },
-  argTypes: {
-    columns: { description: 'Every column the user may choose from, in display order. Required.' },
-    required: { description: 'Keys that cannot be switched off.' },
-    defaults: { description: 'The keys Reset returns to.' },
+    apply: fn(),
+    dismiss: fn(),
   },
   render: (args) => ({
     props: args,
-    template: `
-      <div style="position: relative; width: 420px; height: 360px">
-        <nxs-column-picker [columns]="columns" [required]="required" [defaults]="defaults" />
-      </div>
-    `,
+    template: `<div style="position: relative; width: 420px; height: 360px">
+  <nxs-column-picker
+    [columns]="columns"
+    [required]="required"
+    [defaults]="defaults"
+    (apply)="apply($event)"
+    (dismiss)="dismiss()"
+  />
+</div>`,
   }),
 };
 

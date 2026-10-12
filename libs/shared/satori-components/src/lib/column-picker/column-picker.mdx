@@ -1,0 +1,101 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ColumnPickerStories from './column-picker.stories';
+
+<Meta of={ColumnPickerStories} name="Overview" />
+
+# Column picker
+
+The column picker is the panel a user opens from a table header to choose which columns are shown.
+Use it for any table whose columns the user may show or hide.
+
+## Key features
+
+- **Choose, then apply.** Ticking and unticking is held back until **Done**. **Escape** or a click on
+  the backdrop discards the changes, and **Reset** returns to your defaults.
+- **Columns that stay.** Columns listed in `required` — usually the title, so no row is left
+  unlabelled — show checked and cannot be switched off.
+- **Your columns, your storage.** It is given the columns and reports the keys chosen, in the
+  columns' own order. Where the columns come from and where the choice is saved stay yours.
+- **A proper dialog.** While open it takes focus, keeps **Tab** inside itself and gives focus back to
+  the button that opened it when it closes.
+- **Scrolls when long.** With more columns than fit, the list scrolls and the buttons stay in view.
+
+## Demo showcase
+
+Tick and untick columns, then select **Done** or press **Escape**. The **Actions** tab logs `apply`
+and `dismiss`.
+
+<Canvas of={ColumnPickerStories.SomeColumnsHidden} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import {
+  NxsColumnPickerComponent,
+  type NxsPickableColumn,
+} from '@nuxeo-satori/platform/components';
+
+protected readonly pickerOpen = signal(false);
+protected readonly columns = computed<NxsPickableColumn[]>(() =>
+this.allColumns.map((column) => ({
+key: column.key,
+label: this.translate.instant(column.labelKey),
+visible: this.shown().includes(column.key),
+})),
+);
+
+protected applyColumns(keys: readonly string[]): void {
+this.shown.set([...keys]);
+this.pickerOpen.set(false);
+}`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<div class="acme-table" style="position: relative">
+  <button mat-icon-button type="button" (click)="pickerOpen.set(true)" [attr.aria-label]="'acme.table.manage-columns' | translate">
+    <mat-icon>view_column</mat-icon>
+  </button>
+  @if (pickerOpen()) {
+    <nxs-column-picker
+      [columns]="columns()"
+      [required]="['title']"
+      [defaults]="['title', 'modified']"
+      (apply)="applyColumns($event)"
+      (dismiss)="pickerOpen.set(false)"
+    />
+  }
+  <!-- the table -->
+</div>`}
+/>
+
+The panel hangs from the top-right corner of its nearest positioned ancestor, so render it inside
+the table's wrapper and give the wrapper `position: relative`. Close it — remove it from the page —
+when it emits `apply` or `dismiss`. Its title and buttons are translated with ngx-translate under
+`satori-components.column-picker.*`; `providePlatformEnglishFallback()` supplies the English when
+your catalogue does not. Column names arrive already translated.
+
+## Examples
+
+### All columns shown
+
+<Canvas of={ColumnPickerStories.AllColumnsShown} />
+
+### Many columns
+
+<Canvas of={ColumnPickerStories.ManyColumns} />
+
+## Accessibility
+
+- **Dialog.** The panel has the `dialog` role, is modal, and is named by its title.
+- **Focus.** It takes focus when it opens, keeps **Tab** and **Shift+Tab** inside itself, and returns
+  focus to the element that had it — your "Manage columns" button — when it closes.
+- **Keyboard.** **Space** ticks or unticks the focused column. **Escape** closes without applying.
+- **Required columns.** A required column's checkbox is checked and disabled, so it is announced as
+  unavailable.
+- **Backdrop.** The backdrop is a button with its own translated name, so a pointer click outside the
+  panel and assistive technology both have a way to close it.

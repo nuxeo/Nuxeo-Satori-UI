@@ -1,0 +1,84 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DriveDialogStories from './drive-dialog.stories';
+
+<Meta of={DriveDialogStories} name="Overview" />
+
+# Nuxeo Drive dialog
+
+The Nuxeo Drive dialog is what a user sees after choosing **Open with Nuxeo Drive** on a folder. If
+the user already has Nuxeo Drive set up, it hands the folder to Drive and closes straight away.
+Otherwise it offers the Drive installers for Linux, macOS and Windows.
+
+## Key features
+
+- **Checks first.** When it opens, it asks Nuxeo whether the current user has a Nuxeo Drive token.
+- **Hands over and closes.** With a token, it opens the folder in Drive through an
+  `nxdrive://direct-transfer` link and closes itself, so the user may never see it.
+- **Offers the installers.** Without a token — or when the check fails — it lists the installers
+  and a **Close** button.
+- **The repository root by default.** Without a folder path, Drive opens the repository root.
+
+## Demo showcase
+
+The preview shows the dialog inline, as it looks once open. The code shows how a page opens it.
+
+<Canvas of={DriveDialogStories.NoDriveToken} />
+
+## Usage
+
+Open it with Angular Material's `MatDialog`, passing the folder's path as the dialog's data:
+
+<Source
+  language="typescript"
+  dark
+  code={`import { inject } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import { NxsDriveDialogComponent, type NxsDriveDialogData } from '@nuxeo-satori/platform/components';
+
+private readonly dialog = inject(MatDialog);
+
+protected openInDrive(folderPath: string): void {
+this.dialog.open<NxsDriveDialogComponent, NxsDriveDialogData>(NxsDriveDialogComponent, {
+data: { folderPath },
+});
+}`}
+/>
+
+It has no inputs or outputs: it reads `folderPath` from the dialog's data, and closing the dialog is
+how it reports that it is done. It needs `HttpClient` and the platform's `NuxeoDriveService`, which an
+application using `@nuxeo-satori/platform/nuxeo-client` already has, and ngx-translate for its title,
+labels and button, under `satori-components.drive-dialog.*`. `providePlatformEnglishFallback()`
+supplies the English when your catalogue does not.
+
+## Where its data comes from
+
+Everything goes through the platform's `NuxeoDriveService`, so every request carries the
+application's sign-in:
+
+- `hasDriveToken()`, once, when the dialog opens.
+- With a token: `buildDirectTransferUrl(folderPath)`, then `openDriveUrl(…)`, then the dialog closes.
+- The **Close** button closes the dialog.
+
+**In these stories** `NuxeoDriveService` and the dialog reference are in-memory fakes. They never
+contact Nuxeo and close nothing, and they start again on every reload. Every call they receive is
+logged in the **Actions** tab. With a token the dialog would close at once, so the stories show the
+two states a user can see.
+
+## Examples
+
+### Checking
+
+While Nuxeo is asked whether the user has a Drive token.
+
+<Canvas of={DriveDialogStories.Checking} />
+
+## Accessibility
+
+- **Title.** The dialog's title is a heading that Material's dialog uses as its accessible name.
+- **Checking.** The "checking" message is an `output` element, which has the `status` role. The
+  spinner beside it is decorative, because the message says what is happening.
+- **Installers.** The installers are a table with column headers. Each installer is a link that opens
+  in a new tab.
+- **Keyboard.** **Tab** moves through the links and the **Close** button. Material's dialog keeps
+  focus inside the dialog and closes it on **Escape**.

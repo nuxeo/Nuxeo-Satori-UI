@@ -611,6 +611,47 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ---
 
+## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
+
+Four component-registry IDs for the primitives Satori also ships. Each resolves to a Material
+implementation from `@nuxeo-satori/platform/components`, and to a Satori-backed one when
+`@nuxeo-satori/platform/components-satori` is provided after it. That second entry point is the only
+one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
+Packages access, leave it out and every ID still resolves, on Material.
+
+| Component ID                 | Inputs (all text arrives translated)         | Satori-backed by   |
+| ---------------------------- | -------------------------------------------- | ------------------ |
+| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`         | `sat-avatar`       |
+| `nxs.primitives.breadcrumbs` | `items`, `label`                             | `sat-breadcrumbs`  |
+| `nxs.primitives.tag`         | `label`, `color`                             | `sat-category-tag` |
+| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon` | `sat-rich-tooltip` |
+
+Both implementations of an ID declare the same inputs (`Nxs…Inputs` in `/components`; a spec in
+`/components-satori` compares them), so whoever renders an ID passes the same `componentInputs`
+whichever is registered. Registration layers like every other contribution — in provider order,
+later wins per ID — so the order is the mechanism:
+
+```ts
+providers: [
+  provideNxsComponents(), // Material, from @nuxeo-satori/platform/components
+  provideNxsSatoriComponents(), // optional: Satori, from @nuxeo-satori/platform/components-satori
+  provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTag } }), // yours wins
+];
+```
+
+`provideNxsSatoriComponents()` also needs what any Satori host provides: `provideSatori()` for the
+theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
+`provideAndConfigureSatoriUITranslations`, or seeded into your own loader). Without the catalogue
+the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An override of yours
+implements the matching `Nxs…Inputs` interface.
+
+**Registered, not yet rendered by a packaged screen.** The product registers both, but its screens
+still use the `sat-*` elements directly until they move onto these IDs. Today the IDs render where a
+host resolves them — a `lib-extension-outlet` with a `componentId`, or a Layer 2 component composing
+`NxsTagComponent` and the rest from `/components` directly — and in the library's Storybook.
+
+---
+
 ## 7. `documentList` — the packaged columns
 
 Twelve columns, registered by the application and resolved by both the production

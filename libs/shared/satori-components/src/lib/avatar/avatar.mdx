@@ -1,0 +1,125 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as AvatarStories from './avatar.stories';
+
+<Meta of={AvatarStories} name="Overview" />
+
+# Avatar
+
+An avatar shows a person's initials in a coloured circle. Use it beside a person's name — in a list
+of users, on a comment or task, in a header — or on its own where there is no room for the name.
+
+## Key features
+
+- **Six sizes**, from 24 to 128 pixels, each with a matching type size.
+- **Eight colours**: `purple`, `blue`, `pink`, `teal`, `yellow`, `green`, `red` and `orange`.
+- **Named or decorative.** With a `label` it is announced as an image with that name. Without one it
+  is hidden from assistive technology, for use next to the visible name.
+- **Follows your theme.** Each colour is one of your Angular Material theme's colours, so it adapts
+  to dark mode. Set `--nxs-avatar-<colour>-background` and `--nxs-avatar-<colour>-foreground` to
+  give a colour your own hue.
+- **Replaceable by ID.** It is registered as `nxs.primitives.avatar`, so Satori's avatar or your own
+  can take its place without changing the screens that show it.
+
+## Demo showcase
+
+Change the inputs in the **Controls** tab of the Default story; the code below follows them.
+
+<Canvas of={AvatarStories.Default} />
+
+## Usage
+
+Import it from the components entry point. Used directly, it needs no providers.
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsAvatarComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-avatar initials="NK" color="teal" label="Narasimha Koppula" />`}
+/>
+
+Only `initials` is required. `color` defaults to `blue`, `size` to `36`, and `label` to blank. Pass
+the label already translated or, for a person's name, as it is.
+
+### By registered ID
+
+`provideNxsComponents()` registers the avatar as `nxs.primitives.avatar`, exported as
+`NXS_PRIMITIVE_IDS.avatar`. Render the ID where you want the avatar to be replaceable, and pass the
+same inputs:
+
+<Source
+  language="html"
+  dark
+  code={`<lib-extension-outlet
+  [componentId]="avatarId"
+  [componentInputs]="{ initials: 'NK', color: 'teal', label: 'Narasimha Koppula' }"
+/>`}
+/>
+
+## Examples
+
+### Sizes
+
+`24`, `28`, `36`, `64`, `80` and `128` pixels. Pick the size from the space you have: `24` or `28`
+in a dense list, `36` beside a name, larger in a profile or header.
+
+<Canvas of={AvatarStories.Sizes} />
+
+### Colours
+
+Use colour to tell people apart, not to carry meaning: a colour has no name for assistive technology.
+
+<Canvas of={AvatarStories.Colours} />
+
+### Beside a name
+
+When the person's name is shown next to the avatar, leave `label` blank. The avatar is then hidden
+from assistive technology and the name is announced once.
+
+<Canvas of={AvatarStories.BesideAName} />
+
+### By registered ID
+
+The avatar rendered through `lib-extension-outlet`, as a screen renders it. Whatever is registered
+under `nxs.primitives.avatar` appears here.
+
+<Canvas of={AvatarStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Name.** With a `label`, the avatar has the `img` role and the label is its accessible name. Use
+  the person's full name, not their initials.
+- **Decorative.** With a blank `label`, the whole avatar is hidden from assistive technology. Use it
+  this way only next to the visible name.
+- **Initials.** The initials are never announced on their own; the label is.
+- **Keyboard.** The avatar is not interactive and takes no focus. To make it open a profile, wrap it
+  in a link or button and give that the accessible name.
+- **Contrast.** Each colour pairs a theme container colour with its matching text colour, which
+  Material designs to contrast. If you set your own colours, check the contrast of the pair.
+
+## Satori and the built-in avatar
+
+The same ID, `nxs.primitives.avatar`, renders **Satori's avatar** when
+`@nuxeo-satori/platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+after `provideNxsComponents()`. Otherwise it renders the **built-in avatar** shown on this page.
+Both take the same four inputs, so the screens that render the ID do not change.
+
+What looks different:
+
+- Satori's avatar has a thin border around the circle. The built-in avatar has none.
+- Satori's colours come from Satori's theme, one distinct hue per name. The built-in colours come
+  from your Material theme, so the names are labels rather than exact hues: `orange`, for example,
+  is a light shade of your theme's primary colour.
+- At 24 pixels, Satori's avatar shows only the first initial. The built-in avatar shows up to two at
+  every size.
+
+Satori's own avatar can also show a photo, a status indicator or no border. The registered ID does
+not have inputs for those, so neither version offers them through the ID.
+
+This Storybook is built without access to GitHub Packages, so every example here shows the built-in
+avatar. Satori's avatar is shown in Satori's documentation.

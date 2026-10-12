@@ -3,9 +3,8 @@ import { TranslateService } from '@ngx-translate/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { EMPTY, Subject, of, throwError } from 'rxjs';
+import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
@@ -24,6 +23,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
   return {
@@ -85,7 +85,7 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 describe('BrowseComponent — listing state', () => {
   let component: BrowseComponent;
   let fixture: ComponentFixture<BrowseComponent>;
-  let snackBar: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let dialogOpen: ReturnType<typeof vi.fn>;
   let selection: SelectionService;
   let originalCreate: typeof URL.createObjectURL;
@@ -94,7 +94,7 @@ describe('BrowseComponent — listing state', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    snackBar = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(false) }));
     // `vi.clearAllMocks()` clears recorded calls but keeps implementations, and the
     // component issues its first folder request from the constructor — so without
@@ -130,6 +130,7 @@ describe('BrowseComponent — listing state', () => {
    */
   async function buildComponent(extra: Provider[] = []): Promise<void> {
     TestBed.resetTestingModule();
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), BrowseComponent],
       providers: [
@@ -151,7 +152,6 @@ describe('BrowseComponent — listing state', () => {
             hasAdministrationAccess: () => false,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBar } },
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: AppConfigService, useValue: { manifest } },
         ...extra,
@@ -511,7 +511,7 @@ describe('BrowseComponent — listing state', () => {
     expect(component.showHeaderDelete()).toBe(true);
   });
 
-  it('toggleSelection carries the fetched thumbnail into the selection preview', () => {
+  it('toggleSelection hands the selection no preview: the popup draws its own', () => {
     const entry = doc({ uid: 'a', title: 'Alpha', type: 'Note' });
     component.entries.set([entry]);
     detail.fetchThumbnail.mockReturnValue(of(new Blob(['x'])));
@@ -524,7 +524,7 @@ describe('BrowseComponent — listing state', () => {
     expect(selection.selectedItems()[0]).toEqual({
       id: 'a',
       name: 'Alpha',
-      preview: component.thumbnailMap()['a'],
+      preview: null,
       type: 'Note',
     });
   });
@@ -690,20 +690,22 @@ describe('BrowseComponent — listing state', () => {
     expect(component.totalSize()).toBe(0);
   });
 
-  it('revokes the previous thumbnails when the folder listing is reloaded', () => {
+  /**
+   * Each row's `nxs-thumbnail` fetches, shows and revokes its own image, so the page must not mint
+   * an object URL for one: the blob-URL rule is held in one place.
+   */
+  it('mints no object URL for a listing thumbnail, on load or on reload', () => {
     const entry = doc({ uid: 'a', title: 'Alpha' });
     detail.fetchThumbnail.mockReturnValue(of(new Blob(['x'])));
     browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries: [entry], totalSize: 1 }));
     browse.getFolderContext.mockReturnValue(of(folder));
 
     component.loadContent();
-    const first = component.thumbnailMap()['a'];
-    expect(first).toBeDefined();
-
     component.loadContent();
 
-    expect(revoked).toEqual(['blob:mock/0']);
-    expect(component.thumbnailMap()['a']).not.toBe(first);
+    expect(detail.fetchThumbnail).not.toHaveBeenCalled();
+    expect(URL.createObjectURL).not.toHaveBeenCalled();
+    expect(revoked).toEqual([]);
   });
 
   // ── Bulk delete ──
@@ -725,9 +727,8 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(browse.hasChildCollections).toHaveBeenCalledWith('cols-1');
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
     expect(detail.trashDocument).toHaveBeenCalledTimes(1);
@@ -748,9 +749,8 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(detail.trashDocument).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -770,7 +770,7 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(detail.trashDocument).toHaveBeenCalledWith('cols-1');
-    expect(snackBar).toHaveBeenCalledWith('Moved to trash', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Moved to trash');
   });
 
   it('skips selected documents the user cannot remove and reports how many', () => {
@@ -784,7 +784,7 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteDocument();
 
-    expect(snackBar).toHaveBeenCalledWith('Skipped 1 item without delete permission', 'OK', {
+    expect(toast.error).toHaveBeenCalledWith('Skipped 1 item without delete permission', {
       duration: 5000,
     });
     expect(detail.trashDocument).toHaveBeenCalledTimes(1);
@@ -799,10 +799,8 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(detail.trashDocument).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -819,8 +817,8 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteDocument();
 
-    expect(snackBar).toHaveBeenCalledWith('Moved to trash', 'OK', { duration: 3000 });
-    expect(snackBar).toHaveBeenCalledWith('Failed to delete 1 item', 'OK', { duration: 5000 });
+    expect(toast.show).toHaveBeenCalledWith('Moved to trash');
+    expect(toast.error).toHaveBeenCalledWith('Failed to delete 1 item', { duration: 5000 });
   });
 
   it('reports a wholly failed bulk delete and keeps the selection', () => {
@@ -831,7 +829,7 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteDocument();
 
-    expect(snackBar).toHaveBeenCalledWith('Failed to delete', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to delete');
     expect(selection.selectedIds()).toEqual(new Set(['a']));
   });
 
@@ -846,7 +844,7 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteDocument();
 
-    expect(snackBar).toHaveBeenCalledWith('2 documents moved to trash', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('2 documents moved to trash');
     expect(selection.selectedIds()).toEqual(new Set());
   });
 
@@ -858,7 +856,7 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(detail.trashDocument).not.toHaveBeenCalled();
-    expect(snackBar).not.toHaveBeenCalled();
+    expect([...toast.show.mock.calls, ...toast.error.mock.calls]).toEqual([]);
   });
 
   // ── Single-document delete ──
@@ -873,7 +871,7 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(detail.trashDocument).toHaveBeenCalledWith('ws-1');
-    expect(snackBar).toHaveBeenCalledWith('Moved to trash', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Moved to trash');
     expect(treeRefresh).toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledWith('/browse/default-domain/workspaces');
   });
@@ -885,10 +883,8 @@ describe('BrowseComponent — listing state', () => {
 
     expect(dialogOpen).not.toHaveBeenCalled();
     expect(detail.trashDocument).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -907,9 +903,7 @@ describe('BrowseComponent — listing state', () => {
     component.deleteDocument();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to verify folder contents', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to verify folder contents');
   });
 
   it('does nothing when there is neither a selection nor a browsed document', () => {
@@ -927,13 +921,11 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteDocument();
 
-    expect(snackBar).toHaveBeenCalledWith('Skipped 1 item that could not be loaded', 'OK', {
+    expect(toast.error).toHaveBeenCalledWith('Skipped 1 item that could not be loaded', {
       duration: 5000,
     });
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
     expect(detail.trashDocument).not.toHaveBeenCalled();
   });
@@ -954,10 +946,8 @@ describe('BrowseComponent — listing state', () => {
     component.openEditCollectionDialog(collection);
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -974,7 +964,7 @@ describe('BrowseComponent — listing state', () => {
 
     expect(treeRefresh).toHaveBeenCalled();
     expect(load).toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Collection updated', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Collection updated');
   });
 
   it('openEditCollectionDialog reports a non-permission load failure distinctly', () => {
@@ -982,7 +972,7 @@ describe('BrowseComponent — listing state', () => {
 
     component.openEditCollectionDialog(doc({ uid: 'col-1', type: 'Collection' }));
 
-    expect(snackBar).toHaveBeenCalledWith('Failed to load collection', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to load collection');
   });
 
   it('deleteCollectionEntry refuses a collection the freshly loaded document cannot remove', () => {
@@ -995,10 +985,8 @@ describe('BrowseComponent — listing state', () => {
 
     expect(dialogOpen).not.toHaveBeenCalled();
     expect(detail.trashDocument).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -1012,7 +1000,7 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteCollectionEntry(collection);
 
-    expect(snackBar).toHaveBeenCalledWith('Failed to delete collection', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to delete collection');
   });
 
   it('deleteCollectionEntry leaves the collection alone when the confirmation is dismissed', () => {
@@ -1032,53 +1020,6 @@ describe('BrowseComponent — listing state', () => {
 
     component.deleteCollectionEntry(doc({ uid: 'col-1', type: 'Collection' }));
 
-    expect(snackBar).toHaveBeenCalledWith('Failed to load collection', 'OK', { duration: 3000 });
-  });
-
-  /**
-   * An additive thumbnail load must not cancel the resetting batch it is adding to.
-   *
-   * `loadThumbnails(docs, false)` is used by the optimistic paste path and by the Trash tab appending a
-   * page. Minting a new generation there — which is what I did when first adding the guard — bumped the
-   * token while the folder's own requests were still in flight, so every one of those callbacks
-   * returned at the guard and the folder's thumbnails never appeared at all.
-   */
-  describe('thumbnail batch generations', () => {
-    it('lets an additive load share the resetting batch generation', () => {
-      const pending = new Subject<Blob | null>();
-      detail.fetchThumbnail.mockReturnValue(
-        pending.asObservable() as DetailReturn<'fetchThumbnail'>,
-      );
-
-      // The folder's own batch starts and its request is still in flight.
-      component['loadThumbnails']([doc({ uid: 'doc1' })]);
-
-      // An additive load runs while that is pending.
-      detail.fetchThumbnail.mockReturnValue(EMPTY);
-      component['loadThumbnails']([doc({ uid: 'doc2' })], false);
-
-      // The folder's response arrives late and must still be accepted.
-      pending.next(new Blob(['thumb']));
-      pending.complete();
-
-      expect(component.thumbnailMap()['doc1']).toBeTruthy();
-    });
-
-    it('still lets a resetting load supersede an in-flight batch', () => {
-      // The positive control, so the fix above does not become "never invalidate anything".
-      const pending = new Subject<Blob | null>();
-      detail.fetchThumbnail.mockReturnValue(
-        pending.asObservable() as DetailReturn<'fetchThumbnail'>,
-      );
-      component['loadThumbnails']([doc({ uid: 'doc1' })]);
-
-      detail.fetchThumbnail.mockReturnValue(EMPTY);
-      component['loadThumbnails']([doc({ uid: 'doc2' })]);
-
-      pending.next(new Blob(['stale']));
-      pending.complete();
-
-      expect(component.thumbnailMap()['doc1']).toBeUndefined();
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to load collection');
   });
 });

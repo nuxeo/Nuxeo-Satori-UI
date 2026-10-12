@@ -1,0 +1,212 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ByIdStories from './primitives.stories';
+
+<Meta of={ByIdStories} name="Overview" />
+
+# Primitives by registered ID
+
+Four components here are also in Satori's own component library: the avatar, the breadcrumbs, the
+tag and the rich tooltip. Each one is registered under an ID. A screen that renders the ID, rather
+than the component, shows whichever version the application registered: Satori's, when
+`@nuxeo-satori/platform/components-satori` is installed and provided, or the built-in version
+otherwise.
+
+## Key features
+
+- **Four IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
+  passes the same values whichever is registered.
+- **Satori when it is available.** The choice is made by the providers your application lists, not
+  when the library is built and not by checking at run time.
+- **Works without Satori.** Without access to GitHub Packages, leave Satori out: every ID still
+  renders, using the built-in version.
+- **Yours wins.** Register your own component under an ID, after the library's providers, and it
+  replaces both.
+
+## Demo showcase
+
+The four IDs rendered through `lib-extension-outlet`, as a screen renders them.
+
+<Canvas of={ByIdStories.MaterialRegistration} />
+
+## Usage
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>Inputs</th>
+      <th>Interface</th>
+      <th>Satori component</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>nxs.primitives.avatar</code>
+      </td>
+      <td>
+        <code>initials</code>, <code>color</code>, <code>size</code>, <code>label</code>
+      </td>
+      <td>
+        <code>NxsAvatarInputs</code>
+      </td>
+      <td>
+        Avatar (<code>sat-avatar</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.breadcrumbs</code>
+      </td>
+      <td>
+        <code>items</code>, <code>label</code>
+      </td>
+      <td>
+        <code>NxsBreadcrumbsInputs</code>
+      </td>
+      <td>
+        Breadcrumbs (<code>sat-breadcrumbs</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tag</code>
+      </td>
+      <td>
+        <code>label</code>, <code>color</code>
+      </td>
+      <td>
+        <code>NxsTagInputs</code>
+      </td>
+      <td>
+        Category tag (<code>sat-category-tag</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.richTooltip</code>
+      </td>
+      <td>
+        <code>heading</code>, <code>content</code>, <code>triggerLabel</code>, <code>icon</code>
+      </td>
+      <td>
+        <code>NxsRichTooltipInputs</code>
+      </td>
+      <td>
+        Rich tooltip (<code>sat-rich-tooltip</code>)
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+The IDs are exported as `NXS_PRIMITIVE_IDS` from `@nuxeo-satori/platform/components`. Render one
+with `lib-extension-outlet` from `@nuxeo-satori/platform/extensions`:
+
+<Source
+  language="html"
+  dark
+  code={`<lib-extension-outlet [componentId]="ids.tag" [componentInputs]="{ label: 'Invoice', color: 'purple' }" />`}
+/>
+
+`provideNxsComponents()` registers the built-in versions. Each component's own page lists its inputs
+in full.
+
+## Examples
+
+### With Satori's components
+
+List `provideNxsSatoriComponents()` after `provideNxsComponents()`: a later registration of the same
+ID wins. Satori's components also need `provideSatori()` and Satori's translations in ngx-translate.
+
+<Source
+  language="typescript"
+  dark
+  code={`providers: [
+  provideAndConfigureSatoriUITranslations({ fallbackLang: 'en' }),
+  provideSatori(),
+  provideNxsComponents(),
+  provideNxsSatoriComponents(),
+];`}
+/>
+
+This Storybook is built without access to GitHub Packages, so it cannot render Satori's versions.
+The demo above shows the built-in versions. Satori's are shown in Satori's documentation.
+
+### With your own tag
+
+Register your component under the ID after the library's providers. It implements the ID's interface,
+so screens pass it the same inputs.
+
+<Source
+  language="typescript"
+  dark
+  code={`import { Component, input } from '@angular/core';
+import type { NxsTagColor, NxsTagInputs } from '@nuxeo-satori/platform/components';
+import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+
+@Component({ selector: 'acme-tag', templateUrl: './acme-tag.html' })
+export class AcmeTagComponent implements NxsTagInputs {
+readonly label = input.required<string>();
+readonly color = input<NxsTagColor>('gray');
+}
+
+providers: [
+provideNxsComponents(),
+provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTagComponent } }),
+];`}
+/>
+
+## Accessibility
+
+- Both versions of an ID take their accessible names from the same inputs: the avatar's `label`, the
+  rich tooltip's `triggerLabel` and the breadcrumbs' `label`. Satori's breadcrumbs are the exception:
+  they name their landmark from Satori's translations.
+- `lib-extension-outlet` adds no role or name to the component it renders. While a component
+  registered with `import()` loads, the outlet shows a short loading message in a `status` region.
+- Each component's page describes its keyboard behaviour. The rich tooltip differs most: Satori's
+  opens on hover and focus, the built-in one when its button is activated.
+
+## Satori and the built-in versions
+
+<table>
+  <thead>
+    <tr>
+      <th>ID</th>
+      <th>What differs</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>
+        <code>nxs.primitives.avatar</code>
+      </td>
+      <td>
+        Satori's has a thin border and its own colours, and shows one initial at 24 pixels. The
+        built-in one follows your Material theme.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.breadcrumbs</code>
+      </td>
+      <td>
+        Satori's collapse a long trail into a menu. The built-in ones wrap onto further lines.
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.tag</code>
+      </td>
+      <td>Satori's uses its own colours. The built-in one follows your Material theme.</td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.richTooltip</code>
+      </td>
+      <td>
+        Satori's opens on hover and focus. The built-in one opens when its button is activated.
+      </td>
+    </tr>
+  </tbody>
+</table>

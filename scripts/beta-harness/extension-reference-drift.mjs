@@ -23,6 +23,8 @@
  *
  * ## What it checks
  *
+ * IDs are the platform's `app.` ones and the component library's `nxs.` ones.
+ *
  * 1. Every ID the document presents as real is registered in non-spec source.
  * 2. Every ID registered in non-spec source is documented.
  * 3. Every slot-state claim in the document's table matches whether the slot is

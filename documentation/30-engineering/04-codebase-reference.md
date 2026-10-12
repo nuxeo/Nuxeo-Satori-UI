@@ -2,15 +2,17 @@
 title: Codebase Reference
 parent: Engineering
 order: 4
-last_reviewed: 2026-10-09
-repo_commit: effd434
+last_reviewed: 2026-10-11
+repo_commit: ad60a57
 audience: engineering
 ---
 
 # Codebase Reference — file and folder responsibilities
 
-> **Last reviewed:** 2026-10-09 · **Repository:** `effd434` (`feature/nxsat-308-satori-components`)
-> Only §6 and the `constants/avatar-colors.ts` row were re-verified at that commit. The repository
+> **Last reviewed:** 2026-10-11 · **Repository:** `ad60a57`
+> Only the entry-point count, the peer count and the secondary-entry-point row of §6 were verified
+> at that commit. The rest of §6 and the `constants/avatar-colors.ts` row were re-verified at
+> `effd434` (`feature/nxsat-308-satori-components`). The repository
 > links (made relative rather than pinned to `feature/adf-hx-browse-poc`, every target present) and
 > the `review-guardrails.mjs` row were re-verified on 2026-10-08 at `2898046`
 > (`feature/nxsat-308-ci-cold-cache-tooling`), and the `verify-gate.mjs` and harness-script rows
@@ -150,17 +152,17 @@ format in [`docs/extension-reference.md`](../../docs/extension-reference.md) §9
 
 ## 6. `libs/platform` — the publishable package
 
-Owns no logic. Wraps five shared libraries as entry points and ships the customer-facing assets.
+Owns no logic. Wraps six shared libraries as entry points and ships the customer-facing assets.
 
-| Path                                                                 | Responsibility                                                                                                            |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `package.json`                                                       | Name, version, **10 peers**, `private: true`, `generators` field                                                          |
-| `ng-package.json`                                                    | ng-packagr config + assets: README, AGENTS.md, extension reference, `generators.json`, `guardrails/**`, `generators/**`   |
-| `tsconfig.lib.json`                                                  | **The entire compiler configuration**, not overrides. Two defects came from options being _absent_                        |
-| `{app-config,components,extensions,nuxeo-client,ui}/ng-package.json` | The five secondary entry points, pointing at `../../shared/*/src/index.ts`                                                |
-| `guardrails/check-extension-library.mjs`                             | The 5 customer checks, shipped in the tarball                                                                             |
-| `AGENTS.md`                                                          | ~255 lines of customer procedure, shipped                                                                                 |
-| `project.json`                                                       | `build` depends on `sync-docs` **and** `sync-generators`, which must precede ng-packagr because it clears its destination |
+| Path                                                                                   | Responsibility                                                                                                            |
+| -------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `package.json`                                                                         | Name, version, **10 peers**, `private: true`, `generators` field                                                          |
+| `ng-package.json`                                                                      | ng-packagr config + assets: README, AGENTS.md, extension reference, `generators.json`, `guardrails/**`, `generators/**`   |
+| `tsconfig.lib.json`                                                                    | **The entire compiler configuration**, not overrides. Two defects came from options being _absent_                        |
+| `{app-config,components,components-satori,extensions,nuxeo-client,ui}/ng-package.json` | The six secondary entry points, pointing at `../../shared/*/src/index.ts`                                                 |
+| `guardrails/check-extension-library.mjs`                                               | The 5 customer checks, shipped in the tarball                                                                             |
+| `AGENTS.md`                                                                            | ~255 lines of customer procedure, shipped                                                                                 |
+| `project.json`                                                                         | `build` depends on `sync-docs` **and** `sync-generators`, which must precede ng-packagr because it clears its destination |
 
 ---
 

@@ -1,0 +1,58 @@
+{
+  "name": "satori-components-satori",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/satori-components-satori/src",
+  "prefix": "nxs",
+  "projectType": "library",
+  "tags": ["scope:shared", "type:ui"],
+  "targets": {
+    "typecheck": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["default", "^default"],
+      "outputs": ["{workspaceRoot}/dist/out-tsc/libs/shared/satori-components-satori"],
+      "options": {
+        "command": "ngc -p libs/shared/satori-components-satori/tsconfig.lib.json --outDir dist/out-tsc/libs/shared/satori-components-satori && tsc -p libs/shared/satori-components-satori/.storybook/tsconfig.json --noEmit"
+      },
+      "$comment": "The second half type-checks the stories and `.storybook/preview.ts`, which `tsconfig.lib.json` excludes and Vitest never compiles."
+    },
+    "test": {
+      "executor": "@nx/vitest:test",
+      "outputs": ["{options.reportsDirectory}"],
+      "options": {
+        "reportsDirectory": "coverage/libs/shared/satori-components-satori"
+      }
+    },
+    "lint": {
+      "executor": "@nx/eslint:lint"
+    },
+    "storybook": {
+      "executor": "@storybook/angular:start-storybook",
+      "options": {
+        "port": 6007,
+        "configDir": "libs/shared/satori-components-satori/.storybook",
+        "browserTarget": "satori-components-satori:build-storybook",
+        "compodoc": false
+      }
+    },
+    "build-storybook": {
+      "executor": "@storybook/angular:build-storybook",
+      "outputs": ["{options.outputDir}"],
+      "options": {
+        "outputDir": "dist/storybook/satori-components-satori",
+        "configDir": "libs/shared/satori-components-satori/.storybook",
+        "browserTarget": "satori-components-satori:build-storybook",
+        "tsConfig": "libs/shared/satori-components-satori/.storybook/tsconfig.json",
+        "styles": ["libs/shared/satori-components-satori/.storybook/satori-theme.scss"],
+        "experimentalZoneless": true,
+        "compodoc": false
+      },
+      "configurations": {
+        "ci": {
+          "quiet": true
+        }
+      },
+      "$comment": "Needs @hylandsoftware/satori-ui installed, so a GitHub Packages token. The token-free Storybook is satori-components'."
+    }
+  }
+}

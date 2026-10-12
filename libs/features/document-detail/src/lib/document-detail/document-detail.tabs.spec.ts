@@ -11,7 +11,6 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Observable, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -47,6 +46,7 @@ import {
 } from '@nuxeo-satori/platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 
 /**
  * The tab surfaces: publishing, permissions, comments, activity and attachments,
@@ -245,7 +245,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let http: HttpTestingController;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   const revoked: string[] = [];
   let seq = 0;
@@ -329,7 +329,8 @@ describe('DocumentDetailComponent — tab surfaces', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     revoked.length = 0;
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     installDefaults();
 
     await TestBed.configureTestingModule({
@@ -372,7 +373,6 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         { provide: ContentLakeIngestService, useValue: mockIngestService },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -485,7 +485,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       openTab('app.tabs.permissions');
 
       expect(component.permissionsLoading()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to refresh permissions', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to refresh permissions');
 
       mockDetailService.getDocumentPermissions.mockReturnValue(of(doc()));
       openTab('app.tabs.view');
@@ -504,7 +504,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         documentUid: 'doc-1',
         permissionLabel: 'Edit',
       });
-      expect(snack).toHaveBeenCalledWith('Permission deleted', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Permission deleted');
     });
 
     it('leaves the permissions alone when the delete is cancelled', async () => {
@@ -524,7 +524,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.editExternalPermission(ace({ externalUser: true }));
 
       expect(lastDialogData()).toMatchObject({ isExternal: true });
-      expect(snack).toHaveBeenCalledWith('Permission updated', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Permission updated');
     });
 
     it('reloads after an external share is created', async () => {
@@ -534,7 +534,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       component.openExternalPermissionDialog();
 
-      expect(snack).toHaveBeenCalledWith('Shared with external user', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Shared with external user');
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
     });
 
@@ -548,7 +548,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         'ace-7',
       );
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Notification email sent', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Notification email sent');
     });
 
     it('reports a generic failure when the notification cannot be sent', async () => {
@@ -560,7 +560,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.sendPermissionNotification(ace());
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to send notification', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to send notification');
     });
   });
 
@@ -677,7 +677,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.publishing()).toBe(false);
       expect(component.selectedSectionId()).toBe('sec-1');
-      expect(snack).toHaveBeenCalledWith('Failed to publish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to publish');
     });
 
     it('removes just the unpublished proxy from the list', async () => {
@@ -703,7 +703,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.publishedDocs().map((d) => d.uid)).toEqual(['p1']);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to unpublish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to unpublish');
     });
 
     it('republishes against the section uid already in the loaded tree', async () => {
@@ -747,7 +747,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(mockDetailService.publishDocument).not.toHaveBeenCalled();
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Section not found', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Section not found');
     });
 
     it('releases the in-progress flag when the section lookup fails', async () => {
@@ -757,7 +757,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.republishDocument(doc({ uid: 'p1', path: '/s/news/doc' }));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to republish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to republish');
     });
 
     it('releases the in-progress flag when the republish itself fails', async () => {
@@ -771,7 +771,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.republishDocument(doc({ uid: 'p1', path: '/s/news/doc' }));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to republish', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to republish');
     });
 
     it('empties the publication list when every publication is removed', async () => {
@@ -800,11 +800,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.publishedDocs()).toEqual([survivor]);
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith(
-        'Failed to remove some publications',
-        'OK',
-        expect.anything(),
-      );
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove some publications');
     });
 
     it('does nothing when there is nothing published', async () => {
@@ -961,7 +957,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.newCommentText()).toBe('keep me');
       expect(component.commentSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to add comment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to add comment');
     });
 
     it('refuses to comment on a document the user cannot write', async () => {
@@ -1041,7 +1037,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.editingCommentId()).toBe('c1');
       expect(component.commentSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to update comment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to update comment');
     });
 
     it('does not save an edit that has been emptied', async () => {
@@ -1065,7 +1061,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.deleteComment).toHaveBeenCalledWith('doc-1', 'c1');
       expect(component.comments().map((c) => c.id)).toEqual(['c2']);
       expect(component.repliesMap()['c1']).toBeUndefined();
-      expect(snack).toHaveBeenCalledWith('Comment deleted', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Comment deleted');
     });
 
     it('removes only the deleted reply and keeps its parent', async () => {
@@ -1080,7 +1076,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.comments().map((c) => c.id)).toEqual(['c1']);
       expect(component.repliesMap()['c1'].map((r) => r.id)).toEqual(['r2']);
-      expect(snack).toHaveBeenCalledWith('Reply deleted', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Reply deleted');
     });
 
     it('leaves the thread alone when the delete is cancelled', async () => {
@@ -1103,7 +1099,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.deleteComment(comment({ id: 'c1' }));
 
       expect(component.comments()).toHaveLength(1);
-      expect(snack).toHaveBeenCalledWith('Failed to delete comment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to delete comment');
     });
 
     it('files a reply under the comment it answers', async () => {
@@ -1131,7 +1127,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(component.replyText()).toBe('keep me');
       expect(component.commentSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to add reply', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to add reply');
     });
 
     it('does not post an empty reply', async () => {
@@ -1378,7 +1374,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       );
       expect(component.actionInProgress()).toBeNull();
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('"notes.txt" attached', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('"notes.txt" attached');
     });
 
     it('releases the in-progress flag when the upload fails', async () => {
@@ -1388,7 +1384,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.uploadAttachment(fileInput(new File(['x'], 'big.bin')));
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to upload attachment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to upload attachment');
     });
 
     it('does nothing when the file picker was dismissed', async () => {
@@ -1423,7 +1419,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         expect.objectContaining({ name: 'new.pdf' }),
       );
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('"old.pdf" replaced', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('"old.pdf" replaced');
     });
 
     it('does not replace an attachment when the dialog is dismissed', async () => {
@@ -1445,7 +1441,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openReplaceDialog({ index: 0, name: 'old.pdf' });
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to replace attachment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to replace attachment');
     });
 
     it('removes an attachment after confirmation', async () => {
@@ -1455,7 +1451,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveDialog({ index: 2, name: 'gone.pdf' });
 
       expect(mockDetailService.removeAttachment).toHaveBeenCalledWith('doc-1', 2);
-      expect(snack).toHaveBeenCalledWith('"gone.pdf" removed', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('"gone.pdf" removed');
     });
 
     it('keeps the attachment when the removal is cancelled', async () => {
@@ -1475,7 +1471,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveDialog({ index: 0, name: 'x.pdf' });
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to remove attachment', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove attachment');
     });
 
     it('replaces the main file and reloads', async () => {
@@ -1492,7 +1488,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         expect.objectContaining({ name: 'main.pdf' }),
       );
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Main file replaced', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Main file replaced');
     });
 
     it('releases the in-progress flag when replacing the main file fails', async () => {
@@ -1505,7 +1501,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openReplaceMainFileDialog();
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to replace main file', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to replace main file');
     });
 
     it('removes the main file after confirmation', async () => {
@@ -1515,7 +1511,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveMainFileDialog();
 
       expect(mockDetailService.removeMainFile).toHaveBeenCalledWith('doc-1');
-      expect(snack).toHaveBeenCalledWith('Main file removed', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Main file removed');
     });
 
     it('releases the in-progress flag when removing the main file fails', async () => {
@@ -1526,7 +1522,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.openRemoveMainFileDialog();
 
       expect(component.actionInProgress()).toBeNull();
-      expect(snack).toHaveBeenCalledWith('Failed to remove main file', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to remove main file');
     });
 
     it('refuses every attachment mutation without the write permission', async () => {
@@ -1584,7 +1580,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
         .error(new ProgressEvent('error'), { status: 404, statusText: 'Not Found' });
 
       expect(mockDialog.open).not.toHaveBeenCalled();
-      expect(snack).toHaveBeenCalledWith('Failed to load preview', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to load preview');
     });
   });
 
@@ -1636,7 +1632,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'invoice');
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['q3']);
-      expect(snack).toHaveBeenCalledWith('Tag "invoice" applied', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Tag "invoice" applied');
     });
 
     it('keeps the suggestion when applying it fails', async () => {
@@ -1648,7 +1644,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.applyAiTag('invoice');
 
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['invoice']);
-      expect(snack).toHaveBeenCalledWith('Failed to apply tag', 'Dismiss', { duration: 3000 });
+      expect(toast.error).toHaveBeenCalledWith('Failed to apply tag');
     });
 
     it('clears the tag loading flag when the suggestion call fails', async () => {
@@ -1721,6 +1717,9 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockKeClient.enrich).not.toHaveBeenCalled();
       expect(component.keError()).toContain('"nature" vocabulary failed to load');
       expect(component.keActionInFlight()).toBeNull();
+      // A refusal, so it is announced as an error rather than as news.
+      expect(toast.error).toHaveBeenCalledWith(component.keError());
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
     it('writes the matched vocabulary id, not the label the model returned', async () => {
@@ -1945,6 +1944,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.ingestToContentLake();
 
       expect(component.contentLakeIngestError()).toContain('(3 failed)');
+      expect(toast.error).toHaveBeenCalledWith(component.contentLakeIngestError());
       expect(component.contentLakeIngestStatus()).toBeNull();
       expect(component.contentLakePresenceVerified()).toBe(false);
       expect(component.contentLakeIngestInFlight()).toBe(false);

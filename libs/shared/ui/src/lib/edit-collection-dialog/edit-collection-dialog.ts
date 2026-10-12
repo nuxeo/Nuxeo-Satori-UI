@@ -11,7 +11,6 @@ import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { forkJoin } from 'rxjs';
 
 import {
@@ -33,6 +32,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
+import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
 
 export interface EditCollectionDialogData {
   document: NuxeoDocument;
@@ -53,9 +53,8 @@ export interface EditCollectionDialogData {
     MatProgressSpinnerModule,
     MatChipsModule,
     MatIconModule,
-    MatSnackBarModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './edit-collection-dialog.html',
   styleUrl: './edit-collection-dialog.scss',
 })
@@ -66,7 +65,7 @@ export class EditCollectionDialogComponent implements OnInit {
   private readonly collectionService = inject(CollectionService);
   private readonly directoryService = inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
 
   readonly l10nEntryLabel = l10nEntryLabel;
   protected readonly directoryPickerLabel = directoryPickerLabel;
@@ -128,10 +127,8 @@ export class EditCollectionDialogComponent implements OnInit {
           this.coverageEntries.set(coverage);
         },
         error: () => {
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant('shared-ui.message.failed-to-load-vocabulary-options'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
         },
       });
@@ -256,12 +253,10 @@ export class EditCollectionDialogComponent implements OnInit {
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
+          this.toast.error(
             isPermissionDeniedError(err)
               ? this.translate.instant(PERMISSION_DENIED_KEY)
               : this.translate.instant('shared-ui.message.failed-to-update-collection'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
         },
       });

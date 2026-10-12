@@ -1,0 +1,103 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import { CompodocService, CompodocTypes } from '../../../.storybook/api-page';
+import * as ToastStories from './toast.stories';
+
+<Meta of={ToastStories} name="Overview" />
+
+# Toast
+
+A toast is a short message at the bottom of the screen. It says that something happened — "Document
+saved", "Moved to trash" — or that something the user asked for did not happen. It closes by itself
+after a few seconds, or when the user dismisses it. Use it to confirm an action the user just took,
+not for information they must act on later.
+
+## Key features
+
+- **One call.** `show(message)` for something that happened, `error(message)` for something that did
+  not.
+- **Announced.** `show` is announced politely; `error` is announced straight away, because the user is
+  waiting on the action that failed.
+- **Always dismissible.** Every toast has a **Dismiss** button and closes on **Escape**. Escape closes
+  only the toast, not a dialog underneath it.
+- **Time to read.** A toast stays at least four seconds (`NXS_TOAST_DURATION`). A duration of `0`
+  keeps it until it is dismissed.
+- **One action.** A button such as **Undo** or **View**, or **Retry** for an error. A toast with an
+  action stays until it is dismissed, so a keyboard user has time to reach the button.
+- **Tidy.** One toast shows at a time, and a toast with an action closes when the component that
+  opened it goes away.
+
+## Demo showcase
+
+Select **Save** to show the toast. The code shows the call that opens it.
+
+<Canvas of={ToastStories.Message} />
+
+## Usage
+
+List `provideNxsToast()` in your component's `providers`, inject `NxsToastService`, and call it with
+text you have already translated:
+
+<Source
+  language="typescript"
+  dark
+  code={`import { Component, inject } from '@angular/core';
+import { TranslateService } from '@ngx-translate/core';
+import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
+
+@Component({
+selector: 'acme-editor',
+templateUrl: './acme-editor.html',
+providers: [provideNxsToast()],
+})
+export class AcmeEditorComponent {
+private readonly toast = inject(NxsToastService);
+private readonly translate = inject(TranslateService);
+
+protected saved(): void {
+this.toast.show(this.translate.instant('acme.editor.saved'));
+}
+
+protected saveFailed(): void {
+this.toast.error(this.translate.instant('acme.editor.save-failed'), {
+retry: () => this.save(),
+});
+}
+}`}
+/>
+
+The toast is built on Angular Material's snack bar, which Angular Material provides. Its **Dismiss**
+and **Retry** buttons are translated with ngx-translate under `satori-components.toast.*`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not. A blank message
+opens nothing.
+
+## Service API
+
+Read from the service's source by Compodoc.
+
+<CompodocService name="NxsToastService" />
+
+<CompodocTypes names={['NxsToastOptions', 'NxsToastErrorOptions', 'NxsToastAction']} />
+
+## Examples
+
+### An error with Retry
+
+<Canvas of={ToastStories.ErrorWithRetry} />
+
+### With an action
+
+<Canvas of={ToastStories.WithAnAction} />
+
+## Accessibility
+
+- **Announcement.** The message is placed in a live region: polite for `show`, assertive for `error`.
+  Focus stays where it was.
+- **Buttons.** **Dismiss** shows only an icon and is named "Dismiss", translated. An action button
+  shows its label.
+- **Keyboard.** The toast's buttons are reached with **Tab**. **Escape** closes the toast while focus
+  is in it, and does not close a dialog underneath.
+- **Timing.** A toast stays at least four seconds, and a toast with an action stays until it is
+  dismissed, so nobody has to race it.
+- **Not the only record.** A toast disappears. Do not use it for anything the user needs to read
+  again; show that on the page.

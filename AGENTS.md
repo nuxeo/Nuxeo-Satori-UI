@@ -144,6 +144,9 @@ Feature flag: **on by default** — gated by `AiFeatureFlagService`, with an exp
 - [ ] `docs/ai-features.md` updated if AI backend changed
 - [ ] `AGENTS/01-services.md` updated if a new service method was added
 - [ ] `AGENTS/00-architecture.md` updated if architecture changed
+- [ ] A new `nxs-` component has its section in `docs/satori-components/with-and-without-satori.md`,
+      then `npm run docs:satori-comparison:capture` and `npm run docs:satori-comparison:publish`
+      (`AGENTS/00-architecture.md`, "Adding a component", step 10)
 - [ ] PR created on `feature/*` or `fix/*` branch (never commit to `main` directly)
 
 ---

@@ -1,0 +1,5 @@
+@if (url(); as src) {
+  <img class="nxs-thumbnail__image" [src]="src" [alt]="alt()" (error)="broken()" />
+} @else {
+  <ng-content />
+}
