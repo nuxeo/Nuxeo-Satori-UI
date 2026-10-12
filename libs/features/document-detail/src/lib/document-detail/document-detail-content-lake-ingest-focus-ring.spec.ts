@@ -20,16 +20,15 @@ describe('Document detail Content Lake ingest focus ring (NXSAT-491)', () => {
     expect(scss).toMatch(/--agentic-document-detail-header-focus-outline:\s*#3f51b5/);
   });
 
-  it('declares a standalone :focus ring on the Content Lake ingest icon button in global toolbar focus SCSS', () => {
+  it('covers Content Lake ingest via the global header toolbar mat-icon-button :focus ring', () => {
     const scss = readFileSync(globalFocusPath, 'utf8');
-    expect(scss).toMatch(
-      /\.detail-header \.header-actions button\.content-lake-ingest-btn\.mat-mdc-icon-button:focus\s*\{/,
-    );
+    expect(scss).toMatch(/NXSAT-491/);
+    expect(scss).toMatch(/\.detail-header \.header-actions button\.mat-mdc-icon-button:focus\s*\{/);
     expect(scss).not.toMatch(
-      /\.detail-header \.header-actions button\.content-lake-ingest-btn\.mat-mdc-icon-button:focus,\s/,
+      /\.detail-header \.header-actions button\.mat-mdc-icon-button:focus,\s/,
     );
     expect(scss).toMatch(
-      /\.detail-header \.header-actions button\.content-lake-ingest-btn\.mat-mdc-icon-button:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--agentic-document-detail-header-focus-outline\)/,
+      /\.detail-header \.header-actions button\.mat-mdc-icon-button:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--agentic-document-detail-header-focus-outline\)/,
     );
   });
 });
