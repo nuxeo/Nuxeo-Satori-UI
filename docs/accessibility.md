@@ -32,6 +32,14 @@ thing that turns a run red and the number anyone quotes.
 | **a11y-scout**       | `npm run a11y:scan -- surfaces` (routes), `npm run a11y:scan -- states` (interaction states), `npm run a11y:scan -- modes` (display modes), `npm run a11y:scan -- journey` (per-screen) | Keyboard traps, focus order, focus visibility, reflow, AI semantics | 26.8, 25.3, 19.5 and 70.3 min, all measured |
 | **Manual**           | —                                                                                                                                                                                       | Everything automation cannot decide                                 | per release                                 |
 
+**Observation outside the four layers: the component library's Storybook.** Its accessibility
+panel (`@storybook/addon-a11y`) runs axe over every story of `libs/shared/satori-components`. It owns
+no verdict. `.storybook/preview.ts` sets `a11y.test` to `todo`, which reports a violation as a
+warning rather than failing the story, and no CI job runs it. Treat what it shows as a cross-check:
+triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
+its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
+difference between the two is not an engine difference.
+
 ### Why axe is owned by `phase-6-a11y.mjs` and not by a11y-scout
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:

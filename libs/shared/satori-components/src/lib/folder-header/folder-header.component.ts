@@ -30,10 +30,9 @@ export class NxsFolderHeaderComponent {
    * The title's level in the page outline, rendered as the native `<h1>`–`<h6>`. The header is
    * usually the page's own heading, so level one; lower it where the header sits inside a section
    * that already has one.
-   *
-   * Annotated rather than inferred, as `nxs-empty-state`'s is, to keep the published API snapshot
-   * stable.
    */
+  // Annotated rather than inferred, as `nxs-empty-state`'s is, to keep the published API snapshot
+  // stable.
   readonly headingLevel: InputSignal<NxsHeadingLevel> = input<NxsHeadingLevel>(1);
   /** A second line under the title — usually the type's name — already translated. */
   readonly subheading = input('');

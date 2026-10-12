@@ -1,0 +1,95 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ThumbnailStories from './thumbnail.stories';
+
+<Meta of={ThumbnailStories} name="Overview" />
+
+# Thumbnail
+
+The thumbnail shows a document's `thumbnail` rendition from a blob URL that no caller creates or
+revokes. Until the image arrives — and whenever there is none — the projected content shows instead,
+usually the document-type icon. Use it wherever a document is listed or titled beside a preview of
+its content.
+
+## Key features
+
+- **Fetched through the authenticated client.** The image never binds a Nuxeo URL directly, so it
+  never fails with 401.
+- **Never a broken image.** Before the rendition arrives, when there is none, when the request
+  fails, or when the bytes do not decode, the projected fallback shows instead.
+- **No box of its own while it falls back.** The host is `display: contents` until an image shows,
+  so the fallback lays out exactly as it would without this wrapper.
+- **Shares one cache across a page.** A page that lists `provideNxsThumbnailCache()` shares one
+  request and one blob URL per document across every `nxs-thumbnail` under it, bounds concurrent
+  requests, and revokes URLs once nothing shows them and with the page. Without the cache, each
+  thumbnail owns and revokes its own URL.
+- **Decorative by default.** A blank `alt` hides it from assistive technology, for the usual case
+  where the title beside it already names the document.
+
+## Demo showcase
+
+<Canvas of={ThumbnailStories.Loaded} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsThumbnailComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-thumbnail
+  style="width: 160px; height: 120px; object-fit: cover; border-radius: 8px"
+  [documentId]="document.uid"
+>
+  <nxs-doc-type-icon [type]="document.type" />
+</nxs-thumbnail>`}
+/>
+
+Only `documentId` is required; `alt` defaults to `''`. Size the thumbnail with a class or style on
+the host — the image fills it and takes the host's `object-fit` and `border-radius`. Used directly,
+it needs no providers. A page listing many documents should also list `provideNxsThumbnailCache()`:
+
+<Source
+  language="typescript"
+  dark
+  code={`import { provideNxsThumbnailCache } from '@nuxeo-satori/platform/components';
+
+@Component({ providers: [provideNxsThumbnailCache()] })
+export class ResultsListComponent {}`}
+/>
+
+## Where its data comes from
+
+Everything goes through the platform's `DocumentDetailService.fetchThumbnail(documentId)`, so every
+request carries the application's sign-in. With a page cache, thumbnails of the same document share
+one request and one blob URL, at most four requests run at once, and a URL nothing shows is revoked
+shortly after, so a document shown again later is fetched again rather than kept forever.
+
+**In these stories** `DocumentDetailService` is an in-memory fake that returns a drawn picture
+instead of calling Nuxeo, and resets on reload.
+
+## Examples
+
+### No thumbnail
+
+The request fails, or the document has no rendition: the projected icon stays, laid out exactly as
+it would without the wrapper.
+
+<Canvas of={ThumbnailStories.NoThumbnail} />
+
+### Under a page cache
+
+Several thumbnails of the same few documents, sharing one request and one URL per document.
+
+<Canvas of={ThumbnailStories.UnderAPageCache} />
+
+## Accessibility
+
+- **Decorative by default.** A blank `alt` hides the image from assistive technology, for the usual
+  case where the document's title sits beside it.
+- **Named.** Pass a translated `alt` where no text beside it names the document.
+- **Keyboard.** It is not interactive and takes no focus.

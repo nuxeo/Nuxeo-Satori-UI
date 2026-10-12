@@ -20,7 +20,12 @@ import type { NxsBreadcrumbItem, NxsBreadcrumbsInputs } from '../primitives';
   host: { class: 'nxs-breadcrumbs' },
 })
 export class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
+  /**
+   * The trail, outermost first. An item with `routerLink` navigates in the app, one with `href` is a
+   * plain link, and one with neither is text — the current page, when it is the last.
+   */
   readonly items = input.required<readonly NxsBreadcrumbItem[]>();
+  /** The navigation landmark's accessible name, already translated, such as "Breadcrumbs". */
   readonly label = input('');
 
   protected linkKind(item: NxsBreadcrumbItem): 'router' | 'href' | 'text' {

@@ -17,6 +17,8 @@ import type { NxsTagColor, NxsTagInputs } from '../primitives';
   host: { '[class]': "'nxs-tag nxs-tag--' + color()" },
 })
 export class NxsTagComponent implements NxsTagInputs {
+  /** The text, already translated. A long label is cut short with an ellipsis. */
   readonly label = input.required<string>();
+  /** The colour: `gray` or one of the avatar colours. */
   readonly color = input<NxsTagColor>('gray');
 }

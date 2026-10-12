@@ -33,6 +33,7 @@ const thumbnails = (answer: () => Observable<Blob>): Provider => ({
 const meta: Meta<NxsThumbnailComponent> = {
   title: 'Primitives/Thumbnail',
   component: NxsThumbnailComponent,
+  tags: ['autodocs'],
   args: { documentId: 'claims-photo', alt: '' },
   argTypes: {
     documentId: { control: false, description: 'The document whose thumbnail to show. Required.' },
