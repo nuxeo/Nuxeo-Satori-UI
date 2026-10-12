@@ -203,7 +203,7 @@ export default async function run(page, h) {
   h.step(
     'Document detail — Picture metadata strip (NXENG-812 / NXSAT-493 / WCAG 1.4.3 on .info-label)',
   );
-  const pictureUid = await findPictureWithPictureCardsUid(page);
+  const pictureUid = await findPictureWithPictureCardsUid(page, h.baseUrl);
   h.check(
     'a Picture with picture:info and picture:views exists',
     pictureUid !== null,
@@ -213,24 +213,24 @@ export default async function run(page, h) {
     await h.goToDoc(pictureUid);
     await h.expectVisible('document detail rendered', 'lib-document-detail');
     await h.expectVisible('document viewer rendered', 'lib-document-viewer');
-    const infoLabel = page.locator('lib-document-viewer .picture-cards .info-label').first();
-    await infoLabel.waitFor({ state: 'visible', timeout: 30_000 });
-    h.check(
-      'picture metadata .info-label is visible on the light strip',
-      (await infoLabel.count()) > 0,
-      'lib-document-viewer has no .picture-cards .info-label — picture:info may be incomplete',
+    const stripLabelVisible = await h.expectVisible(
+      'picture metadata .info-label on the light strip',
+      'lib-document-viewer .picture-cards .info-label',
+      30_000,
     );
-    await h.expectNoA11yViolations(
-      'document detail (picture metadata strip): no WCAG 2.1 AA violations',
-      { ignore: KNOWN_VIOLATIONS },
-    );
-    await h.screenshot('a11y-document-detail-picture-metadata');
+    if (stripLabelVisible) {
+      await h.expectNoA11yViolations(
+        'document detail (picture metadata strip): no WCAG 2.1 AA violations',
+        { ignore: KNOWN_VIOLATIONS },
+      );
+      await h.screenshot('a11y-document-detail-picture-metadata');
+    }
   }
 
   h.step(
     'Document detail — Replace main file with tooltip open (NXENG-771 / WCAG 2.5.3 label-in-name)',
   );
-  const docUid = await findFileWithMainBlobUid(page);
+  const docUid = await findFileWithMainBlobUid(page, h.baseUrl);
   h.check(
     'a File with a persisted main blob exists',
     docUid !== null,
@@ -419,11 +419,12 @@ const PICTURE_WITH_METADATA_NXQL =
  * First Picture uid with hydrated `picture:info` and `picture:views`, paging NXQL until exhausted.
  *
  * @param {import('@playwright/test').Page} page
+ * @param {string} baseUrl
  * @returns {Promise<string | null>}
  */
-async function findPictureWithPictureCardsUid(page) {
+async function findPictureWithPictureCardsUid(page, baseUrl) {
   for (let pageIndex = 0; ; pageIndex++) {
-    const response = await page.request.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
+    const response = await page.request.get(`${baseUrl}/nuxeo/api/v1/search/lang/NXQL/execute`, {
       params: {
         query: PICTURE_WITH_METADATA_NXQL,
         pageSize: '20',
@@ -444,7 +445,10 @@ async function findPictureWithPictureCardsUid(page) {
       if (typeof uid !== 'string') {
         continue;
       }
-      const doc = await page.request.get(`/nuxeo/api/v1/id/${uid}`, { failOnStatusCode: false });
+      const doc = await page.request.get(`${baseUrl}/nuxeo/api/v1/id/${uid}`, {
+        failOnStatusCode: false,
+        params: { properties: '*' },
+      });
       if (!doc.ok()) {
         continue;
       }
@@ -467,11 +471,12 @@ async function findPictureWithPictureCardsUid(page) {
  * First File uid whose main blob responds on `@blob/file:content`, paging NXQL until exhausted.
  *
  * @param {import('@playwright/test').Page} page
+ * @param {string} baseUrl
  * @returns {Promise<string | null>}
  */
-async function findFileWithMainBlobUid(page) {
+async function findFileWithMainBlobUid(page, baseUrl) {
   for (let pageIndex = 0; ; pageIndex++) {
-    const response = await page.request.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
+    const response = await page.request.get(`${baseUrl}/nuxeo/api/v1/search/lang/NXQL/execute`, {
       params: {
         query: FILE_WITH_MAIN_BLOB_NXQL,
         pageSize: '20',
@@ -492,9 +497,10 @@ async function findFileWithMainBlobUid(page) {
       if (typeof uid !== 'string') {
         continue;
       }
-      const head = await page.request.head(`/nuxeo/api/v1/id/${uid}/@blob/file:content`, {
-        failOnStatusCode: false,
-      });
+      const head = await page.request.head(
+        `${baseUrl}/nuxeo/api/v1/id/${uid}/@blob/file:content`,
+        { failOnStatusCode: false },
+      );
       if (head.ok()) {
         return uid;
       }
