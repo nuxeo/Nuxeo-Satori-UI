@@ -1,8 +1,9 @@
 /**
- * NXENG-808 / IBM 673904446 — document-detail header toolbar `mat-icon-button` keyboard focus
- * indicator (WCAG 2.1 SC 2.4.7 / 1.4.11). Material icon buttons suppress the default ring and
- * Karma loads `apps/nuxeo-ui/src/styles.scss` (see `angular.json`), which `@use`s
- * `document-detail-header-toolbar-focus.scss` — the same path production uses.
+ * NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504 — document-detail header toolbar
+ * `mat-icon-button` keyboard focus indicator (WCAG 2.1 SC 2.4.7 / 1.4.11). Material icon
+ * buttons suppress the default ring and Karma loads `apps/nuxeo-ui/src/styles.scss` (see
+ * `angular.json`), which `@use`s `document-detail-header-toolbar-focus.scss` — the same path
+ * production uses.
  *
  * Same IBM `style_focus_visible` constraints as NXENG-789 / NXENG-773: standalone `:focus`
  * selector on the focused control, token wiring, and outline width/style when focused.
@@ -28,7 +29,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 })
 class ToolbarIconFocusHostComponent {}
 
-describe('Document detail toolbar icon button — keyboard focus indicator (NXENG-808)', () => {
+describe('Document detail toolbar icon button — keyboard focus indicator (NXENG-808 / NXSAT-489)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ToolbarIconFocusHostComponent],
@@ -72,6 +73,22 @@ describe('Document detail toolbar icon button — keyboard focus indicator (NXEN
       expect(style.outlineStyle).toBe('solid');
       expect(style.outlineWidth).toBe('2px');
       expect(style.outlineOffset).toBe('2px');
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible)', async () => {
+    const { fixture, button } = await mount();
+    try {
+      button.focus({ focusVisible: false } as FocusOptions);
+      expect(button.matches(':focus')).toBe(true);
+      expect(button.matches(':focus-visible')).toBe(false);
+
+      const style = getComputedStyle(button);
+      expect(style.outlineStyle).toBe('solid');
+      expect(Number.parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
     } finally {
       button.blur();
       fixture.nativeElement.remove();
