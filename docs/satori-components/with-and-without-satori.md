@@ -220,7 +220,7 @@ The same Material progress spinner in both, in the theme's primary colour. The c
 
 ![Toast: without Satori on the left, with Satori on the right](toast-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same toast in both: the message, a Retry button and a Dismiss button. A page never places it in a template; it calls `NxsToastService`, which is what the library exports, and the toast opens at the bottom of the window. The theme sets its colours, type and button styles.
+The same dark toast in both: the message, a Retry button and a Dismiss (×) button. The theme sets the type and the colour of Retry, blue under Material and purple under Satori. A page never places the toast in a template; it calls `NxsToastService`, which is what the library exports, and the toast opens at the bottom of the window.
 
 This is the error toast. Because it carries a button it stays until dismissed, and screen readers announce it straight away; a toast without a button closes after four seconds.
 
