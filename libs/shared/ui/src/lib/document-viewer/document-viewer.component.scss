@@ -475,7 +475,7 @@
 
 .info-label {
   font-size: 12px;
-  /* NXENG-812 / NXSAT-493 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018); mat-sys-on-surface-variant fails in dark theme. */
+  /* NXENG-812 / NXSAT-493 / NXSAT-507 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018, IBM 1668870227); mat-sys-on-surface-variant fails in dark theme. Runtime axe (phase-6-a11y) owns WCAG clearance; this comment is audit trace only. */
   color: var(--document-viewer-muted-on-light-surface);
   min-width: 0;
   white-space: nowrap;
