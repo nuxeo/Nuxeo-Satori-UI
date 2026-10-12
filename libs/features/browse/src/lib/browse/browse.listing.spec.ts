@@ -268,7 +268,11 @@ describe('BrowseComponent — rendered document list', () => {
 
     expect(component.loading()).toBe(false);
     expect(component.error()).toBe('Failed to load folder contents.');
-    expect(query('.browse-error p')?.textContent).toContain('Failed to load folder contents.');
+    expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+    expect(query('nxs-error-state .nxs-error-state__heading')?.textContent).toContain(
+      'Failed to load folder contents.',
+    );
+    expect(query('nxs-error-state button')?.textContent).toContain('Retry');
     expect(query('.browse-loading')).toBeNull();
   });
 
@@ -276,27 +280,43 @@ describe('BrowseComponent — rendered document list', () => {
     browse.getBrowseFolderContents.mockReturnValueOnce(throwError(() => new Error('network down')));
 
     const component = await render();
-    expect(query('.browse-error')).not.toBeNull();
+    expect(query('nxs-error-state')).not.toBeNull();
 
     browse.getBrowseFolderContents.mockReturnValue(
       of({ folder, entries: [doc({ uid: 'c-1', title: 'Recovered.pdf' })], totalSize: 1 }),
     );
-    const retry = query('.browse-error button') as HTMLButtonElement;
+    const retry = query('nxs-error-state button') as HTMLButtonElement;
     retry.click();
     await settle();
 
     expect(component.error()).toBeNull();
+    expect(query('nxs-error-state')).toBeNull();
     expect(rowTitles()).toEqual(['Recovered.pdf']);
   });
 
-  it('leaves a permission-denied folder load in the retryable error state, not stuck loading', async () => {
+  it('says a forbidden folder is forbidden, without a Retry that would get the same answer', async () => {
     browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
 
     const component = await render();
 
     expect(component.loading()).toBe(false);
-    expect(component.error()).toBe('Failed to load folder contents.');
-    expect(query('.browse-error button')).not.toBeNull();
+    expect(component.errorStatus()).toBe(403);
+    expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+    expect(query('nxs-error-state .nxs-error-state__message')?.textContent).toContain(
+      'You do not have permission to see this.',
+    );
+    expect(query('nxs-error-state button')).toBeNull();
+  });
+
+  it('says a folder that no longer exists was not found', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 404 })));
+
+    await render();
+
+    expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('404');
+    expect(query('nxs-error-state .nxs-error-state__message')?.textContent).toContain(
+      'It may have been moved or deleted',
+    );
   });
 
   it('follows a single-entry root redirect instead of rendering the bootstrap listing', async () => {

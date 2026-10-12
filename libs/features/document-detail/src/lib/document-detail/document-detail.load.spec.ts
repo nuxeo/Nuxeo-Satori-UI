@@ -215,25 +215,10 @@ describe('DocumentDetailComponent — load chain', () => {
     await fixture.whenStable();
   }
 
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    created.length = 0;
-    revoked.length = 0;
-    toast = { show: vi.fn(), error: vi.fn() };
+  /** `rendered` keeps the real template, for a test that asserts what the page shows. */
+  async function configure({ rendered = false } = {}): Promise<void> {
     TestBed.overrideProvider(NxsToastService, { useValue: toast });
-
-    // `clearAllMocks` clears call history but NOT implementations installed with
-    // `mockReturnValue`, so anything a test overrides must be restored explicitly here or it
-    // leaks into every later test.
-    mockDetailService.getFullDocument.mockReturnValue(of(doc()));
-    mockDetailService.fetchBlob.mockReturnValue(of(new Blob(['x'], { type: 'text/plain' })));
-    mockDetailService.fetchThumbnail.mockReturnValue(of(new Blob(['x'], { type: 'image/png' })));
-    mockDetailService.getAllComments.mockReturnValue(of({ entries: [] }));
-    mockARenderService.isAvailable.mockReturnValue(of(false));
-    mockARenderService.getPreviewerUrl.mockReturnValue(of(null));
-    mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
-
-    await TestBed.configureTestingModule({
+    const bed = TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), DocumentDetailComponent],
       providers: [
         provideZonelessChangeDetection(),
@@ -269,11 +254,33 @@ describe('DocumentDetailComponent — load chain', () => {
           slots: { [EXTENSION_SLOTS.tabs]: PACKAGED_DOCUMENT_TABS },
         }),
       ],
-    })
-      .overrideComponent(DocumentDetailComponent, {
+    });
+    if (!rendered) {
+      bed.overrideComponent(DocumentDetailComponent, {
         set: { imports: [], template: '<div></div>' },
-      })
-      .compileComponents();
+      });
+    }
+    await bed.compileComponents();
+  }
+
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    created.length = 0;
+    revoked.length = 0;
+    toast = { show: vi.fn(), error: vi.fn() };
+
+    // `clearAllMocks` clears call history but NOT implementations installed with
+    // `mockReturnValue`, so anything a test overrides must be restored explicitly here or it
+    // leaks into every later test.
+    mockDetailService.getFullDocument.mockReturnValue(of(doc()));
+    mockDetailService.fetchBlob.mockReturnValue(of(new Blob(['x'], { type: 'text/plain' })));
+    mockDetailService.fetchThumbnail.mockReturnValue(of(new Blob(['x'], { type: 'image/png' })));
+    mockDetailService.getAllComments.mockReturnValue(of({ entries: [] }));
+    mockARenderService.isAvailable.mockReturnValue(of(false));
+    mockARenderService.getPreviewerUrl.mockReturnValue(of(null));
+    mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
+
+    await configure();
   });
 
   describe('loadDocument', () => {
@@ -294,8 +301,29 @@ describe('DocumentDetailComponent — load chain', () => {
       await fixture.whenStable();
 
       expect(component.error()).toBe('Failed to load document.');
+      expect(component.errorStatus()).toBe(500);
       expect(component.loading()).toBe(false);
       expect(component.doc()).toBeNull();
+    });
+
+    it('renders a missing document as the 404 state, the page heading, with Go Back', async () => {
+      mockDetailService.getFullDocument.mockReturnValue(throwError(() => ({ status: 404 })));
+      TestBed.resetTestingModule();
+      await configure({ rendered: true });
+
+      fixture = TestBed.createComponent(DocumentDetailComponent);
+      component = fixture.componentInstance;
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const state = (fixture.nativeElement as HTMLElement).querySelector('nxs-error-state');
+      expect(component.errorStatus()).toBe(404);
+      expect(state?.getAttribute('data-status')).toBe('404');
+      expect(state?.querySelector('h1')?.textContent?.trim()).toBe('Failed to load document.');
+      expect(state?.querySelector('.nxs-error-state__message')?.textContent).toContain(
+        'It may have been moved or deleted',
+      );
+      expect(state?.querySelector('button')?.textContent).toContain('Go Back');
     });
 
     /**

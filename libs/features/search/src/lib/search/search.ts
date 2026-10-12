@@ -50,10 +50,13 @@ import {
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsColumnPickerComponent,
+  NxsErrorStateComponent,
   NxsFavoriteToggleComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
+  nxsErrorStatus,
   provideNxsThumbnailCache,
+  type NxsErrorStatus,
   type NxsPickableColumn,
   NxsToastService,
   provideNxsToast,
@@ -179,6 +182,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   standalone: true,
   imports: [
     NxsColumnPickerComponent,
+    NxsErrorStateComponent,
     NxsFavoriteToggleComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
@@ -286,9 +290,22 @@ export class SearchComponent {
   readonly selectedSavedSearchId = this.searchAggregationService.selectedSavedSearchId;
   readonly selectedSavedSearchTitle = this.searchAggregationService.selectedSavedSearchTitle;
 
+  /** Which error state `error` shows: the status of the search request that failed. */
+  readonly errorStatus = signal<NxsErrorStatus>(500);
+  /**
+   * The standard search's failure, while its results are the ones on screen. `error` belongs to the
+   * standard pipeline and outlives an AI search, whose results must not be hidden behind it.
+   */
+  readonly resultsError = computed(() =>
+    this.aiSearchMode() && this.aiSearchExecuted() ? null : this.error(),
+  );
+  /** Bumped by Retry, so the same query and filters run again. */
+  private readonly searchAttempt = signal(0);
+
   private readonly results$ = combineLatest([
     this.route.queryParamMap,
     toObservable(this.searchAggregationService.drawerFilters),
+    toObservable(this.searchAttempt),
   ]).pipe(
     tap(() => {
       this.loading.set(true);
@@ -375,9 +392,10 @@ export class SearchComponent {
         }),
         map((response) => response.items),
         tap(() => this.loading.set(false)),
-        catchError(() => {
+        catchError((err: unknown) => {
           this.searchAggregationService.aggregations.set({});
           this.searchAggregationService.items.set([]);
+          this.errorStatus.set(nxsErrorStatus(err));
           this.error.set(this.translate.instant('search.message.failed-to-load-search-results'));
           this.loading.set(false);
           return of<SearchResultItem[]>([]);
@@ -387,6 +405,11 @@ export class SearchComponent {
   );
 
   readonly results = toSignal(this.results$, { initialValue: [] as SearchResultItem[] });
+
+  /** Run the failed search again, with the same query and filters. */
+  retrySearch(): void {
+    this.searchAttempt.update((attempt) => attempt + 1);
+  }
 
   readonly visibleColumns = computed(() =>
     ALL_COLUMNS.filter((c) => this.visibleColumnKeys().includes(c.key)),

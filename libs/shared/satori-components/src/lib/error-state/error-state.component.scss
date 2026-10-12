@@ -1,0 +1,41 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-error-state__icon {
+  width: 48px;
+  height: 48px;
+  font-size: 48px;
+  color: var(--mat-sys-error);
+}
+
+// Doubled to outrank the app theme's `html[data-app-theme] .mat-typography h1`–`h6`, which would
+// otherwise render this heading at display size.
+.nxs-error-state__heading.nxs-error-state__heading {
+  margin: 0;
+  font: var(--mat-sys-title-medium);
+  letter-spacing: normal;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-error-state__message {
+  max-width: 48ch;
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+}
+
+.nxs-error-state__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+
+  &:empty {
+    display: none;
+  }
+}

@@ -55,30 +55,11 @@
       >
         <mat-icon>download</mat-icon>
       </button>
-      <button
-        mat-icon-button
-        [matMenuTriggerFor]="moreMenu"
-        [matTooltip]="'browse.browse.more-actions' | translate"
-        [attr.aria-label]="'browse.browse.more-actions' | translate"
-      >
-        <mat-icon>more_vert</mat-icon>
-      </button>
-      <mat-menu #moreMenu="matMenu">
-        @for (action of contextMenuActions(); track action.id) {
-          <button
-            mat-menu-item
-            type="button"
-            [attr.data-action-id]="action.id"
-            [disabled]="!isContextMenuActionEnabled(action)"
-            (click)="runContextMenuAction(action)"
-          >
-            @if (action.icon) {
-              <mat-icon>{{ action.icon }}</mat-icon>
-            }
-            <span>{{ action | descriptorLabel }}</span>
-          </button>
-        }
-      </mat-menu>
+      <nxs-action-menu
+        [actions]="contextMenuItems()"
+        [label]="'browse.browse.more-actions' | translate"
+        (selected)="runContextMenuItem($event)"
+      />
     </div>
   </nxs-folder-header>
 
@@ -232,14 +213,13 @@
               <div class="browse-loading">
                 <nxs-spinner diameter="36" [label]="'browse.browse.loading' | translate" />
               </div>
-            } @else if (error()) {
-              <div class="browse-error">
-                <mat-icon class="error-icon">error_outline</mat-icon>
-                <p>{{ error() }}</p>
-                <button mat-stroked-button (click)="loadContent()">
-                  <mat-icon>refresh</mat-icon> {{ 'browse.browse.retry' | translate }}
-                </button>
-              </div>
+            } @else if (error(); as message) {
+              <nxs-error-state
+                [status]="errorStatus()"
+                [heading]="message"
+                retryable
+                (retry)="loadContent()"
+              />
             } @else if (filteredEntries().length === 0) {
               <div class="browse-empty">
                 <mat-icon class="empty-icon">folder_open</mat-icon>

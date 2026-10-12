@@ -1950,6 +1950,9 @@
     }
   },
   "satori-components": {
+    "action-menu": {
+      "more-actions": "More actions"
+    },
     "column-picker": {
       "close": "Close column picker",
       "done": "Done",
@@ -1963,6 +1966,25 @@
       "package": "Package to Install",
       "platform": "Platform",
       "title": "Download Nuxeo Drive Client"
+    },
+    "error-state": {
+      "forbidden": {
+        "heading": "You do not have access",
+        "message": "You do not have permission to see this. Ask its owner or an administrator for access."
+      },
+      "not-found": {
+        "heading": "Not found",
+        "message": "It may have been moved or deleted, or the link may be wrong."
+      },
+      "retry": "Retry",
+      "server": {
+        "heading": "Something went wrong",
+        "message": "The server could not complete the request. Try again in a moment."
+      },
+      "unauthorized": {
+        "heading": "Your session has ended",
+        "message": "Sign in again to continue."
+      }
     },
     "favorite-toggle": {
       "add": "Add to favorites",

@@ -142,8 +142,8 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
     // nothing is on screen until the trigger is used.
     const trigger = fixture.nativeElement.querySelector(
       '[aria-label="More actions"]',
-    ) as HTMLElement;
-    trigger.click();
+    ) as HTMLElement | null;
+    trigger?.click();
     fixture.detectChanges();
     await fixture.whenStable();
     fixture.detectChanges();
@@ -208,5 +208,31 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       '[data-action-id="app.contextMenu.subscribe"]',
     ) as HTMLElement;
     expect(subscribe.textContent).toContain('Watch this folder');
+  });
+
+  it('runs the chosen entry’s descriptor', async () => {
+    await render({});
+    const run = vi.spyOn(fixture.componentInstance, 'runContextMenuAction');
+
+    (
+      document.body.querySelector('[data-action-id="app.contextMenu.export"]') as HTMLElement
+    ).click();
+
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(run.mock.calls[0][0].id).toBe('app.contextMenu.export');
+  });
+
+  it('renders no trigger when the manifest hides every entry', async () => {
+    await render({
+      overrides: {
+        'app.contextMenu.share': { visible: false },
+        'app.contextMenu.subscribe': { visible: false },
+        'app.contextMenu.unsubscribe': { visible: false },
+        'app.contextMenu.export': { visible: false },
+      },
+    });
+
+    expect(fixture.nativeElement.querySelector('[aria-label="More actions"]')).toBeNull();
+    expect(menuActionIds()).toEqual([]);
   });
 });

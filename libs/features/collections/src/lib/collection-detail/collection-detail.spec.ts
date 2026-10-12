@@ -1084,6 +1084,21 @@ describe('CollectionDetailComponent', () => {
       expect(component.members().length).toBe(2);
       expect(component.totalSize()).toBe(2);
     });
+
+    it.each([
+      [403, { status: 403 }],
+      [404, { status: 404 }],
+      [500, new Error('network down')],
+    ] as const)('shows the %i error state when the members fail to load', (status, failure) => {
+      component['collectionUid'] = 'collection-1';
+      mockCollectionService.getCollectionMembers.mockReturnValue(throwError(() => failure));
+
+      component.loadMembers();
+
+      expect(component.loading()).toBe(false);
+      expect(component.errorStatus()).toBe(status);
+      expect(component.error()).toBe('Failed to load collection contents.');
+    });
   });
 
   describe('shareCollection', () => {

@@ -303,6 +303,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'nav.loading': 'Loading',
   'nav.refresh': 'Refresh',
   'nav.tree.toggle': 'Toggle {{ name }}',
+  'satori-components.action-menu.more-actions': 'More actions',
   'satori-components.column-picker.close': 'Close column picker',
   'satori-components.column-picker.done': 'Done',
   'satori-components.column-picker.reset': 'Reset',
@@ -310,6 +311,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.drive-dialog.close': 'Close',
   'satori-components.drive-dialog.name': 'Nuxeo Drive',
   'satori-components.drive-dialog.title': 'Download Nuxeo Drive Client',
+  'satori-components.error-state.retry': 'Retry',
   'permissions.add-permission-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',
   'permissions.add-permission-dialog.search-for-users-and-groups': 'Search for users and groups',

@@ -1,4 +1,8 @@
 export {
+  NxsActionMenuComponent,
+  type NxsMenuAction,
+} from './lib/action-menu/action-menu.component';
+export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
 } from './lib/column-picker/column-picker.component';
@@ -9,6 +13,8 @@ export {
   type NxsDriveDialogData,
 } from './lib/drive-dialog/drive-dialog.component';
 export { NxsEmptyStateComponent } from './lib/empty-state/empty-state.component';
+export { NxsErrorStateComponent } from './lib/error-state/error-state.component';
+export { type NxsErrorStatus, nxsErrorStatus } from './lib/error-state/error-status';
 export { NxsFavoriteToggleComponent } from './lib/favorite-toggle/favorite-toggle.component';
 export {
   NXS_FAVORITES_CHANGED_EVENT,

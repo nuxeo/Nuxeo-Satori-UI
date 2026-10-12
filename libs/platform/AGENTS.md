@@ -267,6 +267,13 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 - **`nxs-empty-state` renders its heading as an `<h2>` by default.** Bind `[headingLevel]` to
   one below the heading of the section it sits in, so screen-reader heading navigation stays in
   order.
+- **A load failure is `nxs-error-state`, chosen by status.** Map the request's error with
+  `nxsErrorStatus(err)` and bind the result to `[status]`, so a 403 says the user lacks access and
+  a 404 says the item is gone instead of both reading as a breakage. Retry appears only for a
+  server error, and only with `retryable`.
+- **An action slot rendered as a menu is `nxs-action-menu`.** Resolve the slot's descriptors into
+  `NxsMenuAction` entries yourself (labels translated, enabled rules evaluated) and run the one it
+  emits; with no entries it renders no trigger.
 - **Show a document's thumbnail with `nxs-thumbnail`.** `<nxs-thumbnail [documentId]="doc.uid">`
   fetches the rendition with the platform's credentials and revokes its blob URL itself; put the
   fallback (a type icon) inside it, and size it with your own class on the element. A page

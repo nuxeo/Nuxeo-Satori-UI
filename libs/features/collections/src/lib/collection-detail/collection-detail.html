@@ -159,14 +159,13 @@
                 [label]="'collections.collection-detail.loading' | translate"
               />
             </div>
-          } @else if (error()) {
-            <div class="tab-error">
-              <mat-icon class="error-icon">error_outline</mat-icon>
-              <p>{{ error() }}</p>
-              <button mat-stroked-button (click)="loadMembers()">
-                <mat-icon>refresh</mat-icon> {{ 'collections.collection-detail.retry' | translate }}
-              </button>
-            </div>
+          } @else if (error(); as message) {
+            <nxs-error-state
+              [status]="errorStatus()"
+              [heading]="message"
+              retryable
+              (retry)="loadMembers()"
+            />
           } @else if (members().length === 0) {
             <div class="tab-empty">
               <mat-icon class="empty-icon">collections_bookmark</mat-icon>

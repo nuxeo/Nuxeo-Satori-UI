@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-38 exported symbol(s).
+43 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -202,6 +202,16 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     }>;
 }
 const NXS_TOAST_DURATION = 4000;
+class NxsActionMenuComponent {
+    readonly actions: _angular_core.InputSignal<readonly NxsMenuAction[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly icon: _angular_core.InputSignal<string>;
+    readonly selected: _angular_core.OutputEmitterRef<NxsMenuAction>;
+    protected readonly ownLabel: _angular_core.Signal<string>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsActionMenuComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsActionMenuComponent, "nxs-action-menu", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, never, true, never>;
+    }
+}
 type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
 class NxsAvatarComponent implements NxsAvatarInputs {
     readonly initials: _angular_core.InputSignal<string>;
@@ -299,6 +309,20 @@ class NxsEmptyStateComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "message": { "alias": "message"; "required": false; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
     }
 }
+class NxsErrorStateComponent {
+    readonly status: _angular_core.InputSignal<NxsErrorStatus>;
+    readonly heading: _angular_core.InputSignal<string>;
+    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
+    readonly retryable: _angular_core.InputSignalWithTransform<boolean, unknown>;
+    readonly retry: _angular_core.OutputEmitterRef<void>;
+    protected readonly variant: _angular_core.Signal<Variant>;
+    protected readonly ownHeading: _angular_core.Signal<string>;
+    protected readonly canRetry: _angular_core.Signal<boolean>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsErrorStateComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsErrorStateComponent, "nxs-error-state", never, { "status": { "alias": "status"; "required": false; "isSignal": true; }; "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "retryable": { "alias": "retryable"; "required": false; "isSignal": true; }; }, { "retry": "retry"; }, never, ["*"], true, never>;
+    }
+}
+type NxsErrorStatus = 401 | 403 | 404 | 500;
 class NxsFavoriteToggleComponent {
     readonly documentId: _angular_core.InputSignal<string>;
     readonly favorite: _angular_core.ModelSignal<boolean>;
@@ -328,6 +352,13 @@ class NxsIconComponent {
     protected readonly accessibleName: _angular_core.Signal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsIconComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsIconComponent, "nxs-icon", never, { "name": { "alias": "name"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsMenuAction {
+    readonly id: string;
+    readonly label: string;
+    readonly icon?: string;
+    readonly disabled?: boolean;
     }
 }
 class NxsPermissionsPanelComponent {
@@ -472,6 +503,7 @@ class NxsToastService {
     static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
     }
 }
+function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
 function provideNxsComponents(): EnvironmentProviders;
 function provideNxsThumbnailCache(): Provider;

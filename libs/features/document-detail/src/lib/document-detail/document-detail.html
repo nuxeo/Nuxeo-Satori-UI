@@ -2,14 +2,18 @@
   <div class="detail-loading">
     <nxs-spinner diameter="40" [label]="'document-detail.document-detail.loading' | translate" />
   </div>
-} @else if (error()) {
-  <div class="detail-error">
-    <mat-icon class="error-icon">error_outline</mat-icon>
-    <p>{{ error() }}</p>
-    <button mat-stroked-button (click)="goBack()">
-      <mat-icon>arrow_back</mat-icon> {{ 'document-detail.document-detail.go-back-2' | translate }}
+} @else if (error(); as message) {
+  <nxs-error-state
+    class="detail-error"
+    [status]="errorStatus()"
+    [heading]="message"
+    [headingLevel]="1"
+  >
+    <button mat-stroked-button type="button" (click)="goBack()">
+      <mat-icon aria-hidden="true">arrow_back</mat-icon>
+      {{ 'document-detail.document-detail.go-back-2' | translate }}
     </button>
-  </div>
+  </nxs-error-state>
 } @else if (doc()) {
   <!-- Header -->
   <div class="detail-header">

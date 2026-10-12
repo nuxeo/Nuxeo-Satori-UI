@@ -144,15 +144,20 @@ import { CreateImportDialogComponent } from '../create-import/create-import-dial
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  NxsActionMenuComponent,
   NxsColumnPickerComponent,
   NxsDomainHintComponent,
   NxsDriveDialogComponent,
+  NxsErrorStateComponent,
   NxsFolderHeaderComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
+  nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsDriveDialogData,
+  type NxsErrorStatus,
+  type NxsMenuAction,
   type NxsPickableColumn,
   NxsToastService,
   provideNxsToast,
@@ -178,8 +183,10 @@ const FALLBACK_COLUMN_DESCRIPTORS: readonly ExtensionColumnDescriptor[] = ALL_CO
   standalone: true,
   providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
+    NxsActionMenuComponent,
     NxsColumnPickerComponent,
     NxsDomainHintComponent,
+    NxsErrorStateComponent,
     NxsFolderHeaderComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
@@ -241,6 +248,8 @@ export class BrowseComponent {
   readonly entries = signal<NuxeoDocument[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  /** Which error state `error` shows: the status of the request that failed. */
+  readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly currentDoc = signal<NuxeoDocument | null>(null);
   readonly totalSize = signal(0);
   private currentNuxeoPath = '/';
@@ -492,6 +501,17 @@ export class BrowseComponent {
     ),
   );
 
+  /** The context menu as `nxs-action-menu` renders it: labels translated, enabled rules applied. */
+  readonly contextMenuItems = computed<readonly NxsMenuAction[]>(() => {
+    this.currentLang();
+    return this.contextMenuActions().map((action) => ({
+      id: action.id,
+      label: descriptorLabel(action, (key) => this.translate.instant(key)),
+      icon: action.icon,
+      disabled: !this.isContextMenuActionEnabled(action),
+    }));
+  });
+
   /**
    * Publish this surface's interface state so the context-menu rules can read it.
    *
@@ -637,6 +657,12 @@ export class BrowseComponent {
     this.actionRegistry.execute(action, this.ruleContext.context());
   }
 
+  /** The descriptor behind the entry chosen in `nxs-action-menu`, run through the registry. */
+  runContextMenuItem(item: NxsMenuAction): void {
+    const action = this.contextMenuActions().find((candidate) => candidate.id === item.id);
+    if (action) this.runContextMenuAction(action);
+  }
+
   /**
    * The behaviour behind the packaged context-menu ids.
    *
@@ -693,7 +719,7 @@ export class BrowseComponent {
           this.error.set(null);
           return this.browseService.getBrowseFolderContents(nuxeoPath, 50).pipe(
             map((result) => ({ nuxeoPath, result })),
-            catchError(() => of({ nuxeoPath, error: true as const })),
+            catchError((error: unknown) => of({ nuxeoPath, error: nxsErrorStatus(error) })),
           );
         }),
         takeUntilDestroyed(),
@@ -701,6 +727,7 @@ export class BrowseComponent {
       .subscribe((payload) => {
         if (payload.nuxeoPath !== this.currentNuxeoPath) return;
         if ('error' in payload) {
+          this.errorStatus.set(payload.error);
           this.error.set(this.translate.instant('browse.message.failed-to-load-folder-contents'));
           this.loading.set(false);
           return;

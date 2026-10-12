@@ -200,12 +200,15 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsDriveDialogComponent,
+  NxsErrorStateComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
   NxsToastService,
+  nxsErrorStatus,
   nxsToggleFavorite,
   provideNxsToast,
   type NxsDriveDialogData,
+  type NxsErrorStatus,
 } from '@nuxeo-satori/platform/components';
 
 export interface SectionNode {
@@ -293,6 +296,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   selector: 'lib-document-detail',
   standalone: true,
   imports: [
+    NxsErrorStateComponent,
     NxsSpinnerComponent,
     CdkAriaLive,
     DescriptorLabelPipe,
@@ -490,6 +494,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.loading() || (this.blobLoading() && !this.blobUrl() && this.videoSources().length === 0),
   );
   readonly error = signal<string | null>(null);
+  /** Which error state `error` shows: the status of the document request that failed. */
+  readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly blobUrl = signal<SafeResourceUrl | null>(null);
   readonly noteContent = signal<string | null>(null);
   readonly noteHtml = signal<SafeHtml | null>(null);
@@ -1060,6 +1066,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const uid = params.get('uid');
       if (!uid) {
+        this.errorStatus.set(404);
         this.error.set(this.translate.instant('document-detail.message.no-document-id-provided'));
         this.loading.set(false);
         return;
@@ -1776,7 +1783,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.loadARenderUrl(doc);
           this.maybeBackfillContentLakeMarker(doc);
         },
-        error: () => {
+        error: (err: unknown) => {
+          this.errorStatus.set(nxsErrorStatus(err));
           this.error.set(this.translate.instant('document-detail.message.failed-to-load-document'));
           this.loading.set(false);
         },
