@@ -171,7 +171,9 @@
           (click)="runToolbarAction(action)"
         >
           <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
-          <span class="cdk-visually-hidden" cdkAriaLive="off">{{ action | descriptorLabel }}</span>
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            toolbarTooltip(action) || (action | descriptorLabel)
+          }}</span>
           <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }

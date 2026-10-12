@@ -23,9 +23,8 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     const loop = toolbarActionsLoopMarkup(readFileSync(templatePath, 'utf8'));
     expect(loop).toContain('[matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"');
     expect(loop).not.toContain('[attr.aria-label]="action | descriptorLabel"');
-    expect(loop).toContain(
-      '<span class="cdk-visually-hidden" cdkAriaLive="off">{{ action | descriptorLabel }}</span>',
-    );
+    expect(loop).toContain('toolbarTooltip(action) || (action | descriptorLabel)');
+    expect(loop).toContain('<span class="cdk-visually-hidden" cdkAriaLive="off">');
     expect(loop).toContain('<mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>');
   });
 
@@ -40,6 +39,13 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(moreBlock).toContain('document-detail.document-detail.more-actions');
     expect(moreBlock).not.toContain('[attr.aria-label]');
     expect(moreBlock).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
+  });
+
+  it('includes custom unlock/manifest tooltip text in the accessible name when non-empty', () => {
+    const loop = toolbarActionsLoopMarkup(readFileSync(templatePath, 'utf8'));
+    expect(loop).toMatch(
+      /toolbarTooltip\(action\)\s*\|\|\s*\(action \| descriptorLabel\)/,
+    );
   });
 
   it('keeps data-action-id on toolbar buttons for IBM scan selectors (e.g. app.toolbar.addToCollection)', () => {
