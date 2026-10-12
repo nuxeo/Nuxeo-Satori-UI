@@ -992,7 +992,6 @@
       "notifications-enabled": "Benachrichtigungen aktiviert",
       "removed-from-clipboard": "Aus der Zwischenablage entfernt"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "Benachrichtigen",
     "remove-from-clipboard": "Aus Zwischenablage entfernen",
     "share-fallback-title": "Sammlung",
@@ -1431,7 +1430,6 @@
       "workflow-abandoned": "Workflow abgebrochen.",
       "workflow-started-successfully": "Workflow erfolgreich gestartet"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "Zentriert ausrichten",
       "align-left": "Links ausrichten",

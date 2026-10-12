@@ -890,7 +890,7 @@
                       {{ 'document-detail.document-detail.date' | translate }}
                     </th>
                     <td mat-cell *matCellDef="let entry">
-                      {{ entry.eventDate | date: ('document-detail.mmmm-d-yyyy' | translate) }}
+                      {{ entry.eventDate | date: 'longDate' }}
                     </td>
                   </ng-container>
 
