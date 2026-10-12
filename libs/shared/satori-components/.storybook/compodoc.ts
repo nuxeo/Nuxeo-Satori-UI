@@ -55,7 +55,7 @@ export interface CompodocJson {
 
 /**
  * Compodoc's output for the library, written by the project's `compodoc` target, which
- * `typecheck`, `storybook` and `build-storybook` run first. TypeScript checks the JSON Compodoc
+ * `typecheck`, `test`, `storybook` and `build-storybook` run first. TypeScript checks the JSON Compodoc
  * wrote against this shape, so a field the pages read that Compodoc writes differently fails
  * `typecheck` rather than rendering an empty column.
  */

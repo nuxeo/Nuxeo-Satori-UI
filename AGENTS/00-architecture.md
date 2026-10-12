@@ -151,12 +151,15 @@ branch or change history:
   version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
   tools above it, and a table of contents of the `##` and `###` headings.
 - **API**: the `autodocs` page, renamed by `docs.defaultName` in `main.ts` and rendered by
-  `.storybook/api-page.ts` (`parameters.docs.page`). Inputs with type, required, default and JSDoc,
-  outputs with what they emit, and the library interfaces those types name (plus any listed in a
-  meta's `parameters.docs.api.types`, as the Drive dialog lists its dialog data) — every row read
-  from Compodoc, none written by hand. An input's JSDoc is its description there, so keep it free
-  of maintainer notes; put those in a `//` comment.
-- **Compodoc** is the project's `compodoc` target, which `typecheck`, `storybook` and
+  `.storybook/api-page.ts` (`parameters.docs.page`). Inputs and outputs under the names a template
+  binds — an alias, or `<name>Change` for a `model()`'s output — from Angular's compiled metadata
+  (`reflectComponentType`), each with Compodoc's type, required flag, default and JSDoc; public
+  methods with their signature; and the library interfaces those types name (plus any listed in a
+  meta's `parameters.docs.api.types`, as the Drive dialog lists its dialog data). No row is written
+  by hand, and `.storybook/api-members.spec.ts` checks the names against Angular's metadata for
+  every exported component. An input's JSDoc is its description there, so keep it free of
+  maintainer notes; put those in a `//` comment.
+- **Compodoc** is the project's `compodoc` target, which `typecheck`, `test`, `storybook` and
   `build-storybook` depend on. It reads `tsconfig.lib.json` and writes the gitignored
   `libs/shared/satori-components/documentation.json`, leaving out private, protected, `@internal`
   and lifecycle members and the source, templates and styles nothing reads. `.storybook/compodoc.ts`
@@ -179,6 +182,15 @@ branch or change history:
   exactly what renders.
 - **MDX has no GitHub-flavoured Markdown** — `remark-gfm` is not installed — so a Markdown table
   renders as a paragraph of pipes. Write tables as `<table>` markup.
+- **A multi-line code sample goes in an `export const`** just above its `<Source code={name} />`.
+  MDX strips up to two leading spaces from every continuation line of an attribute expression, so
+  one written inline in `code={`…`}` renders with its first level of indentation lost. Prettier
+  does not format MDX (`.prettierignore`): it parses MDX 1, where a blank line inside a sample ends
+  the JSX block, and re-flows the rest of the sample as Markdown.
+- **A story whose component renders router links** provides `provideStoryRouter()`
+  (`.storybook/story-router.ts`): hash location, and an empty route for each path the stories link
+  to, so following a link stays in the story. Add a path there when a story links somewhere new;
+  without a match the router logs NG04002 and resets the iframe's URL.
 - **The Satori-backed variants are not in this Storybook.** It builds without GitHub Packages, so the
   primitives' Overviews describe what Satori's version changes and do not render it;
   `satori-components-satori` has its own Storybook, which needs the token.
