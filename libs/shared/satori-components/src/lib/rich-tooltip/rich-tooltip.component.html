@@ -12,7 +12,12 @@
 </button>
 <div class="nxs-rich-tooltip__live" role="status">
   @if (open()) {
-    <div class="nxs-rich-tooltip__panel" [id]="panelId">
+    <div
+      #panel
+      class="nxs-rich-tooltip__panel"
+      [id]="panelId"
+      [style.translate.px]="shift() || null"
+    >
       <p class="nxs-rich-tooltip__heading">{{ heading() }}</p>
       <p class="nxs-rich-tooltip__content">{{ content() }}</p>
     </div>

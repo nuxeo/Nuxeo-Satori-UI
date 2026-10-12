@@ -2,6 +2,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
+  afterRenderEffect,
   inject,
   input,
   signal,
@@ -14,6 +15,9 @@ import type { NxsRichTooltipInputs } from '../primitives';
 
 let nextId = 0;
 
+/** The least gap, in px, the open panel keeps from either side of the viewport. */
+const VIEWPORT_MARGIN = 8;
+
 /**
  * An icon button that opens a titled explanation — the Material implementation of
  * `nxs.primitives.richTooltip`.
@@ -24,6 +28,9 @@ let nextId = 0;
  *
  * Focus stays on the button, as it does on Satori's, and the panel opens inside a live region so a
  * screen reader announces it. It is not a dialog: a dialog takes focus when it opens.
+ *
+ * The panel opens under the button from its inline-start edge, is never wider than the viewport,
+ * and moves sideways when it would cross either side of it, in either direction.
  */
 @Component({
   selector: 'nxs-rich-tooltip',
@@ -50,11 +57,25 @@ export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
 
   protected readonly open = signal(false);
   protected readonly panelId = `nxs-rich-tooltip-${nextId++}`;
+  /** How far, in px, the open panel is moved sideways to stay inside the viewport. */
+  protected readonly shift = signal(0);
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly trigger = viewChild.required('trigger', {
     read: ElementRef<HTMLButtonElement>,
   });
+  private readonly panel = viewChild('panel', { read: ElementRef<HTMLElement> });
+
+  constructor() {
+    afterRenderEffect((onCleanup) => {
+      if (!this.open()) return;
+      this.place();
+      const view = this.host.nativeElement.ownerDocument.defaultView;
+      const replace = () => this.place();
+      view?.addEventListener('resize', replace);
+      onCleanup(() => view?.removeEventListener('resize', replace));
+    });
+  }
 
   protected toggle(): void {
     this.open.update((open) => !open);
@@ -70,5 +91,20 @@ export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     const next = event.relatedTarget;
     if (next instanceof Node && this.host.nativeElement.contains(next)) return;
     this.open.set(false);
+  }
+
+  /** Measured from the host, so the shift already applied does not feed into the next one. */
+  private place(): void {
+    const panel = this.panel()?.nativeElement;
+    if (!panel) return;
+    const host = this.host.nativeElement;
+    const anchor = host.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const viewport = host.ownerDocument.documentElement.clientWidth;
+    const rtl = getComputedStyle(host).direction === 'rtl';
+    const left = rtl ? anchor.right - width : anchor.left;
+    const furthest = Math.max(VIEWPORT_MARGIN, viewport - VIEWPORT_MARGIN - width);
+    const placed = Math.min(Math.max(left, VIEWPORT_MARGIN), furthest);
+    this.shift.set(Math.round(placed - left));
   }
 }

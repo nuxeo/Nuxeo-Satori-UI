@@ -7,8 +7,9 @@ import type { NxsAvatarColor, NxsAvatarInputs, NxsAvatarSize } from '../primitiv
  * `nxs.primitives.avatar`.
  *
  * Material has no eight-hue palette, so each colour maps to one of the theme's container roles and
- * follows the theme, dark included. Set `--nxs-avatar-<colour>-background` and `-foreground` to
- * give each colour its own hue.
+ * follows the theme, dark included. Teal, which no role is, tints a teal hue toward the theme's
+ * surface and text instead. Set `--nxs-avatar-<colour>-background` and `-foreground` to give each
+ * colour its own hue.
  */
 @Component({
   selector: 'nxs-avatar',
@@ -18,9 +19,9 @@ import type { NxsAvatarColor, NxsAvatarInputs, NxsAvatarSize } from '../primitiv
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     '[class]': "'nxs-avatar nxs-avatar--' + color() + ' nxs-avatar--size-' + size()",
-    '[attr.role]': "label() ? 'img' : null",
-    '[attr.aria-label]': 'label() || null',
-    '[attr.aria-hidden]': "label() ? null : 'true'",
+    '[attr.role]': "name() ? 'img' : null",
+    '[attr.aria-label]': 'name() || null',
+    '[attr.aria-hidden]': "name() ? null : 'true'",
   },
 })
 export class NxsAvatarComponent implements NxsAvatarInputs {
@@ -31,10 +32,12 @@ export class NxsAvatarComponent implements NxsAvatarInputs {
   /** The diameter in pixels: `24`, `28`, `36`, `64`, `80` or `128`. */
   readonly size = input<NxsAvatarSize>('36');
   /**
-   * The accessible name, usually the person's name, already translated. Blank makes the avatar
-   * decorative.
+   * The accessible name, usually the person's name, already translated. Blank, or only whitespace,
+   * makes the avatar decorative.
    */
   readonly label = input('');
+
+  protected readonly name = computed(() => this.label().trim());
 
   protected readonly shownInitials = computed(() =>
     this.initials().trim().slice(0, 2).toUpperCase(),
