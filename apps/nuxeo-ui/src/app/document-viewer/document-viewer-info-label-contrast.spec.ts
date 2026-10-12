@@ -1,6 +1,6 @@
 /**
- * NXENG-812 / NXSAT-493 — `.info-label` on themed `.picture-cards` uses the light-strip muted token
- * (IBM 716638997, IBM 1390196018). Per-theme cases below verify **token wiring** only (sentinel on
+ * NXENG-812 / NXSAT-493 / NXSAT-507 — `.info-label` on themed `.picture-cards` uses the light-strip
+ * muted token (IBM 716638997, IBM 1390196018, IBM 1668870227). Per-theme cases verify **token wiring**
  * `--document-viewer-muted-on-light-surface`), not a WCAG 1.4.3 verdict — that is axe-owned
  * (`docs/accessibility.md` §87–91). Karma loads `apps/nuxeo-ui/src/styles.scss`.
  */
@@ -12,7 +12,7 @@ import { DocumentViewerComponent } from '@nuxeo-satori/platform/ui';
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
-describe('DocumentViewer info-label contrast by theme (NXENG-812 / NXSAT-493)', () => {
+describe('DocumentViewer info-label contrast by theme (NXENG-812 / NXSAT-493 / NXSAT-507)', () => {
   let fixture: ComponentFixture<DocumentViewerComponent>;
   let originalTheme: string | null;
 
