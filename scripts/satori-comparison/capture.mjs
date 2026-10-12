@@ -45,6 +45,7 @@ import { tmpdir } from 'node:os';
 import { extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { captureInputs } from './sources.mjs';
 import {
   FULL_IMAGES,
   FULL_STORIES,
@@ -114,6 +115,8 @@ try {
   precondition(error.message);
 }
 const { components } = comparison;
+// Taken before the builds, so it describes what was built rather than what is on disk afterwards.
+const inputs = captureInputs(ROOT, components);
 
 /* ------------------------------------------------------------- cleanup of what we own ---- */
 
@@ -687,6 +690,10 @@ try {
     browser: browser.version(),
     storybooks: REUSE ? `${REUSE} (reused)` : KEEP ? dir : '(temporary, removed)',
     served: base,
+    inputs,
+    images: [...components.map((c) => c.image), ...Object.values(FULL_IMAGES)].filter((name) =>
+      existsSync(join(OUT, name)),
+    ),
     components: results,
     checks,
     summary: {

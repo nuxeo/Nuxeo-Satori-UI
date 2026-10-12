@@ -174,6 +174,28 @@ const NEGATIVE = [
     /satori:comparison:components -->` exactly once \(found 0\)/,
   ],
   [
+    'the summary marker moved below the table it marks',
+    {
+      doc: swap(
+        swap(doc, `${MARKERS.summary}\n\n`, ''),
+        'This table and the screenshots are kept current',
+        `${MARKERS.summary}\n\nThis table and the screenshots are kept current`,
+      ),
+    },
+    /satori:comparison:summary -->` must sit under "## All components", before its table/,
+  ],
+  [
+    'a second table under "All components"',
+    {
+      doc: swap(
+        doc,
+        'This table and the screenshots are kept current',
+        '| A | B |\n| --- | --- |\n| x | y |\n\nThis table and the screenshots are kept current',
+      ),
+    },
+    /"## All components" must hold exactly one table \(found 2\)/,
+  ],
+  [
     'a misspelt field row',
     {
       doc: swap(

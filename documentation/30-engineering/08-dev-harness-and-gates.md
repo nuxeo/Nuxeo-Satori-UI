@@ -2,17 +2,19 @@
 title: Dev Harness & Gates
 parent: Engineering
 order: 8
-last_reviewed: 2026-10-09
-repo_commit: effd434
+last_reviewed: 2026-10-11
+repo_commit: e8bca76
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-09 · **Repository:** `effd434` (`feature/nxsat-308-satori-components`)
-> Only "Hard floors, and where it runs" was re-verified at that commit. The gate inventory (§2 and
-> §7) — 27 gates, including the `dependency-tree` pair (gates 4 and 5) that NXSAT-308 adds — was
-> re-verified on 2026-10-08 at `fb97d44`, before `peer-installability` (gate 22) joined it; the `nxs-comparison` pair (gates 26 and 27) joined on 2026-10-11. §3, §8, the `supply-chain` and `guardrails` rows of §2 and
+> **Last reviewed:** 2026-10-11 · **Repository:** `e8bca76` (`docs/nxsat-308-satori-comparison`)
+> Only the `nxs-comparison` pair — gates 26 and 27 in §2, their §7 row and §7's CI count — was
+> verified at that commit, against `ALL_GATES` and `.github/workflows/ci.yml`. "Hard floors, and
+> where it runs" was re-verified on 2026-10-09 at `effd434`. The rest of the gate inventory (§2 and
+> §7) — 27 gates then, including the `dependency-tree` pair (gates 4 and 5) that NXSAT-308 adds — was
+> re-verified on 2026-10-08 at `fb97d44`, before `peer-installability` (gate 22) joined it. §3, §8, the `supply-chain` and `guardrails` rows of §2 and
 > the CI-only rows of §7 were re-verified on 2026-10-08 at `2898046`
 > (`feature/nxsat-308-ci-cold-cache-tooling`) against `GUARDRAILS`, `supply-chain.mjs` and
 > `.github/workflows/`; §3's three `checkSatoriComponents*` rows and §8's `integration/**` push

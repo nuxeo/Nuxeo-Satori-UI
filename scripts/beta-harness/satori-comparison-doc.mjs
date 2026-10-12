@@ -224,6 +224,8 @@ export function parseDoc(md) {
   const h2 = [];
   const sections = [];
   const summaryRows = [];
+  let summaryTables = 0;
+  let previousWasTable = false;
   const markerLines = { components: [], summary: [] };
   let inComments = false;
   let current = null;
@@ -239,6 +241,9 @@ export function parseDoc(md) {
       if (line.includes('-->')) inComments = false;
       return;
     }
+    const isTable = /^\s*\|/.test(line);
+    const startsTable = isTable && !previousWasTable;
+    previousWasTable = isTable;
     const heading = /^(#{2,3})\s+(.*?)\s*$/.exec(line);
     if (heading) {
       if (heading[1] === '##') {
@@ -261,7 +266,8 @@ export function parseDoc(md) {
         else if (current.tables === 1)
           current.fields.set(row[0].replace(/\*\*/g, ''), row[1] ?? '');
       } else if (h2Title === SUMMARY_HEADING) {
-        summaryRows.push({ lineNo, cells: row });
+        if (startsTable) summaryTables += 1;
+        if (summaryTables === 1) summaryRows.push({ lineNo, cells: row });
       }
       return;
     }
@@ -270,7 +276,14 @@ export function parseDoc(md) {
   });
 
   // The summary table's first row is its header.
-  return { h2, sections, summaryRows: summaryRows.slice(1), markerLines };
+  return {
+    h2,
+    sections,
+    summaryRows: summaryRows.slice(1),
+    summaryHeaderLine: summaryRows[0]?.lineNo ?? null,
+    summaryTables,
+    markerLines,
+  };
 }
 
 /** Every image the page references, in order, with the line it is on. */
@@ -319,7 +332,12 @@ export function checkComparison(inputs) {
     fail(`${DOC} does not exist`);
     return { problems, components: [] };
   }
-  const { h2, sections, summaryRows, markerLines } = parseDoc(inputs.doc);
+  const { h2, sections, summaryRows, summaryHeaderLine, summaryTables, markerLines } = parseDoc(
+    inputs.doc,
+  );
+  if (h2.includes(SUMMARY_HEADING) && summaryTables !== 1) {
+    fail(`${DOC} "## ${SUMMARY_HEADING}" must hold exactly one table (found ${summaryTables})`);
+  }
   for (const heading of [COMPONENTS_HEADING, SUMMARY_HEADING]) {
     if (!h2.includes(heading)) fail(`${DOC} has no "## ${heading}" section`);
   }
@@ -332,7 +350,13 @@ export function checkComparison(inputs) {
     }
     const [{ lineNo, h2: under, after }] = found;
     const want = key === 'components' ? COMPONENTS_HEADING : SUMMARY_HEADING;
-    if (under !== want || (key === 'components' && after !== lastSection)) {
+    // The generator appends the summary row to the first table after the marker, so a marker below
+    // the table would send it past the end of the document.
+    const misplaced =
+      under !== want ||
+      (key === 'components' && after !== lastSection) ||
+      (key === 'summary' && summaryHeaderLine !== null && lineNo > summaryHeaderLine);
+    if (misplaced) {
       fail(
         `${DOC}:${lineNo} \`${MARKERS[key]}\` must sit ` +
           (key === 'components'

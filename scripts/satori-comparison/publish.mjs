@@ -19,9 +19,13 @@
  * Credentials from CONFLUENCE_EMAIL and CONFLUENCE_TOKEN (or CONFLUENCE_TOKEN_FILE), else from
  * ~/.jira_email and ~/.jira_token. Never printed.
  *
- * The read-back fails unless the version went up by one, every image the page references is an
- * attachment of the page that downloads as the PNG that was uploaded (byte for byte), Confluence
- * renders each, the headings match the Markdown, and no forbidden reference appears.
+ * Refuses, too, a capture that is not of the repository as it is: `manifest.json` must record a
+ * clean run whose input digest (`sources.mjs`) matches the current sources and sections.
+ *
+ * The read-back — after publishing, or alone with `--verify` — fails unless the version went up by
+ * one (publishing only), every image the page references is an attachment of the page that
+ * downloads byte for byte as the capture has it, Confluence renders each, the headings are the ones
+ * sent, and no forbidden reference appears.
  *
  * Usage:
  *   npm run docs:satori-comparison:publish                 # upload, update, read back
@@ -36,6 +40,7 @@ import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { captureInputs } from './sources.mjs';
 import { imageMacro, toStorage, uploadAttachment } from '../confluence-storage.mjs';
 import {
   DOC,
@@ -81,8 +86,9 @@ if (config.spaceId !== ALLOWED_SPACE_ID) {
 }
 
 let doc;
+let components;
 try {
-  ({ doc } = loadComparison(ROOT));
+  ({ doc, components } = loadComparison(ROOT));
 } catch (error) {
   refuse(error.message);
 }
@@ -106,6 +112,24 @@ if (missing.length) {
       'Run `npm run docs:satori-comparison:capture` first.',
   );
 }
+// The capture must be of what is in the repository now: a clean run, over the same inputs.
+const manifestFile = join(IMAGES, 'manifest.json');
+if (!existsSync(manifestFile)) refuse(`no capture manifest in ${IMAGES}; run the capture first.`);
+const manifest = JSON.parse(readFileSync(manifestFile, 'utf8'));
+if (manifest.summary?.failed !== 0) {
+  refuse(
+    `the capture in ${IMAGES} failed ${manifest.summary?.failed ?? '?'} check(s); fix and re-capture.`,
+  );
+}
+if (manifest.inputs?.digest !== captureInputs(ROOT, components).digest) {
+  refuse(
+    `the capture in ${IMAGES} (${manifest.capturedAt}) is stale: a component, story, theme, ` +
+      'catalogue, Satori version or the page sections changed since. Run the capture again.',
+  );
+}
+const uncaptured = referenced.filter((name) => !manifest.images?.includes(name));
+if (uncaptured.length) refuse(`not written by that capture: ${uncaptured.join(', ')}`);
+
 const local = new Map(referenced.map((name) => [name, pngInfo(join(IMAGES, name))]));
 const notPng = referenced.filter((name) => !local.get(name).png);
 if (notPng.length) refuse(`not PNG files: ${notPng.join(', ')}`);
@@ -213,7 +237,9 @@ if (!verifyOnly) {
       body: { representation: 'storage', value: storage },
       version: {
         number: before + 1,
-        message: `Published from ${DOC}${commit ? ` at ${commit}` : ''}`,
+        message:
+          `Published from ${DOC}${commit ? ` at ${commit}` : ''}; ` +
+          `screenshots captured ${manifest.capturedAt}`,
       },
     }),
   });
@@ -259,7 +285,7 @@ for (const name of new Set(refs)) {
   const want = readFileSync(join(IMAGES, name));
   if (!res.ok) fail(`image ${name} does not download (${res.status})`);
   else if (buf.subarray(0, 8).toString('hex') !== PNG_MAGIC) fail(`image ${name} is not a PNG`);
-  else if (!verifyOnly && !buf.equals(want)) fail(`image ${name} is not the PNG just uploaded`);
+  else if (!buf.equals(want)) fail(`image ${name} differs from the capture in ${IMAGES}`);
 }
 
 const view = (await api(`/api/v2/pages/${config.pageId}?body-format=view`)).body.view.value;
