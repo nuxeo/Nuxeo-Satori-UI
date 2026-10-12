@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "破棄",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "文書は既に別のユーザーによってロックされています。ページを更新してください。",
+      "lock-no-permission": "この文書をロックする権限がありません。",
+      "locked-by": "{{ owner }} によって {{ date }} にロックされました",
+      "locked-by-another-user": "この文書は別のユーザーによってロックされているため、ロックを解除できません。",
+      "unlock-no-permission": "この文書のロックを解除する権限がありません。"
+    },
     "ok": "OK",
     "page-number": "{{ page }} ページ",
     "page-of": "{{ page }} / {{ total }} ページ",
