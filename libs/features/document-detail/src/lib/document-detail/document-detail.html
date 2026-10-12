@@ -163,9 +163,11 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="action.tooltip ?? (action | descriptorLabel)"
+          [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
           [attr.aria-label]="action | descriptorLabel"
           [disabled]="!isToolbarActionEnabled(action)"
+          disabledInteractive
+          [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
           <mat-icon>{{ action.icon }}</mat-icon>
@@ -188,6 +190,8 @@
           type="button"
           [attr.data-action-id]="action.id"
           [disabled]="!isToolbarActionEnabled(action)"
+          [matTooltip]="toolbarTooltip(action) ?? ''"
+          matTooltipPosition="left"
           (click)="runToolbarAction(action)"
         >
           @if (action.icon) {

@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Verwerfen",
     "email-example": "name@firma.de",
+    "lock": {
+      "already-locked": "Dokument bereits von einem anderen Benutzer gesperrt, bitte aktualisieren Sie Ihre Seite.",
+      "lock-no-permission": "Sie haben keine Berechtigung, dieses Dokument zu sperren.",
+      "locked-by": "Gesperrt von {{ owner }} am {{ date }}",
+      "locked-by-another-user": "Sie können dieses Dokument nicht entsperren, weil es von einem anderen Benutzer gesperrt ist.",
+      "unlock-no-permission": "Sie haben keine Berechtigung, dieses Dokument zu entsperren."
+    },
     "ok": "OK",
     "page-number": "Seite {{ page }}",
     "page-of": "Seite {{ page }} von {{ total }}",
