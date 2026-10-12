@@ -243,6 +243,26 @@ into the library to dodge the rule.
    a constant) and rendered through `lib-extension-outlet` with the component as the unresolved
    fallback, so a customer library can re-register the ID. `beta:reference` checks `nxs.*` IDs
    against `docs/extension-reference.md` as it does `app.*` ones.
+10. Put it on the with-and-without-Satori page. `docs/satori-components/with-and-without-satori.md`
+    is the source of the Confluence page that shows every component without and with Satori:
+    - add a `### <Name>` section under "Side by side" with its `| Field | Value |` table — the
+      class; the ID something registers the component under, or `—` when nothing does;
+      `Same component; theme only` (or, for a component `libs/shared/satori-components-satori`
+      re-registers, `Satori's own component:` naming the `NxsSatori…Component` and the `<sat-…>`
+      element its template renders, plus a second story from that library); and a story **of that
+      component** — one whose Storybook meta names it, or that renders its registered ID through an
+      outlet — then the image `<selector without nxs->-side-by-side.png`, and a row under
+      "All components". The two `<!-- satori:comparison:* -->` markers are where a generator splices
+      them, in the shape of `generatedComponent()` in
+      `scripts/beta-harness/satori-comparison-doc.selftest.mjs`;
+    - `npm run docs:satori-comparison:capture` renders every component both ways and writes the
+      images to `$AGENTIC_UI_EVIDENCE_DIR/satori-comparison/`, outside the repository (needs
+      `@hylandsoftware/satori-ui` installed, so the GitHub Packages token);
+    - `npm run docs:satori-comparison:publish` updates the page in place and reads it back (your
+      Confluence credentials; it refuses to run in CI).
+
+    `npm run docs:satori-comparison:check` — the `nxs-comparison` gate, and a CI step — fails an
+    exported component with no section, and a section whose component is gone.
 
 ---
 

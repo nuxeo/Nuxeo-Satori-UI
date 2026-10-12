@@ -93,6 +93,7 @@ jobs:
           set -euo pipefail
           npm run review:analysis-selftest
           npm run docs:links-selftest
+          npm run docs:storage-selftest
 
       # Static checks that `beta:gate` has run locally since Phase 5 and that had
       # never run here. They are seconds each and they close a specific hole: the local
@@ -105,7 +106,7 @@ jobs:
       # runs individual scripts. So "registered as a gate" meant local-only, and review had
       # to point out that the gate guarding a shipped XSS-adjacent defect could not block a
       # merge. Registering a check in ALL_GATES is not the same as running it.
-      - name: Static beta gates (evidence, reference drift, customer guardrails, supply chain, sanitizers, lockfile and dependency-tree controls)
+      - name: Static beta gates (evidence, reference drift, Satori comparison page, customer guardrails, supply chain, sanitizers, lockfile and dependency-tree controls)
         env:
           # The sanitizer budget ratchet compares against the merge base with `origin/main` by
           # default. A PR into an integration branch must be ratcheted against that branch, or a
@@ -141,6 +142,10 @@ jobs:
           # The only customer-facing document nothing checked. When first measured it was
           # wrong in both directions.
           npm run beta:reference
+          # The same for the Confluence page showing each nxs- component with and without Satori:
+          # a section per barrel component and none for a removed one, with its controls.
+          npm run docs:satori-comparison:check
+          npm run docs:satori-comparison:selftest
           # The guardrail we hand customers, run against our own reference library — so we
           # do not learn it is broken from a customer's CI log.
           npm run beta:customer-guardrails
