@@ -27,8 +27,12 @@ describe('Document detail Content Lake ingest focus ring (NXSAT-491)', () => {
     expect(scss).not.toMatch(
       /\.detail-header \.header-actions button\.mat-mdc-icon-button:focus,\s/,
     );
-    expect(scss).toMatch(
-      /\.detail-header \.header-actions button\.mat-mdc-icon-button:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--agentic-document-detail-header-focus-outline\)/,
+    const focusBlock =
+      scss.match(
+        /\.detail-header \.header-actions button\.mat-mdc-icon-button:focus\s*\{([^}]*)\}/,
+      )?.[1] ?? '';
+    expect(focusBlock).toMatch(
+      /outline:\s*2px\s+solid\s+var\(--agentic-document-detail-header-focus-outline\)/,
     );
   });
 });
