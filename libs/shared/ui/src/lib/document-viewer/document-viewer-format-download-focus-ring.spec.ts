@@ -25,14 +25,16 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     const selectorIndex = scss.indexOf(selector);
     expect(selectorIndex).toBeGreaterThan(-1);
     const lines = scss.slice(0, selectorIndex).split(/\r?\n/);
+    let i = lines.length - 1;
+    // Only discard the single empty line immediately before the selector (split artifact).
+    if (i >= 0 && lines[i].trim() === '') {
+      i -= 1;
+    }
     const commentLines: string[] = [];
-    for (let i = lines.length - 1; i >= 0; i--) {
+    for (; i >= 0; i -= 1) {
       const trimmed = lines[i].trim();
       if (trimmed === '') {
-        if (commentLines.length > 0) {
-          break;
-        }
-        continue;
+        break;
       }
       if (trimmed.startsWith('//')) {
         commentLines.unshift(lines[i]);
