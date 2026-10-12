@@ -79,12 +79,17 @@ describe('provideSatoriDateAdapter', () => {
     },
   );
 
+  // The assertion requires an Invalid Date specifically, and must NOT accept `null`. Material
+  // reads `null` as an empty, valid field: it clears the model and marks nothing, so a
+  // regression returning `null` for non-empty unparseable text would leave the field looking
+  // fine while the user's input vanished — and a test that tolerated `null` would stay green
+  // through it. That is AC-3's whole point, and permitting `null` here was caught in review.
   it.each(REJECTED_CASES)('refuses "$input" in $locale rather than guessing ($why)', ({ locale, input }) => {
     const parsed = parseAsInput(locale, input);
 
-    // Material treats an invalid Date as invalid input and marks the field, which is what makes
-    // the rejection visible. `null` would mean "empty", which this input is not.
-    expect(parsed === null || Number.isNaN(parsed.getTime())).toBe(true);
+    expect(parsed).not.toBeNull();
+    expect(parsed).toBeInstanceOf(Date);
+    expect(Number.isNaN((parsed as Date).getTime())).toBe(true);
   });
 
   it('supplies MAT_DATE_FORMATS, the token the application never set', () => {
