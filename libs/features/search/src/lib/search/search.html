@@ -288,18 +288,12 @@
                 }}</span>
               </div>
               <div class="grid-card-actions col-hover-actions">
-                <button
-                  mat-icon-button
-                  [matTooltip]="'search.search.add-to-favorites' | translate"
-                  [attr.aria-label]="'search.search.add-to-favorites' | translate"
-                  class="action-btn"
-                  [disabled]="favoritePendingIds().has(row.id)"
-                  (click)="toggleFavorite(row.id, $event)"
-                >
-                  <mat-icon class="action-icon" [class.favorited]="isFavorited(row.id)">{{
-                    isFavorited(row.id) ? 'star' : 'star_outline'
-                  }}</mat-icon>
-                </button>
+                <nxs-favorite-toggle
+                  [documentId]="row.id"
+                  [favorite]="isFavorited(row.id)"
+                  (changed)="onFavoriteChanged(row.id, $event)"
+                  (failed)="onFavoriteFailed($event)"
+                />
                 @if (isDownloadableType(row.type)) {
                   <button
                     mat-icon-button
@@ -483,18 +477,12 @@
               }}</span>
             </div>
             <div class="simple-list-actions col-hover-actions">
-              <button
-                mat-icon-button
-                [matTooltip]="'search.search.add-to-favorites' | translate"
-                [attr.aria-label]="'search.search.add-to-favorites' | translate"
-                class="action-btn"
-                [disabled]="favoritePendingIds().has(row.id)"
-                (click)="toggleFavorite(row.id, $event)"
-              >
-                <mat-icon class="action-icon" [class.favorited]="isFavorited(row.id)">{{
-                  isFavorited(row.id) ? 'star' : 'star_outline'
-                }}</mat-icon>
-              </button>
+              <nxs-favorite-toggle
+                [documentId]="row.id"
+                [favorite]="isFavorited(row.id)"
+                (changed)="onFavoriteChanged(row.id, $event)"
+                (failed)="onFavoriteFailed($event)"
+              />
               @if (isDownloadableType(row.type)) {
                 <button
                   mat-icon-button

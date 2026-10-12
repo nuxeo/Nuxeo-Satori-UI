@@ -189,9 +189,10 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-35 exported symbol(s).
+38 exported symbol(s).
 
 ```ts
+const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
 const NXS_PERMISSIONS_PANEL_ID = "nxs.components.permissionsPanel";
 const NXS_PRIMITIVE_IDS: Readonly<{
     readonly avatar: "nxs.primitives.avatar";
@@ -296,6 +297,19 @@ class NxsEmptyStateComponent {
     readonly icon: InputSignal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsEmptyStateComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "message": { "alias": "message"; "required": false; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    }
+}
+class NxsFavoriteToggleComponent {
+    readonly documentId: _angular_core.InputSignal<string>;
+    readonly favorite: _angular_core.ModelSignal<boolean>;
+    readonly disabled: _angular_core.InputSignal<boolean>;
+    readonly changed: _angular_core.OutputEmitterRef<boolean>;
+    readonly failed: _angular_core.OutputEmitterRef<unknown>;
+    protected readonly busy: _angular_core.Signal<boolean>;
+    toggle(): void;
+    protected press(event: Event): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "favorite": { "alias": "favorite"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "favorite": "favoriteChange"; "changed": "changed"; "failed": "failed"; }, never, never, true, never>;
     }
 }
 class NxsFolderHeaderComponent {
@@ -458,6 +472,7 @@ class NxsToastService {
     static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
     }
 }
+function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
 function provideNxsComponents(): EnvironmentProviders;
 function provideNxsThumbnailCache(): Provider;
 function provideNxsToast(): Provider;

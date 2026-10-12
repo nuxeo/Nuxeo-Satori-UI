@@ -541,38 +541,28 @@ describe('SearchComponent', () => {
       expect(component.isFavorited('doc2')).toBe(false);
     });
 
-    it('should add to favorites when not favorited', () => {
-      mockDocumentDetailService.addToFavorites.mockReturnValue(of(undefined));
+    // The add/remove request, its in-flight guard and the click's propagation are the star's own —
+    // nxs-favorite-toggle — so the page only keeps its view of the state and reports a failure.
+    it('marks a result a favorite once its star confirms it', () => {
       component.favoriteIds.set(new Set());
-      component.toggleFavorite('doc1');
-      expect(mockDocumentDetailService.addToFavorites).toHaveBeenCalledWith('doc1');
+      component.onFavoriteChanged('doc1', true);
+      expect(component.isFavorited('doc1')).toBe(true);
     });
 
-    it('should remove from favorites when favorited', () => {
-      mockDocumentDetailService.removeFromFavorites.mockReturnValue(of(undefined));
-      component.favoriteIds.set(new Set(['doc1']));
-      component.toggleFavorite('doc1');
-      expect(mockDocumentDetailService.removeFromFavorites).toHaveBeenCalledWith('doc1');
+    it('unmarks a result once its star confirms the removal, leaving the others', () => {
+      component.favoriteIds.set(new Set(['doc1', 'doc2']));
+      component.onFavoriteChanged('doc1', false);
+      expect([...component.favoriteIds()]).toEqual(['doc2']);
     });
 
-    it('should do nothing when id is empty', () => {
-      mockDocumentDetailService.addToFavorites.mockClear();
-      component.toggleFavorite('');
-      expect(mockDocumentDetailService.addToFavorites).not.toHaveBeenCalled();
+    it('reports the server’s message when a star’s request fails', () => {
+      component.onFavoriteFailed({ error: { message: 'Not allowed' } });
+      expect(toast.error).toHaveBeenCalledWith('Not allowed', { duration: 5000 });
     });
 
-    it('should do nothing when operation is pending', () => {
-      component.favoritePendingIds.set(new Set(['doc1']));
-      mockDocumentDetailService.addToFavorites.mockClear();
-      component.toggleFavorite('doc1');
-      expect(mockDocumentDetailService.addToFavorites).not.toHaveBeenCalled();
-    });
-
-    it('should stop event propagation', () => {
-      mockDocumentDetailService.addToFavorites.mockReturnValue(of(undefined));
-      const event = { stopPropagation: vi.fn() } as unknown as Event;
-      component.toggleFavorite('doc1', event);
-      expect(event.stopPropagation).toHaveBeenCalled();
+    it('falls back to its own message when the server sends none', () => {
+      component.onFavoriteFailed(new Error(''));
+      expect(toast.error).toHaveBeenCalledWith('Failed to update favorites.', { duration: 5000 });
     });
   });
 

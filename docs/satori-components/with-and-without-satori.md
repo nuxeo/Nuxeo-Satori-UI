@@ -263,6 +263,19 @@ The same panel in both. The library defines its ID and our app registers it; `pr
 
 The same dialog content in both; the theme sets the type, the colours and the button styles.
 
+### Favorite toggle
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsFavoriteToggleComponent`          |
+| Registered ID   | —                                     |
+| With Satori     | Same component; theme only            |
+| Storybook story | `actions-favorite-toggle--a-favorite` |
+
+![Favorite toggle: without Satori on the left, with Satori on the right](favorite-toggle-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same star button in both, for a document that is already a favorite. A favorite's star takes the theme's primary colour, blue under Material and purple under Satori; a document that is not a favorite shows an outlined grey star. Pressing it adds the document to the user's favorites or removes it, and the page that shows the star decides what message to give.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -334,6 +347,7 @@ The components in the library today:
 | Column picker      | —                                                                                                                       | Same component; theme only   |
 | Permissions panel  | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
 | Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
+| Favorite toggle    | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

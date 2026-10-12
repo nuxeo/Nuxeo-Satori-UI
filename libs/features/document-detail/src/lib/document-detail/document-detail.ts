@@ -203,6 +203,7 @@ import {
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
   NxsToastService,
+  nxsToggleFavorite,
   provideNxsToast,
   type NxsDriveDialogData,
 } from '@nuxeo-satori/platform/components';
@@ -3205,31 +3206,30 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   toggleFavorite(): void {
     if (this.actionInProgress()) return;
     this.actionInProgress.set('favorite');
-    const op = this.isFavorite()
-      ? this.detailService.removeFromFavorites(this.docUid)
-      : this.detailService.addToFavorites(this.docUid);
-
-    op.subscribe({
-      next: () => {
-        const wasFav = this.isFavorite();
-        this.isFavorite.set(!wasFav);
-        this.actionInProgress.set(null);
-        this.toast.show(
-          this.translate.instant(
-            wasFav
-              ? 'document-detail.message.removed-from-favorites'
-              : 'document-detail.message.added-to-favorites',
-          ),
-        );
-        window.dispatchEvent(new Event('favorites-changed'));
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(
-          this.translate.instant('document-detail.message.failed-to-update-favorites'),
-        );
-      },
-    });
+    const uid = this.docUid;
+    nxsToggleFavorite(this.detailService, uid, this.isFavorite())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (favorite) => {
+          // The page is reused when `:uid` changes: an answer for the document left behind says
+          // nothing about the star of the one now shown, which loaded its own.
+          if (uid === this.docUid) this.isFavorite.set(favorite);
+          this.actionInProgress.set(null);
+          this.toast.show(
+            this.translate.instant(
+              favorite
+                ? 'document-detail.message.added-to-favorites'
+                : 'document-detail.message.removed-from-favorites',
+            ),
+          );
+        },
+        error: () => {
+          this.actionInProgress.set(null);
+          this.toast.error(
+            this.translate.instant('document-detail.message.failed-to-update-favorites'),
+          );
+        },
+      });
   }
 
   toggleSubscription(): void {

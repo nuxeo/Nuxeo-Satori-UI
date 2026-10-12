@@ -1,0 +1,24 @@
+:host {
+  display: inline-flex;
+}
+
+// Compact, to sit among a card's or a row's other icon actions.
+.nxs-favorite-toggle__button {
+  --mat-icon-button-state-layer-size: 32px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  color: var(--mat-sys-on-surface-variant);
+
+  .mat-icon {
+    width: 18px;
+    height: 18px;
+    font-size: 18px;
+  }
+}
+
+// Web UI colours a pressed toggle with its activated-action colour; here that is the theme's primary,
+// overridable with `--nxs-favorite-toggle-active-color`.
+.nxs-favorite-toggle__button--on {
+  color: var(--nxs-favorite-toggle-active-color, var(--mat-sys-primary));
+}

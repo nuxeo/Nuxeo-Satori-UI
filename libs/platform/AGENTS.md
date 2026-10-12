@@ -275,6 +275,20 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
   component's `providers`, then `show(message)` or `error(message, { retry })` with text you have
   translated. It keeps the core slice's timing and announcements: four seconds or longer, a
   Dismiss button, Escape to close, errors announced assertively.
+- **Favourite a document with `nxs-favorite-toggle`.** It is the star; it runs the request and
+  reports the outcome, and your component says what to the user. To offer the same operation as a
+  menu entry, call `nxsToggleFavorite(documentDetailService, id, favorite)`, which emits the new
+  state.
+
+```html
+<nxs-favorite-toggle
+  [documentId]="doc.uid"
+  [(favorite)]="isFavorite"
+  (changed)="onFavoriteChanged($event)"
+  (failed)="onFavoriteFailed($event)"
+/>
+```
+
 - **Replace a packaged panel by its ID.** `nxs-permissions-panel` is registered as
   `NXS_PERMISSIONS_PANEL_ID` (`nxs.components.permissionsPanel`). Register your own component
   under it and both Permissions tabs render yours, with `documentId` and `permissionsChanged`, a

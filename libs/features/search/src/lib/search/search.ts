@@ -9,7 +9,6 @@ import {
   tap,
   map,
   combineLatest,
-  finalize,
   Subject,
   debounceTime,
   distinctUntilChanged,
@@ -51,6 +50,7 @@ import {
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsColumnPickerComponent,
+  NxsFavoriteToggleComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
   provideNxsThumbnailCache,
@@ -179,6 +179,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   standalone: true,
   imports: [
     NxsColumnPickerComponent,
+    NxsFavoriteToggleComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
@@ -282,7 +283,6 @@ export class SearchComponent {
   readonly sortColumn = signal<string | null>(null);
   readonly sortDirection = signal<SortDirection>(null);
   readonly favoriteIds = signal<Set<string>>(new Set());
-  readonly favoritePendingIds = signal<Set<string>>(new Set());
   readonly selectedSavedSearchId = this.searchAggregationService.selectedSavedSearchId;
   readonly selectedSavedSearchTitle = this.searchAggregationService.selectedSavedSearchTitle;
 
@@ -636,48 +636,24 @@ export class SearchComponent {
     img.src = FALLBACK_ART_URL;
   }
 
-  toggleFavorite(id: string, event?: Event): void {
-    if (event) {
-      event.stopPropagation();
-    }
-    if (!id || this.favoritePendingIds().has(id)) return;
-
-    const isCurrentlyFavorite = this.favoriteIds().has(id);
-    this.favoritePendingIds.update((current) => new Set(current).add(id));
-
-    const op = isCurrentlyFavorite
-      ? this.documentDetailService.removeFromFavorites(id)
-      : this.documentDetailService.addToFavorites(id);
-
-    op.pipe(
-      finalize(() => {
-        this.favoritePendingIds.update((current) => {
-          const next = new Set(current);
-          next.delete(id);
-          return next;
-        });
-      }),
-      takeUntilDestroyed(this.destroyRef),
-    ).subscribe({
-      next: () => {
-        this.favoriteIds.update((current) => {
-          const next = new Set(current);
-          if (isCurrentlyFavorite) next.delete(id);
-          else next.add(id);
-          return next;
-        });
-        window.dispatchEvent(new Event('favorites-changed'));
-      },
-      error: (err) => {
-        this.toast.error(
-          this.getApiErrorMessage(
-            err,
-            this.translate.instant('search.message.failed-to-update-favorites'),
-          ),
-          { duration: 5000 },
-        );
-      },
+  /** A result's star confirmed a change: keep the page's view of it in step. */
+  onFavoriteChanged(id: string, favorite: boolean): void {
+    this.favoriteIds.update((current) => {
+      const next = new Set(current);
+      if (favorite) next.add(id);
+      else next.delete(id);
+      return next;
     });
+  }
+
+  onFavoriteFailed(error: unknown): void {
+    this.toast.error(
+      this.getApiErrorMessage(
+        error,
+        this.translate.instant('search.message.failed-to-update-favorites'),
+      ),
+      { duration: 5000 },
+    );
   }
 
   private getApiErrorMessage(err: unknown, fallback: string): string {
