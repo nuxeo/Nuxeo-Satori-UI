@@ -327,6 +327,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     './document-detail.scss',
     './document-detail-go-back-icon.scss',
     './document-detail-panel-close-focus.scss',
+    './document-detail-tab-focus.scss',
   ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {

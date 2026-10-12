@@ -1,0 +1,5 @@
+// NXSAT-488 — standalone stylesheet so document-detail.scss stays under the 36 kB cap.
+.detail-tabs ::ng-deep .mat-mdc-tab:focus {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: -2px;
+}
