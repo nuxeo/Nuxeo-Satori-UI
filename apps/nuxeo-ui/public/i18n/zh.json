@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "解除",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "文档已被其他用户锁定，请刷新您的页面。",
+      "lock-no-permission": "您没有权限锁定该文档。",
+      "locked-by": "已由 {{ owner }} 于 {{ date }} 锁定",
+      "locked-by-another-user": "您不能解锁此文档，因为它已被其他用户锁定。",
+      "unlock-no-permission": "您没有权限解锁该文档。"
+    },
     "ok": "确定",
     "page-number": "第 {{ page }} 页",
     "page-of": "第 {{ page }} 页，共 {{ total }} 页",

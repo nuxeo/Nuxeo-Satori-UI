@@ -1061,6 +1061,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Ontsla",
     "email-example": "naam@bedrijf.nl",
+    "lock": {
+      "already-locked": "Document is al vergrendeld door een andere gebruiker, vernieuw uw pagina.",
+      "lock-no-permission": "U hebt geen toestemming om dit document te vergrendelen.",
+      "locked-by": "Door {{ owner }} op {{ date }} vergrendeld",
+      "locked-by-another-user": "U kunt dit document niet ontgrendelen omdat het door een andere gebruiker is vergrendeld.",
+      "unlock-no-permission": "U hebt geen toestemming om dit document te ontgrendelen."
+    },
     "ok": "OK",
     "page-number": "Pagina {{ page }}",
     "page-of": "Pagina {{ page }} van {{ total }}",
