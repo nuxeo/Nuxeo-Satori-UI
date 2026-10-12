@@ -324,6 +324,8 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.permissions-panel.loading': 'Loading permissions',
   'satori-components.permissions-panel.permission-for': 'Permission for {{ principal }}',
   'satori-components.permissions-panel.remove-entry': 'Remove {{ permission }} for {{ principal }}',
+  'satori-components.toast.dismiss': 'Dismiss',
+  'satori-components.toast.retry': 'Retry',
   'search.filter.tag-placeholder': 'e.g. events, boston',
   'search.search-filters-drawer.search': 'Search...',
   'search.search-filters-drawer.search-for-authors': 'Search for authors...',

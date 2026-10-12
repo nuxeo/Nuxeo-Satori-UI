@@ -2077,6 +2077,10 @@
       "unverified": {
         "heading": "The changes were sent, but reading the permissions back failed, so the panel cannot confirm them. Reload to see what the server holds."
       }
+    },
+    "toast": {
+      "dismiss": "Dismiss",
+      "retry": "Retry"
     }
   },
   "search": {
