@@ -223,7 +223,145 @@ expectGreen(
   /1 component registration\(s\)/,
 );
 
+const component = (className, selector, implementsClause = '') =>
+  `@Component({ selector: '${selector}', standalone: true, templateUrl: './claims.html' })\n` +
+  `export class ${className}${implementsClause} {}\n`;
+const ANGULAR = "import { Component } from '@angular/core';\n";
+
+expectGreen(
+  "the registered class's own selector, not one declared above it",
+  library({
+    'src/lib/claims/claims.ts':
+      ANGULAR +
+      component('NxsLookalikeComponent', 'nxs-lookalike') +
+      component('AcmeClaimsComponent', 'acme-claims'),
+  }),
+  /1 component registration\(s\)/,
+);
+
+expectGreen(
+  'a component with no selector, which the outlet can still create',
+  library({
+    'src/lib/claims/claims.ts':
+      ANGULAR +
+      "@Component({ standalone: true, templateUrl: './claims.html' })\n" +
+      'export class AcmeClaimsComponent {}\n',
+  }),
+  /1 component registration\(s\)/,
+);
+
+expectGreen(
+  'an override implementing the platform contract under an alias',
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/claims.ts':
+      "import type { NxsTagInputs as PlatformTagInputs } from '@nuxeo-satori/platform/components';\n" +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements PlatformTagInputs'),
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+  }),
+);
+
+expectGreen(
+  'an override implementing the platform contract through a namespace import',
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/claims.ts':
+      "import type * as platform from '@nuxeo-satori/platform/components';\n" +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements platform.NxsTagInputs'),
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+  }),
+);
+
 // ---------------------------------------------------------------- negatives ----
+
+const specNaming = (body) =>
+  "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" + body;
+
+expectRed(
+  'a spec naming only a longer ID that begins with the registered one',
+  library({
+    'src/lib/extensions.spec.ts': specNaming(
+      "it('registers', () => expect(r(ExtensionComponentRegistry).has('acme.panel.claimsExtra')).toBe(true));\n",
+    ),
+  }),
+  /registers 'acme\.panel\.claims' \(`AcmeClaimsComponent`\), and no spec names it/,
+);
+
+expectRed(
+  'a spec naming only a longer class that begins with the registered one',
+  library({
+    'src/lib/extensions.spec.ts': specNaming(
+      'class AcmeClaimsComponentFake {}\n' +
+        "it('overrides', () => expect(r(ExtensionComponentRegistry).peek('acme.other.thing')).toBe(AcmeClaimsComponentFake));\n",
+    ),
+  }),
+  /and no spec names it/,
+);
+
+expectRed(
+  "a spec naming only a longer expression that ends with the registration's key",
+  library({
+    'src/lib/extensions.ts':
+      "export const IDS = { components: ['acme.panel.claims'] } as const;\n" +
+      extensions(
+        "[IDS.components[0]]: () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+      ),
+    'src/lib/extensions.spec.ts': specNaming(
+      "it('registers', () => expect(r(ExtensionComponentRegistry).has(OTHER_IDS.components[0])).toBe(true));\n",
+    ),
+  }),
+  /and no spec names it/,
+);
+
+expectRed(
+  'a registered class with no @Component',
+  library({ 'src/lib/claims/claims.ts': 'export class AcmeClaimsComponent {}\n' }),
+  /as `AcmeClaimsComponent`, which .*claims\.ts declares without `@Component`/,
+);
+
+expectRed(
+  'a registered class with no @Component, below a decorated one',
+  library({
+    'src/lib/claims/claims.ts':
+      ANGULAR +
+      component('AcmeOtherComponent', 'acme-other') +
+      'export class AcmeClaimsComponent {}\n',
+  }),
+  /declares without `@Component`/,
+);
+
+expectRed(
+  "a platform selector on the registered class, an owner's on one declared above it",
+  library({
+    'src/lib/claims/claims.ts':
+      ANGULAR +
+      component('AcmeHelperComponent', 'acme-helper') +
+      component('AcmeClaimsComponent', 'nxs-claims'),
+  }),
+  /declares selector `nxs-claims`\. Use your owner prefix, `acme-`/,
+);
+
+expectRed(
+  'an override that aliases the platform contract away and implements a local same-named one',
+  library({
+    'src/lib/extensions.ts': extensions(
+      "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
+    ),
+    'src/lib/claims/claims.ts':
+      "import type { NxsTagInputs as PlatformTagInputs } from '@nuxeo-satori/platform/components';\n" +
+      'interface NxsTagInputs {}\n' +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
+  }),
+  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+);
 
 expectRed(
   'a typed contributions constant in a file of its own, with a wrong path',

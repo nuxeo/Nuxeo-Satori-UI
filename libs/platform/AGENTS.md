@@ -377,12 +377,17 @@ not a registration, so give an object like that plain keys. It fails a registrat
 - **does not resolve** — an `import()` path that is not a file in your library, or a class name
   the file does not export. The registry swallows a failed load, so this is otherwise a blank
   slot with no error anywhere;
-- **no spec names** — by its ID, the key expression it is registered under, or its class;
-- **uses another prefix's selector** — yours is `<owner>-`; `nxs-`, `lib-`, `app-` and `sat-`
-  belong to the platform and collide on an upgrade;
+- **is not a component** — the class has no `@Component` of its own, so the outlet cannot create
+  it;
+- **no spec names** — by its ID as a string, the key expression it is registered under, or its
+  class, each as a whole: a spec that names only `acme.panel.claimsExtra` or
+  `AcmeClaimsComponentFake` does not name `acme.panel.claims` or `AcmeClaimsComponent`;
+- **uses another prefix's selector** — the selector in that class's own `@Component`, not another
+  in the same file. Yours is `<owner>-`; `nxs-`, `lib-`, `app-` and `sat-` belong to the platform
+  and collide on an upgrade. A component with no selector is allowed;
 - **overrides an `nxs.primitives.*` ID without implementing its contract** — the interface
-  imported from `@nuxeo-satori/platform/components`, not a same-named one of your own — or one that
-  does not exist.
+  imported from `@nuxeo-satori/platform/components`, under whatever name you import it, not a
+  same-named one of your own — or one that does not exist.
 
 Any other shape — a class declared in the same file, a default or namespace import, a class from
 another package — gets a warning that **none of these checks ran on it**, and the command still

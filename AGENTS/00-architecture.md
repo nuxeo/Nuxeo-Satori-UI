@@ -221,7 +221,11 @@ them from route data — a story tagged `autodocs` with `headingLevel`'s typed s
 `.mdx`, the barrel export, the `nxs.<slot>.<name>` registration in `provideNxsComponents()`, its
 row in `docs/extension-reference.md` §6a, and its section and "All components" row on the
 with-and-without-Satori page. Each goes through a marker it refuses to guess past, and the output
-passes every check below unedited. What it cannot do is yours: make the component do its job,
+passes the per-component checks below unedited — tests and the coverage floor, lint, typecheck,
+the review guardrails (story, Overview, entry point, labels), `beta:reference` and
+`docs:satori-comparison:check`. One gate is red on purpose until you act: a new export changes the
+public API, so `beta:api` fails until you run `npm run beta:api -- --update` and review the
+snapshot diff (step 4). What it cannot do is yours: make the component do its job,
 rewrite the Overview and the page section to say so, then capture and publish the page (step 10).
 It is internal (`x-satori-internal` in `generators.json`): `nxs-` is our prefix, so it is not
 shipped in the package; customers use `extension-component`. By hand, the steps are:

@@ -150,13 +150,14 @@ function placementFor(
  * customer contributes with `extension-component` under their own. It is marked internal in
  * `generators.json` and not shipped in the package.
  *
- * It emits everything the library's gates require of a component, so the output passes them as
+ * It emits everything the library's per-component gates require, so the output passes them as
  * generated: the component on theme tokens with only translated text inputs; a spec that asserts
  * registry state and renders the component the way its slot's host does; a story tagged
  * `autodocs` with a typed control for its numeric input; an Overview page; the barrel export; the
  * registration in `provideNxsComponents()`; the ID's row in the extension reference; and its
  * section and row on the with-and-without-Satori page. Each splice goes through a marker and
- * throws if the marker is gone, rather than guessing.
+ * throws if the marker is gone, rather than guessing. `beta:api` is the exception, on purpose: a
+ * new export is a public API change, red until its snapshot is updated and reviewed.
  *
  * It registers; it does not place. Putting the component on a screen is a manifest entry in the
  * slot (Layer 1), which the closing message spells out.

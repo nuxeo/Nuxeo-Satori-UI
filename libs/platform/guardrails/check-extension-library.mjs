@@ -324,14 +324,18 @@ if (!barrel) {
  *
  * - **Resolves.** `ExtensionComponentRegistry.resolve()` returns `null` for a loader that rejects,
  *   on purpose, so the outlet renders nothing and logs nothing. A wrong `import()` path or class
- *   name is a blank panel with no error anywhere; this is the only place it can be seen.
+ *   name is a blank panel with no error anywhere; this is the only place it can be seen. The class
+ *   must carry `@Component`: anything else resolves, then the outlet cannot create it.
  * - **Named by a spec.** Check 3 asks for one registry assertion in the library. A component no
- *   spec names — by its ID, its key expression or its class — is a registration nothing proves.
+ *   spec names — by its ID as a string, its key expression or its class, each whole, so
+ *   `'acme.panel.claimsExtra'` does not name `acme.panel.claims` — is a registration nothing proves.
  * - **Selector prefix.** `nxs-` is the platform's component library and `lib-`/`app-`/`sat-` its
- *   shell and design system; a customer selector under one of them collides on an upgrade.
+ *   shell and design system; a customer selector under one of them collides on an upgrade. Read
+ *   from that class's own `@Component`; a component with no selector has nothing to collide.
  * - **Override contract.** A host renders `nxs.primitives.tag` with the inputs `NxsTagInputs`
  *   names, and the outlet silently drops an input the component does not declare — so an override
- *   that does not `implements` the interface renders with the wrong inputs, and nothing fails.
+ *   that does not `implements` the interface renders with the wrong inputs, and nothing fails. The
+ *   name in `implements` must be the platform's interface under whatever name the file imports it.
  *
  * Registrations are read from each `components: { … }` object literal, in the two shapes the
  * contract uses: `'id': () => import('./x').then((m) => m.X)` and `'id': X` with `X` imported by
@@ -392,7 +396,7 @@ function declaration(file, name, depth = 0) {
     return { file, name };
   }
   for (const m of text.matchAll(/export\s*\{([^}]*)\}(?:\s*from\s*['"]([^'"]+)['"])?/g)) {
-    const binding = bindings(m[1]).find(({ local }) => local === name);
+    const binding = bindings(m[1]).find(({ local, typeOnly }) => !typeOnly && local === name);
     if (!binding) continue;
     if (!m[2]) {
       const local = new RegExp(String.raw`\bclass\s+${binding.imported}\b`).test(text);
@@ -409,16 +413,74 @@ function declaration(file, name, depth = 0) {
   return null;
 }
 
-/** `A, B as C, type D` → `[{ imported: 'A', local: 'A' }, { imported: 'B', local: 'C' }]`. */
+/** `A, B as C, type D` → `{ imported, local, typeOnly }` per name: `B` is imported, `C` local. */
 function bindings(clause) {
   return clause
     .split(',')
     .map((part) => part.trim())
-    .filter((part) => part && !/^type\s/.test(part))
+    .filter(Boolean)
     .map((part) => {
-      const [imported, local = imported] = part.split(/\s+as\s+/).map((s) => s.trim());
-      return { imported, local };
+      const typeOnly = /^type\s/.test(part);
+      const [imported, local = imported] = part
+        .replace(/^type\s+/, '')
+        .split(/\s+as\s+/)
+        .map((s) => s.trim());
+      return { imported, local, typeOnly };
     });
+}
+
+const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** `token` in `text` as a whole name or expression — not `AcmeClaimsComponentFake` for `AcmeClaimsComponent`. */
+const namesToken = (text, token) =>
+  new RegExp(String.raw`(?<![\w$.])${escapeRegExp(token)}(?![\w$])`).test(text);
+
+/** `id` as a whole string literal — not `'acme.panel.claimsExtra'` for `acme.panel.claims`. */
+const namesString = (text, id) =>
+  new RegExp(String.raw`(['"\x60])${escapeRegExp(id)}\1`).test(text);
+
+/**
+ * The argument text of the `@Component(…)` decorating class `name` in `text`, or `null`.
+ *
+ * The decorator on that class, not the first `selector:` anywhere in the file: a file can declare
+ * several classes, and a class with no `@Component` is not a component at all. Only whitespace and
+ * other argument-less or flat decorators may sit between the two.
+ */
+function componentDecorator(text, name) {
+  const declared = new RegExp(String.raw`(?:export\s+)?class\s+${name}\b`).exec(text);
+  if (!declared) return null;
+  const before = text.slice(0, declared.index);
+  let args = null;
+  for (const m of before.matchAll(/@Component\s*\(/g)) {
+    let depth = 1;
+    let at = m.index + m[0].length;
+    while (at < before.length && depth > 0) {
+      if (before[at] === '(') depth += 1;
+      else if (before[at] === ')') depth -= 1;
+      at += 1;
+    }
+    if (depth === 0 && /^\s*(?:@[\w.]+(?:\([^()]*\))?\s*)*$/.test(before.slice(at))) {
+      args = before.slice(m.index + m[0].length, at - 1);
+    }
+  }
+  return args;
+}
+
+/** The local names under which `text` imports `contract` from the platform's components entry point. */
+function contractBindings(text, contract) {
+  const from = String.raw`\s*from\s*['"]@nuxeo-satori/platform/components['"]`;
+  const locals = [];
+  for (const m of text.matchAll(
+    new RegExp(String.raw`import\s*(?:type\s*)?\{([^}]*)\}${from}`, 'g'),
+  )) {
+    for (const b of bindings(m[1])) if (b.imported === contract) locals.push(b.local);
+  }
+  for (const m of text.matchAll(
+    new RegExp(String.raw`import\s*(?:type\s*)?\*\s*as\s+(\w+)${from}`, 'g'),
+  )) {
+    locals.push(`${m[1]}.${contract}`);
+  }
+  return locals;
 }
 
 const KEY = String.raw`(\[(?:[^\[\]]|\[[^\]]*\])+\]|['"\x60][^'"\x60]+['"\x60])`;
@@ -449,7 +511,9 @@ for (const [file, text] of code) {
       const imported = new RegExp(
         String.raw`import\s*(?:type\s*)?\{([^}]*\b${m[2]}\b[^}]*)\}\s*from\s*['"]([^'"]+)['"]`,
       ).exec(text);
-      const binding = imported && bindings(imported[1]).find(({ local }) => local === m[2]);
+      const binding =
+        imported &&
+        bindings(imported[1]).find(({ local, typeOnly }) => !typeOnly && local === m[2]);
       // Only a named import is read. A default or namespace import, a class declared in this file
       // or one from another package stays unseen, so the warning below names it.
       if (!binding) continue;
@@ -498,17 +562,29 @@ for (const { file, key, className, exported, target, from } of contributions) {
     continue;
   }
   const componentSource = sources.get(declared.file);
+  const decorator = componentDecorator(componentSource, declared.name);
+  if (decorator === null) {
+    fail(
+      `${where} as \`${declared.name}\`, which ${rel(declared.file)} declares without ` +
+        '`@Component`. It resolves, then the outlet cannot create it, so the slot renders nothing.',
+    );
+    continue;
+  }
   const keyText = key.replace(/^['"\x60]|['"\x60]$/g, '');
-  const named = [keyText, key.replace(/^\[|\]$/g, ''), className, declared.name].some(
-    (token) => token && specText.includes(token),
-  );
+  const quoted = keyText !== key;
+  const named =
+    (quoted
+      ? namesString(specText, keyText)
+      : namesToken(specText, key.replace(/^\[\s*|\s*\]$/g, ''))) ||
+    [className, declared.name].some((name) => namesToken(specText, name));
   if (!named) {
     fail(
       `${where} (\`${className}\`), and no spec names it — not its ID, its key, nor its class. ` +
         'Render it, or assert `ExtensionComponentRegistry.has(...)` for it.',
     );
   }
-  const selector = /selector\s*:\s*['"]([^'"]+)['"]/.exec(componentSource)?.[1];
+  // A component with no selector is still renderable by the outlet; only a declared one can collide.
+  const selector = /\bselector\s*:\s*['"\x60]([^'"\x60]+)['"\x60]/.exec(decorator)?.[1];
   const reserved = ['nxs', 'lib', 'app', 'sat'].some(
     (prefix) => selector?.startsWith(`${prefix}-`) || selector?.startsWith(`[${prefix}`),
   );
@@ -527,15 +603,18 @@ for (const { file, key, className, exported, target, from } of contributions) {
     /^nxs\.primitives\.(.+)$/.exec(keyText)?.[1] ??
     /^\[\s*NXS_PRIMITIVE_IDS\.(\w+)\s*\]$/.exec(key)?.[1];
   const contract = primitive && PRIMITIVE_CONTRACTS[primitive];
+  // The name the class implements must be the one bound to the platform's interface: aliased or
+  // not, and not a same-named one declared locally or taken from elsewhere.
+  const implemented = (
+    new RegExp(String.raw`class\s+${declared.name}\b[^{]*?\bimplements\b([^{]*)\{`).exec(
+      componentSource,
+    )?.[1] ?? ''
+  )
+    .split(',')
+    .map((name) => name.replace(/<[\s\S]*$/, '').trim());
   const implementsContract =
     contract &&
-    new RegExp(String.raw`class\s+${declared.name}\b[^{]*\bimplements\b[^{]*\b${contract}\b`).test(
-      componentSource,
-    ) &&
-    // The platform's interface, not a same-named one declared locally or taken from elsewhere.
-    new RegExp(
-      String.raw`import\s*(?:type\s*)?\{[^}]*\b${contract}\b[^}]*\}\s*from\s*['"]@nuxeo-satori/platform/components['"]`,
-    ).test(componentSource);
+    contractBindings(componentSource, contract).some((local) => implemented.includes(local));
   if (primitive && !contract) {
     fail(`${where}, but the platform has no \`nxs.primitives.${primitive}\` to override.`);
   } else if (contract && !implementsContract) {
