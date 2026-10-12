@@ -18,6 +18,17 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     return rule!;
   }
 
+  /** Comment block immediately above the `:focus` rule (ticket / IBM traceability). */
+  function formatDownloadBtnFocusRuleTraceComment(): string {
+    const selector = '.format-download-btn.mat-mdc-icon-button:focus';
+    const selectorIndex = scss.indexOf(selector);
+    expect(selectorIndex).toBeGreaterThan(-1);
+    const prefix = scss.slice(0, selectorIndex).replace(/[ \t\r\n]+$/, '');
+    const comment = prefix.match(/(?:(?:\/\/[^\n]*(?:\r?\n|$))+|\/\*[\s\S]*?\*\/\s*)+$/)?.[0];
+    expect(comment).toBeTruthy();
+    return comment!;
+  }
+
   it('declares a light-strip focus token and routes the ring through it', () => {
     expect(scss).toMatch(/--document-viewer-focus-on-light-surface:\s*#[0-9a-f]{6}/i);
     const focusRule = formatDownloadBtnFocusRule();
@@ -34,8 +45,10 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
     const focusRule = formatDownloadBtnFocusRule();
     expect(focusRule).toMatch(/outline:\s*2px\s+solid/);
     expect(focusRule).toMatch(/outline-offset:\s*2px/);
-    expect(scss).toMatch(/NXSAT-505/);
-    expect(scss).toMatch(/NXSAT-527/);
-    expect(scss).toMatch(/2294099067/);
+
+    const traceComment = formatDownloadBtnFocusRuleTraceComment();
+    expect(traceComment).toMatch(/NXSAT-505/);
+    expect(traceComment).toMatch(/NXSAT-527/);
+    expect(traceComment).toMatch(/2294099067/);
   });
 });
