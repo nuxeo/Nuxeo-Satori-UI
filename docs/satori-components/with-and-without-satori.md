@@ -194,7 +194,7 @@ The same icon, heading, message and projected action in both; the theme sets the
 
 ![Spinner: without Satori on the left, with Satori on the right](spinner-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same Material progress spinner in both, in the theme's primary colour.
+The same Material progress spinner in both, in the theme's primary colour. The capture stops its animation, so it shows as a still arc.
 
 ### Column picker
 

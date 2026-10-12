@@ -270,6 +270,7 @@ async function open(page, url, selector) {
   // `sat-breadcrumbs` measures through a ResizeObserver debounced by 100 ms.
   await page.waitForTimeout(800);
   await page.mouse.move(1, 1);
+  await freeze(page);
   return { errors, iconFont };
 }
 
@@ -383,6 +384,20 @@ function isolate(page, selector) {
   }, selector);
 }
 
+/**
+ * Animations are stopped for every screenshot — an endless one at its first frame, a finite one at
+ * its last — so the same sources give the same bytes, and `publish --verify` can compare them.
+ * Playwright's `animations: 'disabled'` does not hold Material's indeterminate spinner still, so
+ * anything with `role="progressbar"` loses its animation outright, as soon as the story loads:
+ * its rotating parts would otherwise give a different crop box each time it is measured.
+ */
+async function freeze(page) {
+  await page.addStyleTag({
+    content:
+      '[role="progressbar"], [role="progressbar"] * { animation: none !important; transition: none !important; }',
+  });
+}
+
 async function crop(page, box, file) {
   const pad = 16;
   const vp = page.viewportSize();
@@ -394,7 +409,7 @@ async function crop(page, box, file) {
     width: Math.min(vp.width - x, Math.ceil(box.right - box.x + pad * 2)),
     height: Math.min(vp.height - y, Math.ceil(box.bottom - box.y + pad * 2)),
   };
-  await page.screenshot({ path: file, clip });
+  await page.screenshot({ path: file, clip, animations: 'disabled' });
   return clip;
 }
 
@@ -617,7 +632,7 @@ try {
     try {
       const { errors } = await open(page, url, host);
       const seen = await inspect(page, host);
-      await page.screenshot({ path: join(OUT, FULL_IMAGES[side]) });
+      await page.screenshot({ path: join(OUT, FULL_IMAGES[side]), animations: 'disabled' });
       const close = await browser.newContext({
         viewport: { width: 1440, height: 900 },
         deviceScaleFactor: 2,
