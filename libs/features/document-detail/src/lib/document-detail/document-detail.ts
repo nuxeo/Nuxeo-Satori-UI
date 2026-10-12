@@ -529,6 +529,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** A storyboard load is already running for the current document. */
   private storyboardInFlight = false;
   private docUid = '';
+  /** Token of the newest `loadDocument` read; the page is reused across `:uid` changes. */
+  private documentLoadGeneration = 0;
   private metadataRefreshAttempt = 0;
   private blobLoadGeneration = 0;
   /** Set when navigating here immediately after create/import with a main blob. */
@@ -1800,6 +1802,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadDocument(uid: string): void {
+    const generation = ++this.documentLoadGeneration;
+    const isCurrent = (): boolean =>
+      generation === this.documentLoadGeneration && uid === this.docUid;
     this.loading.set(true);
     this.error.set(null);
 
@@ -1808,6 +1813,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (doc) => {
+          if (!isCurrent()) return;
           if (isCollectionDocument(doc)) {
             void this.router.navigate(['/collections', doc.uid], { replaceUrl: true });
             return;
@@ -1844,6 +1850,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.maybeBackfillContentLakeMarker(doc);
         },
         error: () => {
+          if (!isCurrent()) return;
           this.error.set(this.translate.instant('document-detail.message.failed-to-load-document'));
           this.loading.set(false);
         },
