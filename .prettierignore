@@ -14,3 +14,11 @@
 # It is generated output that says "Do not edit by hand" in its own header, so the byte
 # comparison has to be against the generator, not against prettier's opinion of it.
 /docs/api/platform.api.md
+
+# Storybook's MDX pages. Prettier parses MDX 1, where a blank line ends a JSX block; Storybook 9
+# compiles MDX 3, where it does not. So a blank line inside a `<Source code={`…`} />` sample
+# ends the block for Prettier, which then re-flows the rest of the sample as Markdown and strips
+# its indentation — it did to ten samples, three on Getting started. `{/* prettier-ignore */}`
+# covers only the part before the blank line, and Prettier's ignore ranges need HTML comments,
+# which MDX 3 rejects.
+*.mdx

@@ -52,13 +52,15 @@ the label already translated or, for a person's name, as it is.
 `NXS_PRIMITIVE_IDS.avatar`. Render the ID where you want the avatar to be replaceable, and pass the
 same inputs:
 
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="avatarId"
+  [componentInputs]="{ initials: 'NK', color: 'teal', label: 'Narasimha Koppula' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet
-  [componentId]="avatarId"
-  [componentInputs]="{ initials: 'NK', color: 'teal', label: 'Narasimha Koppula' }"
-/>`}
+  code={byRegisteredIdHtml}
 />
 
 ## Examples

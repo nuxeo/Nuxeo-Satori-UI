@@ -65,13 +65,15 @@ The Nuxeo Satori application registers the panel as `nxs.components.permissionsP
 the browse page. Register your own component under the ID to replace the panel in both places. It
 receives the same inputs:
 
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="permissionsPanelId"
+  [componentInputs]="{ documentId: document.uid, permissionsChanged: reloadShares }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet
-  [componentId]="permissionsPanelId"
-  [componentInputs]="{ documentId: document.uid, permissionsChanged: reloadShares }"
-/>`}
+  code={byRegisteredIdHtml}
 />
 
 ## Where its data comes from

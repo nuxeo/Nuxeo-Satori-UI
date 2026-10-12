@@ -38,28 +38,32 @@ its content.
   code={`import { NxsThumbnailComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-<Source
-  language="html"
-  dark
-  code={`<nxs-thumbnail
+export const usageHtml = `<nxs-thumbnail
   style="width: 160px; height: 120px; object-fit: cover; border-radius: 8px"
   [documentId]="document.uid"
 >
   <nxs-doc-type-icon [type]="document.type" />
-</nxs-thumbnail>`}
+</nxs-thumbnail>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 Only `documentId` is required; `alt` defaults to `''`. Size the thumbnail with a class or style on
 the host — the image fills it and takes the host's `object-fit` and `border-radius`. Used directly,
 it needs no providers. A page listing many documents should also list `provideNxsThumbnailCache()`:
 
+export const usageTs = `import { provideNxsThumbnailCache } from '@nuxeo-satori/platform/components';
+
+@Component({ providers: [provideNxsThumbnailCache()] })
+export class ResultsListComponent {}`;
+
 <Source
   language="typescript"
   dark
-  code={`import { provideNxsThumbnailCache } from '@nuxeo-satori/platform/components';
-
-@Component({ providers: [provideNxsThumbnailCache()] })
-export class ResultsListComponent {}`}
+  code={usageTs}
 />
 
 ## Where its data comes from

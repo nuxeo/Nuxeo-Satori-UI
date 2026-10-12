@@ -36,14 +36,16 @@ Select the button to open the panel. The **Open** story in the sidebar shows it 
   code={`import { NxsRichTooltipComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-<Source
-  language="html"
-  dark
-  code={`<nxs-rich-tooltip
+export const usageHtml = `<nxs-rich-tooltip
   [heading]="'acme.versioning.title' | translate"
   [content]="'acme.versioning.help' | translate"
   [triggerLabel]="'acme.versioning.about' | translate"
-/>`}
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 `heading`, `content` and `triggerLabel` are required, already translated. Used directly, the rich
@@ -54,13 +56,15 @@ tooltip needs no providers.
 `provideNxsComponents()` registers the rich tooltip as `nxs.primitives.richTooltip`, exported as
 `NXS_PRIMITIVE_IDS.richTooltip`:
 
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="tooltipId"
+  [componentInputs]="{ heading: 'Versioning', content: 'A new version is created each time you check in.', triggerLabel: 'About versioning' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet
-  [componentId]="tooltipId"
-  [componentInputs]="{ heading: 'Versioning', content: 'A new version is created each time you check in.', triggerLabel: 'About versioning' }"
-/>`}
+  code={byRegisteredIdHtml}
 />
 
 ## Examples

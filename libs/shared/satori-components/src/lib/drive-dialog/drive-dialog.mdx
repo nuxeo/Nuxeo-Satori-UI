@@ -29,20 +29,25 @@ The preview shows the dialog inline, as it looks once open. The code shows how a
 
 Open it with Angular Material's `MatDialog`, passing the folder's path as the dialog's data:
 
-<Source
-  language="typescript"
-  dark
-  code={`import { inject } from '@angular/core';
+export const usageTs = `import { inject } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
-import { NxsDriveDialogComponent, type NxsDriveDialogData } from '@nuxeo-satori/platform/components';
+import {
+  NxsDriveDialogComponent,
+  type NxsDriveDialogData,
+} from '@nuxeo-satori/platform/components';
 
 private readonly dialog = inject(MatDialog);
 
 protected openInDrive(folderPath: string): void {
-this.dialog.open<NxsDriveDialogComponent, NxsDriveDialogData>(NxsDriveDialogComponent, {
-data: { folderPath },
-});
-}`}
+  this.dialog.open<NxsDriveDialogComponent, NxsDriveDialogData>(NxsDriveDialogComponent, {
+    data: { folderPath },
+  });
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
 />
 
 It has no inputs or outputs: it reads `folderPath` from the dialog's data, and closing the dialog is

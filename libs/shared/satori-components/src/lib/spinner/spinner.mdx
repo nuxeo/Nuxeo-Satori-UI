@@ -30,12 +30,14 @@ to notice and you cannot say how far it has got.
   code={`import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';`}
 />
 
+export const usageHtml = `@if (loading()) {
+  <nxs-spinner [label]="'acme.documents.loading' | translate" />
+}`;
+
 <Source
   language="html"
   dark
-  code={`@if (loading()) {
-  <nxs-spinner [label]="'acme.documents.loading' | translate" />
-}`}
+  code={usageHtml}
 />
 
 Both inputs are optional. Used directly, the spinner needs no providers.

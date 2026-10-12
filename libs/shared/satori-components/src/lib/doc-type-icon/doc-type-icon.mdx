@@ -34,11 +34,13 @@ same icon for the same type.
   code={`import { NxsDocTypeIconComponent } from '@nuxeo-satori/platform/components';`}
 />
 
+export const usageHtml = `<nxs-doc-type-icon [type]="document.type" />
+<span>{{ document.title }}</span>`;
+
 <Source
   language="html"
   dark
-  code={`<nxs-doc-type-icon [type]="document.type" />
-<span>{{ document.title }}</span>`}
+  code={usageHtml}
 />
 
 Only `type` is required: the document's type as Nuxeo names it. Used directly, it needs no
