@@ -12,8 +12,9 @@ describe('DocumentDetailComponent — detail tab focus ring (NXSAT-488)', () => 
     const scss = readFileSync(join(import.meta.dirname, 'document-detail-tab-focus.scss'), 'utf8');
     expect(scss).toMatch(/\.mat-mdc-tab:focus\s*\{/);
     expect(scss).not.toMatch(/\.mat-mdc-tab:focus,\s/);
-    expect(scss).toMatch(
-      /\.mat-mdc-tab:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--agentic-document-detail-panel-toggle-focus-outline\)/,
+    const focusBlock = scss.match(/\.mat-mdc-tab:focus\s*\{([^}]*)\}/)?.[1] ?? '';
+    expect(focusBlock).toMatch(
+      /outline:\s*2px\s+solid\s+var\(--agentic-document-detail-panel-toggle-focus-outline\)/,
     );
   });
 
