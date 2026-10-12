@@ -331,7 +331,14 @@ export function parseDoc(md) {
         h2.push(h2Title);
         current = null;
       } else if (h2Title === COMPONENTS_HEADING) {
-        current = { heading: heading[2], lineNo, fields: new Map(), images: [], tables: 0 };
+        current = {
+          heading: heading[2],
+          lineNo,
+          fields: new Map(),
+          repeated: [],
+          images: [],
+          tables: 0,
+        };
         sections.push(current);
       } else {
         current = null;
@@ -343,8 +350,11 @@ export function parseDoc(md) {
       if (isSeparator(row)) return;
       if (current) {
         if (row[0] === 'Field' && row[1] === 'Value') current.tables += 1;
-        else if (current.tables === 1)
-          current.fields.set(row[0].replace(/\*\*/g, ''), row[1] ?? '');
+        else if (current.tables === 1) {
+          const field = row[0].replace(/\*\*/g, '');
+          if (current.fields.has(field)) current.repeated.push(field);
+          current.fields.set(field, row[1] ?? '');
+        }
       } else if (h2Title === SUMMARY_HEADING) {
         if (startsTable) summaryTables += 1;
         if (summaryTables === 1) summaryRows.push({ lineNo, cells: row });
@@ -463,6 +473,7 @@ export function checkComparison(inputs) {
     for (const field of REQUIRED_FIELDS) {
       if (!s.fields.has(field)) fail(`${where} has no "${field}" row`);
     }
+    for (const field of new Set(s.repeated)) fail(`${where} has more than one "${field}" row`);
     for (const field of s.fields.keys()) {
       if (!REQUIRED_FIELDS.includes(field) && !OPTIONAL_FIELDS.includes(field)) {
         fail(`${where} has an unknown row "${field}"`);
@@ -627,11 +638,21 @@ export function checkComparison(inputs) {
     }
   }
 
-  const byHeading = new Map(result.map((r) => [r.heading, r]));
+  const byHeading = new Map();
+  for (const s of sections) {
+    if (byHeading.has(s.heading)) {
+      fail(`${DOC}:${s.lineNo} "### ${s.heading}" is a second section with that heading`);
+    }
+    byHeading.set(s.heading, result.find((r) => r.heading === s.heading) ?? null);
+  }
   const rowNames = new Set();
   for (const { lineNo, cells: row } of summaryRows) {
     const [name, idCell = '', differs = ''] = row;
     const where = `${DOC}:${lineNo} "${SUMMARY_HEADING}" row "${name}"`;
+    if (rowNames.has(name)) {
+      fail(`${where} is a second row with that name`);
+      continue;
+    }
     rowNames.add(name);
     const section = byHeading.get(name);
     if (!section) {

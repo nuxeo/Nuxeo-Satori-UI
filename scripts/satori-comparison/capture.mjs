@@ -29,6 +29,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import {
   createReadStream,
   existsSync,
@@ -723,8 +724,16 @@ try {
     storybooks: REUSE ? `${REUSE} (reused)` : KEEP ? dir : '(temporary, removed)',
     served: base,
     inputs,
-    images: [...components.map((c) => c.image), ...Object.values(FULL_IMAGES)].filter((name) =>
-      existsSync(join(OUT, name)),
+    // Each image's sha256, so publish can tell a file replaced after this run from what it wrote.
+    images: Object.fromEntries(
+      [...components.map((c) => c.image), ...Object.values(FULL_IMAGES)]
+        .filter((name) => existsSync(join(OUT, name)))
+        .map((name) => [
+          name,
+          createHash('sha256')
+            .update(readFileSync(join(OUT, name)))
+            .digest('hex'),
+        ]),
     ),
     components: results,
     checks,

@@ -21,7 +21,8 @@
  * ~/.jira_email and ~/.jira_token. Never printed.
  *
  * Refuses, too, a capture that is not of the repository as it is: `manifest.json` must record a
- * clean run whose input digest (`sources.mjs`) matches the current sources and sections.
+ * clean run whose input digest (`sources.mjs`) matches the current sources and sections, and the
+ * sha256 of every image as it is on disk now.
  *
  * The read-back — after publishing, or alone with `--verify` — fails unless the version went up by
  * one (publishing only), the images the page references are exactly this capture's attachments —
@@ -143,8 +144,16 @@ if (manifest.inputs?.digest !== captureInputs(ROOT, components).digest) {
       'catalogue, Satori version or the page sections changed since. Run the capture again.',
   );
 }
-const uncaptured = referenced.filter((name) => !manifest.images?.includes(name));
-if (uncaptured.length) refuse(`not written by that capture: ${uncaptured.join(', ')}`);
+const digestOf = (name) =>
+  createHash('sha256')
+    .update(readFileSync(join(IMAGES, name)))
+    .digest('hex');
+const uncaptured = referenced.filter((name) => manifest.images?.[name] !== digestOf(name));
+if (uncaptured.length) {
+  refuse(
+    `not as that capture wrote them (missing from it, or replaced since): ${uncaptured.join(', ')}`,
+  );
+}
 
 const local = new Map(referenced.map((name) => [name, pngInfo(join(IMAGES, name))]));
 const notPng = referenced.filter((name) => !local.get(name).png);

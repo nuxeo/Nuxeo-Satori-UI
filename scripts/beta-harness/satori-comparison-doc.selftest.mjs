@@ -4,10 +4,12 @@
  *
  * Each control breaks the page or the barrel **in memory** — nothing tracked is touched — and
  * asserts the check reports that specific breakage, not merely that it fails: a control that
- * fails for an unrelated reason would read as a pass. Two positive controls hold the other
- * direction: the repository as it stands passes, and so does a copy of it carrying what the
- * `satori-component` generator is expected to emit for a new component (`generatedComponent`
- * below), built under `os.tmpdir()`.
+ * fails for an unrelated reason would read as a pass. Five positive controls hold the other
+ * direction: the repository as it stands passes; so do a six-digit hex colour, which is not a
+ * pull-request number, and a ticket key inside an HTML comment, which is not on the page; and a
+ * copy of the repository carrying what the `satori-component` generator is expected to emit for a
+ * new component (`generatedComponent` below), built under `os.tmpdir()`, passes — after the same
+ * copy without its section is shown to fail.
  *
  * Usage:  node scripts/beta-harness/satori-comparison-doc.selftest.mjs
  */
@@ -250,6 +252,44 @@ const NEGATIVE = [
       ),
     },
     /"## All components" must hold exactly one table \(found 2\)/,
+  ],
+  [
+    'a field row given twice, the second contradicting the first',
+    {
+      doc: swap(
+        doc,
+        sectionOf(doc, 'Icon'),
+        sectionOf(doc, 'Icon').replace(
+          /(\| Registered ID[^\n]*\n)/,
+          '$1| Registered ID | `nxs.components.permissionsPanel` |\n',
+        ),
+      ),
+    },
+    /"### Icon" has more than one "Registered ID" row/,
+  ],
+  [
+    'two sections under one heading',
+    {
+      doc: swap(
+        doc,
+        sectionOf(doc, 'Spinner'),
+        sectionOf(doc, 'Spinner').replace('### Spinner', '### Icon'),
+      ),
+    },
+    /"### Icon" is a second section with that heading/,
+  ],
+  [
+    'a summary row given twice',
+    {
+      doc: swap(
+        doc,
+        doc.split('\n').find((l) => l.startsWith('| Spinner ')),
+        `${doc.split('\n').find((l) => l.startsWith('| Spinner '))}\n${doc
+          .split('\n')
+          .find((l) => l.startsWith('| Spinner '))}`,
+      ),
+    },
+    /row "Spinner" is a second row with that name/,
   ],
   [
     'a misspelt field row',
