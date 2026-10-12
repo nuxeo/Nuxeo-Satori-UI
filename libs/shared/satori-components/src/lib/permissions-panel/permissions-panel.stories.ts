@@ -129,6 +129,25 @@ function inMemoryDocuments(
   // `timer`, not `delay`: `delay` holds back values but passes an error straight through.
   const answer = <T>(source: () => Observable<T>): Observable<T> =>
     fixture.delay ? timer(fixture.delay).pipe(switchMap(source)) : defer(source);
+  /** The document as the server now holds it, with the enrichers the panel reads. */
+  const document = (uid: string): NuxeoDocument => {
+    const blocked = local.some((entry) => entry.id === BLOCK.id);
+    const acls: NuxeoAcl[] = [{ name: 'local', aces: local }];
+    if (!blocked) acls.push({ name: 'inherited', aces: [...fixture.inherited] });
+    return {
+      uid,
+      title: 'Claims 2026',
+      type: 'Folder',
+      path: '/default-domain/workspaces/claims-2026',
+      lastModified: '2026-10-01T00:00:00.000Z',
+      properties: {},
+      contextParameters: {
+        acls,
+        permissions: [...fixture.permissions],
+        userVisiblePermissions: ['Read', 'ReadWrite', 'Everything'],
+      },
+    };
+  };
   const read = (uid: string): Observable<NuxeoDocument> =>
     answer(() => {
       if (fixture.readsHang) return NEVER;
@@ -136,29 +155,13 @@ function inMemoryDocuments(
       if (fixture.readFails && reads <= (fixture.failedReads ?? Infinity)) {
         return throwError(() => ({ status: fixture.readFails }));
       }
-      const blocked = local.some((entry) => entry.id === BLOCK.id);
-      const acls: NuxeoAcl[] = [{ name: 'local', aces: local }];
-      if (!blocked) acls.push({ name: 'inherited', aces: [...fixture.inherited] });
-      const doc: NuxeoDocument = {
-        uid,
-        title: 'Claims 2026',
-        type: 'Folder',
-        path: '/default-domain/workspaces/claims-2026',
-        lastModified: '2026-10-01T00:00:00.000Z',
-        properties: {},
-        contextParameters: {
-          acls,
-          permissions: [...fixture.permissions],
-          userVisiblePermissions: ['Read', 'ReadWrite', 'Everything'],
-        },
-      };
-      return of(doc);
+      return of(document(uid));
     });
   const written = (uid: string, change: () => void): Observable<NuxeoDocument> =>
     answer(() => {
       if (fixture.writeFails) return throwError(() => ({ status: fixture.writeFails }));
       change();
-      return read(uid);
+      return of(document(uid));
     });
   const entry = (params: {
     username?: string;
