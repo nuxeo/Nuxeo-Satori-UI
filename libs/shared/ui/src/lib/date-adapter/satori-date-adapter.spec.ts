@@ -1,6 +1,11 @@
 import { Component, LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { DateAdapter, MAT_DATE_FORMATS, MatDateFormats, MatNativeDateModule } from '@angular/material/core';
+import {
+  DateAdapter,
+  MAT_DATE_FORMATS,
+  MatDateFormats,
+  MatNativeDateModule,
+} from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -27,7 +32,14 @@ const PARSE_CASES = [
   { locale: 'fr', input: '03/04/2026', year: 2026, month: 3, date: 3, why: 'French is day-first' },
   { locale: 'nl', input: '03-04-2026', year: 2026, month: 3, date: 3, why: 'Dutch uses hyphens' },
   { locale: 'de', input: '03.04.2026', year: 2026, month: 3, date: 3, why: 'German uses dots' },
-  { locale: 'ja', input: '2026/04/03', year: 2026, month: 3, date: 3, why: 'Japanese is year-first' },
+  {
+    locale: 'ja',
+    input: '2026/04/03',
+    year: 2026,
+    month: 3,
+    date: 3,
+    why: 'Japanese is year-first',
+  },
 ];
 
 /**
@@ -84,13 +96,16 @@ describe('provideSatoriDateAdapter', () => {
   // regression returning `null` for non-empty unparseable text would leave the field looking
   // fine while the user's input vanished — and a test that tolerated `null` would stay green
   // through it. That is AC-3's whole point, and permitting `null` here was caught in review.
-  it.each(REJECTED_CASES)('refuses "$input" in $locale rather than guessing ($why)', ({ locale, input }) => {
-    const parsed = parseAsInput(locale, input);
+  it.each(REJECTED_CASES)(
+    'refuses "$input" in $locale rather than guessing ($why)',
+    ({ locale, input }) => {
+      const parsed = parseAsInput(locale, input);
 
-    expect(parsed).not.toBeNull();
-    expect(parsed).toBeInstanceOf(Date);
-    expect(Number.isNaN((parsed as Date).getTime())).toBe(true);
-  });
+      expect(parsed).not.toBeNull();
+      expect(parsed).toBeInstanceOf(Date);
+      expect(Number.isNaN((parsed as Date).getTime())).toBe(true);
+    },
+  );
 
   it('supplies MAT_DATE_FORMATS, the token the application never set', () => {
     const { formats } = adapterFor('fr');
@@ -146,11 +161,25 @@ describe('provideSatoriDateAdapter', () => {
     { locale: 'fr-CH', input: '03.04.2026', month: 3, date: 3 },
     { locale: 'nl-BE', input: '03.04.2026', month: 3, date: 3 },
     { locale: 'en-US', input: '03/04/2026', month: 2, date: 4 },
-  ])('reads "$input" in $locale with that region\'s own order', ({ locale, input, month, date }) => {
-    const parsed = parseAsInput(locale, input);
+  ])(
+    'reads "$input" in $locale with that region\'s own order',
+    ({ locale, input, month, date }) => {
+      const parsed = parseAsInput(locale, input);
 
-    expect(Number.isNaN(parsed?.getTime())).toBe(false);
-    expect([parsed?.getMonth(), parsed?.getDate()]).toEqual([month, date]);
+      expect(Number.isNaN(parsed?.getTime())).toBe(false);
+      expect([parsed?.getMonth(), parsed?.getDate()]).toEqual([month, date]);
+    },
+  );
+
+  it('uses Angular’s default en-US locale without a fallback warning', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    try {
+      expect(dateFnsLocaleFor('en-US')).toBe(enUS);
+      expect(dateFnsLocaleFor('EN_us')).toBe(enUS);
+      expect(warn).not.toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('resolves the exact regional tag rather than the bare language', () => {

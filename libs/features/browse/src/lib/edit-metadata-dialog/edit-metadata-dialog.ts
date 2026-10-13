@@ -1,3 +1,4 @@
+import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
@@ -23,11 +24,13 @@ import {
   groupL10nChildrenByParent,
   createExpiresErrorStateMatcher,
   isExpiresFieldValid,
-  shouldShowExpiresFieldError,
   l10nEntryLabel,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideSatoriDateAdapter, provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo-satori/platform/ui';
 
 export interface EditMetadataDialogData {
   uid: string;
@@ -153,6 +156,8 @@ export class EditMetadataDialogComponent {
   private readonly directoryService = inject(DirectoryService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
+  private readonly dateFormats = inject(MAT_DATE_FORMATS);
 
   title = this.data.title;
   description = this.data.description;
@@ -161,9 +166,7 @@ export class EditMetadataDialogComponent {
   coverage = this.data.coverage;
   expires: Date | null = this.data.expires ? new Date(this.data.expires) : null;
   expiresRawText = '';
-  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() =>
-    shouldShowExpiresFieldError(this.expiresRawText, this.expires),
-  );
+  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() => this.showExpiresError());
 
   @ViewChild('expiresInput') expiresNgModel?: NgModel;
 
@@ -278,15 +281,23 @@ export class EditMetadataDialogComponent {
   }
 
   isExpiresValid(): boolean {
-    return isExpiresFieldValid(this.expiresRawText, this.expires);
+    const parsed = this.expiresRawText.trim()
+      ? this.dateAdapter.parse(this.expiresRawText, this.dateFormats.parse.dateInput)
+      : this.expires;
+    return isExpiresFieldValid(this.expiresRawText, parsed);
   }
 
   showExpiresError(): boolean {
-    return shouldShowExpiresFieldError(this.expiresRawText, this.expires);
+    return !this.isExpiresValid();
   }
 
   onExpiresInput(event: Event): void {
     this.expiresRawText = (event.target as HTMLInputElement).value;
+    // Parse synchronously so validation and the saved payload agree even before ngModel updates.
+    this.expires = this.dateAdapter.parse(
+      this.expiresRawText.trim(),
+      this.dateFormats.parse.dateInput,
+    );
     const ctrl = this.expiresNgModel?.control;
     if (ctrl) {
       ctrl.markAsDirty();

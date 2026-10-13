@@ -1,3 +1,4 @@
+import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import { Component, DestroyRef, OnInit, ViewChild, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
@@ -25,7 +26,6 @@ import {
   groupL10nChildrenByParent,
   createExpiresErrorStateMatcher,
   isExpiresFieldValid,
-  shouldShowExpiresFieldError,
   l10nEntryLabel,
   PERMISSION_DENIED_KEY,
   isPermissionDeniedError,
@@ -66,6 +66,8 @@ export class EditCollectionDialogComponent implements OnInit {
   private readonly collectionService = inject(CollectionService);
   private readonly directoryService = inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
+  private readonly dateFormats = inject(MAT_DATE_FORMATS);
   private readonly snackBar = inject(MatSnackBar);
 
   readonly l10nEntryLabel = l10nEntryLabel;
@@ -99,9 +101,7 @@ export class EditCollectionDialogComponent implements OnInit {
   coverage: string | null = null;
   expires: Date | null = null;
   expiresRawText = '';
-  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() =>
-    shouldShowExpiresFieldError(this.expiresRawText, this.expires),
-  );
+  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() => this.showExpiresError());
 
   ngOnInit(): void {
     const doc = this.data.document;
@@ -208,15 +208,23 @@ export class EditCollectionDialogComponent implements OnInit {
   }
 
   isExpiresValid(): boolean {
-    return isExpiresFieldValid(this.expiresRawText, this.expires);
+    const parsed = this.expiresRawText.trim()
+      ? this.dateAdapter.parse(this.expiresRawText, this.dateFormats.parse.dateInput)
+      : this.expires;
+    return isExpiresFieldValid(this.expiresRawText, parsed);
   }
 
   showExpiresError(): boolean {
-    return shouldShowExpiresFieldError(this.expiresRawText, this.expires);
+    return !this.isExpiresValid();
   }
 
   onExpiresInput(event: Event): void {
     this.expiresRawText = (event.target as HTMLInputElement).value;
+    // Parse synchronously so validation and the saved payload agree even before ngModel updates.
+    this.expires = this.dateAdapter.parse(
+      this.expiresRawText.trim(),
+      this.dateFormats.parse.dateInput,
+    );
     const ctrl = this.expiresNgModel?.control;
     if (ctrl) {
       ctrl.markAsDirty();

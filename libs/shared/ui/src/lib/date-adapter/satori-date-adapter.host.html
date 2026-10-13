@@ -4,7 +4,8 @@
   component is compiled the way a real one is; the assertion reads the injected `DateAdapter`.
 -->
 <mat-form-field>
-  <input matInput [matDatepicker]="picker" />
+  <mat-label>Date</mat-label>
+  <input id="adapter-test-date" matInput [matDatepicker]="picker" />
   <mat-datepicker-toggle matIconSuffix [for]="picker" />
   <mat-datepicker #picker />
 </mat-form-field>

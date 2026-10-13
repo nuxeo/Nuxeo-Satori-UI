@@ -59,6 +59,7 @@ import {
  */
 const DATE_FNS_LOCALES: Readonly<Record<string, Locale>> = {
   en: enUS,
+  'en-us': enUS,
   'en-au': enAU,
   'en-ca': enCA,
   'en-gb': enGB,
@@ -94,7 +95,7 @@ export const DATE_ADAPTER_LANGUAGES: readonly string[] = Object.keys(DATE_FNS_LO
  * development, because the fallback is the one case here that can be wrong without any symptom.
  */
 export function dateFnsLocaleFor(localeId: string): Locale {
-  const tag = (localeId ?? '').toLowerCase().replace(/_/g, '-');
+  const tag = (localeId ?? '').toLowerCase().replaceAll('_', '-');
   const exact = DATE_FNS_LOCALES[tag];
   if (exact) return exact;
 
