@@ -1603,6 +1603,9 @@ Measured on the local 2025 instance:
   as an array.
 - A `PUT` without `pageProviderName` is refused with `400`; with it and without `params` the stored
   parameters are kept, which is what renaming relies on.
+- A `PUT`'s `params` are merged into the stored ones: a parameter left out keeps its saved value. So
+  Save writes every filter parameter, an empty one as `[]` or `""`, as Web UI writes its whole form;
+  without that, a filter the user removed stayed in the saved search.
 
 **Usage:** the search page and the search drawer, through `SearchSession`
 (`libs/features/search/src/lib/search-session/search-session.ts`), which sends one request per change

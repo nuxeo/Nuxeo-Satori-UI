@@ -21,6 +21,19 @@ import { SearchFiltersDrawerComponent } from './search-filters-drawer.component'
 @Component({ standalone: true, template: '' })
 class BlankPage {}
 
+/** A saved search's params with no filter set: every parameter written, empty. */
+const EMPTY_SAVED_PARAMS: Record<string, string> = {
+  ecm_fulltext: '',
+  dc_modified_agg: '[]',
+  dc_creator_agg: '[]',
+  ecm_collections: '[]',
+  ecm_tags: '[]',
+  dc_nature_agg: '[]',
+  dc_subjects_agg: '[]',
+  dc_coverage_agg: '[]',
+  common_size_agg: '[]',
+};
+
 const item = (over: Partial<SearchResultItem>): SearchResultItem =>
   ({
     id: 'doc-1',
@@ -132,7 +145,7 @@ describe('SearchFiltersDrawerComponent', () => {
     component.openSaveAsDialog();
     expect(searchService.saveSavedSearch).toHaveBeenCalledWith({
       title: 'Mine',
-      params: { common_size_agg: '["tiny"]' },
+      params: { ...EMPTY_SAVED_PARAMS, common_size_agg: '["tiny"]' },
       pageProviderName: 'default_search',
     });
     expect(toast.show).toHaveBeenCalledWith('Search "Mine" saved.');

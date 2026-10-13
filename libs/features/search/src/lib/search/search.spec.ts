@@ -42,6 +42,19 @@ const mockSearchService = {
   getSavedSearchById: vi.fn((): Observable<Record<string, string>> => of({})),
 };
 
+/** A saved search's params with no filter set: every parameter written, empty. */
+const EMPTY_SAVED_PARAMS: Record<string, string> = {
+  ecm_fulltext: '',
+  dc_modified_agg: '[]',
+  dc_creator_agg: '[]',
+  ecm_collections: '[]',
+  ecm_tags: '[]',
+  dc_nature_agg: '[]',
+  dc_subjects_agg: '[]',
+  dc_coverage_agg: '[]',
+  common_size_agg: '[]',
+};
+
 const mockSearchAggregationService = {
   drawerFilters: signal<Record<string, string>>({}),
   aggregations: signal<Record<string, unknown>>({}),
@@ -1334,6 +1347,7 @@ describe('SearchComponent', () => {
         title: 'My Search',
         pageProviderName: 'default_search',
         params: {
+          ...EMPTY_SAVED_PARAMS,
           ecm_fulltext: 'contract',
           dc_subjects_agg: '["art","art/cinema"]',
           common_size_agg: '["tiny"]',
@@ -1372,7 +1386,7 @@ describe('SearchComponent', () => {
 
       expect(mockSearchService.updateSavedSearch).toHaveBeenCalledWith('ss-1', {
         title: 'Mine',
-        params: { ecm_fulltext: 'invoice' },
+        params: { ...EMPTY_SAVED_PARAMS, ecm_fulltext: 'invoice' },
         pageProviderName: 'default_search',
       });
       expect(toast.show).toHaveBeenCalledWith('Search "Mine" updated.');

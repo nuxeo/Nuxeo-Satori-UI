@@ -14,6 +14,19 @@ import {
   type NxsSearchFilters,
 } from './search-filters.model';
 
+/** A saved search's params with no filter set: every parameter written, empty. */
+const EMPTY_SAVED_PARAMS: Record<string, string> = {
+  ecm_fulltext: '',
+  dc_modified_agg: '[]',
+  dc_creator_agg: '[]',
+  ecm_collections: '[]',
+  ecm_tags: '[]',
+  dc_nature_agg: '[]',
+  dc_subjects_agg: '[]',
+  dc_coverage_agg: '[]',
+  common_size_agg: '[]',
+};
+
 const filters = (over: Partial<NxsSearchFilters>): NxsSearchFilters => ({
   ...NXS_EMPTY_SEARCH_FILTERS,
   ...over,
@@ -79,8 +92,16 @@ describe('search filters — a saved search’s params', () => {
     }
   });
 
-  it('writes nothing for no filters', () => {
-    expect(nxsSearchFiltersToSavedParams(NXS_EMPTY_SEARCH_FILTERS)).toEqual({});
+  it('writes every parameter, empty, for no filters — an update merges, so a left-out one stays saved', () => {
+    expect(nxsSearchFiltersToSavedParams(NXS_EMPTY_SEARCH_FILTERS)).toEqual(EMPTY_SAVED_PARAMS);
+  });
+
+  it('clears a filter by writing it empty, and writes q only when set', () => {
+    const params = nxsSearchFiltersToSavedParams(filters({ nature: ['article'] }));
+    expect(params['dc_nature_agg']).toBe('["article"]');
+    expect(params['common_size_agg']).toBe('[]');
+    expect(params['ecm_fulltext']).toBe('');
+    expect(params).not.toHaveProperty('q');
   });
 
   it('round-trips every field, a comma inside a value included', () => {

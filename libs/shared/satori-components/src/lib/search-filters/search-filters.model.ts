@@ -96,7 +96,11 @@ export function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<stri
 /**
  * The filters as a saved search's `params`, under `default_search`'s own parameter names — the ones
  * Web UI writes, so either application opens a search the other saved. A multi-value field is a JSON
- * array, which the server stores as a list; an empty field is left out.
+ * array, which the server stores as a list.
+ *
+ * Every parameter is written, an empty one as `""` or `[]`, as Web UI writes its whole form: the
+ * server merges an update's `params` into the ones it holds, so a filter left out would stay saved.
+ * `q`, which no field edits, is written only when set.
  *
  * Not {@link nxsSearchFiltersToRecord}'s names: the server maps a parameter onto the saved search's
  * own fields by name, and refuses `subjects` and `size`, which collide with `dc:subjects` and the
@@ -104,15 +108,11 @@ export function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<stri
  */
 export function nxsSearchFiltersToSavedParams(filters: NxsSearchFilters): Record<string, string> {
   const params: Record<string, string> = {};
-  const text = (key: string, value: string) => {
-    if (value.trim()) params[key] = value.trim();
-  };
   const values = (key: string, value: string | readonly string[]) => {
-    const list = uniqueValues(typeof value === 'string' ? [value] : value);
-    if (list.length > 0) params[key] = JSON.stringify(list);
+    params[key] = JSON.stringify(uniqueValues(typeof value === 'string' ? [value] : value));
   };
-  text('q', filters.query);
-  text('ecm_fulltext', filters.fulltext);
+  if (filters.query.trim()) params['q'] = filters.query.trim();
+  params['ecm_fulltext'] = filters.fulltext.trim();
   values('dc_modified_agg', filters.modified);
   values('dc_creator_agg', filters.author);
   values('ecm_collections', filters.collection);

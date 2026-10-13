@@ -13,6 +13,19 @@ import {
 
 import { SearchSession, type SearchResultsState } from './search-session';
 
+/** A saved search's params with no filter set: every parameter written, empty. */
+const EMPTY_SAVED_PARAMS: Record<string, string> = {
+  ecm_fulltext: '',
+  dc_modified_agg: '[]',
+  dc_creator_agg: '[]',
+  ecm_collections: '[]',
+  ecm_tags: '[]',
+  dc_nature_agg: '[]',
+  dc_subjects_agg: '[]',
+  dc_coverage_agg: '[]',
+  common_size_agg: '[]',
+};
+
 const item = (id: string): SearchResultItem =>
   ({ id, title: id, type: 'File', tags: [], icon: 'description' }) as unknown as SearchResultItem;
 
@@ -221,7 +234,7 @@ describe('SearchSession', () => {
 
       expect(searchService.saveSavedSearch).toHaveBeenCalledWith({
         title: 'Typed title',
-        params: { dc_subjects_agg: '["art"]' },
+        params: { ...EMPTY_SAVED_PARAMS, dc_subjects_agg: '["art"]' },
         pageProviderName: 'default_search',
       });
       expect(session.savedSearchId()).toBe('ss-9');
@@ -249,7 +262,7 @@ describe('SearchSession', () => {
 
       expect(searchService.updateSavedSearch).toHaveBeenCalledWith('ss-1', {
         title: 'Mine',
-        params: { ecm_fulltext: 'new' },
+        params: { ...EMPTY_SAVED_PARAMS, ecm_fulltext: 'new' },
         pageProviderName: 'default_search',
       });
       expect(session.dirty()).toBe(false);
