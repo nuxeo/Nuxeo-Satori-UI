@@ -587,6 +587,24 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.toolbarTooltip(relabelled)).toBe('Release the lock');
     });
 
+    it('keeps the descriptor in toolbarActionLabel and appends supplemental tooltip text', async () => {
+      await build(lockedByAlice());
+
+      const unlock = offered('app.toolbar.unlock');
+      expect(component.toolbarActionTooltip(unlock)).toBe('Locked by alice on August 24, 2026');
+      expect(component.toolbarActionLabel(unlock)).toBe(
+        'Unlock. Locked by alice on August 24, 2026',
+      );
+
+      const relabelled = { ...unlock, tooltip: 'Release the lock' };
+      expect(component.toolbarActionTooltip(relabelled)).toBe('Release the lock');
+      expect(component.toolbarActionLabel(relabelled)).toBe('Unlock. Release the lock');
+
+      const silenced = { ...unlock, tooltip: '' };
+      expect(component.toolbarActionTooltip(silenced)).toBe('Unlock');
+      expect(component.toolbarActionLabel(silenced)).toBe('Unlock');
+    });
+
     it('shows the closed padlock, marked active, while locked and the open one while unlocked', async () => {
       await build(lockedByAlice());
       const unlock = offered('app.toolbar.unlock');
@@ -1129,10 +1147,13 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
   });
 
   describe('versions', () => {
+    const WITH_WRITE_VERSION = ['Read', 'Write', 'WriteVersion', 'ReadWrite', 'Remove'];
     const version = (major: number, minor: number): NuxeoDocument =>
       doc({
         uid: `v-${major}-${minor}`,
+        isVersion: true,
         properties: { 'uid:major_version': major, 'uid:minor_version': minor },
+        contextParameters: { permissions: WITH_WRITE_VERSION },
       });
 
     it('loads the version list the first time the dropdown opens and not again', async () => {
@@ -1190,16 +1211,33 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.error).toHaveBeenCalledWith('Failed to restore version');
     });
 
-    it('refuses to restore a version without the write permission', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+    it('refuses to restore a version without WriteVersion, which is what Nuxeo checks', async () => {
+      await build();
 
-      component.restoreVersion(version(1, 0));
+      component.restoreVersion({
+        ...version(1, 0),
+        contextParameters: { permissions: ['Read', 'Write'] },
+      });
 
       expect(mockDetailService.restoreVersion).not.toHaveBeenCalled();
     });
 
-    it('reloads the document after a version is created', async () => {
+    it('returns to the live document after restoring the version it shows', async () => {
       await build();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      component.restoreVersion({ ...version(1, 0), versionableId: 'doc-live' });
+
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+    });
+
+    it('reloads the document after a version is created', async () => {
+      await build(
+        doc({
+          facets: ['Versionable'],
+          contextParameters: { permissions: WITH_WRITE_VERSION },
+        }),
+      );
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
       mockDetailService.getFullDocument.mockClear();
 

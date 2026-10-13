@@ -55,6 +55,11 @@ export const JOURNEY_SCREENS = [
   { id: 'dashboard', label: 'dashboard screen', authenticated: true },
   { id: 'browse', label: 'browse screen', authenticated: true },
   { id: 'document-detail', label: 'document detail screen', authenticated: true },
+  {
+    id: 'document-detail-more-actions',
+    label: 'document detail More actions focus',
+    authenticated: true,
+  },
   // Core flows: finding and returning to content.
   { id: 'search', label: 'search results screen', authenticated: true },
   { id: 'documents', label: 'documents (assets) screen', authenticated: true },

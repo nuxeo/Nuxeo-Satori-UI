@@ -1,5 +1,7 @@
-// NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504, NXSAT-491 / IBM 1365203900 —
-// header toolbar mat-icon-button focus (Content Lake ingest included; global: component SCSS at budget).
+// NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504, NXSAT-491 / IBM 1365203900,
+// NXSAT-535 / IBM 2589851771 (More actions menu trigger),
+// NXSAT-542 / IBM 2714359167 (Edit and other extension toolbar icon buttons) — header toolbar
+// mat-icon-button focus (Content Lake ingest included; global: component SCSS at budget).
 .detail-header .header-actions button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--agentic-document-detail-header-focus-outline);
   outline-offset: 2px;

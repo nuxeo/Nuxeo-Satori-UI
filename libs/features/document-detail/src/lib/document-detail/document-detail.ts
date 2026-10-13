@@ -87,6 +87,7 @@ import {
   canWriteDocument,
   canRemoveDocument,
   canViewDocumentAuditLog,
+  hasDocumentPermission,
   mergeDocumentPermissionsContext,
   auditActivityLabel,
   resolveAcePrincipal,
@@ -271,6 +272,31 @@ const KE_MESSAGE_KEYS: Record<KeUiAction, { start: string; success: string; fail
   },
 };
 
+/** The permission Nuxeo checks for creating and restoring versions. */
+const WRITE_VERSION = 'WriteVersion';
+const VERSIONABLE_FACET = 'Versionable';
+
+/**
+ * Nuxeo flags a record with the `isRecord` field of the document JSON — there is no facet for it.
+ * The public `NuxeoDocument` model does not declare the field, so it is read here rather than
+ * added to that published type.
+ */
+function isRecordDocument(doc: NuxeoDocument): boolean {
+  return (doc as NuxeoDocument & { readonly isRecord?: boolean }).isRecord === true;
+}
+
+/**
+ * The message for a refused restore. 403 is also what Nuxeo answers when another user holds
+ * the lock, which removes `WriteVersion` from everyone but its owner and administrators.
+ */
+function restoreVersionErrorKey(err: unknown): string {
+  if (isPermissionDeniedError(err)) return 'document-detail.message.restore-version-forbidden';
+  if ((err as { status?: number })?.status === 409) {
+    return 'document-detail.message.restore-version-conflict';
+  }
+  return 'document-detail.message.failed-to-restore-version';
+}
+
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -344,6 +370,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     './document-detail.scss',
     './document-detail-go-back-icon.scss',
     './document-detail-go-back-focus.scss',
+    './document-detail-panel-toggle-focus.scss',
+    './document-detail-version-banner.scss',
   ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {
@@ -913,14 +941,42 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     () => this.doc()?.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
   );
 
-  readonly canManagePermissions = computed(() => canManageDocumentPermissions(this.doc()));
+  /**
+   * The page is showing a version rather than the live document.
+   *
+   * A version's `permissions` enricher repeats the live document's — `Write`, `WriteSecurity`
+   * and the rest — while the server refuses to modify it, so the enricher alone would render
+   * every edit control. The write gates below therefore also ask this.
+   */
+  readonly isVersionView = computed(() => this.doc()?.isVersion === true);
+
+  readonly canManagePermissions = computed(
+    () => !this.isVersionView() && canManageDocumentPermissions(this.doc()),
+  );
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
-  readonly canWriteDoc = computed(() => canWriteDocument(this.doc()));
+  readonly canWriteDoc = computed(() => !this.isVersionView() && canWriteDocument(this.doc()));
   /** Web UI's `isTaggable`: Write on the document itself, not a version or a proxy. */
   readonly canTag = computed(() => canTagDocument(this.doc()));
   readonly canRemoveDoc = computed(() => canRemoveDocument(this.doc()));
+
+  /** `Document.RestoreVersion` is checked against `WriteVersion`, not `Write`. */
+  readonly canRestoreVersion = computed(
+    () => this.isVersionView() && hasDocumentPermission(this.doc(), WRITE_VERSION),
+  );
+
+  /** Web UI's gate for Create Version. */
+  readonly canCreateVersion = computed(() => {
+    const d = this.doc();
+    return (
+      !!d &&
+      !d.isVersion &&
+      !isRecordDocument(d) &&
+      (d.facets ?? []).includes(VERSIONABLE_FACET) &&
+      hasDocumentPermission(d, WRITE_VERSION)
+    );
+  });
 
   permissionLabel(permission: string): string {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
@@ -1005,6 +1061,29 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   toolbarTooltip(action: ExtensionActionDescriptor): string | null {
     if (action.tooltip !== undefined) return action.tooltip;
     return action.id === 'app.toolbar.unlock' ? this.lockedByLabel() : null;
+  }
+
+  private toolbarDescriptorLabel(action: ExtensionActionDescriptor): string {
+    return descriptorLabel(action, (key) => this.translate.instant(key));
+  }
+
+  /** Hover text: supplemental lock/manifest tooltip when set, otherwise the action label. */
+  toolbarActionTooltip(action: ExtensionActionDescriptor): string {
+    const tip = this.toolbarTooltip(action);
+    if (tip !== null && tip !== '') {
+      return tip;
+    }
+    return this.toolbarDescriptorLabel(action);
+  }
+
+  /** Accessible name: always includes the descriptor label; appends non-empty tooltip text when it differs. */
+  toolbarActionLabel(action: ExtensionActionDescriptor): string {
+    const label = this.toolbarDescriptorLabel(action);
+    const tip = this.toolbarTooltip(action);
+    if (tip === null || tip === '' || tip === label) {
+      return label;
+    }
+    return `${label}. ${tip}`;
   }
 
   /** The highlighted padlock Web UI shows on a locked document. */
@@ -1149,7 +1228,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.panelActivityLoaded = false;
     this.versions.set([]);
     this.versionsLoaded = false;
+    this.versionsLoading.set(false);
     this.versionDropdownOpen.set(false);
+    this.actionInProgress.set(null);
+    this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
     this.keActionInFlight.set(null);
@@ -1164,6 +1246,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.historyLoaded = false;
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
+    // Not just the `publishTabLoaded` flag above: `loadPublishingData()` skips its own fetch
+    // while this array is non-empty, so the previous document's entries would both show in the
+    // side panel's count and keep Unpublish pointing at its proxies — indefinitely if the new
+    // document's count request then failed.
+    this.publishedDocs.set([]);
+    this.publishLoading.set(false);
   }
 
   generateSummary(): void {
@@ -1614,6 +1702,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private maybeBackfillContentLakeMarker(doc: NuxeoDocument): void {
+    // The backfill writes the marker to the document, and a version is read-only.
+    if (doc.isVersion) return;
     if (!shouldProbeContentLakeIngestStatus(doc)) {
       if (isContentLakeIngestCurrent(doc)) {
         this.contentLakePresenceVerified.set(true);
@@ -1721,20 +1811,37 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   private loadDocumentTasks(uid: string): void {
     this.documentTasksLoading.set(true);
+    const generation = this.documentLoadGeneration;
     const userId = this.currentUsername() ?? 'Administrator';
     this.taskService.getDocumentTasks(uid, userId).subscribe({
       next: (tasks) => {
+        if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.documentTasks.set(tasks);
         this.documentTasksLoading.set(false);
       },
-      error: () => this.documentTasksLoading.set(false),
+      error: () => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentTasksLoading.set(false);
+        }
+      },
     });
   }
 
   private loadDocumentWorkflows(uid: string): void {
+    // A late answer for the document the route left would put its workflow banner, and
+    // its Abandon button, on the page now showing another — a version, say.
+    const generation = this.documentLoadGeneration;
     this.workflowService.getDocumentWorkflows(uid).subscribe({
-      next: (wfs) => this.documentWorkflows.set(wfs),
-      error: () => this.documentWorkflows.set([]),
+      next: (wfs) => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentWorkflows.set(wfs);
+        }
+      },
+      error: () => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentWorkflows.set([]);
+        }
+      },
     });
   }
 
@@ -1763,16 +1870,21 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   openStartProcess(): void {
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.showStartProcessPanel.set(true);
     this.workflowsLoading.set(true);
-    this.detailService.getRunnableWorkflows(this.docUid).subscribe({
+    this.detailService.getRunnableWorkflows(requestedFor).subscribe({
       next: (models) => {
+        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.availableWorkflows.set(models);
         this.workflowsLoading.set(false);
       },
       error: () => {
-        this.availableWorkflows.set([]);
-        this.workflowsLoading.set(false);
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.availableWorkflows.set([]);
+          this.workflowsLoading.set(false);
+        }
       },
     });
   }
@@ -2753,13 +2865,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private reloadDocumentPermissions(): void {
-    if (!this.docUid) return;
+    const requestedFor = this.docUid;
+    if (!requestedFor) return;
+    const generation = this.documentLoadGeneration;
     this.permissionsLoading.set(true);
     this.detailService
-      .getDocumentPermissions(this.docUid)
+      .getDocumentPermissions(requestedFor)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
+          // Late, this would put the previous document — or its permissions — on the page.
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           const existing = this.doc();
           if (!existing) {
             this.doc.set(updated);
@@ -2770,6 +2886,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.permissionsLoading.set(false);
         },
         error: () => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.permissionsLoading.set(false);
           this.toast.error(
             this.translate.instant('document-detail.message.failed-to-refresh-permissions'),
@@ -2811,18 +2928,23 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
     this.auditLoading.set(true);
 
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.detailService
-      .getAuditLog(this.docUid, this.auditPageSize(), this.auditPageIndex())
+      .getAuditLog(requestedFor, this.auditPageSize(), this.auditPageIndex())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.auditEntries.set(res.entries);
           this.auditTotalSize.set(res.resultsCount ?? res.totalSize ?? res.entries.length);
           this.auditLoading.set(false);
           this.historyLoaded = true;
         },
         error: () => {
-          this.auditLoading.set(false);
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.auditLoading.set(false);
+          }
         },
       });
   }
@@ -2863,12 +2985,18 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadPublicationCount(uid: string): void {
+    const generation = this.documentLoadGeneration;
     this.detailService.getPublishedVersions(uid).subscribe({
       next: (res) => {
+        if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.publishedDocs.set(res.entries);
         this.publishLoading.set(false);
       },
-      error: () => this.publishLoading.set(false),
+      error: () => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.publishLoading.set(false);
+        }
+      },
     });
   }
 
@@ -2877,12 +3005,19 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.sectionsLoading.set(true);
 
     if (this.publishedDocs().length === 0) {
-      this.detailService.getPublishedVersions(this.docUid).subscribe({
+      const requestedFor = this.docUid;
+      const generation = this.documentLoadGeneration;
+      this.detailService.getPublishedVersions(requestedFor).subscribe({
         next: (res) => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.publishedDocs.set(res.entries);
           this.publishLoading.set(false);
         },
-        error: () => this.publishLoading.set(false),
+        error: () => {
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.publishLoading.set(false);
+          }
+        },
       });
     } else {
       this.publishLoading.set(false);
@@ -3097,8 +3232,14 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private refreshPublishedDocs(): void {
-    this.detailService.getPublishedVersions(this.docUid).subscribe({
-      next: (res) => this.publishedDocs.set(res.entries),
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
+    this.detailService.getPublishedVersions(requestedFor).subscribe({
+      next: (res) => {
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.publishedDocs.set(res.entries);
+        }
+      },
     });
   }
 
@@ -3492,8 +3633,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return !d?.facets?.includes('Immutable') && d?.type !== 'Root';
   }
 
+  /**
+   * Through `canWriteDoc`, so a version is refused here too: a manifest may re-enable a write
+   * action's rule, and the handler must not then open an editor on a version.
+   */
   private requireWritePermission(): boolean {
-    if (canWriteDocument(this.doc())) return true;
+    if (this.canWriteDoc()) return true;
     this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
     return false;
   }
@@ -3662,16 +3807,23 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
 
     this.panelActivityLoading.set(true);
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.detailService
-      .getAuditLog(this.docUid, 20, 0)
+      .getAuditLog(requestedFor, 20, 0)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.panelActivity.set(res.entries);
           this.panelActivityLoading.set(false);
           this.panelActivityLoaded = true;
         },
-        error: () => this.panelActivityLoading.set(false),
+        error: () => {
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.panelActivityLoading.set(false);
+          }
+        },
       });
   }
 
@@ -3682,7 +3834,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   // ── Versioning ──
 
   openCreateVersionDialog(): void {
-    if (!this.requireWritePermission()) return;
+    if (!this.canCreateVersion()) {
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
+      return;
+    }
     const ref = this.dialog.open(CreateVersionDialogComponent, {
       width: '600px',
       maxWidth: '95vw',
@@ -3711,16 +3866,31 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.versionDropdownOpen.update((v) => !v);
   }
 
+  /** The live document whose versions the list shows — itself, or the one a version belongs to. */
+  private liveDocumentUid(): string {
+    const d = this.doc();
+    return (d?.isVersion && d.versionableId) || this.docUid;
+  }
+
   loadVersions(): void {
-    if (!this.docUid) return;
+    const requestedFor = this.docUid;
+    if (!requestedFor) return;
+    const generation = this.documentLoadGeneration;
     this.versionsLoading.set(true);
-    this.detailService.getVersions(this.docUid).subscribe({
+    this.detailService.getVersions(this.liveDocumentUid()).subscribe({
       next: (res) => {
+        // A list that arrives after the route moved on belongs to the previous document; marking
+        // it loaded would skip the next document's own fetch.
+        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.versions.set(res.entries ?? []);
         this.versionsLoading.set(false);
         this.versionsLoaded = true;
       },
-      error: () => this.versionsLoading.set(false),
+      error: () => {
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.versionsLoading.set(false);
+        }
+      },
     });
   }
 
@@ -3730,28 +3900,91 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return `${major}.${minor}`;
   }
 
+  /**
+   * Move between a document and its versions. The browse return mode is carried along, or the
+   * breadcrumb and back target of a document opened from adf-hx browse would reset after one
+   * version was opened.
+   */
+  private navigateWithinVersions(uid: string): void {
+    const returnMode = this.route.snapshot.queryParamMap.get(BROWSE_RETURN_MODE_PARAM);
+    void this.router.navigate(
+      ['/doc', uid],
+      returnMode ? { queryParams: { [BROWSE_RETURN_MODE_PARAM]: returnMode } } : {},
+    );
+  }
+
+  /** Open a version read-only. Choosing one from the list never restores it. */
+  openVersion(version: NuxeoDocument): void {
+    this.versionDropdownOpen.set(false);
+    if (version.uid !== this.docUid) this.navigateWithinVersions(version.uid);
+  }
+
+  /** Leave a version for the live document it belongs to. */
+  showLatestVersion(): void {
+    this.versionDropdownOpen.set(false);
+    const liveUid = this.liveDocumentUid();
+    if (liveUid !== this.docUid) this.navigateWithinVersions(liveUid);
+  }
+
+  /** Restoring replaces the live document's content, so it is confirmed first. */
+  confirmRestoreVersion(): void {
+    const version = this.doc();
+    if (!version || !this.canRestoreVersion() || this.actionInProgress()) return;
+    const label = this.versionString(version);
+    this.dialog
+      .open(ConfirmDialogComponent, {
+        data: {
+          title: this.translate.instant('document-detail.version-restore-confirm-title'),
+          message: this.translate.instant('document-detail.version-restore-replaces-content', {
+            version: label,
+          }),
+          confirmLabel: this.translate.instant('document-detail.version-restore', {
+            version: label,
+          }),
+        } as ConfirmDialogData,
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((confirmed) => {
+        if (confirmed) this.restoreVersion(version);
+      });
+  }
+
   restoreVersion(version: NuxeoDocument): void {
-    if (!this.requireWritePermission()) return;
+    if (!hasDocumentPermission(version, WRITE_VERSION)) {
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
+      return;
+    }
+    const generation = this.documentLoadGeneration;
+    const versionUid = version.uid;
     this.versionDropdownOpen.set(false);
     this.actionInProgress.set('restore');
-    this.detailService.restoreVersion(version.uid).subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.toast.show(
-          this.translate.instant('document-detail.restored-to-version', {
-            version: this.versionString(version),
-          }),
-        );
-        this.loadDocument(this.docUid);
-        this.versionsLoaded = false;
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(
-          this.translate.instant('document-detail.message.failed-to-restore-version'),
-        );
-      },
-    });
+    this.detailService
+      .restoreVersion(versionUid)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          if (generation !== this.documentLoadGeneration) return;
+          this.actionInProgress.set(null);
+          this.toast.show(
+            this.translate.instant('document-detail.restored-to-version', {
+              version: this.versionString(version),
+            }),
+          );
+          const liveUid = version.versionableId;
+          if (liveUid && liveUid !== this.docUid) {
+            this.navigateWithinVersions(liveUid);
+          } else {
+            this.versionsLoaded = false;
+            this.loadDocument(this.docUid);
+          }
+        },
+        error: (err: unknown) => {
+          if (generation !== this.documentLoadGeneration) return;
+          this.actionInProgress.set(null);
+          this.toast.error(this.translate.instant(restoreVersionErrorKey(err)));
+        },
+      });
   }
 
   // ── Publish ──

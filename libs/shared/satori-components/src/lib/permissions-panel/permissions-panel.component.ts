@@ -89,7 +89,8 @@ interface EditorState {
  * `refusalsFor` and `unconfirmedChanges`.
  *
  * **Hiding a control is not a security control.** The panel offers editing when the read says the
- * user holds `WriteSecurity` or `Everything`, and Nuxeo checks every write regardless.
+ * user holds `WriteSecurity` or `Everything` and the document is not a version, and Nuxeo checks
+ * every write regardless.
  *
  * Its chrome is translated through ngx-translate under `satori-components.permissions-panel.*`,
  * and permission names under `permissions.right.*`, both in the application's catalogue.
