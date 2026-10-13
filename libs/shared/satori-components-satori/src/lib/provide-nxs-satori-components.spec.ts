@@ -246,6 +246,41 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(nav()?.getAttribute('aria-label')).toBe('sat.breadcrumbs.breadcrumbs');
   });
 
+  it('renders each new trail on a new sat-breadcrumbs, so Satori measures it, and keeps our label', async () => {
+    // Satori runs its fitting only when it starts or its box resizes, never when its items change,
+    // so a trail handed to the same instance after navigation overflowed until the window resized.
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+      ],
+    });
+    const fixture = TestBed.createComponent(NxsSatoriBreadcrumbsComponent);
+    const el = fixture.nativeElement as HTMLElement;
+    fixture.componentRef.setInput('label', 'Fil d’Ariane');
+    fixture.componentRef.setInput('items', [{ label: 'Domain', href: '/d' }, { label: 'Claims' }]);
+    await fixture.whenStable();
+    const first = el.querySelector('sat-breadcrumbs');
+
+    fixture.componentRef.setInput('items', [
+      { label: 'Domain', href: '/d' },
+      { label: 'Claims', href: '/d/claims' },
+      { label: 'Claim 42' },
+    ]);
+    await fixture.whenStable();
+    const second = el.querySelectorAll('sat-breadcrumbs');
+    expect(second).toHaveLength(1);
+    expect(second[0]).not.toBe(first);
+    expect(second[0].textContent).toContain('Claim 42');
+    expect(el.querySelector('nav')?.getAttribute('aria-label')).toBe('Fil d’Ariane');
+
+    fixture.componentRef.setInput('label', 'Breadcrumb trail');
+    await fixture.whenStable();
+    expect(el.querySelector('sat-breadcrumbs')).toBe(second[0]);
+  });
+
   it("leaves Satori's own name on the landmark when our label is blank", async () => {
     const host = await renderById(NXS_PRIMITIVE_IDS.breadcrumbs, {
       label: '  ',
