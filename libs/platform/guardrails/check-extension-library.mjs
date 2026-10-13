@@ -363,6 +363,7 @@ const PRIMITIVE_CONTRACTS = {
   breadcrumbs: 'NxsBreadcrumbsInputs',
   tag: 'NxsTagInputs',
   richTooltip: 'NxsRichTooltipInputs',
+  errorState: 'NxsErrorStateInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;

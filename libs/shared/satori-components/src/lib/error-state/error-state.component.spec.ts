@@ -15,6 +15,7 @@ import { type NxsErrorStatus, nxsErrorStatus } from './error-status';
       [heading]="heading()"
       [headingLevel]="level()"
       [retryable]="retryable()"
+      [retryHandler]="handler()"
       (retry)="retries = retries + 1"
     >
       @if (projected()) {
@@ -29,6 +30,7 @@ class HostComponent {
   readonly level = signal<NxsHeadingLevel>(2);
   readonly retryable = signal(false);
   readonly projected = signal(false);
+  readonly handler = signal<(() => void) | null>(null);
   retries = 0;
 }
 
@@ -137,6 +139,17 @@ describe('NxsErrorStateComponent', () => {
     const button = retryButton();
     expect(button).toBeDefined();
     button?.click();
+    expect(host.retries).toBe(1);
+  });
+
+  it('calls the retry handler a host rendering it by ID passes, then emits retry', async () => {
+    const calls: string[] = [];
+    host.retryable.set(true);
+    host.handler.set(() => calls.push(`handler after ${host.retries} retries`));
+    await render();
+
+    retryButton()?.click();
+    expect(calls).toEqual(['handler after 0 retries']);
     expect(host.retries).toBe(1);
   });
 

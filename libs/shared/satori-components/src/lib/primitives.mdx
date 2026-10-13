@@ -10,11 +10,13 @@ Four components here are also in Satori's own component library: the avatar, the
 tag and the rich tooltip. Each one is registered under an ID. A screen that renders the ID, rather
 than the component, shows whichever version the application registered: Satori's, when
 `@nuxeo-satori/platform/components-satori` is installed and provided, or the built-in version
-otherwise.
+otherwise. A fifth, the error state, is registered the same way; Satori's own error states arrive with
+Satori 1.0, which needs a newer Angular than this package supports, so it renders the built-in
+version either way for now.
 
 ## Key features
 
-- **Four IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
+- **Five IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
   passes the same values whichever is registered.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
@@ -25,7 +27,8 @@ otherwise.
 
 ## Demo showcase
 
-The four IDs rendered through `lib-extension-outlet`, as a screen renders them.
+The four IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them.
+The error state's own page shows it by ID.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -96,6 +99,19 @@ The four IDs rendered through `lib-extension-outlet`, as a screen renders them.
       <td>
         Rich tooltip (<code>sat-rich-tooltip</code>)
       </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.errorState</code>
+      </td>
+      <td>
+        <code>status</code>, <code>heading</code>, <code>headingLevel</code>, <code>retryable</code>,
+        <code>retryHandler</code>
+      </td>
+      <td>
+        <code>NxsErrorStateInputs</code>
+      </td>
+      <td>None yet: Satori 1.0's error states</td>
     </tr>
   </tbody>
 </table>

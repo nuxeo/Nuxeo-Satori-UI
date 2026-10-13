@@ -613,18 +613,19 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Four component-registry IDs for the primitives Satori also ships. Each resolves to a Material
-implementation from `@nuxeo-satori/platform/components`, and to a Satori-backed one when
-`@nuxeo-satori/platform/components-satori` is provided after it. That second entry point is the only
+Five component-registry IDs for the primitives Satori also ships. Each resolves to a Material
+implementation from `@nuxeo-satori/platform/components`, and the first four to a Satori-backed one
+when `@nuxeo-satori/platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
 
-| Component ID                 | Inputs (all text arrives translated)         | Satori-backed by   |
-| ---------------------------- | -------------------------------------------- | ------------------ |
-| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`         | `sat-avatar`       |
-| `nxs.primitives.breadcrumbs` | `items`, `label`                             | `sat-breadcrumbs`  |
-| `nxs.primitives.tag`         | `label`, `color`                             | `sat-category-tag` |
-| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon` | `sat-rich-tooltip` |
+| Component ID                 | Inputs (all text arrives translated)                             | Satori-backed by                                         |
+| ---------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- |
+| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                             | `sat-avatar`                                             |
+| `nxs.primitives.breadcrumbs` | `items`, `label`                                                 | `sat-breadcrumbs`                                        |
+| `nxs.primitives.tag`         | `label`, `color`                                                 | `sat-category-tag`                                       |
+| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                     | `sat-rich-tooltip`                                       |
+| `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler` | — (Material only: Satori's error states need Satori 1.0) |
 
 Both implementations of an ID declare the same inputs (`Nxs…Inputs` in `/components`; a spec in
 `/components-satori` compares them), so whoever renders an ID passes the same `componentInputs`

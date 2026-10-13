@@ -1,11 +1,15 @@
-import type { InputSignal } from '@angular/core';
+import type { InputSignal, InputSignalWithTransform } from '@angular/core';
+
+import type { NxsErrorStatus } from './error-state/error-status';
+import type { NxsHeadingLevel } from './heading-level';
 
 /**
- * The IDs of the four primitives Satori also ships, registered by `provideNxsComponents()`.
+ * The IDs of the primitives Satori also ships, registered by `provideNxsComponents()`.
  *
- * Each ID resolves to a Material implementation from this entry point, and to a Satori-backed one
- * once `provideNxsSatoriComponents()` from `@nuxeo-satori/platform/components-satori` is provided
- * after it. Both implement the same `Nxs…Inputs` contract below, so whoever renders an ID — a
+ * Each ID resolves to a Material implementation from this entry point, and the first four to a
+ * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo-satori/platform/components-satori`
+ * is provided after it. `errorState` stays on Material there: Satori's error states arrive in
+ * Satori 1.0, which needs a newer Angular than this package supports. Both implement the same `Nxs…Inputs` contract below, so whoever renders an ID — a
  * `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
  * A customer overriding an ID implements that contract too.
  */
@@ -14,6 +18,7 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   breadcrumbs: 'nxs.primitives.breadcrumbs',
   tag: 'nxs.primitives.tag',
   richTooltip: 'nxs.primitives.richTooltip',
+  errorState: 'nxs.primitives.errorState',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -64,6 +69,26 @@ export interface NxsBreadcrumbsInputs {
 export interface NxsTagInputs {
   readonly label: InputSignal<string>;
   readonly color: InputSignal<NxsTagColor>;
+}
+
+/**
+ * `nxs.primitives.errorState`: what a region shows in place of content that failed to load. Text
+ * inputs arrive already translated.
+ */
+export interface NxsErrorStateInputs {
+  /** Which variant: the HTTP status the failure stands for. */
+  readonly status: InputSignal<NxsErrorStatus>;
+  /** What failed. Blank shows the variant's own heading. */
+  readonly heading: InputSignal<string>;
+  /** The heading's level in the page outline, 1 to 6. */
+  readonly headingLevel: InputSignal<NxsHeadingLevel>;
+  /** Offer Retry for a server error. */
+  readonly retryable: InputSignalWithTransform<boolean, unknown>;
+  /**
+   * Called when Retry is pressed. A host rendering the ID through `lib-extension-outlet` passes
+   * this, because the outlet sets inputs and binds no outputs.
+   */
+  readonly retryHandler: InputSignal<(() => void) | null>;
 }
 
 /** `nxs.primitives.richTooltip`: a trigger button and a titled panel. Text arrives translated. */

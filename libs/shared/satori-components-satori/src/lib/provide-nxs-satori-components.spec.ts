@@ -14,6 +14,7 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
   NxsBreadcrumbsComponent,
+  NxsErrorStateComponent,
   NxsRichTooltipComponent,
   NxsTagComponent,
   provideNxsComponents,
@@ -46,6 +47,12 @@ describe('provideNxsSatoriComponents', () => {
   it('re-registers every primitive ID on Satori when listed after the Material registration', () => {
     const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
     for (const [id, , satori] of PAIRS) expect(components.peek(id)).toBe(satori);
+  });
+
+  // Satori's error states ship only in Satori 1.0 (Angular 22); the installable Satori has none.
+  it('leaves the error state on Material, which Satori cannot replace yet', () => {
+    const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
+    expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {

@@ -49,6 +49,7 @@ export {
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
   type NxsBreadcrumbsInputs,
+  type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsTagColor,
   type NxsTagInputs,

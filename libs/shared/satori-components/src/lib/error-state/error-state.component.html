@@ -23,7 +23,7 @@
 <p class="nxs-error-state__message">{{ variant().message | translate }}</p>
 <div class="nxs-error-state__actions">
   @if (canRetry()) {
-    <button mat-stroked-button type="button" (click)="retry.emit()">
+    <button mat-stroked-button type="button" (click)="pressRetry()">
       <mat-icon aria-hidden="true">refresh</mat-icon>
       {{ 'satori-components.error-state.retry' | translate }}
     </button>

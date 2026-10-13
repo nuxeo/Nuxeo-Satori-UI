@@ -315,7 +315,7 @@ Two kinds of ID are addressable, so you can replace what renders under them with
 tabs render yours, with `documentId` and `permissionsChanged`, a callback to invoke after a write
 so the host re-reads the external-user section it owns.
 
-**The four primitives**, each with a Material and a Satori implementation:
+**The primitives**, each with a Material implementation, and all but the error state with a Satori one:
 
 | ID                           | Contract to implement  | Material, from `/components` | Satori, from `/components-satori` |
 | ---------------------------- | ---------------------- | ---------------------------- | --------------------------------- |
@@ -323,6 +323,7 @@ so the host re-reads the external-user section it owns.
 | `nxs.primitives.breadcrumbs` | `NxsBreadcrumbsInputs` | `nxs-breadcrumbs`            | `sat-breadcrumbs`                 |
 | `nxs.primitives.tag`         | `NxsTagInputs`         | `nxs-tag`                    | `sat-category-tag`                |
 | `nxs.primitives.richTooltip` | `NxsRichTooltipInputs` | `nxs-rich-tooltip`           | `sat-rich-tooltip`                |
+| `nxs.primitives.errorState`  | `NxsErrorStateInputs`  | `nxs-error-state`            | — (needs Satori 1.0)              |
 
 `provideNxsComponents()` registers them on Material. Only with GitHub Packages access, add
 `provideNxsSatoriComponents()` from `@nuxeo-satori/platform/components-satori` after it to
@@ -348,7 +349,7 @@ The shipped guardrail fails an override that does not.
 
 **What overriding does not reach:** a component used **by class** rather than resolved by ID. An
 override changes every place that renders the ID through `lib-extension-outlet`, and nothing that
-composed `NxsTagComponent` directly. Today no packaged screen resolves the four primitive IDs yet — see
+composed `NxsTagComponent` directly. Today no packaged screen resolves the primitive IDs yet — see
 `extension-reference.md` §6a for where they do render.
 
 ### Placeable — the slots that render a component by ID

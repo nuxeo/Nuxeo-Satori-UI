@@ -1081,6 +1081,34 @@ for (const [variant, claims] of [
   expectGreen(`[K] an override implementing the contract with ${variant}`, tagOverride(claims));
 }
 
+const errorStateOverride = (claims) =>
+  library({
+    'src/lib/extensions.ts': withComponents(
+      `components: { 'nxs.primitives.errorState': ${lazyTo('./claims/claims')} },`,
+    ),
+    'src/lib/claims/claims.ts': claims,
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.errorState'),
+  });
+
+expectGreen(
+  '[K] an error-state override implementing NxsErrorStateInputs',
+  errorStateOverride(
+    "import type { NxsErrorStateInputs } from '@nuxeo-satori/platform/components';\n" +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements NxsErrorStateInputs'),
+  ),
+);
+
+expectRed(
+  '[K] an error-state override implementing another primitive’s contract',
+  errorStateOverride(
+    TAG_CONTRACT +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
+  ),
+  /does not implement `NxsErrorStateInputs` from '@nuxeo-satori\/platform\/components'/,
+);
+
 expectRed(
   '[K] an override implementing a same-named interface from another platform entry point',
   tagOverride(
