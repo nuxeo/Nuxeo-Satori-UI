@@ -1277,6 +1277,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.versionsLoaded = false;
     this.versionsLoading.set(false);
     this.versionDropdownOpen.set(false);
+    this.actionInProgress.set(null);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
     this.keActionInFlight.set(null);
@@ -3053,19 +3054,22 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.auditLoading.set(true);
 
     const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.detailService
       .getAuditLog(requestedFor, this.auditPageSize(), this.auditPageIndex())
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
-          if (requestedFor !== this.docUid) return;
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.auditEntries.set(res.entries);
           this.auditTotalSize.set(res.resultsCount ?? res.totalSize ?? res.entries.length);
           this.auditLoading.set(false);
           this.historyLoaded = true;
         },
         error: () => {
-          if (requestedFor === this.docUid) this.auditLoading.set(false);
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.auditLoading.set(false);
+          }
         },
       });
   }
@@ -3106,14 +3110,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadPublicationCount(uid: string): void {
+    const generation = this.documentLoadGeneration;
     this.detailService.getPublishedVersions(uid).subscribe({
       next: (res) => {
-        if (uid !== this.docUid) return;
+        if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.publishedDocs.set(res.entries);
         this.publishLoading.set(false);
       },
       error: () => {
-        if (uid === this.docUid) this.publishLoading.set(false);
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.publishLoading.set(false);
+        }
       },
     });
   }
@@ -3124,14 +3131,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
     if (this.publishedDocs().length === 0) {
       const requestedFor = this.docUid;
+      const generation = this.documentLoadGeneration;
       this.detailService.getPublishedVersions(requestedFor).subscribe({
         next: (res) => {
-          if (requestedFor !== this.docUid) return;
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.publishedDocs.set(res.entries);
           this.publishLoading.set(false);
         },
         error: () => {
-          if (requestedFor === this.docUid) this.publishLoading.set(false);
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.publishLoading.set(false);
+          }
         },
       });
     } else {
@@ -4132,18 +4142,21 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
     this.panelActivityLoading.set(true);
     const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.detailService
       .getAuditLog(requestedFor, 20, 0)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
-          if (requestedFor !== this.docUid) return;
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.panelActivity.set(res.entries);
           this.panelActivityLoading.set(false);
           this.panelActivityLoaded = true;
         },
         error: () => {
-          if (requestedFor === this.docUid) this.panelActivityLoading.set(false);
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.panelActivityLoading.set(false);
+          }
         },
       });
   }
