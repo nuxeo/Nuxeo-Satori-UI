@@ -1,535 +1,225 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import {
+  Component,
+  forwardRef,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection } from '@angular/core';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { of, throwError, type Observable } from 'rxjs';
+import { MatButtonModule } from '@angular/material/button';
+import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { TranslatePipe } from '@ngx-translate/core';
+import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import {
-  BrowseService,
-  DirectoryService,
-  type DirectoryEntry,
-  type L10nDirectoryEntry,
-  type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentLayoutFormComponent } from '@agentic-ui/shared/document-layouts';
+import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { EditDocumentDialogComponent } from './edit-document-dialog';
 
-/**
- * Typed factories that fill EVERY required field.
- *
- * A partial object cast with `as DirectoryEntry` keeps compiling when the model gains a
- * required field, so the fixture drifts from what the component is really handed while the
- * suite stays green.
- */
-function directoryEntry(overrides: Partial<DirectoryEntry> = {}): DirectoryEntry {
-  return {
-    id: 'article',
-    label: 'Article',
-    displayLabel: 'Article',
-    ordering: 0,
-    obsolete: 0,
-    directoryName: 'nature',
-    ...overrides,
-  };
-}
-
-function l10n(id: string, parent: string, labelEn: string): L10nDirectoryEntry {
-  return {
-    id,
-    directoryName: 'l10ncoverage',
-    properties: { id, parent, ordering: 0, obsolete: 0, label_en: labelEn },
-  };
-}
-
-function docWith(overrides: Partial<NuxeoDocument> = {}): NuxeoDocument {
-  return {
-    uid: 'doc-1',
-    title: 'Fallback title',
-    type: 'File',
-    path: '/default-domain/workspaces/ws/doc',
-    lastModified: '2026-08-01T00:00:00.000Z',
-    properties: {},
-    ...overrides,
-  };
-}
-
-const natureEntries: DirectoryEntry[] = [
-  directoryEntry({ id: 'article', label: 'Article', displayLabel: 'Article' }),
-  directoryEntry({ id: 'memo', label: 'Memo', displayLabel: 'Memo' }),
-];
-
-const subjectEntries: L10nDirectoryEntry[] = [
-  l10n('art', '', 'Art'),
-  l10n('cinema', 'art', 'Cinema'),
-  l10n('painting', 'art', 'Painting'),
-];
-
-const coverageEntries: L10nDirectoryEntry[] = [
-  l10n('africa', '', 'Africa'),
-  l10n('tanzania', 'africa', 'Tanzania'),
-];
-
-const mockDialogRef = {
-  close: vi.fn(),
+const DOC: NuxeoDocument = {
+  uid: 'doc-1',
+  title: 'Policy 42',
+  type: 'File',
+  path: '/default-domain/workspaces/ws/doc',
+  lastModified: '2026-08-01T00:00:00.000Z',
+  properties: { 'dc:title': 'Policy 42' },
 };
 
 /**
- * Full mock surface up front with explicit return types.
- *
- * `vi.fn(() => of([]))` infers `Observable<never[]>`, so a later `mockReturnValue` carrying
- * real entries fails `tsc` — invisible under `nx test`, which strips types through esbuild.
+ * Stands in for the layout form, which has its own spec, under the form's own token so the
+ * dialog's `viewChild` finds it. The dialog is tested for what it does with the form's answers.
  */
-const mockDirectoryService = {
-  getEntries: vi.fn((): Observable<DirectoryEntry[]> => of([])),
-  getAllL10nEntries: vi.fn((_name: string): Observable<L10nDirectoryEntry[]> => of([])),
-};
-
-const mockBrowseService = {
-  updateDocument: vi.fn(
-    (_uid: string, _properties: Record<string, unknown>): Observable<NuxeoDocument> =>
-      of(docWith()),
-  ),
-};
-
-async function flushAsync(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
-interface EditDocumentDialogHarness {
-  component: EditDocumentDialogComponent;
-  fixture: ComponentFixture<EditDocumentDialogComponent>;
-}
-
-async function createDialog(document: NuxeoDocument): Promise<EditDocumentDialogHarness> {
-  TestBed.resetTestingModule();
-  await TestBed.configureTestingModule({
-    imports: [EditDocumentDialogComponent],
-    providers: [
-      provideZonelessChangeDetection(),
-      { provide: MatDialogRef, useValue: mockDialogRef },
-      { provide: MAT_DIALOG_DATA, useValue: { document } },
-      { provide: DirectoryService, useValue: mockDirectoryService },
-      { provide: BrowseService, useValue: mockBrowseService },
-    ],
-  })
-    .overrideComponent(EditDocumentDialogComponent, {
-      set: { imports: [], template: '<div></div>' },
-    })
-    .compileComponents();
-
-  const fixture = TestBed.createComponent(EditDocumentDialogComponent);
-  const component = fixture.componentInstance;
-  fixture.detectChanges();
-  await flushAsync();
-  return { component, fixture };
+@Component({
+  selector: 'lib-document-layout-form',
+  standalone: true,
+  template: `<p class="form">{{ mode() }} {{ document()?.uid }} {{ disabled() }}</p>`,
+  providers: [
+    {
+      provide: DocumentLayoutFormComponent,
+      useExisting: forwardRef(() => FakeLayoutFormComponent),
+    },
+  ],
+})
+class FakeLayoutFormComponent {
+  readonly mode = input('');
+  readonly document = input<NuxeoDocument | null>(null);
+  readonly disabled = input(false);
+  readonly headingLevel = input(3);
+  readonly ready = signal(true);
+  valid = true;
+  changes: Record<string, unknown> = { 'dc:title': 'Policy 43' };
+  unplaced: string[] = [];
+  readonly validate = vi.fn((): boolean => this.valid);
+  readonly changedProperties = vi.fn((): Record<string, unknown> => this.changes);
+  readonly showServerErrors = vi.fn(
+    (_errors: Readonly<Record<string, string>>): string[] => this.unplaced,
+  );
 }
 
 describe('EditDocumentDialogComponent', () => {
-  let component: EditDocumentDialogComponent;
+  let fixture: ComponentFixture<EditDocumentDialogComponent>;
+  let dialog: EditDocumentDialogComponent;
+  let form: FakeLayoutFormComponent;
+  const close = vi.fn();
+  const updateDocument = vi.fn(
+    (_uid: string, _properties: Record<string, unknown>): Observable<NuxeoDocument> =>
+      of({ ...DOC, title: 'Policy 43' }),
+  );
 
-  const fullDocument = docWith({
-    uid: 'doc-42',
-    title: 'Fallback title',
-    properties: {
-      'dc:title': 'Quarterly report',
-      'dc:description': 'Q3 numbers',
-      'dc:nature': 'memo',
-      'dc:subjects': ['cinema', 'painting'],
-      'dc:coverage': 'tanzania',
-      'dc:expired': '2026-12-31T00:00:00.000Z',
-    },
-  });
+  const host = (): HTMLElement => fixture.nativeElement;
+  const saveButton = (): HTMLButtonElement => {
+    const button = host().querySelectorAll<HTMLButtonElement>('mat-dialog-actions button')[1];
+    if (!button) throw new Error('no Save button');
+    return button;
+  };
+  const alertText = (): string | null =>
+    host().querySelector('[role="alert"]')?.querySelector('span')?.textContent?.trim() ?? null;
+  const settle = async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
+  const clickSave = async () => {
+    saveButton().click();
+    await settle();
+  };
+  const failWith = (status: number, error: unknown) =>
+    updateDocument.mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status, error })));
 
   beforeEach(async () => {
-    vi.clearAllMocks();
-    // `vi.clearAllMocks()` clears call history but NOT an implementation installed by
-    // `mockReturnValue`, so anything stubbed in one test leaks into every later one.
-    mockDirectoryService.getEntries.mockReturnValue(of(natureEntries));
-    mockDirectoryService.getAllL10nEntries.mockImplementation((name: string) =>
-      of(name === 'l10nsubjects' ? subjectEntries : coverageEntries),
+    close.mockReset();
+    updateDocument.mockClear();
+    TestBed.configureTestingModule({
+      imports: [EditDocumentDialogComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: MatDialogRef, useValue: { close } },
+        { provide: MAT_DIALOG_DATA, useValue: { document: DOC } },
+        { provide: BrowseService, useValue: { updateDocument } },
+      ],
+    });
+    TestBed.overrideComponent(EditDocumentDialogComponent, {
+      set: {
+        imports: [
+          FakeLayoutFormComponent,
+          MatButtonModule,
+          MatDialogModule,
+          MatIconModule,
+          MatProgressSpinnerModule,
+          TranslatePipe,
+        ],
+      },
+    });
+    fixture = TestBed.createComponent(EditDocumentDialogComponent);
+    dialog = fixture.componentInstance;
+    await settle();
+    const found = fixture.debugElement.query(
+      (el) => el.componentInstance instanceof FakeLayoutFormComponent,
     );
-    mockBrowseService.updateDocument.mockReturnValue(of(docWith({ uid: 'doc-42' })));
-
-    ({ component } = await createDialog(fullDocument));
+    form = found.componentInstance;
   });
 
-  describe('ngOnInit', () => {
-    it('seeds every field from the document properties', () => {
-      expect(component.title).toBe('Quarterly report');
-      expect(component.description).toBe('Q3 numbers');
-      expect(component.nature).toBe('memo');
-      expect(component.subjects).toEqual(['cinema', 'painting']);
-      expect(component.coverage).toBe('tanzania');
-      expect(component.expires?.toISOString()).toBe('2026-12-31T00:00:00.000Z');
-    });
-
-    it('loads nature, subjects and coverage vocabularies in one forkJoin', () => {
-      expect(mockDirectoryService.getEntries).toHaveBeenCalledWith('nature');
-      expect(mockDirectoryService.getAllL10nEntries).toHaveBeenCalledWith('l10nsubjects');
-      expect(mockDirectoryService.getAllL10nEntries).toHaveBeenCalledWith('l10ncoverage');
-
-      expect(component.natureEntries().map((e) => e.id)).toEqual(['article', 'memo']);
-      // Children must be present, not just top-level parents, or the grouped picker is empty.
-      expect(component.subjectEntries().map((e) => e.id)).toContain('cinema');
-      expect(component.coverageEntries().map((e) => e.id)).toContain('tanzania');
-    });
-
-    it('falls back to doc.title and empty defaults when dc: properties are absent', async () => {
-      const { component: bare } = await createDialog(
-        docWith({ uid: 'doc-bare', title: 'Untitled note', properties: {} }),
-      );
-
-      expect(bare.title).toBe('Untitled note');
-      expect(bare.description).toBe('');
-      expect(bare.nature).toBeNull();
-      expect(bare.subjects).toEqual([]);
-      expect(bare.coverage).toBeNull();
-      expect(bare.expires).toBeNull();
-    });
-
-    it('falls back to an empty title when neither dc:title nor doc.title is set', async () => {
-      // `title` is required on `NuxeoDocument`, so it is removed rather than cast: Nuxeo omits
-      // it on some proxy and version entries, which is what makes the `?? ''` tail of the
-      // chain reachable. `title: ''` would not reach it — '' is not nullish.
-      const titleless = docWith({ uid: 'doc-titleless', properties: {} });
-      delete (titleless as { title?: string }).title;
-
-      const { component: loaded } = await createDialog(titleless);
-
-      expect(loaded.title).toBe('');
-    });
-
-    it('tolerates a document with no properties object at all', async () => {
-      // `properties` is required on NuxeoDocument, so this exercises the `?? {}` guard the
-      // component keeps for responses that omit it.
-      const noProps = docWith({ uid: 'doc-noprops', title: 'No props' });
-      delete (noProps as { properties?: Record<string, unknown> }).properties;
-
-      const { component: loaded } = await createDialog(noProps);
-
-      expect(loaded.title).toBe('No props');
-      expect(loaded.subjects).toEqual([]);
-    });
+  it("puts the document's edit form under the dialog title", () => {
+    expect(host().querySelector('h2')?.textContent?.trim()).toBe('Edit Document');
+    expect(host().querySelector('.form')?.textContent?.trim()).toBe('edit doc-1 false');
+    expect(alertText()).toBeNull();
   });
 
-  describe('nature picker', () => {
-    it('refetches nature entries when the panel opens', () => {
-      mockDirectoryService.getEntries.mockClear();
-      mockDirectoryService.getEntries.mockReturnValue(
-        of([directoryEntry({ id: 'report', label: 'Report', displayLabel: 'Report' })]),
-      );
-
-      component.onNaturePanelOpen(true);
-
-      expect(mockDirectoryService.getEntries).toHaveBeenCalledWith('nature');
-      expect(component.natureEntries().map((e) => e.id)).toEqual(['report']);
-    });
-
-    it('clears the search text when the panel closes, without refetching', () => {
-      component.naturePanelSearch = 'mem';
-      mockDirectoryService.getEntries.mockClear();
-
-      component.onNaturePanelOpen(false);
-
-      expect(component.naturePanelSearch).toBe('');
-      expect(mockDirectoryService.getEntries).not.toHaveBeenCalled();
-    });
-
-    it('filters nature options by the panel search text', () => {
-      expect(component.filteredNatureOptions().map((e) => e.id)).toEqual(['article', 'memo']);
-
-      component.naturePanelSearch = 'mem';
-
-      expect(component.filteredNatureOptions().map((e) => e.id)).toEqual(['memo']);
-    });
-
-    it('renders the pill label from the loaded entry', () => {
-      expect(component.naturePillLabel('memo')).toBe('Memo');
-    });
-
-    it('falls back to the raw id when the entry is not loaded', () => {
-      component.natureEntries.set([]);
-      expect(component.naturePillLabel('memo')).toBe('memo');
-    });
-
-    it('clears the selected nature', () => {
-      expect(component.nature).toBe('memo');
-      component.clearNature();
-      expect(component.nature).toBeNull();
-    });
+  it('sends only what changed and closes with the saved document', async () => {
+    await clickSave();
+    expect(form.validate).toHaveBeenCalled();
+    expect(updateDocument).toHaveBeenCalledWith('doc-1', { 'dc:title': 'Policy 43' });
+    expect(close).toHaveBeenCalledWith({ ...DOC, title: 'Policy 43' });
   });
 
-  describe('subjects picker', () => {
-    it('groups children under their parent label', () => {
-      const groups = component.groupedSubjectOptions();
-      expect(groups).toHaveLength(1);
-      expect(groups[0].parentLabel).toBe('Art');
-      expect(groups[0].entries.map((e) => e.id)).toEqual(['cinema', 'painting']);
-    });
-
-    it('narrows the groups by the panel search text', () => {
-      component.subjectsPanelSearch = 'cin';
-      const groups = component.groupedSubjectOptions();
-      expect(groups).toHaveLength(1);
-      expect(groups[0].entries.map((e) => e.id)).toEqual(['cinema']);
-    });
-
-    it('reloads subject entries when the panel opens', () => {
-      mockDirectoryService.getAllL10nEntries.mockClear();
-
-      component.onSubjectsPanelOpen(true);
-
-      expect(mockDirectoryService.getAllL10nEntries).toHaveBeenCalledWith('l10nsubjects');
-      expect(component.subjectEntries().map((e) => e.id)).toContain('cinema');
-    });
-
-    it('clears the subjects search on close without refetching', () => {
-      component.subjectsPanelSearch = 'cin';
-      mockDirectoryService.getAllL10nEntries.mockClear();
-
-      component.onSubjectsPanelOpen(false);
-
-      expect(component.subjectsPanelSearch).toBe('');
-      expect(mockDirectoryService.getAllL10nEntries).not.toHaveBeenCalled();
-    });
-
-    it('renders a child subject as Parent/Child', () => {
-      expect(component.subjectPillLabel('cinema')).toBe('Art/Cinema');
-    });
-
-    it('removes one subject and leaves the others', () => {
-      component.subjects = ['cinema', 'painting'];
-      component.removeSubject('cinema');
-      expect(component.subjects).toEqual(['painting']);
-    });
+  it('locks the form and the buttons while saving, and sends once however often Save is pressed', async () => {
+    const pending = new Subject<NuxeoDocument>();
+    updateDocument.mockReturnValueOnce(pending);
+    await clickSave();
+    dialog.save();
+    expect(updateDocument).toHaveBeenCalledTimes(1);
+    expect(host().querySelector('.form')?.textContent?.trim()).toBe('edit doc-1 true');
+    expect(saveButton().disabled).toBe(true);
+    expect(saveButton().querySelector('mat-spinner')?.getAttribute('aria-label')).toBe('Saving');
+    pending.next(DOC);
+    await settle();
+    expect(close).toHaveBeenCalledWith(DOC);
   });
 
-  describe('coverage picker', () => {
-    it('groups coverage children under their parent label', () => {
-      const groups = component.groupedCoverageOptions();
-      expect(groups).toHaveLength(1);
-      expect(groups[0].parentLabel).toBe('Africa');
-      expect(groups[0].entries.map((e) => e.id)).toEqual(['tanzania']);
-    });
-
-    it('reloads coverage entries when the panel opens', () => {
-      mockDirectoryService.getAllL10nEntries.mockClear();
-
-      component.onCoveragePanelOpen(true);
-
-      expect(mockDirectoryService.getAllL10nEntries).toHaveBeenCalledWith('l10ncoverage');
-      expect(component.coverageEntries().map((e) => e.id)).toContain('tanzania');
-    });
-
-    it('clears the coverage search on close without refetching', () => {
-      component.coveragePanelSearch = 'afr';
-      mockDirectoryService.getAllL10nEntries.mockClear();
-
-      component.onCoveragePanelOpen(false);
-
-      expect(component.coveragePanelSearch).toBe('');
-      expect(mockDirectoryService.getAllL10nEntries).not.toHaveBeenCalled();
-    });
-
-    it('renders the selected child coverage as Parent/Child', () => {
-      expect(component.coveragePillLabel('tanzania')).toBe('Africa/Tanzania');
-    });
-
-    it('clears the selected coverage', () => {
-      expect(component.coverage).toBe('tanzania');
-      component.clearCoverage();
-      expect(component.coverage).toBeNull();
-    });
+  it('sends nothing and stays open when the form is not valid', async () => {
+    form.valid = false;
+    await clickSave();
+    expect(updateDocument).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
   });
 
-  describe('expires field', () => {
-    it('accepts an empty value as valid', () => {
-      component.expiresRawText = '';
-      component.expires = null;
-      expect(component.isExpiresValid()).toBe(true);
-      expect(component.showExpiresError()).toBe(false);
-    });
-
-    it('accepts a fully typed valid date', () => {
-      component.expiresRawText = '12/31/2026';
-      expect(component.isExpiresValid()).toBe(true);
-      expect(component.showExpiresError()).toBe(false);
-    });
-
-    it('treats unparseable text as invalid and shows the error', () => {
-      component.expiresRawText = 'not-a-date';
-      component.expires = null;
-      expect(component.isExpiresValid()).toBe(false);
-      expect(component.showExpiresError()).toBe(true);
-    });
-
-    it('reports the datepicker error state through the errorStateMatcher', () => {
-      component.expiresRawText = 'not-a-date';
-      expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
-
-      component.expiresRawText = '';
-      expect(component.expiresErrorMatcher.isErrorState()).toBe(false);
-    });
-
-    it('records raw input and marks the control dirty and touched', () => {
-      const control = {
-        markAsDirty: vi.fn(),
-        markAsTouched: vi.fn(),
-        updateValueAndValidity: vi.fn(),
-      };
-      (component as unknown as { expiresNgModel: unknown }).expiresNgModel = { control };
-
-      component.onExpiresInput({ target: { value: '12/31/2026' } } as unknown as Event);
-
-      expect(component.expiresRawText).toBe('12/31/2026');
-      expect(control.markAsDirty).toHaveBeenCalled();
-      expect(control.markAsTouched).toHaveBeenCalled();
-      // `emitEvent: false` matters — re-emitting re-enters this same handler.
-      expect(control.updateValueAndValidity).toHaveBeenCalledWith({ emitEvent: false });
-    });
-
-    it('does not throw when the ngModel control is not resolved yet', () => {
-      (component as unknown as { expiresNgModel: unknown }).expiresNgModel = undefined;
-
-      expect(() =>
-        component.onExpiresInput({ target: { value: '01/02/2027' } } as unknown as Event),
-      ).not.toThrow();
-      expect(component.expiresRawText).toBe('01/02/2027');
-    });
-
-    it('clears the raw text once a real date is picked', () => {
-      component.expiresRawText = 'partially typed';
-      component.onExpiresChange(new Date('2026-12-31T00:00:00.000Z'));
-      expect(component.expires?.toISOString()).toBe('2026-12-31T00:00:00.000Z');
-      expect(component.expiresRawText).toBe('');
-    });
-
-    it('keeps the raw text when the picked date is unusable', () => {
-      component.expiresRawText = 'partially typed';
-      component.onExpiresChange(new Date('nonsense'));
-      // Clearing here would discard what the user typed in favour of an Invalid Date.
-      expect(component.expiresRawText).toBe('partially typed');
-    });
-
-    it('keeps the raw text when the date is cleared', () => {
-      component.expiresRawText = 'partially typed';
-      component.onExpiresChange(null);
-      expect(component.expires).toBeNull();
-      expect(component.expiresRawText).toBe('partially typed');
-    });
+  it('closes without a request when nothing changed', async () => {
+    form.changes = {};
+    await clickSave();
+    expect(updateDocument).not.toHaveBeenCalled();
+    expect(close).toHaveBeenCalledWith();
   });
 
-  describe('save', () => {
-    beforeEach(() => {
-      component.title = 'Quarterly report';
-      component.description = '';
-      component.nature = null;
-      component.subjects = [];
-      component.coverage = null;
-      component.expires = null;
-      component.expiresRawText = '';
-      component.saving.set(false);
+  it('does nothing until the form is on screen', async () => {
+    form.ready.set(false);
+    await clickSave();
+    expect(form.validate).not.toHaveBeenCalled();
+    expect(updateDocument).not.toHaveBeenCalled();
+  });
+
+  it("puts Nuxeo's constraint message on the field and says nothing more when the field shows it", async () => {
+    failWith(422, {
+      'entity-type': 'exception',
+      status: 422,
+      message: "Constraint violation thrown on property dc:description[0]: 'Too long.'",
     });
+    await clickSave();
+    expect(form.showServerErrors).toHaveBeenCalledWith({ 'dc:description': 'Too long.' });
+    expect(alertText()).toBeNull();
+    expect(close).not.toHaveBeenCalled();
+    expect(saveButton().disabled).toBe(false);
+  });
 
-    it('sends trimmed values and nulls for the empty optional fields', () => {
-      component.title = '  Spaced  ';
-      component.description = '   ';
-
-      component.save();
-
-      expect(mockBrowseService.updateDocument).toHaveBeenCalledWith('doc-42', {
-        'dc:title': 'Spaced',
-        // Empty optional text must be null, not '' — an empty string is a value Nuxeo stores.
-        'dc:description': null,
-        'dc:nature': null,
-        'dc:subjects': [],
-        'dc:coverage': null,
-        'dc:expired': null,
-      });
+  it('reports the messages no field could show, with a fallback for a violation without one', async () => {
+    form.unplaced = ['The document is locked.'];
+    failWith(400, {
+      'entity-type': 'validation_report',
+      violations: [
+        { message: 'The document is locked.' },
+        { path: [{ field_name: 'pol:number' }] },
+      ],
     });
-
-    it('sends the selected vocabulary values as-is', () => {
-      component.description = 'Q3 numbers';
-      component.nature = 'memo';
-      component.subjects = ['cinema', 'painting'];
-      component.coverage = 'tanzania';
-
-      component.save();
-
-      expect(mockBrowseService.updateDocument).toHaveBeenCalledWith('doc-42', {
-        'dc:title': 'Quarterly report',
-        'dc:description': 'Q3 numbers',
-        'dc:nature': 'memo',
-        'dc:subjects': ['cinema', 'painting'],
-        'dc:coverage': 'tanzania',
-        'dc:expired': null,
-      });
+    await clickSave();
+    expect(form.showServerErrors).toHaveBeenCalledWith({
+      '': 'The document is locked.',
+      'pol:number': 'Nuxeo did not accept this value.',
     });
+    expect(alertText()).toBe('The document is locked.');
+  });
 
-    it('serialises a valid expiry as an ISO string', () => {
-      component.expires = new Date('2026-12-31T00:00:00.000Z');
-
-      component.save();
-
-      const properties = mockBrowseService.updateDocument.mock.calls[0][1];
-      expect(properties['dc:expired']).toBe('2026-12-31T00:00:00.000Z');
+  it('says a refused save is a missing permission, not a failure', async () => {
+    failWith(403, {
+      'entity-type': 'exception',
+      status: 403,
+      message: 'Privilege WRITE is not granted',
     });
+    await clickSave();
+    expect(alertText()).toBe('You do not have permission to change this document.');
+    expect(form.showServerErrors).not.toHaveBeenCalled();
+  });
 
-    /**
-     * The `!Number.isNaN(...)` ternary on `dc:expired` (edit-document-dialog.ts:523) cannot be
-     * reached with an Invalid Date through `save()`: the `!this.isExpiresValid()` guard on line
-     * 513 rejects it first and returns before any payload is built. The ternary is
-     * belt-and-braces, not the thing that prevents a `RangeError` — the guard is. Asserting the
-     * guard is therefore the real behaviour; left as-is because the redundancy is harmless.
-     */
-    it('refuses to save an invalid expiry date, before building any payload', () => {
-      component.expires = new Date('nonsense');
+  it('reports any other failure, keeps the input, and clears the report on the next try', async () => {
+    failWith(500, { 'entity-type': 'exception', status: 500, message: 'Boom' });
+    await clickSave();
+    expect(alertText()).toBe('The changes could not be saved. Try again.');
+    expect(close).not.toHaveBeenCalled();
 
-      component.save();
-
-      expect(component.isExpiresValid()).toBe(false);
-      expect(mockBrowseService.updateDocument).not.toHaveBeenCalled();
-      expect(component.saving()).toBe(false);
-    });
-
-    it('closes with the updated document on success and releases the saving flag', () => {
-      const updated = docWith({ uid: 'doc-42', title: 'Quarterly report' });
-      mockBrowseService.updateDocument.mockReturnValue(of(updated));
-
-      component.save();
-
-      expect(mockDialogRef.close).toHaveBeenCalledWith(updated);
-      expect(component.saving()).toBe(false);
-    });
-
-    it('releases the saving flag and stays open on failure', () => {
-      mockBrowseService.updateDocument.mockReturnValue(throwError(() => new Error('conflict')));
-
-      component.save();
-
-      // Leaving `saving` true would disable the Save button permanently, stranding the user
-      // with unsaved edits and no way to retry.
-      expect(component.saving()).toBe(false);
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
-    });
-
-    it('refuses to save an empty or whitespace-only title', () => {
-      component.title = '   ';
-      component.save();
-      expect(mockBrowseService.updateDocument).not.toHaveBeenCalled();
-    });
-
-    it('refuses to save while a save is already in flight', () => {
-      component.saving.set(true);
-      component.save();
-      expect(mockBrowseService.updateDocument).not.toHaveBeenCalled();
-    });
-
-    it('refuses to save while the expiry field text is invalid', () => {
-      component.expiresRawText = 'not-a-date';
-      component.save();
-      expect(mockBrowseService.updateDocument).not.toHaveBeenCalled();
-    });
+    form.valid = false;
+    await clickSave();
+    expect(alertText()).toBeNull();
   });
 });

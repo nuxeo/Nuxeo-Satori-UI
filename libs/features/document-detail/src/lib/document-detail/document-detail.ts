@@ -15,7 +15,6 @@ import {
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   AppExtensionsService,
-  DescriptorLabelPipe,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionComponentRegistry,
@@ -314,7 +313,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NxsTabBodyDirective,
     NxsTabsComponent,
     CdkAriaLive,
-    DescriptorLabelPipe,
     TranslatePipe,
     DatePipe,
     NgTemplateOutlet,
@@ -3502,7 +3500,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!currentDoc || !this.requireWritePermission()) return;
 
     const ref = this.dialog.open(EditDocumentDialogComponent, {
-      width: '560px',
+      width: '720px',
+      maxWidth: '95vw',
       data: { document: currentDoc },
     });
 
