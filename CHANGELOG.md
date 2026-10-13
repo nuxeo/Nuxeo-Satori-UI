@@ -28,6 +28,27 @@ so the next publish has to be a minor. Nothing has been published yet.
   `provideNxsSatoriComponents()` re-registers the same four IDs on Satori. List it after
   `provideNxsComponents()`; later registrations win.
 
+### Added (`@nuxeo-satori/platform/components`) — search
+
+- `nxs-search-filters`, Web UI's search form over `default_search`, which edits `NxsSearchFilters`
+  and takes the server's `aggregations` for its counts; with `nxsSearchFiltersToQuery`,
+  `nxsSearchFiltersToSavedParams`, `nxsSearchFiltersFromParams` and `nxsSearchFiltersToRecord` to
+  convert the filters.
+- `nxs-saved-search-select`, the saved searches a page provider lists, and
+  `nxs-saved-search-actions`, which offers Save, Rename, Share and Delete only with `WriteProperties`
+  on the saved search, as Web UI does.
+
+### Fixed (`@nuxeo-satori/platform/nuxeo-client`) — search
+
+- `SearchService.search` sends a collection on `ecm_collections`. It sent the collection id on
+  `dc_coverage_agg` too, which the server applied as a coverage filter, so a collection search
+  returned nothing. `moreThan1YearAgo`, which the server ignored, is sent as `priorToLastYear`;
+  the page is no longer filtered again client-side; dashes in the full text become spaces, as in Web
+  UI; and a list parameter may be a JSON array, which keeps a value containing a comma whole.
+- `SearchService.getSavedSearchById` returns a list parameter as JSON rather than comma-joined.
+- Added `SearchService.getTagSuggestions` (`Tag.Suggestion`) and `renameSavedSearch`, which keeps
+  the stored filters.
+
 ### Removed (`@nuxeo-satori/platform`) — a peer dependency
 
 - **`@alfresco/adf-extensions` is no longer a peer dependency.** The extension engine used three of

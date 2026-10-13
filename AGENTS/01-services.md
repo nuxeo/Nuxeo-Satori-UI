@@ -146,8 +146,10 @@ readonly savedSearchVersion: Signal<number>
 markSavedSearchDirty(): void
 ```
 
-The search page and drawer do not read or write these directly any more: `SearchSession` in
-`libs/features/search` keeps the filters here and runs the one search both show.
+`SearchSession` in `libs/features/search` keeps the filters and the open saved search here, runs
+the one search the page and the drawer show, and publishes its `items` and `aggregations` here; the
+drawer's queue reads `items`. Search for results through the session, not by calling
+`SearchService.search` beside it.
 
 ## SearchService (`search.service.ts`)
 

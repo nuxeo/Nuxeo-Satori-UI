@@ -824,7 +824,7 @@ describe('SearchComponent', () => {
       /**
        * The other half, and the reason the two flags are separate.
        *
-       * `loading` belongs to the standard `results$` pipeline. When `runNxqlQuery` shared it,
+       * `loading` belongs to the standard search `SearchSession` runs. When `runNxqlQuery` shared it,
        * `supersedeAiRequest` had to clear it — and that clear could land while a *standard* search was
        * still in flight. Every view mode is gated on `!busy()`, so the spinner disappeared and the
        * PREVIOUS results rendered as if they were current.
@@ -988,10 +988,10 @@ describe('SearchComponent', () => {
   });
   describe('the results pipeline', () => {
     /**
-     * `results$` combines the route's query params with the drawer's filter signal, builds a
-     * request, and fans the response out into three places. Driven through the real pipeline
-     * rather than by setting `results` directly, because the request-building and the fan-out
-     * are the parts that carry risk.
+     * The page hands its URL's quick filters and sort to `SearchSession`, which combines them with
+     * the drawer's filters, sends the one request and fans the response out into three places.
+     * Driven through the real session rather than by setting `results` directly, because the
+     * request-building and the fan-out are the parts that carry risk.
      */
     it('publishes items, aggregations and favourites from one response', async () => {
       const items = [resultItem({ id: 'a', isFavorite: true }), resultItem({ id: 'b' })];
@@ -1004,8 +1004,8 @@ describe('SearchComponent', () => {
       await fixture.whenStable();
 
       expect(component.results().map((i) => i.id)).toEqual(['a', 'b']);
-      // Aggregations and items are pushed to the shared service so the filters drawer can
-      // render facet counts without issuing its own query.
+      // Aggregations and items are published to the shared service, which the drawer's queue
+      // reads; the drawer's counts come from the same response, with no query of its own.
       expect(mockSearchAggregationService.aggregations()).toEqual({
         dc_creator: { buckets: [] },
       });

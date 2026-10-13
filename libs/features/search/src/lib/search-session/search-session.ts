@@ -164,8 +164,8 @@ export class SearchSession {
     this.savedFilters.set(null);
     return this.searchService.getSavedSearchById(id).pipe(
       map((params) => {
-        // `getSavedSearchById` answers a failed read with no parameters at all; a saved search
-        // always has some, since none is saved without a filter and Web UI writes every key.
+        // `getSavedSearchById` answers a failed read with no parameters at all, and a saved
+        // search always has some: the server returns every one of its page provider's.
         if (Object.keys(params).length === 0)
           throw new Error(`Saved search ${id} could not be read`);
         return params;
