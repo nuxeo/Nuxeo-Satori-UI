@@ -1,0 +1,221 @@
+@if (document(); as doc) {
+  <dl class="nxs-properties-panel__info">
+    @if (processRunning()) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.process' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value">
+          <nxs-tag
+            color="orange"
+            [label]="'satori-components.properties-panel.running' | translate"
+          />
+        </dd>
+      </div>
+    }
+
+    @if (state()) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.state' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value">
+          <span class="nxs-properties-panel__state">{{ state() }}</span>
+        </dd>
+      </div>
+    }
+
+    <div class="nxs-properties-panel__row">
+      <dt class="nxs-properties-panel__label">
+        {{ 'satori-components.properties-panel.version' | translate }}
+      </dt>
+      <dd class="nxs-properties-panel__value">
+        <ng-content select="[nxsVersion]">
+          <span [class.nxs-properties-panel__empty]="!versionLabel()">{{
+            versionLabel() || '—'
+          }}</span>
+        </ng-content>
+      </dd>
+    </div>
+
+    @if (publications() !== null) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.publications' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value">
+          @if (publications()! > 0) {
+            <button
+              type="button"
+              class="nxs-properties-panel__link"
+              (click)="publicationsSelected.emit()"
+            >
+              {{ publications() }}
+            </button>
+          } @else {
+            <span class="nxs-properties-panel__empty">0</span>
+          }
+        </dd>
+      </div>
+    }
+
+    @if (modified()) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.last-modified' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value">{{ modified() | date: 'longDate' }}</dd>
+      </div>
+    }
+
+    @if (created()) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.created' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value">{{ created() | date: 'longDate' }}</dd>
+      </div>
+    }
+
+    @if (creator(); as by) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.by' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value nxs-properties-panel__person">
+          <nxs-avatar [initials]="by.initial" [color]="by.color" size="24" />
+          <span>{{ by.name }}</span>
+        </dd>
+      </div>
+    }
+
+    @if (contributors().length > 0) {
+      <div class="nxs-properties-panel__row">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.contributors' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__value nxs-properties-panel__people">
+          @for (contributor of contributors(); track $index) {
+            <span class="nxs-properties-panel__person">
+              <nxs-avatar [initials]="contributor.initial" [color]="contributor.color" size="24" />
+              <span>{{ contributor.name }}</span>
+            </span>
+          }
+        </dd>
+      </div>
+    }
+  </dl>
+
+  <div class="nxs-properties-panel__heading" role="heading" [attr.aria-level]="headingLevel()">
+    {{ 'satori-components.properties-panel.indexing-properties' | translate }}
+  </div>
+
+  <dl class="nxs-properties-panel__fields">
+    <div class="nxs-properties-panel__field">
+      <dt class="nxs-properties-panel__label">
+        {{ 'satori-components.properties-panel.title' | translate }}
+      </dt>
+      <dd class="nxs-properties-panel__text">{{ doc.title }}</dd>
+    </div>
+
+    @if (format()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.format' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text">{{ format() }}</dd>
+      </div>
+    }
+
+    @if (fileName()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.file-name' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text">{{ fileName() }}</dd>
+      </div>
+    }
+
+    @if (expires()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.expires' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text">{{ expires() | date: 'longDate' }}</dd>
+      </div>
+    }
+
+    @if (taggable()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.tags' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text">
+          <ng-content select="[nxsTags]">
+            <div class="nxs-properties-panel__chips">
+              @for (tag of tags(); track tag) {
+                <nxs-tag color="gray" [label]="tag" />
+              } @empty {
+                <span class="nxs-properties-panel__empty">—</span>
+              }
+            </div>
+          </ng-content>
+        </dd>
+      </div>
+    }
+
+    @if (description()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.description' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text nxs-properties-panel__description">
+          {{ description() }}
+        </dd>
+      </div>
+    }
+
+    @if (nature()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.nature' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text">{{ nature() }}</dd>
+      </div>
+    }
+
+    @if (coverage()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.coverage' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text nxs-properties-panel__chips">
+          <nxs-tag color="gray" [label]="coverage()" />
+        </dd>
+      </div>
+    }
+
+    @if (subjects()) {
+      <div class="nxs-properties-panel__field">
+        <dt class="nxs-properties-panel__label">
+          {{ 'satori-components.properties-panel.subjects' | translate }}
+        </dt>
+        <dd class="nxs-properties-panel__text">{{ subjects() }}</dd>
+      </div>
+    }
+  </dl>
+
+  <ng-content />
+
+  @if (collections().length > 0) {
+    <div class="nxs-properties-panel__divider"></div>
+    <div class="nxs-properties-panel__heading" role="heading" [attr.aria-level]="headingLevel()">
+      {{ 'satori-components.properties-panel.collections' | translate }}
+    </div>
+    <div class="nxs-properties-panel__chips">
+      @for (collection of collections(); track collection.uid || collection.title) {
+        <nxs-tag color="blue" [label]="collection.title" />
+      }
+    </div>
+  }
+}

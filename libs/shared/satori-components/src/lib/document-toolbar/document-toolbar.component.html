@@ -1,0 +1,65 @@
+<div
+  class="nxs-document-toolbar__group"
+  role="group"
+  [attr.aria-label]="ownLabel() || ('satori-components.document-toolbar.label' | translate)"
+>
+  <ng-content />
+
+  @for (action of inline(); track action.id) {
+    <button
+      mat-icon-button
+      type="button"
+      class="nxs-document-toolbar__action"
+      [class.nxs-document-toolbar__action--active]="action.active"
+      [attr.data-action-id]="action.id"
+      [matTooltip]="tooltipOf(action)"
+      [attr.aria-label]="action.label"
+      [disabled]="!!action.disabled"
+      disabledInteractive
+      (click)="run(action)"
+    >
+      @if (action.icon) {
+        <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
+      } @else {
+        <span class="nxs-document-toolbar__text" aria-hidden="true">{{ action.label }}</span>
+      }
+    </button>
+  }
+
+  @if (overflow().length > 0) {
+    <button
+      mat-icon-button
+      type="button"
+      class="nxs-document-toolbar__more"
+      [matMenuTriggerFor]="moreMenu"
+      [matTooltip]="
+        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+      "
+      [attr.aria-label]="
+        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+      "
+    >
+      <mat-icon aria-hidden="true">more_vert</mat-icon>
+    </button>
+  }
+</div>
+
+<mat-menu #moreMenu="matMenu" class="nxs-document-toolbar__menu">
+  @for (action of overflow(); track action.id) {
+    <button
+      mat-menu-item
+      type="button"
+      [attr.data-action-id]="action.id"
+      [disabled]="!!action.disabled"
+      [matTooltip]="action.tooltip ?? ''"
+      [matTooltipDisabled]="!action.tooltip"
+      matTooltipPosition="left"
+      (click)="run(action)"
+    >
+      @if (action.icon) {
+        <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
+      }
+      <span>{{ action.label }}</span>
+    </button>
+  }
+</mat-menu>

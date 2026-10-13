@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-43 exported symbol(s).
+54 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -271,12 +271,50 @@ class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsColumnPickerComponent, "nxs-column-picker", never, { "columns": { "alias": "columns"; "required": true; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "defaults": { "alias": "defaults"; "required": false; "isSignal": true; }; }, { "apply": "apply"; "dismiss": "dismiss"; }, never, never, true, never>;
     }
 }
+class NxsDetailsPanelComponent {
+    readonly heading: _angular_core.InputSignal<string>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly tabs: _angular_core.InputSignal<readonly NxsDetailsPanelTab[]>;
+    readonly selected: _angular_core.ModelSignal<string>;
+    readonly closeLabel: _angular_core.InputSignal<string>;
+    readonly closed: _angular_core.OutputEmitterRef<void>;
+    protected readonly regionLabel: _angular_core.Signal<string | null>;
+    protected readonly ownCloseLabel: _angular_core.Signal<string>;
+    protected readonly activeId: _angular_core.Signal<string>;
+    protected readonly panelId: string;
+    protected tabId(id: string): string;
+    protected select(tab: NxsDetailsPanelTab): void;
+    protected onKeydown(event: KeyboardEvent, index: number): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDetailsPanelComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDetailsPanelComponent, "nxs-details-panel", never, { "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "tabs": { "alias": "tabs"; "required": true; "isSignal": true; }; "selected": { "alias": "selected"; "required": false; "isSignal": true; }; "closeLabel": { "alias": "closeLabel"; "required": false; "isSignal": true; }; }, { "selected": "selectedChange"; "closed": "closed"; }, never, ["*"], true, never>;
+    }
+}
+interface NxsDetailsPanelTab {
+    readonly id: string;
+    readonly label: string;
+    }
+}
 class NxsDocTypeIconComponent {
     readonly type: _angular_core.InputSignal<string>;
     readonly label: _angular_core.InputSignal<string>;
     protected readonly icon: _angular_core.Signal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocTypeIconComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocTypeIconComponent, "nxs-doc-type-icon", never, { "type": { "alias": "type"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+class NxsDocumentToolbarComponent {
+    readonly actions: _angular_core.InputSignal<readonly NxsToolbarAction[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly moreLabel: _angular_core.InputSignal<string>;
+    readonly selected: _angular_core.OutputEmitterRef<NxsToolbarAction>;
+    protected readonly inline: _angular_core.Signal<NxsToolbarAction[]>;
+    protected readonly overflow: _angular_core.Signal<NxsToolbarAction[]>;
+    protected readonly ownLabel: _angular_core.Signal<string>;
+    protected readonly ownMoreLabel: _angular_core.Signal<string>;
+    protected tooltipOf(action: NxsToolbarAction): string;
+    protected run(action: NxsToolbarAction): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "moreLabel": { "alias": "moreLabel"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, ["*"], true, never>;
     }
 }
 class NxsDomainHintComponent {
@@ -432,6 +470,37 @@ interface NxsPickableColumn {
     readonly visible: boolean;
     }
 }
+class NxsPropertiesPanelComponent {
+    readonly document: _angular_core.InputSignal<NuxeoDocument | null>;
+    readonly vocabularyLabel: _angular_core.InputSignal<NxsVocabularyLabel | null>;
+    readonly processRunning: _angular_core.InputSignal<boolean>;
+    readonly versionLabel: _angular_core.InputSignal<string>;
+    readonly publications: _angular_core.InputSignal<number | null>;
+    readonly format: _angular_core.InputSignal<string>;
+    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
+    readonly publicationsSelected: _angular_core.OutputEmitterRef<void>;
+    protected readonly props: _angular_core.Signal<Readonly<Record<string, unknown>>>;
+    protected readonly state: _angular_core.Signal<string>;
+    protected readonly modified: _angular_core.Signal<string>;
+    protected readonly created: _angular_core.Signal<string>;
+    protected readonly expires: _angular_core.Signal<string>;
+    protected readonly creator: _angular_core.Signal<NxsPerson | null>;
+    protected readonly contributors: _angular_core.Signal<NxsPerson[]>;
+    protected readonly fileName: _angular_core.Signal<string>;
+    protected readonly description: _angular_core.Signal<string>;
+    protected readonly nature: _angular_core.Signal<string>;
+    protected readonly coverage: _angular_core.Signal<string>;
+    protected readonly subjects: _angular_core.Signal<string>;
+    protected readonly taggable: _angular_core.Signal<boolean>;
+    protected readonly tags: _angular_core.Signal<string[]>;
+    protected readonly collections: _angular_core.Signal<{
+    uid: string;
+    title: string;
+    }[]>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsPropertiesPanelComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsPropertiesPanelComponent, "nxs-properties-panel", never, { "document": { "alias": "document"; "required": true; "isSignal": true; }; "vocabularyLabel": { "alias": "vocabularyLabel"; "required": false; "isSignal": true; }; "processRunning": { "alias": "processRunning"; "required": false; "isSignal": true; }; "versionLabel": { "alias": "versionLabel"; "required": false; "isSignal": true; }; "publications": { "alias": "publications"; "required": false; "isSignal": true; }; "format": { "alias": "format"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; }, { "publicationsSelected": "publicationsSelected"; }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
+    }
+}
 class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     readonly heading: _angular_core.InputSignal<string>;
     readonly content: _angular_core.InputSignal<string>;
@@ -461,6 +530,36 @@ class NxsSpinnerComponent {
     protected readonly name: _angular_core.Signal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSpinnerComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSpinnerComponent, "nxs-spinner", never, { "diameter": { "alias": "diameter"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsTab {
+    readonly id: string;
+    readonly label: string;
+    readonly icon?: string;
+    }
+}
+interface NxsTabBodyContext {
+    readonly $implicit: NxsTab;
+    }
+}
+class NxsTabBodyDirective {
+    readonly template: TemplateRef<NxsTabBodyContext>;
+    static ngTemplateContextGuard(_directive: NxsTabBodyDirective, _context: unknown): _context is NxsTabBodyContext;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTabBodyDirective, never>;
+    static ɵdir: _angular_core.ɵɵDirectiveDeclaration<NxsTabBodyDirective, "ng-template[nxsTabBody]", never, {}, {}, never, never, true, never>;
+    }
+}
+class NxsTabsComponent {
+    readonly tabs: _angular_core.InputSignal<readonly NxsTab[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly selectedIndex: _angular_core.ModelSignal<number>;
+    readonly selectedTabChange: _angular_core.OutputEmitterRef<NxsTab>;
+    protected readonly body: _angular_core.Signal<NxsTabBodyDirective | undefined>;
+    protected readonly ownLabel: _angular_core.Signal<string>;
+    constructor();
+    protected select(index: number): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTabsComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTabsComponent, "nxs-tabs", never, { "tabs": { "alias": "tabs"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "selectedIndex": { "alias": "selectedIndex"; "required": false; "isSignal": true; }; }, { "selectedIndex": "selectedIndexChange"; "selectedTabChange": "selectedTabChange"; }, ["body"], never, true, never>;
     }
 }
 type NxsTagColor = NxsAvatarColor | 'gray';
@@ -507,7 +606,19 @@ class NxsToastService {
     static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
     }
 }
+interface NxsToolbarAction {
+    readonly id: string;
+    readonly label: string;
+    readonly icon?: string;
+    readonly tooltip?: string | null;
+    readonly disabled?: boolean;
+    readonly active?: boolean;
+    readonly overflow?: boolean;
+    }
+}
+type NxsVocabularyLabel = (directory: string, id: string) => string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
+function nxsPropertyText(value: unknown): string;
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
 function provideNxsComponents(): EnvironmentProviders;
 function provideNxsThumbnailCache(): Provider;

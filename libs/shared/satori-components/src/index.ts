@@ -6,7 +6,15 @@ export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
 } from './lib/column-picker/column-picker.component';
+export {
+  NxsDetailsPanelComponent,
+  type NxsDetailsPanelTab,
+} from './lib/details-panel/details-panel.component';
 export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.component';
+export {
+  NxsDocumentToolbarComponent,
+  type NxsToolbarAction,
+} from './lib/document-toolbar/document-toolbar.component';
 export { NxsDomainHintComponent } from './lib/domain-hint/domain-hint.component';
 export {
   NxsDriveDialogComponent,
@@ -27,7 +35,18 @@ export {
   NXS_PERMISSIONS_PANEL_ID,
   NxsPermissionsPanelComponent,
 } from './lib/permissions-panel/permissions-panel.component';
+export {
+  NxsPropertiesPanelComponent,
+  type NxsVocabularyLabel,
+} from './lib/properties-panel/properties-panel.component';
+export { nxsPropertyText } from './lib/properties-panel/property-text';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
+export {
+  NxsTabBodyDirective,
+  type NxsTab,
+  type NxsTabBodyContext,
+} from './lib/tabs/tab-body.directive';
+export { NxsTabsComponent } from './lib/tabs/tabs.component';
 export { provideNxsThumbnailCache } from './lib/thumbnail/thumbnail-cache';
 export { NxsThumbnailComponent } from './lib/thumbnail/thumbnail.component';
 export {

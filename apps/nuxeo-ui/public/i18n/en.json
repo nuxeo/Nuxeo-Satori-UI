@@ -1964,6 +1964,13 @@
       "reset": "Reset",
       "title": "Column Settings"
     },
+    "details-panel": {
+      "close": "Close details"
+    },
+    "document-toolbar": {
+      "label": "Document actions",
+      "more-actions": "More actions"
+    },
     "drive-dialog": {
       "checking": "Checking Nuxeo Drive...",
       "close": "Close",
@@ -2109,6 +2116,28 @@
       "unverified": {
         "heading": "The changes were sent, but reading the permissions back failed, so the panel cannot confirm them. Reload to see what the server holds."
       }
+    },
+    "properties-panel": {
+      "by": "By",
+      "collections": "Collections",
+      "contributors": "Contributors",
+      "coverage": "Coverage",
+      "created": "Created",
+      "description": "Description",
+      "expires": "Expires",
+      "file-name": "File name",
+      "format": "Format",
+      "indexing-properties": "Indexing properties",
+      "last-modified": "Last modified",
+      "nature": "Nature",
+      "process": "Process",
+      "publications": "Publications",
+      "running": "Running",
+      "state": "State",
+      "subjects": "Subjects",
+      "tags": "Tags",
+      "title": "Title",
+      "version": "Version"
     },
     "toast": {
       "dismiss": "Dismiss",

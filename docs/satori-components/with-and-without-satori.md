@@ -306,6 +306,66 @@ The folder header's "More actions" button with its menu open, opened with Enter 
 
 The page gives the menu its entries and runs the one chosen. An entry that is not allowed is shown disabled; one hidden by the configuration is not listed, and with none left, no button renders.
 
+### Document toolbar
+
+| Field           | Value                                                     |
+| --------------- | --------------------------------------------------------- |
+| Component       | `NxsDocumentToolbarComponent`                             |
+| Registered ID   | —                                                         |
+| With Satori     | Same component; theme only                                |
+| Storybook story | `documents-document-toolbar--file-locked-by-another-user` |
+
+![Document toolbar: without Satori on the left, with Satori on the right](document-toolbar-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The action row of a File locked by another user: Edit, Add to collection, the padlock drawn as on, Add to Favorites, Share and Delete as icon buttons, and a "More actions" button for the rest. The same buttons in both; the theme sets the icon colour, the "on" colour of the padlock and the focus ring.
+
+The page gives the toolbar its entries and runs the one chosen. A disabled entry stays focusable so its tooltip, such as who holds the lock, can be read; with nothing to overflow, no "More actions" button renders.
+
+### Tabs
+
+| Field           | Value                       |
+| --------------- | --------------------------- |
+| Component       | `NxsTabsComponent`          |
+| Registered ID   | —                           |
+| With Satori     | Same component; theme only  |
+| Storybook story | `documents-tabs--file-tabs` |
+
+![Tabs: without Satori on the left, with Satori on the right](tabs-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A File's View, Permissions, History and Publishing tabs and a "Claims" tab a manifest adds, with View selected. The same strip in both; the theme sets the type, the icon colour and the selection underline.
+
+The page gives the tabs their list and one template every body renders from, so a tab a manifest adds renders like a packaged one.
+
+### Details panel
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsDetailsPanelComponent`                  |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `documents-details-panel--document-details` |
+
+![Details panel: without Satori on the left, with Satori on the right](details-panel-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document page's side panel for "Quarterly report.pdf": the header with its close button, the Properties, Comments and Activity views with Properties selected, and the view's content. The same panel in both; the theme sets the type, the divider and the selection underline.
+
+The page decides which views exist — no Comments view on a document that cannot be commented on — and projects what each one shows.
+
+### Properties panel
+
+| Field           | Value                                         |
+| --------------- | --------------------------------------------- |
+| Component       | `NxsPropertiesPanelComponent`                 |
+| Registered ID   | —                                             |
+| With Satori     | Same component; theme only                    |
+| Storybook story | `documents-properties-panel--file-properties` |
+
+![Properties panel: without Satori on the left, with Satori on the right](properties-panel-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A File's properties: its state, version, publications, dates, creator and contributors, then title, file name, tags, description, nature, coverage and subjects, and the collection it is in. The same rows in both; the theme sets the type, the label colour and the chips.
+
+Every value is a label or a name: a directory entry or a user that arrives as an object never shows as `[object Object]`. Tags show only on a document that can be tagged.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -377,6 +437,10 @@ The components in the library today:
 | Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
 | Favorite toggle    | —                                                                                                                       | Same component; theme only   |
 | Action menu        | —                                                                                                                       | Same component; theme only   |
+| Document toolbar   | —                                                                                                                       | Same component; theme only   |
+| Tabs               | —                                                                                                                       | Same component; theme only   |
+| Details panel      | —                                                                                                                       | Same component; theme only   |
+| Properties panel   | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 
