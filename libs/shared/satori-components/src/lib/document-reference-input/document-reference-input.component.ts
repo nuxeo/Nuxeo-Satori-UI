@@ -111,7 +111,7 @@ export class NxsDocumentReferenceInputComponent
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
   private readonly input = viewChild.required(MatInput);
-  protected readonly control = new NxsPickerControl<NxsDocumentReference | null>();
+  private readonly control = new NxsPickerControl<NxsDocumentReference | null>();
 
   protected readonly text = signal('');
   protected readonly finder = nxsSearchAsYouType<NxsDocumentReference>(

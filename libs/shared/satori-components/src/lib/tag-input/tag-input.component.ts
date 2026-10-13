@@ -73,7 +73,7 @@ export class NxsTagInputComponent implements ControlValueAccessor, Validator, Do
   private readonly translate = inject(TranslateService);
   private readonly grid = viewChild.required(MatChipGrid);
   private readonly trigger = viewChild.required(MatAutocompleteTrigger);
-  protected readonly control = new NxsPickerControl<readonly string[]>();
+  private readonly control = new NxsPickerControl<readonly string[]>();
 
   protected readonly text = signal('');
   protected readonly finder = nxsSearchAsYouType<string>(

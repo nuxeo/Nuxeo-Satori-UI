@@ -78,7 +78,7 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   private readonly dateInput = viewChild.required<MatDatepickerInput<unknown>>(MatDatepickerInput);
   /** The date the field last set itself, so its own changes are not mistaken for a host's. */
   private committed: Date | null = null;
-  protected readonly control = new NxsPickerControl<Date | null>();
+  private readonly control = new NxsPickerControl<Date | null>();
 
   /** What the user typed, while it is not a date the field holds. */
   private readonly typed = signal('');

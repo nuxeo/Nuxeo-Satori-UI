@@ -97,7 +97,7 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   private readonly users = inject(UserService);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
-  protected readonly control = new NxsPickerControl<NxsPrincipal | null>();
+  private readonly control = new NxsPickerControl<NxsPrincipal | null>();
 
   /** What the input shows: the chosen principal's label, or what the user is typing. */
   protected readonly text = signal('');

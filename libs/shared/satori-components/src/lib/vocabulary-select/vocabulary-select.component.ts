@@ -111,7 +111,7 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
   private readonly destroyRef = inject(DestroyRef);
   private readonly input = viewChild(MatInput);
   private readonly grid = viewChild(MatChipGrid);
-  protected readonly control = new NxsPickerControl<string | readonly string[] | null>();
+  private readonly control = new NxsPickerControl<string | readonly string[] | null>();
 
   private readonly loads = new Subject<string>();
   /** The value the picker last set itself, so its own changes are not mistaken for a host's. */
