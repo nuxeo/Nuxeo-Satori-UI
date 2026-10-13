@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -16,6 +15,7 @@ import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
 import { type MockInstance, vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { NxsToastService } from '@nuxeo-satori/platform/components';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -134,7 +134,7 @@ const mockDialog = {
   })),
 };
 
-const snack = vi.fn();
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const mockWorkflowService = {
   getDocumentWorkflows: vi.fn((_uid: string): Observable<NuxeoWorkflow[]> => of([])),
@@ -222,10 +222,10 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         }),
       ],
     })
-      // The real template imports the Material modules, whose own `MatDialog` and
-      // `MatSnackBar` would otherwise shadow a root-level mock.
+      // The real template imports the Material modules, whose own `MatDialog` would otherwise
+      // shadow a root-level mock, and the component provides its own `NxsToastService`.
       .overrideProvider(MatDialog, { useValue: mockDialog })
-      .overrideProvider(MatSnackBar, { useValue: { open: snack } })
+      .overrideProvider(NxsToastService, { useValue: toast })
       .compileComponents();
 
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
@@ -484,11 +484,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       fixture.componentInstance.openEditDialog();
 
       expect(mockDialog.open).not.toHaveBeenCalled();
-      expect(snack).toHaveBeenCalledWith(
-        'You do not have permission to perform this action',
-        'OK',
-        expect.anything(),
-      );
+      expect(toast.error).toHaveBeenCalledWith('You do not have permission to perform this action');
     });
 
     it('leaves the live document editable', async () => {
@@ -553,7 +549,8 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await click('.version-banner-restore');
 
       expect(mockDetailService.restoreVersion).toHaveBeenCalledWith('v-0-1');
-      expect(snack).toHaveBeenCalledWith('Restored to version 0.1', 'OK', expect.anything());
+      expect(toast.show).toHaveBeenCalledWith('Restored to version 0.1');
+      expect(toast.error).not.toHaveBeenCalled();
       expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
     });
 
@@ -577,7 +574,8 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
       await click('.version-banner-restore');
 
-      expect(snack).toHaveBeenCalledWith(message, 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith(message);
+      expect(toast.show).not.toHaveBeenCalled();
       expect(navigate).not.toHaveBeenCalled();
       expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
       expect(fixture.componentInstance.actionInProgress()).toBeNull();
