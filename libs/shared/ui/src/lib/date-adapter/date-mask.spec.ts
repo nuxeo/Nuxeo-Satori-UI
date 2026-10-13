@@ -82,6 +82,40 @@ describe('dateMaskFor', () => {
   });
 
   /**
+   * `providePlatformEnglishFallback()` answers with the platform's English for any language
+   * whose catalogue has no mask, so the letters arrive in **English** order while `LOCALE_ID`
+   * says otherwise. The first version of this function read them as the language's own and
+   * reintroduced the defect: `fr` kept month-first `mm/dd/yyyy`, and `fr-CA` composed English
+   * runs through French field positions and produced `yy-dd-mm`. Every row here is day-first or
+   * year-first, which is what each of these parsers accepts.
+   */
+  describe.each([
+    { locale: 'fr', expected: 'dd/mm/yyyy', why: 'French parses day-first' },
+    { locale: 'de', expected: 'dd.mm.yyyy', why: 'German uses dots' },
+    { locale: 'nl', expected: 'dd-mm-yyyy', why: 'Dutch uses hyphens' },
+    { locale: 'ja', expected: 'yyyy/mm/dd', why: 'Japanese is year-first' },
+    { locale: 'th', expected: 'dd/mm/yyyy', why: 'Thai parses day-first' },
+    { locale: 'zh', expected: 'yy-mm-dd', why: 'Chinese is a two-digit year' },
+    { locale: 'fr-CA', expected: 'yy-mm-dd', why: 'the yy-dd-mm case the review found' },
+    { locale: 'fr-CH', expected: 'dd.mm.yyyy', why: 'French order, Swiss dots' },
+    { locale: 'en-GB', expected: 'dd/mm/yyyy', why: 'English letters already' },
+  ])('English fallback under $locale ($why)', ({ locale, expected }) => {
+    it(`composes ${expected}`, () => {
+      expect(dateMaskFor(locale, CATALOGUE_MASKS.en)).toBe(expected);
+    });
+
+    it('never leaves the English month-first hint in place', () => {
+      if (expected === CATALOGUE_MASKS.en) return;
+      expect(dateMaskFor(locale, CATALOGUE_MASKS.en)).not.toBe(CATALOGUE_MASKS.en);
+    });
+  });
+
+  it('reads a language’s own mask as that language, not as the English fallback', () => {
+    // `jj/mm/aaaa` is not the English value, so French field positions are the right ones.
+    expect(dateMaskFor('fr-CA', CATALOGUE_MASKS.fr)).toBe('aa-mm-jj');
+  });
+
+  /**
    * Anything it cannot line up comes back exactly as given. A hint this function mangled would
    * be worse than one that merely disagrees with the parser, and it cannot tell a value it
    * failed to parse from one it misread.

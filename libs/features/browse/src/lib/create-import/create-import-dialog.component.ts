@@ -659,10 +659,21 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   isExpiresValid(): boolean {
-    const parsed = this.expiresRawText.trim()
-      ? this.dateAdapter.parse(this.expiresRawText, this.dateFormats.parse.dateInput)
-      : this.expires;
-    return isExpiresFieldValid(this.expiresRawText, parsed);
+    return this.isExpiresStateValid(this.expiresRawText, this.expires);
+  }
+
+  /**
+   * One Expires check for the live form and for an entry's saved state alike.
+   *
+   * Next saves the form without validating it, so `isImportFormComplete()` alone only ever
+   * described the file on screen: an invalid expiry typed on file 1 was serialized as
+   * `dc:expired: null` and sent when the batch was submitted from file 3.
+   */
+  private isExpiresStateValid(expiresRawText: string, expires: Date | null): boolean {
+    const parsed = expiresRawText.trim()
+      ? this.dateAdapter.parse(expiresRawText, this.dateFormats.parse.dateInput)
+      : expires;
+    return isExpiresFieldValid(expiresRawText, parsed);
   }
 
   showExpiresError(): boolean {
@@ -684,7 +695,16 @@ export class CreateImportDialogComponent implements OnInit {
     const allCheckedVisited = entries
       .filter((entry) => entry.checked)
       .every((entry) => entry.visited);
-    return onLast || allCheckedVisited;
+    if (!onLast && !allCheckedVisited) return false;
+    // The entry on screen is covered by `isImportFormComplete()` above; its own saved state is
+    // a navigation behind. Every other checked entry is judged on what Next stored for it.
+    const current = this.importFileIndex();
+    return entries.every(
+      (entry, index) =>
+        !entry.checked ||
+        index === current ||
+        this.isExpiresStateValid(entry.state.expiresRawText, entry.state.expires),
+    );
   }
 
   /** Apply To All is only available on the first file while metadata is still being configured. */

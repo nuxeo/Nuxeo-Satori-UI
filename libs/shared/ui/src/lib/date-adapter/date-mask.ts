@@ -1,3 +1,4 @@
+import { PLATFORM_EN_TRANSLATIONS } from '../i18n/platform-en';
 import { dateFnsLocaleFor } from './satori-date-adapter';
 
 /**
@@ -24,6 +25,19 @@ import { dateFnsLocaleFor } from './satori-date-adapter';
  * `fr-CH` is the separator-only case (`jj.mm.aaaa`), `en-GB` the order-only case
  * (`dd/mm/yyyy`), `fr-CA` both at once (`aa-mm-jj`).
  *
+ * ## The letters are not always in `LOCALE_ID`'s order
+ *
+ * A host using `providePlatformEnglishFallback()` for a language whose catalogue has no
+ * `common.date-mask` is handed the **platform's English**, so the letters arrive in English
+ * order while `LOCALE_ID` says otherwise. Reading them as that language's own mask is how the
+ * first version of this function reintroduced the defect it was written to remove: `fr` kept
+ * the month-first `mm/dd/yyyy` because French's own pattern matched itself, and `fr-CA`
+ * composed English runs through French field positions and produced `yy-dd-mm`.
+ *
+ * So the order the letters are *in* is tracked separately from the order they are wanted in —
+ * see `sourcePattern`. With it, the English fallback now follows the adapter for every
+ * language: `fr` renders `dd/mm/yyyy`, `de` renders `dd.mm.yyyy`, `fr-CA` renders `yy-mm-dd`.
+ *
  * ## Why it fails back to the translated value
  *
  * Every exit that cannot line the two up returns `translatedMask` untouched. A hint that
@@ -34,18 +48,18 @@ import { dateFnsLocaleFor } from './satori-date-adapter';
 export function dateMaskFor(localeId: string, translatedMask: string): string {
   const language = (localeId ?? '').toLowerCase().replaceAll('_', '-').split('-')[0];
   const target = shortDatePattern(localeId);
-  const base = shortDatePattern(language);
+  const source = sourcePattern(translatedMask, language);
 
-  // Every language we ship a catalogue for, and every region whose order and separators match
-  // its base. The translated mask already describes this field, so leave it exactly as it is.
-  if (target === base) return translatedMask;
+  // The mask's letters are already in the order this field parses: every language we ship a
+  // catalogue for, and every region whose order and separators match it. Leave it exactly as is.
+  if (target === source) return translatedMask;
 
-  const baseFields = patternFields(base);
+  const sourceFields = patternFields(source);
   const letters = maskLetters(translatedMask);
-  if (!letters || letters.length !== baseFields.length) return translatedMask;
+  if (!letters || letters.length !== sourceFields.length) return translatedMask;
 
   const lettersByField = new Map<DateField, string>();
-  baseFields.forEach((field, index) => lettersByField.set(field, letters[index]));
+  sourceFields.forEach((field, index) => lettersByField.set(field, letters[index]));
 
   let composed = '';
   for (const segment of patternSegments(target)) {
@@ -60,6 +74,31 @@ export function dateMaskFor(localeId: string, translatedMask: string): string {
     composed += segment.field === 'year' && segment.width === 2 ? word.slice(0, 2) : word;
   }
   return composed;
+}
+
+/** What `providePlatformEnglishFallback()` answers with when a catalogue has no mask. */
+const PLATFORM_EN_MASK = PLATFORM_EN_TRANSLATIONS['common.date-mask'];
+
+/**
+ * The pattern whose field order the mask's letters are already in.
+ *
+ * Normally the language in `LOCALE_ID`, because that language's catalogue answered. The
+ * exception is the platform's English fallback, which answers for any language whose catalogue
+ * lacks the key — then the letters are English and in English order, whatever `LOCALE_ID` says.
+ *
+ * Recognising it by value is exact for the one case that matters and cannot misfire on a
+ * shipped catalogue: no language's own mask is `mm/dd/yyyy` except English's. A host that
+ * writes a month-first mask into its own non-English catalogue is read as English and gets its
+ * fields reordered to match the parser — which is the right outcome for a mask that was already
+ * disagreeing with the field.
+ *
+ * What this does **not** catch is a host whose own fallback chain answers in some third
+ * language. Nothing in the string says which language wrote it, so that case is out of reach
+ * here; it stays with the host that configured the chain.
+ */
+function sourcePattern(translatedMask: string, language: string): string {
+  if ((translatedMask ?? '').trim() === PLATFORM_EN_MASK) return shortDatePattern('en');
+  return shortDatePattern(language);
 }
 
 type DateField = 'day' | 'month' | 'year';

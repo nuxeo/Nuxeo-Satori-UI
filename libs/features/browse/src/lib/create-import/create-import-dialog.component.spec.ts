@@ -556,6 +556,63 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     expect(component.canApplyImportToAll()).toBe(false);
   });
 
+  describe('an invalid expiry on a file the user has navigated away from', () => {
+    /** Type an unparseable expiry into the file on screen, as the input handler would. */
+    const typeInvalidExpiry = () =>
+      component.onExpiresInput({ target: { value: '99/99/9999' } } as unknown as Event);
+
+    it('blocks the batch from a later file', async () => {
+      // Next saves the entry without validating it, so file 1's invalid expiry used to survive
+      // to `runImportWithProperties()` and serialize as `dc:expired: null`.
+      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      expect(component.isExpiresValid()).toBe(false);
+
+      component.editImportNext();
+
+      expect(component.importFileIndex()).toBe(1);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.isImportFormComplete()).toBe(true);
+      expect(component.isImportBatchReadyToCreate()).toBe(false);
+      expect(component.canCreateImportWithProperties()).toBe(false);
+    });
+
+    it('sends no request when the batch is run anyway', async () => {
+      mockImportService.importFilesWithProperties.mockReturnValue(of([]));
+      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      component.editImportNext();
+
+      component.runImportWithProperties();
+      await flushAsync();
+
+      expect(mockImportService.importFilesWithProperties).not.toHaveBeenCalled();
+    });
+
+    it('stops blocking once that file is unchecked', async () => {
+      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      component.editImportNext();
+      expect(component.isImportBatchReadyToCreate()).toBe(false);
+
+      component.toggleImportFileChecked(0, false);
+
+      expect(component.isImportBatchReadyToCreate()).toBe(true);
+    });
+
+    it('still allows a batch whose other entries cleared Expires deliberately', async () => {
+      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      component.editImportNext();
+
+      expect(component.importEntries()[0].state.expiresRawText).toBe('');
+      expect(component.isImportBatchReadyToCreate()).toBe(true);
+    });
+  });
+
   it('runImportWithProperties sends per-file titles after applyImportToAll', async () => {
     mockImportService.importFilesWithProperties.mockReturnValue(of([]));
     component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
