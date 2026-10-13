@@ -26,13 +26,28 @@ function contrastRatio(a: readonly number[], b: readonly number[]): number {
 }
 
 function parseColor(value: string): { rgb: number[]; alpha: number } {
-  const match = /rgba?\(([^)]+)\)/.exec(value);
-  if (!match) throw new Error(`not a computed colour: "${value}"`);
-  const parts = match[1]
-    .split(/[,\s/]+/)
-    .filter(Boolean)
-    .map(Number);
-  return { rgb: parts.slice(0, 3), alpha: parts.length > 3 ? parts[3] : 1 };
+  const rgbMatch = /rgba?\(([^)]+)\)/.exec(value);
+  if (rgbMatch) {
+    const parts = rgbMatch[1]
+      .split(/[,\s/]+/)
+      .filter(Boolean)
+      .map(Number);
+    return { rgb: parts.slice(0, 3), alpha: parts.length > 3 ? parts[3] : 1 };
+  }
+
+  const srgbMatch = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/.exec(
+    value,
+  );
+  if (srgbMatch) {
+    return {
+      rgb: [srgbMatch[1], srgbMatch[2], srgbMatch[3]].map((channel) =>
+        Math.round(Number(channel) * 255),
+      ),
+      alpha: srgbMatch[4] ? Number(srgbMatch[4]) : 1,
+    };
+  }
+
+  throw new Error(`not a computed colour: "${value}"`);
 }
 
 function compositeOver(
@@ -58,6 +73,7 @@ function paintedBackground(element: HTMLElement): number[] {
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-version-select-focus.scss',
+    './version-select-focus-ring.fixture.scss',
   ],
   templateUrl: './version-select-focus-ring.spec.html',
 })
@@ -136,37 +152,40 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
     }
   });
 
-  it('overrides document-detail.scss :hover fill while focused (including dark theme)', async () => {
+  it('keeps panel-surface fill and ring contrast when focused and hovered (dark theme)', async () => {
     applyTheme('dark');
     const { fixture, button } = await mount();
+    const panel = fixture.nativeElement.querySelector('.properties-panel') as HTMLElement;
     try {
+      panel.classList.add('nxsat545-karma-focus-hover');
+      panel.style.setProperty('--document-detail-properties-panel-surface', 'rgb(222, 223, 224)');
+      document.documentElement.style.setProperty('--mat-sys-surface', 'rgb(12, 13, 14)');
+      document.documentElement.style.setProperty('--mat-sys-primary', 'rgb(80, 90, 200)');
+
       button.focus({ focusVisible: false } as FocusOptions);
+      expect(button.matches(':focus')).toBe(true);
 
-      let focusHoverRule = '';
-      for (const sheet of Array.from(document.styleSheets)) {
-        let sheetRules: CSSRuleList;
-        try {
-          sheetRules = sheet.cssRules;
-        } catch {
-          continue;
-        }
-        for (const rule of Array.from(sheetRules)) {
-          const styleRule = rule as CSSStyleRule;
-          const selector = (styleRule.selectorText ?? '').replace(/\[_ngcontent-[^\]]+\]/g, '');
-          if (selector.includes('.version-select:focus:hover')) {
-            focusHoverRule = styleRule.cssText;
-          }
-        }
-      }
+      const focusedHoveredBg = getComputedStyle(button).backgroundColor;
 
-      expect(focusHoverRule).toContain('color-mix');
-      expect(focusHoverRule).toContain('--document-detail-properties-panel-surface');
+      const surfaceHoverProbe = document.createElement('button');
+      surfaceHoverProbe.type = 'button';
+      surfaceHoverProbe.className = 'version-select nxsat545-simulate-base-hover';
+      surfaceHoverProbe.style.position = 'absolute';
+      surfaceHoverProbe.style.left = '-9999px';
+      panel.appendChild(surfaceHoverProbe);
+      const competingHoverFill = getComputedStyle(surfaceHoverProbe).backgroundColor;
+      surfaceHoverProbe.remove();
 
-      const focusedFill = getComputedStyle(button).backgroundColor;
-      button.blur();
-      button.focus({ focusVisible: false } as FocusOptions);
-      expect(getComputedStyle(button).backgroundColor).toBe(focusedFill);
+      expect(focusedHoveredBg).not.toBe(competingHoverFill);
+
+      const style = getComputedStyle(button);
+      const backdrop = paintedBackground(button);
+      const ring = parseColor(style.outlineColor);
+      expect(contrastRatio(compositeOver(ring, backdrop), backdrop)).toBeGreaterThanOrEqual(
+        WCAG_1411_MIN_RATIO,
+      );
     } finally {
+      panel.classList.remove('nxsat545-karma-focus-hover');
       button.blur();
       fixture.nativeElement.remove();
     }

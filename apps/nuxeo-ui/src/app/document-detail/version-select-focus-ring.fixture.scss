@@ -1,0 +1,19 @@
+/**
+ * Karma-only helpers. ChromeHeadless does not apply `:hover` while a control stays focused
+ * (same constraint as header-search-focus-ring.spec.ts). The wrapper class applies the
+ * production `.version-select:focus:hover` cascade for regression checks.
+ */
+.properties-panel.nxsat545-karma-focus-hover .version-select:focus {
+  background: color-mix(
+    in srgb,
+    var(--mat-sys-primary) 8%,
+    var(--document-detail-properties-panel-surface)
+  );
+  outline: 2px solid var(--document-detail-properties-label-muted);
+  outline-offset: -2px;
+}
+
+/* Competing fill from document-detail.scss `.version-select:hover` (mat-sys-surface base). */
+.version-select.nxsat545-simulate-base-hover {
+  background: color-mix(in srgb, var(--mat-sys-primary) 8%, var(--mat-sys-surface));
+}
