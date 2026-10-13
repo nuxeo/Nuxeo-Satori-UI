@@ -134,6 +134,13 @@ describe('document-permissions', () => {
       expect(canPublishDocument(null)).toBe(false);
     });
 
+    it('canPublishDocument reads the deleted state as the trash only when isTrashed is absent', () => {
+      expect(canPublishDocument(versionable([WRITE_VERSION], { state: 'deleted' }))).toBe(false);
+      expect(
+        canPublishDocument(versionable([WRITE_VERSION], { state: 'deleted', isTrashed: false })),
+      ).toBe(true);
+    });
+
     it('canPublishDocument needs WriteVersion, not Write', () => {
       expect(canPublishDocument(versionable([WRITE_DOCUMENT, READ_WRITE_DOCUMENT]))).toBe(false);
     });

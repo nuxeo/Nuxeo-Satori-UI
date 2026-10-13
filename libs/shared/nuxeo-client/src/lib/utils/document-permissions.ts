@@ -105,13 +105,14 @@ export function canCreateDocumentVersion(doc: NuxeoDocument | null | undefined):
 /**
  * Web UI's `isPublishable`: not a proxy, a record or in the trash, the `Publishable` facet, and
  * `WriteVersion`. A version is publishable — `Document.PublishToSection` publishes it as it is.
+ * Without an `isTrashed` flag, Web UI reads the `deleted` life-cycle state as the trash.
  */
 export function canPublishDocument(doc: NuxeoDocument | null | undefined): boolean {
   return (
     !!doc &&
     !doc.isProxy &&
     !isRecordDocument(doc) &&
-    doc.isTrashed !== true &&
+    !(doc.isTrashed ?? doc.state === 'deleted') &&
     (doc.facets ?? []).includes('Publishable') &&
     hasDocumentPermission(doc, WRITE_VERSION)
   );

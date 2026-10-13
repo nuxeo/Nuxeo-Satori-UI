@@ -189,6 +189,8 @@ describe('DocumentDetailService', () => {
       expect(query).toContain('ecm:proxyVersionableId = "doc-1"');
       // Newest first, and version-ordered within a day.
       expect(req.request.params.get('sortOrder')).toBe('desc,desc,desc');
+      // Unpublish and Republish are gated on each proxy's own WriteVersion.
+      expect(req.request.headers.get('enrichers.document')).toBe('permissions');
       req.flush({ entries: [], resultsCount: 0 });
       await pending;
     });

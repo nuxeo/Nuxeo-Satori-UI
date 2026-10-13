@@ -709,15 +709,17 @@
                         </td>
                         <td>{{ publishedDate(pub) | date: 'longDate' }}</td>
                         <td class="pub-actions-cell">
-                          <button
-                            mat-stroked-button
-                            class="pub-action-btn"
-                            [disabled]="actionInProgress() === 'unpublish'"
-                            (click)="unpublishDocument(pub)"
-                          >
-                            {{ 'document-detail.document-detail.unpublish' | translate }}
-                          </button>
-                          @if (isOlderVersion(pub)) {
+                          @if (canUnpublish(pub)) {
+                            <button
+                              mat-stroked-button
+                              class="pub-action-btn unpublish-btn"
+                              [disabled]="actionInProgress() === 'unpublish'"
+                              (click)="unpublishDocument(pub)"
+                            >
+                              {{ 'document-detail.document-detail.unpublish' | translate }}
+                            </button>
+                          }
+                          @if (canRepublish(pub)) {
                             <button
                               mat-flat-button
                               color="primary"
@@ -737,68 +739,71 @@
             </section>
 
             <!-- Publish to Section -->
-            <section class="publish-section">
-              <div class="publish-section-header">
-                <div class="publish-section-title" role="heading" aria-level="3">
-                  {{ 'document-detail.document-detail.publish-to-a-section' | translate }}
+            @if (canPublish()) {
+              <section class="publish-section">
+                <div class="publish-section-header">
+                  <div class="publish-section-title" role="heading" aria-level="3">
+                    {{ 'document-detail.document-detail.publish-to-a-section' | translate }}
+                  </div>
+                  <button
+                    mat-flat-button
+                    color="primary"
+                    class="publish-btn"
+                    [disabled]="!selectedSectionId() || publishing()"
+                    (click)="publishToSection()"
+                  >
+                    @if (publishing()) {
+                      <mat-spinner
+                        diameter="18"
+                        [attr.aria-label]="'document-detail.document-detail.loading' | translate"
+                      />
+                    } @else {
+                      <ng-container>
+                        <mat-icon>publish</mat-icon>
+                        {{ 'document-detail.document-detail.publish' | translate }}
+                      </ng-container>
+                    }
+                  </button>
                 </div>
-                <button
-                  mat-flat-button
-                  color="primary"
-                  class="publish-btn"
-                  [disabled]="!selectedSectionId() || publishing()"
-                  (click)="publishToSection()"
-                >
-                  @if (publishing()) {
-                    <mat-spinner
-                      diameter="18"
-                      [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                    />
-                  } @else {
-                    <ng-container>
-                      <mat-icon>publish</mat-icon>
-                      {{ 'document-detail.document-detail.publish' | translate }}
-                    </ng-container>
-                  }
-                </button>
-              </div>
 
-              <div class="publish-info-bar">
-                <span class="publish-info-accent"></span>
-                <p>
-                  {{
-                    'document-detail.document-detail.select-a-section-below-to-publish' | translate
-                  }}
-                </p>
-              </div>
-
-              @if (sectionsLoading()) {
-                <div class="publish-loading">
-                  <mat-spinner
-                    diameter="24"
-                    [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                  />
-                </div>
-              } @else if (sectionTree().length === 0) {
-                <div class="publish-empty">
-                  <mat-icon>folder_off</mat-icon>
+                <div class="publish-info-bar">
+                  <span class="publish-info-accent"></span>
                   <p>
                     {{
-                      'document-detail.document-detail.no-sections-available-for-publishing'
+                      'document-detail.document-detail.select-a-section-below-to-publish'
                         | translate
                     }}
                   </p>
                 </div>
-              } @else {
-                <div class="section-tree">
-                  @for (node of sectionTree(); track node.doc.uid) {
-                    <ng-container
-                      *ngTemplateOutlet="sectionNodeTpl; context: { $implicit: node, depth: 0 }"
+
+                @if (sectionsLoading()) {
+                  <div class="publish-loading">
+                    <mat-spinner
+                      diameter="24"
+                      [attr.aria-label]="'document-detail.document-detail.loading' | translate"
                     />
-                  }
-                </div>
-              }
-            </section>
+                  </div>
+                } @else if (sectionTree().length === 0) {
+                  <div class="publish-empty">
+                    <mat-icon>folder_off</mat-icon>
+                    <p>
+                      {{
+                        'document-detail.document-detail.no-sections-available-for-publishing'
+                          | translate
+                      }}
+                    </p>
+                  </div>
+                } @else {
+                  <div class="section-tree">
+                    @for (node of sectionTree(); track node.doc.uid) {
+                      <ng-container
+                        *ngTemplateOutlet="sectionNodeTpl; context: { $implicit: node, depth: 0 }"
+                      />
+                    }
+                  </div>
+                }
+              </section>
+            }
           </div>
         </ng-template>
 

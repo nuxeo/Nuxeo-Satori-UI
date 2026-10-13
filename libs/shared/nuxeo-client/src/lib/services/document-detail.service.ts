@@ -119,7 +119,13 @@ export class DocumentDetailService {
       .set('sortOrder', 'desc,desc,desc');
     return this.http.get<NuxeoDocumentList>(
       this.api.apiUrl('/nuxeo/api/v1/search/pp/nxql_search/execute'),
-      { params, headers: { properties: 'dublincore,common,uid,rendition' } },
+      {
+        params,
+        headers: {
+          properties: 'dublincore,common,uid,rendition',
+          'enrichers.document': 'permissions',
+        },
+      },
     );
   }
 

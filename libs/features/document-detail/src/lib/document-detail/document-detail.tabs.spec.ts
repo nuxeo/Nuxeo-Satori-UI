@@ -71,6 +71,16 @@ function doc(over: Partial<NuxeoDocument> = {}): NuxeoDocument {
   };
 }
 
+/** What Web UI's `isPublishable` asks for: the `Publishable` facet and `WriteVersion`. */
+function publishable(over: Partial<NuxeoDocument> = {}): NuxeoDocument {
+  return doc({
+    facets: ['Publishable', 'Versionable'],
+    contextParameters: { permissions: ['Read', 'Write', 'ReadWrite', 'WriteVersion'] },
+    properties: { 'uid:major_version': 2, 'uid:minor_version': 0 },
+    ...over,
+  });
+}
+
 function section(path: string, uid = path): NuxeoDocument {
   return doc({ uid, title: path.split('/').pop() ?? path, type: 'Section', path });
 }
@@ -627,7 +637,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     });
 
     it('publishes to the selected section and refreshes the publication list', async () => {
-      await build();
+      await build(publishable());
       component.selectedSectionId.set('sec-1');
       const proxy = doc({ uid: 'proxy-1', path: '/default-domain/sections/news/doc' });
       mockDetailService.getPublishedVersions.mockReturnValue(of({ entries: [proxy] }));
@@ -652,7 +662,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     });
 
     it('clears the publishing flag when the publish fails', async () => {
-      await build();
+      await build(publishable());
       component.selectedSectionId.set('sec-1');
       mockDetailService.publishDocument.mockReturnValue(throwError(() => new Error('403')));
 
@@ -661,6 +671,39 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(component.publishing()).toBe(false);
       expect(component.selectedSectionId()).toBe('sec-1');
       expect(toast.error).toHaveBeenCalledWith('Failed to publish');
+    });
+
+    it('refuses to publish a document it cannot publish, even when called directly', async () => {
+      // Write but not WriteVersion: Nuxeo refuses the publish, as the toolbar's rule does.
+      await build(doc({ facets: ['Publishable'] }));
+      component.selectedSectionId.set('sec-1');
+
+      component.publishToSection();
+
+      expect(component.canPublish()).toBe(false);
+      expect(mockDetailService.publishDocument).not.toHaveBeenCalled();
+    });
+
+    it('offers Republish of the current version only once the document has changed since', async () => {
+      const current = doc({
+        uid: 'p-now',
+        path: '/s/now/doc',
+        contextParameters: { permissions: ['WriteVersion'] },
+        properties: { 'uid:major_version': 2, 'uid:minor_version': 0 },
+      });
+      await build(publishable({ isCheckedOut: false }));
+      expect(component.canUnpublish(current)).toBe(true);
+      expect(component.canRepublish(current)).toBe(false);
+
+      fixture.destroy();
+      // Checked out at 2.0+: Web UI's `_canRepublish` offers 2.0 again.
+      await build(publishable({ isCheckedOut: true }));
+      expect(component.canRepublish(current)).toBe(true);
+      expect(
+        component.canRepublish(
+          doc({ ...current, properties: { 'uid:major_version': 3, 'uid:minor_version': 0 } }),
+        ),
+      ).toBe(false);
     });
 
     it('removes just the unpublished proxy from the list', async () => {

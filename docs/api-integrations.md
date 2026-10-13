@@ -836,36 +836,49 @@ L10n directories (`l10nsubjects`, `l10ncoverage`) use `label_en` instead of `lab
 | **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
 | **Method**      | `getPublishedVersions(uid)`                                                                      |
 | **HTTP Method** | `GET`                                                                                            |
-| **Endpoint**    | `/nuxeo/api/v1/search/lang/NXQL/execute`                                                         |
+| **Endpoint**    | `/nuxeo/api/v1/search/pp/nxql_search/execute`                                                    |
 
 **Query Parameters:**
 
-| Parameter  | Value                                                                                                |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| `query`    | `SELECT * FROM Document WHERE ecm:isProxy = 1 AND ecm:proxyTargetId = '{uid}' AND ecm:isTrashed = 0` |
-| `pageSize` | `50`                                                                                                 |
+| Parameter     | Value                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queryParams` | `SELECT * FROM Document WHERE ecm:isProxy = 1 AND ecm:isTrashed = 0 AND (rend:sourceVersionableId = "{uid}" OR ecm:proxyVersionableId = "{uid}")` |
+| `pageSize`    | `40`                                                                                                                                              |
+| `sortBy`      | `dc:modified,uid:major_version,uid:minor_version`                                                                                                 |
+| `sortOrder`   | `desc,desc,desc`                                                                                                                                  |
+
+`{uid}` is the **live** document's uid, also on a version page: a proxy's `ecm:proxyVersionableId`
+is the live document's uid (see section 30c).
 
 **Request Headers:**
 
-| Header          | Value                                        |
-| --------------- | -------------------------------------------- |
-| `Authorization` | `Basic <credentials>` (added by interceptor) |
-| `properties`    | `dublincore,uid`                             |
+| Header               | Value                                        |
+| -------------------- | -------------------------------------------- |
+| `Authorization`      | `Basic <credentials>` (added by interceptor) |
+| `properties`         | `dublincore,common,uid,rendition`            |
+| `enrichers.document` | `permissions`                                |
 
 **Response (200 OK):** Standard `NuxeoDocumentList` — each entry is a proxy (published copy) of the source document.
 
 **Key response fields used:**
 
-| Field                                                             | Usage                                                  |
-| ----------------------------------------------------------------- | ------------------------------------------------------ |
-| `entries[].title`                                                 | Published document title                               |
-| `entries[].path`                                                  | Location in the section tree (displayed as breadcrumb) |
-| `entries[].lastModified`                                          | When the publication was last updated                  |
-| `entries[].properties['uid:major_version']` / `uid:minor_version` | Published version number                               |
+| Field                                                             | Usage                                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `entries[].path`                                                  | Location in the section tree                                  |
+| `entries[].properties['uid:major_version']` / `uid:minor_version` | Published version number; Republish compares it with the page |
+| `entries[].properties['dc:modified']`                             | Publish date                                                  |
+| `entries[].contextParameters.permissions`                         | Unpublish and Republish need `WriteVersion` on the proxy      |
+
+The permissions are the user's on each **proxy**, which follow the section's ACL, not the
+document's: measured on the shared Nuxeo, a workspace reader gets no `WriteVersion` on a
+publication in a section under that workspace, and a ReadWrite user does. This is Web UI's
+`nuxeo-document-publications` gate (`_canUnpublish`, `_canRepublish`). The tab's own
+**Publish to a section** is offered only when `canPublishDocument` holds — the same rule as the
+toolbar's Publish (`app.rules.canPublish`).
 
 **Used by:**
 
-- **Document detail page — Publishing tab** — displays list of existing publications
+- **Document detail page — Publishing tab** — the list of publications, and the publication count in the properties panel
 
 ---
 

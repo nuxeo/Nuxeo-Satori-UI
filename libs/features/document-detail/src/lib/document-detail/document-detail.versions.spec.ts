@@ -543,6 +543,55 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
     });
   });
 
+  describe("the Publishing tab's own actions", () => {
+    async function openPublishingTab(): Promise<HTMLElement> {
+      fixture.componentInstance.goToPublishingTab();
+      await settle();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('offers Publish to a section only on a document the user can publish', async () => {
+      await render(live({ facets: ['Versionable', 'Publishable'] }));
+      expect((await openPublishingTab()).querySelector('.publish-btn')).not.toBeNull();
+
+      await render(
+        live({
+          facets: ['Versionable', 'Publishable'],
+          contextParameters: { permissions: ['Read', 'Write', 'ReadWrite'] },
+        }),
+      );
+      const tab = await openPublishingTab();
+      expect(tab.querySelector('.publish-container'), 'the tab itself renders').not.toBeNull();
+      expect(tab.querySelector('.publish-btn')).toBeNull();
+    });
+
+    it('offers Unpublish and Republish only on a publication the user holds WriteVersion on', async () => {
+      const proxy = (uid: string, permissions: string[]): NuxeoDocument =>
+        live({
+          uid,
+          path: `/sections/${uid}/contract`,
+          isProxy: true,
+          contextParameters: { permissions },
+          properties: { 'uid:major_version': 0, 'uid:minor_version': 1 },
+        });
+      mockDetailService.getPublishedVersions.mockReturnValue(
+        of({ entries: [proxy('own', ['Read', 'WriteVersion']), proxy('other', ['Read'])] }),
+      );
+      await render(live({ facets: ['Versionable', 'Publishable'] }));
+
+      const rows = Array.from(
+        (await openPublishingTab()).querySelectorAll('.publish-table tbody tr'),
+      );
+      expect(rows).toHaveLength(2);
+      const [own, other] = rows;
+      expect(own.querySelector('.unpublish-btn')).not.toBeNull();
+      // 0.1 published, 0.2 live: an older version, so it can be republished.
+      expect(own.querySelector('.republish-btn')).not.toBeNull();
+      expect(other.querySelector('.unpublish-btn')).toBeNull();
+      expect(other.querySelector('.republish-btn')).toBeNull();
+    });
+  });
+
   describe('restoring a version', () => {
     it('offers Restore to a user with WriteVersion', async () => {
       await render(version(1));

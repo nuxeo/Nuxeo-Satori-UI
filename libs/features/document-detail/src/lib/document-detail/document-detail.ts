@@ -913,6 +913,22 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly canRestoreVersion = computed(
     () => this.isVersionView() && hasDocumentPermission(this.doc(), WRITE_VERSION),
   );
+  /** The Publishing tab's own Publish, gated as the toolbar's is (`app.rules.canPublish`). */
+  readonly canPublish = computed(() => canPublishDocument(this.doc()));
+
+  /** Web UI's `_canUnpublish`: `WriteVersion` on the publication itself, not on this document. */
+  canUnpublish(pub: NuxeoDocument): boolean {
+    return hasDocumentPermission(pub, WRITE_VERSION);
+  }
+
+  /** Web UI's `_canRepublish`: an older version is published, or this one with changes since. */
+  canRepublish(pub: NuxeoDocument): boolean {
+    if (!this.canUnpublish(pub)) return false;
+    const sameVersion =
+      Number(pub.properties?.['uid:major_version'] ?? 0) === this.currentMajor() &&
+      Number(pub.properties?.['uid:minor_version'] ?? 0) === this.currentMinor();
+    return this.isOlderVersion(pub) || (sameVersion && this.doc()?.isCheckedOut === true);
+  }
 
   permissionLabel(permission: string): string {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
@@ -2847,7 +2863,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   publishToSection(): void {
     const target = this.selectedSectionId();
-    if (!target || !this.docUid) return;
+    if (!target || !this.docUid || !this.canPublish()) return;
     this.publishing.set(true);
 
     this.detailService.publishDocument(this.docUid, target, { override: true }).subscribe({
