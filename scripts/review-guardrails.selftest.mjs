@@ -1198,6 +1198,7 @@ const NOT_PROSE = [
 ];
 
 for (const [label, line] of NOT_PROSE) {
+  if (!selected('checkNoHardcodedUiText')) break;
   positive += 1;
   falsePositiveControls += 1;
   withFixture(
@@ -1818,6 +1819,7 @@ for (const [label, line] of [
   ['a commented-out label', `// label: 'Knowledge Discovery'`],
   ['a docblock mentioning one', ` * label: 'Knowledge Discovery'`],
 ]) {
+  if (!selected('checkNoHardcodedDescriptorText')) break;
   positive += 1;
   falsePositiveControls += 1;
   withFixture(
@@ -8175,6 +8177,21 @@ expectGreen(
       "export const usageTs = `import { signal } from '@angular/core';\n\nreadonly open = signal(false);\n\ntoggle(): void {\n  this.open.update((open) => !open);\n}`;\n\n" +
       '<Source language="typescript" code={usageTs} />',
   ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a formatted fenced TypeScript block, and a fenced bash one',
+  'checkMdxCodeSamplesFormatted',
+  mdx('```ts\nconst answer = 42;\n```\n\n```bash\nnpx   nx   test\n```'),
+);
+
+expectRed(
+  '[mdx] an unformatted fenced TypeScript block',
+  'checkMdxCodeSamplesFormatted',
+  mdx('```typescript\nconst answer=42\n```'),
+  null,
+  /a fenced typescript block is not formatted as Prettier formats it/,
 );
 
 falsePositiveControls += 1;

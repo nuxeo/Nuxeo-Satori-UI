@@ -17,7 +17,7 @@ On GitHub they show as missing images, by design.
 
 ## Summary
 
-The `nxs-` library renders the same pages whether or not a customer has access to Satori. Four primitives — avatar, tag, breadcrumbs and rich tooltip — exist twice, under one registered ID each: a built-in version in `@nuxeo-satori/platform/components`, and a thin wrapper around Satori's own component in `@nuxeo-satori/platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
+The `nxs-` library renders the same pages whether or not a customer has access to Satori. Four primitives — avatar, tag, breadcrumbs and rich tooltip — exist twice, under one registered ID each: a built-in version in `@nuxeo-satori/platform/components`, and a thin wrapper around Satori's own component in `@nuxeo-satori/platform/components-satori`. Every other component is the same component in both cases; only the theme differs. A fifth registered ID, the error state's, has only the built-in version until Satori's error states can be installed.
 
 > **Note:** the library is not published yet; this page describes the configuration it is built to support.
 

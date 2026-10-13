@@ -8493,9 +8493,10 @@ function* mdxSourceBlocks(text) {
  * copies into their component — formatted by nobody. So each `<Source language="…" code={…} />`,
  * whether the code is written inline or in an `export const` it names, is formatted here with the
  * repository's Prettier options and the parser its language calls for, and fails when the result
- * differs or the sample does not parse. `bash`, `text` and any other language are not checked. A
- * multi-line inline sample fails whatever its formatting: MDX strips the indentation of an
- * attribute's continuation lines, so what renders is not what was written.
+ * differs or the sample does not parse. A fenced code block is held to the same rule by its info
+ * string. `bash`, `text` and any other language are not checked. A multi-line inline sample fails
+ * whatever its formatting: MDX strips the indentation of an attribute's continuation lines, so what
+ * renders is not what was written.
  */
 async function checkMdxCodeSamplesFormatted() {
   const pages = [
@@ -8512,6 +8513,21 @@ async function checkMdxCodeSamplesFormatted() {
       ),
     );
     const options = (await prettier.resolveConfig(join(repoRoot, page))) ?? {};
+    for (const [, language, code] of text.matchAll(/^```(\w+)[^\n]*\n([\s\S]*?)^```\s*$/gm)) {
+      const parser = MDX_SAMPLE_PARSERS[language];
+      if (!parser) continue;
+      const sample = code.replace(/\n$/, '');
+      const { formatted, error } = await formatMdxSample(prettier, sample, parser, options);
+      if (error) {
+        fail(
+          `${page}: a fenced ${language} block does not parse: ${String(error.message).split('\n')[0]}`,
+        );
+      } else if (formatted !== sample) {
+        fail(
+          `${page}: a fenced ${language} block is not formatted as Prettier formats it. Prettier gives:\n${formatted}`,
+        );
+      }
+    }
     for (const { language, inline, named, unread } of mdxSourceBlocks(text)) {
       const where = named ? `the sample \`${named}\`` : 'an inline sample';
       if (unread) {

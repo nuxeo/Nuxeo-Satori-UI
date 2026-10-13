@@ -174,7 +174,13 @@ function main() {
     if (dryRun) {
       say(`would take this branch's side of ${path}, to regenerate it`);
     } else {
-      git('checkout', '--ours', '--', path);
+      const result = git('checkout', '--ours', '--', path);
+      if (result.status !== 0) {
+        console.error(
+          `sync-derived: FAIL — could not take this branch's side of ${path}:\n${result.stderr}`,
+        );
+        process.exit(1);
+      }
       say(`took this branch's side of ${path}, to regenerate it`);
     }
   }
@@ -223,7 +229,11 @@ function main() {
   if (dryRun) {
     say(`would stage changes to: ${derivedPaths.join(', ')}`);
   } else {
-    git('add', '--', ...derivedPaths);
+    const added = git('add', '--', ...derivedPaths);
+    if (added.status !== 0) {
+      console.error(`sync-derived: FAIL — could not stage the derived files:\n${added.stderr}`);
+      process.exit(1);
+    }
     const staged = git('diff', '--cached', '--name-only', '--', ...derivedPaths)
       .stdout.split('\n')
       .filter(Boolean);
