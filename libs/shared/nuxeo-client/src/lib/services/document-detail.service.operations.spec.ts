@@ -432,10 +432,13 @@ describe('DocumentDetailService', () => {
       await pending;
     });
 
-    it('checks the document out when restoring a version, so it stays editable', async () => {
+    it('restores a version checked in, not checked out', async () => {
+      // NXSAT-332. `checkout: true` left the restored document reading `0.2+` — unversioned
+      // changes the user never made — where Web UI leaves it at the restored `0.1`. It stays
+      // editable either way: Nuxeo checks a checked-in document out on its next save.
       const pending = firstValueFrom(service.restoreVersion('ver-1'));
       const req = httpMock.expectOne('/nuxeo/api/v1/id/ver-1/@op/Document.RestoreVersion');
-      expect(req.request.body.params).toEqual({ checkout: true });
+      expect(req.request.body.params).toEqual({ checkout: false });
       req.flush(doc());
       await pending;
     });
