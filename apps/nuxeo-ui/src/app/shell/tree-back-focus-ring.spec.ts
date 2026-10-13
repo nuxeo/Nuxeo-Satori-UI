@@ -60,7 +60,7 @@ describe('Browse drawer Root back — keyboard focus indicator (NXSAT-547)', () 
       const style = getComputedStyle(button);
       expect(style.outlineStyle).toBe('solid');
       expect(style.outlineWidth).toBe('2px');
-      expect(style.outlineOffset).toBe('2px');
+      expect(style.outlineOffset).toBe('-2px');
     } finally {
       button.blur();
       fixture.nativeElement.remove();
