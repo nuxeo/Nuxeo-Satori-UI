@@ -1,0 +1,26 @@
+:host {
+  display: block;
+  --nxs-delete-permission-dialog-border: var(--mat-sys-outline-variant);
+  --nxs-delete-permission-dialog-header: var(--mat-sys-surface-container);
+}
+
+.nxs-delete-permission-dialog__entry {
+  width: 100%;
+  border: 1px solid var(--nxs-delete-permission-dialog-border);
+  border-collapse: collapse;
+  font-size: 13px;
+  color: var(--mat-sys-on-surface);
+
+  th,
+  td {
+    padding: 10px 16px;
+    text-align: start;
+  }
+
+  th {
+    font-size: 12px;
+    font-weight: 600;
+    background: var(--nxs-delete-permission-dialog-header);
+    border-bottom: 1px solid var(--nxs-delete-permission-dialog-border);
+  }
+}

@@ -12,7 +12,12 @@ import {
 } from '@angular/router';
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of } from 'rxjs';
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
+import {
+  NxsDeletePermissionDialogComponent,
+  NxsShareExternalDialogComponent,
+  NxsUpdatePermissionDialogComponent,
+} from '@nuxeo-satori/platform/components';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import {
@@ -31,6 +36,7 @@ import {
   TagService,
   TaskService,
   WorkflowService,
+  type NuxeoAce,
   type NuxeoDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import {
@@ -178,7 +184,13 @@ const mockDirectoryService = {
   getAllL10nEntries: vi.fn((): Observable<unknown[]> => of([])),
 };
 
-const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
+const manifest = signal<{
+  extensionLayers: readonly unknown[];
+  featureToggles?: Readonly<Record<string, boolean>>;
+}>({ extensionLayers: [] });
+/** `AppConfigService.featureToggle`, over the same manifest the slots read. */
+const featureToggle = (id: string, fallback: boolean): boolean =>
+  manifest().featureToggles?.[id] ?? fallback;
 
 /** A raw comment document, as `getAllComments` returns them. */
 function commentEntry(
@@ -258,7 +270,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(undefined) })) },
         },
-        { provide: AppConfigService, useValue: { manifest } },
+        { provide: AppConfigService, useValue: { manifest, featureToggle } },
         provideSatoriExtensions({
           slots: {
             [EXTENSION_SLOTS.toolbar]: PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
@@ -984,6 +996,128 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       custom.permissionsChanged()?.();
 
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+    });
+
+    describe('external-user shares', () => {
+      const share = (email: string, status: NuxeoAce['status'], granted = true): NuxeoAce => ({
+        id: `transient/${email}:Read:${granted}:Administrator::1924905600000`,
+        username: `transient/${email}`,
+        permission: 'Read',
+        granted,
+        externalUser: true,
+        creator: 'Administrator',
+        begin: null,
+        end: '2030-12-31T00:00:00.000Z',
+        status,
+      });
+      const shared = (canManage = true) =>
+        doc({
+          contextParameters: {
+            permissions: canManage ? ['Everything'] : ['Read'],
+            userVisiblePermissions: ['Read', 'ReadWrite'],
+            acls: [
+              {
+                name: 'local',
+                aces: [
+                  share('effective@example.com', 'effective'),
+                  share('pending@example.com', 'pending'),
+                  share('archived@example.com', 'archived'),
+                  share('denied@example.com', 'effective', false),
+                ],
+              },
+              { name: 'inherited', aces: [share('parent@example.com', 'effective')] },
+            ],
+          },
+        });
+      const rows = (body: HTMLElement): string[] =>
+        [...body.querySelectorAll('.perm-table tbody tr')].map(
+          (row) => (row as HTMLElement).querySelector('td')?.textContent?.trim() ?? '',
+        );
+      /** The detail screen's own `MatDialog`: its standalone imports shadow the root mock. */
+      const spyDialog = (closedWith?: boolean): Mock =>
+        vi
+          .spyOn(fixture.debugElement.injector.get(MatDialog), 'open')
+          .mockReturnValue({ afterClosed: () => of(closedWith) } as never) as unknown as Mock;
+
+      it('lists only the document’s own pending and effective shares, as Web UI does', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({});
+
+        const body = await openPermissions();
+
+        expect(rows(body)).toEqual(['effective@example.com', 'pending@example.com']);
+      });
+
+      it('hides the card when a package turns permissions.externalUsers off', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({});
+        manifest.update((m) => ({ ...m, featureToggles: { 'permissions.externalUsers': false } }));
+
+        const body = await openPermissions();
+
+        expect(body.textContent).not.toContain('Permissions Assigned to External Users');
+        expect(body.querySelector('nxs-permissions-panel')).toBeTruthy();
+      });
+
+      it('offers a user without WriteSecurity no way to change a share', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared(false)));
+        await render({});
+
+        const body = await openPermissions();
+
+        expect(rows(body)).toHaveLength(2);
+        expect(body.querySelector('.perm-row-actions')).toBeNull();
+        expect(body.querySelector('.perm-action-btn')).toBeNull();
+      });
+
+      it('opens the share dialog with the rights the document offers', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({}, shared());
+        const body = await openPermissions();
+        const open = spyDialog();
+
+        (body.querySelector('.perm-action-btn') as HTMLButtonElement).click();
+
+        expect(open).toHaveBeenCalledWith(NxsShareExternalDialogComponent, {
+          maxWidth: '95vw',
+          data: { documentUid: 'doc-1', permissions: ['Read', 'ReadWrite'] },
+        });
+      });
+
+      it('deletes the one entry, naming the ACL it is on, behind an alert dialog', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({});
+        const body = await openPermissions();
+        const open = spyDialog();
+
+        const remove = body.querySelector(
+          '.perm-row-actions button:last-child',
+        ) as HTMLButtonElement;
+        remove.click();
+
+        const [component, config] = open.mock.calls[0];
+        expect(component).toBe(NxsDeletePermissionDialogComponent);
+        expect(config.role).toBe('alertdialog');
+        expect(config.data.acl).toBe('local');
+        expect(config.data.ace.id).toBe(
+          'transient/effective@example.com:Read:true:Administrator::1924905600000',
+        );
+      });
+
+      it('re-reads the shares once an update is saved, leaving the toast to the dialog', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({}, shared());
+        const body = await openPermissions();
+        const open = spyDialog(true);
+        const reads = mockDetailService.getDocumentPermissions.mock.calls.length;
+
+        (body.querySelector('.perm-row-actions button') as HTMLButtonElement).click();
+
+        const [component, config] = open.mock.calls[0];
+        expect(component).toBe(NxsUpdatePermissionDialogComponent);
+        expect(config.data.permissions).toEqual(['Read', 'ReadWrite']);
+        expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+      });
     });
   });
 

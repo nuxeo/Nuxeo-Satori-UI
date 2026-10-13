@@ -13,6 +13,18 @@ export {
 export { NxsCommentsComponent } from './lib/comments/comments.component';
 export { NxsTagEditorComponent } from './lib/tag-editor/tag-editor.component';
 export {
+  NxsDeletePermissionDialogComponent,
+  type NxsDeletePermissionDialogData,
+} from './lib/delete-permission-dialog/delete-permission-dialog.component';
+export {
+  NxsShareExternalDialogComponent,
+  type NxsShareExternalDialogData,
+} from './lib/share-external-dialog/share-external-dialog.component';
+export {
+  NxsUpdatePermissionDialogComponent,
+  type NxsUpdatePermissionDialogData,
+} from './lib/update-permission-dialog/update-permission-dialog.component';
+export {
   NxsDetailsPanelComponent,
   type NxsDetailsPanelTab,
 } from './lib/details-panel/details-panel.component';
@@ -29,6 +41,7 @@ export {
 export { NxsEmptyStateComponent } from './lib/empty-state/empty-state.component';
 export { NxsErrorStateComponent } from './lib/error-state/error-state.component';
 export { type NxsErrorStatus, nxsErrorStatus } from './lib/error-state/error-status';
+export { nxsAceTimeFrame } from './lib/permission-dialog-support';
 export { NxsFavoriteToggleComponent } from './lib/favorite-toggle/favorite-toggle.component';
 export {
   NXS_FAVORITES_CHANGED_EVENT,

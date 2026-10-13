@@ -1,0 +1,340 @@
+import { provideZonelessChangeDetection } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
+import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { MatDialog, type MatDialogRef } from '@angular/material/dialog';
+import { Subject, of, throwError, type Observable } from 'rxjs';
+import { type MockInstance } from 'vitest';
+import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+
+import { NxsToastService } from '../toast/toast.service';
+import {
+  NxsShareExternalDialogComponent,
+  type NxsShareExternalDialogData,
+} from './share-external-dialog.component';
+
+describe('NxsShareExternalDialogComponent', () => {
+  let addExternal: ReturnType<typeof vi.fn<(...args: unknown[]) => Observable<unknown>>>;
+  let toastShow: MockInstance;
+  let toastError: MockInstance;
+  let ref: MatDialogRef<NxsShareExternalDialogComponent, boolean>;
+  let close: MockInstance;
+
+  const overlay = (): HTMLElement =>
+    document.querySelector('.cdk-overlay-container') as HTMLElement;
+  const q = <T extends Element = HTMLElement>(selector: string): T =>
+    overlay().querySelector(selector) as T;
+  const emailBox = () => q<HTMLInputElement>('input[type="email"]');
+  const dateBoxes = () =>
+    [
+      ...overlay().querySelectorAll('.nxs-share-external-dialog__dates input'),
+    ] as HTMLInputElement[];
+  const commentBox = () => q<HTMLTextAreaElement>('textarea');
+  const create = () => q<HTMLButtonElement>('.nxs-share-external-dialog__create');
+  const another = () => q<HTMLButtonElement>('.nxs-share-external-dialog__another');
+  const cancel = () => q<HTMLButtonElement>('mat-dialog-actions button');
+  const alerts = () =>
+    [...overlay().querySelectorAll('[role="alert"]')].map((el) => el.textContent?.trim());
+
+  async function settle(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve));
+    TestBed.tick();
+  }
+
+  async function open(data: Partial<NxsShareExternalDialogData> = {}): Promise<void> {
+    ref = TestBed.inject(MatDialog).open(NxsShareExternalDialogComponent, {
+      data: { documentUid: 'doc-1', ...data },
+    });
+    close = vi.spyOn(ref, 'close');
+    await settle();
+  }
+
+  async function type(box: HTMLInputElement | HTMLTextAreaElement, value: string): Promise<void> {
+    box.value = value;
+    box.dispatchEvent(new Event('input'));
+    box.dispatchEvent(new Event('change'));
+    await settle();
+  }
+
+  /** A day as the native date adapter parses what a user types: local midnight. */
+  const day = (month: number, date: number, year: number) => `${month}/${date}/${year}`;
+
+  async function fillValid(email = 'ext@example.com'): Promise<void> {
+    await type(emailBox(), email);
+    await type(dateBoxes()[1], day(1, 31, 2030));
+  }
+
+  async function offeredLabels(): Promise<string[]> {
+    q<HTMLElement>('.mat-mdc-select-trigger').click();
+    await settle();
+    const labels = [...document.querySelectorAll('mat-option')].map(
+      (option) => option.textContent?.trim() ?? '',
+    );
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    return labels;
+  }
+
+  beforeEach(() => {
+    addExternal = vi.fn(() => of({ document: {}, notificationSent: true }));
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: MATERIAL_ANIMATIONS, useValue: { animationsDisabled: true } },
+        {
+          provide: DocumentDetailService,
+          useValue: { addExternalPermissionWithNotification: addExternal },
+        },
+      ],
+    });
+    toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
+    toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
+  });
+
+  afterEach(() => {
+    TestBed.inject(MatDialog).closeAll();
+    vi.restoreAllMocks();
+  });
+
+  it('is named by its title', async () => {
+    await open();
+
+    const container = q('mat-dialog-container');
+    const title = document.getElementById(container.getAttribute('aria-labelledby') ?? '');
+    expect(title?.textContent?.trim()).toBe('Share with external user');
+  });
+
+  it('offers the rights the document type makes visible, as Web UI does', async () => {
+    await open({ permissions: ['Read', 'WriteVersion'] });
+
+    expect(await offeredLabels()).toEqual(['Read', 'Write versions']);
+  });
+
+  it('offers Nuxeo’s default three rights when the type names none', async () => {
+    await open({ permissions: null });
+
+    expect(await offeredLabels()).toEqual(['Read', 'Edit', 'Manage everything']);
+  });
+
+  it('needs a valid email and an end date before it can share', async () => {
+    await open();
+    expect(create().disabled).toBe(true);
+
+    await type(emailBox(), 'ext@example.com');
+    expect(create().disabled).toBe(true);
+    expect(another().disabled).toBe(true);
+
+    await type(dateBoxes()[1], day(1, 31, 2030));
+    expect(create().disabled).toBe(false);
+    expect(another().disabled).toBe(false);
+  });
+
+  it('flags an invalid email once the user leaves the box, and ties the message to it', async () => {
+    await open();
+    await type(emailBox(), 'not-an-email');
+    expect(overlay().querySelector('mat-error')).toBeNull();
+    expect(emailBox().getAttribute('aria-invalid')).toBe('false');
+
+    emailBox().dispatchEvent(new Event('blur'));
+    await settle();
+
+    const error = overlay().querySelector('mat-error') as HTMLElement;
+    expect(error.textContent?.trim()).toBe('Enter a valid email address.');
+    expect(error.closest('[aria-live="polite"]')).not.toBeNull();
+    expect(emailBox().getAttribute('aria-invalid')).toBe('true');
+    expect((emailBox().getAttribute('aria-describedby') ?? '').split(' ')).toContain(error.id);
+
+    await type(emailBox(), 'ext@example.com');
+    expect(overlay().querySelector('mat-error')).toBeNull();
+    expect(emailBox().getAttribute('aria-invalid')).toBe('false');
+  });
+
+  it('refuses an end date before the start date', async () => {
+    await open();
+    await fillValid();
+
+    await type(dateBoxes()[0], day(2, 1, 2030));
+
+    expect(alerts()).toEqual(['The end date is before the start date.']);
+    expect(create().disabled).toBe(true);
+  });
+
+  it('shares with a notification and the end day, then closes with true', async () => {
+    await open({ permissions: ['Read', 'ReadWrite'] });
+    await fillValid('  ext@example.com ');
+
+    create().click();
+    await settle();
+
+    expect(addExternal).toHaveBeenCalledWith('doc-1', {
+      email: 'ext@example.com',
+      permission: 'Read',
+      begin: null,
+      end: '2030-01-31',
+      notify: true,
+      comment: undefined,
+    });
+    expect(toastShow).toHaveBeenCalledWith(
+      'Shared with ext@example.com, who has been sent a link to the document.',
+      { duration: 7000 },
+    );
+    expect(close).toHaveBeenCalledWith(true);
+  });
+
+  it('sends the start day and a trimmed message when given', async () => {
+    await open();
+    await fillValid();
+    await type(dateBoxes()[0], day(1, 2, 2030));
+    await type(commentBox(), '  Please review  ');
+
+    create().click();
+    await settle();
+
+    expect(addExternal.mock.calls[0][1]).toMatchObject({
+      begin: '2030-01-02',
+      comment: 'Please review',
+    });
+  });
+
+  it('shows why Nuxeo could not send the notification, when it says', async () => {
+    addExternal.mockReturnValue(
+      of({
+        document: {},
+        notificationSent: false,
+        notificationErrorKey: 'permissions.notification.mail-hint',
+      }),
+    );
+    await open();
+    await fillValid();
+
+    create().click();
+    await settle();
+
+    expect(toastShow).toHaveBeenCalledWith(
+      'Requires outbound mail (SMTP) configured on the Nuxeo server.',
+      { duration: 7000 },
+    );
+  });
+
+  it('stays open and empties the form after "Create and add another"', async () => {
+    await open();
+    await fillValid();
+    await type(commentBox(), 'note');
+
+    another().click();
+    await settle();
+
+    expect(addExternal).toHaveBeenCalledTimes(1);
+    expect(close).not.toHaveBeenCalled();
+    expect(emailBox().value).toBe('');
+    expect(dateBoxes()[1].value).toBe('');
+    expect(commentBox().value).toBe('');
+    expect(create().disabled).toBe(true);
+  });
+
+  it('reports a share made with "add another" however the dialog is closed', async () => {
+    await open();
+    await fillValid();
+    another().click();
+    await settle();
+
+    cancel().click();
+
+    expect(close).toHaveBeenCalledWith(true);
+  });
+
+  it('reports the share on Escape and on a backdrop click too', async () => {
+    await open();
+    await fillValid();
+    another().click();
+    await settle();
+
+    q('mat-dialog-container').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    await settle();
+    expect(close).toHaveBeenCalledWith(true);
+
+    close.mockClear();
+    await open();
+    q<HTMLElement>('.cdk-overlay-backdrop').click();
+    await settle();
+    expect(close).toHaveBeenCalledWith(false);
+  });
+
+  it('closes with false when nothing was shared', async () => {
+    await open();
+
+    cancel().click();
+
+    expect(close).toHaveBeenCalledWith(false);
+    expect(addExternal).not.toHaveBeenCalled();
+  });
+
+  it('names the progress on the button pressed and blocks the others', async () => {
+    const pending = new Subject<unknown>();
+    addExternal.mockReturnValue(pending);
+    await open();
+    await fillValid();
+
+    another().click();
+    create().click();
+    await settle();
+
+    expect(addExternal).toHaveBeenCalledTimes(1);
+    expect(another().querySelector('mat-progress-spinner')?.getAttribute('aria-label')).toBe(
+      'Sharing the document',
+    );
+    expect(create().querySelector('mat-progress-spinner')).toBeNull();
+    expect(cancel().disabled).toBe(true);
+    q('mat-dialog-container').dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }),
+    );
+    expect(close).not.toHaveBeenCalled();
+    pending.complete();
+  });
+
+  it('says a refusal is a refusal, and keeps what the user typed', async () => {
+    addExternal.mockReturnValue(throwError(() => ({ status: 401 })));
+    await open();
+    await fillValid();
+
+    create().click();
+    await settle();
+
+    expect(toastError).toHaveBeenCalledWith(
+      "You don't have permission to change permissions on this document.",
+      { duration: 7000 },
+    );
+    expect(close).not.toHaveBeenCalled();
+    expect(emailBox().value).toBe('ext@example.com');
+    expect(create().disabled).toBe(false);
+  });
+
+  it('points at the mail server when Nuxeo could not send the share', async () => {
+    addExternal.mockReturnValue(
+      throwError(() => ({ error: { message: 'Error while sending a mail' } })),
+    );
+    await open();
+    await fillValid();
+
+    create().click();
+    await settle();
+
+    expect(toastError).toHaveBeenCalledWith(
+      'Permission could not be created. Configure outbound mail (SMTP) on the Nuxeo server.',
+      { duration: 7000 },
+    );
+  });
+
+  it('reports any other failure as one', async () => {
+    addExternal.mockReturnValue(throwError(() => ({ status: 500 })));
+    await open();
+    await fillValid();
+
+    create().click();
+    await settle();
+
+    expect(toastError).toHaveBeenCalledWith('The document could not be shared.', {
+      duration: 7000,
+    });
+  });
+});

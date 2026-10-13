@@ -1904,7 +1904,16 @@
       "Version": "Create versions",
       "Write": "Write",
       "WriteSecurity": "Manage permissions",
-      "WriteVersion": "Write versions"
+      "WriteVersion": "Write versions",
+      "Browse": "Browse",
+      "ReadChildren": "Read children",
+      "ReadLifeCycle": "Read lifecycle",
+      "ReadProperties": "Read properties",
+      "ReadSecurity": "Read security",
+      "WriteLifeCycle": "Edit lifecycle",
+      "WriteProperties": "Edit properties",
+      "ManageLegalHold": "Manage legal hold",
+      "ManageRecord": "Manage record"
     },
     "share-external-dialog": {
       "cancel": "Cancel",
@@ -2091,6 +2100,50 @@
       "summary-one": "1 field needs a correction before you can save.",
       "summary-other": "{{count}} fields need a correction before you can save.",
       "title": "Title"
+    },
+    "permission-dialogs": {
+      "cancel": "Cancel",
+      "comment": "Notification email",
+      "comment-placeholder": "Hi! Could you comment on this document and...",
+      "date-based": "Date-based",
+      "delete": {
+        "delete": "Delete",
+        "deleting": "Deleting the permission",
+        "title": "The following permission will be deleted."
+      },
+      "end-before-begin": "The end date is before the start date.",
+      "error": {
+        "delete": "The permission could not be deleted.",
+        "forbidden": "You don't have permission to change permissions on this document.",
+        "share": "The document could not be shared.",
+        "update": "The permission could not be updated."
+      },
+      "from": "From",
+      "granted-by": "Granted by",
+      "permanent": "Permanent",
+      "right": "Right",
+      "share": {
+        "create": "Create",
+        "create-another": "Create and add another",
+        "email": "Email",
+        "email-invalid": "Enter a valid email address.",
+        "email-placeholder": "name@company.com",
+        "saving": "Sharing the document",
+        "shared": "Shared with {{email}}, who has been sent a link to the document.",
+        "title": "Share with external user"
+      },
+      "time-frame": "Time frame",
+      "to": "To",
+      "update": {
+        "for": "For {{principal}}",
+        "notify": "Send an email to notify user",
+        "saving": "Updating the permission",
+        "title": "Update permission",
+        "update": "Update",
+        "updated": "Permission updated",
+        "updated-notified": "Permission updated and notification sent"
+      },
+      "user-group": "User / Group"
     },
     "permissions-panel": {
       "add": "Add",

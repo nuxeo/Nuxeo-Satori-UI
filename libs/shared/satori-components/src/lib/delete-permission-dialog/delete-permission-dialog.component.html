@@ -1,0 +1,44 @@
+<h2 mat-dialog-title>{{ 'satori-components.permission-dialogs.delete.title' | translate }}</h2>
+
+<mat-dialog-content>
+  <table class="nxs-delete-permission-dialog__entry">
+    <thead>
+      <tr>
+        <th scope="col">{{ 'satori-components.permission-dialogs.user-group' | translate }}</th>
+        <th scope="col">{{ 'satori-components.permission-dialogs.right' | translate }}</th>
+        <th scope="col">{{ 'satori-components.permission-dialogs.time-frame' | translate }}</th>
+        <th scope="col">{{ 'satori-components.permission-dialogs.granted-by' | translate }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>{{ principal }}</td>
+        <td>{{ right }}</td>
+        <td>{{ timeFrame }}</td>
+        <td>{{ grantedBy }}</td>
+      </tr>
+    </tbody>
+  </table>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end">
+  <button mat-button type="button" mat-dialog-close [disabled]="deleting()">
+    {{ 'satori-components.permission-dialogs.cancel' | translate }}
+  </button>
+  <button
+    mat-flat-button
+    type="button"
+    class="nxs-delete-permission-dialog__delete"
+    [disabled]="deleting()"
+    (click)="confirm()"
+  >
+    @if (deleting()) {
+      <nxs-spinner
+        diameter="18"
+        [label]="'satori-components.permission-dialogs.delete.deleting' | translate"
+      />
+    } @else {
+      {{ 'satori-components.permission-dialogs.delete.delete' | translate }}
+    }
+  </button>
+</mat-dialog-actions>

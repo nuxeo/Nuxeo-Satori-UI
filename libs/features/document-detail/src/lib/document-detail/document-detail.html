@@ -490,109 +490,114 @@
               </div>
             }
             <!-- Permissions Assigned to External Users -->
-            <section class="perm-section">
-              <div class="perm-section-header">
-                <div class="perm-section-title" role="heading" aria-level="3">
-                  {{
-                    'document-detail.document-detail.permissions-assigned-to-external-users'
-                      | translate
-                  }}
+            @if (showExternalShares()) {
+              <section class="perm-section">
+                <div class="perm-section-header">
+                  <div class="perm-section-title" role="heading" aria-level="3">
+                    {{
+                      'document-detail.document-detail.permissions-assigned-to-external-users'
+                        | translate
+                    }}
+                  </div>
+                  @if (canManagePermissions()) {
+                    <button
+                      mat-button
+                      color="primary"
+                      type="button"
+                      class="perm-action-btn"
+                      (click)="openExternalPermissionDialog()"
+                    >
+                      {{ 'document-detail.document-detail.new' | translate }}
+                    </button>
+                  }
                 </div>
-                @if (canManagePermissions()) {
-                  <button
-                    mat-button
-                    color="primary"
-                    type="button"
-                    class="perm-action-btn"
-                    (click)="openExternalPermissionDialog()"
-                  >
-                    {{ 'document-detail.document-detail.new' | translate }}
-                  </button>
-                }
-              </div>
-              <div class="perm-info-bar">
-                <span class="perm-info-accent"></span>
-                <p>
-                  {{
-                    'document-detail.document-detail.sharing-to-external-users-does-not' | translate
-                  }}
-                </p>
-              </div>
-              @if (externalAces().length === 0) {
-                <div class="perm-empty">
-                  {{
-                    'document-detail.document-detail.the-document-is-not-shared-with' | translate
-                  }}
+                <div class="perm-info-bar">
+                  <span class="perm-info-accent"></span>
+                  <p>
+                    {{
+                      'document-detail.document-detail.sharing-to-external-users-does-not'
+                        | translate
+                    }}
+                  </p>
                 </div>
-              } @else {
-                <div class="perm-table-wrap">
-                  <table class="perm-table">
-                    <thead>
-                      <tr>
-                        <th>{{ 'document-detail.document-detail.user' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.right' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.time-frame' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.granted-by' | translate }}</th>
-                        @if (canManagePermissions()) {
-                          <th></th>
-                        }
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (ace of externalAces(); track ace.id) {
+                @if (externalAces().length === 0) {
+                  <div class="perm-empty">
+                    {{
+                      'document-detail.document-detail.the-document-is-not-shared-with' | translate
+                    }}
+                  </div>
+                } @else {
+                  <div class="perm-table-wrap">
+                    <table class="perm-table">
+                      <thead>
                         <tr>
-                          <td>{{ displayUsername(ace) }}</td>
-                          <td>{{ permissionLabel(ace.permission) }}</td>
-                          <td>{{ aceTimeFrame(ace) }}</td>
-                          <td>{{ aceGrantedBy(ace) }}</td>
+                          <th>{{ 'document-detail.document-detail.user' | translate }}</th>
+                          <th>{{ 'document-detail.document-detail.right' | translate }}</th>
+                          <th>{{ 'document-detail.document-detail.time-frame' | translate }}</th>
+                          <th>{{ 'document-detail.document-detail.granted-by' | translate }}</th>
                           @if (canManagePermissions()) {
-                            <td class="perm-row-actions">
-                              <button
-                                mat-icon-button
-                                [matTooltip]="'document-detail.document-detail.edit' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.edit-permission' | translate
-                                "
-                                type="button"
-                                (click)="editExternalPermission(ace)"
-                              >
-                                <mat-icon>edit</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                [matTooltip]="
-                                  'document-detail.document-detail.send-notification-email'
-                                    | translate
-                                "
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.send-notification' | translate
-                                "
-                                type="button"
-                                [disabled]="actionInProgress() === 'notify-' + ace.id"
-                                (click)="sendPermissionNotification(ace)"
-                              >
-                                <mat-icon>send</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                [matTooltip]="'document-detail.document-detail.delete' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.delete-permission' | translate
-                                "
-                                type="button"
-                                (click)="deletePermission(ace)"
-                              >
-                                <mat-icon>delete</mat-icon>
-                              </button>
-                            </td>
+                            <th></th>
                           }
                         </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-            </section>
+                      </thead>
+                      <tbody>
+                        @for (ace of externalAces(); track ace.id) {
+                          <tr>
+                            <td>{{ displayUsername(ace) }}</td>
+                            <td>{{ permissionLabel(ace.permission) }}</td>
+                            <td>{{ aceTimeFrame(ace) }}</td>
+                            <td>{{ aceGrantedBy(ace) }}</td>
+                            @if (canManagePermissions()) {
+                              <td class="perm-row-actions">
+                                <button
+                                  mat-icon-button
+                                  [matTooltip]="'document-detail.document-detail.edit' | translate"
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.edit-permission' | translate
+                                  "
+                                  type="button"
+                                  (click)="editExternalPermission(ace)"
+                                >
+                                  <mat-icon>edit</mat-icon>
+                                </button>
+                                <button
+                                  mat-icon-button
+                                  [matTooltip]="
+                                    'document-detail.document-detail.send-notification-email'
+                                      | translate
+                                  "
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.send-notification' | translate
+                                  "
+                                  type="button"
+                                  [disabled]="actionInProgress() === 'notify-' + ace.id"
+                                  (click)="sendPermissionNotification(ace)"
+                                >
+                                  <mat-icon>send</mat-icon>
+                                </button>
+                                <button
+                                  mat-icon-button
+                                  [matTooltip]="
+                                    'document-detail.document-detail.delete' | translate
+                                  "
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.delete-permission' | translate
+                                  "
+                                  type="button"
+                                  (click)="deletePermission(ace)"
+                                >
+                                  <mat-icon>delete</mat-icon>
+                                </button>
+                              </td>
+                            }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+            }
           </div>
         </ng-template>
 

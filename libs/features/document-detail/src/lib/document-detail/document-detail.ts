@@ -113,7 +113,6 @@ import {
   type BrowseReturnMode,
   type ClipboardDoc,
   formatRelativeTime,
-  formatAceDateRange,
   permissionRightLabel,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
@@ -181,20 +180,16 @@ import { RemoveAttachmentDialogComponent } from '../remove-attachment-dialog/rem
 import { EditDocumentDialogComponent } from '../edit-document-dialog/edit-document-dialog';
 import { NoteEditorComponent } from '../note-editor/note-editor';
 import { documentTypeTraits, type PackagedDocumentView } from './document-type-traits';
-import {
-  DeletePermissionDialogComponent,
-  DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
-} from '@agentic-ui/shared-permission-dialogs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsCommentExtraDirective,
   NxsCommentsComponent,
   NxsTagEditorComponent,
+  NxsDeletePermissionDialogComponent,
+  NxsShareExternalDialogComponent,
+  NxsUpdatePermissionDialogComponent,
   NxsDetailsPanelComponent,
   NxsDocumentToolbarComponent,
   NxsDriveDialogComponent,
@@ -205,11 +200,15 @@ import {
   NxsTabBodyDirective,
   NxsTabsComponent,
   NxsToastService,
+  nxsAceTimeFrame,
   nxsErrorStatus,
   nxsToggleFavorite,
   provideNxsToast,
+  type NxsDeletePermissionDialogData,
   type NxsDetailsPanelTab,
   type NxsDriveDialogData,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
   type NxsErrorStatus,
   type NxsTab,
   type NxsToolbarAction,
@@ -364,6 +363,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
+  private readonly appConfig = inject(AppConfigService);
   private readonly nuxeoApi = inject(NuxeoApiBase);
   private readonly taskService = inject(TaskService);
   private readonly workflowService = inject(WorkflowService);
@@ -887,12 +887,31 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   });
 
   // Permissions tab computed
-  readonly externalAces = computed<NuxeoAce[]>(() => {
+  /**
+   * Web UI's external-user card: granted, pending or effective shares on the document's own ACLs.
+   * An inherited share is the parent's to edit, and an archived one has expired.
+   */
+  readonly externalAces = computed<(NuxeoAce & { aclName: string })[]>(() => {
     const d = this.doc();
     const acls = d?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces.map((ace) => ({ ...ace, aclName: acl.name })))
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
+  /** Web UI's `org.nuxeo.web.ui.permissions.externalUsers`, on unless a package turns it off. */
+  readonly showExternalShares = computed(() =>
+    this.appConfig.featureToggle('permissions.externalUsers', true),
+  );
+  private readonly visiblePermissions = computed(
+    () => this.doc()?.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
+  );
 
   readonly canManagePermissions = computed(() => canManageDocumentPermissions(this.doc()));
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
@@ -908,12 +927,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -3836,16 +3850,16 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.dialog.open(NxsDriveDialogComponent, { data });
   }
 
-  deletePermission(ace: NuxeoAce): void {
-    const ref = this.dialog.open(DeletePermissionDialogComponent, {
+  deletePermission(ace: NuxeoAce & { aclName?: string }): void {
+    const ref = this.dialog.open(NxsDeletePermissionDialogComponent, {
       width: '560px',
+      maxWidth: '95vw',
+      role: 'alertdialog',
       data: {
         documentUid: this.docUid,
         ace,
-        permissionLabel: this.permissionLabel(ace.permission),
-        timeFrameLabel: this.aceTimeFrame(ace),
-      } satisfies DeletePermissionDialogData,
-      autoFocus: false,
+        acl: ace.aclName,
+      } satisfies NxsDeletePermissionDialogData,
     });
     ref
       .afterClosed()
@@ -3859,23 +3873,19 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   editExternalPermission(ace: NuxeoAce): void {
-    const ref = this.dialog.open(UpdatePermissionDialogComponent, {
-      width: '520px',
+    const ref = this.dialog.open(NxsUpdatePermissionDialogComponent, {
+      maxWidth: '95vw',
       data: {
         documentUid: this.docUid,
         ace,
-        isExternal: true,
-      } satisfies UpdatePermissionDialogData,
-      autoFocus: false,
+        permissions: this.visiblePermissions(),
+      } satisfies NxsUpdatePermissionDialogData,
     });
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((updated: boolean | undefined) => {
-        if (updated) {
-          this.toast.show(this.translate.instant('browse.message.permission-updated'));
-          this.reloadDocumentPermissions();
-        }
+        if (updated) this.reloadDocumentPermissions();
       });
   }
 
@@ -3903,20 +3913,16 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   openExternalPermissionDialog(): void {
     if (!this.docUid) return;
-    const data: ShareExternalDialogData = { documentUid: this.docUid };
-    const ref = this.dialog.open(ShareExternalDialogComponent, {
-      width: '540px',
-      data,
-      autoFocus: false,
-    });
+    const data: NxsShareExternalDialogData = {
+      documentUid: this.docUid,
+      permissions: this.visiblePermissions(),
+    };
+    const ref = this.dialog.open(NxsShareExternalDialogComponent, { maxWidth: '95vw', data });
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((saved: boolean | undefined) => {
-        if (saved) {
-          this.reloadDocumentPermissions();
-          this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
-        }
+      .subscribe((shared: boolean | undefined) => {
+        if (shared) this.reloadDocumentPermissions();
       });
   }
 

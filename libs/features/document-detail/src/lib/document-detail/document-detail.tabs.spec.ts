@@ -475,15 +475,16 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(2);
     });
 
-    it('describes the grant being removed in the delete confirmation', async () => {
+    it('hands the delete confirmation the one entry and the ACL it is on', async () => {
       await build();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
 
-      component.deletePermission(ace({ permission: 'ReadWrite', begin: '2026-01-01' }));
+      component.deletePermission({ ...ace({ id: 'ace-9' }), aclName: 'local' });
 
       expect(lastDialogData()).toMatchObject({
         documentUid: 'doc-1',
-        permissionLabel: 'Edit',
+        ace: { id: 'ace-9' },
+        acl: 'local',
       });
       expect(toast.show).toHaveBeenCalledWith('Permission deleted');
     });
@@ -498,25 +499,28 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.getDocumentPermissions).not.toHaveBeenCalled();
     });
 
-    it('flags an external grant as external when editing it', async () => {
+    it('reloads after an external grant is updated, leaving the toast to the dialog', async () => {
       await build();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+      mockDetailService.getDocumentPermissions.mockClear();
 
-      component.editExternalPermission(ace({ externalUser: true }));
+      component.editExternalPermission(ace({ id: 'ace-3', externalUser: true }));
 
-      expect(lastDialogData()).toMatchObject({ isExternal: true });
-      expect(toast.show).toHaveBeenCalledWith('Permission updated');
+      expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1', ace: { id: 'ace-3' } });
+      expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
-    it('reloads after an external share is created', async () => {
+    it('reloads after an external share is created, leaving the toast to the dialog', async () => {
       await build();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
       mockDetailService.getDocumentPermissions.mockClear();
 
       component.openExternalPermissionDialog();
 
-      expect(toast.show).toHaveBeenCalledWith('Shared with external user');
+      expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1' });
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledWith('doc-1');
+      expect(toast.show).not.toHaveBeenCalled();
     });
 
     it('sends a notification email for a grant', async () => {

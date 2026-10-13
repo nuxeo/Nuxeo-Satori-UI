@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-65 exported symbol(s).
+72 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -331,6 +331,23 @@ class NxsCommentsComponent {
     protected saveEdit(comment: NuxeoComment, parent: NuxeoComment | null): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsCommentsComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsCommentsComponent, "nxs-comments", never, { "documentUid": { "alias": "documentUid"; "required": true; "isSignal": true; }; "readOnly": { "alias": "readOnly"; "required": false; "isSignal": true; }; "pageSize": { "alias": "pageSize"; "required": false; "isSignal": true; }; "maxChars": { "alias": "maxChars"; "required": false; "isSignal": true; }; }, { "threadChange": "threadChange"; }, ["extra"], never, true, never>;
+    }
+}
+class NxsDeletePermissionDialogComponent {
+    protected readonly deleting: _angular_core.WritableSignal<boolean>;
+    protected readonly principal: string;
+    protected readonly right: string;
+    protected readonly timeFrame: string;
+    protected readonly grantedBy: string;
+    protected confirm(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDeletePermissionDialogComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDeletePermissionDialogComponent, "nxs-delete-permission-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsDeletePermissionDialogData {
+    readonly documentUid: string;
+    readonly ace: NuxeoAce;
+    readonly acl?: string;
     }
 }
 class NxsDetailsPanelComponent {
@@ -676,6 +693,33 @@ interface NxsRichTooltipInputs {
     readonly icon: InputSignal<string>;
     }
 }
+class NxsShareExternalDialogComponent {
+    protected readonly rights: readonly string[];
+    protected readonly mailHint = "permissions.notification.mail-hint";
+    protected readonly email: _angular_core.WritableSignal<string>;
+    protected readonly emailLeft: _angular_core.WritableSignal<boolean>;
+    protected readonly right: _angular_core.WritableSignal<string>;
+    protected readonly begin: _angular_core.WritableSignal<Date | null>;
+    protected readonly end: _angular_core.WritableSignal<Date | null>;
+    protected readonly comment: _angular_core.WritableSignal<string>;
+    protected readonly saving: _angular_core.WritableSignal<"another" | "create" | null>;
+    protected readonly emailValid: _angular_core.Signal<boolean>;
+    protected readonly emailError: ErrorStateMatcher;
+    protected readonly endBeforeBegin: _angular_core.Signal<boolean>;
+    protected readonly valid: _angular_core.Signal<boolean>;
+    constructor();
+    protected label(permission: string): string;
+    protected cancel(): void;
+    protected create(another: boolean): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsShareExternalDialogComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsShareExternalDialogComponent, "nxs-share-external-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsShareExternalDialogData {
+    readonly documentUid: string;
+    readonly permissions?: readonly string[] | null;
+    }
+}
 class NxsSpinnerComponent {
     readonly diameter: _angular_core.InputSignalWithTransform<number, unknown>;
     readonly label: _angular_core.InputSignal<string>;
@@ -789,7 +833,35 @@ interface NxsToolbarAction {
     readonly overflow?: boolean;
     }
 }
+class NxsUpdatePermissionDialogComponent {
+    protected readonly id: string;
+    protected readonly external: boolean;
+    protected readonly principal: string;
+    protected readonly rights: readonly string[];
+    protected readonly mailHint = "permissions.notification.mail-hint";
+    protected readonly right: _angular_core.WritableSignal<string>;
+    protected readonly dated: _angular_core.WritableSignal<boolean>;
+    protected readonly begin: _angular_core.WritableSignal<Date | null>;
+    protected readonly end: _angular_core.WritableSignal<Date | null>;
+    protected readonly notify: _angular_core.WritableSignal<boolean>;
+    protected readonly comment: _angular_core.WritableSignal<string>;
+    protected readonly saving: _angular_core.WritableSignal<boolean>;
+    protected readonly endBeforeBegin: _angular_core.Signal<boolean>;
+    protected readonly valid: _angular_core.Signal<boolean>;
+    protected label(permission: string): string;
+    protected update(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUpdatePermissionDialogComponent, "nxs-update-permission-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsUpdatePermissionDialogData {
+    readonly documentUid: string;
+    readonly ace: NuxeoAce;
+    readonly permissions?: readonly string[] | null;
+    }
+}
 type NxsVocabularyLabel = (directory: string, id: string) => string;
+function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsPropertyText(value: unknown): string;
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;

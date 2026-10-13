@@ -1597,6 +1597,40 @@ component `nxs.components.permissionsPanel`.
 
 ---
 
+## 30b. Permission Dialogs — External Shares, Edit and Delete (NXSAT-308)
+
+| Field       | Value                                                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service** | `DocumentDetailService`, called by `nxs-share-external-dialog`, `nxs-update-permission-dialog` and `nxs-delete-permission-dialog` (`libs/shared/satori-components/src/lib/`)  |
+| **Share**   | `POST /nuxeo/api/v1/automation/Document.AddPermission` — `email`, `permission`, `begin`, `end`, `comment`, `notify: false` (`addExternalPermissionWithNotification`)          |
+| **Notify**  | then `POST /nuxeo/api/v1/automation/Document.SendNotificationEmailForPermission` — `id` of the new entry, so a mail failure reaches the dialog                                |
+| **Edit**    | `POST /nuxeo/api/v1/automation/Document.ReplacePermission` — `id`, `username`, `permission`, `begin`, `end`, `comment`, `notify: false`, then the notification when asked for |
+| **Delete**  | `POST /nuxeo/api/v1/id/:uid/@op/Document.RemovePermission` — `id`, `acl` (`removePermissionById`)                                                                             |
+
+**Behaviour measured on 2025.26.16:**
+
+- `AddPermission` with `email` creates the principal `transient/<email>` and marks the entry
+  `externalUser`. Dates in the past are accepted, and the entry reads back with status `archived`.
+- `ReplacePermission` edits an external entry in place: it keeps `externalUser` and its status, so
+  the dialog no longer removes and re-adds it. An unchanged date is written back as the instant the
+  read returned, as in the panel, so an end written as `2030-07-15T00:00:00+02:00` (which reads back
+  as `2030-07-14T22:00:00.000Z`) survives an edit made from another zone.
+- `RemovePermission` with `id` and the entry's own `acl` removes that one entry, including a deny.
+- `Document.AddACE` with `grant: false` replaces the **whole** local ACL with the one deny it
+  writes. The app does not call it; test seeding that does must add the other entries afterwards.
+
+A new date is sent as the day (`2030-01-31`), which Nuxeo anchors at the server's midnight, as the
+panel's are. Web UI sends the end as the end of that day in the browser's zone, so a share Web UI
+writes lasts through its last day and one written here ends as that day starts.
+
+Every date is shown as the calendar day its writer picked (`nxsAceTimeFrame`), not the UTC date
+Nuxeo returns, so the Permissions tab's card, the panel and all three dialogs show the same day.
+
+**Usage:** the external-shares card on document detail's Permissions tab. The manifest's
+`featureToggles["permissions.externalUsers"]` hides the card and its share action when `false`.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

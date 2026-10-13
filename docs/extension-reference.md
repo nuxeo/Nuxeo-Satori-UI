@@ -161,6 +161,19 @@ name breaks that rule is skipped, and an unknown name is reported and forgotten.
 Presets are package content, served anonymously like every fragment. Switching chooses among them
 for one browser; it grants nothing and changes nothing on the server.
 
+### Feature toggles
+
+A manifest fragment's top-level `featureToggles` turns a packaged feature on or off by name. A value
+that is not `true` or `false` is ignored, and a later fragment's value wins.
+
+```json
+{ "version": 1, "featureToggles": { "permissions.externalUsers": false } }
+```
+
+| Toggle                      | Default | What it controls                                                                                                                                                                                                                                 |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server. |
+
 ---
 
 ## 2. Slots

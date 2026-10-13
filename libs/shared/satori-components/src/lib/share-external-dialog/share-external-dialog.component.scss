@@ -1,0 +1,32 @@
+:host {
+  display: block;
+  --nxs-share-external-dialog-error: var(--mat-sys-error);
+}
+
+.nxs-share-external-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(480px, 80vw);
+}
+
+.nxs-share-external-dialog__dates {
+  display: flex;
+  gap: 16px;
+
+  mat-form-field {
+    flex: 1;
+  }
+}
+
+// Material gives content under a title no top padding, which clips the first outlined field's label.
+:host .nxs-share-external-dialog__content {
+  padding-top: 8px;
+}
+
+// Scoped to the host: the theme's `.mat-typography p` margin outranks a single class.
+:host .nxs-share-external-dialog__error {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: var(--nxs-share-external-dialog-error);
+}

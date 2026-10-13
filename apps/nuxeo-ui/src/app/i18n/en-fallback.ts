@@ -346,6 +346,12 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.metadata-editor.search': 'Search',
   'satori-components.metadata-editor.search-in': 'Search {{label}}',
   'satori-components.metadata-editor.sections': 'Metadata sections',
+  'satori-components.permission-dialogs.delete.deleting': 'Deleting the permission',
+  'satori-components.permission-dialogs.share.saving': 'Sharing the document',
+  'satori-components.permission-dialogs.update.saving': 'Updating the permission',
+  'satori-components.permission-dialogs.share.email-placeholder': 'name@company.com',
+  'satori-components.permission-dialogs.comment-placeholder':
+    'Hi! Could you comment on this document and...',
   'satori-components.permissions-panel.column.time-frame': 'Time frame',
   'satori-components.permissions-panel.edit-entry': 'Edit the permission for {{ principal }}',
   'satori-components.permissions-panel.loading': 'Loading permissions',

@@ -411,6 +411,51 @@ A document's two tags as chips, each with a remove button, and the box that adds
 
 It follows Web UI's tag field on the document page: existing tags suggested as you type, the typed text offered as a new tag, each change saved at once, and read-only without Write or on a version or proxy.
 
+### Delete permission dialog
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsDeletePermissionDialogComponent`        |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `dialogs-delete-permission--external-share` |
+
+![Delete permission dialog: without Satori on the left, with Satori on the right](delete-permission-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The confirmation before an external user's share is deleted: the person's email, the right, the date it ends and who granted it, with Cancel and Delete. The same dialog in both; the theme sets the type, the table's lines and the button styles.
+
+It deletes that one entry, as Web UI does, so the same person's other entries on the document stay.
+
+### Share with external user dialog
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsShareExternalDialogComponent`           |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `dialogs-share-with-external-user--default` |
+
+![Share with external user dialog: without Satori on the left, with Satori on the right](share-external-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The empty form for sharing a document by email: the email, the right, the start and end dates, the message, and Cancel, Create and add another, and Create. The same form in both; the theme sets the type, the outlines and the button styles.
+
+It follows Web UI's external-user popup: the end date is required, the person is always emailed, and the rights offered are the ones the document type makes visible.
+
+### Update permission dialog
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsUpdatePermissionDialogComponent`        |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `dialogs-update-permission--external-share` |
+
+![Update permission dialog: without Satori on the left, with Satori on the right](update-permission-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Changing an external user's share: whose it is, the right, the dates with the end required, and the message the person is sent. The same form in both; the theme sets the type, the outlines and the button styles.
+
+It replaces the entry in one call, as Web UI does, and writes back a date the user did not change exactly as Nuxeo holds it.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -462,33 +507,36 @@ The components in the library today:
 
 <!-- satori:comparison:summary -->
 
-| Component          | Registered ID (if any)                                                                                                  | Differs with Satori?         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Avatar             | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
-| Tag                | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
-| Breadcrumbs        | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
-| Rich tooltip       | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
-| Icon               | —                                                                                                                       | Same component; theme only   |
-| Document type icon | —                                                                                                                       | Same component; theme only   |
-| Thumbnail          | —                                                                                                                       | Same component; theme only   |
-| Folder header      | —                                                                                                                       | Same component; theme only   |
-| Domain hint        | —                                                                                                                       | Same component; theme only   |
-| Empty state        | —                                                                                                                       | Same component; theme only   |
-| Error state        | —                                                                                                                       | Same component; theme only   |
-| Spinner            | —                                                                                                                       | Same component; theme only   |
-| Toast              | —                                                                                                                       | Same component; theme only   |
-| Column picker      | —                                                                                                                       | Same component; theme only   |
-| Permissions panel  | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
-| Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
-| Favorite toggle    | —                                                                                                                       | Same component; theme only   |
-| Action menu        | —                                                                                                                       | Same component; theme only   |
-| Document toolbar   | —                                                                                                                       | Same component; theme only   |
-| Tabs               | —                                                                                                                       | Same component; theme only   |
-| Details panel      | —                                                                                                                       | Same component; theme only   |
-| Properties panel   | —                                                                                                                       | Same component; theme only   |
-| Metadata editor    | —                                                                                                                       | Same component; theme only   |
-| Comments           | —                                                                                                                       | Same component; theme only   |
-| Tag editor         | —                                                                                                                       | Same component; theme only   |
+| Component                       | Registered ID (if any)                                                                                                  | Differs with Satori?         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Avatar                          | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
+| Tag                             | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
+| Breadcrumbs                     | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
+| Rich tooltip                    | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
+| Icon                            | —                                                                                                                       | Same component; theme only   |
+| Document type icon              | —                                                                                                                       | Same component; theme only   |
+| Thumbnail                       | —                                                                                                                       | Same component; theme only   |
+| Folder header                   | —                                                                                                                       | Same component; theme only   |
+| Domain hint                     | —                                                                                                                       | Same component; theme only   |
+| Empty state                     | —                                                                                                                       | Same component; theme only   |
+| Error state                     | —                                                                                                                       | Same component; theme only   |
+| Spinner                         | —                                                                                                                       | Same component; theme only   |
+| Toast                           | —                                                                                                                       | Same component; theme only   |
+| Column picker                   | —                                                                                                                       | Same component; theme only   |
+| Permissions panel               | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
+| Nuxeo Drive dialog              | —                                                                                                                       | Same component; theme only   |
+| Favorite toggle                 | —                                                                                                                       | Same component; theme only   |
+| Action menu                     | —                                                                                                                       | Same component; theme only   |
+| Document toolbar                | —                                                                                                                       | Same component; theme only   |
+| Tabs                            | —                                                                                                                       | Same component; theme only   |
+| Details panel                   | —                                                                                                                       | Same component; theme only   |
+| Properties panel                | —                                                                                                                       | Same component; theme only   |
+| Metadata editor                 | —                                                                                                                       | Same component; theme only   |
+| Comments                        | —                                                                                                                       | Same component; theme only   |
+| Tag editor                      | —                                                                                                                       | Same component; theme only   |
+| Delete permission dialog        | —                                                                                                                       | Same component; theme only   |
+| Share with external user dialog | —                                                                                                                       | Same component; theme only   |
+| Update permission dialog        | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

@@ -1425,6 +1425,15 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       );
     });
 
+    it('shows the day a share ends as the panel does, not its UTC date', async () => {
+      await build();
+
+      // Midnight in Paris on 15 July, which Nuxeo holds as 22:00 UTC on the 14th.
+      expect(component.aceTimeFrame(ace({ end: '2030-07-14T22:00:00.000Z' }))).toBe(
+        'Until Jul 15, 2030',
+      );
+    });
+
     it('strips the transient prefix from a shared-link principal', async () => {
       await build();
 
