@@ -2758,9 +2758,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return TAG_CATEGORIES[index % TAG_CATEGORIES.length];
   }
 
+  /**
+   * A version's publications are its live document's, as Web UI lists them: a proxy names the live
+   * document as its `proxyVersionableId`, so asking with the version's own uid finds none.
+   */
   private loadPublicationCount(uid: string): void {
     const generation = this.documentLoadGeneration;
-    this.detailService.getPublishedVersions(uid).subscribe({
+    this.detailService.getPublishedVersions(this.liveDocumentUid()).subscribe({
       next: (res) => {
         if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.publishedDocs.set(res.entries);
@@ -2781,7 +2785,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (this.publishedDocs().length === 0) {
       const requestedFor = this.docUid;
       const generation = this.documentLoadGeneration;
-      this.detailService.getPublishedVersions(requestedFor).subscribe({
+      this.detailService.getPublishedVersions(this.liveDocumentUid()).subscribe({
         next: (res) => {
           if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.publishedDocs.set(res.entries);
@@ -3008,7 +3012,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private refreshPublishedDocs(): void {
     const requestedFor = this.docUid;
     const generation = this.documentLoadGeneration;
-    this.detailService.getPublishedVersions(requestedFor).subscribe({
+    this.detailService.getPublishedVersions(this.liveDocumentUid()).subscribe({
       next: (res) => {
         if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
           this.publishedDocs.set(res.entries);

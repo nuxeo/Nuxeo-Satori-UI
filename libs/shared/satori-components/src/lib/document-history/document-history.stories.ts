@@ -12,6 +12,7 @@ import {
   type AuditEntry,
   type AuditLogList,
   type AuditLogQuery,
+  type DirectoryEntry,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { NxsDocumentHistoryComponent } from './document-history.component';
@@ -81,21 +82,39 @@ function serverSide(
   } as AuditLogList).pipe(delay(250));
 }
 
+/** A vocabulary entry as `DirectoryService` hands it over. */
+const entry = (
+  directoryName: string,
+  id: string,
+  label: string,
+  ordering: number,
+): DirectoryEntry => ({
+  id,
+  label,
+  displayLabel: label,
+  ordering,
+  obsolete: 0,
+  directoryName,
+});
+
 const withHistory = (getAuditLog: typeof serverSide = serverSide) => {
   const detail: Pick<DocumentDetailService, 'getAuditLog'> = {
     getAuditLog: logged('getAuditLog', getAuditLog) as DocumentDetailService['getAuditLog'],
   };
   const directories: Pick<DirectoryService, 'getEventTypes' | 'getEventCategories'> = {
     getEventTypes: () =>
-      of([
-        { id: 'documentCreated', displayLabel: 'Document created' },
-        { id: 'documentModified', displayLabel: 'Document modified' },
-        { id: 'documentCheckedIn', displayLabel: 'Document checked in' },
-        { id: 'documentLocked', displayLabel: 'Document locked' },
-        { id: 'documentUnlocked', displayLabel: 'Document unlocked' },
-        { id: 'download', displayLabel: 'Download' },
-      ]),
-    getEventCategories: () => of([{ id: 'eventDocumentCategory', displayLabel: 'Document' }]),
+      of(
+        [
+          ['documentCreated', 'Creation'],
+          ['documentModified', 'Modification'],
+          ['documentCheckedIn', 'Version created'],
+          ['documentLocked', 'Lock document'],
+          ['documentUnlocked', 'Unlock document'],
+          ['download', 'Download'],
+        ].map(([id, label], index) => entry('eventTypes', id, label, index)),
+      ),
+    getEventCategories: () =>
+      of([entry('eventCategories', 'eventDocumentCategory', 'Document', 0)]),
   };
   const providers: Provider[] = [
     provideNativeDateAdapter(),

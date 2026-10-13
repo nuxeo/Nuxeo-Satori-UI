@@ -518,6 +518,18 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({ documentUid: 'v-0-1' });
     });
 
+    it('counts a version’s publications through its live document, as Web UI lists them', async () => {
+      const proxy = live({ uid: 'proxy-of-1-0', path: '/sections/a', isProxy: true });
+      mockDetailService.getPublishedVersions.mockImplementation((uid: string) =>
+        of({ entries: uid === 'doc-live' ? [proxy] : [] }),
+      );
+      await render(publishableVersion());
+
+      expect(mockDetailService.getPublishedVersions).toHaveBeenCalledWith('doc-live');
+      expect(mockDetailService.getPublishedVersions).not.toHaveBeenCalledWith('v-0-1');
+      expect(fixture.componentInstance.publicationCount()).toBe(1);
+    });
+
     it('does not offer Publish on a version to a user without WriteVersion', async () => {
       await render(
         version(1, {
