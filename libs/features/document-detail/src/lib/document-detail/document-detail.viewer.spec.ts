@@ -115,6 +115,7 @@ const mockDetailService = {
   exportZip: vi.fn((): Observable<Blob> => of(new Blob(['zip']))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -394,7 +395,16 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
     });
 
     it('opens the share, export, publish and start-process surfaces', async () => {
-      await build(doc({ properties: { 'uid:major_version': 1 } }));
+      // Publish is Web UI's `isPublishable`: the Publishable facet and WriteVersion.
+      await build(
+        doc({
+          facets: ['Publishable'],
+          properties: { 'uid:major_version': 1 },
+          contextParameters: {
+            permissions: ['Read', 'Write', 'ReadWrite', 'WriteVersion', 'Everything', 'Remove'],
+          },
+        }),
+      );
 
       for (const id of [
         'app.toolbar.share',

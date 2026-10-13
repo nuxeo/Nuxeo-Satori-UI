@@ -41,11 +41,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { provideNativeDateAdapter } from '@angular/material/core';
-import { MatSortModule, Sort } from '@angular/material/sort';
-import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 
 import {
   NuxeoDocument,
@@ -83,11 +79,13 @@ import {
   shouldProbeContentLakeIngestStatus,
   supportsContentLakeIngest,
   canManageDocumentPermissions,
+  canPublishDocument,
   canTagDocument,
   canWriteDocument,
   canRemoveDocument,
   canViewDocumentAuditLog,
   hasDocumentPermission,
+  WRITE_VERSION,
   mergeDocumentPermissionsContext,
   auditActivityLabel,
   resolveAcePrincipal,
@@ -170,10 +168,6 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo-satori/platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
-import {
-  CreateVersionDialogComponent,
-  CreateVersionDialogData,
-} from '../create-version-dialog/create-version-dialog';
 import { PublishDialogComponent, PublishDialogData } from '../publish-dialog/publish-dialog';
 import { AttachmentPreviewDialogComponent } from '../attachment-preview-dialog/attachment-preview-dialog';
 import { ReplaceAttachmentDialogComponent } from '../replace-attachment-dialog/replace-attachment-dialog';
@@ -192,8 +186,10 @@ import {
   NxsShareExternalDialogComponent,
   NxsUpdatePermissionDialogComponent,
   NxsDetailsPanelComponent,
+  NxsDocumentHistoryComponent,
   NxsDocumentToolbarComponent,
   NxsDriveDialogComponent,
+  NxsManageVersionsComponent,
   NxsErrorStateComponent,
   NxsPermissionsPanelComponent,
   NxsPropertiesPanelComponent,
@@ -272,19 +268,6 @@ const KE_MESSAGE_KEYS: Record<KeUiAction, { start: string; success: string; fail
   },
 };
 
-/** The permission Nuxeo checks for creating and restoring versions. */
-const WRITE_VERSION = 'WriteVersion';
-const VERSIONABLE_FACET = 'Versionable';
-
-/**
- * Nuxeo flags a record with the `isRecord` field of the document JSON — there is no facet for it.
- * The public `NuxeoDocument` model does not declare the field, so it is read here rather than
- * added to that published type.
- */
-function isRecordDocument(doc: NuxeoDocument): boolean {
-  return (doc as NuxeoDocument & { readonly isRecord?: boolean }).isRecord === true;
-}
-
 /**
  * The message for a refused restore. 403 is also what Nuxeo answers when another user holds
  * the lock, which removes `WriteVersion` from everyone but its owner and administrators.
@@ -330,8 +313,10 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NxsCommentsComponent,
     NxsTagEditorComponent,
     NxsDetailsPanelComponent,
+    NxsDocumentHistoryComponent,
     NxsDocumentToolbarComponent,
     NxsErrorStateComponent,
+    NxsManageVersionsComponent,
     NxsPropertiesPanelComponent,
     NxsSpinnerComponent,
     NxsTabBodyDirective,
@@ -351,10 +336,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
-    MatSortModule,
-    MatTableModule,
-    MatPaginatorModule,
     DocumentLayoutComponent,
     DocumentViewerComponent,
     ExtensionOutletComponent,
@@ -684,12 +665,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly panelActivityLoading = signal(false);
   private panelActivityLoaded = false;
 
-  // Version state
-  readonly versions = signal<NuxeoDocument[]>([]);
-  readonly versionsLoading = signal(false);
-  readonly versionDropdownOpen = signal(false);
-  private versionsLoaded = false;
-
   readonly currentMajor = computed(() => {
     const d = this.doc();
     return Number(d?.properties['uid:major_version'] ?? 0);
@@ -727,40 +702,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly clipboardDocs = signal<ClipboardDoc[]>(readClipboardDocs());
   readonly isInClipboard = computed(() => this.clipboardDocs().some((d) => d.uid === this.docUid));
 
-  // History tab state
-  readonly auditEntries = signal<AuditEntry[]>([]);
-  readonly auditLoading = signal(false);
-  readonly auditTotalSize = signal(0);
-  readonly auditPageSize = signal(20);
-  readonly auditPageIndex = signal(0);
-  readonly historyDisplayedColumns = [
-    'eventId',
-    'eventDate',
-    'principalName',
-    'category',
-    'comment',
-    'docLifeCycle',
-  ];
-  private historyLoaded = false;
   private permissionsTabLoaded = false;
   readonly activeTabIndex = signal(0);
   readonly permissionsLoading = signal(false);
 
-  // History filters (signals so computed() reacts)
-  readonly filterUsername = signal('');
-  readonly filterDateFrom = signal<Date | null>(null);
-  readonly filterDateTo = signal<Date | null>(null);
-  readonly filterAction = signal('');
-  readonly filterCategory = signal('');
-
-  readonly availableActions = signal<DirectoryEntry[]>([]);
-  readonly availableCategories = signal<DirectoryEntry[]>([]);
-  private eventTypeLabelMap = new Map<string, string>();
-  private eventCategoryLabelMap = new Map<string, string>();
-
-  // Sort state
-  private sortActive = signal('');
-  private sortDirection = signal<'asc' | 'desc' | ''>('');
+  /** The `eventTypes` vocabulary's labels, for the side panel's activity; read once. */
+  private readonly eventTypeLabels = signal(new Map<string, string>());
+  private eventTypesRequested = false;
 
   // Publishing tab state
   readonly publishedDocs = signal<NuxeoDocument[]>([]);
@@ -966,18 +914,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     () => this.isVersionView() && hasDocumentPermission(this.doc(), WRITE_VERSION),
   );
 
-  /** Web UI's gate for Create Version. */
-  readonly canCreateVersion = computed(() => {
-    const d = this.doc();
-    return (
-      !!d &&
-      !d.isVersion &&
-      !isRecordDocument(d) &&
-      (d.facets ?? []).includes(VERSIONABLE_FACET) &&
-      hasDocumentPermission(d, WRITE_VERSION)
-    );
-  });
-
   permissionLabel(permission: string): string {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
@@ -994,49 +930,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const creator = ace.creator ? resolveAcePrincipal(ace.creator) : '';
     return creator || '—';
   }
-
-  readonly filteredAuditEntries = computed(() => {
-    let entries = this.auditEntries();
-    const username = this.filterUsername();
-    const dateFrom = this.filterDateFrom();
-    const dateTo = this.filterDateTo();
-    const action = this.filterAction();
-    const category = this.filterCategory();
-    const active = this.sortActive();
-    const direction = this.sortDirection();
-
-    if (username) {
-      const lower = username.toLowerCase();
-      entries = entries.filter((e) => e.principalName.toLowerCase().includes(lower));
-    }
-    if (dateFrom) {
-      const from = dateFrom.getTime();
-      entries = entries.filter((e) => new Date(e.eventDate).getTime() >= from);
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      to.setHours(23, 59, 59, 999);
-      entries = entries.filter((e) => new Date(e.eventDate).getTime() <= to.getTime());
-    }
-    if (action) {
-      entries = entries.filter((e) => e.eventId === action);
-    }
-    if (category) {
-      entries = entries.filter((e) => e.category === category);
-    }
-
-    if (active && direction) {
-      const dir = direction === 'asc' ? 1 : -1;
-      const key = active as keyof AuditEntry;
-      entries = [...entries].sort((a, b) => {
-        const va = a[key] ?? '';
-        const vb = b[key] ?? '';
-        return va < vb ? -dir : va > vb ? dir : 0;
-      });
-    }
-
-    return entries;
-  });
 
   /** `enabledRule` renders a control disabled rather than hiding it. */
   isToolbarActionEnabled(action: ExtensionActionDescriptor): boolean {
@@ -1203,10 +1096,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.comments.set([]);
     this.panelActivity.set([]);
     this.panelActivityLoaded = false;
-    this.versions.set([]);
-    this.versionsLoaded = false;
-    this.versionsLoading.set(false);
-    this.versionDropdownOpen.set(false);
     this.actionInProgress.set(null);
     this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
@@ -1220,7 +1109,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.contentLakePresenceVerified.set(false);
     this.contentLakePresenceChecking.set(false);
     this.panelSubTab.set('properties');
-    this.historyLoaded = false;
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
     // Not just the `publishTabLoaded` flag above: `loadPublishingData()` skips its own fetch
@@ -1755,10 +1643,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.loading.set(false);
           if (this.activeTabId() === 'app.tabs.permissions') {
             this.reloadDocumentPermissions();
-          }
-          if (this.activeTabId() === 'app.tabs.history' && !this.historyLoaded) {
-            this.loadDirectoryEntries();
-            this.loadAuditLog();
           }
           if (this.panelSubTab() === 'activity' && !this.panelActivityLoaded) {
             this.loadPanelActivity();
@@ -2827,14 +2711,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.loadDataForTab(this.detailTabs()[index]?.id ?? null);
   }
 
-  /** The lazy loads the Permissions, History and Publishing tabs need on first show. */
+  /** The lazy loads the Permissions and Publishing tabs need on first show. */
   private loadDataForTab(id: string | null): void {
     if (id === 'app.tabs.permissions' && !this.permissionsTabLoaded) {
       this.reloadDocumentPermissions();
-    }
-    if (id === 'app.tabs.history' && !this.historyLoaded) {
-      this.loadDirectoryEntries();
-      this.loadAuditLog();
     }
     if (id === 'app.tabs.publishing' && !this.publishTabLoaded) {
       this.loadPublishingData();
@@ -2870,89 +2750,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           );
         },
       });
-  }
-
-  private loadDirectoryEntries(): void {
-    forkJoin({
-      types: this.directoryService.getEventTypes(),
-      categories: this.directoryService.getEventCategories(),
-    }).subscribe({
-      next: ({ types, categories }) => {
-        this.availableActions.set(types);
-        this.availableCategories.set(categories);
-        this.eventTypeLabelMap = new Map(types.map((t) => [t.id, t.displayLabel]));
-        this.eventCategoryLabelMap = new Map(categories.map((c) => [c.id, c.displayLabel]));
-      },
-    });
-  }
-
-  loadAuditLog(): void {
-    if (!this.docUid) return;
-
-    const doc = this.doc();
-    if (!doc) {
-      this.auditLoading.set(false);
-      return;
-    }
-
-    if (!canViewDocumentAuditLog(doc)) {
-      this.auditEntries.set([]);
-      this.auditTotalSize.set(0);
-      this.auditLoading.set(false);
-      this.historyLoaded = true;
-      return;
-    }
-
-    this.auditLoading.set(true);
-
-    const requestedFor = this.docUid;
-    const generation = this.documentLoadGeneration;
-    this.detailService
-      .getAuditLog(requestedFor, this.auditPageSize(), this.auditPageIndex())
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (res) => {
-          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
-          this.auditEntries.set(res.entries);
-          this.auditTotalSize.set(res.resultsCount ?? res.totalSize ?? res.entries.length);
-          this.auditLoading.set(false);
-          this.historyLoaded = true;
-        },
-        error: () => {
-          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
-            this.auditLoading.set(false);
-          }
-        },
-      });
-  }
-
-  onAuditPageChange(event: PageEvent): void {
-    this.auditPageSize.set(event.pageSize);
-    this.auditPageIndex.set(event.pageIndex);
-    this.loadAuditLog();
-  }
-
-  onAuditSort(sort: Sort): void {
-    this.sortActive.set(sort.active);
-    this.sortDirection.set(sort.direction);
-  }
-
-  eventLabel(eventId: string): string {
-    return (
-      this.eventTypeLabelMap.get(eventId) ??
-      eventId.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
-    );
-  }
-
-  categoryLabel(category: string): string {
-    return (
-      this.eventCategoryLabelMap.get(category) ??
-      category
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, (c) => c.toUpperCase())
-        .replace('event ', '')
-        .replace(' Category', '')
-    );
   }
 
   avatarColor = avatarColor;
@@ -3769,6 +3566,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   loadPanelActivity(): void {
     if (!this.docUid) return;
+    this.loadEventTypeLabels();
 
     const doc = this.doc();
     if (!doc) {
@@ -3805,70 +3603,34 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   activityLabel(entry: AuditEntry): string {
-    return auditActivityLabel(entry, this.eventTypeLabelMap);
+    return auditActivityLabel(entry, this.eventTypeLabels());
+  }
+
+  /** The activity list names an event by its vocabulary label once the vocabulary is read. */
+  private loadEventTypeLabels(): void {
+    if (this.eventTypesRequested) return;
+    this.eventTypesRequested = true;
+    this.directoryService
+      .getEventTypes()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (types) =>
+          this.eventTypeLabels.set(new Map(types.map((t) => [t.id, t.displayLabel]))),
+        error: () => (this.eventTypesRequested = false),
+      });
   }
 
   // ── Versioning ──
 
-  openCreateVersionDialog(): void {
-    if (!this.canCreateVersion()) {
-      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
-      return;
-    }
-    const ref = this.dialog.open(CreateVersionDialogComponent, {
-      width: '600px',
-      maxWidth: '95vw',
-      panelClass: 'create-version-dialog-panel',
-      data: {
-        documentUid: this.docUid,
-        documentTitle: this.doc()?.title ?? '',
-        currentMajor: this.currentMajor(),
-        currentMinor: this.currentMinor(),
-      } satisfies CreateVersionDialogData,
-    });
-
-    ref.afterClosed().subscribe((result) => {
-      if (result) {
-        this.loadDocument(this.docUid);
-        this.versionsLoaded = false;
-        this.loadVersions();
-      }
-    });
+  /** `nxs-manage-versions` created one: the document is checked in at it now. */
+  onVersionCreated(): void {
+    this.loadDocument(this.docUid);
   }
 
-  toggleVersionDropdown(): void {
-    if (!this.versionsLoaded) {
-      this.loadVersions();
-    }
-    this.versionDropdownOpen.update((v) => !v);
-  }
-
-  /** The live document whose versions the list shows — itself, or the one a version belongs to. */
+  /** The live document — this one, or the one a version on screen belongs to. */
   private liveDocumentUid(): string {
     const d = this.doc();
     return (d?.isVersion && d.versionableId) || this.docUid;
-  }
-
-  loadVersions(): void {
-    const requestedFor = this.docUid;
-    if (!requestedFor) return;
-    const generation = this.documentLoadGeneration;
-    this.versionsLoading.set(true);
-    this.detailService.getVersions(this.liveDocumentUid()).subscribe({
-      next: (res) => {
-        // A list that arrives after the route moved on belongs to the previous document; marking
-        // it loaded would skip the next document's own fetch.
-        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
-        this.versions.set(res.entries ?? []);
-        this.versionsLoading.set(false);
-        this.versionsLoaded = true;
-      },
-      error: () => {
-        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
-          this.versionsLoading.set(false);
-        }
-      },
-    });
   }
 
   versionString(doc: NuxeoDocument): string {
@@ -3892,13 +3654,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /** Open a version read-only. Choosing one from the list never restores it. */
   openVersion(version: NuxeoDocument): void {
-    this.versionDropdownOpen.set(false);
     if (version.uid !== this.docUid) this.navigateWithinVersions(version.uid);
   }
 
   /** Leave a version for the live document it belongs to. */
   showLatestVersion(): void {
-    this.versionDropdownOpen.set(false);
     const liveUid = this.liveDocumentUid();
     if (liveUid !== this.docUid) this.navigateWithinVersions(liveUid);
   }
@@ -3934,7 +3694,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
     const generation = this.documentLoadGeneration;
     const versionUid = version.uid;
-    this.versionDropdownOpen.set(false);
     this.actionInProgress.set('restore');
     this.detailService
       .restoreVersion(versionUid)
@@ -3952,7 +3711,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           if (liveUid && liveUid !== this.docUid) {
             this.navigateWithinVersions(liveUid);
           } else {
-            this.versionsLoaded = false;
             this.loadDocument(this.docUid);
           }
         },
@@ -3966,42 +3724,47 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   // ── Publish ──
 
+  /**
+   * Web UI's `isPublishable`, so a version is published as it is: `Document.PublishToSection`
+   * runs on the document on screen, and the dialog lists the live document's versions.
+   */
   openPublishDialog(): void {
-    if (!this.requireWritePermission()) return;
+    const doc = this.doc();
+    if (!doc || !canPublishDocument(doc)) {
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
+      return;
+    }
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     const openDialog = (versions: NuxeoDocument[]) => {
-      const renditions = this.buildRenditionOptions();
-      const ref = this.dialog.open(PublishDialogComponent, {
-        width: '620px',
-        panelClass: 'publish-dialog-panel',
-        data: {
-          documentUid: this.docUid,
-          documentTitle: this.doc()?.title ?? '',
-          versionLabel: this.versionLabel(),
-          renditions,
-          versions,
-        } satisfies PublishDialogData,
-      });
-
-      ref.afterClosed().subscribe((published) => {
-        if (published) {
+      if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
+      this.dialog
+        .open(PublishDialogComponent, {
+          width: '620px',
+          panelClass: 'publish-dialog-panel',
+          data: {
+            documentUid: doc.uid,
+            documentTitle: doc.title,
+            versionLabel: this.versionLabel(),
+            renditions: this.buildRenditionOptions(),
+            versions,
+          } satisfies PublishDialogData,
+        })
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((published) => {
+          if (!published) return;
           this.publishTabLoaded = false;
-        }
-      });
+          this.refreshPublishedDocs();
+        });
     };
-
-    if (this.versionsLoaded) {
-      openDialog(this.versions());
-    } else {
-      this.detailService.getVersions(this.docUid).subscribe({
-        next: (res) => {
-          const entries = res.entries ?? [];
-          this.versions.set(entries);
-          this.versionsLoaded = true;
-          openDialog(entries);
-        },
+    this.detailService
+      .getVersionsDirect(this.liveDocumentUid())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (versions) => openDialog(versions),
         error: () => openDialog([]),
       });
-    }
   }
 
   private buildRenditionOptions(): { name: string; label: string }[] {

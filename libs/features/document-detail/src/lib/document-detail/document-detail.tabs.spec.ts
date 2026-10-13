@@ -147,6 +147,7 @@ const mockDetailService = {
   updateComment: vi.fn((): Observable<NuxeoComment> => of(comment({ text: 'edited' }))),
   deleteComment: vi.fn((): Observable<void> => of(undefined)),
   getVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -404,19 +405,16 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(1);
     });
 
-    it('lazy-loads the history tab with its vocabularies', async () => {
-      mockDirectoryService.getEventTypes.mockReturnValue(of([directoryEntry('a', 'A')]));
-      mockDirectoryService.getEventCategories.mockReturnValue(of([directoryEntry('c', 'C')]));
-      mockDetailService.getAuditLog.mockReturnValue(
-        of({ entries: [auditEntry()], resultsCount: 1 }),
-      );
+    it('leaves the History tab’s requests to nxs-document-history', async () => {
       await build();
+      mockDetailService.getAuditLog.mockClear();
+      mockDirectoryService.getEventTypes.mockClear();
 
       openTab('app.tabs.history');
 
-      expect(component.availableActions()).toHaveLength(1);
-      expect(component.availableCategories()).toHaveLength(1);
-      expect(component.auditEntries()).toHaveLength(1);
+      expect(component.activeTabId()).toBe('app.tabs.history');
+      expect(mockDetailService.getAuditLog).not.toHaveBeenCalled();
+      expect(mockDirectoryService.getEventTypes).not.toHaveBeenCalled();
     });
 
     it('ignores a nonsensical tab index rather than addressing nothing', async () => {
@@ -997,20 +995,22 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       clickSpy.mockRestore();
     });
 
-    it('labels an audit event from the vocabulary, falling back to the raw id', async () => {
+    it('names an activity by the eventTypes vocabulary, read once with the activity', async () => {
       mockDirectoryService.getEventTypes.mockReturnValue(
-        of([directoryEntry('documentModified', 'Modified')]),
+        of([directoryEntry('custom.reviewed', 'Reviewed the contract')]),
       );
-      mockDirectoryService.getEventCategories.mockReturnValue(
-        of([directoryEntry('eventDocumentCategory', 'Document')]),
+      mockDetailService.getAuditLog.mockReturnValue(
+        of({ entries: [auditEntry({ eventId: 'custom.reviewed' })], resultsCount: 1 }),
       );
       await build();
-      openTab('app.tabs.history');
+      mockDirectoryService.getEventTypes.mockClear();
 
-      expect(component.eventLabel('documentModified')).toBe('Modified');
-      expect(component.eventLabel('somethingElse')).toBe('Something Else');
-      expect(component.categoryLabel('eventDocumentCategory')).toBe('Document');
-      expect(component.categoryLabel('eventLifeCycleCategory')).toBe('Event Life Cycle');
+      component.switchPanelSubTab('activity');
+      component.switchPanelSubTab('properties');
+      component.loadPanelActivity();
+
+      expect(mockDirectoryService.getEventTypes).toHaveBeenCalledTimes(1);
+      expect(component.activityLabel(component.panelActivity()[0])).toBe('Reviewed the contract');
     });
   });
 

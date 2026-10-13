@@ -371,11 +371,17 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.canRemove`            | The user has `Remove`                                             |
 | `app.rules.canAddChildren`       | The user has `AddChildren`                                        |
 | `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                      |
+| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                               |
 | `app.rules.hasDocument`          | A document is in focus                                            |
 | `app.rules.isType`               | The focused document's type is one of the `parameters`            |
 | `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`   |
 | `app.rules.isTrashed`            | The focused document is in the trash                              |
 | `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                    |
+
+`app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
+record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
+true on a version — Web UI publishes a version as it is — and needs no version to exist, because
+publishing a live document creates one.
 
 `app.rules.isType` and `app.rules.hasFacet` take the type or facet names as `parameters`, matched
 exactly — Nuxeo names are case-sensitive. With no string parameters — or `parameters` that is not
@@ -766,24 +772,24 @@ sees at once: the toggles are mutually exclusive pairs, and every entry is gated
 icon buttons in the header row. `overflow` is a descriptor field like any other,
 so `slots.toolbar` can move a packaged action between the two.
 
-| ID                                | Label                 | Icon                   | Order | Overflow | Shown when                              |
-| --------------------------------- | --------------------- | ---------------------- | ----- | -------- | --------------------------------------- |
-| `app.toolbar.edit`                | Edit                  | `edit`                 | 10    | no       | not trashed, writable¹ and not a Note   |
-| `app.toolbar.editProperties`      | Edit properties       | `edit`                 | 10    | no       | not trashed, writable¹ and a Note       |
-| `app.toolbar.addToCollection`     | Add to collection     | `library_add`          | 20    | no       | not trashed                             |
-| `app.toolbar.delete`              | Delete                | `delete`               | 30    | no       | not trashed and `app.rules.canRemove`   |
-| `app.toolbar.lock`                | Lock                  | `lock_open`            | 40    | no       | not trashed, writable and not locked ¹  |
-| `app.toolbar.unlock`              | Unlock                | `lock`                 | 40    | no       | not trashed and locked ¹ ²              |
-| `app.toolbar.addToFavorites`      | Add to Favorites      | `star_border`          | 50    | yes      | not trashed and not a favourite         |
-| `app.toolbar.removeFromFavorites` | Remove from Favorites | `star`                 | 50    | yes      | not trashed and a favourite             |
-| `app.toolbar.share`               | Share                 | `share`                | 60    | yes      | not trashed                             |
-| `app.toolbar.publish`             | Publish document      | `publish`              | 70    | yes      | not trashed, has a version and writable |
-| `app.toolbar.subscribe`           | Notify Me             | `notifications`        | 80    | yes      | not trashed and not subscribed          |
-| `app.toolbar.unsubscribe`         | Unsubscribe           | `notifications_active` | 80    | yes      | not trashed and subscribed              |
-| `app.toolbar.addToClipboard`      | Add to Clipboard      | `content_paste`        | 90    | yes      | not trashed and not in the clipboard    |
-| `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard        |
-| `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                  |
-| `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                             |
+| ID                                | Label                 | Icon                   | Order | Overflow | Shown when                             |
+| --------------------------------- | --------------------- | ---------------------- | ----- | -------- | -------------------------------------- |
+| `app.toolbar.edit`                | Edit                  | `edit`                 | 10    | no       | not trashed, writable¹ and not a Note  |
+| `app.toolbar.editProperties`      | Edit properties       | `edit`                 | 10    | no       | not trashed, writable¹ and a Note      |
+| `app.toolbar.addToCollection`     | Add to collection     | `library_add`          | 20    | no       | not trashed                            |
+| `app.toolbar.delete`              | Delete                | `delete`               | 30    | no       | not trashed and `app.rules.canRemove`  |
+| `app.toolbar.lock`                | Lock                  | `lock_open`            | 40    | no       | not trashed, writable and not locked ¹ |
+| `app.toolbar.unlock`              | Unlock                | `lock`                 | 40    | no       | not trashed and locked ¹ ²             |
+| `app.toolbar.addToFavorites`      | Add to Favorites      | `star_border`          | 50    | yes      | not trashed and not a favourite        |
+| `app.toolbar.removeFromFavorites` | Remove from Favorites | `star`                 | 50    | yes      | not trashed and a favourite            |
+| `app.toolbar.share`               | Share                 | `share`                | 60    | yes      | not trashed                            |
+| `app.toolbar.publish`             | Publish document      | `publish`              | 70    | yes      | not trashed and `app.rules.canPublish` |
+| `app.toolbar.subscribe`           | Notify Me             | `notifications`        | 80    | yes      | not trashed and not subscribed         |
+| `app.toolbar.unsubscribe`         | Unsubscribe           | `notifications_active` | 80    | yes      | not trashed and subscribed             |
+| `app.toolbar.addToClipboard`      | Add to Clipboard      | `content_paste`        | 90    | yes      | not trashed and not in the clipboard   |
+| `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard       |
+| `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                 |
+| `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                            |
 
 ¹ For Edit and Edit properties, writable also means **not `Immutable`** — the rule is
 `app.rules.canWrite` and `core.not` over `app.rules.hasFacet` with `["Immutable"]`. Nuxeo

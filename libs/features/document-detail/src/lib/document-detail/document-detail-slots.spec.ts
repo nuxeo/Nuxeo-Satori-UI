@@ -166,6 +166,7 @@ const mockDetailService = {
   ),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<unknown[]> => of([])),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<unknown[]> => of([])),
   getSectionTree: vi.fn((): Observable<unknown[]> => of([])),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),

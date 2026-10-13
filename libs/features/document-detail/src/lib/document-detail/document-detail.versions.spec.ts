@@ -117,6 +117,9 @@ const mockDetailService = {
   getVersions: vi.fn((_uid: string): Observable<{ entries: NuxeoDocument[] }> =>
     of({ entries: [version(2), version(1)] }),
   ),
+  getVersionsDirect: vi.fn((_uid: string): Observable<NuxeoDocument[]> =>
+    of([version(2), version(1)]),
+  ),
   getPublishedVersions: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -256,27 +259,34 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
     await settle();
   }
 
+  /** `nxs-manage-versions`' list opens in the overlay container, outside the fixture. */
   async function openVersionsList(): Promise<void> {
-    await click('.version-select');
+    await click('.nxs-manage-versions__trigger');
+  }
+
+  function inMenu<T extends HTMLElement = HTMLElement>(selector: string): T | null {
+    return document.querySelector(`.nxs-manage-versions__menu ${selector}`) as T | null;
   }
 
   function versionItem(label: string): HTMLElement | undefined {
-    return [...fixture.nativeElement.querySelectorAll('.version-dropdown-item')].find(
-      (item) =>
-        (item as HTMLElement).querySelector('.version-dropdown-label')?.textContent?.trim() ===
-        label,
-    ) as HTMLElement | undefined;
+    return [...document.querySelectorAll<HTMLElement>('.nxs-manage-versions__version')].find(
+      (item) => item.querySelector('.nxs-manage-versions__number')?.textContent?.trim() === label,
+    );
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
     dialogResult = undefined;
     mockDetailService.getVersions.mockReturnValue(of({ entries: [version(2), version(1)] }));
+    mockDetailService.getVersionsDirect.mockReturnValue(of([version(2), version(1)]));
     mockDetailService.restoreVersion.mockReturnValue(of(live({ isCheckedOut: false })));
     mockWorkflowService.getDocumentWorkflows.mockImplementation(() => of([]));
   });
 
-  afterEach(() => fixture?.destroy());
+  afterEach(() => {
+    fixture?.destroy();
+    document.querySelectorAll('.cdk-overlay-container').forEach((n) => n.remove());
+  });
 
   describe('the versions list', () => {
     it('opens the version a user clicks, and restores nothing', async () => {
@@ -305,11 +315,12 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await render(version(1));
       await openVersionsList();
 
-      expect(mockDetailService.getVersions).toHaveBeenCalledWith('doc-live');
-      expect(versionItem('0.1')?.getAttribute('aria-current')).toBe('true');
-      expect(versionItem('0.2')?.getAttribute('aria-current')).toBeNull();
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
+      expect(versionItem('0.1')?.getAttribute('aria-checked')).toBe('true');
+      expect(versionItem('0.2')?.getAttribute('aria-checked')).toBe('false');
 
-      await click('.version-dropdown-latest');
+      inMenu('.nxs-manage-versions__latest')?.click();
+      await settle();
       expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
     });
     it('keeps the browse return mode when moving between a document and its versions', async () => {
@@ -344,19 +355,26 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
     it('drops a versions list that arrives after the route moved to another document', async () => {
       const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
-      const lateList = new Subject<{ entries: NuxeoDocument[] }>();
+      const lateList = new Subject<NuxeoDocument[]>();
       await render(live(), { paramMap: route });
-      mockDetailService.getVersions.mockReturnValueOnce(lateList);
+      mockDetailService.getVersionsDirect.mockImplementation((uid: string) =>
+        uid === 'doc-live' ? lateList : of([]),
+      );
       await openVersionsList();
+      document.querySelector<HTMLElement>('.cdk-overlay-backdrop')?.click();
       const other = live({ uid: 'doc-other', title: 'Other' });
       mockDetailService.getFullDocument.mockReturnValue(of(other));
       route.next(convertToParamMap({ uid: 'doc-other' }));
       await settle();
-      lateList.next({ entries: [version(2), version(1)] });
+      lateList.next([version(2), version(1)]);
       await settle();
+      await openVersionsList();
 
-      expect(fixture.componentInstance.versions()).toEqual([]);
-      expect(fixture.componentInstance.versionsLoading()).toBe(false);
+      expect(mockDetailService.getVersionsDirect).toHaveBeenLastCalledWith('doc-other');
+      expect(versionItem('0.1')).toBeUndefined();
+      expect(inMenu('')?.textContent ?? document.body.textContent).toContain(
+        'No previous versions',
+      );
     });
 
     it('drops a permissions refresh for the document the route has left', async () => {
@@ -440,7 +458,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(component.canWriteDoc()).toBe(false);
       expect(component.canManagePermissions()).toBe(false);
       expect(el('[data-action-id="app.toolbar.edit"]')).toBeNull();
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('offers no enrichment that would write back to a version', async () => {
@@ -478,6 +496,38 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(el('.version-banner')).toBeNull();
       expect(fixture.componentInstance.canWriteDoc()).toBe(true);
       expect(el('[data-action-id="app.toolbar.edit"]')).toBeTruthy();
+    });
+  });
+
+  describe('publishing a version (register item 49)', () => {
+    const publishableVersion = (): NuxeoDocument =>
+      version(1, { facets: ['Immutable', 'Versionable', 'Publishable', 'Commentable'] });
+
+    it('offers Publish on a version, as Web UI does, and opens the dialog for that version', async () => {
+      await render(publishableVersion());
+      const component = fixture.componentInstance;
+      const publish = component.toolbarEntries().find((e) => e.id === 'app.toolbar.publish');
+      expect(publish, 'Publish is offered').toBeTruthy();
+      expect(publish?.disabled).toBe(false);
+
+      component.runToolbarEntry(publish!);
+      await settle();
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
+      expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({ documentUid: 'v-0-1' });
+    });
+
+    it('does not offer Publish on a version to a user without WriteVersion', async () => {
+      await render(
+        version(1, {
+          facets: ['Immutable', 'Versionable', 'Publishable'],
+          contextParameters: { permissions: ['Read', 'Write', 'ReadWrite'] },
+        }),
+      );
+      expect(
+        fixture.componentInstance.toolbarEntries().some((e) => e.id === 'app.toolbar.publish'),
+      ).toBe(false);
     });
   });
 
@@ -575,7 +625,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
     it('is offered on a versionable document to a user with WriteVersion', async () => {
       await render(neverVersioned());
 
-      expect(el('.create-version-btn')).toBeTruthy();
+      expect(el('button.nxs-manage-versions__create')).toBeTruthy();
     });
 
     it('is not offered to a user with Write but not WriteVersion', async () => {
@@ -585,31 +635,33 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         }),
       );
 
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('is not offered on a document without the Versionable facet', async () => {
       await render(neverVersioned({ facets: ['Commentable'] }));
 
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('is not offered on a record', async () => {
       // `isRecord` is in Nuxeo's document JSON but not in the `NuxeoDocument` model.
       await render({ ...neverVersioned(), isRecord: true } as NuxeoDocument);
 
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('is offered in the list of a checked-out document only with WriteVersion', async () => {
       await render(live());
       await openVersionsList();
-      expect(el('.version-dropdown-create')).toBeTruthy();
+      expect(inMenu('.nxs-manage-versions__create')).toBeTruthy();
 
       fixture.destroy();
+      document.querySelectorAll('.cdk-overlay-container').forEach((n) => n.remove());
       await render(live({ contextParameters: { permissions: ['Read', 'Write'] } }));
       await openVersionsList();
-      expect(el('.version-dropdown-create')).toBeNull();
+      expect(versionItem('0.1')).toBeTruthy();
+      expect(inMenu('.nxs-manage-versions__create')).toBeNull();
     });
   });
 });

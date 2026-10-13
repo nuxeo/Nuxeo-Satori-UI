@@ -490,11 +490,11 @@ describe('DocumentDetailComponent', () => {
       );
     });
 
-    it('openCreateVersionDialog is blocked for read-only users', () => {
+    it('openPublishDialog is blocked for read-only users', () => {
       component.doc.set(readOnlyDoc);
       const dialogSpy = vi.spyOn(component['dialog'], 'open');
 
-      component.openCreateVersionDialog();
+      component.openPublishDialog();
 
       expect(dialogSpy).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalledWith(
