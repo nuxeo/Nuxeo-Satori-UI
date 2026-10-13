@@ -98,9 +98,9 @@ Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 1
 
 ![Breadcrumbs: without Satori on the left, with Satori on the right](breadcrumbs-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-When space runs out, both fold the middle of the trail into a "…" menu ("Show more breadcrumbs"), keeping the first item and the current page. Satori has its own chevron icon and a rounded purple focus ring.
+When space runs out, both fold the middle of the trail into a "…" menu ("Show more breadcrumbs"), keeping the first item and the current page. Satori has its own chevron icon and a rounded purple focus ring. Satori fits a trail to its box only when it starts or the box resizes, not when the trail changes, so ours hands each new trail to a new `sat-breadcrumbs`; without that, a long trail overflowed after navigating.
 
-Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page, where the built-in breadcrumbs keep the first item and the current page and cut the page's name short.
+Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page, where the built-in breadcrumbs keep "…" and the current page and cut the page's name short.
 
 ### Rich tooltip
 

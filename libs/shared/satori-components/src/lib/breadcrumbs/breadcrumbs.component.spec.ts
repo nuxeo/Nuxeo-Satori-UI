@@ -93,38 +93,55 @@ describe('NxsBreadcrumbsComponent', () => {
 describe('breadcrumbsToFold', () => {
   // Five items of 100 px, a "…" of 30 px.
   const FIVE = [100, 100, 100, 100, 100];
+  const fromSecond = (count: number) => ({ start: 1, count });
 
   it.each([
-    ['everything fits', FIVE, 500, 0],
-    ['one pixel short folds the second', FIVE, 499, 1],
-    ['the "…" costs room of its own', FIVE, 430, 1],
-    ['one more pixel short folds the third too', FIVE, 429, 2],
-    ['folds up to, never past, the last but one', FIVE, 230, 3],
-    ['first, "…" and last do not fit: still keeps both', FIVE, 50, 3],
-  ])('%s', (_name, widths, available, folded) => {
-    expect(breadcrumbsToFold(widths, 30, available)).toBe(folded);
+    ['everything fits', FIVE, 500, fromSecond(0)],
+    ['one pixel short folds the second', FIVE, 499, fromSecond(1)],
+    ['the "…" costs room of its own', FIVE, 430, fromSecond(1)],
+    ['one more pixel short folds the third too', FIVE, 429, fromSecond(2)],
+    ['folds up to, never past, the last but one', FIVE, 230, fromSecond(3)],
+  ])('%s', (_name, widths, available, fold) => {
+    expect(breadcrumbsToFold(widths, 30, available)).toEqual(fold);
+  });
+
+  it.each([
+    // First 100, "…" 30, and the last cut to a 40 px minimum: 170 px.
+    ['keeps the first while it fits beside "…" and the shortened last', 170, fromSecond(3)],
+    ['folds the first too one pixel short of that', 169, { start: 0, count: 4 }],
+    ['folds the first too in a box far narrower', 50, { start: 0, count: 4 }],
+  ])('with only the first, "…" and the last left: %s', (_name, available, fold) => {
+    expect(breadcrumbsToFold(FIVE, 30, available, 40)).toEqual(fold);
+  });
+
+  it('cuts the last no shorter than its own width, and takes its whole width when no minimum is known', () => {
+    // A last item narrower than the minimum is not padded out to it.
+    expect(breadcrumbsToFold([100, 100, 20], 30, 150, 40)).toEqual(fromSecond(1));
+    expect(breadcrumbsToFold([100, 100, 100], 30, 229)).toEqual({ start: 0, count: 2 });
+    expect(breadcrumbsToFold([100, 100, 100], 30, 230)).toEqual(fromSecond(1));
   });
 
   it('never folds a trail of two items or fewer', () => {
-    expect(breadcrumbsToFold([400, 400], 30, 100)).toBe(0);
-    expect(breadcrumbsToFold([400], 30, 100)).toBe(0);
-    expect(breadcrumbsToFold([], 30, 100)).toBe(0);
+    expect(breadcrumbsToFold([400, 400], 30, 100)).toEqual(fromSecond(0));
+    expect(breadcrumbsToFold([400], 30, 100)).toEqual(fromSecond(0));
+    expect(breadcrumbsToFold([], 30, 100)).toEqual(fromSecond(0));
   });
 
   it('folds nothing while the box has no width yet, rather than everything', () => {
-    expect(breadcrumbsToFold(FIVE, 30, 0)).toBe(0);
-    expect(breadcrumbsToFold(FIVE, 30, Number.NaN)).toBe(0);
+    expect(breadcrumbsToFold(FIVE, 30, 0)).toEqual(fromSecond(0));
+    expect(breadcrumbsToFold(FIVE, 30, Number.NaN)).toEqual(fromSecond(0));
   });
 
   it('folds the narrow items it needs, not a fixed count', () => {
     // The second is wide: folding it alone is enough.
-    expect(breadcrumbsToFold([100, 300, 50, 50, 100], 30, 340)).toBe(1);
+    expect(breadcrumbsToFold([100, 300, 50, 50, 100], 30, 340)).toEqual(fromSecond(1));
   });
 });
 
 describe('NxsBreadcrumbsComponent folding', () => {
   let fixture: ComponentFixture<NxsBreadcrumbsComponent>;
   let resize: (() => void) | null;
+  let fontsLoaded: (() => void) | null;
   const OriginalResizeObserver = globalThis.ResizeObserver;
 
   const DEEP: readonly NxsBreadcrumbItem[] = [
@@ -158,6 +175,19 @@ describe('NxsBreadcrumbsComponent folding', () => {
 
   beforeEach(async () => {
     resize = null;
+    fontsLoaded = null;
+    // jsdom has no FontFaceSet; this one reports a font arriving when the test says so.
+    Object.defineProperty(document, 'fonts', {
+      configurable: true,
+      value: {
+        addEventListener: (type: string, listener: () => void) => {
+          if (type === 'loadingdone') fontsLoaded = listener;
+        },
+        removeEventListener: () => {
+          fontsLoaded = null;
+        },
+      },
+    });
     globalThis.ResizeObserver = class implements ResizeObserver {
       constructor(callback: ResizeObserverCallback) {
         resize = () => callback([], this);
@@ -184,6 +214,7 @@ describe('NxsBreadcrumbsComponent folding', () => {
 
   afterEach(() => {
     globalThis.ResizeObserver = OriginalResizeObserver;
+    Reflect.deleteProperty(document, 'fonts');
   });
 
   it('shows the whole trail while it fits', async () => {
@@ -221,16 +252,31 @@ describe('NxsBreadcrumbsComponent folding', () => {
     ]);
   });
 
-  it('keeps the current page on screen however narrow the box', async () => {
+  it('keeps the current page on screen however narrow the box, folding the first too', async () => {
     layout(60);
     resize?.();
     await render();
-    expect(shown()).toEqual(['Root', '…', 'Claim 42 with a rather long name']);
-    // The first and the last can be cut short by the stylesheet, so both stay readable in full on
-    // hover; the ones in between are either whole or in the menu, and carry no title.
+    expect(shown()).toEqual(['…', 'Claim 42 with a rather long name']);
+    // Cut short by the stylesheet, and still readable in full on hover.
+    expect(el().querySelector('[aria-current="page"]')?.getAttribute('title')).toBe(
+      'Claim 42 with a rather long name',
+    );
+    (el().querySelector('.nxs-breadcrumbs__overflow') as HTMLButtonElement).click();
+    await render();
+    const menu = [...document.querySelectorAll('[role="menuitem"]')].map((item) =>
+      item.textContent?.trim(),
+    );
+    expect(menu).toEqual(['Root', 'Domain', 'Workspaces', 'Claims']);
+  });
+
+  it('gives the first and the last their full names in a title, since either can be cut short', async () => {
+    layout(330);
+    resize?.();
+    await render();
     const visible = [...el().querySelectorAll('nav .nxs-breadcrumbs__item')];
     expect(visible.map((item) => item.querySelector('a, span')?.getAttribute('title'))).toEqual([
       'Root',
+      null,
       null,
       'Claim 42 with a rather long name',
     ]);
@@ -253,9 +299,26 @@ describe('NxsBreadcrumbsComponent folding', () => {
     expect(measure?.querySelector('a, button, [tabindex]')).toBeNull();
   });
 
+  it('measures again when a web font arrives, though the box keeps its width', async () => {
+    layout(330);
+    resize?.();
+    await render();
+    expect(shown()).toContain('…');
+
+    // The icon font arrives and every item is narrower; nothing resized the box.
+    for (const li of el().querySelectorAll<HTMLElement>('.nxs-breadcrumbs__measure > li')) {
+      li.getBoundingClientRect = () => ({ width: 60 }) as DOMRect;
+    }
+    fontsLoaded?.();
+    await render();
+    expect(shown()).toHaveLength(5);
+  });
+
   it('stops observing when destroyed', () => {
     expect(resize).not.toBeNull();
+    expect(fontsLoaded).not.toBeNull();
     fixture.destroy();
     expect(resize).toBeNull();
+    expect(fontsLoaded).toBeNull();
   });
 });

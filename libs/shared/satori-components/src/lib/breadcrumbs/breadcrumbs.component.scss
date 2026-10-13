@@ -27,8 +27,8 @@
   white-space: nowrap;
 }
 
-// When nothing is left to fold, the first and the last labels are cut short. The last keeps a
-// few characters, so the current page is never hidden.
+// When nothing is left to fold, the first and the last labels are cut short. The last keeps 4em,
+// which `measure()` counts on, so the current page is never hidden.
 .nxs-breadcrumbs__item--first,
 .nxs-breadcrumbs__item--last {
   flex: 0 1 auto;
@@ -80,10 +80,13 @@
   width: 28px;
 }
 
+// In the flow with no height, so a box sized by its content still prefers the whole unfolded trail
+// and folding never takes away the room it is measured against. It wraps, so the narrowest such a
+// box can be is its widest item, not the whole trail.
 .nxs-breadcrumbs__measure {
-  position: absolute;
-  top: 0;
-  inset-inline-start: 0;
+  flex-wrap: wrap;
+  height: 0;
+  overflow: hidden;
   visibility: hidden;
   pointer-events: none;
 }

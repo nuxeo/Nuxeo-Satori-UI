@@ -19,9 +19,10 @@ the page title.
 - **Navigation landmark.** The trail is a named `nav` region, so screen reader users can jump to
   it.
 - **Folds when long.** It stays on one line. When the trail is wider than its box, the items after
-  the first fold into a "…" menu, furthest from the current page first; the first and the last item
-  always stay, and when even they do not fit, the current page's name is cut short rather than
-  hidden. It unfolds again when the box grows.
+  the first fold into a "…" menu, furthest from the current page first. The first item stays while
+  it fits beside the "…" and the current page; in a box too narrow for that, it goes into the menu
+  too. The current page always stays, its name cut short rather than hidden. It unfolds again when
+  the box grows, and it measures the whole trail, so it also unfolds in a box sized by its content.
 - **Replaceable by ID.** It is registered as `nxs.primitives.breadcrumbs`, so Satori's breadcrumbs
   or your own can take its place.
 
@@ -100,8 +101,8 @@ In a 360-pixel box the middle folds into "…". Open it to reach the folders it 
 
 ### Very narrow
 
-Only the first item, "…" and the current page remain, the page's name cut short with "…" and shown
-in full on hover.
+Only "…" and the current page remain: the first item is in the menu with the rest, and the page's
+name is cut short with "…" and shown in full on hover.
 
 <Canvas of={BreadcrumbsStories.VeryNarrow} />
 

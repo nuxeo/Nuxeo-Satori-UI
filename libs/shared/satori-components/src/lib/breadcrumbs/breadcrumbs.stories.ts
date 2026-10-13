@@ -106,7 +106,7 @@ export const CollapsedTrail: Story = {
   },
 };
 
-/** In a 120-pixel box only the first, "…" and the current page remain, the page's name cut short. */
+/** In a 120-pixel box only "…" and the current page remain, the page's name cut short. */
 export const VeryNarrow: Story = {
   args: { items: LONG_TRAIL },
   render: (args) => ({
