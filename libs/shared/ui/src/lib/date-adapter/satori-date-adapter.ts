@@ -33,7 +33,7 @@ import {
  *
  * The regional entries are here for the **published** provider rather than for us. These
  * dialogs are exported from `@nuxeo-satori/platform/ui`, so a customer's `LOCALE_ID` reaches
- * this map unclamped, and a region can change the field order outright: six of the seven
+ * this map unclamped, and a region can change the field order outright: all seven non-US
  * English regions date-fns ships are day-first or year-first, so reducing any of them to `en`
  * hands them `enUS` — month-first, the original defect wearing a different locale id.
  *

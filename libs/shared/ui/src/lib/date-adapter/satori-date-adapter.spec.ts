@@ -144,8 +144,8 @@ describe('provideSatoriDateAdapter', () => {
     expect(dateFnsLocaleFor('fr_CA')).toBe(frCA);
   });
 
-  // A region can change the field order outright, not just the separators, and six of the seven
-  // English regions date-fns ships are day- or year-first. Reduced to their base language they
+  // A region can change the field order outright, not just the separators, and all seven
+  // non-US English regions date-fns ships are day- or year-first. Reduced to their base language they
   // would all get `enUS` — month-first — which is the original defect under a different id.
   // Every variant whose `P` differs from its base is covered, with the parsed result asserted
   // rather than just the locale object, so a wrong mapping cannot pass.
