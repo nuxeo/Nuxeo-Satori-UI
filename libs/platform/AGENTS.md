@@ -378,8 +378,9 @@ not a registration, so give an object like that plain keys. It fails a registrat
 - **does not resolve** — an `import()` path that is not a file in your library, or a class name
   the file does not export. The registry swallows a failed load, so this is otherwise a blank
   slot with no error anywhere;
-- **is not a component** — the class has no `@Component` of its own, so the outlet cannot create
-  it;
+- **is not a component** — the class has no `@Component` of its own, imported from `@angular/core`
+  under any name (a `Component` from another package, or one no import binds, does not count), so
+  the outlet cannot create it;
 - **no spec names** — by its ID as a string, the key expression it is registered under, or its
   class, each as a whole: a spec that names only `acme.panel.claimsExtra` or
   `AcmeClaimsComponentFake` does not name `acme.panel.claims` or `AcmeClaimsComponent`;
