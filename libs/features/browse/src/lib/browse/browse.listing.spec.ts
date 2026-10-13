@@ -819,7 +819,7 @@ describe('BrowseComponent — rendered document list', () => {
     await render();
 
     await settleOutlets();
-    expect(query(`${ROW} nxs-avatar`)?.textContent?.trim()).toBe('JD');
+    expect(query(`${ROW} nxs-avatar`)?.textContent?.trim()).toBe('J');
     expect(query(`${ROW} .nxs-document-list__person`)?.textContent).toContain('jdoe');
   });
 

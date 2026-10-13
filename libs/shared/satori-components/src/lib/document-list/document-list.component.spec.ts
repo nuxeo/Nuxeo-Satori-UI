@@ -642,7 +642,7 @@ describe('NxsDocumentListComponent', () => {
       const cells = rows()[0].querySelectorAll('td');
       expect(cells[2].querySelector('lib-extension-outlet nxs-tag')).toBeNull();
       expect(cells[2].querySelector('nxs-tag')?.textContent?.trim()).toBe('File');
-      expect(cells[4].querySelector('nxs-avatar')?.textContent?.trim()).toBe('JD');
+      expect(cells[4].querySelector('nxs-avatar')?.textContent?.trim()).toBe('J');
     });
 
     it('marks folders so they read as folders', async () => {
