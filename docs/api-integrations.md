@@ -1565,6 +1565,34 @@ component `nxs.components.permissionsPanel`.
 
 ---
 
+## 30a. Pickers — the `nxs-` picker and input components (NXSAT-308)
+
+| Picker                         | Service and method                                                       | Endpoint                                                                                           |
+| ------------------------------ | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------- |
+| `nxs-user-group-picker`        | `DocumentDetailService.searchUsersGroups` (users and groups)             | `POST /nuxeo/api/v1/automation/UserGroup.Suggestion` — `searchTerm`, `searchType: USER_GROUP_TYPE` |
+| `nxs-user-group-picker`        | `UserService.searchUsers` / `searchGroups` (`search="users"`/`"groups"`) | `GET /nuxeo/api/v1/user/search?q=` / `GET /nuxeo/api/v1/group/search?q=`                           |
+| `nxs-vocabulary-select`        | `DirectoryService.getEntries` (flat vocabularies)                        | `POST /nuxeo/api/v1/automation/Directory.SuggestEntries`                                           |
+| `nxs-vocabulary-select`        | `DirectoryService.getAllL10nEntries` (`l10n*` vocabularies)              | `GET /nuxeo/api/v1/directory/:name?pageSize=50&currentPageIndex=n`                                 |
+| `nxs-tag-input`                | `TagService.suggestTags` — **new**                                       | `POST /nuxeo/api/v1/automation/Tag.Suggestion` — `searchTerm`                                      |
+| `nxs-document-reference-input` | `NuxeoApiBase.nxqlSearch`, query from `nxsDocumentSuggestionQuery()`     | `GET /nuxeo/api/v1/search/lang/NXQL/execute?query=…&pageSize=20`                                   |
+
+**Each search follows Web UI's widget it replaces:** three characters before the user, group and
+document searches run, one for tags, 300 ms after the last key; twenty documents per search. The
+document query is Web UI's `default_document_suggestion` page provider's — `ecm:fulltext LIKE
+'<term>*'`, not hidden, not a version, not trashed — with the term and any document type escaped by
+`escapeNxqlLiteral`, so they stay text in the query.
+
+**`TagService.searchTags` is not used:** it reads `/api/v1/directory/label_tag_entry`, which Nuxeo
+2025 answers with `404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never
+suggests anything. `suggestTags` uses the operation Web UI uses, which answered the same server.
+
+`nxs-date-input` makes no request.
+
+**Usage:** none yet. The pickers are in `@nuxeo-satori/platform/components`, documented in its
+Storybook; screens move onto them in a later change.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

@@ -306,6 +306,71 @@ The folder header's "More actions" button with its menu open, opened with Enter 
 
 The page gives the menu its entries and runs the one chosen. An entry that is not allowed is shown disabled; one hidden by the configuration is not listed, and with none left, no button renders.
 
+### User and group picker
+
+| Field           | Value                                         |
+| --------------- | --------------------------------------------- |
+| Component       | `NxsUserGroupPickerComponent`                 |
+| Registered ID   | —                                             |
+| With Satori     | Same component; theme only                    |
+| Storybook story | `pickers-user-and-group-picker--with-a-value` |
+
+![User and group picker: without Satori on the left, with Satori on the right](user-group-picker-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same outlined field in both, holding a group. It finds users and groups as the user types — from three characters, as in Web UI — and lists each with a person or group icon and, for a user, the email address. Satori has no picker of its own; the theme sets the field's outline, type and colours.
+
+### Vocabulary select
+
+| Field           | Value                                                 |
+| --------------- | ----------------------------------------------------- |
+| Component       | `NxsVocabularySelectComponent`                        |
+| Registered ID   | —                                                     |
+| With Satori     | Same component; theme only                            |
+| Storybook story | `pickers-vocabulary-select--several-from-a-hierarchy` |
+
+![Vocabulary select: without Satori on the left, with Satori on the right](vocabulary-select-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same field in both, holding two countries from the Coverage vocabulary as chips reading `Europe/France` and `Africa/Kenya`, as Web UI writes a hierarchical entry. The theme sets the chips' shape and colours. Satori has no vocabulary field.
+
+### Tag input
+
+| Field           | Value                          |
+| --------------- | ------------------------------ |
+| Component       | `NxsTagInputComponent`         |
+| Registered ID   | —                              |
+| With Satori     | Same component; theme only     |
+| Storybook story | `pickers-tag-input--with-tags` |
+
+![Tag input: without Satori on the left, with Satori on the right](tag-input-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same field in both, holding two tags as chips with remove buttons. It suggests the tags documents already have and adds new ones with Enter or a comma. This is an editable field; Satori's category tag, the `nxs.primitives.tag` above, only displays a label.
+
+### Document reference input
+
+| Field           | Value                                            |
+| --------------- | ------------------------------------------------ |
+| Component       | `NxsDocumentReferenceInputComponent`             |
+| Registered ID   | —                                                |
+| With Satori     | Same component; theme only                       |
+| Storybook story | `pickers-document-reference-input--with-a-value` |
+
+![Document reference input: without Satori on the left, with Satori on the right](document-reference-input-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same field in both, holding a reference to a note. It searches the repository's full text from three characters, as Web UI's document suggestion does, and lists each result with its type icon, title and path. Satori has no equivalent.
+
+### Date input
+
+| Field           | Value                              |
+| --------------- | ---------------------------------- |
+| Component       | `NxsDateInputComponent`            |
+| Registered ID   | —                                  |
+| With Satori     | Same component; theme only         |
+| Storybook story | `pickers-date-input--with-a-value` |
+
+![Date input: without Satori on the left, with Satori on the right](date-input-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same field and calendar button in both, holding 31 December. A typed date is read in the order the user's language writes dates, and the calendar is Angular Material's under either theme; Satori has no date field of its own.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -357,26 +422,31 @@ The components in the library today:
 
 <!-- satori:comparison:summary -->
 
-| Component          | Registered ID (if any)                                                                                                  | Differs with Satori?         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Avatar             | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
-| Tag                | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
-| Breadcrumbs        | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
-| Rich tooltip       | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
-| Icon               | —                                                                                                                       | Same component; theme only   |
-| Document type icon | —                                                                                                                       | Same component; theme only   |
-| Thumbnail          | —                                                                                                                       | Same component; theme only   |
-| Folder header      | —                                                                                                                       | Same component; theme only   |
-| Domain hint        | —                                                                                                                       | Same component; theme only   |
-| Empty state        | —                                                                                                                       | Same component; theme only   |
-| Error state        | `nxs.primitives.errorState`                                                                                             | Same component; theme only   |
-| Spinner            | —                                                                                                                       | Same component; theme only   |
-| Toast              | —                                                                                                                       | Same component; theme only   |
-| Column picker      | —                                                                                                                       | Same component; theme only   |
-| Permissions panel  | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
-| Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
-| Favorite toggle    | —                                                                                                                       | Same component; theme only   |
-| Action menu        | —                                                                                                                       | Same component; theme only   |
+| Component                | Registered ID (if any)                                                                                                  | Differs with Satori?         |
+| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Avatar                   | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
+| Tag                      | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
+| Breadcrumbs              | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
+| Rich tooltip             | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
+| Icon                     | —                                                                                                                       | Same component; theme only   |
+| Document type icon       | —                                                                                                                       | Same component; theme only   |
+| Thumbnail                | —                                                                                                                       | Same component; theme only   |
+| Folder header            | —                                                                                                                       | Same component; theme only   |
+| Domain hint              | —                                                                                                                       | Same component; theme only   |
+| Empty state              | —                                                                                                                       | Same component; theme only   |
+| Error state              | `nxs.primitives.errorState`                                                                                             | Same component; theme only   |
+| Spinner                  | —                                                                                                                       | Same component; theme only   |
+| Toast                    | —                                                                                                                       | Same component; theme only   |
+| Column picker            | —                                                                                                                       | Same component; theme only   |
+| Permissions panel        | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
+| Nuxeo Drive dialog       | —                                                                                                                       | Same component; theme only   |
+| Favorite toggle          | —                                                                                                                       | Same component; theme only   |
+| Action menu              | —                                                                                                                       | Same component; theme only   |
+| User and group picker    | —                                                                                                                       | Same component; theme only   |
+| Vocabulary select        | —                                                                                                                       | Same component; theme only   |
+| Tag input                | —                                                                                                                       | Same component; theme only   |
+| Document reference input | —                                                                                                                       | Same component; theme only   |
+| Date input               | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

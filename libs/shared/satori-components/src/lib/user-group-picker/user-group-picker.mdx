@@ -1,0 +1,100 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as PickerStories from './user-group-picker.stories';
+
+<Meta of={PickerStories} name="Overview" />
+
+# User and group picker
+
+The user and group picker is a field that finds a user or a group as the user types, and returns the
+one chosen. It is the field behind adding a permission, sharing a saved search and assigning a task,
+as Web UI's `nuxeo-user-suggestion` is. Use it wherever a screen needs one principal that Nuxeo knows.
+
+## Key features
+
+- **Searches as you type, as Web UI does.** From three characters, 300 milliseconds after the last
+  key, so a one-letter term does not list the whole directory. Set `minChars` for a smaller one.
+- **Users, groups or both.** `search` is `users-and-groups` (the default), `users` or `groups`.
+- **Only a principal Nuxeo returned.** Typing after a choice clears it, so the value is never free
+  text. Text typed and not chosen is an error on the form, `nxsChooseFromList`.
+- **Says what is happening.** Too few characters, searching, no results and a failed search each
+  show in the field or its list, and screen readers hear the number of results.
+- **A form control.** Use it with `ngModel`, `formControl` or `formControlName`, or bind `value`
+  two-way. `required`, a form's `Validators.required` and `disabled` work as on any field.
+
+## Demo showcase
+
+Type `smi`: Jane Smith, John Smythe and the Claims team come from an in-memory directory.
+
+<Canvas of={PickerStories.ChoosingAPrincipal} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsUserGroupPickerComponent, type NxsPrincipal } from '@nuxeo-satori/platform/components';`}
+/>
+
+export const usageHtml = `<nxs-user-group-picker [label]="'acme.share.grant-to' | translate" [formControl]="principal" />`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`label` is the only required input: the field's label, already translated. The value is an
+`NxsPrincipal` — `id`, `label`, `kind` (`user` or `group`), `prefixedId` (`user:jsmith`) and, for a
+user who has one, `email` — or `null`. Pass `id` to operations that take a username or group name,
+and `prefixedId` to those that take the prefixed form.
+
+The picker needs `HttpClient` and the platform's `DocumentDetailService` and `UserService`, which an
+application using `@nuxeo-satori/platform/nuxeo-client` already has. Its hints, statuses and the
+clear button's name are translated with ngx-translate, under `satori-components.pickers.*` and
+`satori-components.user-group-picker.*`; `providePlatformEnglishFallback()` supplies the English. It
+has no registered ID: place it in a template by its selector.
+
+## Where its data comes from
+
+For users and groups together the picker runs Nuxeo's `UserGroup.Suggestion` operation, as Web UI
+does, through `DocumentDetailService.searchUsersGroups`. For users only it reads
+`/api/v1/user/search`, and for groups only `/api/v1/group/search`, through `UserService`. Each request
+carries the application's sign-in, so the server decides whom the user may see.
+
+**In these stories** the services are in-memory fakes holding three principals, which answer after
+150 milliseconds or refuse; nothing is sent to a server.
+
+## Examples
+
+### Groups only
+
+<Canvas of={PickerStories.GroupsOnly} />
+
+### With a value
+
+<Canvas of={PickerStories.WithAValue} />
+
+### Too few characters
+
+<Canvas of={PickerStories.TooFewCharacters} />
+
+### The server refuses
+
+<Canvas of={PickerStories.ServerError} />
+
+### Disabled
+
+<Canvas of={PickerStories.Disabled} />
+
+## Accessibility
+
+- **A combobox.** The input is named by its label and controls a list of options, which the arrow
+  keys move through and **Enter** chooses. **Escape** closes the list.
+- **Each option names the principal and its kind.** The person or group icon is hidden from
+  assistive technology; "User" or "Group", and the email address, follow the name as words.
+- **Statuses are announced.** The number of results, "No results" and a failed search are announced
+  politely. The hint for too few characters is the field's description.
+- **Errors.** Once the field is left, an empty required field and text that was not chosen show an
+  error under it, linked to the input.
+- **Clear.** The x button that removes the choice is named "Clear".

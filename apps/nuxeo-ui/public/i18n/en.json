@@ -1964,6 +1964,11 @@
       "reset": "Reset",
       "title": "Column Settings"
     },
+    "date-input": {
+      "invalid": "Enter a date like {{ example }}",
+      "too-early": "Enter {{ date }} or later",
+      "too-late": "Enter {{ date }} or earlier"
+    },
     "drive-dialog": {
       "checking": "Checking Nuxeo Drive...",
       "close": "Close",
@@ -2110,9 +2115,33 @@
         "heading": "The changes were sent, but reading the permissions back failed, so the panel cannot confirm them. Reload to see what the server holds."
       }
     },
+    "pickers": {
+      "choose-from-list": "Choose an entry from the list",
+      "clear": "Clear",
+      "failed": "Search failed. Try again.",
+      "loading": "Loading…",
+      "min-chars-many": "Type at least {{ count }} characters",
+      "min-chars-one": "Type at least {{ count }} character",
+      "no-results": "No results",
+      "remove": "Remove {{ name }}",
+      "required": "Required",
+      "results-many": "{{ count }} results",
+      "results-one": "{{ count }} result",
+      "searching": "Searching…"
+    },
+    "tag-input": {
+      "add": "Add “{{ tag }}”"
+    },
     "toast": {
       "dismiss": "Dismiss",
       "retry": "Retry"
+    },
+    "user-group-picker": {
+      "group": "Group",
+      "user": "User"
+    },
+    "vocabulary-select": {
+      "failed": "Could not load the list. Open it again to try again."
     }
   },
   "search": {

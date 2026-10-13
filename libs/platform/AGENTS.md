@@ -301,6 +301,11 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 />
 ```
 
+- **A form field that picks something is an `nxs-` picker.** `nxs-user-group-picker`,
+  `nxs-vocabulary-select`, `nxs-tag-input`, `nxs-document-reference-input` and `nxs-date-input` each
+  work with `ngModel` or a form control, or a two-way `value`, and search as Web UI's matching widget
+  does. Text typed and not chosen is an `nxsChooseFromList` error on the form; a date that is not one
+  is `nxsDateParse`.
 - **Import only the entry point.** A path past it fails the shipped guardrail like any other
   deep import.
 - **The type declarations are the list of what exists.** Do not take a component's existence

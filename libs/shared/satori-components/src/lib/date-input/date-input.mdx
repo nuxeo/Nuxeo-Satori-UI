@@ -1,0 +1,92 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DateStories from './date-input.stories';
+
+<Meta of={DateStories} name="Overview" />
+
+# Date input
+
+The date input is a date field: the user types a date, or chooses one from Material's calendar. Use
+it for any date property, such as an expiry date or the start of a permission.
+
+## Key features
+
+- **Reads a typed date the way the user writes dates.** `03/04/2026` is 3 April in French and 4 March
+  in American English, whatever the separators. A four-digit year can come first, as in `2026-04-03`,
+  in every language; a month can be written as a word; without a year, this year is meant.
+- **The Gregorian calendar throughout,** in Thai too, so a year shown can be typed back.
+- **Keeps your date adapter.** A host that provides its own Angular Material date adapter keeps it.
+  Material's native adapter, which reads every typed date as American, is replaced.
+- **Says what is wrong.** Text that is not a date shows an example in the locale's format, such as
+  "Enter a date like 31/12/2026"; a date outside `min` and `max` says the limit.
+- **Translated calendar.** The calendar's buttons and labels follow the application's catalogue.
+
+## Demo showcase
+
+The same text typed in two languages.
+
+<Canvas of={DateStories.TypedInAmericanEnglish} />
+
+<Canvas of={DateStories.TypedInFrench} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsDateInputComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+export const usageHtml = `<nxs-date-input
+  [label]="'acme.document.expires' | translate"
+  [min]="today"
+  [formControl]="expires"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`label` is the only required input. The value is a `Date` at local midnight, or `null`. Text that
+is not a date, or a date outside the limits, is an error on the form — `nxsDateParse`, `nxsDateMin` or
+`nxsDateMax` — and the value is then `null`. The language comes from Angular's `LOCALE_ID`, through
+Material's `MAT_DATE_LOCALE`.
+
+The input needs no service. Its errors are translated under `satori-components.date-input.*`, and
+the calendar's labels use the `shared-ui.datepicker.*` keys the application's other date pickers
+use; `providePlatformEnglishFallback()` supplies the English. It has no registered ID: place it in a
+template by its selector.
+
+## Where its data comes from
+
+Nowhere: the date input loads nothing. It reads what the user types with the locale's own date
+format, from the browser's `Intl` data, and passes Angular Material's calendar the same locale.
+
+**In these stories** the language is American English, or French where the story says so.
+
+## Examples
+
+### Text that is not a date
+
+<Canvas of={DateStories.NotADate} />
+
+### With a value
+
+<Canvas of={DateStories.WithAValue} />
+
+### Disabled
+
+<Canvas of={DateStories.Disabled} />
+
+## Accessibility
+
+- **A text field with a calendar button.** The input is named by its label; the calendar button is
+  named "Open calendar", and the calendar is a dialog with a labelled grid of days that the arrow keys
+  move through.
+- **Typing is never required.** A user who cannot type a date in the expected order can choose it
+  from the calendar, and one who cannot use the calendar can type it.
+- **Errors.** Once the field is left, text that is not a date, a date outside the limits and an
+  empty required field show an error under it, linked to the input. The example date in the error
+  has a day above 12, so the order of the fields is clear.

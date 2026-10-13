@@ -1,0 +1,96 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as VocabularyStories from './vocabulary-select.stories';
+
+<Meta of={VocabularyStories} name="Overview" />
+
+# Vocabulary select
+
+The vocabulary select chooses one entry, or several, from a Nuxeo vocabulary — Nature, Subjects,
+Coverage or any other directory — as Web UI's `nuxeo-directory-suggestion` does. Use it for a
+property whose values come from a vocabulary.
+
+## Key features
+
+- **The whole vocabulary, narrowed as you type.** Focusing the field lists every entry; typing keeps
+  those whose label or id contains the text.
+- **Hierarchies, as in Web UI.** An `l10n` vocabulary — `l10nsubjects`, `l10ncoverage` — lists each
+  entry under its parent, and a chosen entry reads `Parent/Child`, such as `Europe/France`. Typing a
+  parent's name finds its children.
+- **One or several.** With `multiple`, each choice is a chip, removed with its button or Backspace,
+  and a chosen entry is no longer offered.
+- **Never drops a value.** An id the vocabulary no longer has is kept and shown as it is.
+- **A form control.** The value is an entry id, or a list of ids with `multiple`. Text typed and not
+  chosen is an error on the form, `nxsChooseFromList`.
+
+## Demo showcase
+
+Type `con`, then choose Contract.
+
+<Canvas of={VocabularyStories.ChoosingAnEntry} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsVocabularySelectComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+export const usageHtml = `<nxs-vocabulary-select
+  directory="l10ncoverage"
+  multiple
+  [label]="'acme.document.coverage' | translate"
+  [formControl]="coverage"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`directory` and `label` are required: the directory's name and the field's label, already
+translated. The select needs the platform's `DirectoryService`. Its statuses and the chips' remove
+buttons are translated under `satori-components.pickers.*` and `satori-components.vocabulary-select.*`;
+`providePlatformEnglishFallback()` supplies the English. It has no registered ID: place it in a
+template by its selector.
+
+## Where its data comes from
+
+A flat vocabulary is loaded with Nuxeo's `Directory.SuggestEntries` operation, as Web UI loads it,
+without obsolete entries and in the directory's own order. An `l10n` vocabulary is read whole, page
+by page, from `/api/v1/directory/<name>`, with each entry's parent. Both go through
+`DirectoryService` when the field appears and again when `directory` changes; after a failure,
+focusing the field tries again.
+
+**In these stories** `DirectoryService` is an in-memory fake: `nature` holds four entries and
+`l10ncoverage` two continents and four countries.
+
+## Examples
+
+### Several entries from a hierarchy
+
+<Canvas of={VocabularyStories.SeveralFromAHierarchy} />
+
+### An entry the vocabulary no longer has
+
+<Canvas of={VocabularyStories.ARetiredEntry} />
+
+### The vocabulary could not be loaded
+
+<Canvas of={VocabularyStories.LoadFailed} />
+
+### Disabled
+
+<Canvas of={VocabularyStories.Disabled} />
+
+## Accessibility
+
+- **A combobox.** The input is named by its label; the arrow keys move through the list and
+  **Enter** chooses. A hierarchy's parents are option groups, so a screen reader names the group of
+  the option it reads.
+- **Chips.** With `multiple`, the chips form a grid the arrow keys move through. Each has a remove
+  button named "Remove" and the entry, and **Backspace** in the empty input moves to the last chip.
+- **Errors.** Once the field is left, an empty required field and text that was not chosen show an
+  error under it, linked to the input.
