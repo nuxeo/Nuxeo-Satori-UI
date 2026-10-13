@@ -1,0 +1,23 @@
+<!--
+  Fixture for more-actions-focus-ring.spec.ts. Mirrors document-detail.html More actions slot:
+  `.detail-header` > `.header-actions` > mat-icon-button with aria-label "More actions".
+-->
+<div class="detail-header more-actions-focus-ring-host">
+  <div class="header-actions">
+    <button
+      type="button"
+      mat-icon-button
+      data-testid="more-actions-btn"
+      aria-label="More actions"
+      [matMenuTriggerFor]="moreMenu"
+    >
+      <mat-icon>more_vert</mat-icon>
+    </button>
+    <mat-menu #moreMenu="matMenu">
+      <button mat-menu-item type="button" aria-label="Export">
+        <mat-icon>download</mat-icon>
+        <span>Export</span>
+      </button>
+    </mat-menu>
+  </div>
+</div>
