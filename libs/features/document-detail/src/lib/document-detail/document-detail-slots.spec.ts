@@ -423,12 +423,17 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     it('renders the production More actions overflow trigger in .header-actions', async () => {
       await render({});
 
-      const button = fixture.nativeElement.querySelector(
-        '.detail-header .header-actions button[aria-label="More actions"]',
-      ) as HTMLButtonElement | null;
-      expect(button).withContext('expected header More actions mat-icon-button').not.toBeNull();
-      expect(button!.classList.contains('mat-mdc-icon-button')).toBe(true);
-      expect(button!.querySelector('mat-icon')?.textContent?.trim()).toBe('more_vert');
+      const buttons = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.detail-header .header-actions button.mat-mdc-icon-button',
+        ),
+      ) as HTMLButtonElement[];
+      const button = buttons.find(
+        (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
+      );
+      expect(button).withContext('expected header More actions mat-icon-button').toBeTruthy();
+      expect(button!.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBeTruthy();
+      expect(button!.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
     });
   });
 

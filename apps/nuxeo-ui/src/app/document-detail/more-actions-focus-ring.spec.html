@@ -10,8 +10,9 @@
     <div class="header-title" role="heading" aria-level="1">Title</div>
   </div>
   <div class="header-actions">
-    <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu" aria-label="More actions">
-      <mat-icon>more_vert</mat-icon>
+    <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu">
+      <span class="cdk-visually-hidden" cdkAriaLive="off">More actions</span>
+      <mat-icon aria-hidden="true">more_vert</mat-icon>
     </button>
   </div>
   <mat-menu #moreMenu="matMenu"></mat-menu>

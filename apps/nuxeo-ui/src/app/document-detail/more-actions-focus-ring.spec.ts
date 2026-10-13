@@ -42,8 +42,13 @@ describe('Document detail More actions — keyboard focus indicator (NXSAT-535 /
     document.body.appendChild(fixture.nativeElement);
     fixture.detectChanges();
     await fixture.whenStable();
-    const button = fixture.nativeElement.querySelector(
-      '.detail-header .header-actions button[aria-label="More actions"]',
+    const buttons = Array.from(
+      fixture.nativeElement.querySelectorAll(
+        '.detail-header .header-actions button.mat-mdc-icon-button',
+      ),
+    ) as HTMLButtonElement[];
+    const button = buttons.find(
+      (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
     ) as HTMLButtonElement;
     const header = fixture.nativeElement.querySelector('.detail-header') as HTMLElement;
     return { fixture, button, header };
@@ -52,7 +57,10 @@ describe('Document detail More actions — keyboard focus indicator (NXSAT-535 /
   it('focuses the More actions control with IBM-readable outline (NXSAT-535 / IBM 2589851771)', async () => {
     const { fixture, button } = await mount();
     try {
-      expect(button.getAttribute('aria-label')).toBe('More actions');
+      expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe(
+        'More actions',
+      );
+      expect(button.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
       expect(button.classList.contains('mat-mdc-icon-button')).toBe(true);
       button.focus();
       expect(document.activeElement).toBe(button);

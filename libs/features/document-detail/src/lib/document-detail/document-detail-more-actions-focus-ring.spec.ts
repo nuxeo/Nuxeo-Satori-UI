@@ -30,8 +30,12 @@ describe('DocumentDetailComponent — header More actions focus ring (NXSAT-535)
     expect(tagEnd, 'More actions button opening tag must close').toBeGreaterThan(menuIdx);
     const openingTag = headerBlock!.slice(tagStart, tagEnd + 1);
     expect(openingTag).toContain('mat-icon-button');
-    expect(openingTag).toContain(
-      '[attr.aria-label]="\'document-detail.document-detail.more-actions\' | translate"',
+    expect(openingTag).not.toMatch(/\[attr\.aria-label\]/);
+    expect(headerBlock!.slice(tagStart, headerBlock!.indexOf('</button>', tagEnd) + 9)).toMatch(
+      /cdk-visually-hidden[\s\S]*document-detail\.document-detail\.more-actions/,
+    );
+    expect(headerBlock!.slice(tagStart, headerBlock!.indexOf('</button>', tagEnd) + 9)).toContain(
+      '<mat-icon aria-hidden="true">more_vert</mat-icon>',
     );
     const actionsStart = headerBlock!.indexOf('class="header-actions"');
     expect(actionsStart, 'header-actions region').toBeGreaterThan(-1);
@@ -43,8 +47,9 @@ describe('DocumentDetailComponent — header More actions focus ring (NXSAT-535)
     expect(host).toContain('class="header-actions"');
     expect(host).toContain('mat-icon-button');
     expect(host).toContain('[matMenuTriggerFor]="moreMenu"');
-    expect(host).toContain('aria-label="More actions"');
-    expect(host).toContain('more_vert');
+    expect(host).toContain('cdk-visually-hidden');
+    expect(host).not.toContain('aria-label="More actions"');
+    expect(host).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
   });
 
   it('traces NXSAT-535 / IBM 2589851771 on the global header toolbar mat-icon-button :focus ring', () => {
