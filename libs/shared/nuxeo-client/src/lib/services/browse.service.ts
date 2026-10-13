@@ -193,8 +193,10 @@ export class BrowseService {
   ): Observable<{ entries: NuxeoDocument[]; totalSize: number; hasNextPage?: boolean }> {
     // Each branch is asked for one page in the server's order. `Root`, `Domain`, `Favorites` and
     // `Collection` used to take only a page size, so a listing could never reach past its first
-    // page there, and a sort the caller asked for was dropped without a word.
-    if (folder.type === 'Root' || folder.type === 'Domain') {
+    // page there, and a sort the caller asked for was dropped without a word. A domain lists every
+    // child through `@children`, as Nuxeo Web UI's domain view does: keeping only its folders after
+    // the server had paged them left pages short, or empty, wherever files came first.
+    if (folder.type === 'Root') {
       return this.getNavTreeChildren(folder, pageSize, page ?? {}).pipe(
         map((list) => this.toBrowseEntryList(list)),
       );
@@ -350,7 +352,9 @@ export class BrowseService {
    * containers (SectionRoot / TemplateRoot / WorkspaceRoot) are always listed.
    *
    * Without `page`, a repository root lists every page, as a tree level does. With `page`, the
-   * root and a domain answer that one page in the order it asks for, as a listing does.
+   * root answers that one page in the order it asks for, as a listing does. A domain's level is its
+   * folders on the first page of `@children`, whatever `page` says: a listing pages a domain
+   * through `getBrowseFolderContents`, which keeps its files too.
    */
   getNavTreeChildren(
     parent: NuxeoDocument,
@@ -364,7 +368,7 @@ export class BrowseService {
     }
     if (parent.type === 'Domain') {
       const safePath = parent.path?.replace(/\/+$/, '') ?? '';
-      return this.getChildren(safePath, pageSize, page?.currentPageIndex ?? 0, page?.sort).pipe(
+      return this.getChildren(safePath, pageSize).pipe(
         map((list) => this.keepEntries(list, (doc) => isFolderishDocument(doc))),
       );
     }

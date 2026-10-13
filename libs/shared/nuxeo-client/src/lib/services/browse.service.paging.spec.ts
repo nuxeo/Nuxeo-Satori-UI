@@ -115,7 +115,7 @@ describe('BrowseService paging — Root, Domain, Favorites and Collection', () =
   describe('Domain', () => {
     const domain = doc('domain-uid', 'Domain', '/default-domain');
 
-    it('asks @children for the requested page and order, and keeps the folders', async () => {
+    it('asks @children for the requested page and order, and lists every child, as Web UI does', async () => {
       const result$ = firstValueFrom(
         service.getBrowseFolderContents('/default-domain', 2, { currentPageIndex: 3, sort: SORT }),
       );
@@ -136,10 +136,27 @@ describe('BrowseService paging — Root, Domain, Favorites and Collection', () =
       );
 
       const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['ws']);
+      // Nothing dropped after the server paged: a page of files and folders is a full page.
+      expect(result.entries.map((e) => e.uid)).toEqual(['ws', 'pdf']);
       expect(result.hasNextPage).toBe(true);
-      // A filtered page with more to come has no known total.
-      expect(result.totalSize).toBeLessThan(0);
+    });
+
+    it('still gives the tree only a domain’s folders, from the first page', async () => {
+      const result$ = firstValueFrom(
+        service.getNavTreeChildren(domain, 50, { currentPageIndex: 3, sort: SORT }),
+      );
+      const req = httpMock.expectOne(
+        (r) => r.url === '/nuxeo/api/v1/path/default-domain/@children',
+      );
+      expectPaged(req, '0');
+      expect(req.request.params.has('sortBy')).toBe(false);
+      req.flush(
+        page([
+          doc('ws', 'WorkspaceRoot', '/default-domain/workspaces', ['Folderish']),
+          doc('pdf', 'File', '/default-domain/test.pdf'),
+        ]),
+      );
+      expect((await result$).entries?.map((e) => e.uid)).toEqual(['ws']);
     });
   });
 
