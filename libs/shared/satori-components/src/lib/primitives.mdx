@@ -119,10 +119,15 @@ The error state's own page shows it by ID.
 The IDs are exported as `NXS_PRIMITIVE_IDS` from `@nuxeo-satori/platform/components`. Render one
 with `lib-extension-outlet` from `@nuxeo-satori/platform/extensions`:
 
+export const byIdHtml = `<lib-extension-outlet
+  [componentId]="ids.tag"
+  [componentInputs]="{ label: 'Invoice', color: 'purple' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet [componentId]="ids.tag" [componentInputs]="{ label: 'Invoice', color: 'purple' }" />`}
+  code={byIdHtml}
 />
 
 `provideNxsComponents()` registers the built-in versions. Each component's own page lists its inputs

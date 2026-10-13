@@ -34,6 +34,10 @@
  * assurance than it is.
  *
  * Usage:  node scripts/review-guardrails.selftest.mjs
+ *         GUARDRAIL_SELFTEST_ONLY=checkA,checkB node scripts/review-guardrails.selftest.mjs
+ *
+ * The second form runs only the named guardrails' controls, for iterating on one; the report says
+ * it was filtered, and CI never sets it.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -46,6 +50,8 @@ const GUARDRAILS = join(ROOT, 'scripts', 'review-guardrails.mjs');
 
 let negative = 0;
 let positive = 0;
+const ONLY = process.env.GUARDRAIL_SELFTEST_ONLY?.split(',').map((name) => name.trim());
+const selected = (guardrail) => !ONLY || ONLY.includes(guardrail);
 /**
  * Positive controls that specifically assert a NON-violation is not flagged.
  *
@@ -162,6 +168,7 @@ function withFixture(files, mutate, run) {
 
 /** Asserts the guardrail goes red, and that the message says why. */
 function expectRed(label, guardrail, files, mutate, expected) {
+  if (!selected(guardrail)) return;
   negative += 1;
   withFixture(files, mutate, (runGuardrail) => {
     const { code, out } = runGuardrail(guardrail);
@@ -188,6 +195,7 @@ function expectRed(label, guardrail, files, mutate, expected) {
  * a demoted check quietly becomes no check at all.
  */
 function expectWarn(label, guardrail, files, mutate, expected) {
+  if (!selected(guardrail)) return;
   negative += 1;
   withFixture(files, mutate, (runGuardrail) => {
     const { code, out } = runGuardrail(guardrail);
@@ -206,6 +214,7 @@ function expectWarn(label, guardrail, files, mutate, expected) {
 
 /** Asserts a correct tree is green — the control that stops a guardrail failing on everything. */
 function expectGreen(label, guardrail, files) {
+  if (!selected(guardrail)) return;
   positive += 1;
   withFixture(files, null, (runGuardrail) => {
     const { code, out } = runGuardrail(guardrail);
@@ -4152,11 +4161,15 @@ expectRed(
 // prove the matcher works. This one proves the attribute's quotes do not manufacture one; the
 // red controls above are what prove the matcher still bites.
 falsePositiveControls += 1;
-expectGreen('a single-quoted key inside a double-quoted attribute', 'checkNoTranslatableDatePatterns', {
-  ...APP,
-  'libs/features/x/src/lib/x.html':
-    '<span [title]="entry.eventDate | date: (\'longDate\')">{{ entry.name }}</span>\n',
-});
+expectGreen(
+  'a single-quoted key inside a double-quoted attribute',
+  'checkNoTranslatableDatePatterns',
+  {
+    ...APP,
+    'libs/features/x/src/lib/x.html':
+      '<span [title]="entry.eventDate | date: (\'longDate\')">{{ entry.name }}</span>\n',
+  },
+);
 
 // The exemption must not become a loophole. `common.date-mask` is allowed to BE a date pattern;
 // it is not allowed to be USED as one in a template. Arm 2 is what makes that distinction real
@@ -8000,13 +8013,231 @@ expectRed(
   /sets `heading="Nothing here"` on `<nxs-empty-state>`/,
 );
 
+// checkSatoriComponentsHaveSpecs (register item 21)
+
+const NXS_SPEC = `${NXS_ROOT}/src/lib/thing/thing.component.spec.ts`;
+const nxsSpec = (head, body = 'it("renders", () => expect(1).toBe(1));') => `${head}\n${body}\n`;
+const THING_IMPORT = "import { NxsThingComponent } from './thing.component';";
+const SPEC_NAMES =
+  /thing\.component\.ts declares the component `NxsThingComponent`, and no spec imports it/;
+
+expectGreen(
+  'a component whose spec imports it from its module',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({ [NXS_SPEC]: nxsSpec(THING_IMPORT, 'it("renders", () => create(NxsThingComponent));') }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component whose spec imports it through the published entry point',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({
+    [NXS_SPEC]: nxsSpec("import { NxsThingComponent } from '@nuxeo-satori/platform/components';"),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, covered by a spec importing the service',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({
+    ...NXS_NOTICE_LIB(),
+    [NXS_SPEC]: nxsSpec(THING_IMPORT),
+    [`${NXS_NOTICE}/notice.service.spec.ts`]: nxsSpec(
+      "import { NxsNoticeService } from './notice.service';",
+    ),
+  }),
+);
+
+for (const [variant, spec] of [
+  ['no spec at all', undefined],
+  ['a spec naming it only in a comment', nxsSpec('// NxsThingComponent is covered elsewhere')],
+  ['a spec naming it only in a string', nxsSpec('it("NxsThingComponent", () => undefined);')],
+  [
+    'a spec declaring a same-named fake',
+    nxsSpec('class NxsThingComponent {}', 'it("x", () => new NxsThingComponent());'),
+  ],
+  [
+    'a spec importing it as a type only',
+    nxsSpec("import type { NxsThingComponent } from './thing.component';"),
+  ],
+  [
+    'a spec importing it with an inline type modifier',
+    nxsSpec("import { type NxsThingComponent } from './thing.component';"),
+  ],
+  [
+    'a spec importing a longer-named class',
+    nxsSpec("import { NxsThingComponentFake } from './thing.component';"),
+  ],
+]) {
+  expectRed(
+    `[spec] ${variant}`,
+    'checkSatoriComponentsHaveSpecs',
+    NXS_LIB(spec === undefined ? {} : { [NXS_SPEC]: spec }),
+    null,
+    SPEC_NAMES,
+  );
+}
+
+expectRed(
+  '[spec] a component the barrel does not export, with no spec',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({
+    [NXS_SPEC]: nxsSpec(THING_IMPORT),
+    [`${NXS_ROOT}/src/lib/thing/thing-row.component.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-thing-row', standalone: true, template: '' })\n" +
+      'export class NxsThingRowComponent {}\n',
+  }),
+  null,
+  /thing-row\.component\.ts declares the component `NxsThingRowComponent`, and no spec imports it/,
+);
+
+expectRed(
+  '[spec] a component a service opens, when no spec imports the service',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({ ...NXS_NOTICE_LIB(), [NXS_SPEC]: nxsSpec(THING_IMPORT) }),
+  null,
+  /notice\.component\.ts declares the component `NxsNoticeComponent`, and no spec imports it/,
+);
+
+expectRed(
+  '[spec] a component in the Satori entry point with no spec',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_FALLBACK({
+    [NXS_SPEC]: nxsSpec(THING_IMPORT),
+    [`${NXS_SAT_ROOT}/src/lib/sat-thing.component.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-satori-thing', standalone: true, template: '' })\n" +
+      'export class NxsSatoriThingComponent {}\n',
+  }),
+  null,
+  /sat-thing\.component\.ts declares the component `NxsSatoriThingComponent`, and no spec imports it/,
+);
+
+// checkPlatformEntryPointsListed (register item 23)
+
+expectGreen('every published entry point listed', 'checkPlatformEntryPointsListed', NXS_LIB());
+
+expectRed(
+  '[entry] a published entry point the list leaves out',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({ 'libs/platform/ui/ng-package.json': '{ "lib": { "entryFile": "x.ts" } }\n' }),
+  null,
+  /libs\/platform\/ui\/ng-package\.json publishes `@nuxeo-satori\/platform\/ui`, and .* does not list 'ui'/,
+);
+
+expectRed(
+  '[entry] a listed entry point nothing publishes',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({ [PLATFORM_INDEX]: platformIndex('components', 'extras') }),
+  null,
+  /lists 'extras' in `PLATFORM_ENTRY_POINTS`, and no libs\/platform\/extras\/ng-package\.json publishes it/,
+);
+
+expectRed(
+  '[entry] a list the guardrail cannot read',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({
+    [PLATFORM_INDEX]:
+      "const names = ['components'];\nexport const PLATFORM_ENTRY_POINTS = names;\n",
+  }),
+  null,
+  /does not export `PLATFORM_ENTRY_POINTS` as a literal list of strings, so whether it matches/,
+);
+
+// The package root's own ng-package.json is not an entry point under a subpath.
+falsePositiveControls += 1;
+expectGreen(
+  'the package root ng-package.json beside the listed entry points',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({ 'libs/platform/ng-package.json': '{ "lib": { "entryFile": "src/index.ts" } }\n' }),
+);
+
+// checkMdxCodeSamplesFormatted (register item 38)
+
+const PRETTIER_RC = `${readFileSync(join(ROOT, '.prettierrc'), 'utf8')}`;
+const MDX_PAGE = `${NXS_ROOT}/src/lib/thing/thing.mdx`;
+const mdx = (body) => ({
+  '.prettierrc': PRETTIER_RC,
+  [MDX_PAGE]: `import { Source } from '@storybook/addon-docs/blocks';\n\n# Thing\n\n${body}\n`,
+});
+const MDX_RED =
+  /thing\.mdx: (the sample `\w+`|an inline sample) \(\w+\) is not formatted as Prettier formats it/;
+
+expectGreen(
+  'formatted samples: html in a constant, a one-line inline import, and class members',
+  'checkMdxCodeSamplesFormatted',
+  mdx(
+    'export const usageHtml = `<nxs-thing\n  [heading]="title()"\n  [subheading]="typeName()"\n  [documentType]="type()"\n  (selected)="open($event)"\n/>`;\n\n' +
+      '<Source language="html" code={usageHtml} />\n\n' +
+      '<Source language="typescript" code={`import { NxsThingComponent } from \'@nuxeo-satori/platform/components\';`} />\n\n' +
+      "export const usageTs = `import { signal } from '@angular/core';\n\nreadonly open = signal(false);\n\ntoggle(): void {\n  this.open.update((open) => !open);\n}`;\n\n" +
+      '<Source language="typescript" code={usageTs} />',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a bash sample, which is not checked',
+  'checkMdxCodeSamplesFormatted',
+  mdx('<Source language="bash" code={`npx   nx   test`} />'),
+);
+
+for (const [variant, body, reason] of [
+  [
+    'an unformatted html constant',
+    'export const usageHtml = `<nxs-thing [heading]="title()" [subheading]="typeName()" [documentType]="type()" (selected)="open($event)" />`;\n\n<Source language="html" code={usageHtml} />',
+    MDX_RED,
+  ],
+  // The sample's own `/>` must not end the block: a pattern stopping there reads no code at all.
+  [
+    'an unformatted inline html sample that closes its own element',
+    '<Source language="html" code={`<nxs-thing   heading="x" />`} />',
+    MDX_RED,
+  ],
+  [
+    'unformatted class members',
+    'export const usageTs = `import { signal } from \'@angular/core\';\n\nreadonly open=signal( false );`;\n\n<Source language="typescript" code={usageTs} />',
+    MDX_RED,
+  ],
+  [
+    'a multi-line inline sample, whose indentation MDX strips',
+    '<Source language="html" code={`<div>\n  <nxs-thing />\n</div>`} />',
+    /an inline sample spans lines with indentation, which MDX strips/,
+  ],
+  [
+    'a sample that does not parse',
+    '<Source language="typescript" code={`const = ;`} />',
+    /an inline sample \(typescript\) does not parse as typescript/,
+  ],
+  [
+    'a sample with no language, beside one inside its code',
+    '<Source code={`<p language="html">x</p>`} />',
+    /an inline sample has no `language`/,
+  ],
+  [
+    'a sample naming a constant the page does not declare',
+    '<Source language="html" code={missingHtml} />',
+    /the sample `missingHtml` is not an `export const` template literal on this page/,
+  ],
+  [
+    'a Source block that never closes',
+    '<Source language="html" code={`<p>x</p>`}',
+    /a <Source> block does not close/,
+  ],
+]) {
+  expectRed(`[mdx] ${variant}`, 'checkMdxCodeSamplesFormatted', mdx(body), null, reason);
+}
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
 console.log(
   `review-guardrails selftest: ${total} controls — ${negative} negative (a broken tree must go ` +
     `red, for the stated reason) and ${positive} positive (a correct tree must stay green), ` +
-    `of which ${falsePositiveControls} assert that a specific non-violation is NOT flagged.`,
+    `of which ${falsePositiveControls} assert that a specific non-violation is NOT flagged.` +
+    (ONLY ? ` FILTERED to ${ONLY.join(', ')} — not a full run.` : ''),
 );
 
 if (failures.length) {

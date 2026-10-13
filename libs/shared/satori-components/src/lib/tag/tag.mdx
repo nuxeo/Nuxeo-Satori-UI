@@ -47,10 +47,15 @@ needs no providers.
 `provideNxsComponents()` registers the tag as `nxs.primitives.tag`, exported as
 `NXS_PRIMITIVE_IDS.tag`:
 
+export const byIdHtml = `<lib-extension-outlet
+  [componentId]="tagId"
+  [componentInputs]="{ label: 'Invoice', color: 'purple' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet [componentId]="tagId" [componentInputs]="{ label: 'Invoice', color: 'purple' }" />`}
+  code={byIdHtml}
 />
 
 ## Examples
