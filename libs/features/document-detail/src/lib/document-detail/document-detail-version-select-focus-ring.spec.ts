@@ -7,15 +7,36 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+function selectorBlock(scss: string, selector: string): string {
+  const start = scss.indexOf(selector);
+  expect(start, `selector ${selector}`).toBeGreaterThan(-1);
+  const openBrace = scss.indexOf('{', start);
+  expect(openBrace, `opening brace for ${selector}`).toBeGreaterThan(start);
+  let depth = 0;
+  for (let i = openBrace; i < scss.length; i++) {
+    if (scss[i] === '{') {
+      depth++;
+    }
+    if (scss[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return scss.slice(start, i + 1);
+      }
+    }
+  }
+  throw new Error(`unclosed block for ${selector}`);
+}
+
 describe('DocumentDetailComponent — version-select focus ring (NXSAT-545)', () => {
   const scssPath = join(import.meta.dirname, 'document-detail-version-select-focus.scss');
   const componentPath = join(import.meta.dirname, 'document-detail.ts');
+
   it('declares a standalone :focus ring on the version selector', () => {
     const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(/\.version-select:focus(?:,\s*\.version-select:focus:hover)?\s*\{/);
+    const focusBlock = selectorBlock(scss, '.version-select:focus {');
     expect(scss).not.toMatch(/\.version-select:focus-visible/);
-    expect(scss).toMatch(
-      /\.version-select:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--document-detail-properties-label-muted\)/,
+    expect(focusBlock).toMatch(
+      /outline:\s*2px\s+solid\s+var\(--document-detail-properties-label-muted\)/,
     );
     expect(scss).toMatch(/NXSAT-545[\s\S]*2851011211/);
   });
@@ -25,19 +46,23 @@ describe('DocumentDetailComponent — version-select focus ring (NXSAT-545)', ()
     expect(source).toMatch(/['"]\.\/document-detail-version-select-focus\.scss['"]/);
   });
 
-  it('pins version-select fill to the properties panel surface (with hover tint) on focus and focus+hover', () => {
+  it('pins version-select fill and accent to light-panel tokens', () => {
     const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(
-      /\.version-select[\s\S]*background:\s*var\(--document-detail-properties-panel-surface\)/,
+    const baseBlock = selectorBlock(scss, '.version-select {');
+    expect(baseBlock).toMatch(/background:\s*var\(--document-detail-properties-panel-surface\)/);
+    expect(baseBlock).toMatch(/color:\s*var\(--document-detail-properties-accent\)/);
+    expect(baseBlock).toMatch(/border-color:\s*var\(--document-detail-properties-accent\)/);
+    expect(baseBlock).toMatch(
+      /\.version-arrow[\s\S]*color:\s*var\(--document-detail-properties-accent\)/,
     );
-    expect(scss).toMatch(
-      /\.version-select:focus:hover[\s\S]*color-mix\([\s\S]*var\(--document-detail-properties-panel-surface\)/,
+
+    const focusHoverBlock = selectorBlock(scss, '.version-select:focus:hover {');
+    expect(focusHoverBlock).toMatch(
+      /color-mix\([\s\S]*var\(--document-detail-properties-accent\)\s+8%/,
     );
-    expect(scss).toMatch(
-      /\.version-select:focus:hover[\s\S]*color-mix\([\s\S]*var\(--mat-sys-primary\)\s+8%/,
-    );
-    expect(scss).toMatch(
-      /\.version-select:focus\s*\{[\s\S]*background:\s*var\(--document-detail-properties-panel-surface\)/,
+    expect(focusHoverBlock).toMatch(
+      /var\(--document-detail-properties-panel-surface\)/,
     );
   });
 });
+

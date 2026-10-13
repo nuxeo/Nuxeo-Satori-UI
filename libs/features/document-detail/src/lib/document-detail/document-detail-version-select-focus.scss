@@ -1,6 +1,17 @@
 // NXSAT-545 / IBM 2851011211 — standalone sheet so document-detail.scss stays under the 36 kB cap.
+:host {
+  /* Light panel keeps a fixed accent; dark-theme --mat-sys-primary is too pale on #fff (≈1.7:1). */
+  --document-detail-properties-accent: #3f51b5;
+}
+
 .version-select {
   background: var(--document-detail-properties-panel-surface);
+  color: var(--document-detail-properties-accent);
+  border-color: var(--document-detail-properties-accent);
+
+  .version-arrow {
+    color: var(--document-detail-properties-accent);
+  }
 }
 
 .version-select:focus {
@@ -12,7 +23,7 @@
 .version-select:focus:hover {
   background: color-mix(
     in srgb,
-    var(--mat-sys-primary) 8%,
+    var(--document-detail-properties-accent) 8%,
     var(--document-detail-properties-panel-surface)
   );
   outline: 2px solid var(--document-detail-properties-label-muted);

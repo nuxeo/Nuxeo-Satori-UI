@@ -6,7 +6,7 @@
 .properties-panel.nxsat545-karma-focus-hover .version-select:focus {
   background: color-mix(
     in srgb,
-    var(--mat-sys-primary) 8%,
+    var(--document-detail-properties-accent) 8%,
     var(--document-detail-properties-panel-surface)
   );
   outline: 2px solid var(--document-detail-properties-label-muted);

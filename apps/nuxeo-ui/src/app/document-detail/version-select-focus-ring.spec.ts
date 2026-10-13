@@ -11,6 +11,8 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 const WCAG_1411_MIN_RATIO = 3;
+const WCAG_AA_NORMAL_TEXT = 4.5;
+const WCAG_1411_UI_COMPONENT = 3;
 
 function luminance([r, g, b]: readonly number[]): number {
   const channel = (c: number) => {
@@ -81,9 +83,13 @@ class VersionSelectFocusHostComponent {}
 
 describe('Document detail version selector — keyboard focus indicator (NXSAT-545)', () => {
   let originalTheme: string | null;
+  let originalSurfaceToken: string;
+  let originalPrimaryToken: string;
 
   beforeEach(async () => {
     originalTheme = document.documentElement.getAttribute('data-app-theme');
+    originalSurfaceToken = document.documentElement.style.getPropertyValue('--mat-sys-surface');
+    originalPrimaryToken = document.documentElement.style.getPropertyValue('--mat-sys-primary');
 
     await TestBed.configureTestingModule({
       imports: [VersionSelectFocusHostComponent],
@@ -96,6 +102,16 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       document.documentElement.removeAttribute('data-app-theme');
     } else {
       document.documentElement.setAttribute('data-app-theme', originalTheme);
+    }
+    if (originalSurfaceToken) {
+      document.documentElement.style.setProperty('--mat-sys-surface', originalSurfaceToken);
+    } else {
+      document.documentElement.style.removeProperty('--mat-sys-surface');
+    }
+    if (originalPrimaryToken) {
+      document.documentElement.style.setProperty('--mat-sys-primary', originalPrimaryToken);
+    } else {
+      document.documentElement.style.removeProperty('--mat-sys-primary');
     }
   });
 
@@ -186,6 +202,28 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       );
     } finally {
       panel.classList.remove('nxsat545-karma-focus-hover');
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('keeps label and border contrast on the light panel in dark theme (NXSAT-545)', async () => {
+    applyTheme('dark');
+    const { fixture, button } = await mount();
+    try {
+      button.focus({ focusVisible: false } as FocusOptions);
+      const style = getComputedStyle(button);
+      const fill = paintedBackground(button);
+      const label = parseColor(style.color);
+      const border = parseColor(style.borderColor);
+
+      expect(contrastRatio(compositeOver(label, fill), fill)).toBeGreaterThanOrEqual(
+        WCAG_AA_NORMAL_TEXT,
+      );
+      expect(contrastRatio(compositeOver(border, fill), fill)).toBeGreaterThanOrEqual(
+        WCAG_1411_UI_COMPONENT,
+      );
+    } finally {
       button.blur();
       fixture.nativeElement.remove();
     }
