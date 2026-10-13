@@ -124,6 +124,55 @@ export function nxsSearchFiltersToSavedParams(filters: NxsSearchFilters): Record
   return params;
 }
 
+/**
+ * The keys {@link nxsSearchFiltersFromParams} falls back to when the page provider's own is empty —
+ * the names earlier saved searches were written under, and `default_search`'s other parameters for
+ * the same fields — each with the value that clears it.
+ */
+const FALLBACK_PARAMS: Readonly<Record<string, string>> = {
+  ecmFulltext: '',
+  modifiedDate: '',
+  dc_modified: '[]',
+  author: '',
+  dc_creator: '[]',
+  collection: '',
+  collection_agg: '[]',
+  tag: '',
+  nature: '',
+  dc_nature: '[]',
+  dc_subjects: '[]',
+  coverage: '',
+  dc_coverage: '[]',
+  common_size: '[]',
+};
+
+/**
+ * The params that clear every fallback key a saved search was read with, to send beside
+ * {@link nxsSearchFiltersToSavedParams} when it is saved again.
+ *
+ * The server merges an update into the stored params, so a search saved under an earlier name
+ * (`author: "alice"`) kept that key: with its author removed and saved, it read back from the old key
+ * and the author returned. Once saved, the page provider's own key holds the value.
+ */
+export function nxsSavedParamsToClear(
+  loaded: Readonly<Record<string, unknown>> | null | undefined,
+): Record<string, string> {
+  const clear: Record<string, string> = {};
+  for (const [key, cleared] of Object.entries(FALLBACK_PARAMS)) {
+    for (const candidate of [key, `defaults:${key}`]) {
+      const value = loaded?.[candidate];
+      const empty =
+        value === undefined ||
+        value === null ||
+        value === '' ||
+        value === '[]' ||
+        (Array.isArray(value) && value.length === 0);
+      if (!empty) clear[candidate] = cleared;
+    }
+  }
+  return clear;
+}
+
 /** The filters as `SearchService.search`'s parameters, with the page's quick filters and sort. */
 export function nxsSearchFiltersToQuery(
   filters: NxsSearchFilters,

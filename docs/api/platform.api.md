@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-60 exported symbol(s).
+61 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -621,6 +621,7 @@ function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
+function nxsSavedParamsToClear(loaded: Readonly<Record<string, unknown>> | null | undefined): Record<string, string>;
 function nxsSearchFiltersFromParams(params: Readonly<Record<string, unknown>> | null | undefined): NxsSearchFilters;
 function nxsSearchFiltersToQuery(filters: NxsSearchFilters, page?: {
     quickFilters?: string;

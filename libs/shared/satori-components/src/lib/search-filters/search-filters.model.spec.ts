@@ -6,6 +6,7 @@ import {
   nxsHasSearchFilters,
   nxsRangeOptions,
   nxsSameSearchFilters,
+  nxsSavedParamsToClear,
   nxsSearchFiltersFromParams,
   nxsSearchFiltersToQuery,
   nxsSearchFiltersToRecord,
@@ -254,6 +255,55 @@ describe('search filters — a saved search’s params', () => {
     ).toEqual(filters({ subjects: ['7', 'sciences'] }));
     expect(nxsSearchFiltersFromParams(null)).toEqual(NXS_EMPTY_SEARCH_FILTERS);
     expect(nxsSearchFiltersFromParams(undefined)).toEqual(NXS_EMPTY_SEARCH_FILTERS);
+  });
+});
+
+describe('search filters — clearing the names a saved search was read with', () => {
+  it('clears every fallback key the search carried, and only those', () => {
+    expect(
+      nxsSavedParamsToClear({
+        author: 'alice',
+        nature: 'contract',
+        modifiedDate: 'last24h',
+        dc_nature: ['report'],
+        collection_agg: '["col-1"]',
+        'defaults:tag': 't1',
+        coverage: '',
+        dc_creator: [],
+        dc_coverage: '[]',
+        ecm_fulltext: 'kept',
+        dc_creator_agg: '["alice"]',
+      }),
+    ).toEqual({
+      author: '',
+      nature: '',
+      modifiedDate: '',
+      dc_nature: '[]',
+      collection_agg: '[]',
+      'defaults:tag': '',
+    });
+  });
+
+  it('clears nothing for a search saved under the page provider’s names, or none at all', () => {
+    expect(nxsSavedParamsToClear({ dc_creator_agg: '["alice"]', ecm_fulltext: 'x' })).toEqual({});
+    expect(nxsSavedParamsToClear(null)).toEqual({});
+  });
+
+  it('reads back with a removed author gone once the old key is cleared', () => {
+    const loaded = { author: 'alice', ecm_fulltext: 'x' };
+    const saved = {
+      ...loaded,
+      ...nxsSavedParamsToClear(loaded),
+      ...nxsSearchFiltersToSavedParams(filters({ fulltext: 'x' })),
+    };
+    expect(nxsSearchFiltersFromParams(saved).authors).toEqual([]);
+    // Without the clearing, the merge keeps `author` and the removed author comes back.
+    expect(
+      nxsSearchFiltersFromParams({
+        ...loaded,
+        ...nxsSearchFiltersToSavedParams(filters({ fulltext: 'x' })),
+      }).authors,
+    ).toEqual(['alice']);
   });
 });
 

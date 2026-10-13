@@ -16,6 +16,7 @@ import {
   NXS_EMPTY_SEARCH_FILTERS,
   nxsHasSearchFilters,
   nxsSameSearchFilters,
+  nxsSavedParamsToClear,
   nxsSearchFiltersFromParams,
   nxsSearchFiltersToQuery,
   nxsSearchFiltersToRecord,
@@ -115,6 +116,8 @@ export class SearchSession {
   readonly savedSearchesVersion = this.shared.savedSearchVersion;
   /** The open saved search's filters as the server holds them. */
   private readonly savedFilters = signal<NxsSearchFilters | null>(null);
+  /** The params the open saved search was read with, so Save can clear the old names it carries. */
+  private loadedParams: Record<string, string> = {};
 
   /**
    * Whether the filters differ from the open saved search's — or, with none open, whether any is
@@ -152,6 +155,7 @@ export class SearchSession {
     this.savedSearchId.set('');
     this.savedSearchTitle.set('');
     this.savedFilters.set(null);
+    this.loadedParams = {};
   }
 
   /**
@@ -162,6 +166,7 @@ export class SearchSession {
     this.savedSearchId.set(id);
     this.savedSearchTitle.set(title);
     this.savedFilters.set(null);
+    this.loadedParams = {};
     return this.searchService.getSavedSearchById(id).pipe(
       map((params) => {
         // `getSavedSearchById` answers a failed read with no parameters at all, and a saved
@@ -174,6 +179,7 @@ export class SearchSession {
         // A late answer for a search the user has already left is dropped.
         if (this.savedSearchId() !== id) return;
         const filters = nxsSearchFiltersFromParams(params);
+        this.loadedParams = params;
         this.savedFilters.set(filters);
         this.setFilters(filters);
       }),
@@ -212,15 +218,21 @@ export class SearchSession {
     const id = this.savedSearchId().trim();
     if (!id) return of(undefined);
     const filters = this.filters();
+    const params = {
+      ...nxsSavedParamsToClear(this.loadedParams),
+      ...nxsSearchFiltersToSavedParams(filters),
+    };
     return this.searchService
       .updateSavedSearch(id, {
         title: this.savedSearchTitle(),
-        params: nxsSearchFiltersToSavedParams(filters),
+        params,
         pageProviderName: SEARCH_PAGE_PROVIDER,
       })
       .pipe(
         map(() => {
-          if (this.savedSearchId() === id) this.savedFilters.set(filters);
+          if (this.savedSearchId() !== id) return;
+          this.savedFilters.set(filters);
+          this.loadedParams = params;
         }),
       );
   }

@@ -62,6 +62,7 @@ export {
   nxsHasSearchFilters,
   nxsRangeOptions,
   nxsSameSearchFilters,
+  nxsSavedParamsToClear,
   nxsSearchFiltersFromParams,
   nxsSearchFiltersToQuery,
   nxsSearchFiltersToRecord,

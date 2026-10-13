@@ -268,6 +268,24 @@ describe('SearchSession', () => {
       expect(session.dirty()).toBe(false);
     });
 
+    it('clears the old names a search was saved under, so a removed author stays removed', async () => {
+      searchService.getSavedSearchById.mockReturnValue(
+        of({ author: 'alice', ecm_fulltext: 'x', dc_creator_agg: '' }),
+      );
+      await firstValueFrom(session.openSavedSearch('ss-1', 'Old'), { defaultValue: undefined });
+      expect(session.filters().authors).toEqual(['alice']);
+
+      session.setFilters({ ...session.filters(), authors: [] });
+      await firstValueFrom(session.save());
+
+      const sent = searchService.updateSavedSearch.mock.calls.at(-1)?.[1] as {
+        params: Record<string, string>;
+      };
+      expect(sent.params['dc_creator_agg']).toBe('[]');
+      expect(sent.params['author']).toBe('');
+      expect(session.dirty()).toBe(false);
+    });
+
     it('renames, deletes and saves nothing with no search open', async () => {
       await firstValueFrom(session.save(), { defaultValue: undefined });
       await firstValueFrom(session.rename('x'), { defaultValue: undefined });
