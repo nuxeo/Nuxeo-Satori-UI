@@ -144,11 +144,11 @@
   }
 
   <!-- Local -->
-  <section class="nxs-permissions-panel__section" aria-labelledby="nxs-permissions-local">
+  <section class="nxs-permissions-panel__section" [attr.aria-labelledby]="idPrefix + '-local'">
     <div class="nxs-permissions-panel__section-header">
       <div
         class="nxs-permissions-panel__section-title"
-        id="nxs-permissions-local"
+        [id]="idPrefix + '-local'"
         role="heading"
         aria-level="3"
       >
@@ -171,12 +171,12 @@
     @if (editor(); as edit) {
       <form
         class="nxs-permissions-panel__editor"
-        [attr.aria-labelledby]="'nxs-permissions-editor-heading'"
+        [attr.aria-labelledby]="idPrefix + '-editor-heading'"
         (submit)="$event.preventDefault(); applyEditor()"
       >
         <div
           class="nxs-permissions-panel__editor-heading"
-          id="nxs-permissions-editor-heading"
+          [id]="idPrefix + '-editor-heading'"
           role="heading"
           aria-level="4"
         >
@@ -331,7 +331,7 @@
       <table
         mat-table
         class="nxs-permissions-panel__table"
-        aria-labelledby="nxs-permissions-local"
+        [attr.aria-labelledby]="idPrefix + '-local'"
         [dataSource]="localItems()"
         [trackBy]="trackItem"
       >
@@ -543,11 +543,11 @@
   </section>
 
   <!-- Inherited -->
-  <section class="nxs-permissions-panel__section" aria-labelledby="nxs-permissions-inherited">
+  <section class="nxs-permissions-panel__section" [attr.aria-labelledby]="idPrefix + '-inherited'">
     <div class="nxs-permissions-panel__section-header">
       <div
         class="nxs-permissions-panel__section-title"
-        id="nxs-permissions-inherited"
+        [id]="idPrefix + '-inherited'"
         role="heading"
         aria-level="3"
       >
@@ -592,7 +592,7 @@
       <table
         mat-table
         class="nxs-permissions-panel__table"
-        aria-labelledby="nxs-permissions-inherited"
+        [attr.aria-labelledby]="idPrefix + '-inherited'"
         [dataSource]="current.inherited"
       >
         <ng-container matColumnDef="principal">
@@ -643,10 +643,10 @@
   </section>
 
   @if (current.otherAcls.length > 0) {
-    <section class="nxs-permissions-panel__section" aria-labelledby="nxs-permissions-other">
+    <section class="nxs-permissions-panel__section" [attr.aria-labelledby]="idPrefix + '-other'">
       <div
         class="nxs-permissions-panel__section-title"
-        id="nxs-permissions-other"
+        [id]="idPrefix + '-other'"
         role="heading"
         aria-level="3"
       >
@@ -655,7 +655,7 @@
       <table
         mat-table
         class="nxs-permissions-panel__table"
-        aria-labelledby="nxs-permissions-other"
+        [attr.aria-labelledby]="idPrefix + '-other'"
         [dataSource]="current.otherAcls"
       >
         <ng-container matColumnDef="principal">

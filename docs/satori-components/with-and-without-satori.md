@@ -39,7 +39,7 @@ Install `@hylandsoftware/satori-ui` from GitHub Packages (this needs a token) al
 
 Register the providers `provideSatori()` (theme and icons), `provideNxsComponents()`, then `provideNxsSatoriComponents()` — the later registration wins, so every avatar, tag, breadcrumb and rich-tooltip slot renders `<sat-avatar>`, `<sat-category-tag>`, `<sat-breadcrumbs>` and `<sat-rich-tooltip>` in Satori's theme.
 
-The Satori components also need Satori's translation strings: register `provideAndConfigureSatoriUITranslations()` from `@hylandsoftware/satori-ui/translations`, or add Satori's `sat.*` strings to your own translation loader. Without them, the breadcrumbs' screen-reader name and the rich tooltip's close hint show raw translation keys.
+The Satori components also need Satori's translation strings: register `provideAndConfigureSatoriUITranslations()` from `@hylandsoftware/satori-ui/translations`, or add Satori's `sat.*` strings to your own translation loader. Without them, the breadcrumbs' "Show more breadcrumbs" button, the breadcrumbs' screen-reader name when no `label` is given, and the rich tooltip's close hint show raw translation keys.
 
 The wrapper maps our inputs onto Satori's: our `color` becomes Satori's `category`, and initials are never passed empty, because an empty value crashes Satori's avatar.
 
@@ -72,7 +72,7 @@ Every component in the library, with the same inputs on both sides: on the left 
 
 ![Avatar: without Satori on the left, with Satori on the right](avatar-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-Both are 36 px circles. Satori's has a thin white border and uses Noto Sans. The built-in one maps "teal" to a blue-grey (a known gap). At size 24, Satori shows one initial and the built-in version two.
+Both are 36 px teal circles. Satori's has a thin white border and uses Noto Sans; the built-in one blends teal with the Material theme's surface and text, so it is a little darker and greyer. At size 24, Satori shows one initial and the built-in version two. Screen readers hear one image, named by `label`, on both sides.
 
 ### Tag
 
@@ -100,7 +100,7 @@ Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 1
 
 The biggest visible difference. When space runs out, Satori's collapse into a "…" menu and the built-in ones wrap onto two lines. Satori has its own chevron icon and a rounded purple focus ring.
 
-Two gaps on the Satori side: the wrapper doesn't pass our `label` input through, so the screen-reader name comes from Satori; and at 110 px or narrower Satori hides every item, including the current page.
+Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page.
 
 ### Rich tooltip
 
@@ -114,7 +114,7 @@ Two gaps on the Satori side: the wrapper doesn't pass our `label` input through,
 
 ![Rich tooltip: without Satori on the left, with Satori on the right](rich-tooltip-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs, opened from the keyboard.')
 
-The biggest behaviour difference. The built-in one opens on click, Enter or Space and closes straight away; Satori's opens on hover or keyboard focus after 200 ms, ignores clicks, and closes 1.5 s after you leave (Escape closes it at once).
+The biggest behaviour difference. The built-in one opens on click, Enter or Space and closes straight away; Satori's opens on hover or keyboard focus after 200 ms, ignores clicks, and closes 1.5 s after you leave (Escape closes it at once). The built-in panel is never wider than the window and moves sideways to stay on screen near either edge, in either reading direction.
 
 Screen readers: the built-in version uses `aria-expanded`/`aria-controls` and a live region; Satori uses `role=tooltip` with linked hidden text ending "Press Escape key to close". Both use the Material Icons font for the trigger icon.
 
@@ -322,12 +322,12 @@ Storybook's "Primitives/By registered ID" story renders all four registered IDs 
 
 Colours are given as background / text.
 
-| Primitive        | Without Satori (built-in, Material theme)                                                                                                        | With Satori (`sat-*`, Satori theme)                                                                                                                          |
-| ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **Avatar**       | 36 px circle, no border, "teal" → `#dae2f9`/`#3e4759`                                                                                            | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                            |
-| **Tag**          | 20 px, 12 px text, padding 2/8, `#ecdcff`/`#5f00c0`, truncates ("In…" in a 40 px box)                                                            | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                       |
-| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, wraps when narrow                                        | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, name from Satori's translations, collapses to "…" ("Show more breadcrumbs") |
-| **Rich tooltip** | Click/Enter/Space, panel under the button (radius 8, max 320 px), closes instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring    |
+| Primitive        | Without Satori (built-in, Material theme)                                                                                                                        | With Satori (`sat-*`, Satori theme)                                                                                                                       |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Avatar**       | 36 px circle, no border, teal `#c8e1e4`/`#095d5e`                                                                                                                | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
+| **Tag**          | 20 px, 12 px text, padding 2/8, `#ecdcff`/`#5f00c0`, truncates ("In…" in a 40 px box)                                                                            | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
+| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, wraps when narrow                                                        | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
+| **Rich tooltip** | Click/Enter/Space, panel under the button (radius 8, max 320 px, kept on screen), closes instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring |
 
 ## What a customer without access also loses
 
@@ -341,11 +341,8 @@ Only things rendered by ID, such as customer extensions, go through the choice.
 
 ## Known gaps
 
-- Built-in avatar teal colour (it renders as a blue-grey).
 - Built-in breadcrumbs wrap instead of collapsing.
-- Satori breadcrumbs wrapper ignores `label`.
 - Satori breadcrumbs hide everything at 110 px or less.
-- Satori avatar exposes an extra unnamed image to assistive technology.
 - Storybook's default theme names Roboto but doesn't load it, so the built-in screenshots render in Arial.
 
 ## Open questions

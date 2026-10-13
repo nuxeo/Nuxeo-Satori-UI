@@ -8,9 +8,12 @@
   inset-block-start: 100%;
   inset-inline-start: 0;
   z-index: 10;
+  box-sizing: border-box;
   inline-size: max-content;
-  max-inline-size: 320px;
+  // Twice the component's VIEWPORT_MARGIN, so the panel fits between both margins.
+  max-inline-size: min(320px, 100vw - 16px);
   padding: 12px 16px;
+  overflow-wrap: anywhere;
   border-radius: 8px;
   background: var(--mat-sys-surface-container);
   color: var(--mat-sys-on-surface-variant);

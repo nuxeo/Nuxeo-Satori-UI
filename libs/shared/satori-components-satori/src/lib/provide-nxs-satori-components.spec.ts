@@ -1,4 +1,5 @@
 import {
+  ApplicationRef,
   Component,
   provideZonelessChangeDetection,
   reflectComponentType,
@@ -21,7 +22,7 @@ import {
   ExtensionComponentRegistry,
   ExtensionOutletComponent,
 } from '@nuxeo-satori/platform/extensions';
-import { provideTranslateService } from '@ngx-translate/core';
+import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
@@ -106,6 +107,12 @@ describe('the Satori primitives, rendered by ID', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
+  /** Elements with `role="img"` that no `aria-hidden` subtree hides. */
+  const exposedImages = (root: HTMLElement) =>
+    Array.from(root.querySelectorAll('[role="img"]')).filter(
+      (image) => !image.closest('[aria-hidden="true"]'),
+    );
+
   it('renders the avatar on sat-avatar, named by its label', async () => {
     const host = await renderById(NXS_PRIMITIVE_IDS.avatar, {
       initials: 'NK',
@@ -119,11 +126,44 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(host.querySelector('nxs-avatar')).toBeNull();
   });
 
+  // `sat-avatar` is `role="img"` itself and takes no name, so inside our named image it would be a
+  // second, unnamed one.
+  it('exposes exactly one image, the named wrapper', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.avatar, {
+      initials: 'NK',
+      label: 'Narasimha Koppula',
+    });
+    expect(exposedImages(host)).toEqual([host.querySelector('nxs-satori-avatar')]);
+  });
+
   it('hides a label-less avatar from assistive technology', async () => {
     const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: 'NK' });
     const avatar = host.querySelector('nxs-satori-avatar');
     expect(avatar?.getAttribute('aria-hidden')).toBe('true');
     expect(avatar?.hasAttribute('role')).toBe(false);
+    expect(exposedImages(host)).toEqual([]);
+  });
+
+  it.each(['   ', '\u00a0', '\u3000'])(
+    'treats a whitespace-only label %j as no label, as Material does',
+    async (label) => {
+      const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: 'NK', label });
+      const avatar = host.querySelector('nxs-satori-avatar');
+      expect(avatar?.getAttribute('aria-hidden')).toBe('true');
+      expect(avatar?.hasAttribute('role')).toBe(false);
+      expect(avatar?.hasAttribute('aria-label')).toBe(false);
+      expect(exposedImages(host)).toEqual([]);
+    },
+  );
+
+  it('names the image without the whitespace around its label', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.avatar, {
+      initials: 'ZÅ',
+      label: ' Zoë Ångström\u00a0',
+    });
+    expect(host.querySelector('nxs-satori-avatar')?.getAttribute('aria-label')).toBe(
+      'Zoë Ångström',
+    );
   });
 
   // `sat-avatar` at size 24 reads `initials()[0]`; blank initials are valid in the contract.
@@ -160,6 +200,60 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(crumbs).not.toBeNull();
     expect(crumbs?.querySelector('nav')).not.toBeNull();
     expect(crumbs?.textContent).toContain('Contracts');
+  });
+
+  it('names the navigation landmark from our label, as Material does', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.breadcrumbs, {
+      label: 'Fil d’Ariane',
+      items: [{ label: 'Domain', href: '/d' }, { label: 'Contracts' }],
+    });
+    const landmarks = host.querySelectorAll('nxs-satori-breadcrumbs nav');
+    expect(landmarks).toHaveLength(1);
+    expect(landmarks[0].getAttribute('aria-label')).toBe('Fil d’Ariane');
+  });
+
+  it('keeps our label when Satori re-renders its own name later', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.breadcrumbs, {
+      label: 'Fil d’Ariane',
+      items: [{ label: 'Contracts' }],
+    });
+    const translate = TestBed.inject(TranslateService);
+    translate.setTranslation('en', { sat: { breadcrumbs: { breadcrumbs: 'Breadcrumbs' } } });
+    translate.use('en');
+    await TestBed.inject(ApplicationRef).whenStable();
+    expect(host.querySelector('nxs-satori-breadcrumbs nav')?.getAttribute('aria-label')).toBe(
+      'Fil d’Ariane',
+    );
+  });
+
+  it("gives the landmark Satori's own name back when our label is cleared", async () => {
+    TestBed.configureTestingModule({
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideSatori(),
+      ],
+    });
+    const fixture = TestBed.createComponent(NxsSatoriBreadcrumbsComponent);
+    const nav = () => (fixture.nativeElement as HTMLElement).querySelector('nav');
+    fixture.componentRef.setInput('items', [{ label: 'Contracts' }]);
+    fixture.componentRef.setInput('label', 'Fil d’Ariane');
+    await fixture.whenStable();
+    expect(nav()?.getAttribute('aria-label')).toBe('Fil d’Ariane');
+    fixture.componentRef.setInput('label', '');
+    await fixture.whenStable();
+    expect(nav()?.getAttribute('aria-label')).toBe('sat.breadcrumbs.breadcrumbs');
+  });
+
+  it("leaves Satori's own name on the landmark when our label is blank", async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.breadcrumbs, {
+      label: '  ',
+      items: [{ label: 'Contracts' }],
+    });
+    expect(host.querySelector('nxs-satori-breadcrumbs nav')?.getAttribute('aria-label')).toBe(
+      'sat.breadcrumbs.breadcrumbs',
+    );
   });
 
   it('renders the rich tooltip as a named Satori trigger', async () => {

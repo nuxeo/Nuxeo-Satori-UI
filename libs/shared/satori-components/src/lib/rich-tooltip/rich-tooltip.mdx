@@ -18,6 +18,8 @@ clutter the page if it were always shown. For one word or a short phrase, a plai
   panel does not cover the page or trap focus.
 - **Announced when it opens.** The panel opens inside a live region, so a screen reader reads it
   without the user moving to it.
+- **Stays on screen.** The panel is never wider than the window, and moves sideways to stay inside
+  it when the button sits near either edge, in left-to-right and right-to-left layouts alike.
 - **Any icon.** `info` by default; any Material Icons ligature through `icon`.
 - **Replaceable by ID.** It is registered as `nxs.primitives.richTooltip`, so Satori's rich tooltip
   or your own can take its place.
