@@ -29,8 +29,6 @@ import {
   CollectionService,
   AssetService,
   AssetAggregationService,
-  SearchService,
-  SearchAggregationService,
   DocumentService,
   DocumentDetailService,
   TaskService,
@@ -48,7 +46,6 @@ import {
   topLevelNuxeoFolderPath,
   documentNavigationUrl,
   isCollectionDocument,
-  type SearchQueryParams,
   type AssetAggregations,
   canPasteClipboard,
   readClipboardDocs,
@@ -121,8 +118,6 @@ export class NavDrawerComponent {
   private readonly collectionService = inject(CollectionService);
   private readonly assetService = inject(AssetService);
   private readonly assetAggregationService = inject(AssetAggregationService);
-  private readonly searchService = inject(SearchService);
-  private readonly searchAggregationService = inject(SearchAggregationService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly docService = inject(DocumentService);
   private readonly authService = inject(AuthService);
@@ -293,9 +288,6 @@ export class NavDrawerComponent {
       if (item?.id === 'app.navbar.assets') {
         this.loadAssetAggregations();
       }
-      if (item?.id === 'app.navbar.search') {
-        this.loadSearchAggregations();
-      }
       if (item?.id === 'app.navbar.tasks') {
         this.loadTasks();
       }
@@ -326,33 +318,6 @@ export class NavDrawerComponent {
       window.removeEventListener('clipboard-changed', onClipboardChanged);
       window.removeEventListener('favorites-changed', onFavoritesChanged);
       this.revokeThumbnails();
-    });
-  }
-
-  private loadSearchAggregations(): void {
-    const filters = this.searchAggregationService.drawerFilters();
-    const request: SearchQueryParams = {
-      q: (filters['q'] ?? '').trim() || undefined,
-      ecmFulltext: (filters['ecm_fulltext'] ?? '').trim() || undefined,
-      modifiedDate: (filters['modifiedDate'] ?? '').trim() || undefined,
-      author: (filters['author'] ?? '').trim() || undefined,
-      collection: (filters['collection'] ?? '').trim() || undefined,
-      tag: (filters['tag'] ?? '').trim() || undefined,
-      nature: (filters['nature'] ?? '').trim() || undefined,
-      subjects: (filters['subjects'] ?? '').trim() || undefined,
-      coverage: (filters['coverage'] ?? '').trim() || undefined,
-      size: (filters['size'] ?? '').trim() || undefined,
-    };
-
-    this.searchService.search(request).subscribe({
-      next: (res) => {
-        this.searchAggregationService.aggregations.set(res.aggregations);
-        this.searchAggregationService.items.set(res.items);
-      },
-      error: () => {
-        this.searchAggregationService.aggregations.set({});
-        this.searchAggregationService.items.set([]);
-      },
     });
   }
 
