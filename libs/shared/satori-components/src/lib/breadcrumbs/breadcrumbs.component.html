@@ -28,7 +28,7 @@
                 class="nxs-breadcrumbs__link"
                 [routerLink]="entry.item.routerLink"
                 [queryParams]="entry.item.queryParams"
-                [attr.title]="last ? entry.item.label : null"
+                [attr.title]="last || entry.index === 0 ? entry.item.label : null"
                 >{{ entry.item.label }}</a
               >
             }
@@ -36,7 +36,7 @@
               <a
                 class="nxs-breadcrumbs__link"
                 [href]="entry.item.href"
-                [attr.title]="last ? entry.item.label : null"
+                [attr.title]="last || entry.index === 0 ? entry.item.label : null"
                 >{{ entry.item.label }}</a
               >
             }
@@ -44,7 +44,7 @@
               <span
                 class="nxs-breadcrumbs__text"
                 [attr.aria-current]="last ? 'page' : null"
-                [attr.title]="last ? entry.item.label : null"
+                [attr.title]="last || entry.index === 0 ? entry.item.label : null"
                 >{{ entry.item.label }}</span
               >
             }

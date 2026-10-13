@@ -226,10 +226,14 @@ describe('NxsBreadcrumbsComponent folding', () => {
     resize?.();
     await render();
     expect(shown()).toEqual(['Root', '…', 'Claim 42 with a rather long name']);
-    // Cut short by the stylesheet, and still readable in full on hover.
-    expect(el().querySelector('[aria-current="page"]')?.getAttribute('title')).toBe(
+    // The first and the last can be cut short by the stylesheet, so both stay readable in full on
+    // hover; the ones in between are either whole or in the menu, and carry no title.
+    const visible = [...el().querySelectorAll('nav .nxs-breadcrumbs__item')];
+    expect(visible.map((item) => item.querySelector('a, span')?.getAttribute('title'))).toEqual([
+      'Root',
+      null,
       'Claim 42 with a rather long name',
-    );
+    ]);
   });
 
   it('unfolds again when the box grows back', async () => {
