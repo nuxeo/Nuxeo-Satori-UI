@@ -21,7 +21,7 @@ describe('Document detail tag chip remove label in name (NXSAT-526)', () => {
     const removeButton = tagsBlock!.match(/<button[\s\S]*?matChipRemove[\s\S]*?<\/button>/)?.[0];
     expect(removeButton, 'tag chip remove button').toBeTruthy();
     expect(removeButton).toContain(
-      "[attr.aria-label]=\"'shared.remove-tag' | translate: { name: tag }\"",
+      '[attr.aria-label]="\'shared.remove-tag\' | translate: { name: tag }"',
     );
     const iconMarkup = removeButton!.match(/<mat-icon[\s\S]*?<\/mat-icon>/)?.[0];
     expect(iconMarkup, 'tag chip remove mat-icon').toBeTruthy();
@@ -34,9 +34,7 @@ describe('Document detail tag chip remove label in name (NXSAT-526)', () => {
 
   it('maps the tag chip remove icon to Material Icons cancel codepoint U+E5C9 in SCSS', () => {
     const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(
-      /mat-icon\.detail-tag-chip-remove-icon::before[\s\S]*content:\s*'\\e5c9'/,
-    );
+    expect(scss).toMatch(/mat-icon\.detail-tag-chip-remove-icon::before[\s\S]*content:\s*'\\e5c9'/);
   });
 
   it('loads tag chip remove icon styles through DocumentDetailComponent styleUrls', () => {
