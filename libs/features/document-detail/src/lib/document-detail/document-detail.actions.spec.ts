@@ -304,8 +304,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
           provide: TagService,
           useValue: {
             searchTags: vi.fn(() => of([])),
-            addTag: vi.fn(() => of({})),
-            removeTag: vi.fn(() => of(undefined)),
+            addTag: vi.fn(() => of([])),
+            removeTag: vi.fn(() => of([])),
           },
         },
         {

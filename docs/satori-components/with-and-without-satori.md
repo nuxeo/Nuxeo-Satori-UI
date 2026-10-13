@@ -396,6 +396,21 @@ A document's comment thread signed in as one of its authors: three comments, the
 
 It follows Web UI's thread: the newest page first, replies only on top-level comments, Edit and Delete for the author and administrators, a confirmation before deleting, Ctrl+Enter to submit.
 
+### Tag editor
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsTagEditorComponent`          |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `documents-tag-editor--editable` |
+
+![Tag editor: without Satori on the left, with Satori on the right](tag-editor-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document's two tags as chips, each with a remove button, and the box that adds one. The same field in both; the theme sets the chip colour, the outline of the box and the type.
+
+It follows Web UI's tag field on the document page: existing tags suggested as you type, the typed text offered as a new tag, each change saved at once, and read-only without Write or on a version or proxy.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -473,6 +488,7 @@ The components in the library today:
 | Properties panel   | —                                                                                                                       | Same component; theme only   |
 | Metadata editor    | —                                                                                                                       | Same component; theme only   |
 | Comments           | —                                                                                                                       | Same component; theme only   |
+| Tag editor         | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

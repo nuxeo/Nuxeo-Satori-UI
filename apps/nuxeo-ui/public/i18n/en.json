@@ -2228,6 +2228,22 @@
       "title": "Title",
       "version": "Version"
     },
+    "tag-editor": {
+      "add": "Add tags to this document",
+      "added": "The tag {{tag}} has been added to the document.",
+      "adding": "Adding tag {{tag}}",
+      "error": {
+        "add": "The tag {{tag}} could not be added.",
+        "forbidden": "You do not have permission to change this document's tags.",
+        "remove": "The tag {{tag}} could not be removed."
+      },
+      "new": "+ {{tag}}",
+      "new-label": "New tag {{tag}}",
+      "none": "No tags",
+      "remove": "Remove tag {{tag}}",
+      "removed": "The tag {{tag}} has been removed from the document.",
+      "tags": "Tags"
+    },
     "toast": {
       "dismiss": "Dismiss",
       "retry": "Retry"

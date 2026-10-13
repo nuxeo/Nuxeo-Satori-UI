@@ -2,6 +2,7 @@ import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, map } from 'rxjs';
 
+import type { NuxeoDocument } from '../models/document.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
 
 export interface TagEntry {
@@ -13,18 +14,29 @@ export class TagService {
   private readonly api = inject(NuxeoApiBase);
   private readonly http = inject(HttpClient);
 
-  addTag(uid: string, label: string): Observable<unknown> {
-    return this.api.post(`/nuxeo/api/v1/id/${uid}/@op/Services.TagDocument`, {
-      params: { tags: label },
-      context: {},
-    });
+  /**
+   * Tags the document and answers with all its tags afterwards. Nuxeo normalises a label — "Q3
+   * Report" is stored as `q3report` — so what to show is the label it stored, not the one typed.
+   */
+  addTag(uid: string, label: string): Observable<string[]> {
+    return this.api
+      .post<NuxeoDocument>(
+        `/nuxeo/api/v1/id/${uid}/@op/Services.TagDocument`,
+        { params: { tags: label }, context: {} },
+        TAGS_SCHEMA,
+      )
+      .pipe(map(tagLabels));
   }
 
-  removeTag(uid: string, label: string): Observable<unknown> {
-    return this.api.post(`/nuxeo/api/v1/id/${uid}/@op/Services.UntagDocument`, {
-      params: { tags: label },
-      context: {},
-    });
+  /** Takes the tag off the document and answers with the tags it still has. */
+  removeTag(uid: string, label: string): Observable<string[]> {
+    return this.api
+      .post<NuxeoDocument>(
+        `/nuxeo/api/v1/id/${uid}/@op/Services.UntagDocument`,
+        { params: { tags: label }, context: {} },
+        TAGS_SCHEMA,
+      )
+      .pipe(map(tagLabels));
   }
 
   searchTags(term: string): Observable<string[]> {
@@ -63,3 +75,17 @@ interface TagSuggestion {
   readonly id: string;
   readonly displayLabel?: string;
 }
+
+/** Asks for the schema holding `nxtag:tags`, which the operations' answer otherwise leaves out. */
+const TAGS_SCHEMA = { properties: 'facetedTag' };
+
+const tagLabels = (doc: NuxeoDocument | null): string[] => {
+  const tags = doc?.properties?.['nxtag:tags'];
+  return Array.isArray(tags)
+    ? tags
+        .map((tag: unknown) =>
+          typeof tag === 'string' ? tag : ((tag as TagEntry | null)?.label ?? ''),
+        )
+        .filter(Boolean)
+    : [];
+};

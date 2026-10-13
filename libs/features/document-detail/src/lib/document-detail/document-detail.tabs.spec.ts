@@ -175,8 +175,8 @@ const mockDirectoryService = {
 
 const mockTagService = {
   searchTags: vi.fn((_term: string): Observable<string[]> => of([])),
-  addTag: vi.fn((_uid: string, _label: string): Observable<unknown> => of({})),
-  removeTag: vi.fn((_uid: string, _label: string): Observable<void> => of(undefined)),
+  addTag: vi.fn((_uid: string, _label: string): Observable<string[]> => of([])),
+  removeTag: vi.fn((_uid: string, _label: string): Observable<string[]> => of([])),
 };
 
 const mockAiGateway = {
@@ -288,7 +288,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
     mockDirectoryService.getEventCategories.mockReturnValue(of([]));
     mockDirectoryService.getEntries.mockReturnValue(of([]));
     mockDirectoryService.getAllL10nEntries.mockReturnValue(of([]));
-    mockTagService.addTag.mockReturnValue(of({}));
+    mockTagService.addTag.mockReturnValue(of([]));
     mockAiGateway.summarize.mockReturnValue(of({ summary: 'ok' }));
     mockAiGateway.suggestTags.mockReturnValue(of({ tags: [] }));
     mockAiGateway.classify.mockReturnValue(of({ category: 'Invoice' }));
@@ -1320,9 +1320,11 @@ describe('DocumentDetailComponent — tab surfaces', () => {
       component.suggestTags();
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['invoice', 'q3']);
 
+      mockTagService.addTag.mockReturnValue(of(['invoice']));
       component.applyAiTag('invoice');
 
       expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'invoice');
+      expect(component.tags()).toEqual(['invoice']);
       expect(component.aiSuggestedTags().map((t) => t.label)).toEqual(['q3']);
       expect(toast.show).toHaveBeenCalledWith('Tag "invoice" applied');
     });

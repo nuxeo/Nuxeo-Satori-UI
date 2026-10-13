@@ -1437,76 +1437,15 @@
                   <span class="no-publications">—</span>
                 }
               </div>
-              <div nxsTags class="prop-field--tags">
-                @if (canWriteDoc()) {
-                  <mat-form-field
-                    appearance="fill"
-                    class="tags-suggestion-field"
-                    subscriptSizing="dynamic"
-                  >
-                    <mat-chip-grid
-                      #tagChipGrid
-                      [attr.aria-label]="
-                        'document-detail.document-detail.document-tags' | translate
-                      "
-                    >
-                      @for (tag of tags(); track $index) {
-                        <mat-chip-row (removed)="removeInlineTag(tag)">
-                          {{ tag }}
-                          <button
-                            type="button"
-                            matChipRemove
-                            [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
-                          >
-                            <mat-icon
-                              aria-hidden="true"
-                              class="detail-tag-chip-remove-icon"
-                            ></mat-icon>
-                          </button>
-                        </mat-chip-row>
-                      }
-                      <input
-                        name="tagInput"
-                        [placeholder]="
-                          tags().length
-                            ? ''
-                            : ('document-detail.document-detail.add-a-tag' | translate)
-                        "
-                        [matChipInputFor]="tagChipGrid"
-                        [matAutocomplete]="tagAuto"
-                        [(ngModel)]="tagInput"
-                        [disabled]="tagAdding()"
-                        (ngModelChange)="onTagSearch($event)"
-                        (matChipInputTokenEnd)="addInlineTagFromChip($event)"
-                      />
-                    </mat-chip-grid>
-                    <mat-icon matSuffix>arrow_drop_down</mat-icon>
-                  </mat-form-field>
-                  <mat-autocomplete
-                    #tagAuto="matAutocomplete"
-                    autoActiveFirstOption
-                    (optionSelected)="selectTag($event)"
-                  >
-                    @for (result of tagSearchResults(); track result) {
-                      <mat-option [value]="result">{{ result }}</mat-option>
-                    }
-                    @if (showCreateTagOption()) {
-                      <mat-option [value]="tagInput">
-                        <span class="create-tag-option">+ {{ tagInput }}</span>
-                      </mat-option>
-                    }
-                  </mat-autocomplete>
-                } @else {
-                  <div class="tags-readonly">
-                    @for (tag of tags(); track tag) {
-                      <span class="tags-readonly-chip">{{ tag }}</span>
-                    }
-                    @if (tags().length === 0) {
-                      <span class="tags-empty">—</span>
-                    }
-                  </div>
-                }
-              </div>
+              @if (doc(); as tagged) {
+                <nxs-tag-editor
+                  nxsTags
+                  [documentUid]="tagged.uid"
+                  [tags]="tags()"
+                  [readOnly]="!canTag()"
+                  (tagsChange)="setTags($event)"
+                />
+              }
               <lib-document-layout
                 [document]="doc()"
                 mode="metadata"

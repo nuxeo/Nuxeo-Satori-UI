@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-64 exported symbol(s).
+65 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -722,6 +722,27 @@ class NxsTagComponent implements NxsTagInputs {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagComponent, "nxs-tag", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
     }
 }
+class NxsTagEditorComponent {
+    readonly documentUid: _angular_core.InputSignal<string>;
+    readonly tags: _angular_core.InputSignal<readonly string[]>;
+    readonly readOnly: _angular_core.InputSignal<boolean>;
+    readonly tagsChange: _angular_core.OutputEmitterRef<readonly string[]>;
+    protected readonly id: string;
+    protected readonly saved: _angular_core.WritableSignal<readonly string[]>;
+    protected readonly adding: _angular_core.WritableSignal<readonly string[]>;
+    protected readonly removing: _angular_core.WritableSignal<ReadonlySet<string>>;
+    protected readonly term: _angular_core.WritableSignal<string>;
+    protected readonly shown: _angular_core.Signal<string[]>;
+    protected readonly options: _angular_core.Signal<readonly NxsTagOption[]>;
+    constructor();
+    protected typed(value: string): void;
+    protected picked(event: MatAutocompleteSelectedEvent): void;
+    protected entered(event: MatChipInputEvent): void;
+    protected remove(tag: string): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTagEditorComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagEditorComponent, "nxs-tag-editor", never, { "documentUid": { "alias": "documentUid"; "required": true; "isSignal": true; }; "tags": { "alias": "tags"; "required": false; "isSignal": true; }; "readOnly": { "alias": "readOnly"; "required": false; "isSignal": true; }; }, { "tagsChange": "tagsChange"; }, never, never, true, never>;
+    }
+}
 interface NxsTagInputs {
     readonly label: InputSignal<string>;
     readonly color: InputSignal<NxsTagColor>;
@@ -1071,7 +1092,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo-satori/platform/nuxeo-client
 
-313 exported symbol(s).
+314 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -1814,6 +1835,7 @@ interface NuxeoDocument {
     isTrashed?: boolean;
     isCheckedOut?: boolean;
     isVersion?: boolean;
+    isProxy?: boolean;
     versionableId?: string;
     isLatestVersion?: boolean;
     isLatestMajorVersion?: boolean;
@@ -2249,9 +2271,10 @@ interface SynchronizationRootRow {
     }
 }
 class TagService {
-    addTag(uid: string, label: string): Observable<unknown>;
-    removeTag(uid: string, label: string): Observable<unknown>;
+    addTag(uid: string, label: string): Observable<string[]>;
+    removeTag(uid: string, label: string): Observable<string[]>;
     searchTags(term: string): Observable<string[]>;
+    suggestTags(term: string): Observable<string[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<TagService, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<TagService>;
     }
@@ -2429,6 +2452,7 @@ function canPasteClipboard(items: ClipboardDoc[], target: NuxeoDocument | null |
 function canRemoveDocument(doc: NuxeoDocument | null | undefined): boolean;
 function canShowRemoveDocumentAction(doc: NuxeoDocument | null | undefined): boolean;
 function canShowWriteDocumentAction(doc: NuxeoDocument | null | undefined): boolean;
+function canTagDocument(doc: NuxeoDocument | null | undefined): boolean;
 function canViewDocumentAuditLog(doc: NuxeoDocument | null | undefined): boolean;
 function canWriteDocument(doc: NuxeoDocument | null | undefined): boolean;
 function createExpiresErrorStateMatcher(isInvalid: () => boolean): {

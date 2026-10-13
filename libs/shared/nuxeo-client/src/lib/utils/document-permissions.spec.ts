@@ -5,6 +5,7 @@ import {
   canRemoveDocument,
   canShowRemoveDocumentAction,
   canShowWriteDocumentAction,
+  canTagDocument,
   canViewDocumentAuditLog,
   canWriteDocument,
   hasDocumentPermission,
@@ -69,6 +70,19 @@ describe('document-permissions', () => {
 
   it('canWriteDocument is true when user has WriteProperties (Web UI note parity)', () => {
     expect(canWriteDocument(docWithPermissions(['Read', WRITE_PROPERTIES]))).toBe(true);
+  });
+
+  it('canTagDocument follows Web UI: Write on the document itself', () => {
+    expect(canTagDocument(docWithPermissions(['Read', WRITE_DOCUMENT]))).toBe(true);
+    expect(canTagDocument(docWithPermissions(['Read']))).toBe(false);
+    expect(canTagDocument(docWithPermissions(['Read', WRITE_PROPERTIES]))).toBe(false);
+    expect(canTagDocument(null)).toBe(false);
+  });
+
+  it('canTagDocument is false on a version and on a proxy, whatever the permissions', () => {
+    const writable = docWithPermissions(['Read', WRITE_DOCUMENT]);
+    expect(canTagDocument({ ...writable, isVersion: true })).toBe(false);
+    expect(canTagDocument({ ...writable, isProxy: true })).toBe(false);
   });
 
   it('canAddChildren is false for read-only users', () => {

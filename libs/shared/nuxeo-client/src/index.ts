@@ -263,6 +263,7 @@ export {
   canRemoveDocument,
   canShowRemoveDocumentAction,
   canShowWriteDocumentAction,
+  canTagDocument,
   canViewDocumentAuditLog,
   canWriteDocument,
   hasDocumentPermission,

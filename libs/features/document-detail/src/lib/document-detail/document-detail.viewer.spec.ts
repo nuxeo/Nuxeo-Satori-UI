@@ -10,7 +10,6 @@ import {
   withDisabledInitialNavigation,
   type ParamMap,
 } from '@angular/router';
-import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { MatDialog } from '@angular/material/dialog';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -100,19 +99,6 @@ function auditEntry(over: Partial<AuditEntry> = {}): AuditEntry {
   };
 }
 
-/**
- * A `MatAutocompleteSelectedEvent` carrying just what `selectTag` reads.
- *
- * Built on the real prototype rather than cast from a literal: the class takes a live
- * `MatAutocomplete` and `MatOption` that would have to be rendered to construct.
- */
-function tagSelection(value: string, deselect: () => void): MatAutocompleteSelectedEvent {
-  return Object.assign(Object.create(MatAutocompleteSelectedEvent.prototype), {
-    source: null,
-    option: { value, deselect },
-  });
-}
-
 interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
@@ -158,8 +144,8 @@ const mockARender = {
 
 const mockTagService = {
   searchTags: vi.fn((): Observable<string[]> => of([])),
-  addTag: vi.fn((): Observable<unknown> => of({})),
-  removeTag: vi.fn((): Observable<void> => of(undefined)),
+  addTag: vi.fn((): Observable<string[]> => of([])),
+  removeTag: vi.fn((): Observable<string[]> => of([])),
 };
 
 const mockTaskService = { getDocumentTasks: vi.fn((): Observable<unknown[]> => of([])) };
@@ -249,7 +235,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
     mockARender.isAvailable.mockReturnValue(of(false));
     mockARender.getPreviewerUrl.mockReturnValue(of(null));
     mockTagService.searchTags.mockReturnValue(of([]));
-    mockTagService.addTag.mockReturnValue(of({}));
+    mockTagService.addTag.mockReturnValue(of([]));
     mockTaskService.getDocumentTasks.mockReturnValue(of([]));
     mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([]));
     mockBrowseService.updateDocument.mockReturnValue(of(doc()));
@@ -920,95 +906,6 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
       expect(component.coverageVocabulary()).toEqual([]);
       expect(component.subjectVocabulary()).toEqual([]);
-    });
-  });
-
-  describe('tag autocomplete', () => {
-    it('offers matching tags the document does not already have', () => {
-      vi.useFakeTimers();
-      mockTagService.searchTags.mockReturnValue(of(['invoice', 'existing']));
-      buildSync(doc({ properties: { 'nxtag:tags': [{ label: 'existing' }] } }));
-      component.tagInput = 'in';
-
-      component.onTagSearch('in');
-      vi.advanceTimersByTime(300);
-
-      expect(component.tagSearchResults()).toEqual(['invoice']);
-      // "in" is not itself a tag, so creating it is offered.
-      expect(component.showCreateTagOption()).toBe(true);
-    });
-
-    it('does not offer to create a tag that already exists verbatim', () => {
-      vi.useFakeTimers();
-      mockTagService.searchTags.mockReturnValue(of(['invoice']));
-      buildSync();
-      component.tagInput = 'invoice';
-
-      component.onTagSearch('invoice');
-      vi.advanceTimersByTime(300);
-
-      expect(component.showCreateTagOption()).toBe(false);
-    });
-
-    it('offers nothing for an empty term', () => {
-      vi.useFakeTimers();
-      buildSync();
-      component.tagInput = '';
-
-      component.onTagSearch('');
-      vi.advanceTimersByTime(300);
-
-      expect(mockTagService.searchTags).not.toHaveBeenCalled();
-      expect(component.tagSearchResults()).toEqual([]);
-    });
-
-    it('offers nothing when the tag search itself fails', () => {
-      vi.useFakeTimers();
-      mockTagService.searchTags.mockReturnValue(throwError(() => new Error('500')));
-      buildSync();
-      component.tagInput = 'in';
-
-      component.onTagSearch('in');
-      vi.advanceTimersByTime(300);
-
-      expect(component.tagSearchResults()).toEqual([]);
-    });
-
-    it('applies the tag chosen from the autocomplete and clears the input', async () => {
-      await build();
-      const deselect = vi.fn();
-
-      component.selectTag(tagSelection('invoice', deselect));
-
-      expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'invoice');
-      expect(component.tagInput).toBe('');
-      expect(deselect).toHaveBeenCalled();
-    });
-
-    it('ignores an autocomplete selection with no value', async () => {
-      await build();
-
-      component.selectTag(tagSelection('   ', vi.fn()));
-
-      expect(mockTagService.addTag).not.toHaveBeenCalled();
-    });
-
-    it('does not add the tag twice when the chip input fires after the autocomplete', async () => {
-      await build();
-      component.selectTag(tagSelection('invoice', vi.fn()));
-      mockTagService.addTag.mockClear();
-
-      const chipInput = { clear: vi.fn() };
-      component.addInlineTagFromChip(
-        Object.assign(Object.create(null), {
-          value: 'invoice',
-          chipInput,
-          input: document.createElement('input'),
-        }),
-      );
-
-      expect(mockTagService.addTag).not.toHaveBeenCalled();
-      expect(chipInput.clear).toHaveBeenCalled();
     });
   });
 

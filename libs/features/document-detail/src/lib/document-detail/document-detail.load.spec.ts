@@ -11,7 +11,6 @@ import {
   Router,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { MatChipInputEvent } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
@@ -159,8 +158,8 @@ const mockARenderService = {
   getPreviewerUrl: vi.fn((): Observable<string | null> => of(null)),
 };
 const mockTagService = {
-  addTag: vi.fn((): Observable<unknown> => of({})),
-  removeTag: vi.fn((): Observable<void> => of(undefined)),
+  addTag: vi.fn((): Observable<string[]> => of([])),
+  removeTag: vi.fn((): Observable<string[]> => of([])),
   searchTags: vi.fn((): Observable<unknown[]> => of([])),
 };
 const mockAiGateway = {
@@ -952,84 +951,35 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
 
-  describe('inline tags', () => {
-    /**
-     * Tags arrive through the Material chip input, so the entry point takes a
-     * `MatChipInputEvent` and clears the chip itself. Built here rather than calling the private
-     * `applyInlineTag` directly, so the clear-and-apply sequencing is exercised too.
-     */
-    function chipInput(value: string): MatChipInputEvent {
-      return {
-        value,
-        chipInput: { clear: vi.fn() },
-        input: document.createElement('input'),
-      } as unknown as MatChipInputEvent;
-    }
+  describe('tags', () => {
+    it('keeps the document in step with the tags the tag editor saved', async () => {
+      await build(doc({ properties: { 'nxtag:tags': [{ label: 'old', username: 'jdoe' }] } }));
 
-    it('appends a new tag to the document without refetching it', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'existing' }] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
+      component.setTags(['old', 'q3report']);
 
-      component.addInlineTagFromChip(chipInput('fresh'));
-
-      expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'fresh');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['existing', 'fresh']);
-      expect(component.tagAdding()).toBe(false);
+      expect(component.doc()?.properties['nxtag:tags']).toEqual([
+        { label: 'old' },
+        { label: 'q3report' },
+      ]);
+      expect(component.tags()).toEqual(['old', 'q3report']);
     });
 
-    it('normalises string tags to objects when appending', async () => {
-      // Nuxeo returns `nxtag:tags` as strings on some deployments and objects on others; the
-      // component normalises so the template does not have to.
-      await build(doc({ properties: { 'nxtag:tags': ['plain'] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
-
-      component.addInlineTagFromChip(chipInput('added'));
-
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags).toEqual([{ label: 'plain' }, { label: 'added' }]);
+    it('lets a user with Write tag the document itself, as Web UI does', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(true);
     });
 
-    it('does not duplicate a tag that is already present', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'dup' }] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
-
-      component.addInlineTagFromChip(chipInput('dup'));
-
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['dup']);
+    it('does not let a user tag without Write, even with WriteProperties', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read', 'WriteProperties'] } }));
+      expect(component.canTag()).toBe(false);
     });
 
-    it('releases the adding flag and warns when adding a tag fails', async () => {
-      await build();
-      mockTagService.addTag.mockReturnValue(throwError(() => new Error('boom')));
+    it('does not let anyone tag a version or a proxy', async () => {
+      await build(doc({ isVersion: true, contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(false);
 
-      component.addInlineTagFromChip(chipInput('nope'));
-
-      expect(component.tagAdding()).toBe(false);
-      expect(toast.error).toHaveBeenCalledWith('Failed to add tag');
-    });
-
-    it('removes a tag from the document', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'keep' }, { label: 'drop' }] } }));
-      mockTagService.removeTag.mockReturnValue(of(undefined));
-
-      component.removeInlineTag('drop');
-
-      expect(mockTagService.removeTag).toHaveBeenCalledWith('doc-1', 'drop');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['keep']);
-    });
-
-    it('warns and leaves the tags alone when removal fails', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'keep' }] } }));
-      mockTagService.removeTag.mockReturnValue(throwError(() => new Error('boom')));
-
-      component.removeInlineTag('keep');
-
-      expect(toast.error).toHaveBeenCalledWith('Failed to remove tag');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['keep']);
+      await build(doc({ isProxy: true, contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(false);
     });
   });
 

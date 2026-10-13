@@ -46,11 +46,6 @@ import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
-import { MatChipsModule, MatChipInputEvent } from '@angular/material/chips';
-import {
-  MatAutocompleteModule,
-  MatAutocompleteSelectedEvent,
-} from '@angular/material/autocomplete';
 
 import {
   NuxeoDocument,
@@ -88,6 +83,7 @@ import {
   shouldProbeContentLakeIngestStatus,
   supportsContentLakeIngest,
   canManageDocumentPermissions,
+  canTagDocument,
   canWriteDocument,
   canRemoveDocument,
   canViewDocumentAuditLog,
@@ -145,15 +141,12 @@ import { DocumentLayoutComponent } from '@agentic-ui/shared/document-layouts';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   catchError,
-  debounceTime,
-  distinctUntilChanged,
   finalize,
   forkJoin,
   map,
   merge,
   Observable,
   of,
-  Subject,
   switchMap,
   throwError,
   timer,
@@ -201,6 +194,7 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsCommentExtraDirective,
   NxsCommentsComponent,
+  NxsTagEditorComponent,
   NxsDetailsPanelComponent,
   NxsDocumentToolbarComponent,
   NxsDriveDialogComponent,
@@ -309,6 +303,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   imports: [
     NxsCommentExtraDirective,
     NxsCommentsComponent,
+    NxsTagEditorComponent,
     NxsDetailsPanelComponent,
     NxsDocumentToolbarComponent,
     NxsErrorStateComponent,
@@ -335,8 +330,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatSortModule,
     MatTableModule,
     MatPaginatorModule,
-    MatChipsModule,
-    MatAutocompleteModule,
     DocumentLayoutComponent,
     DocumentViewerComponent,
     ExtensionOutletComponent,
@@ -351,7 +344,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   styleUrls: [
     './document-detail.scss',
     './document-detail-go-back-icon.scss',
-    './document-detail-tag-chip-remove-icon.scss',
     './document-detail-go-back-focus.scss',
   ],
 })
@@ -656,15 +648,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly coverageVocabulary = signal<L10nDirectoryEntry[]>([]);
   readonly subjectVocabulary = signal<L10nDirectoryEntry[]>([]);
 
-  // Tag management state (nuxeo-tag-suggestion style)
-  tagInput = '';
-  readonly tagSearchResults = signal<string[]>([]);
-  readonly showCreateTagOption = signal(false);
-  readonly tagAdding = signal(false);
-  private readonly tagSearch$ = new Subject<string>();
-  /** Autocomplete selection also fires matChipInputTokenEnd — skip the duplicate add. */
-  private skipNextChipInput = false;
-
   /** The thread `nxs-comments` loaded, comments and replies, for the sentiment analysis. */
   readonly comments = signal<readonly NuxeoComment[]>([]);
 
@@ -916,6 +899,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
   readonly canWriteDoc = computed(() => canWriteDocument(this.doc()));
+  /** Web UI's `isTaggable`: Write on the document itself, not a version or a proxy. */
+  readonly canTag = computed(() => canTagDocument(this.doc()));
   readonly canRemoveDoc = computed(() => canRemoveDocument(this.doc()));
 
   permissionLabel(permission: string): string {
@@ -1067,25 +1052,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.registerToolbarHandlers();
-    this.tagSearch$
-      .pipe(
-        debounceTime(250),
-        distinctUntilChanged(),
-        switchMap((term) =>
-          term.length > 0
-            ? this.tagService.searchTags(term).pipe(catchError(() => of([])))
-            : of([]),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((results) => {
-        const existing = this.tags();
-        const filtered = results.filter((r) => !existing.includes(r));
-        this.tagSearchResults.set(filtered);
-        const exactMatch = results.some((r) => r.toLowerCase() === this.tagInput.toLowerCase());
-        this.showCreateTagOption.set(this.tagInput.trim().length > 0 && !exactMatch);
-      });
-
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const uid = params.get('uid');
       if (!uid) {
@@ -1231,7 +1197,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   applyAiTag(tagLabel: string): void {
     if (!this.docUid) return;
     this.tagService.addTag(this.docUid, tagLabel).subscribe({
-      next: () => {
+      next: (labels) => {
+        this.setTags(labels);
         this.aiSuggestedTags.update((tags) => tags.filter((t) => t.label !== tagLabel));
         this.toast.show(this.translate.instant('common.tag-applied', { name: tagLabel }));
       },
@@ -1240,97 +1207,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  onTagSearch(term: string): void {
-    this.tagSearch$.next(term);
-  }
-
-  selectTag(event: MatAutocompleteSelectedEvent): void {
-    const label = String(event.option.value ?? '').trim();
-    if (!label) return;
-    this.skipNextChipInput = true;
-    this.clearTagInput();
-    event.option.deselect();
-    this.applyInlineTag(label);
-  }
-
-  addInlineTagFromChip(event: MatChipInputEvent): void {
-    if (this.skipNextChipInput) {
-      this.skipNextChipInput = false;
-      event.chipInput.clear();
-      this.clearTagInput();
-      return;
-    }
-    const label = (event.value ?? '').trim();
-    event.chipInput.clear();
-    this.clearTagInput();
-    if (label) this.applyInlineTag(label);
-  }
-
-  private clearTagInput(): void {
-    this.tagInput = '';
-    this.tagSearchResults.set([]);
-    this.showCreateTagOption.set(false);
-    this.tagSearch$.next('');
-  }
-
-  private applyInlineTag(label: string): void {
-    if (!label || !this.docUid || this.tagAdding()) return;
-    this.tagAdding.set(true);
-    this.tagService
-      .addTag(this.docUid, label)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.doc.update((d) => {
-            if (!d) return d;
-            const raw = (d.properties['nxtag:tags'] as Array<{ label: string } | string>) ?? [];
-            const normalized: Array<{ label: string }> = raw.map((t) =>
-              typeof t === 'string' ? { label: t } : t,
-            );
-            const alreadyExists = normalized.some((t) => t.label === label);
-            return {
-              ...d,
-              properties: {
-                ...d.properties,
-                'nxtag:tags': alreadyExists ? normalized : [...normalized, { label }],
-              },
-            };
-          });
-          this.clearTagInput();
-          this.tagAdding.set(false);
+  /** Keeps the document's `nxtag:tags` in step with what Nuxeo answered to a tag change. */
+  setTags(labels: readonly string[]): void {
+    this.doc.update(
+      (d) =>
+        d && {
+          ...d,
+          properties: { ...d.properties, 'nxtag:tags': labels.map((label) => ({ label })) },
         },
-        error: () => {
-          this.toast.error(this.translate.instant('browse.message.failed-to-add-tag'));
-          this.tagAdding.set(false);
-        },
-      });
-  }
-
-  removeInlineTag(tagLabel: string): void {
-    if (!this.docUid) return;
-    this.tagService
-      .removeTag(this.docUid, tagLabel)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.doc.update((d) => {
-            if (!d) return d;
-            const raw = (d.properties['nxtag:tags'] as Array<{ label: string } | string>) ?? [];
-            const normalized: Array<{ label: string }> = raw.map((t) =>
-              typeof t === 'string' ? { label: t } : t,
-            );
-            return {
-              ...d,
-              properties: {
-                ...d.properties,
-                'nxtag:tags': normalized.filter((t) => t.label !== tagLabel),
-              },
-            };
-          });
-        },
-        error: () =>
-          this.toast.error(this.translate.instant('browse.message.failed-to-remove-tag')),
-      });
+    );
   }
 
   classifyDocument(): void {

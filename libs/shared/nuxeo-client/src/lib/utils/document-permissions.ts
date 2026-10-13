@@ -65,6 +65,15 @@ export function canWriteDocument(doc: NuxeoDocument | null | undefined): boolean
   return hasDocumentPermission(doc, WRITE_DOCUMENT) || hasDocumentPermission(doc, WRITE_PROPERTIES);
 }
 
+/**
+ * Web UI's `isTaggable`: the document itself, not a proxy or a version, and the user holds Write.
+ * Nuxeo accepts a tag from a reader too, but Web UI does not offer it, and only a user with Write
+ * may take a tag off.
+ */
+export function canTagDocument(doc: NuxeoDocument | null | undefined): boolean {
+  return !!doc && !doc.isProxy && !doc.isVersion && hasDocumentPermission(doc, WRITE_DOCUMENT);
+}
+
 /** True when the current user can create child documents in a folder. */
 export function canAddChildren(doc: NuxeoDocument | null | undefined): boolean {
   return hasDocumentPermission(doc, ADD_CHILDREN);

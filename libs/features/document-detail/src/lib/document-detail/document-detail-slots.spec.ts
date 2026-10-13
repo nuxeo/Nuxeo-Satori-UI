@@ -408,6 +408,41 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       });
     });
 
+    describe('tags', () => {
+      const editor = (): HTMLElement | null =>
+        fixture.nativeElement.querySelector('.properties-panel nxs-tag-editor');
+      const tagged = (over: Partial<NuxeoDocument> = {}): NuxeoDocument =>
+        doc({ facets: ['NXTag'], properties: { 'nxtag:tags': [{ label: 'q3' }] }, ...over });
+
+      it('offers the tag editor in the panel’s Tags field to a user with Write', async () => {
+        await render({}, tagged());
+
+        expect(editor()?.closest('dd')).not.toBeNull();
+        expect(editor()?.querySelector('input')).not.toBeNull();
+        expect(editor()?.textContent).toContain('q3');
+      });
+
+      it('shows the tags read-only to a reader, as Web UI does', async () => {
+        await render({}, tagged({ contextParameters: { permissions: ['Read'] } }));
+
+        expect(editor()?.querySelector('input')).toBeNull();
+        expect(editor()?.textContent).toContain('q3');
+      });
+
+      it('shows the tags read-only on a version and on a proxy, whatever the permissions', async () => {
+        await render({}, tagged({ isVersion: true }));
+        expect(editor()?.querySelector('input')).toBeNull();
+
+        await render({}, tagged({ isProxy: true }));
+        expect(editor()?.querySelector('input')).toBeNull();
+      });
+
+      it('shows no Tags field on a document without the NXTag facet', async () => {
+        await render({}, doc());
+        expect(editor()).toBeNull();
+      });
+    });
+
     it('lists the collections the document is in, leaving out Favorites (NXSAT-191)', async () => {
       await render(
         {},

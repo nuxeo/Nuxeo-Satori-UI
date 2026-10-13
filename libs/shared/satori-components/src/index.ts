@@ -11,6 +11,7 @@ export {
   type NxsCommentContext,
 } from './lib/comments/comment-extra.directive';
 export { NxsCommentsComponent } from './lib/comments/comments.component';
+export { NxsTagEditorComponent } from './lib/tag-editor/tag-editor.component';
 export {
   NxsDetailsPanelComponent,
   type NxsDetailsPanelTab,

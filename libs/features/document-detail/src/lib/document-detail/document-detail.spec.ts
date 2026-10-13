@@ -123,7 +123,7 @@ const mockARenderService = {
 };
 
 const mockTagService = {
-  addTag: () => of(null),
+  addTag: () => of([]),
 };
 
 const mockAiGatewayService = {

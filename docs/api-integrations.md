@@ -535,6 +535,38 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 ---
 
+## 8b. Document Detail — Tags (NXSAT-308)
+
+| Field           | Value                                                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `TagService` (`libs/shared/nuxeo-client/src/lib/services/tag.service.ts`)                                               |
+| **Methods**     | `addTag(uid, label)` / `removeTag(uid, label)` / `suggestTags(term)`                                                    |
+| **HTTP Method** | `POST`                                                                                                                  |
+| **Endpoints**   | `/nuxeo/api/v1/id/{uid}/@op/Services.TagDocument` / `Services.UntagDocument`; `/nuxeo/api/v1/automation/Tag.Suggestion` |
+
+**Request Payload:** `{ "params": { "tags": "<label>" }, "context": {} }` to tag and untag;
+`{ "params": { "searchTerm": "<term>" }, "context": {} }` to suggest.
+
+**Headers:** `properties: facetedTag` on tag and untag, so the answer — the document — carries
+`nxtag:tags`. Without it the operations' answer leaves the schema out.
+
+**Response (200 OK):** `addTag` and `removeTag` answer with the labels of the document's tags
+afterwards; `Tag.Suggestion` with `[{ "id", "displayLabel" }]`.
+
+**Behaviour measured on Nuxeo LTS 2025 (2026-10-13):**
+
+- Nuxeo normalises a label: "B2 Hello World" is stored as `b2helloworld`, "Writer Tag!" as
+  `writertag!`. Show the label from the answer, not the one typed.
+- A user with Read alone may tag (200) but not untag (500, "Failed to invoke operation"). A user with
+  Write may untag a tag someone else added (200).
+- Web UI's `isTaggable` — `canTagDocument(doc)` here — offers neither without Write, nor on a version
+  or a proxy.
+
+**Used by:** `nxs-tag-editor` in the document page's Properties panel, and the AI "Suggested tags"
+card, which refreshes the document's tags from `addTag`'s answer.
+
+---
+
 ## 9. Document Detail — Blob Download
 
 | Field           | Value                                                                                            |
