@@ -17,9 +17,9 @@ move to another folder in one step.
   what it has not loaded, and folds away the branch it left.
 - **The current folder is marked.** The folder on screen is `aria-current="page"` and the selected
   row, styled as such. A path the tree cannot show, such as a document's, marks its nearest folder.
-- **Arrows only where there is something to open.** For each level it asks Nuxeo once which folders
-  hold a folder, as Nuxeo Web UI does, so a leaf has no expand arrow. When Nuxeo cannot say, the
-  arrow stays rather than hiding a branch.
+- **Arrows only where there is something to open.** For each level it asks Nuxeo, in one query,
+  which folders hold a folder, so a leaf has no expand arrow, as in Nuxeo Web UI. When Nuxeo cannot
+  say, the arrow stays rather than hiding a branch.
 - **No silent failure.** If the tree cannot load, it shows an error state chosen by status: a 403
   says the user has no access, a server error offers Retry. If one folder's folders fail, a row under
   it says so and retries when activated, and the failure is announced.

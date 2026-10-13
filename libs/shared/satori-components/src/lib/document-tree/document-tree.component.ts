@@ -66,9 +66,9 @@ interface TreeRow {
  * current page.
  *
  * It reads the repository itself through `BrowseService`, with the application's credentials:
- * a level's folders through `getNavTreeChildren`, as Nuxeo Web UI's tree does, and in one query
- * per level which of them hold a folder, so a leaf has no expand arrow. Choosing a folder emits
- * it; the host navigates.
+ * a level's folders through `getNavTreeChildren` (the `tree_children` page provider Nuxeo Web UI's
+ * tree uses), and in one query per level which of them hold a folder, so a leaf has no expand
+ * arrow, as in Web UI. Choosing a folder emits it; the host navigates.
  *
  * A failure is never silent: the tree's own failure is an error state chosen by status, and a
  * folder whose children fail gets a row saying so, which retries, and an announcement.
@@ -125,9 +125,7 @@ export class NxsDocumentTreeComponent {
     const path = normalizeNuxeoPath(this.currentPath());
     if (isRepositoryRootPath(path)) return [root];
     const domainPath = topLevelNuxeoFolderPath(path);
-    const domain = domainPath
-      ? root.children.find((child) => nuxeoPathsEqualFlexible(child.doc.path, domainPath))
-      : undefined;
+    const domain = domainPath ? nodeAt(root.children, domainPath) : undefined;
     return domain ? [domain] : [root];
   });
 
@@ -173,23 +171,29 @@ export class NxsDocumentTreeComponent {
     const path = normalizeNuxeoPath(this.currentPath());
     const target = nuxeoPathSegments(path);
     let best: TreeNode | null = null;
-    let bestDepth = -1;
+    // Deeper wins; at the same depth a folder whose path matches exactly wins over one that
+    // matches only ignoring case and spacing, so of `Folder` and `folder` the right one is marked.
+    let bestRank = -1;
     for (const row of this.rows()) {
       if (row.kind !== 'node') continue;
       const node = row.node;
       if (node.root) {
-        if (bestDepth < 0) {
+        if (bestRank < 0) {
           best = node;
-          bestDepth = 0;
+          bestRank = 0;
         }
         continue;
       }
-      const segments = nuxeoPathSegments(node.doc.path ?? '');
+      const own = normalizeNuxeoPath(node.doc.path ?? '');
+      const segments = nuxeoPathSegments(own);
       const onPath =
         segments.length <= target.length && segments.every((segment, i) => segment === target[i]);
-      if (onPath && segments.length > bestDepth) {
+      if (!onPath) continue;
+      const exact = path === own || path.startsWith(`${own}/`);
+      const rank = segments.length * 2 + (exact ? 1 : 0);
+      if (rank > bestRank) {
         best = node;
-        bestDepth = segments.length;
+        bestRank = rank;
       }
     }
     return best?.key ?? null;
@@ -392,15 +396,10 @@ export class NxsDocumentTreeComponent {
     root.expanded = true;
     const step = (nodes: readonly TreeNode[], index: number): void => {
       if (generation !== this.syncGeneration) return;
+      const next = index < prefixes.length ? nodeAt(nodes, prefixes[index]) : undefined;
       for (const node of nodes) {
-        if (index >= prefixes.length || !nuxeoPathsEqualFlexible(node.doc.path, prefixes[index])) {
-          collapse(node);
-        }
+        if (node !== next) collapse(node);
       }
-      const next =
-        index < prefixes.length
-          ? nodes.find((node) => nuxeoPathsEqualFlexible(node.doc.path, prefixes[index]))
-          : undefined;
       if (!next) {
         this.bump();
         return;
@@ -501,4 +500,16 @@ export class NxsDocumentTreeComponent {
 function collapse(node: TreeNode): void {
   node.expanded = false;
   for (const child of node.children) collapse(child);
+}
+
+/**
+ * The folder at `path` among siblings: the one whose path is exactly `path`, else one that differs
+ * only in case or spacing, since the path in the address may not match Nuxeo's casing.
+ */
+function nodeAt(nodes: readonly TreeNode[], path: string): TreeNode | undefined {
+  const exact = normalizeNuxeoPath(path);
+  return (
+    nodes.find((node) => normalizeNuxeoPath(node.doc.path ?? '') === exact) ??
+    nodes.find((node) => nuxeoPathsEqualFlexible(node.doc.path ?? '', path))
+  );
 }

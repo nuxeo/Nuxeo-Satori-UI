@@ -113,10 +113,11 @@ describe('NxsDocumentTreeComponent', () => {
   async function create(
     path = '/',
     domains: NuxeoDocument[] = [DOMAIN, OTHER_DOMAIN],
+    children: Record<string, NuxeoDocument[]> = CHILDREN,
   ): Promise<void> {
     browse = {
       getNavTreeBootstrap: vi.fn(() => of({ root: ROOT, entries: domains })),
-      getNavTreeChildren: vi.fn((doc: NuxeoDocument) => of({ entries: CHILDREN[doc.uid] ?? [] })),
+      getNavTreeChildren: vi.fn((doc: NuxeoDocument) => of({ entries: children[doc.uid] ?? [] })),
       getFolderIdsWithSubfolders: vi.fn((uids: readonly string[]) =>
         of(new Set(uids.filter((uid) => HOLD_FOLDERS.has(uid)))),
       ),
@@ -231,6 +232,37 @@ describe('NxsDocumentTreeComponent', () => {
       host.path.set('/default-domain/workspaces/claims/a-file.pdf');
       await render();
       expect(item('Claims').getAttribute('aria-current')).toBe('page');
+    });
+  });
+
+  describe('which folder it marks as the current one', () => {
+    const WS = '/default-domain/workspaces';
+    // Listed before their exact twins, so taking the first loose match would mark the wrong one.
+    const SIBLINGS: Record<string, NuxeoDocument[]> = {
+      ...CHILDREN,
+      workspaces: [
+        folder('lower', `${WS}/folder`, 'Lower'),
+        folder('upper', `${WS}/Folder`, 'Upper'),
+        folder('hyphen', `${WS}/a-b`, 'Hyphen'),
+        folder('spaced', `${WS}/a b`, 'Spaced'),
+        CLAIMS,
+        LEGAL,
+      ],
+    };
+
+    it.each([
+      ['the folder whose name matches exactly, of two differing in case', `${WS}/Folder`, 'Upper'],
+      ['the other of the two', `${WS}/folder`, 'Lower'],
+      ['the folder whose name has a space, not its hyphenated twin', `${WS}/a b`, 'Spaced'],
+      ['the hyphenated twin', `${WS}/a-b`, 'Hyphen'],
+      ['a folder named in other casing than Nuxeo’s', `${WS}/CLAIMS`, 'Claims'],
+      ['a folder, with a trailing slash', `${WS}/claims/`, 'Claims'],
+      ['an exact ancestor of a folder not shown', `${WS}/Folder/sub`, 'Upper'],
+      ['the parent, for a name that only starts with a sibling’s', `${WS}/claimsx`, 'Workspaces'],
+    ])('%s', async (_case, path, current) => {
+      await create(path, [DOMAIN, OTHER_DOMAIN], SIBLINGS);
+      const marked = items().filter((node) => node.getAttribute('aria-current') === 'page');
+      expect(marked).toEqual([item(current)]);
     });
   });
 

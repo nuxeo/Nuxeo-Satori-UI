@@ -13,11 +13,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
   BrowseService,
-  decodeNuxeoPathSegment,
   isFolderishDocument,
   normalizeNuxeoPath,
-  nuxeoPathSegments,
-  nuxeoPathsEqualFlexible,
   type NuxeoDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { forkJoin } from 'rxjs';
@@ -80,17 +77,15 @@ export class NxsFolderPickerDialogComponent {
   protected readonly loading = signal(true);
   protected readonly failure = signal<NxsErrorStatus | 'not-a-folder' | null>(null);
 
-  protected readonly trail = computed(() =>
-    nuxeoPathSegments(this.path()).map((segment) => decodeNuxeoPathSegment(segment)),
-  );
-  protected readonly canGoUp = computed(() => nuxeoPathSegments(this.path()).length > 1);
+  protected readonly trail = computed(() => segmentsOf(this.path()));
+  protected readonly canGoUp = computed(() => segmentsOf(this.path()).length > 1);
   /** Why the folder on screen cannot be chosen, if it cannot. */
   protected readonly refusal = computed<'inside' | 'already' | null>(() => {
     const path = this.path();
     const exclude = this.data.excludePath;
     if (exclude && isSameOrInside(path, exclude)) return 'inside';
     const parent = this.data.currentParentPath;
-    if (parent && nuxeoPathsEqualFlexible(path, parent)) return 'already';
+    if (parent && normalizeNuxeoPath(parent) === path) return 'already';
     return null;
   });
   protected readonly canChoose = computed(
@@ -147,8 +142,7 @@ export class NxsFolderPickerDialogComponent {
 
   protected up(): void {
     if (!this.canGoUp()) return;
-    const segments = nuxeoPathSegments(this.path());
-    this.path.set(`/${segments.slice(0, -1).join('/')}`);
+    this.path.set(`/${segmentsOf(this.path()).slice(0, -1).join('/')}`);
     this.load();
   }
 
@@ -163,9 +157,17 @@ export class NxsFolderPickerDialogComponent {
   }
 }
 
+/**
+ * A path's names, exactly as Nuxeo gave them. Every path here comes from the server, and Nuxeo's
+ * names are case-sensitive: `/ws/Folder` and `/ws/folder` are two folders.
+ */
+function segmentsOf(path: string): string[] {
+  return normalizeNuxeoPath(path).split('/').filter(Boolean);
+}
+
 function isSameOrInside(path: string, container: string): boolean {
-  const inner = nuxeoPathSegments(path).map((segment) => segment.toLowerCase());
-  const outer = nuxeoPathSegments(container).map((segment) => segment.toLowerCase());
+  const inner = segmentsOf(path);
+  const outer = segmentsOf(container);
   return (
     outer.length > 0 &&
     outer.length <= inner.length &&

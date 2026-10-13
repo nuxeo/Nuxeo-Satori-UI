@@ -140,6 +140,51 @@ describe('NxsFolderPickerDialogComponent', () => {
     );
   });
 
+  describe('which folder it refuses', () => {
+    const WS = '/default-domain/workspaces';
+    const refusal = (): string | undefined =>
+      el().querySelector('.nxs-folder-picker-dialog__refusal')?.textContent?.trim();
+
+    it.each([
+      ['the folder itself', `${WS}/a`, `${WS}/a`, true],
+      ['a folder inside it', `${WS}/a/b`, `${WS}/a`, true],
+      ['a folder deep inside it', `${WS}/a/b/c`, `${WS}/a`, true],
+      ['the folder itself, with a trailing slash', `${WS}/a/`, `${WS}/a`, true],
+      ['a sibling whose name starts with its name', `${WS}/ab`, `${WS}/a`, false],
+      ['a sibling', `${WS}/b`, `${WS}/a`, false],
+      ['its parent', WS, `${WS}/a`, false],
+      ['a sibling whose name differs only in case', `${WS}/Folder`, `${WS}/folder`, false],
+      ['a sibling with a space where it has a hyphen', `${WS}/a b`, `${WS}/a-b`, false],
+    ])('moving a folder: %s', async (_case, path, excludePath, refused) => {
+      await create({ initialPath: path, excludePath });
+      expect(refusal()).toBe(
+        refused ? 'A folder cannot be moved into itself or into a folder inside it.' : undefined,
+      );
+      expect(choose().disabled).toBe(refused);
+    });
+
+    it.each([
+      ['the folder it is in', `${WS}/a`, `${WS}/a`, true],
+      ['the folder it is in, with a trailing slash', `${WS}/a`, `${WS}/a/`, true],
+      ['a folder whose name differs only in case', `${WS}/A`, `${WS}/a`, false],
+      ['a folder inside the one it is in', `${WS}/a/b`, `${WS}/a`, false],
+      ['the parent of the one it is in', WS, `${WS}/a`, false],
+    ])('moving a document: %s', async (_case, path, currentParentPath, refused) => {
+      await create({ initialPath: path, currentParentPath });
+      expect(refusal()).toBe(refused ? 'The document is already in this folder.' : undefined);
+      expect(choose().disabled).toBe(refused);
+    });
+
+    it('goes up to a parent whose name has capitals and spaces, and shows it as named', async () => {
+      await create({ initialPath: `${WS}/My Folder/Sub` });
+      expect(trail()).toBe('default-domain › workspaces › My Folder › Sub');
+      up().click();
+      await render();
+      expect(browse.getByPath).toHaveBeenLastCalledWith(`${WS}/My Folder`);
+      expect(trail()).toBe('default-domain › workspaces › My Folder');
+    });
+  });
+
   it('cannot go above the domain', async () => {
     await create({ initialPath: '/default-domain' });
     expect(up().disabled).toBe(true);
