@@ -339,6 +339,7 @@ class NxsDocumentListComponent {
     protected hasThumbnail(doc: NuxeoDocument): boolean;
     protected icon(doc: NuxeoDocument): string;
     protected rowName(doc: NuxeoDocument): string;
+    protected accessibleName(doc: NuxeoDocument): string;
     protected rowIndex(index: number): number;
     protected contributor(doc: NuxeoDocument): string;
     protected initials(name: string): string;
