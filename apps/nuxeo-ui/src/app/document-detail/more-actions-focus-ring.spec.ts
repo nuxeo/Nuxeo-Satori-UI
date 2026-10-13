@@ -7,6 +7,7 @@
  * Karma loads `apps/nuxeo-ui/src/styles.scss` (see `angular.json`), which `@use`s
  * `document-detail-header-toolbar-focus.scss` — the same path production uses.
  */
+import { CdkAriaLive } from '@angular/cdk/a11y';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
@@ -16,7 +17,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [CdkAriaLive, MatButtonModule, MatIconModule, MatMenuModule],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './more-actions-focus-ring.fixture.scss',
