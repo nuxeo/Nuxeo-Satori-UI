@@ -25,6 +25,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import {
   DocTypeLabelPipe,
+  NON_CONTENT_DOCUMENT_TYPES,
   avatarColor,
   docTypeIcon,
   isFolderishDocument,
@@ -272,6 +273,12 @@ export class NxsDocumentListComponent {
 
   protected isFolder(doc: NuxeoDocument): boolean {
     return doc.type === 'Favorites' || isFolderishDocument(doc);
+  }
+
+  /** A container's rendition is only Nuxeo's generic icon, so it is not fetched; the type icon shows. */
+  protected hasThumbnail(doc: NuxeoDocument): boolean {
+    const type = doc.type?.trim().toLowerCase() ?? '';
+    return type.length > 0 && !NON_CONTENT_DOCUMENT_TYPES.has(type);
   }
 
   protected icon(doc: NuxeoDocument): string {

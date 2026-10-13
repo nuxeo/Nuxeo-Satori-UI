@@ -169,71 +169,37 @@
     >
       <mat-tab [label]="'collections.tab.view' | translate">
         <div class="tab-content">
-          @if (loading()) {
-            <div class="tab-loading">
-              <nxs-spinner
-                diameter="36"
-                [label]="'collections.collection-detail.loading' | translate"
-              />
-            </div>
-          } @else if (error(); as message) {
-            <nxs-error-state
-              [status]="errorStatus()"
-              [heading]="message"
-              retryable
-              (retry)="loadMembers()"
-            />
-          } @else if (members().length === 0) {
-            <div class="tab-empty">
-              <mat-icon class="empty-icon">collections_bookmark</mat-icon>
-              <p>{{ 'collections.collection-detail.this-collection-is-empty' | translate }}</p>
-            </div>
-          } @else {
+          @if (members().length > 0 && totalSize() >= 0 && !loading() && !error()) {
             <div class="result-count">
               {{
                 (totalSize() === 1 ? 'common.count.result-one' : 'common.count.result-many')
                   | translate: { count: totalSize() }
               }}
             </div>
-            <div class="members-table-wrapper">
-              <table class="members-table">
-                <thead>
-                  <tr>
-                    <th class="col-title">
-                      {{ 'collections.collection-detail.title' | translate }}
-                    </th>
-                    <th class="col-modified">
-                      {{ 'collections.collection-detail.modified' | translate }}
-                    </th>
-                    <th class="col-contributor">
-                      {{ 'collections.collection-detail.last-contributor' | translate }}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (doc of members(); track doc.uid) {
-                    <tr class="member-row" (click)="onRowClick(doc)">
-                      <td class="cell-title">
-                        @if (canLoadThumbnail(doc)) {
-                          <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
-                            <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
-                          </nxs-thumbnail>
-                        } @else {
-                          <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
-                        }
-                        <span class="doc-name">{{ doc.title }}</span>
-                      </td>
-                      <td class="cell-modified">{{ doc.lastModified | date: 'mediumDate' }}</td>
-                      <td class="cell-contributor">
-                        <span class="contributor-avatar">{{ contributorInitial(doc) }}</span>
-                        {{ lastContributor(doc) }}
-                      </td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
           }
+          <nxs-document-list
+            class="members-list"
+            [documents]="members()"
+            [columns]="memberColumns()"
+            [label]="
+              'collections.collection-detail.members-of'
+                | translate: { name: collection()?.title ?? '' }
+            "
+            [selectable]="false"
+            [sort]="memberSort()"
+            [pageIndex]="memberPageIndex()"
+            [pageSize]="memberPageSize"
+            [totalSize]="totalSize()"
+            [hasNextPage]="membersHaveNextPage()"
+            [loading]="loading()"
+            [error]="error() ? errorStatus() : null"
+            [errorHeading]="error() ?? ''"
+            [emptyHeading]="'collections.collection-detail.this-collection-is-empty' | translate"
+            (sortChange)="onMemberSortChange($event)"
+            (pageChange)="goToMemberPage($event)"
+            (open)="onRowClick($event)"
+            (retry)="loadMembers()"
+          />
         </div>
       </mat-tab>
 

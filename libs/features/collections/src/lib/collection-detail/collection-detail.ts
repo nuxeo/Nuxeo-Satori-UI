@@ -2,8 +2,8 @@ import { Component, DestroyRef, LOCALE_ID, inject, signal, computed } from '@ang
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, Observable } from 'rxjs';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { forkJoin, map, Observable } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -28,7 +28,6 @@ import {
   DocumentDetailService,
   DirectoryService,
   DirectoryEntry,
-  docTypeIcon,
   avatarColor,
   canViewDocumentAuditLog,
   canWriteDocument,
@@ -38,7 +37,6 @@ import {
   hasDocumentPermissionsEnricher,
   PERMISSION_DENIED_KEY,
   isPermissionDeniedError,
-  NON_CONTENT_DOCUMENT_TYPES,
   isMailSendError,
   mailSendFailureMessage,
   readClipboardDocs,
@@ -79,26 +77,38 @@ import {
 } from '@agentic-ui/shared-permission-dialogs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
-  NxsErrorStateComponent,
+  NxsDocumentListComponent,
   NxsFolderHeaderComponent,
   NxsSpinnerComponent,
-  NxsThumbnailComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   NxsToastService,
   provideNxsToast,
+  type NxsDocumentListColumn,
+  type NxsDocumentListSort,
   type NxsErrorStatus,
 } from '@nuxeo-satori/platform/components';
+
+/**
+ * The property each member column sorts by on the server. Nuxeo Web UI's collection view sorts
+ * these three, and `default_content_collection` was checked to accept each.
+ */
+const MEMBER_SORT_FIELDS: Readonly<Record<string, string>> = {
+  title: 'dc:title',
+  modified: 'dc:modified',
+  lastContributor: 'dc:lastContributor',
+};
+
+const MEMBER_PAGE_SIZE = 50;
 
 @Component({
   selector: 'lib-collection-detail',
   standalone: true,
   providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
-    NxsErrorStateComponent,
+    NxsDocumentListComponent,
     NxsFolderHeaderComponent,
     NxsSpinnerComponent,
-    NxsThumbnailComponent,
     TranslatePipe,
     DatePipe,
     FormsModule,
@@ -152,6 +162,27 @@ export class CollectionDetailComponent {
   /** Which error state `error` shows: the status of the member request that failed. */
   readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly totalSize = signal(0);
+  readonly memberPageSize = MEMBER_PAGE_SIZE;
+  readonly memberPageIndex = signal(0);
+  readonly membersHaveNextPage = signal(false);
+  readonly memberSort = signal<NxsDocumentListSort | null>(null);
+  /** The active language as a signal, so the column names follow a language change. */
+  private readonly currentLang = toSignal(
+    this.translate.onLangChange.pipe(map((event) => event.lang)),
+    { initialValue: this.translate.currentLang },
+  );
+  /** The member columns, as the list takes them: translated, each sorted on the server. */
+  readonly memberColumns = computed<readonly NxsDocumentListColumn[]>(() => {
+    this.currentLang();
+    return [
+      { key: 'title', label: this.translate.instant('collections.collection-detail.title') },
+      { key: 'modified', label: this.translate.instant('collections.collection-detail.modified') },
+      {
+        key: 'lastContributor',
+        label: this.translate.instant('collections.collection-detail.last-contributor'),
+      },
+    ].map((column) => ({ ...column, sortable: column.key in MEMBER_SORT_FIELDS }));
+  });
   /** Request token for the members load — see `loadMembers`. */
   private memberGeneration = 0;
   /**
@@ -385,14 +416,23 @@ export class CollectionDetailComponent {
     this.loading.set(true);
     this.error.set(null);
 
+    const sort = this.memberSort();
+    const sortBy = sort ? MEMBER_SORT_FIELDS[sort.key] : undefined;
     this.collectionService
-      .getCollectionMembers(requestedUid, 50)
+      .getCollectionMembers(requestedUid, MEMBER_PAGE_SIZE, {
+        currentPageIndex: this.memberPageIndex(),
+        sort:
+          sort && sortBy ? [{ sortBy, sortOrder: sort.direction === 'asc' ? 'ASC' : 'DESC' }] : [],
+      })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
           if (generation !== this.memberGeneration || requestedUid !== this.collectionUid) return;
           this.members.set(res.entries);
           this.totalSize.set(res.totalSize);
+          this.membersHaveNextPage.set(
+            (res as { isNextPageAvailable?: boolean }).isNextPageAvailable === true,
+          );
           this.loading.set(false);
         },
         error: (err: unknown) => {
@@ -409,23 +449,18 @@ export class CollectionDetailComponent {
       });
   }
 
-  /** Whether the document type has a content thumbnail worth requesting. */
-  protected canLoadThumbnail(doc: NuxeoDocument): boolean {
-    const normalizedType = doc.type.trim().toLowerCase();
-    return normalizedType.length > 0 && !NON_CONTENT_DOCUMENT_TYPES.has(normalizedType);
+  /** Another page of members, in the same order. */
+  goToMemberPage(pageIndex: number): void {
+    if (pageIndex < 0 || pageIndex === this.memberPageIndex()) return;
+    this.memberPageIndex.set(pageIndex);
+    this.loadMembers();
   }
 
-  docIcon(doc: NuxeoDocument): string {
-    return docTypeIcon(doc.type);
-  }
-
-  lastContributor(doc: NuxeoDocument): string {
-    return (doc.properties?.['dc:lastContributor'] as string) ?? '';
-  }
-
-  contributorInitial(doc: NuxeoDocument): string {
-    const c = this.lastContributor(doc);
-    return c ? c.charAt(0).toUpperCase() : '?';
+  /** A new order starts from the first page. */
+  onMemberSortChange(sort: NxsDocumentListSort | null): void {
+    this.memberSort.set(sort);
+    this.memberPageIndex.set(0);
+    this.loadMembers();
   }
 
   onRowClick(doc: NuxeoDocument): void {

@@ -9,7 +9,7 @@ import {
   untracked,
 } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
-import { DatePipe, NgClass } from '@angular/common';
+import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { forkJoin, of, Subject, timer, EMPTY } from 'rxjs';
@@ -120,7 +120,6 @@ import {
 
 import {
   AppExtensionsService,
-  DescriptorLabelPipe,
   EXTENSION_SLOTS,
   descriptorLabel,
   ExtensionActionRegistry,
@@ -146,15 +145,20 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsActionMenuComponent,
   NxsColumnPickerComponent,
+  NxsDocumentListComponent,
   NxsDomainHintComponent,
   NxsDriveDialogComponent,
   NxsErrorStateComponent,
   NxsFolderHeaderComponent,
+  NxsPagerComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
+  type NxsDocumentListColumn,
+  type NxsDocumentListRowAction,
+  type NxsDocumentListSort,
   type NxsDriveDialogData,
   type NxsErrorStatus,
   type NxsMenuAction,
@@ -178,6 +182,25 @@ const FALLBACK_COLUMN_DESCRIPTORS: readonly ExtensionColumnDescriptor[] = ALL_CO
   }),
 );
 
+/**
+ * The Nuxeo property each sortable column orders by on the server.
+ *
+ * Only these five: every browse source — `@children`, `tree_children` and
+ * `default_content_collection` — was checked to sort by each of them, and they are the columns Nuxeo
+ * Web UI's folder and collection views sort. A column outside this map gets a plain header, because
+ * `@children` answers a property it cannot sort by with an empty page rather than an error.
+ */
+const SORT_FIELDS: Readonly<Record<string, string>> = {
+  title: 'dc:title',
+  modified: 'dc:modified',
+  lastContributor: 'dc:lastContributor',
+  created: 'dc:created',
+  author: 'dc:creator',
+};
+
+/** One page of a folder; Web UI pages its folder view by 40, and the page has always held 50. */
+const PAGE_SIZE = 50;
+
 @Component({
   selector: 'lib-browse',
   standalone: true,
@@ -185,16 +208,16 @@ const FALLBACK_COLUMN_DESCRIPTORS: readonly ExtensionColumnDescriptor[] = ALL_CO
   imports: [
     NxsActionMenuComponent,
     NxsColumnPickerComponent,
+    NxsDocumentListComponent,
     NxsDomainHintComponent,
     NxsErrorStateComponent,
     NxsFolderHeaderComponent,
+    NxsPagerComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
-    DescriptorLabelPipe,
     TranslatePipe,
     DatePipe,
-    NgClass,
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -251,7 +274,13 @@ export class BrowseComponent {
   /** Which error state `error` shows: the status of the request that failed. */
   readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly currentDoc = signal<NuxeoDocument | null>(null);
+  /** Nuxeo's count of the folder's entries; negative when it did not count them. */
   readonly totalSize = signal(0);
+  readonly pageSize = PAGE_SIZE;
+  readonly pageIndex = signal(0);
+  readonly hasNextPage = signal(false);
+  /** The server-side order, or `null` for the source's own. Kept across folders, like Web UI. */
+  readonly listSort = signal<NxsDocumentListSort | null>(null);
   private currentNuxeoPath = '/';
   /** Skips the initial contentRefreshTick effect run to avoid duplicate folder loads. */
   private lastSeenContentRefreshTick = -1;
@@ -260,7 +289,7 @@ export class BrowseComponent {
   /** Clipboard paste results not yet visible in @children (eventual consistency on Cloud). */
   private readonly pendingPasteEntries = new Map<string, NuxeoDocument>();
   readonly browsePath = signal('/');
-  private readonly browsePath$ = new Subject<string>();
+  private readonly browsePath$ = new Subject<{ nuxeoPath: string; pageIndex: number }>();
 
   // Details side panel
   readonly panelOpen = signal(false);
@@ -324,9 +353,6 @@ export class BrowseComponent {
     }
     return this.canRemoveCurrentDoc();
   });
-  readonly hasCollectionEntries = computed(() =>
-    this.filteredEntries().some((doc) => isCollectionDocument(doc)),
-  );
   readonly canManageCurrentPermissions = computed(() =>
     canManageDocumentPermissions(this.currentDoc()),
   );
@@ -409,10 +435,6 @@ export class BrowseComponent {
   // View toggle
   readonly viewMode = signal<'list' | 'card'>('list');
   readonly csvExporting = signal(false);
-
-  // Column sorting
-  readonly browseSortKey = signal<string>('');
-  readonly browseSortDir = signal<'asc' | 'desc'>('asc');
 
   // ── Column settings ──
   //
@@ -565,40 +587,70 @@ export class BrowseComponent {
       );
     }
 
-    const key = this.browseSortKey();
-    const dir = this.browseSortDir();
-    if (key) {
-      const mult = dir === 'asc' ? 1 : -1;
-      docs = [...docs].sort((a, b) => {
-        let va: string, vb: string;
-        if (key === 'title') {
-          va = a.title.toLowerCase();
-          vb = b.title.toLowerCase();
-        } else if (key === 'modified') {
-          va = a.lastModified ?? '';
-          vb = b.lastModified ?? '';
-        } else if (key === 'lastContributor') {
-          va = ((a.properties?.['dc:lastContributor'] as string) ?? '').toLowerCase();
-          vb = ((b.properties?.['dc:lastContributor'] as string) ?? '').toLowerCase();
-        } else {
-          va = String(this.getCellValue(a, key)).toLowerCase();
-          vb = String(this.getCellValue(b, key)).toLowerCase();
-        }
-        return va < vb ? -mult : va > vb ? mult : 0;
-      });
-    }
-
+    // Never sorted here: the page arrives in the server's order, which is the order the user
+    // asked for. Sorting a page in the browser once hid a sort the server had dropped.
     return docs;
   });
 
-  toggleBrowseSort(colKey: string): void {
-    if (this.browseSortKey() === colKey) {
-      this.browseSortDir.update((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      this.browseSortKey.set(colKey);
-      this.browseSortDir.set('asc');
-    }
-  }
+  /** Whether a toolbar filter narrows the page on screen. */
+  readonly filtersActive = computed(
+    () =>
+      !!this.filterText() ||
+      !!this.filterType() ||
+      !!this.filterModifiedFrom() ||
+      !!this.filterModifiedTo() ||
+      !!this.filterContributor(),
+  );
+
+  /**
+   * The count beside the toolbar: what a filter left of this page, else Nuxeo's total, else
+   * nothing — a page of fifty from a folder Nuxeo did not count is not "50 results".
+   */
+  readonly resultCount = computed<number | null>(() => {
+    if (this.filtersActive()) return this.filteredEntries().length;
+    const total = this.totalSize();
+    return total >= 0 ? total : null;
+  });
+
+  /** The visible columns as the document list takes them: translated, sortable where the server sorts. */
+  readonly listColumns = computed<readonly NxsDocumentListColumn[]>(() => {
+    this.currentLang();
+    return this.visibleColumns().map((column) => ({
+      key: column.key,
+      label: descriptorLabel(column, (key) => this.translate.instant(key)),
+      sortable: column.key in SORT_FIELDS,
+    }));
+  });
+
+  readonly listSelectedIds = computed(() => [...this.selectionService.selectedIds()]);
+
+  /** Edit and Delete on a collection listed here, the one menu a row has carried. */
+  readonly collectionRowActions = computed<Readonly<Record<string, readonly NxsMenuAction[]>>>(
+    () => {
+      this.currentLang();
+      const actions: Record<string, NxsMenuAction[]> = {};
+      for (const doc of this.filteredEntries()) {
+        if (!this.isCollectionEntry(doc)) continue;
+        const entries: NxsMenuAction[] = [];
+        if (this.canEditCollectionEntry(doc)) {
+          entries.push({
+            id: 'collection.edit',
+            label: this.translate.instant('browse.browse.edit'),
+            icon: 'edit',
+          });
+        }
+        if (this.canDeleteCollectionEntry(doc)) {
+          entries.push({
+            id: 'collection.delete',
+            label: this.translate.instant('browse.browse.delete'),
+            icon: 'delete',
+          });
+        }
+        if (entries.length > 0) actions[doc.uid] = entries;
+      }
+      return actions;
+    },
+  );
 
   // Subscription state
   readonly isSubscribed = computed(() => {
@@ -706,26 +758,35 @@ export class BrowseComponent {
         this.resetBrowseTabState();
         this.currentNuxeoPath = nuxeoPath;
         this.browsePath.set(nuxeoPath);
+        this.pageIndex.set(0);
         if (isBrowseRouterUrl(this.router.url)) {
           this.browseContext.setFromRouterUrl(this.router.url);
         }
-        this.browsePath$.next(nuxeoPath);
+        this.browsePath$.next({ nuxeoPath, pageIndex: 0 });
       });
 
     this.browsePath$
       .pipe(
-        switchMap((nuxeoPath) => {
+        switchMap(({ nuxeoPath, pageIndex }) => {
           this.loading.set(true);
           this.error.set(null);
-          return this.browseService.getBrowseFolderContents(nuxeoPath, 50).pipe(
-            map((result) => ({ nuxeoPath, result })),
-            catchError((error: unknown) => of({ nuxeoPath, error: nxsErrorStatus(error) })),
-          );
+          return this.browseService
+            .getBrowseFolderContents(nuxeoPath, PAGE_SIZE, {
+              currentPageIndex: pageIndex,
+              sort: this.serverSort(),
+            })
+            .pipe(
+              map((result) => ({ nuxeoPath, pageIndex, result })),
+              catchError((error: unknown) =>
+                of({ nuxeoPath, pageIndex, error: nxsErrorStatus(error) }),
+              ),
+            );
         }),
         takeUntilDestroyed(),
       )
       .subscribe((payload) => {
         if (payload.nuxeoPath !== this.currentNuxeoPath) return;
+        if (payload.pageIndex !== this.pageIndex()) return;
         if ('error' in payload) {
           this.errorStatus.set(payload.error);
           this.error.set(this.translate.instant('browse.message.failed-to-load-folder-contents'));
@@ -741,6 +802,7 @@ export class BrowseComponent {
         this.currentDoc.set(folder);
         this.browseContext.setFromNuxeoPath(folder.path);
         this.entries.set(entries);
+        this.hasNextPage.set(payload.result.hasNextPage === true);
         this.reconcilePendingPasteEntries(entries);
         const pendingCount = this.pendingPasteEntries.size;
         this.totalSize.set(totalSize === entries.length ? totalSize + pendingCount : totalSize);
@@ -751,7 +813,7 @@ export class BrowseComponent {
         }
       });
 
-    this.browsePath$.next(initialPath);
+    this.browsePath$.next({ nuxeoPath: initialPath, pageIndex: 0 });
 
     effect(() => {
       const tick = this.browseContext.contentRefreshTick();
@@ -850,7 +912,48 @@ export class BrowseComponent {
   }
 
   loadContent(): void {
-    this.browsePath$.next(this.currentNuxeoPath);
+    this.browsePath$.next({ nuxeoPath: this.currentNuxeoPath, pageIndex: this.pageIndex() });
+  }
+
+  /** Another page of the same folder, in the same order. */
+  goToPage(pageIndex: number): void {
+    if (pageIndex < 0 || pageIndex === this.pageIndex()) return;
+    this.pageIndex.set(pageIndex);
+    this.loadContent();
+  }
+
+  /** A new order starts again from the first page: page three of another order is another set. */
+  onListSortChange(sort: NxsDocumentListSort | null): void {
+    this.listSort.set(sort);
+    this.pageIndex.set(0);
+    this.loadContent();
+  }
+
+  /** The list's order as Nuxeo takes it; a column outside `SORT_FIELDS` is never sent. */
+  private serverSort(): { sortBy: string; sortOrder: 'ASC' | 'DESC' }[] {
+    const sort = this.listSort();
+    const field = sort ? SORT_FIELDS[sort.key] : undefined;
+    if (!sort || !field) return [];
+    return [{ sortBy: field, sortOrder: sort.direction === 'asc' ? 'ASC' : 'DESC' }];
+  }
+
+  /** The list's selection, written back to the shared service with each document's title and type. */
+  onListSelectionChange(ids: readonly string[]): void {
+    const next = new Set(ids);
+    const current = this.selectionService.selectedIds();
+    for (const id of current) {
+      if (!next.has(id)) this.selectionService.toggle(id);
+    }
+    for (const id of ids) {
+      if (current.has(id)) continue;
+      const doc = this.entries().find((entry) => entry.uid === id);
+      this.selectionService.toggle(id, doc?.title ?? id, null, doc?.type);
+    }
+  }
+
+  onCollectionRowAction({ action, document }: NxsDocumentListRowAction): void {
+    if (action.id === 'collection.edit') this.openEditCollectionDialog(document);
+    else if (action.id === 'collection.delete') this.deleteCollectionEntry(document);
   }
 
   /** Merge clipboard copy/move API results into the visible folder (Web UI updates listing immediately). */

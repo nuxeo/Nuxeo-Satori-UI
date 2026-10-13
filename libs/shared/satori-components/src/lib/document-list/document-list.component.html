@@ -11,12 +11,15 @@
     (retry)="retry.emit()"
   />
 } @else if (documents().length === 0) {
-  <nxs-empty-state
-    icon="folder_open"
-    [heading]="emptyHeading().trim() || ('satori-components.document-list.empty' | translate)"
-    [message]="emptyMessage()"
-    [headingLevel]="stateHeadingLevel()"
-  />
+  <!-- An empty page past the first is not an empty folder: the pager says there is nothing more. -->
+  @if (pageIndex() === 0) {
+    <nxs-empty-state
+      icon="folder_open"
+      [heading]="emptyHeading().trim() || ('satori-components.document-list.empty' | translate)"
+      [message]="emptyMessage()"
+      [headingLevel]="stateHeadingLevel()"
+    />
+  }
 } @else {
   <span class="cdk-visually-hidden" [id]="hintId">{{
     (selectable()
@@ -38,6 +41,9 @@
     >
       <ng-container [matColumnDef]="selectColumn">
         <th mat-header-cell *matHeaderCellDef class="nxs-document-list__select">
+          <span class="cdk-visually-hidden">{{
+            'satori-components.document-list.selection' | translate
+          }}</span>
           <mat-checkbox
             [checked]="allOnPageSelected()"
             [indeterminate]="someOnPageSelected()"
@@ -155,14 +161,21 @@
   @switch (key) {
     @case ('title') {
       <span class="nxs-document-list__title">
-        <nxs-thumbnail class="nxs-document-list__thumb" [documentId]="doc.uid">
+        <ng-template #typeIcon>
           <mat-icon
             class="nxs-document-list__icon"
             [class.nxs-document-list__icon--folder]="isFolder(doc)"
             aria-hidden="true"
             >{{ icon(doc) }}</mat-icon
           >
-        </nxs-thumbnail>
+        </ng-template>
+        @if (hasThumbnail(doc)) {
+          <nxs-thumbnail class="nxs-document-list__thumb" [documentId]="doc.uid">
+            <ng-container *ngTemplateOutlet="typeIcon" />
+          </nxs-thumbnail>
+        } @else {
+          <ng-container *ngTemplateOutlet="typeIcon" />
+        }
         <button
           type="button"
           class="nxs-document-list__open"

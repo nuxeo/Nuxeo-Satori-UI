@@ -512,10 +512,12 @@ describe('NxsDocumentListComponent', () => {
       );
     });
 
-    it('keeps Previous on an empty page past the end', async () => {
+    it('keeps Previous on an empty page past the end, and does not call the folder empty', async () => {
       host.documents.set([]);
       host.pageIndex.set(1);
       await render();
+      expect(el().querySelector('nxs-empty-state')).toBeNull();
+      expect(el().querySelector('.nxs-pager__range')?.textContent?.trim()).toBe('No more items');
       (el().querySelector('.nxs-pager__previous') as HTMLButtonElement).click();
       expect(host.pages).toEqual([0]);
     });
@@ -606,6 +608,16 @@ describe('NxsDocumentListComponent', () => {
       ]);
       // Choosing from the menu does not also open the row.
       expect(host.opened).toEqual([]);
+    });
+
+    it('gives every header cell text, the selection and actions columns included', async () => {
+      host.rowActions.set({ 'uid-2': [{ id: 'acme.edit', label: 'Edit' }] });
+      await render();
+      // axe's empty-table-header wants text in the cell; an aria-label on the checkbox is not enough.
+      expect(headers().filter((th) => !th.textContent?.trim())).toEqual([]);
+      expect(el().querySelector('th.nxs-document-list__select')?.textContent?.trim()).toBe(
+        'Selection',
+      );
     });
 
     it('drops the actions column when no row has actions', () => {
