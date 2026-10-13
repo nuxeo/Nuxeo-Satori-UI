@@ -139,7 +139,7 @@ export const ChoosingAPrincipal: Story = {
     const option = await within(document.body).findByRole('option', { name: /Jane Smith/ });
     await userEvent.click(option);
     await expect(field).toHaveValue('Jane Smith');
-    await expect(canvasElement.querySelector('output')).toHaveTextContent('user:seeded-failure');
+    await expect(canvasElement.querySelector('output')).toHaveTextContent('user:jsmith');
   },
 };
 
