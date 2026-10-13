@@ -1565,6 +1565,52 @@ component `nxs.components.permissionsPanel`.
 
 ---
 
+## 31. Search — `default_search`, Saved Searches and Tag Suggestions
+
+| Field             | Value                                                                                                                     |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| **Service**       | `SearchService` (`libs/shared/nuxeo-client/src/lib/services/search.service.ts`)                                           |
+| **Search**        | `GET /nuxeo/api/v1/search/pp/default_search/execute` (`search`), `enrichers.document=favorites`                           |
+| **Saved: list**   | `GET /nuxeo/api/v1/search/saved?pageProvider=default_search` (`getSavedSearches`)                                         |
+| **Saved: read**   | `GET /nuxeo/api/v1/search/saved/:id` (`getSavedSearchById`)                                                               |
+| **Saved: create** | `POST /nuxeo/api/v1/search/saved` — `entity-type`, `pageProviderName`, `title`, `params` (`saveSavedSearch`)              |
+| **Saved: save**   | `PUT /nuxeo/api/v1/search/saved/:id` — the same body (`updateSavedSearch`)                                                |
+| **Saved: rename** | `PUT /nuxeo/api/v1/search/saved/:id` — `entity-type`, `pageProviderName`, `title`, **no** `params` (`renameSavedSearch`)  |
+| **Saved: delete** | `DELETE /nuxeo/api/v1/search/saved/:id` (`deleteSavedSearch`)                                                             |
+| **Permissions**   | `GET /nuxeo/api/v1/id/:id` with `enrichers.document=permissions` — `WriteProperties` gates Save, Rename, Share and Delete |
+| **Collections**   | `POST /nuxeo/api/v1/automation/User.GetCollections` (`getUserCollections`)                                                |
+| **Tags**          | `POST /nuxeo/api/v1/automation/Tag.Suggestion` — `searchTerm` (`getTagSuggestions`); answers `[{ id, displayLabel }]`     |
+
+**The filters are `default_search`'s own parameters**, as Web UI's search form sends them: full text
+on `ecm_fulltext` (dashes turned into spaces, as Web UI's `formatFulltext` does, since Nuxeo reads
+`-word` as an exclusion), and JSON arrays on `dc_modified_agg`, `dc_creator_agg`, `ecm_collections`,
+`ecm_tags`, `dc_nature_agg`, `dc_subjects_agg`, `dc_coverage_agg` and `common_size_agg`. The answer's
+`aggregations` give each filter its choices and counts, so the filters need no request of their own.
+Measured on the local 2025 instance:
+
+- `ecm_collections` is the collection filter. `collection_agg` is not a parameter (the server ignores
+  it), and the collection id on `dc_coverage_agg` — which this client sent until NXSAT-308 — filtered
+  coverage on an id and answered no results.
+- The modification-date buckets are `last24h`, `lastWeek`, `lastMonth`, `lastYear` and
+  `priorToLastYear`. An unknown key such as the earlier `moreThan1YearAgo` is ignored, so it returned
+  every document; the client maps it to `priorToLastYear`.
+- A saved search's `params` are matched to the saved-search document's own fields by name: `subjects`
+  is refused with `400` (it is read as `dc:subjects`, a list) and `size` with `501` ("Removed
+  properties don't have field"). Saved searches are therefore written under the page-provider names
+  above, which also lets Web UI open them; searches saved earlier under `modifiedDate`, `nature` and
+  the other short names are still read.
+- A list parameter may be sent as a JSON array or as a JSON-array string; it is stored and read back
+  as an array.
+- A `PUT` without `pageProviderName` is refused with `400`; with it and without `params` the stored
+  parameters are kept, which is what renaming relies on.
+
+**Usage:** the search page and the search drawer, through `SearchSession`
+(`libs/features/search/src/lib/search-session/search-session.ts`), which sends one request per change
+of the query for both; `nxs-search-filters` for collections and tags; `nxs-saved-search-select` for the
+list; `nxs-saved-search-actions` for the permission read.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |

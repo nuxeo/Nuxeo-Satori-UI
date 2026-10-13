@@ -68,6 +68,15 @@ interface SearchApiResponse extends NuxeoDocumentList {
   >;
 }
 
+/**
+ * Modification-date ranges under an earlier name, mapped to the bucket `default_search` defines.
+ * Saved searches written before the rename still carry `moreThan1YearAgo`, which the server does
+ * not know and would ignore — returning every document instead of the old ones.
+ */
+const MODIFIED_RANGE_ALIASES: Readonly<Record<string, string>> = {
+  moreThan1YearAgo: 'priorToLastYear',
+};
+
 @Injectable({ providedIn: 'root' })
 export class SearchService {
   private readonly api = inject(NuxeoApiBase);
@@ -289,7 +298,13 @@ export class SearchService {
             const result: Record<string, string> = {};
             for (const [key, value] of Object.entries(paramsRecord as Record<string, unknown>)) {
               if (key !== 'highlight' && value !== null && value !== undefined) {
-                result[key] = String(value);
+                // A list as JSON, not `String(list)`, which joins on commas and so splits a value
+                // that contains one. An empty list stays an empty string, as it always read.
+                result[key] = Array.isArray(value)
+                  ? value.length > 0
+                    ? JSON.stringify(value)
+                    : ''
+                  : String(value);
               }
             }
             return result;
@@ -359,6 +374,22 @@ export class SearchService {
     );
   }
 
+  /**
+   * Renames a saved search and leaves its filters as stored. The request carries no `params`, so
+   * the server keeps the ones it has — whichever application wrote them.
+   */
+  renameSavedSearch(
+    id: string,
+    title: string,
+    pageProviderName = 'default_search',
+  ): Observable<unknown> {
+    return this.api.put<unknown>(
+      `/nuxeo/api/v1/search/saved/${encodeURIComponent(id)}`,
+      { 'entity-type': 'savedSearch', pageProviderName, title },
+      { 'Content-Type': 'application/json', accept: 'text/plain, application/json' },
+    );
+  }
+
   deleteSavedSearch(id: string): Observable<unknown> {
     const encodedId = encodeURIComponent(id);
     return this.api.delete<unknown>(`/nuxeo/api/v1/search/saved/${encodedId}`);
@@ -397,7 +428,9 @@ export class SearchService {
       .set('sortOrder', sortOrder)
       .set('quickFilters', quickFilters.trim());
 
-    const modifiedDateValues = parseList(modifiedDate);
+    const modifiedDateValues = [
+      ...new Set(parseList(modifiedDate).map((value) => MODIFIED_RANGE_ALIASES[value] ?? value)),
+    ];
     const natureValues = parseList(nature);
     const subjectValues = parseList(subjects);
     const coverageValues = parseList(coverage);
@@ -411,11 +444,10 @@ export class SearchService {
       httpParams = httpParams.set('dc_creator_agg', JSON.stringify([author.trim()]));
     }
 
+    // `ecm_collections` is the parameter `default_search` filters collection membership on, as
+    // Web UI's search form sends it. It has no aggregate, so there is no `collection_agg` bucket.
     if (collection.trim()) {
-      const selectedCollection = JSON.stringify([collection.trim()]);
-      httpParams = httpParams
-        .set('collection_agg', selectedCollection)
-        .set('dc_coverage_agg', selectedCollection);
+      httpParams = httpParams.set('ecm_collections', JSON.stringify([collection.trim()]));
     }
 
     if (natureValues.length > 0) {
@@ -442,8 +474,10 @@ export class SearchService {
       httpParams = httpParams.set('query', q.trim());
     }
 
-    if (ecmFulltext.trim()) {
-      httpParams = httpParams.set('ecm_fulltext', ecmFulltext.trim());
+    // Dashes become spaces, as Web UI's `formatFulltext` does: Nuxeo reads `-word` as an exclusion.
+    const fulltext = ecmFulltext.replace(/-/g, ' ').trim();
+    if (fulltext) {
+      httpParams = httpParams.set('ecm_fulltext', fulltext);
     }
 
     return this.api
@@ -453,92 +487,91 @@ export class SearchService {
       })
       .pipe(
         map((res) => ({
-          items: this.filterItemsByModifiedDate(
-            res.entries.map((doc) => {
-              const props = doc.properties ?? {};
-              const fileContent = props['file:content'] as {
-                'mime-type'?: string;
-                length?: number | string;
-              } | null;
-              const tags = (props['dc:subjects'] as string[] | undefined) ?? [];
-              const lastContributor = this.asPrincipalName(props['dc:lastContributor']);
-              const author = this.asPrincipalName(props['dc:creator']);
-              const major = props['uid:major_version'];
-              const minor = props['uid:minor_version'];
-              const version =
-                typeof major === 'number' && typeof minor === 'number'
-                  ? `${major}.${minor}`
-                  : undefined;
+          items: res.entries.map((doc) => {
+            const props = doc.properties ?? {};
+            const fileContent = props['file:content'] as {
+              'mime-type'?: string;
+              length?: number | string;
+            } | null;
+            const tags = (props['dc:subjects'] as string[] | undefined) ?? [];
+            const lastContributor = this.asPrincipalName(props['dc:lastContributor']);
+            const author = this.asPrincipalName(props['dc:creator']);
+            const major = props['uid:major_version'];
+            const minor = props['uid:minor_version'];
+            const version =
+              typeof major === 'number' && typeof minor === 'number'
+                ? `${major}.${minor}`
+                : undefined;
 
-              return {
-                id: doc.uid,
-                title: doc.title,
-                type: doc.type,
-                path: doc.path,
-                isFavorite: doc.contextParameters?.favorites?.isFavorite ?? false,
-                modifiedDate: doc.lastModified?.slice(0, 10) ?? '',
-                sizeInBytes: this.parseSizeInBytes(fileContent?.length),
-                lastContributor,
-                createdDate:
-                  typeof props['dc:created'] === 'string'
-                    ? (props['dc:created'] as string).slice(0, 10)
-                    : undefined,
-                author,
-                authorKey: author.toLowerCase(),
-                state:
-                  typeof props['ecm:currentLifeCycleState'] === 'string'
-                    ? (props['ecm:currentLifeCycleState'] as string)
-                    : undefined,
-                version,
-                nature:
-                  typeof props['dc:nature'] === 'string'
-                    ? (props['dc:nature'] as string)
-                    : undefined,
-                coverage:
-                  typeof props['dc:coverage'] === 'string'
-                    ? (props['dc:coverage'] as string)
-                    : undefined,
-                subjects: tags.join(', ') || undefined,
-                flags: undefined,
-                collection: Array.isArray(props['collection:documentIds'])
-                  ? (props['collection:documentIds'] as string[]).join(',')
-                  : ((props['collection:documentIds'] as string) ?? ''),
-                collectionKey: Array.isArray(props['collection:documentIds'])
-                  ? (props['collection:documentIds'] as string[]).join(',').toLowerCase()
-                  : ((props['collection:documentIds'] as string) ?? '').toLowerCase(),
-                tags,
-                icon: docTypeIcon(doc.type),
-              } satisfies SearchResultItem;
-            }),
-            modifiedDateValues,
-          ),
+            return {
+              id: doc.uid,
+              title: doc.title,
+              type: doc.type,
+              path: doc.path,
+              isFavorite: doc.contextParameters?.favorites?.isFavorite ?? false,
+              modifiedDate: doc.lastModified?.slice(0, 10) ?? '',
+              sizeInBytes: this.parseSizeInBytes(fileContent?.length),
+              lastContributor,
+              createdDate:
+                typeof props['dc:created'] === 'string'
+                  ? (props['dc:created'] as string).slice(0, 10)
+                  : undefined,
+              author,
+              authorKey: author.toLowerCase(),
+              state:
+                typeof props['ecm:currentLifeCycleState'] === 'string'
+                  ? (props['ecm:currentLifeCycleState'] as string)
+                  : undefined,
+              version,
+              nature:
+                typeof props['dc:nature'] === 'string' ? (props['dc:nature'] as string) : undefined,
+              coverage:
+                typeof props['dc:coverage'] === 'string'
+                  ? (props['dc:coverage'] as string)
+                  : undefined,
+              subjects: tags.join(', ') || undefined,
+              flags: undefined,
+              collection: Array.isArray(props['collection:documentIds'])
+                ? (props['collection:documentIds'] as string[]).join(',')
+                : ((props['collection:documentIds'] as string) ?? ''),
+              collectionKey: Array.isArray(props['collection:documentIds'])
+                ? (props['collection:documentIds'] as string[]).join(',').toLowerCase()
+                : ((props['collection:documentIds'] as string) ?? '').toLowerCase(),
+              tags,
+              icon: docTypeIcon(doc.type),
+            } satisfies SearchResultItem;
+          }),
           aggregations: this.normalizeAggregations(res.aggregations),
         })),
       );
   }
 
-  private filterItemsByModifiedDate(
-    items: SearchResultItem[],
-    modifiedDateValues: string[],
-  ): SearchResultItem[] {
-    if (modifiedDateValues.length === 0) return items;
-
-    const selected = new Set(modifiedDateValues);
-    const nowMs = Date.now();
-    const dayMs = 24 * 60 * 60 * 1000;
-
-    return items.filter((item) => {
-      const modifiedMs = Date.parse(item.modifiedDate);
-      if (!Number.isFinite(modifiedMs)) return false;
-
-      const diffMs = Math.max(0, nowMs - modifiedMs);
-      if (selected.has('last24h') && diffMs <= dayMs) return true;
-      if (selected.has('lastWeek') && diffMs > dayMs && diffMs <= 7 * dayMs) return true;
-      if (selected.has('lastMonth') && diffMs > 7 * dayMs && diffMs <= 30 * dayMs) return true;
-      if (selected.has('lastYear') && diffMs > 30 * dayMs && diffMs <= 365 * dayMs) return true;
-      if (selected.has('moreThan1YearAgo') && diffMs > 365 * dayMs) return true;
-      return false;
-    });
+  /**
+   * Tag labels that start with `term`, from Nuxeo's `Tag.Suggestion` — what Web UI's search form
+   * offers in its Tags field. Empty for a blank term, and on failure, so a typeahead stays usable.
+   */
+  getTagSuggestions(term: string): Observable<string[]> {
+    const searchTerm = term.trim();
+    if (!searchTerm) return of([]);
+    return this.api
+      .post<unknown>(
+        '/nuxeo/api/v1/automation/Tag.Suggestion',
+        { params: { searchTerm }, context: {} },
+        { 'Content-Type': 'application/json' },
+      )
+      .pipe(
+        map((res) =>
+          (Array.isArray(res) ? res : [])
+            .map((entry) =>
+              entry && typeof entry === 'object'
+                ? (this.asString((entry as Record<string, unknown>)['displayLabel']) ??
+                  this.asString((entry as Record<string, unknown>)['id']))
+                : undefined,
+            )
+            .filter((label): label is string => !!label),
+        ),
+        catchError(() => of<string[]>([])),
+      );
   }
 
   private asPrincipalName(value: unknown): string {
