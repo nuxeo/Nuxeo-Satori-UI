@@ -815,11 +815,11 @@ journeyTest('document-detail', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Document detail — header **More actions** overflow trigger keyboard focus (NXSAT-535).
+ * Screen 5 — document detail with header **More actions** overflow trigger focused (NXSAT-535).
  *
  * Separate journey project so the a11y-scout accumulator stays one scan per worker/report
  * (`emitScreenReport` requires `pagesScanned.length === 1`). NXENG-808 keeps the Add to
- * collection pre-scan on `document-detail` above.
+ * collection pre-scan on `document-detail` (Screen 4) above.
  */
 journeyTest('document-detail-more-actions', async ({ signedIn: page, a11y }) => {
   await page.goto('/#/browse', { waitUntil: 'networkidle' });
@@ -846,7 +846,7 @@ journeyTest('document-detail-more-actions', async ({ signedIn: page, a11y }) => 
 // ─────────────────────────── core flows ───────────────────────────
 
 /**
- * Screen 5 — search, with a query applied and results returned.
+ * Screen 6 — search, with a query applied and results returned.
  *
  * ## Why the query is a quick filter and not typed text
  *
@@ -896,7 +896,7 @@ journeyTest('search', async ({ signedIn: page, a11y }) => {
   await emitScreenReport(a11y, journeyReportName('search'));
 });
 
-/** Screen 6 — documents, the asset search, as it opens with no filter applied. */
+/** Screen 7 — documents, the asset search, as it opens with no filter applied. */
 journeyTest('documents', async ({ signedIn: page, a11y }) => {
   // The drawer runs the same search with `pageSize: 200` for its facets and renders empty
   // facets if it fails, so both requests must succeed. `pageSize` then picks the page's: its
@@ -926,7 +926,7 @@ journeyTest('documents', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 7 — one collection, opened by uid, with members in it.
+ * Screen 8 — one collection, opened by uid, with members in it.
  *
  * `/#/collections` alone renders nothing — `collectionsRoutes` declares only `:uid` — which is
  * why `SURFACES` leaves it out and why phase-6's scan of it is a vacuous pass. A real uid is
@@ -1014,7 +1014,7 @@ journeyTest('collection', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 8 — the favorites panel.
+ * Screen 9 — the favorites panel.
  *
  * The panel has no error state: a failed request renders the empty "no favorites" message. So
  * the members request is captured, and the precondition is checked first — when the user has
@@ -1066,7 +1066,7 @@ journeyTest('favorites', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 9 — the recently viewed panel.
+ * Screen 10 — the recently viewed panel.
  *
  * Named for views, but `RECENTLY_VIEWED_QUERY` lists documents the user created or last
  * modified; it reads no audit trail. The request is matched on that clause.
@@ -1095,7 +1095,7 @@ journeyTest('recently-viewed', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 10 — personal space.
+ * Screen 11 — personal space.
  *
  * `/#/personal-space` is a redirect: the page asks for the user's workspace and navigates to
  * `/#/browse<workspace path>`, so the screen a user lands on is browse, rooted in their own
@@ -1146,7 +1146,7 @@ journeyTest('personal-space', async ({ signedIn: page, a11y }) => {
 const CLIPBOARD_STORAGE_KEY = 'nuxeo_clipboard';
 
 /**
- * Screen 11 — the clipboard panel.
+ * Screen 12 — the clipboard panel.
  *
  * The clipboard lives in the browser, not on the server, so it is seeded rather than found:
  * one real document, written in the app's own storage shape. Nothing on the server changes,
@@ -1195,7 +1195,7 @@ function describeState(count: number, noun: string): string {
 }
 
 /**
- * Screen 12 — tasks.
+ * Screen 13 — tasks.
  *
  * With tasks, the page selects the first one and navigates to `/#/tasks/<id>`, so the screen
  * is the task form; without, it is a prompt to pick a task from the drawer. Both are required
@@ -1250,7 +1250,7 @@ journeyTest('tasks', async ({ signedIn: page, a11y }) => {
   await emitScreenReport(a11y, journeyReportName('tasks'), describeState(tasks.length, 'task(s)'));
 });
 
-/** Screen 13 — the expired queue panel: documents whose `dc:expired` date has passed. */
+/** Screen 14 — the expired queue panel: documents whose `dc:expired` date has passed. */
 journeyTest('expired-queue', async ({ signedIn: page, a11y }) => {
   const body = await captureDataRequest(
     page,
@@ -1284,7 +1284,7 @@ journeyTest('expired-queue', async ({ signedIn: page, a11y }) => {
   );
 });
 
-/** Screen 14 — trash, with something in it. */
+/** Screen 15 — trash, with something in it. */
 journeyTest('trash', async ({ signedIn: page, a11y }) => {
   // The filters drawer runs the same query with `pageSize: 200` for its counts and shows zero
   // counts if it fails (`catchError` to an empty list), so both requests must succeed.
@@ -1314,7 +1314,7 @@ journeyTest('trash', async ({ signedIn: page, a11y }) => {
 });
 
 /**
- * Screen 15 — administration, as an administrator lands on it.
+ * Screen 16 — administration, as an administrator lands on it.
  *
  * `/#/administration` redirects to `analytics`, whose first tab is Document Distribution. At
  * the domain root that tab deliberately shows a callout instead of counts — the query would
