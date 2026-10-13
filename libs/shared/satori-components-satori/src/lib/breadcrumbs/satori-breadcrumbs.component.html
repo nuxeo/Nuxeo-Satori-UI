@@ -1,1 +1,5 @@
-<sat-breadcrumbs [items]="satoriItems()" />
+<!-- Satori fits a trail to its box only when it starts or the box resizes, so each new trail gets a
+     new sat-breadcrumbs, which measures it. -->
+@for (trail of [satoriItems()]; track trail) {
+  <sat-breadcrumbs [items]="trail" />
+}

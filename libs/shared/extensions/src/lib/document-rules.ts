@@ -66,6 +66,14 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
     const facets = context.document?.facets ?? [];
     return stringParameters(parameters).some((facet) => facets.includes(facet));
   },
+  /**
+   * The focused document holds a main file, `file:content` — what Download downloads. Nuxeo's
+   * `Downloadable` facet is not a test for it: Picture holds a file and has no such facet.
+   */
+  'app.rules.hasFile': (context) => {
+    const content = context.document?.properties?.['file:content'];
+    return typeof content === 'object' && content !== null && !Array.isArray(content);
+  },
   /** The focused document is in the trash — gates the whole write half of the toolbar. */
   'app.rules.isTrashed': (context) => isTrashedDocument(context.document),
   'app.rules.isNotTrashed': (context) =>

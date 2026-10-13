@@ -15,6 +15,7 @@ import {
   CURRENT_USERNAME,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   PERMISSION_DENIED_KEY,
   SelectionService,
   TagService,
@@ -137,6 +138,7 @@ describe('BrowseComponent — listing state', () => {
         provideZonelessChangeDetection(),
         provideRouter([{ path: '**', children: [] }], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: detail },
         {
           provide: DirectoryService,
@@ -248,52 +250,82 @@ describe('BrowseComponent — listing state', () => {
 
   // ── Sorting ──
 
-  it('sorts the listing by modified date, by contributor and by a computed cell value', () => {
+  it('never sorts the page itself, whatever order is set', () => {
+    component.entries.set([doc({ uid: 'z', title: 'Zebra' }), doc({ uid: 'a', title: 'Alpha' })]);
+    component.listSort.set({ key: 'title', direction: 'asc' });
+
+    expect(component.filteredEntries().map((d) => d.uid)).toEqual(['z', 'a']);
+  });
+
+  it('sends each sortable column as its Nuxeo property, and a new order from page one', () => {
+    component.pageIndex.set(2);
+    const cases: [string, string][] = [
+      ['title', 'dc:title'],
+      ['modified', 'dc:modified'],
+      ['lastContributor', 'dc:lastContributor'],
+      ['created', 'dc:created'],
+      ['author', 'dc:creator'],
+    ];
+    for (const [key, sortBy] of cases) {
+      browse.getBrowseFolderContents.mockClear();
+      component.onListSortChange({ key, direction: 'desc' });
+      expect(component.pageIndex()).toBe(0);
+      expect(browse.getBrowseFolderContents).toHaveBeenCalledWith(expect.any(String), 50, {
+        currentPageIndex: 0,
+        sort: [{ sortBy, sortOrder: 'DESC' }],
+      });
+    }
+  });
+
+  it('sends no sort for a cleared order, nor for a column the server cannot sort by', () => {
+    component.onListSortChange(null);
+    expect(browse.getBrowseFolderContents).toHaveBeenLastCalledWith(expect.any(String), 50, {
+      currentPageIndex: 0,
+      sort: [],
+    });
+
+    component.onListSortChange({ key: 'version', direction: 'asc' });
+    expect(browse.getBrowseFolderContents).toHaveBeenLastCalledWith(expect.any(String), 50, {
+      currentPageIndex: 0,
+      sort: [],
+    });
+  });
+
+  it('marks only the columns the server sorts by as sortable', () => {
+    component.applyColumns(['title', 'type', 'modified', 'lastContributor', 'version', 'author']);
+    const sortable = Object.fromEntries(
+      component.listColumns().map((column) => [column.key, column.sortable]),
+    );
+    expect(sortable['title']).toBe(true);
+    expect(sortable['modified']).toBe(true);
+    expect(sortable['lastContributor']).toBe(true);
+    expect(sortable['author']).toBe(true);
+    expect(sortable['type']).toBe(false);
+    expect(sortable['version']).toBe(false);
+  });
+
+  it('ignores a request for the page on screen or a negative one', () => {
+    browse.getBrowseFolderContents.mockClear();
+    component.goToPage(0);
+    component.goToPage(-1);
+    expect(browse.getBrowseFolderContents).not.toHaveBeenCalled();
+  });
+
+  it('writes the list’s selection back to the shared service with titles and types', () => {
     component.entries.set([
-      doc({
-        uid: 'a',
-        title: 'Alpha',
-        lastModified: '2026-03-01T00:00:00.000Z',
-        properties: { 'dc:lastContributor': 'zoe', 'dc:creator': 'mallory' },
-      }),
-      doc({
-        uid: 'b',
-        title: 'Beta',
-        lastModified: '2026-01-01T00:00:00.000Z',
-        properties: { 'dc:lastContributor': 'adam', 'dc:creator': 'alice' },
-      }),
+      doc({ uid: 'a', title: 'Alpha', type: 'Note' }),
+      doc({ uid: 'b', title: 'Beta', type: 'File' }),
+    ]);
+    component.onListSelectionChange(['a', 'b']);
+    expect([...selection.selectedIds()]).toEqual(['a', 'b']);
+    expect(selection.selectedItems().map((item) => [item.name, item.type])).toEqual([
+      ['Alpha', 'Note'],
+      ['Beta', 'File'],
     ]);
 
-    component.toggleBrowseSort('modified');
-    expect(component.filteredEntries().map((d) => d.uid)).toEqual(['b', 'a']);
-
-    component.toggleBrowseSort('lastContributor');
-    expect(component.filteredEntries().map((d) => d.uid)).toEqual(['b', 'a']);
-
-    component.toggleBrowseSort('author');
-    expect(component.filteredEntries().map((d) => d.uid)).toEqual(['b', 'a']);
-
-    component.toggleBrowseSort('author');
-    expect(component.browseSortDir()).toBe('desc');
-    expect(component.filteredEntries().map((d) => d.uid)).toEqual(['a', 'b']);
-  });
-
-  it('toggleBrowseSort restarts ascending when the sorted column changes', () => {
-    component.toggleBrowseSort('title');
-    component.toggleBrowseSort('title');
-    expect(component.browseSortDir()).toBe('desc');
-
-    component.toggleBrowseSort('modified');
-
-    expect(component.browseSortKey()).toBe('modified');
-    expect(component.browseSortDir()).toBe('asc');
-  });
-
-  it('leaves entries in server order when no column is sorted', () => {
-    component.entries.set([doc({ uid: 'z', title: 'Zebra' }), doc({ uid: 'a', title: 'Alpha' })]);
-
-    expect(component.browseSortKey()).toBe('');
-    expect(component.filteredEntries().map((d) => d.uid)).toEqual(['z', 'a']);
+    component.onListSelectionChange(['b']);
+    expect([...selection.selectedIds()]).toEqual(['b']);
+    expect(component.listSelectedIds()).toEqual(['b']);
   });
 
   // ── Cell values ──
@@ -485,15 +517,29 @@ describe('BrowseComponent — listing state', () => {
     expect(component.canCreateContentHere()).toBe(false);
   });
 
-  it('hasCollectionEntries is true only while a collection is visible in the listing', () => {
+  it('keeps Edit in the row menu of a collection visible in the listing, and only there', () => {
     component.entries.set([doc({ uid: 'a', type: 'File' })]);
-    expect(component.hasCollectionEntries()).toBe(false);
+    expect(component.rowMenus()['a']?.map((entry) => entry.id) ?? []).not.toContain(
+      'collection.edit',
+    );
 
     component.entries.set([doc({ uid: 'c', type: 'Collection' })]);
-    expect(component.hasCollectionEntries()).toBe(true);
+    expect(component.rowMenus()['c']?.map((entry) => entry.id)).toContain('collection.edit');
 
     component.filterType.set('File');
-    expect(component.hasCollectionEntries()).toBe(false);
+    expect(component.rowMenus()['c']).toBeUndefined();
+  });
+
+  it('opens a collection row’s Edit', () => {
+    const edit = vi
+      .spyOn(component, 'openEditCollectionDialog')
+      .mockImplementation(() => undefined);
+    const collection = doc({ uid: 'c', type: 'Collection' });
+    component.onRowAction({
+      action: { id: 'collection.edit', label: 'Edit' },
+      document: collection,
+    });
+    expect(edit).toHaveBeenCalledWith(collection);
   });
 
   it('showHeaderDelete follows the selection when there is one, and the folder otherwise', () => {
@@ -549,17 +595,21 @@ describe('BrowseComponent — listing state', () => {
     fixture.detectChanges();
     component.activeTabIndex.set(2);
     component.permissionsLoaded.set(true);
+    component.goToPage(3);
     browse.getBrowseFolderContents.mockClear();
 
     await TestBed.inject(Router).navigateByUrl('/browse/default-domain/workspaces/other');
     fixture.detectChanges();
 
+    // Another folder starts on its first page, whatever page the last one was on.
+    expect(component.pageIndex()).toBe(0);
     expect(component.activeTabIndex()).toBe(0);
     expect(component.permissionsLoaded()).toBe(false);
     expect(component.browsePath()).toBe('/default-domain/workspaces/other');
     expect(browse.getBrowseFolderContents).toHaveBeenCalledWith(
       '/default-domain/workspaces/other',
       50,
+      { currentPageIndex: 0, sort: [] },
     );
   });
 

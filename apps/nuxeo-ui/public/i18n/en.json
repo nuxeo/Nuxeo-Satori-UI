@@ -10,6 +10,11 @@
     "context-menu-share": "Share",
     "context-menu-subscribe": "Notify Me",
     "context-menu-unsubscribe": "Unsubscribe",
+    "row-actions-copy-to": "Copy to…",
+    "row-actions-delete": "Delete",
+    "row-actions-download": "Download",
+    "row-actions-move-to": "Move to…",
+    "row-actions-rename": "Rename",
     "toolbar-add-to-clipboard": "Add to Clipboard",
     "toolbar-add-to-collection": "Add to collection",
     "toolbar-add-to-favorites": "Add to Favorites",
@@ -634,6 +639,7 @@
   "browse": {
     "block": "Block",
     "breadcrumb": {
+      "label": "Breadcrumbs",
       "root": "Root"
     },
     "browse": {
@@ -646,11 +652,13 @@
       "card-view": "Card view",
       "category": "Category",
       "clear": "Clear",
+      "clear-uploads": "Clear",
       "close-column-picker": "Close column picker",
       "close-panel": "Close panel",
       "collection-actions": "Collection actions",
       "column-settings": "Column Settings",
       "comment": "Comment",
+      "contents-of": "Contents of {{ name }}",
       "contributors": "Contributors",
       "create-folder-upload-files-or-import": "Create folder, upload files, or import CSV",
       "create-import": "Create / Import",
@@ -659,6 +667,7 @@
       "delete": "Delete",
       "done": "Done",
       "download-all": "Download All",
+      "drop-to-upload": "Drop files to upload them to {{ name }}",
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
@@ -705,6 +714,7 @@
       "trash-is-empty": "Trash is empty",
       "type": "Type",
       "upload-with-nuxeo-drive": "Upload with Nuxeo Drive",
+      "uploads": "Uploads",
       "user": "User",
       "user-group": "User / Group",
       "username": "Username"
@@ -841,6 +851,7 @@
       "action-failed": "Action failed",
       "collection-moved-to-trash": "Collection moved to trash",
       "collection-updated": "Collection updated",
+      "copied-to": "Copied \"{{ name }}\" to {{ folder }}",
       "could-not-load-folder-contents": "Could not load folder contents.",
       "could-not-resolve-a-default-folder-open": "Could not resolve a default folder. Open a folder in Browse first.",
       "could-not-resolve-this-path-try-another": "Could not resolve this path. Try another folder.",
@@ -855,12 +866,14 @@
       "domain-container-guidance": "Open Sections, Templates, or Workspaces, then create content inside those folders.",
       "download-failed": "Download failed.",
       "failed-to-add-tag": "Failed to add tag",
+      "failed-to-copy": "The document could not be copied.",
       "failed-to-delete": "Failed to delete",
       "failed-to-delete-collection": "Failed to delete collection",
       "failed-to-load-collection": "Failed to load collection",
       "failed-to-load-folder-contents": "Failed to load folder contents.",
       "failed-to-load-permissions": "Failed to load permissions",
       "failed-to-load-selected-documents-for-deletion": "Failed to load selected documents for deletion",
+      "failed-to-move": "The document could not be moved.",
       "failed-to-remove-tag": "Failed to remove tag",
       "failed-to-restore-document": "Failed to restore document.",
       "failed-to-send-notification": "Failed to send notification",
@@ -871,6 +884,7 @@
       "file-upload-failed": "File upload failed",
       "inheritance-blocked": "Inheritance blocked",
       "inheritance-unblocked": "Inheritance unblocked",
+      "moved-to": "Moved \"{{ name }}\" to {{ folder }}",
       "moved-to-trash": "Moved to trash",
       "notification-email-sent": "Notification email sent",
       "open-a-folder-to-create-or-import": "Open a folder to create or import content.",
@@ -880,6 +894,7 @@
       "please-select-a-csv-file": "Please select a .csv file.",
       "please-wait-for-the-file-upload-to": "Please wait for the file upload to finish.",
       "remove-all-collections-from-this-folder-before": "Remove all collections from this folder before deleting it.",
+      "renamed": "Renamed to \"{{ name }}\"",
       "restricted-import-location": "Select a different container to create your content.",
       "search-failed": "Search failed",
       "selected-path-is-not-a-folder-choose": "Selected path is not a folder. Choose a folder or go up one level.",
@@ -888,8 +903,15 @@
       "subscribed-to-notifications": "Subscribed to notifications",
       "unsubscribed": "Unsubscribed",
       "upload-failed": "Upload failed",
+      "upload-in-progress": "Wait for the files being uploaded to finish before dropping more.",
       "uploading": "Uploading…",
       "uploading-file-of": "Uploading file {{ index }} of {{ count }}…"
+    },
+    "row-actions": {
+      "copy-heading": "Copy \"{{ name }}\" to",
+      "copy-here": "Copy here",
+      "move-heading": "Move \"{{ name }}\" to",
+      "move-here": "Move here"
     },
     "scope": {
       "create-import": "Create / Import",
@@ -927,6 +949,7 @@
     "collection-detail": {
       "actions": "Actions",
       "back-to-collections": "Back to collections",
+      "breadcrumbs": "Breadcrumbs",
       "category": "Category",
       "comment": "Comment",
       "date": "Date",
@@ -942,6 +965,7 @@
       "if-you-want-to-explicitly-control": "If you want to explicitly control the access to this document you can block the permissions inheritance. Any change made on parent document will not affect the access conditions to this document. You and the administrators will be added to local permissions.",
       "last-contributor": "Last Contributor",
       "loading": "Loading",
+      "members-of": "Members of {{ name }}",
       "modified": "Modified",
       "more-actions": "More actions",
       "new": "New",
@@ -1764,8 +1788,8 @@
   },
   "nav": {
     "clipboard": {
-      "aria-label-one": "{{ name }}, {{ count }} item",
       "aria-label-many": "{{ name }}, {{ count }} items",
+      "aria-label-one": "{{ name }}, {{ count }} item",
       "copy": "Copy",
       "empty": "Clipboard is empty",
       "hint": "Use \"Add to Clipboard\" on documents or collections to add items here.",
@@ -1817,6 +1841,7 @@
       "retry": "Retry"
     },
     "tree": {
+      "label": "Folders",
       "retry": "Retry",
       "root": "Root",
       "toggle": "Toggle {{ name }}"
@@ -1958,11 +1983,41 @@
     "action-menu": {
       "more-actions": "More actions"
     },
+    "breadcrumbs": {
+      "show-more": "Show more breadcrumbs"
+    },
     "column-picker": {
       "close": "Close column picker",
       "done": "Done",
       "reset": "Reset",
       "title": "Column Settings"
+    },
+    "document-list": {
+      "actions": "Actions",
+      "drop": "Drop files to upload them here",
+      "empty": "Nothing here yet",
+      "keyboard-hint": "Arrow keys move between documents. Space selects, Shift extends the selection, Enter opens.",
+      "keyboard-hint-no-selection": "Arrow keys move between documents. Enter opens.",
+      "loading": "Loading documents",
+      "row-actions": "Actions for {{ name }}",
+      "row-name-repeated": "{{ name }} ({{ index }} of {{ count }})",
+      "select": "Select {{ name }}",
+      "select-page": "Select all on this page",
+      "selection": "Selection",
+      "sort-by": "Sort by {{ column }}",
+      "sort-cleared": "Sort cleared, showing the default order",
+      "sorted-ascending": "Sorted by {{ column }}, ascending",
+      "sorted-descending": "Sorted by {{ column }}, descending"
+    },
+    "document-tree": {
+      "children-failed": "The folders in {{ name }} could not be loaded",
+      "children-failed-row": "Could not load the folders. Retry",
+      "children-forbidden": "You do not have access to the folders in {{ name }}",
+      "children-forbidden-row": "You do not have access to these folders",
+      "empty": "No folders to show",
+      "load-failed": "The folders could not be loaded",
+      "loading": "Loading folders",
+      "root": "Root"
     },
     "date-input": {
       "invalid": "Enter a date like {{ example }}",
@@ -1976,6 +2031,10 @@
       "package": "Package to Install",
       "platform": "Platform",
       "title": "Download Nuxeo Drive Client"
+    },
+    "dropzone": {
+      "choose-file": "Choose a file",
+      "choose-files": "Choose files"
     },
     "error-state": {
       "forbidden": {
@@ -2000,6 +2059,29 @@
       "add": "Add to favorites",
       "label": "Favorite",
       "remove": "Remove from favorites"
+    },
+    "folder-picker": {
+      "already-here": "The document is already in this folder.",
+      "cancel": "Cancel",
+      "empty": "No folders here. You can choose this folder.",
+      "failed": "The folder could not be loaded.",
+      "folders": "Folders",
+      "forbidden": "You do not have access to this folder.",
+      "inside-itself": "A folder cannot be moved into itself or into a folder inside it.",
+      "loading": "Loading folders",
+      "location": "Location",
+      "not-a-folder": "This is not a folder. Go up and choose a folder.",
+      "not-found": "This folder no longer exists.",
+      "retry": "Retry",
+      "up": "Up one level"
+    },
+    "pager": {
+      "label": "Pages",
+      "next": "Next page",
+      "past-end": "No more items",
+      "previous": "Previous page",
+      "range": "{{ first }}–{{ last }}",
+      "range-of": "{{ first }}–{{ last }} of {{ total }}"
     },
     "permissions-panel": {
       "add": "Add",
@@ -2115,6 +2197,17 @@
         "heading": "The changes were sent, but reading the permissions back failed, so the panel cannot confirm them. Reload to see what the server holds."
       }
     },
+    "rename-dialog": {
+      "cancel": "Cancel",
+      "failed": "The title could not be changed. Try again in a moment.",
+      "forbidden": "You do not have permission to rename this document.",
+      "label": "Title",
+      "locked": "This document is locked by someone else, so it cannot be renamed now.",
+      "not-found": "This document no longer exists.",
+      "required": "Enter a title",
+      "save": "Rename",
+      "title": "Rename"
+    },
     "pickers": {
       "choose-from-list": "Choose an entry from the list",
       "clear": "Clear",
@@ -2135,6 +2228,19 @@
     "toast": {
       "dismiss": "Dismiss",
       "retry": "Retry"
+    },
+    "upload-queue": {
+      "done": "Uploaded",
+      "failed": "Could not be uploaded",
+      "forbidden": "You do not have permission to add documents here",
+      "not-found": "The folder no longer exists",
+      "progress": "Uploading {{ name }}",
+      "remove": "Remove {{ name }}",
+      "retry": "Retry {{ name }}",
+      "summary": "{{ done }} of {{ total }} uploaded",
+      "summary-failed": "{{ count }} could not be uploaded",
+      "uploading": "Uploading, {{ percent }}%",
+      "waiting": "Waiting"
     },
     "user-group-picker": {
       "group": "Group",

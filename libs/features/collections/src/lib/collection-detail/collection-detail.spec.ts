@@ -276,10 +276,8 @@ describe('CollectionDetailComponent', () => {
       component.collection.set(mockCollection);
       const items = component.breadcrumbItems();
       expect(items.length).toBeGreaterThan(0);
-      // `SatBreadcrumbsItem` is a union and only one member carries `href`, so narrow rather
-      // than reaching through it.
-      const first = items[0] as { href?: string };
-      expect(first.href).toContain('/browse');
+      expect(items[0].routerLink).toContain('/browse');
+      expect(items.every((item) => item.href === undefined)).toBe(true);
     });
 
     it('should return empty array when collection has no path', () => {
@@ -358,30 +356,17 @@ describe('CollectionDetailComponent', () => {
     });
   });
 
-  describe('onBreadcrumbClick', () => {
-    it('should navigate when anchor clicked', () => {
-      const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-      const mockEvent = {
-        target: { closest: () => ({ getAttribute: () => '/browse/test' }) },
-        preventDefault: vi.fn(),
-      } as any;
-
-      component.onBreadcrumbClick(mockEvent);
-
-      expect(mockEvent.preventDefault).toHaveBeenCalled();
-      expect(navigateSpy).toHaveBeenCalledWith('/browse/test');
-    });
-
-    it('should do nothing if no href', () => {
-      const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-      const mockEvent = {
-        target: { closest: () => null },
-        preventDefault: vi.fn(),
-      } as any;
-
-      component.onBreadcrumbClick(mockEvent);
-
-      expect(navigateSpy).not.toHaveBeenCalled();
+  describe('breadcrumbs', () => {
+    it('links each parent folder in the app, and does not throw on a literal percent sign', () => {
+      component.collection.set(
+        docWith({ path: '/default-domain/workspaces/100% done/Q3 collection' }),
+      );
+      expect(component.breadcrumbItems()).toEqual([
+        { label: 'default-domain', routerLink: '/browse/default-domain' },
+        { label: 'workspaces', routerLink: '/browse/default-domain/workspaces' },
+        { label: '100% done', routerLink: '/browse/default-domain/workspaces/100% done' },
+      ]);
+      expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
     });
   });
 
@@ -392,34 +377,6 @@ describe('CollectionDetailComponent', () => {
       component.goToCollections();
 
       expect(navigateSpy).toHaveBeenCalledWith('/collections');
-    });
-  });
-
-  describe('docIcon', () => {
-    it('should return icon for document type', () => {
-      const doc = docWith({ type: 'File' });
-      const icon = component.docIcon(doc);
-      expect(icon).toBeTruthy();
-      expect(typeof icon).toBe('string');
-    });
-  });
-
-  describe('lastContributor', () => {
-    it('should return last contributor from properties', () => {
-      const doc = docWith({ properties: { 'dc:lastContributor': 'john' } });
-      expect(component.lastContributor(doc)).toBe('john');
-    });
-
-    it('should return empty string when missing', () => {
-      const doc = docWith({ properties: {} });
-      expect(component.lastContributor(doc)).toBe('');
-    });
-  });
-
-  describe('contributorInitial', () => {
-    it('should return first character of last contributor', () => {
-      const doc = docWith({ properties: { 'dc:lastContributor': 'admin' } });
-      expect(component.contributorInitial(doc)).toBe('A');
     });
   });
 
@@ -1060,18 +1017,6 @@ describe('CollectionDetailComponent', () => {
       expect(mockDetailService.fetchThumbnail).not.toHaveBeenCalled();
       expect(created).toEqual([]);
     });
-
-    it('asks for a thumbnail only for content documents', () => {
-      expect(component['canLoadThumbnail'](docWith({ uid: 'f', title: 'F', type: 'File' }))).toBe(
-        true,
-      );
-      expect(
-        component['canLoadThumbnail'](docWith({ uid: 'w', title: 'W', type: 'Workspace' })),
-      ).toBe(false);
-      expect(component['canLoadThumbnail'](docWith({ uid: 'x', title: 'X', type: '  ' }))).toBe(
-        false,
-      );
-    });
   });
 
   describe('history tab', () => {
@@ -1296,9 +1241,55 @@ describe('CollectionDetailComponent', () => {
 
       component.loadMembers();
 
-      expect(mockCollectionService.getCollectionMembers).toHaveBeenCalledWith('collection-1', 50);
+      expect(mockCollectionService.getCollectionMembers).toHaveBeenCalledWith('collection-1', 50, {
+        currentPageIndex: 0,
+        sort: [],
+      });
       expect(component.members().length).toBe(2);
       expect(component.totalSize()).toBe(2);
+    });
+
+    it('pages on the server, keeping the order, and reports a next page', () => {
+      component['collectionUid'] = 'collection-1';
+      mockCollectionService.getCollectionMembers.mockReturnValue(
+        of({ entries: [docWith({ uid: 'doc51' })], totalSize: 60, isNextPageAvailable: true }),
+      );
+      component.onMemberSortChange({ key: 'modified', direction: 'desc' });
+      component.goToMemberPage(1);
+
+      expect(mockCollectionService.getCollectionMembers).toHaveBeenLastCalledWith(
+        'collection-1',
+        50,
+        { currentPageIndex: 1, sort: [{ sortBy: 'dc:modified', sortOrder: 'DESC' }] },
+      );
+      expect(component.membersHaveNextPage()).toBe(true);
+      expect(component.totalSize()).toBe(60);
+    });
+
+    it('starts a new order from the first page, and ignores the page on screen', () => {
+      component['collectionUid'] = 'collection-1';
+      mockCollectionService.getCollectionMembers.mockReturnValue(of({ entries: [], totalSize: 0 }));
+      component.goToMemberPage(2);
+      component.onMemberSortChange({ key: 'title', direction: 'asc' });
+      expect(component.memberPageIndex()).toBe(0);
+      expect(mockCollectionService.getCollectionMembers).toHaveBeenLastCalledWith(
+        'collection-1',
+        50,
+        { currentPageIndex: 0, sort: [{ sortBy: 'dc:title', sortOrder: 'ASC' }] },
+      );
+
+      mockCollectionService.getCollectionMembers.mockClear();
+      component.goToMemberPage(0);
+      component.goToMemberPage(-1);
+      expect(mockCollectionService.getCollectionMembers).not.toHaveBeenCalled();
+    });
+
+    it('marks every member column sortable on the server', () => {
+      expect(component.memberColumns().map((column) => [column.key, column.sortable])).toEqual([
+        ['title', true],
+        ['modified', true],
+        ['lastContributor', true],
+      ]);
     });
 
     it.each([

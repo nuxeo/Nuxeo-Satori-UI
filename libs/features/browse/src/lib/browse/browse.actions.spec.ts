@@ -20,6 +20,7 @@ import {
   CURRENT_USERNAME,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   PERMISSION_DENIED_KEY,
   TagService,
   type AuditEntry,
@@ -198,6 +199,7 @@ describe('BrowseComponent — actions', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: detail },
         { provide: DirectoryService, useValue: directory },
         { provide: TagService, useValue: tag },
@@ -1055,45 +1057,19 @@ describe('BrowseComponent — actions', () => {
 
   // ── Breadcrumbs ──
 
-  it('onBreadcrumbClick navigates to the crumb href and updates the tree context', () => {
-    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
-    const anchor = document.createElement('a');
-    anchor.setAttribute('href', '/browse/default-domain/workspaces');
-    const span = document.createElement('span');
-    anchor.appendChild(span);
-    const event = new MouseEvent('click', { cancelable: true });
-    span.dispatchEvent(event);
-
-    component.onBreadcrumbClick(event);
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(navigate).toHaveBeenCalledWith('/browse/default-domain/workspaces');
-    expect(TestBed.inject(BrowseContextService).contextPath()).toBe('/default-domain/workspaces');
-  });
-
-  it('onBreadcrumbClick ignores a click that is not on a crumb link', () => {
-    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
-    const div = document.createElement('div');
-    const event = new MouseEvent('click', { cancelable: true });
-    div.dispatchEvent(event);
-
-    component.onBreadcrumbClick(event);
-
-    expect(event.defaultPrevented).toBe(false);
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
   it('breadcrumbs link every ancestor and leave the current folder unlinked', () => {
     component.currentDoc.set(
       doc({ uid: 'ws-1', title: 'My Workspace', path: '/default-domain/workspaces/ws-1' }),
     );
 
+    // Router links: a crumb navigates in the app, and the router's NavigationEnd moves the tree.
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
-      { label: 'default-domain', href: '/browse/default-domain' },
-      { label: 'workspaces', href: '/browse/default-domain/workspaces' },
+      { label: 'Root', routerLink: '/browse' },
+      { label: 'default-domain', routerLink: '/browse/default-domain' },
+      { label: 'workspaces', routerLink: '/browse/default-domain/workspaces' },
       { label: 'My Workspace' },
     ]);
+    expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
   });
 
   // ── Context menu handlers ──

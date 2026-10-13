@@ -26,6 +26,24 @@ export interface NavTreeBootstrap {
   entries: NuxeoDocument[];
 }
 
+/** One server-side sort key: a Nuxeo property name such as `dc:title`, and its direction. */
+export interface BrowseSortEntry {
+  sortBy: string;
+  sortOrder: 'ASC' | 'DESC';
+}
+
+/**
+ * Which page of a browse listing to fetch, and in which server-side order.
+ *
+ * Every browse source honours both — ordinary folders through `@children`, `Root` through the
+ * `tree_children` page provider, `Domain` through `@children`, and `Favorites` and `Collection`
+ * through `default_content_collection` — so a listing never has to sort a page in the browser.
+ */
+export interface BrowsePageRequest {
+  currentPageIndex?: number;
+  sort?: BrowseSortEntry[];
+}
+
 export interface BrowseFolderContents {
   folder: NuxeoDocument;
   entries: NuxeoDocument[];
@@ -59,6 +77,17 @@ function isTopLevelDomain(doc: NuxeoDocument | null | undefined): boolean {
 
 /** Parent-ref sentinel for top-level domains on deployments that use the null UUID root. */
 const NULL_REPOSITORY_ROOT_UID = '00000000-0000-0000-0000-000000000000';
+
+/**
+ * Adds Nuxeo's `sortBy` and `sortOrder` to a page request: comma-separated lists of the same
+ * length, which `@children` and every page provider read the same way.
+ */
+export function withSort(params: HttpParams, sort?: readonly BrowseSortEntry[]): HttpParams {
+  if (!sort?.length) return params;
+  return params
+    .set('sortBy', sort.map((entry) => entry.sortBy).join(','))
+    .set('sortOrder', sort.map((entry) => entry.sortOrder).join(','));
+}
 
 @Injectable({ providedIn: 'root' })
 export class BrowseService {
@@ -126,7 +155,7 @@ export class BrowseService {
   getBrowseFolderContents(
     nuxeoPath: string,
     pageSize = 50,
-    page?: { currentPageIndex?: number; sort?: { sortBy: string; sortOrder: 'ASC' | 'DESC' }[] },
+    page?: BrowsePageRequest,
   ): Observable<BrowseFolderContents> {
     const safePath = nuxeoPath.replace(/\/+$/, '') || '/';
 
@@ -160,15 +189,20 @@ export class BrowseService {
     folder: NuxeoDocument,
     safePath: string,
     pageSize: number,
-    page?: { currentPageIndex?: number; sort?: { sortBy: string; sortOrder: 'ASC' | 'DESC' }[] },
+    page?: BrowsePageRequest,
   ): Observable<{ entries: NuxeoDocument[]; totalSize: number; hasNextPage?: boolean }> {
-    if (folder.type === 'Root' || folder.type === 'Domain') {
-      return this.getNavTreeChildren(folder, pageSize).pipe(
+    // Each branch is asked for one page in the server's order. `Root`, `Domain`, `Favorites` and
+    // `Collection` used to take only a page size, so a listing could never reach past its first
+    // page there, and a sort the caller asked for was dropped without a word. A domain lists every
+    // child through `@children`, as Nuxeo Web UI's domain view does: keeping only its folders after
+    // the server had paged them left pages short, or empty, wherever files came first.
+    if (folder.type === 'Root') {
+      return this.getNavTreeChildren(folder, pageSize, page ?? {}).pipe(
         map((list) => this.toBrowseEntryList(list)),
       );
     }
     if (folder.type === 'Favorites' || folder.type === 'Collection') {
-      return this.getCollectionMembers(folder.uid, pageSize).pipe(
+      return this.getCollectionMembers(folder.uid, pageSize, page).pipe(
         map((list) => this.toBrowseEntryList(list)),
       );
     }
@@ -177,14 +211,31 @@ export class BrowseService {
     );
   }
 
-  /** Collection / Favorites members (Nuxeo Web UI uses default_content_collection, not @children). */
-  getCollectionMembers(collectionUid: string, pageSize = 50): Observable<NuxeoDocumentList> {
-    const params = new HttpParams().set('queryParams', collectionUid).set('pageSize', pageSize);
+  /**
+   * Collection / Favorites members, one page at a time (Nuxeo Web UI uses
+   * `default_content_collection`, not `@children`).
+   *
+   * Unlike `@children`, this page provider answers a sort key it cannot use with HTTP 400 rather
+   * than an empty page, and it counts every member, so `totalSize` is real on every page.
+   */
+  getCollectionMembers(
+    collectionUid: string,
+    pageSize = 50,
+    page?: BrowsePageRequest,
+  ): Observable<NuxeoDocumentList> {
+    const params = withSort(
+      new HttpParams()
+        .set('queryParams', collectionUid)
+        .set('pageSize', pageSize)
+        .set('currentPageIndex', page?.currentPageIndex ?? 0),
+      page?.sort,
+    );
 
     return this.api.get<NuxeoDocumentList>(
       '/nuxeo/api/v1/search/pp/default_content_collection/execute',
       params,
-      { properties: '*' },
+      // `permissions`, as `getChildren` asks for, so a row's actions read its own permissions.
+      { properties: '*', 'enrichers.document': 'permissions' },
     );
   }
 
@@ -299,10 +350,21 @@ export class BrowseService {
    * Folder children for the nav drawer tree. Repository root uses `tree_children`
    * so every accessible domain is listed; domains use `@children` so structural
    * containers (SectionRoot / TemplateRoot / WorkspaceRoot) are always listed.
+   *
+   * Without `page`, a repository root lists every page, as a tree level does. With `page`, the
+   * root answers that one page in the order it asks for, as a listing does. A domain's level is its
+   * folders on the first page of `@children`, whatever `page` says: a listing pages a domain
+   * through `getBrowseFolderContents`, which keeps its files too.
    */
-  getNavTreeChildren(parent: NuxeoDocument, pageSize = 50): Observable<NuxeoDocumentList> {
+  getNavTreeChildren(
+    parent: NuxeoDocument,
+    pageSize = 50,
+    page?: BrowsePageRequest,
+  ): Observable<NuxeoDocumentList> {
     if (parent.type === 'Root') {
-      return this.getTreeChildren(parent.uid, pageSize);
+      return page
+        ? this.getTreeChildrenPage(parent.uid, pageSize, page)
+        : this.getTreeChildren(parent.uid, pageSize);
     }
     if (parent.type === 'Domain') {
       const safePath = parent.path?.replace(/\/+$/, '') ?? '';
@@ -414,18 +476,13 @@ export class BrowseService {
     nuxeoPath: string,
     pageSize = 50,
     currentPageIndex = 0,
-    sort?: { sortBy: string; sortOrder: 'ASC' | 'DESC' }[],
+    sort?: BrowseSortEntry[],
   ): Observable<NuxeoDocumentList> {
     const safePath = nuxeoPath.replace(/\/+$/, '');
-    let params = new HttpParams()
-      .set('pageSize', pageSize)
-      .set('currentPageIndex', currentPageIndex);
-
-    if (sort?.length) {
-      params = params
-        .set('sortBy', sort.map((entry) => entry.sortBy).join(','))
-        .set('sortOrder', sort.map((entry) => entry.sortOrder).join(','));
-    }
+    const params = withSort(
+      new HttpParams().set('pageSize', pageSize).set('currentPageIndex', currentPageIndex),
+      sort,
+    );
 
     return this.api.get<NuxeoDocumentList>(`/nuxeo/api/v1/path${safePath}/@children`, params, {
       properties: '*',
@@ -478,6 +535,26 @@ export class BrowseService {
           numberOfPages: 1,
         };
       }, emptyList),
+    );
+  }
+
+  /** One page of `tree_children`, in the order asked for: a repository root listed as a folder. */
+  private getTreeChildrenPage(
+    parentUid: string,
+    pageSize: number,
+    page: BrowsePageRequest,
+  ): Observable<NuxeoDocumentList> {
+    const params = withSort(
+      new HttpParams()
+        .set('queryParams', parentUid)
+        .set('pageSize', pageSize)
+        .set('currentPageIndex', page.currentPageIndex ?? 0),
+      page.sort,
+    );
+    return this.api.get<NuxeoDocumentList>(
+      '/nuxeo/api/v1/search/pp/tree_children/execute',
+      params,
+      { properties: '*' },
     );
   }
 

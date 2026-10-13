@@ -98,9 +98,9 @@ Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 1
 
 ![Breadcrumbs: without Satori on the left, with Satori on the right](breadcrumbs-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-The biggest visible difference. When space runs out, Satori's collapse into a "…" menu and the built-in ones wrap onto two lines. Satori has its own chevron icon and a rounded purple focus ring.
+When space runs out, both fold the middle of the trail into a "…" menu ("Show more breadcrumbs"), keeping the first item and the current page. Satori has its own chevron icon and a rounded purple focus ring. Satori fits a trail to its box only when it starts or the box resizes, not when the trail changes, so ours hands each new trail to a new `sat-breadcrumbs`; without that, a long trail overflowed after navigating.
 
-Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page.
+Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page, where the built-in breadcrumbs keep "…" and the current page and cut the page's name short.
 
 ### Rich tooltip
 
@@ -371,6 +371,99 @@ The same field in both, holding a note, looked up from its uid. It searches the 
 
 The same field and calendar button in both, holding 31 December. A typed date is read in the order the user's language writes dates, and the calendar is Angular Material's under either theme; Satori has no date field of its own.
 
+### Pager
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsPagerComponent`              |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `tables-pager--uncounted-folder` |
+
+![Pager: without Satori on the left, with Satori on the right](pager-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same range and Previous and Next buttons in both; the theme sets the type and the buttons' style. It shows "of N" only when Nuxeo counted the list. Nuxeo counts a folder's children only when they fit on one page, so a folder's second page reads "51–100"; it counts a collection's members on every page.
+
+### Document list
+
+| Field           | Value                                   |
+| --------------- | --------------------------------------- |
+| Component       | `NxsDocumentListComponent`              |
+| Registered ID   | —                                       |
+| With Satori     | Same component; theme only              |
+| Storybook story | `tables-document-list--folder-contents` |
+
+![Document list: without Satori on the left, with Satori on the right](document-list-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A folder's first page: the same table, sort headers, checkboxes and pager in both. The theme sets the type, the colours and the header's surface. The type tag and the contributor's avatar in each row render whatever is registered under `nxs.primitives.tag` and `nxs.primitives.avatar`, so with Satori registered they are Satori's own tag and avatar, and without it the built-in ones.
+
+The list itself has no Satori counterpart today; Satori's row-state layer, when it arrives, is meant to sit on this same Material table.
+
+### Document tree
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsDocumentTreeComponent`                  |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `navigation-document-tree--inside-a-domain` |
+
+![Document tree: without Satori on the left, with Satori on the right](document-tree-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A domain's branch expanded down to the folder on screen, which is highlighted as the current one. The same rows, arrows and highlight in both; the theme sets the type and the highlight's colour. A folder that holds no folder has no arrow, as in Nuxeo Web UI.
+
+### Rename dialog
+
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| Component       | `NxsRenameDialogComponent` |
+| Registered ID   | —                          |
+| With Satori     | Same component; theme only |
+| Storybook story | `dialogs-rename--renaming` |
+
+![Rename dialog: without Satori on the left, with Satori on the right](rename-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same dialog, title field and buttons in both; the theme sets the type, the field's outline and the buttons' style. It changes the document's title, and stays open with the reason when the server refuses.
+
+### Folder picker
+
+| Field           | Value                                      |
+| --------------- | ------------------------------------------ |
+| Component       | `NxsFolderPickerDialogComponent`           |
+| Registered ID   | —                                          |
+| With Satori     | Same component; theme only                 |
+| Storybook story | `dialogs-folder-picker--choosing-a-folder` |
+
+![Folder picker: without Satori on the left, with Satori on the right](folder-picker-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same location trail, folder list and buttons in both; the theme sets the type, the colours and the buttons' style. It only chooses a folder; the page that opened it copies or moves.
+
+### Dropzone
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsDropzoneComponent`           |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `upload-dropzone--several-files` |
+
+![Dropzone: without Satori on the left, with Satori on the right](dropzone-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same dashed area, text and button in both; the theme sets the type, the outline and the button's style. Files dragged over it light it up in the theme's primary container colour.
+
+### Upload queue
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsUploadQueueComponent`        |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `upload-upload-queue--uploading` |
+
+![Upload queue: without Satori on the left, with Satori on the right](upload-queue-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+An upload in progress: one file uploaded, one on its way with its own progress bar, one waiting. The same list in both; the theme sets the type, the icons' colours and the progress bar's colour.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -391,7 +484,7 @@ Colours are given as background / text.
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Avatar**       | 36 px circle, no border, teal `#d2e6e9`/`#076768`                                                                                                                | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
 | **Tag**          | 20 px, 12 px text, padding 2/8, purple `#e9d7f0`/`#602072`, wraps a long label inside the tag                                                                    | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
-| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, wraps when narrow                                                        | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
+| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, collapses to "…" ("Show more breadcrumbs")                               | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
 | **Rich tooltip** | Click/Enter/Space, panel under the button (radius 8, max 320 px, kept on screen), closes instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring |
 
 ## What a customer without access also loses
@@ -400,13 +493,12 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori; but its own screens currently use `<sat-avatar>`, `<sat-category-tag>`, `<sat-status-tag>` and `<sat-breadcrumbs>` directly, so in practice the app looks as it always has, and a manifest cannot swap these in our own screens.
+The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's and a manifest can swap them. Its other screens still use `<sat-avatar>`, `<sat-category-tag>`, `<sat-status-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and a manifest cannot swap them.
 
 Only things rendered by ID, such as customer extensions, go through the choice.
 
 ## Known gaps
 
-- Built-in breadcrumbs wrap instead of collapsing.
 - Satori breadcrumbs hide everything at 110 px or less.
 - Storybook's default theme names Roboto but doesn't load it, so the built-in screenshots render in Arial.
 
@@ -447,6 +539,13 @@ The components in the library today:
 | Tag input                | —                                                                                                                       | Same component; theme only   |
 | Document reference input | —                                                                                                                       | Same component; theme only   |
 | Date input               | —                                                                                                                       | Same component; theme only   |
+| Pager                    | —                                                                                                                       | Same component; theme only   |
+| Document list            | —                                                                                                                       | Same component; theme only   |
+| Document tree            | —                                                                                                                       | Same component; theme only   |
+| Rename dialog            | —                                                                                                                       | Same component; theme only   |
+| Folder picker            | —                                                                                                                       | Same component; theme only   |
+| Dropzone                 | —                                                                                                                       | Same component; theme only   |
+| Upload queue             | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

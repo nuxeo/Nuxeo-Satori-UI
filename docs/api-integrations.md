@@ -414,7 +414,7 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 | Field       | Value                                                                           |
 | ----------- | ------------------------------------------------------------------------------- |
 | **Service** | `BrowseService` (`libs/shared/nuxeo-client/src/lib/services/browse.service.ts`) |
-| **Method**  | `getNavTreeChildren(parent, pageSize)`                                          |
+| **Method**  | `getNavTreeChildren(parent, pageSize, page?)`                                   |
 
 **Routing:**
 
@@ -423,6 +423,8 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 | `Root`      | `tree_children` | Lists every accessible domain (matches Nuxeo Web UI page provider) |
 | `Domain`    | `@children`     | Includes structural roots (`WorkspaceRoot`, `SectionRoot`, etc.)   |
 | Other       | `tree_children` | Standard folderish navigation under workspaces                     |
+
+With `page` (`{ currentPageIndex?, sort? }`), `Root` returns that one page in that order, which is how the browse listing pages it; without it a `Root` level lists every page, as a tree level needs. A `Domain` level is always the folders of its first `@children` page: the browse listing pages a domain through `getBrowseFolderContents` on `@children` like any folder, with its files, as Nuxeo Web UI's domain view (`advanced_document_content`) does — keeping only the folders after the server paged them left pages short or empty. `Favorites` and `Collection` listings page the same way through `getCollectionMembers(uid, pageSize, page?)` on `default_content_collection`, which answers an unusable sort key with HTTP 400 rather than an empty page.
 
 **Used by:**
 
