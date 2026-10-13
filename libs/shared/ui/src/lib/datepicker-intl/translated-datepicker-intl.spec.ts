@@ -1,10 +1,10 @@
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerIntl, MatDatepickerModule } from '@angular/material/datepicker';
 import { TranslateService } from '@ngx-translate/core';
 import { describe, expect, it, vi } from 'vitest';
 
+import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 import {
   TranslatedDatepickerIntl,
   provideTranslatedDatepickerIntl,
@@ -13,7 +13,7 @@ import {
 @Component({
   standalone: true,
   imports: [MatDatepickerModule],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   templateUrl: './translated-datepicker-intl.host.html',
 })
 class PickerHostComponent {}

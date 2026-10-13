@@ -1955,7 +1955,7 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 
 ## @nuxeo-satori/platform/ui
 
-46 exported symbol(s).
+49 exported symbol(s).
 
 ```ts
 class ConfirmDialogComponent {
@@ -1968,6 +1968,12 @@ interface ConfirmDialogData {
     title: string;
     message: string;
     confirmLabel?: string;
+    }
+}
+class DateMaskPipe implements PipeTransform {
+    transform(translatedMask: string | null | undefined): string;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<DateMaskPipe, never>;
+    static ɵpipe: _angular_core.ɵɵPipeDeclaration<DateMaskPipe, "dateMask", true>;
     }
 }
 class DocumentCompareDialogComponent {
@@ -2311,10 +2317,12 @@ class WidgetGridComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<WidgetGridComponent, "lib-widget-grid", never, { "columns": { "alias": "columns"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
     }
 }
+function dateMaskFor(localeId: string, translatedMask: string): string;
 function observeMatTabListKeyboardA11y(root: HTMLElement): (() => void) | null;
 function observeStripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): MutationObserver | null;
 function openDocumentCompareDialog(dialog: MatDialog, items: DocumentCompareDialogData['items']): void;
 function providePlatformEnglishFallback(): Provider;
+function provideSatoriDateAdapter(): Provider[];
 function provideTranslatedDatepickerIntl(): Provider;
 function stripRedundantMatInputAriaRequired(input: HTMLInputElement | null | undefined): void;
 function trashDocumentConfirmData(title: string, translate: TranslateFn): ConfirmDialogData;

@@ -1,3 +1,4 @@
+import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
@@ -7,7 +8,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatChipsModule } from '@angular/material/chips';
@@ -24,11 +24,14 @@ import {
   groupL10nChildrenByParent,
   createExpiresErrorStateMatcher,
   isExpiresFieldValid,
-  shouldShowExpiresFieldError,
   l10nEntryLabel,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  DateMaskPipe,
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo-satori/platform/ui';
 
 export interface EditMetadataDialogData {
   uid: string;
@@ -43,8 +46,9 @@ export interface EditMetadataDialogData {
 @Component({
   selector: 'lib-edit-metadata-dialog',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
+    DateMaskPipe,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -53,7 +57,6 @@ export interface EditMetadataDialogData {
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatProgressSpinnerModule,
     MatSnackBarModule,
     MatChipsModule,
@@ -155,6 +158,8 @@ export class EditMetadataDialogComponent {
   private readonly directoryService = inject(DirectoryService);
   private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
+  private readonly dateFormats = inject(MAT_DATE_FORMATS);
 
   title = this.data.title;
   description = this.data.description;
@@ -163,9 +168,7 @@ export class EditMetadataDialogComponent {
   coverage = this.data.coverage;
   expires: Date | null = this.data.expires ? new Date(this.data.expires) : null;
   expiresRawText = '';
-  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() =>
-    shouldShowExpiresFieldError(this.expiresRawText, this.expires),
-  );
+  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() => this.showExpiresError());
 
   @ViewChild('expiresInput') expiresNgModel?: NgModel;
 
@@ -280,15 +283,23 @@ export class EditMetadataDialogComponent {
   }
 
   isExpiresValid(): boolean {
-    return isExpiresFieldValid(this.expiresRawText, this.expires);
+    const parsed = this.expiresRawText.trim()
+      ? this.dateAdapter.parse(this.expiresRawText, this.dateFormats.parse.dateInput)
+      : this.expires;
+    return isExpiresFieldValid(this.expiresRawText, parsed);
   }
 
   showExpiresError(): boolean {
-    return shouldShowExpiresFieldError(this.expiresRawText, this.expires);
+    return !this.isExpiresValid();
   }
 
   onExpiresInput(event: Event): void {
     this.expiresRawText = (event.target as HTMLInputElement).value;
+    // Parse synchronously so validation and the saved payload agree even before ngModel updates.
+    this.expires = this.dateAdapter.parse(
+      this.expiresRawText.trim(),
+      this.dateFormats.parse.dateInput,
+    );
     const ctrl = this.expiresNgModel?.control;
     if (ctrl) {
       ctrl.markAsDirty();
