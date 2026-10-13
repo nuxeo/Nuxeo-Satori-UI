@@ -18,11 +18,25 @@ on:
         default: false
 
 concurrency:
-  # Keyed on the package as well as the ref: two different configuration packages have
-  # nothing to serialise against each other, and cancelling an in-flight publish would
-  # leave the Marketplace in a state nobody chose.
-  group: publish-config-package-${{ github.ref }}-${{ inputs.package }}
+  # The package is the whole key. Two different configuration packages have nothing to
+  # serialise against each other, but the Marketplace is global state rather than
+  # per-ref, so the same package dispatched from `main` and from a branch must serialise:
+  # both upload the version declared in `package.xml`, and nothing here stamps a run
+  # identifier over it, so the two uploads carry the same `<name>-<version>` and race.
+  # `build-marketplace.yml` is keyed on the ref because its version already carries a
+  # unique run number; this workflow has no such tiebreak, which is why it cannot borrow
+  # that key.
+  #
+  # Build-only runs (`publishToPreprod=false`) need no serialisation of their own, but
+  # they share the key anyway: with `queue: max` the cost is a bounded FIFO wait rather
+  # than a lost run, which is not worth a second grouping rule to avoid.
+  group: publish-config-package-${{ inputs.package }}
+  # Cancelling an in-flight publish would leave the Marketplace in a state nobody chose.
+  # `queue: max` extends that to runs that have not started: the default (`single`)
+  # cancels an already-pending run when a newer one joins the group, and a publish
+  # silently dropped while it waited is the same surprise as one cancelled midway.
   cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read

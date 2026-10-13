@@ -11,7 +11,7 @@
     <version>[2025.0,2026.0)</version>
   </target-platform>
   <dependencies>
-    <package>nuxeo-agentic-ui</package>
+    <package>nuxeo-agentic-ui:2026.0.2</package>
   </dependencies>
   <visibility>PRIVATE</visibility>
 </package>

@@ -57,7 +57,11 @@ describe('config-package generator', () => {
 
     const packageXml = tree.read(`${ROOT}/package/package.xml`, 'utf8') ?? '';
     expect(packageXml).toContain('<package type="addon" name="acme-config" version="1.0.0">');
-    expect(packageXml).toContain('<package>nuxeo-agentic-ui</package>');
+    // The floor is load-bearing, not decorative: below `2026.0.2` the component this
+    // package `<require>`s does not exist and Nuxeo refuses to start, so a generated
+    // package that depended on `nuxeo-agentic-ui` unbounded would be installable onto a
+    // server it breaks.
+    expect(packageXml).toContain('<package>nuxeo-agentic-ui:2026.0.2</package>');
 
     const component = tree.read(`${ROOT}/bundle/OSGI-INF/acme-config-config.xml`, 'utf8') ?? '';
     expect(component).toContain('<component name="acme.config.acme-config"');
