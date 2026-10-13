@@ -43,11 +43,14 @@ type Rgb = readonly [number, number, number];
 const rgb = (hex: string): Rgb => {
   const value = /^#([0-9a-f]{6})$/i.exec(hex)?.[1];
   if (!value) throw new Error(`not #rrggbb: ${hex}`);
-  return [0, 2, 4].map((i) => parseInt(value.slice(i, i + 2), 16)) as unknown as Rgb;
+  const channel = (at: number) => parseInt(value.slice(at, at + 2), 16);
+  return [channel(0), channel(2), channel(4)];
 };
 /** `color-mix(in srgb, a p%, b)`: a straight mix of the encoded channels. */
-const mix = (a: Rgb, b: Rgb, percent: number): Rgb =>
-  a.map((channel, i) => (channel * percent + b[i] * (100 - percent)) / 100) as unknown as Rgb;
+const mix = (a: Rgb, b: Rgb, percent: number): Rgb => {
+  const channel = (i: 0 | 1 | 2) => (a[i] * percent + b[i] * (100 - percent)) / 100;
+  return [channel(0), channel(1), channel(2)];
+};
 const luminance = (color: Rgb): number => {
   const [r, g, b] = color.map((channel) => {
     const c = channel / 255;
