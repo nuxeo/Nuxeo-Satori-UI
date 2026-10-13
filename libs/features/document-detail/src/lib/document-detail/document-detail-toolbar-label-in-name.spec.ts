@@ -21,7 +21,7 @@ function toolbarActionsLoopMarkup(html: string): string {
 describe('Document detail toolbar label in name (NXSAT-528)', () => {
   it('names extension toolbar icon buttons via cdk-visually-hidden text and hides icon ligatures', () => {
     const loop = toolbarActionsLoopMarkup(readFileSync(templatePath, 'utf8'));
-    expect(loop).toMatch(/\[matTooltip\]="toolbarActionLabel\(action\)"/);
+    expect(loop).toMatch(/\[matTooltip\]="toolbarActionTooltip\(action\)"/);
     expect(loop).not.toMatch(/\[attr\.aria-label\]="action \| descriptorLabel"/);
     expect(loop).toMatch(/cdk-visually-hidden[\s\S]*toolbarActionLabel\(action\)/);
     expect(loop).toMatch(/<mat-icon\s+aria-hidden="true">\{\{\s*action\.icon\s*\}\}<\/mat-icon>/);
@@ -40,8 +40,9 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(moreBlock).toMatch(/<mat-icon\s+aria-hidden="true">more_vert<\/mat-icon>/);
   });
 
-  it('derives tooltip and accessible name from toolbarActionLabel (unlock / manifest tooltips)', () => {
+  it('uses toolbarActionTooltip for hover and toolbarActionLabel for the accessible name', () => {
     const loop = toolbarActionsLoopMarkup(readFileSync(templatePath, 'utf8'));
+    expect(loop).toMatch(/toolbarActionTooltip\(action\)/);
     expect(loop).toMatch(/toolbarActionLabel\(action\)/);
     expect(loop).not.toMatch(/toolbarTooltip\(action\)\s*\?\?/);
     expect(loop).not.toMatch(/toolbarTooltip\(action\)\s*\|\|/);
@@ -52,4 +53,4 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(loop).toContain('[attr.data-action-id]="action.id"');
   });
 });
-
+

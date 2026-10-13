@@ -1,4 +1,4 @@
-@if (loading()) {
+﻿@if (loading()) {
   <div class="detail-loading">
     <mat-spinner
       diameter="40"
@@ -164,7 +164,7 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="toolbarActionLabel(action)"
+          [matTooltip]="toolbarActionTooltip(action)"
           [disabled]="!isToolbarActionEnabled(action)"
           disabledInteractive
           [class.toolbar-action--active]="isToolbarActionActive(action)"
