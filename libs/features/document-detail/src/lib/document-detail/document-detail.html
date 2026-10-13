@@ -33,7 +33,12 @@
         (click)="onBreadcrumbClick($event)"
       ></sat-breadcrumbs>
     </div>
-    <div class="header-actions">
+    <nxs-document-toolbar
+      class="header-actions"
+      [actions]="toolbarEntries()"
+      [moreLabel]="'document-detail.document-detail.more-actions' | translate"
+      (selected)="runToolbarEntry($event)"
+    >
       @if (!isTrashed() && supportsTextKnowledgeEnrichment()) {
         <div class="ke-action-group">
           <button
@@ -159,50 +164,7 @@
           </button>
         }
       }
-
-      @for (action of toolbarActions(); track action.id) {
-        <button
-          mat-icon-button
-          type="button"
-          [attr.data-action-id]="action.id"
-          [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
-          [disabled]="!isToolbarActionEnabled(action)"
-          disabledInteractive
-          [class.toolbar-action--active]="isToolbarActionActive(action)"
-          (click)="runToolbarAction(action)"
-        >
-          <mat-icon>{{ action.icon }}</mat-icon>
-        </button>
-      }
-      <button
-        mat-icon-button
-        [matMenuTriggerFor]="moreMenu"
-        [matTooltip]="'document-detail.document-detail.more-actions' | translate"
-        [attr.aria-label]="'document-detail.document-detail.more-actions' | translate"
-      >
-        <mat-icon>more_vert</mat-icon>
-      </button>
-    </div>
-
-    <mat-menu #moreMenu="matMenu">
-      @for (action of overflowActions(); track action.id) {
-        <button
-          mat-menu-item
-          type="button"
-          [attr.data-action-id]="action.id"
-          [disabled]="!isToolbarActionEnabled(action)"
-          [matTooltip]="toolbarTooltip(action) ?? ''"
-          matTooltipPosition="left"
-          (click)="runToolbarAction(action)"
-        >
-          @if (action.icon) {
-            <mat-icon>{{ action.icon }}</mat-icon>
-          }
-          <span>{{ action | descriptorLabel }}</span>
-        </button>
-      }
-    </mat-menu>
+    </nxs-document-toolbar>
   </div>
 
   @if (keStatus() || keError()) {
@@ -356,47 +318,38 @@
     <!-- Left: Tabs + content -->
     <div class="detail-main">
       <div class="tabs-header-row">
-        <mat-tab-group
-          #detailTabGroup
-          libMatTabListKeydown
+        <nxs-tabs
           class="detail-tabs"
-          animationDuration="0ms"
+          [tabs]="detailTabEntries()"
+          [selectedIndex]="activeTabIndex()"
           (selectedIndexChange)="onTabChange($event)"
         >
-          @for (tab of detailTabs(); track tab.id) {
-            <mat-tab>
-              <ng-template mat-tab-label>
-                @if (tab.icon) {
-                  <mat-icon class="detail-tab-icon">{{ tab.icon }}</mat-icon>
-                }
-                {{ tab | descriptorLabel }}
-              </ng-template>
-              @switch (tab.id) {
-                @case ('app.tabs.view') {
-                  <ng-container [ngTemplateOutlet]="viewTabContent" />
-                }
-                @case ('app.tabs.annotations') {
-                  <ng-container [ngTemplateOutlet]="annotationsTabContent" />
-                }
-                @case ('app.tabs.permissions') {
-                  <ng-container [ngTemplateOutlet]="permissionsTabContent" />
-                }
-                @case ('app.tabs.history') {
-                  <ng-container [ngTemplateOutlet]="historyTabContent" />
-                }
-                @case ('app.tabs.publishing') {
-                  <ng-container [ngTemplateOutlet]="publishingTabContent" />
-                }
-                @case ('app.tabs.aiInsights') {
-                  <ng-container [ngTemplateOutlet]="aiInsightsTabContent" />
-                }
-                @default {
-                  <lib-extension-outlet [componentId]="tab.componentId ?? tab.id" />
-                }
+          <ng-template nxsTabBody let-tab>
+            @switch (tab.id) {
+              @case ('app.tabs.view') {
+                <ng-container [ngTemplateOutlet]="viewTabContent" />
               }
-            </mat-tab>
-          }
-        </mat-tab-group>
+              @case ('app.tabs.annotations') {
+                <ng-container [ngTemplateOutlet]="annotationsTabContent" />
+              }
+              @case ('app.tabs.permissions') {
+                <ng-container [ngTemplateOutlet]="permissionsTabContent" />
+              }
+              @case ('app.tabs.history') {
+                <ng-container [ngTemplateOutlet]="historyTabContent" />
+              }
+              @case ('app.tabs.publishing') {
+                <ng-container [ngTemplateOutlet]="publishingTabContent" />
+              }
+              @case ('app.tabs.aiInsights') {
+                <ng-container [ngTemplateOutlet]="aiInsightsTabContent" />
+              }
+              @default {
+                <lib-extension-outlet [componentId]="tabComponentId(tab.id)" />
+              }
+            }
+          </ng-template>
+        </nxs-tabs>
 
         <ng-template #viewTabContent>
           @if (documentView(); as view) {
@@ -1354,6 +1307,7 @@
         </ng-template>
 
         <button
+          #panelToggle
           mat-icon-button
           class="panel-toggle-btn"
           (click)="propertiesPanelOpen.set(!propertiesPanelOpen())"
@@ -1367,842 +1321,620 @@
       </div>
     </div>
 
-    <!-- Right: Properties Panel (persists across all tabs) -->
+    <!-- Right: details panel (persists across all tabs) -->
     @if (propertiesPanelOpen()) {
-      <aside
+      <nxs-details-panel
         class="properties-panel"
-        [attr.aria-label]="'document-detail.document-detail.document-properties' | translate"
+        [heading]="fileName()"
+        [label]="'document-detail.document-detail.document-properties' | translate"
+        [closeLabel]="'document-detail.document-detail.close-panel' | translate"
+        [tabs]="panelViews()"
+        [selected]="activePanelView()"
+        (selectedChange)="switchPanelSubTab($event)"
+        (closed)="closePropertiesPanel()"
       >
-        <div class="panel-header">
-          <span class="panel-title">{{ fileName() }}</span>
-          <button
-            mat-icon-button
-            class="panel-close-btn"
-            (click)="closePropertiesPanel()"
-            [attr.aria-label]="'document-detail.document-detail.close-panel' | translate"
-          >
-            <mat-icon>close</mat-icon>
-          </button>
-        </div>
-
-        <div class="panel-sub-tabs">
-          <button
-            class="sub-tab"
-            [class.sub-tab--active]="panelSubTab() === 'properties'"
-            (click)="switchPanelSubTab('properties')"
-          >
-            {{ 'document-detail.document-detail.properties' | translate }}
-          </button>
-          <button
-            class="sub-tab"
-            [class.sub-tab--active]="panelSubTab() === 'comments'"
-            (click)="switchPanelSubTab('comments')"
-          >
-            {{ 'document-detail.document-detail.comments' | translate }}
-          </button>
-          <button
-            class="sub-tab"
-            [class.sub-tab--active]="panelSubTab() === 'activity'"
-            (click)="switchPanelSubTab('activity')"
-          >
-            {{ 'document-detail.document-detail.activity' | translate }}
-          </button>
-        </div>
-
-        <!-- Properties sub-tab -->
-        @if (panelSubTab() === 'properties') {
-          <div class="panel-body">
-            <!-- Document info section matching native UI -->
-            <div class="doc-info-section">
-              @if (documentWorkflows().length > 0) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.process' | translate
-                  }}</span>
-                  <span class="doc-info-value">
-                    <sat-status-tag status="important">{{
-                      'document-detail.document-detail.running' | translate
-                    }}</sat-status-tag>
-                  </span>
-                </div>
-              }
-
-              @if (docState()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.state' | translate
-                  }}</span>
-                  <span class="doc-info-value">
-                    <sat-status-tag status="info" [hideIcon]="true">{{
-                      docState()
-                    }}</sat-status-tag>
-                  </span>
-                </div>
-              }
-
-              <div class="doc-info-row">
-                <span class="doc-info-label">{{
-                  'document-detail.document-detail.version' | translate
-                }}</span>
-                <span class="doc-info-value">
-                  @if (hasVersion()) {
-                    <div class="version-select-wrapper">
-                      <button class="version-select" (click)="toggleVersionDropdown()">
-                        <span>{{ versionLabel() }}</span>
-                        <mat-icon class="version-arrow">arrow_drop_down</mat-icon>
-                      </button>
-                      @if (versionDropdownOpen()) {
-                        <div class="version-dropdown">
-                          @if (versionsLoading()) {
-                            <div class="version-dropdown-loading">
-                              <nxs-spinner
-                                diameter="20"
-                                [label]="'document-detail.document-detail.loading' | translate"
-                              />
-                            </div>
-                          } @else {
-                            @if (doc()?.isCheckedOut && canWriteDoc()) {
-                              <button
-                                class="version-dropdown-item version-dropdown-create"
-                                (click)="versionDropdownOpen.set(false); openCreateVersionDialog()"
-                              >
-                                <mat-icon class="create-version-icon">add_circle_outline</mat-icon>
-                                <span class="version-dropdown-label">{{
-                                  'document-detail.document-detail.create-version' | translate
-                                }}</span>
-                              </button>
-                            }
+        @switch (activePanelView()) {
+          @case ('properties') {
+            <nxs-properties-panel
+              class="detail-properties"
+              [document]="doc()"
+              [vocabularyLabel]="vocabularyLabel()"
+              [processRunning]="documentWorkflows().length > 0"
+              [versionLabel]="versionLabel()"
+              [publications]="publicationCount()"
+              [format]="isNoteDocument() ? noteFormatDisplay() : ''"
+              (publicationsSelected)="goToPublishingTab()"
+            >
+              <div nxsVersion class="version-control">
+                @if (hasVersion()) {
+                  <div class="version-select-wrapper">
+                    <button class="version-select" (click)="toggleVersionDropdown()">
+                      <span>{{ versionLabel() }}</span>
+                      <mat-icon class="version-arrow">arrow_drop_down</mat-icon>
+                    </button>
+                    @if (versionDropdownOpen()) {
+                      <div class="version-dropdown">
+                        @if (versionsLoading()) {
+                          <div class="version-dropdown-loading">
+                            <nxs-spinner
+                              diameter="20"
+                              [label]="'document-detail.document-detail.loading' | translate"
+                            />
+                          </div>
+                        } @else {
+                          @if (doc()?.isCheckedOut && canWriteDoc()) {
                             <button
-                              class="version-dropdown-item version-dropdown-item--current"
-                              (click)="versionDropdownOpen.set(false)"
+                              class="version-dropdown-item version-dropdown-create"
+                              (click)="versionDropdownOpen.set(false); openCreateVersionDialog()"
                             >
+                              <mat-icon class="create-version-icon">add_circle_outline</mat-icon>
                               <span class="version-dropdown-label">{{
-                                'document-detail.version-latest'
-                                  | translate: { version: versionLabel() }
+                                'document-detail.document-detail.create-version' | translate
                               }}</span>
                             </button>
-                            @for (v of versions(); track v.uid) {
-                              @if (canWriteDoc()) {
-                                <button class="version-dropdown-item" (click)="restoreVersion(v)">
-                                  <span class="version-dropdown-label">{{ versionString(v) }}</span>
-                                  <span class="version-dropdown-meta">{{
-                                    'document-detail.version-modified-by'
-                                      | translate
-                                        : {
-                                            when: relativeTime(v.lastModified),
-                                            who:
-                                              v.properties['dc:lastContributor'] ??
-                                              ('document-detail.unknown' | translate),
-                                          }
-                                  }}</span>
-                                </button>
-                              } @else {
-                                <div class="version-dropdown-item version-dropdown-item--readonly">
-                                  <span class="version-dropdown-label">{{ versionString(v) }}</span>
-                                  <span class="version-dropdown-meta">{{
-                                    'document-detail.version-modified-by'
-                                      | translate
-                                        : {
-                                            when: relativeTime(v.lastModified),
-                                            who:
-                                              v.properties['dc:lastContributor'] ??
-                                              ('document-detail.unknown' | translate),
-                                          }
-                                  }}</span>
-                                </div>
-                              }
-                            }
-                            @if (versions().length === 0) {
-                              <div class="version-dropdown-empty">
-                                {{
-                                  'document-detail.document-detail.no-previous-versions' | translate
-                                }}
+                          }
+                          <button
+                            class="version-dropdown-item version-dropdown-item--current"
+                            (click)="versionDropdownOpen.set(false)"
+                          >
+                            <span class="version-dropdown-label">{{
+                              'document-detail.version-latest'
+                                | translate: { version: versionLabel() }
+                            }}</span>
+                          </button>
+                          @for (v of versions(); track v.uid) {
+                            @if (canWriteDoc()) {
+                              <button class="version-dropdown-item" (click)="restoreVersion(v)">
+                                <span class="version-dropdown-label">{{ versionString(v) }}</span>
+                                <span class="version-dropdown-meta">{{
+                                  'document-detail.version-modified-by'
+                                    | translate
+                                      : {
+                                          when: relativeTime(v.lastModified),
+                                          who:
+                                            v.properties['dc:lastContributor'] ??
+                                            ('document-detail.unknown' | translate),
+                                        }
+                                }}</span>
+                              </button>
+                            } @else {
+                              <div class="version-dropdown-item version-dropdown-item--readonly">
+                                <span class="version-dropdown-label">{{ versionString(v) }}</span>
+                                <span class="version-dropdown-meta">{{
+                                  'document-detail.version-modified-by'
+                                    | translate
+                                      : {
+                                          when: relativeTime(v.lastModified),
+                                          who:
+                                            v.properties['dc:lastContributor'] ??
+                                            ('document-detail.unknown' | translate),
+                                        }
+                                }}</span>
                               </div>
                             }
                           }
-                        </div>
-                      }
-                    </div>
-                  } @else if (canWriteDoc()) {
-                    <button
-                      mat-flat-button
-                      color="primary"
-                      class="create-version-btn"
-                      (click)="openCreateVersionDialog()"
-                    >
-                      {{ 'document-detail.document-detail.create-version' | translate }}
-                    </button>
-                  } @else {
-                    <span class="no-publications">—</span>
-                  }
-                </span>
-              </div>
-
-              <div class="doc-info-row">
-                <span class="doc-info-label">{{
-                  'document-detail.document-detail.publications' | translate
-                }}</span>
-                <span class="doc-info-value">
-                  @if (publicationCount() > 0) {
-                    <button type="button" class="publications-link" (click)="goToPublishingTab()">
-                      {{ publicationCount() }}
-                    </button>
-                  } @else {
-                    <span class="no-publications">0</span>
-                  }
-                </span>
-              </div>
-
-              @if (modified()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.last-modified' | translate
-                  }}</span>
-                  <span class="doc-info-value">{{ modified() | date: 'longDate' }}</span>
-                </div>
-              }
-
-              @if (created()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.created' | translate
-                  }}</span>
-                  <span class="doc-info-value">{{ created() | date: 'longDate' }}</span>
-                </div>
-              }
-
-              @if (creator()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.by' | translate
-                  }}</span>
-                  <span class="doc-info-value creator-value">
-                    <sat-avatar
-                      [initials]="creator()!.charAt(0).toUpperCase()"
-                      [category]="avatarColor(creator()!)"
-                      size="24"
-                      [borderless]="true"
-                      aria-hidden="true"
-                    />
-                    <span class="creator-name">{{ creator() }}</span>
-                  </span>
-                </div>
-              }
-
-              @if (contributors().length > 0) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.contributors' | translate
-                  }}</span>
-                  <span class="doc-info-value contributors-value">
-                    @for (c of contributors(); track c) {
-                      <span class="contributor-entry">
-                        <sat-avatar
-                          [initials]="c.charAt(0).toUpperCase()"
-                          [category]="avatarColor(c)"
-                          size="24"
-                          [borderless]="true"
-                          aria-hidden="true"
-                        />
-                        <span class="contributor-name">{{ c }}</span>
-                      </span>
+                          @if (versions().length === 0) {
+                            <div class="version-dropdown-empty">
+                              {{
+                                'document-detail.document-detail.no-previous-versions' | translate
+                              }}
+                            </div>
+                          }
+                        }
+                      </div>
                     }
-                  </span>
-                </div>
-              }
-            </div>
-
-            <div class="indexing-header">
-              <div class="indexing-title" role="heading" aria-level="4">
-                {{ 'document-detail.document-detail.indexing-properties' | translate }}
-              </div>
-            </div>
-
-            <div class="prop-field">
-              <span class="prop-label">{{
-                'document-detail.document-detail.title' | translate
-              }}</span>
-              <span class="prop-value">{{ doc()!.title }}</span>
-            </div>
-
-            @if (isNoteDocument()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.format' | translate
-                }}</span>
-                <span class="prop-value">{{ noteFormatDisplay() }}</span>
-              </div>
-            }
-
-            @if (hasPersistedMainBlob()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.file-name' | translate
-                }}</span>
-                <span class="prop-value">{{ fileName() }}</span>
-              </div>
-            }
-
-            @if (expires()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.expires' | translate
-                }}</span>
-                <span class="prop-value">{{ expires() | date: 'longDate' }}</span>
-              </div>
-            }
-
-            <div class="prop-field prop-field--tags">
-              <span class="prop-label">{{
-                'document-detail.document-detail.tags' | translate
-              }}</span>
-              @if (canWriteDoc()) {
-                <mat-form-field
-                  appearance="fill"
-                  class="tags-suggestion-field"
-                  subscriptSizing="dynamic"
-                >
-                  <mat-chip-grid
-                    #tagChipGrid
-                    [attr.aria-label]="'document-detail.document-detail.document-tags' | translate"
+                  </div>
+                } @else if (canWriteDoc()) {
+                  <button
+                    mat-flat-button
+                    color="primary"
+                    class="create-version-btn"
+                    (click)="openCreateVersionDialog()"
                   >
-                    @for (tag of tags(); track $index) {
-                      <mat-chip-row (removed)="removeInlineTag(tag)">
-                        {{ tag }}
-                        <button
-                          type="button"
-                          matChipRemove
-                          [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
-                        >
-                          <mat-icon
-                            aria-hidden="true"
-                            class="detail-tag-chip-remove-icon"
-                          ></mat-icon>
-                        </button>
-                      </mat-chip-row>
-                    }
-                    <input
-                      name="tagInput"
-                      [placeholder]="
-                        tags().length
-                          ? ''
-                          : ('document-detail.document-detail.add-a-tag' | translate)
-                      "
-                      [matChipInputFor]="tagChipGrid"
-                      [matAutocomplete]="tagAuto"
-                      [(ngModel)]="tagInput"
-                      [disabled]="tagAdding()"
-                      (ngModelChange)="onTagSearch($event)"
-                      (matChipInputTokenEnd)="addInlineTagFromChip($event)"
-                    />
-                  </mat-chip-grid>
-                  <mat-icon matSuffix>arrow_drop_down</mat-icon>
-                </mat-form-field>
-                <mat-autocomplete
-                  #tagAuto="matAutocomplete"
-                  autoActiveFirstOption
-                  (optionSelected)="selectTag($event)"
-                >
-                  @for (result of tagSearchResults(); track result) {
-                    <mat-option [value]="result">{{ result }}</mat-option>
-                  }
-                  @if (showCreateTagOption()) {
-                    <mat-option [value]="tagInput">
-                      <span class="create-tag-option">+ {{ tagInput }}</span>
-                    </mat-option>
-                  }
-                </mat-autocomplete>
-              } @else {
-                <div class="tags-readonly">
-                  @for (tag of tags(); track tag) {
-                    <span class="tags-readonly-chip">{{ tag }}</span>
-                  }
-                  @if (tags().length === 0) {
-                    <span class="tags-empty">—</span>
-                  }
-                </div>
-              }
-            </div>
-
-            @if (description()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.description' | translate
-                }}</span>
-                <p class="prop-description">{{ description() }}</p>
+                    {{ 'document-detail.document-detail.create-version' | translate }}
+                  </button>
+                } @else {
+                  <span class="no-publications">—</span>
+                }
               </div>
-            }
-
-            @if (documentCategory()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.nature' | translate
-                }}</span>
-                <span class="prop-value">{{ documentCategory() }}</span>
-              </div>
-            }
-
-            @if (documentCoverage()) {
-              <div class="prop-field prop-field--tags">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.coverage' | translate
-                }}</span>
-                <div class="tags-readonly">
-                  <span class="tags-readonly-chip">{{ documentCoverageDisplay() }}</span>
-                </div>
-              </div>
-            }
-
-            @if (documentSubjects().length > 0) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.subjects' | translate
-                }}</span>
-                <span class="prop-value">{{ documentSubjectsDisplay() }}</span>
-              </div>
-            }
-
-            <lib-document-layout
-              [document]="doc()"
-              mode="metadata"
-              [style.--document-layout-label-color]="'var(--document-detail-properties-label-muted)'"
-            />
-
-            <div class="prop-section-divider"></div>
-
-            <div class="section-title" role="heading" aria-level="4">
-              {{ 'document-detail.document-detail.attachments' | translate }}
-            </div>
-            @if (attachments().length === 0) {
-              <p class="section-empty">
-                {{ 'document-detail.document-detail.there-are-no-attachments' | translate }}
-              </p>
-            } @else {
-              @for (att of attachments(); track att.index) {
-                <div class="attachment-card">
-                  <div class="attachment-info">
-                    <span class="attachment-name">{{ att.name }}</span>
-                    <span class="attachment-size">{{ formatBytes(att.size) }}</span>
-                  </div>
-                  <div class="attachment-actions">
-                    <button
-                      mat-icon-button
-                      [matTooltip]="
-                        'document-detail.document-detail.open-in-nuxeo-drive' | translate
-                      "
+              <div nxsTags class="prop-field--tags">
+                @if (canWriteDoc()) {
+                  <mat-form-field
+                    appearance="fill"
+                    class="tags-suggestion-field"
+                    subscriptSizing="dynamic"
+                  >
+                    <mat-chip-grid
+                      #tagChipGrid
                       [attr.aria-label]="
-                        'document-detail.document-detail.open-in-nuxeo-drive' | translate
+                        'document-detail.document-detail.document-tags' | translate
                       "
-                      (click)="openDriveDialog()"
                     >
-                      <mat-icon>open_in_new</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
-                      [matTooltip]="'document-detail.document-detail.preview' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.preview' | translate"
-                      (click)="previewAttachment(att)"
-                    >
-                      <mat-icon>visibility</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
-                      [matTooltip]="'document-detail.document-detail.download' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.download' | translate"
-                      (click)="downloadAttachment(att.url, att.name)"
-                    >
-                      <mat-icon>download</mat-icon>
-                    </button>
-                    @if (canWriteDoc()) {
-                      <button
-                        mat-icon-button
-                        [matMenuTriggerFor]="attMenu"
-                        [matTooltip]="'document-detail.document-detail.more' | translate"
-                        [attr.aria-label]="
-                          'document-detail.document-detail.more-actions' | translate
+                      @for (tag of tags(); track $index) {
+                        <mat-chip-row (removed)="removeInlineTag(tag)">
+                          {{ tag }}
+                          <button
+                            type="button"
+                            matChipRemove
+                            [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
+                          >
+                            <mat-icon
+                              aria-hidden="true"
+                              class="detail-tag-chip-remove-icon"
+                            ></mat-icon>
+                          </button>
+                        </mat-chip-row>
+                      }
+                      <input
+                        name="tagInput"
+                        [placeholder]="
+                          tags().length
+                            ? ''
+                            : ('document-detail.document-detail.add-a-tag' | translate)
                         "
-                      >
-                        <mat-icon>more_vert</mat-icon>
-                      </button>
-                      <mat-menu #attMenu="matMenu">
-                        <button mat-menu-item (click)="openReplaceDialog(att)">
-                          <mat-icon>find_replace</mat-icon>
-                          <span>{{ 'document-detail.document-detail.replace' | translate }}</span>
-                        </button>
-                        <button mat-menu-item (click)="openRemoveDialog(att)">
-                          <mat-icon>cancel</mat-icon>
-                          <span>{{ 'document-detail.document-detail.remove' | translate }}</span>
-                        </button>
-                      </mat-menu>
+                        [matChipInputFor]="tagChipGrid"
+                        [matAutocomplete]="tagAuto"
+                        [(ngModel)]="tagInput"
+                        [disabled]="tagAdding()"
+                        (ngModelChange)="onTagSearch($event)"
+                        (matChipInputTokenEnd)="addInlineTagFromChip($event)"
+                      />
+                    </mat-chip-grid>
+                    <mat-icon matSuffix>arrow_drop_down</mat-icon>
+                  </mat-form-field>
+                  <mat-autocomplete
+                    #tagAuto="matAutocomplete"
+                    autoActiveFirstOption
+                    (optionSelected)="selectTag($event)"
+                  >
+                    @for (result of tagSearchResults(); track result) {
+                      <mat-option [value]="result">{{ result }}</mat-option>
+                    }
+                    @if (showCreateTagOption()) {
+                      <mat-option [value]="tagInput">
+                        <span class="create-tag-option">+ {{ tagInput }}</span>
+                      </mat-option>
+                    }
+                  </mat-autocomplete>
+                } @else {
+                  <div class="tags-readonly">
+                    @for (tag of tags(); track tag) {
+                      <span class="tags-readonly-chip">{{ tag }}</span>
+                    }
+                    @if (tags().length === 0) {
+                      <span class="tags-empty">—</span>
                     }
                   </div>
-                </div>
-              }
-            }
+                }
+              </div>
+              <lib-document-layout
+                [document]="doc()"
+                mode="metadata"
+                [style.--document-layout-label-color]="'var(--document-detail-properties-label-muted)'"
+              />
 
-            @if (canWriteDoc()) {
-              <label class="upload-attachment-zone">
-                <span class="upload-link">{{
-                  'document-detail.document-detail.upload-attachment' | translate
-                }}</span>
-                <input #attachmentInput type="file" hidden (change)="uploadAttachment($event)" />
-              </label>
-            }
-
-            @if (hasCollections()) {
               <div class="prop-section-divider"></div>
 
               <div class="section-title" role="heading" aria-level="4">
-                {{ 'document-detail.document-detail.collections' | translate }}
+                {{ 'document-detail.document-detail.attachments' | translate }}
               </div>
-              @for (col of collections(); track col.uid) {
-                <sat-category-tag category="blue">
-                  <mat-icon>bookmark</mat-icon>
-                  {{ col.title }}
-                </sat-category-tag>
-              }
-            }
-          </div>
-        }
-
-        <!-- Comments sub-tab -->
-        @if (panelSubTab() === 'comments') {
-          <div class="panel-body comments-panel">
-            @if (commentsLoading()) {
-              <div class="panel-loading">
-                <nxs-spinner
-                  diameter="28"
-                  [label]="'document-detail.document-detail.loading' | translate"
-                />
-              </div>
-            } @else {
-              <!-- AI Sentiment Analysis -->
-              @if (featureFlags.aiEnabled() && comments().length > 0) {
-                <div class="sentiment-toolbar">
-                  <button
-                    class="ai-sentiment-btn"
-                    (click)="analyzeCommentSentiment()"
-                    [disabled]="aiSentimentLoading()"
-                  >
-                    @if (aiSentimentLoading()) {
-                      <mat-spinner
-                        diameter="16"
-                        [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                      />
-                    } @else {
-                      <mat-icon>psychology</mat-icon>
-                    }
-                    {{ 'document-detail.document-detail.analyze-sentiment' | translate }}
-                  </button>
-                </div>
-
-                @if (aiThreadSummary()) {
-                  <div class="sentiment-summary-panel">
-                    <div class="sentiment-summary-header">
-                      <mat-icon>forum</mat-icon>
-                      <span>{{
-                        'document-detail.document-detail.thread-summary' | translate
-                      }}</span>
+              @if (attachments().length === 0) {
+                <p class="section-empty">
+                  {{ 'document-detail.document-detail.there-are-no-attachments' | translate }}
+                </p>
+              } @else {
+                @for (att of attachments(); track att.index) {
+                  <div class="attachment-card">
+                    <div class="attachment-info">
+                      <span class="attachment-name">{{ att.name }}</span>
+                      <span class="attachment-size">{{ formatBytes(att.size) }}</span>
                     </div>
-                    <p class="sentiment-summary-text">{{ aiThreadSummary() }}</p>
+                    <div class="attachment-actions">
+                      <button
+                        mat-icon-button
+                        [matTooltip]="
+                          'document-detail.document-detail.open-in-nuxeo-drive' | translate
+                        "
+                        [attr.aria-label]="
+                          'document-detail.document-detail.open-in-nuxeo-drive' | translate
+                        "
+                        (click)="openDriveDialog()"
+                      >
+                        <mat-icon>open_in_new</mat-icon>
+                      </button>
+                      <button
+                        mat-icon-button
+                        [matTooltip]="'document-detail.document-detail.preview' | translate"
+                        [attr.aria-label]="'document-detail.document-detail.preview' | translate"
+                        (click)="previewAttachment(att)"
+                      >
+                        <mat-icon>visibility</mat-icon>
+                      </button>
+                      <button
+                        mat-icon-button
+                        [matTooltip]="'document-detail.document-detail.download' | translate"
+                        [attr.aria-label]="'document-detail.document-detail.download' | translate"
+                        (click)="downloadAttachment(att.url, att.name)"
+                      >
+                        <mat-icon>download</mat-icon>
+                      </button>
+                      @if (canWriteDoc()) {
+                        <button
+                          mat-icon-button
+                          [matMenuTriggerFor]="attMenu"
+                          [matTooltip]="'document-detail.document-detail.more' | translate"
+                          [attr.aria-label]="
+                            'document-detail.document-detail.more-actions' | translate
+                          "
+                        >
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #attMenu="matMenu">
+                          <button mat-menu-item (click)="openReplaceDialog(att)">
+                            <mat-icon>find_replace</mat-icon>
+                            <span>{{ 'document-detail.document-detail.replace' | translate }}</span>
+                          </button>
+                          <button mat-menu-item (click)="openRemoveDialog(att)">
+                            <mat-icon>cancel</mat-icon>
+                            <span>{{ 'document-detail.document-detail.remove' | translate }}</span>
+                          </button>
+                        </mat-menu>
+                      }
+                    </div>
                   </div>
                 }
               }
 
-              <!-- Existing comments -->
-              @for (comment of comments(); track comment.id) {
-                <div class="comment-card">
-                  <div class="comment-header">
-                    <sat-avatar
-                      [initials]="comment.author"
-                      [category]="avatarColor(comment.author)"
-                      size="28"
-                      [borderless]="true"
-                      aria-hidden="true"
-                    />
-                    <span class="comment-author">{{ comment.author }}</span>
-                    <span class="comment-time">{{ relativeTime(comment.creationDate) }}</span>
-                    @if (isCommentEdited(comment)) {
-                      <span class="comment-edited">(edited)</span>
-                    }
-                    @if (aiSentimentMap()[comment.id]; as sent) {
-                      <span class="sentiment-badge sentiment-{{ sent.sentiment }}">
-                        {{ sent.sentiment }}
-                      </span>
-                    }
-                    @if (canWriteDoc()) {
-                      <button
-                        mat-icon-button
-                        [matMenuTriggerFor]="commentMenu"
-                        class="comment-menu-btn"
-                        [attr.aria-label]="
-                          'document-detail.document-detail.comment-actions' | translate
-                        "
-                      >
-                        <mat-icon>more_vert</mat-icon>
-                      </button>
-                      <mat-menu #commentMenu="matMenu">
-                        <button mat-menu-item (click)="startEditComment(comment)">
-                          <mat-icon>edit</mat-icon>
-                          {{ 'document-detail.document-detail.edit' | translate }}
-                        </button>
-                        <button mat-menu-item (click)="deleteComment(comment)">
-                          <mat-icon>delete</mat-icon>
-                          {{ 'document-detail.document-detail.delete' | translate }}
-                        </button>
-                      </mat-menu>
-                    }
+              @if (canWriteDoc()) {
+                <label class="upload-attachment-zone">
+                  <span class="upload-link">{{
+                    'document-detail.document-detail.upload-attachment' | translate
+                  }}</span>
+                  <input #attachmentInput type="file" hidden (change)="uploadAttachment($event)" />
+                </label>
+              }
+            </nxs-properties-panel>
+          }
+          @case ('comments') {
+            <div class="comments-panel">
+              @if (commentsLoading()) {
+                <div class="panel-loading">
+                  <nxs-spinner
+                    diameter="28"
+                    [label]="'document-detail.document-detail.loading' | translate"
+                  />
+                </div>
+              } @else {
+                <!-- AI Sentiment Analysis -->
+                @if (featureFlags.aiEnabled() && comments().length > 0) {
+                  <div class="sentiment-toolbar">
+                    <button
+                      class="ai-sentiment-btn"
+                      (click)="analyzeCommentSentiment()"
+                      [disabled]="aiSentimentLoading()"
+                    >
+                      @if (aiSentimentLoading()) {
+                        <mat-spinner
+                          diameter="16"
+                          [attr.aria-label]="'document-detail.document-detail.loading' | translate"
+                        />
+                      } @else {
+                        <mat-icon>psychology</mat-icon>
+                      }
+                      {{ 'document-detail.document-detail.analyze-sentiment' | translate }}
+                    </button>
                   </div>
-                  @if (editingCommentId() === comment.id) {
-                    <div class="comment-edit-row">
-                      <input
-                        class="comment-edit-input"
-                        [value]="editingCommentText()"
-                        (input)="editingCommentText.set($any($event.target).value)"
-                        (keydown.enter)="saveEditComment()"
+
+                  @if (aiThreadSummary()) {
+                    <div class="sentiment-summary-panel">
+                      <div class="sentiment-summary-header">
+                        <mat-icon>forum</mat-icon>
+                        <span>{{
+                          'document-detail.document-detail.thread-summary' | translate
+                        }}</span>
+                      </div>
+                      <p class="sentiment-summary-text">{{ aiThreadSummary() }}</p>
+                    </div>
+                  }
+                }
+
+                <!-- Existing comments -->
+                @for (comment of comments(); track comment.id) {
+                  <div class="comment-card">
+                    <div class="comment-header">
+                      <sat-avatar
+                        [initials]="comment.author"
+                        [category]="avatarColor(comment.author)"
+                        size="28"
+                        [borderless]="true"
+                        aria-hidden="true"
                       />
-                      <button
-                        mat-icon-button
-                        (click)="saveEditComment()"
-                        [disabled]="commentSaving()"
-                        [matTooltip]="'document-detail.document-detail.save' | translate"
-                        [attr.aria-label]="'document-detail.document-detail.save' | translate"
-                      >
-                        <mat-icon>check</mat-icon>
-                      </button>
-                      <button
-                        mat-icon-button
-                        (click)="cancelEditComment()"
-                        [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                        [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                      >
-                        <mat-icon>close</mat-icon>
-                      </button>
-                    </div>
-                  } @else {
-                    <p class="comment-text">{{ comment.text }}</p>
-                    @if (aiSentimentMap()[comment.id]; as sentItem) {
-                      @if (sentItem.summary; as sentSummary) {
-                        <p class="sentiment-inline-summary">
-                          <mat-icon class="sentiment-inline-icon">auto_awesome</mat-icon>
-                          {{ sentSummary }}
-                        </p>
+                      <span class="comment-author">{{ comment.author }}</span>
+                      <span class="comment-time">{{ relativeTime(comment.creationDate) }}</span>
+                      @if (isCommentEdited(comment)) {
+                        <span class="comment-edited">(edited)</span>
                       }
-                    }
-                  }
-
-                  @if (canWriteDoc()) {
-                    <div class="comment-footer">
-                      <button class="reply-toggle-btn" (click)="startReply(comment.id)">
-                        <mat-icon class="reply-icon">reply</mat-icon>
-                        {{ 'document-detail.document-detail.reply' | translate }}
-                      </button>
-                    </div>
-                  }
-
-                  @if (replyCount(comment.id) > 0) {
-                    <div class="reply-summary">
-                      {{ replyCount(comment.id) }}
-                      {{
-                        replyCount(comment.id) === 1
-                          ? ('document-detail.reply' | translate)
-                          : ('document-detail.replies' | translate)
-                      }}
-                      · Last reply
-                      {{ lastReplyTime(comment.id) }}
-                    </div>
-                    <div class="replies-section">
-                      @for (reply of repliesMap()[comment.id]; track reply.id) {
-                        <div class="reply-card">
-                          <div class="comment-header">
-                            <sat-avatar
-                              [initials]="reply.author"
-                              [category]="avatarColor(reply.author)"
-                              size="24"
-                              [borderless]="true"
-                              aria-hidden="true"
-                            />
-                            <span class="comment-author">{{ reply.author }}</span>
-                            <span class="comment-time">{{ relativeTime(reply.creationDate) }}</span>
-                            @if (isCommentEdited(reply)) {
-                              <span class="comment-edited">(edited)</span>
-                            }
-                            @if (canWriteDoc()) {
-                              <button
-                                mat-icon-button
-                                [matMenuTriggerFor]="replyMenu"
-                                class="comment-menu-btn"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.reply-actions' | translate
-                                "
-                              >
-                                <mat-icon>more_vert</mat-icon>
-                              </button>
-                              <mat-menu #replyMenu="matMenu">
-                                <button mat-menu-item (click)="startEditComment(reply)">
-                                  <mat-icon>edit</mat-icon>
-                                  {{ 'document-detail.document-detail.edit' | translate }}
-                                </button>
-                                <button mat-menu-item (click)="deleteComment(reply, comment.id)">
-                                  <mat-icon>delete</mat-icon>
-                                  {{ 'document-detail.document-detail.delete' | translate }}
-                                </button>
-                              </mat-menu>
-                            }
-                          </div>
-                          @if (editingCommentId() === reply.id) {
-                            <div class="comment-edit-row">
-                              <input
-                                class="comment-edit-input"
-                                [value]="editingCommentText()"
-                                (input)="editingCommentText.set($any($event.target).value)"
-                                (keydown.enter)="saveEditComment()"
-                              />
-                              <button
-                                mat-icon-button
-                                (click)="saveEditComment()"
-                                [disabled]="commentSaving()"
-                                [matTooltip]="'document-detail.document-detail.save' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.save' | translate
-                                "
-                              >
-                                <mat-icon>check</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                (click)="cancelEditComment()"
-                                [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.cancel' | translate
-                                "
-                              >
-                                <mat-icon>close</mat-icon>
-                              </button>
-                            </div>
-                          } @else {
-                            <p class="comment-text reply-text">{{ reply.text }}</p>
-                          }
-                        </div>
+                      @if (aiSentimentMap()[comment.id]; as sent) {
+                        <span class="sentiment-badge sentiment-{{ sent.sentiment }}">
+                          {{ sent.sentiment }}
+                        </span>
                       }
-                    </div>
-                  }
-
-                  @if (canWriteDoc() && replyingToId() === comment.id) {
-                    <div class="reply-input-row">
-                      <input
-                        class="new-comment-input reply-input"
-                        [placeholder]="
-                          'document-detail.document-detail.write-a-reply-here' | translate
-                        "
-                        [value]="replyText()"
-                        (input)="replyText.set($any($event.target).value)"
-                        (keydown.enter)="submitReply(comment.id)"
-                      />
-                      @if (replyText().trim()) {
+                      @if (canWriteDoc()) {
                         <button
                           mat-icon-button
-                          (click)="submitReply(comment.id)"
+                          [matMenuTriggerFor]="commentMenu"
+                          class="comment-menu-btn"
+                          [attr.aria-label]="
+                            'document-detail.document-detail.comment-actions' | translate
+                          "
+                        >
+                          <mat-icon>more_vert</mat-icon>
+                        </button>
+                        <mat-menu #commentMenu="matMenu">
+                          <button mat-menu-item (click)="startEditComment(comment)">
+                            <mat-icon>edit</mat-icon>
+                            {{ 'document-detail.document-detail.edit' | translate }}
+                          </button>
+                          <button mat-menu-item (click)="deleteComment(comment)">
+                            <mat-icon>delete</mat-icon>
+                            {{ 'document-detail.document-detail.delete' | translate }}
+                          </button>
+                        </mat-menu>
+                      }
+                    </div>
+                    @if (editingCommentId() === comment.id) {
+                      <div class="comment-edit-row">
+                        <input
+                          class="comment-edit-input"
+                          [value]="editingCommentText()"
+                          (input)="editingCommentText.set($any($event.target).value)"
+                          (keydown.enter)="saveEditComment()"
+                        />
+                        <button
+                          mat-icon-button
+                          (click)="saveEditComment()"
                           [disabled]="commentSaving()"
-                          [matTooltip]="'document-detail.document-detail.submit' | translate"
-                          [attr.aria-label]="'document-detail.document-detail.submit' | translate"
+                          [matTooltip]="'document-detail.document-detail.save' | translate"
+                          [attr.aria-label]="'document-detail.document-detail.save' | translate"
                         >
                           <mat-icon>check</mat-icon>
                         </button>
                         <button
                           mat-icon-button
-                          (click)="cancelReply()"
+                          (click)="cancelEditComment()"
                           [matTooltip]="'document-detail.document-detail.cancel' | translate"
                           [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
                         >
                           <mat-icon>close</mat-icon>
                         </button>
+                      </div>
+                    } @else {
+                      <p class="comment-text">{{ comment.text }}</p>
+                      @if (aiSentimentMap()[comment.id]; as sentItem) {
+                        @if (sentItem.summary; as sentSummary) {
+                          <p class="sentiment-inline-summary">
+                            <mat-icon class="sentiment-inline-icon">auto_awesome</mat-icon>
+                            {{ sentSummary }}
+                          </p>
+                        }
                       }
-                    </div>
-                  }
-                </div>
-              }
+                    }
 
-              @if (comments().length === 0) {
-                <p class="section-empty">
-                  {{ 'document-detail.document-detail.no-comments-yet' | translate }}
-                </p>
-              }
+                    @if (canWriteDoc()) {
+                      <div class="comment-footer">
+                        <button class="reply-toggle-btn" (click)="startReply(comment.id)">
+                          <mat-icon class="reply-icon">reply</mat-icon>
+                          {{ 'document-detail.document-detail.reply' | translate }}
+                        </button>
+                      </div>
+                    }
 
-              @if (canWriteDoc()) {
-                <!-- New comment input -->
-                <div class="new-comment-row">
-                  <input
-                    class="new-comment-input"
-                    [placeholder]="
-                      'document-detail.document-detail.write-a-comment-here' | translate
-                    "
-                    [value]="newCommentText()"
-                    (input)="newCommentText.set($any($event.target).value)"
-                    (keydown.enter)="submitComment()"
-                  />
-                  @if (newCommentText().trim()) {
-                    <button
-                      mat-icon-button
-                      (click)="submitComment()"
-                      [disabled]="commentSaving()"
-                      [matTooltip]="'document-detail.document-detail.submit' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.submit' | translate"
-                    >
-                      <mat-icon>check</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
-                      (click)="cancelNewComment()"
-                      [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                    >
-                      <mat-icon>close</mat-icon>
-                    </button>
-                  }
-                </div>
-              }
-            }
-          </div>
-        }
+                    @if (replyCount(comment.id) > 0) {
+                      <div class="reply-summary">
+                        {{ replyCount(comment.id) }}
+                        {{
+                          replyCount(comment.id) === 1
+                            ? ('document-detail.reply' | translate)
+                            : ('document-detail.replies' | translate)
+                        }}
+                        · Last reply
+                        {{ lastReplyTime(comment.id) }}
+                      </div>
+                      <div class="replies-section">
+                        @for (reply of repliesMap()[comment.id]; track reply.id) {
+                          <div class="reply-card">
+                            <div class="comment-header">
+                              <sat-avatar
+                                [initials]="reply.author"
+                                [category]="avatarColor(reply.author)"
+                                size="24"
+                                [borderless]="true"
+                                aria-hidden="true"
+                              />
+                              <span class="comment-author">{{ reply.author }}</span>
+                              <span class="comment-time">{{
+                                relativeTime(reply.creationDate)
+                              }}</span>
+                              @if (isCommentEdited(reply)) {
+                                <span class="comment-edited">(edited)</span>
+                              }
+                              @if (canWriteDoc()) {
+                                <button
+                                  mat-icon-button
+                                  [matMenuTriggerFor]="replyMenu"
+                                  class="comment-menu-btn"
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.reply-actions' | translate
+                                  "
+                                >
+                                  <mat-icon>more_vert</mat-icon>
+                                </button>
+                                <mat-menu #replyMenu="matMenu">
+                                  <button mat-menu-item (click)="startEditComment(reply)">
+                                    <mat-icon>edit</mat-icon>
+                                    {{ 'document-detail.document-detail.edit' | translate }}
+                                  </button>
+                                  <button mat-menu-item (click)="deleteComment(reply, comment.id)">
+                                    <mat-icon>delete</mat-icon>
+                                    {{ 'document-detail.document-detail.delete' | translate }}
+                                  </button>
+                                </mat-menu>
+                              }
+                            </div>
+                            @if (editingCommentId() === reply.id) {
+                              <div class="comment-edit-row">
+                                <input
+                                  class="comment-edit-input"
+                                  [value]="editingCommentText()"
+                                  (input)="editingCommentText.set($any($event.target).value)"
+                                  (keydown.enter)="saveEditComment()"
+                                />
+                                <button
+                                  mat-icon-button
+                                  (click)="saveEditComment()"
+                                  [disabled]="commentSaving()"
+                                  [matTooltip]="'document-detail.document-detail.save' | translate"
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.save' | translate
+                                  "
+                                >
+                                  <mat-icon>check</mat-icon>
+                                </button>
+                                <button
+                                  mat-icon-button
+                                  (click)="cancelEditComment()"
+                                  [matTooltip]="
+                                    'document-detail.document-detail.cancel' | translate
+                                  "
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.cancel' | translate
+                                  "
+                                >
+                                  <mat-icon>close</mat-icon>
+                                </button>
+                              </div>
+                            } @else {
+                              <p class="comment-text reply-text">{{ reply.text }}</p>
+                            }
+                          </div>
+                        }
+                      </div>
+                    }
 
-        <!-- Activity sub-tab -->
-        @if (panelSubTab() === 'activity') {
-          <div class="panel-body activity-panel">
-            @if (panelActivityLoading()) {
-              <div class="panel-loading">
-                <nxs-spinner
-                  diameter="28"
-                  [label]="'document-detail.document-detail.loading' | translate"
-                />
-              </div>
-            } @else {
-              @for (entry of panelActivity(); track $index) {
-                <div class="activity-card">
-                  <sat-avatar
-                    [initials]="entry.principalName"
-                    [category]="avatarColor(entry.principalName)"
-                    size="28"
-                    [borderless]="true"
-                    aria-hidden="true"
-                  />
-                  <div class="activity-info">
-                    <span class="activity-user">{{ entry.principalName }}</span>
-                    <span class="activity-action">{{ activityLabel(entry) }}</span>
-                    <span class="activity-time">{{ relativeTime(entry.eventDate) }}</span>
+                    @if (canWriteDoc() && replyingToId() === comment.id) {
+                      <div class="reply-input-row">
+                        <input
+                          class="new-comment-input reply-input"
+                          [placeholder]="
+                            'document-detail.document-detail.write-a-reply-here' | translate
+                          "
+                          [value]="replyText()"
+                          (input)="replyText.set($any($event.target).value)"
+                          (keydown.enter)="submitReply(comment.id)"
+                        />
+                        @if (replyText().trim()) {
+                          <button
+                            mat-icon-button
+                            (click)="submitReply(comment.id)"
+                            [disabled]="commentSaving()"
+                            [matTooltip]="'document-detail.document-detail.submit' | translate"
+                            [attr.aria-label]="'document-detail.document-detail.submit' | translate"
+                          >
+                            <mat-icon>check</mat-icon>
+                          </button>
+                          <button
+                            mat-icon-button
+                            (click)="cancelReply()"
+                            [matTooltip]="'document-detail.document-detail.cancel' | translate"
+                            [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
+                          >
+                            <mat-icon>close</mat-icon>
+                          </button>
+                        }
+                      </div>
+                    }
                   </div>
-                </div>
-              }
+                }
 
-              @if (panelActivity().length === 0) {
-                <p class="section-empty">
-                  {{ 'document-detail.document-detail.no-recent-activity' | translate }}
-                </p>
+                @if (comments().length === 0) {
+                  <p class="section-empty">
+                    {{ 'document-detail.document-detail.no-comments-yet' | translate }}
+                  </p>
+                }
+
+                @if (canWriteDoc()) {
+                  <!-- New comment input -->
+                  <div class="new-comment-row">
+                    <input
+                      class="new-comment-input"
+                      [placeholder]="
+                        'document-detail.document-detail.write-a-comment-here' | translate
+                      "
+                      [value]="newCommentText()"
+                      (input)="newCommentText.set($any($event.target).value)"
+                      (keydown.enter)="submitComment()"
+                    />
+                    @if (newCommentText().trim()) {
+                      <button
+                        mat-icon-button
+                        (click)="submitComment()"
+                        [disabled]="commentSaving()"
+                        [matTooltip]="'document-detail.document-detail.submit' | translate"
+                        [attr.aria-label]="'document-detail.document-detail.submit' | translate"
+                      >
+                        <mat-icon>check</mat-icon>
+                      </button>
+                      <button
+                        mat-icon-button
+                        (click)="cancelNewComment()"
+                        [matTooltip]="'document-detail.document-detail.cancel' | translate"
+                        [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
+                      >
+                        <mat-icon>close</mat-icon>
+                      </button>
+                    }
+                  </div>
+                }
               }
-            }
-          </div>
+            </div>
+          }
+          @case ('activity') {
+            <div class="activity-panel">
+              @if (panelActivityLoading()) {
+                <div class="panel-loading">
+                  <nxs-spinner
+                    diameter="28"
+                    [label]="'document-detail.document-detail.loading' | translate"
+                  />
+                </div>
+              } @else {
+                @for (entry of panelActivity(); track $index) {
+                  <div class="activity-card">
+                    <sat-avatar
+                      [initials]="entry.principalName"
+                      [category]="avatarColor(entry.principalName)"
+                      size="28"
+                      [borderless]="true"
+                      aria-hidden="true"
+                    />
+                    <div class="activity-info">
+                      <span class="activity-user">{{ entry.principalName }}</span>
+                      <span class="activity-action">{{ activityLabel(entry) }}</span>
+                      <span class="activity-time">{{ relativeTime(entry.eventDate) }}</span>
+                    </div>
+                  </div>
+                }
+
+                @if (panelActivity().length === 0) {
+                  <p class="section-empty">
+                    {{ 'document-detail.document-detail.no-recent-activity' | translate }}
+                  </p>
+                }
+              }
+            </div>
+          }
         }
-      </aside>
+      </nxs-details-panel>
     }
   </div>
 }

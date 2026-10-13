@@ -9,9 +9,10 @@ import {
   signal,
   computed,
   effect,
+  ElementRef,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   AppExtensionsService,
   DescriptorLabelPipe,
@@ -20,6 +21,7 @@ import {
   ExtensionComponentRegistry,
   ExtensionOutletComponent,
   ExtensionRuleContextService,
+  descriptorLabel,
   type ExtensionActionDescriptor,
   type ExtensionDocumentViewDescriptor,
   type ExtensionTabDescriptor,
@@ -33,7 +35,6 @@ import { CdkAriaLive } from '@angular/cdk/a11y';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTabsModule, MatTabGroup } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
@@ -102,7 +103,6 @@ import {
   BrowseContextService,
   BROWSE_RETURN_MODE_PARAM,
   decodeNuxeoPathSegment,
-  documentHasPersistedMainBlob,
   noteFormatLabel,
   normalizeNuxeoPath,
   parentNuxeoFolderPath,
@@ -151,6 +151,7 @@ import {
   finalize,
   forkJoin,
   map,
+  merge,
   Observable,
   of,
   Subject,
@@ -175,7 +176,6 @@ import {
   type VideoInfo,
   type VideoSource,
   provideTranslatedDatepickerIntl,
-  MatTabListKeydownDirective,
 } from '@nuxeo-satori/platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
 import {
@@ -200,16 +200,25 @@ import {
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  NxsDetailsPanelComponent,
+  NxsDocumentToolbarComponent,
   NxsDriveDialogComponent,
   NxsErrorStateComponent,
   NxsPermissionsPanelComponent,
+  NxsPropertiesPanelComponent,
   NxsSpinnerComponent,
+  NxsTabBodyDirective,
+  NxsTabsComponent,
   NxsToastService,
   nxsErrorStatus,
   nxsToggleFavorite,
   provideNxsToast,
+  type NxsDetailsPanelTab,
   type NxsDriveDialogData,
   type NxsErrorStatus,
+  type NxsTab,
+  type NxsToolbarAction,
+  type NxsVocabularyLabel,
 } from '@nuxeo-satori/platform/components';
 
 export interface SectionNode {
@@ -297,8 +306,13 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   selector: 'lib-document-detail',
   standalone: true,
   imports: [
+    NxsDetailsPanelComponent,
+    NxsDocumentToolbarComponent,
     NxsErrorStateComponent,
+    NxsPropertiesPanelComponent,
     NxsSpinnerComponent,
+    NxsTabBodyDirective,
+    NxsTabsComponent,
     CdkAriaLive,
     DescriptorLabelPipe,
     TranslatePipe,
@@ -308,8 +322,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatIconModule,
     MatButtonModule,
     MatProgressSpinnerModule,
-    MatTabsModule,
-    MatTabListKeydownDirective,
     MatTooltipModule,
     MatMenuModule,
     MatDialogModule,
@@ -339,8 +351,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     './document-detail-go-back-icon.scss',
     './document-detail-tag-chip-remove-icon.scss',
     './document-detail-go-back-focus.scss',
-    './document-detail-panel-close-focus.scss',
-    './document-detail-tab-focus.scss',
   ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {
@@ -375,9 +385,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly kdClient = inject(KdClientService);
   private readonly aiChatService = inject(AiChatService);
   readonly featureFlags = inject(AiFeatureFlagService);
-
-  /** Programmatic tab switches (e.g. Publishing link). */
-  private readonly detailTabGroup = viewChild<MatTabGroup>('detailTabGroup');
 
   readonly doc = signal<NuxeoDocument | null>(null);
 
@@ -420,22 +427,41 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   });
 
-  private readonly toolbarDescriptors = computed<readonly ExtensionActionDescriptor[]>(() =>
+  /** The toolbar actions this document is offered, overflow included, with every rule applied. */
+  readonly toolbarActions = computed<readonly ExtensionActionDescriptor[]>(() =>
     this.extensions.resolve<ExtensionActionDescriptor>(
       EXTENSION_SLOTS.toolbar,
       this.extensionRuleContext.context(),
     ),
   );
 
-  /** Inline toolbar controls — everything the descriptor list does not send to overflow. */
-  readonly toolbarActions = computed(() =>
-    this.toolbarDescriptors().filter((action) => !action.overflow),
+  /** Ticks when the language or its catalogue changes, so `instant` lookups in computeds re-run. */
+  private readonly translationTick = toSignal(
+    merge(
+      this.translate.onLangChange,
+      this.translate.onTranslationChange,
+      this.translate.onDefaultLangChange,
+    ).pipe(map((_, index) => index)),
+    { initialValue: -1 },
   );
 
-  /** The "More actions" menu. `overflow: false` in a manifest promotes an entry out of it. */
-  readonly overflowActions = computed(() =>
-    this.toolbarDescriptors().filter((action) => action.overflow),
-  );
+  /**
+   * The toolbar slot, resolved for `nxs-document-toolbar`: labels translated, enabled rules
+   * evaluated, and the Unlock tooltip naming who holds the lock. `overflow` sends an entry to the
+   * "More actions" menu; `overflow: false` in a manifest promotes it out.
+   */
+  readonly toolbarEntries = computed<readonly NxsToolbarAction[]>(() => {
+    this.translationTick();
+    return this.toolbarActions().map((action) => ({
+      id: action.id,
+      label: descriptorLabel(action, (key) => this.translate.instant(key)),
+      icon: action.icon,
+      tooltip: this.toolbarTooltip(action),
+      disabled: !this.isToolbarActionEnabled(action),
+      active: this.isToolbarActionActive(action),
+      overflow: !!action.overflow,
+    }));
+  });
 
   /**
    * The tab strip, resolved through Layer 1.
@@ -451,6 +477,22 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.extensionRuleContext.context(),
     ),
   );
+
+  /** The tab strip for `nxs-tabs`: labels translated, so a language change relabels it. */
+  readonly detailTabEntries = computed<readonly NxsTab[]>(() => {
+    this.translationTick();
+    return this.detailTabs().map((tab) => ({
+      id: tab.id,
+      label: descriptorLabel(tab, (key) => this.translate.instant(key)),
+      icon: tab.icon,
+    }));
+  });
+
+  /** The component a contributed tab renders: its `componentId`, else its own ID. */
+  tabComponentId(id: string): string {
+    const tab = this.detailTabs().find((candidate) => candidate.id === id);
+    return tab?.componentId ?? id;
+  }
 
   /**
    * The View tab body contributed for this document, or `null` for the packaged view.
@@ -526,6 +568,30 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly arenderReloadId = signal(0);
   readonly propertiesPanelOpen = signal(true);
   readonly panelSubTab = signal<'properties' | 'comments' | 'activity'>('properties');
+  private readonly panelToggle = viewChild('panelToggle', { read: ElementRef });
+  /** Web UI's side pane offers Comments only on a document with the `Commentable` facet. */
+  readonly panelViews = computed<readonly NxsDetailsPanelTab[]>(() => {
+    this.translationTick();
+    const view = (id: string) => ({
+      id,
+      label: this.translate.instant(`document-detail.document-detail.${id}`),
+    });
+    const commentable = this.doc()?.facets?.includes('Commentable') ?? false;
+    return [view('properties'), ...(commentable ? [view('comments')] : []), view('activity')];
+  });
+  readonly activePanelView = computed(() => {
+    const selected = this.panelSubTab();
+    return this.panelViews().some((view) => view.id === selected) ? selected : 'properties';
+  });
+  readonly vocabularyLabel = computed<NxsVocabularyLabel>(() => {
+    const nature = this.natureVocabulary();
+    const coverage = this.coverageVocabulary();
+    const subjects = this.subjectVocabulary();
+    return (directory, id) =>
+      directory === 'nature'
+        ? resolveNatureLabel(id, nature)
+        : formatHierarchicalL10nLabel(id, directory === 'l10ncoverage' ? coverage : subjects);
+  });
   /**
    * The unwrapped object URL behind `blobUrl`. Public and a signal because the template forwards
    * it to `lib-document-viewer[rawBlobUrl]` for the three `SecurityContext.NONE` bindings
@@ -673,7 +739,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   ];
   private historyLoaded = false;
   private permissionsTabLoaded = false;
-  private activeTabIndex = signal(0);
+  readonly activeTabIndex = signal(0);
   readonly permissionsLoading = signal(false);
 
   // History filters (signals so computed() reacts)
@@ -712,10 +778,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /** A document whose body is note text, edited in the note editor, with no main file. */
   readonly isNoteDocument = computed(() => this.packagedDocumentView() === 'noteEditor');
-  readonly hasPersistedMainBlob = computed(() => {
-    const d = this.doc();
-    return d ? documentHasPersistedMainBlob(d) : false;
-  });
   readonly noteFormatDisplay = computed(() => noteFormatLabel(this.mimeType()));
   readonly noteEditorBody = computed(() => this.noteContent() ?? '');
   /** Parent folder for note RTE image uploads (Web UI stores uploaded pictures in the repository). */
@@ -796,19 +858,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return d.isCheckedOut ? `${label}+` : label;
   });
 
-  readonly docState = computed(() => {
-    const d = this.doc();
-    if (!d) return '';
-    return d.state ?? '';
-  });
-
   readonly publicationCount = computed(() => this.publishedDocs().length);
-
-  readonly contributors = computed(() => {
-    const d = this.doc();
-    if (!d) return [];
-    return (d.properties['dc:contributors'] as string[]) ?? [];
-  });
 
   readonly tags = computed(() => {
     const d = this.doc();
@@ -817,39 +867,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!raw) return [];
     return raw.map((t) => (typeof t === 'string' ? t : t.label));
   });
-
-  readonly description = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:description'] as string) ?? '';
-  });
-
-  readonly documentCategory = computed(() => {
-    const d = this.doc();
-    const id = (d?.properties['dc:nature'] as string) ?? '';
-    if (!id) return '';
-    return resolveNatureLabel(id, this.natureVocabulary());
-  });
-
-  readonly documentCoverage = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:coverage'] as string) ?? '';
-  });
-
-  readonly documentCoverageDisplay = computed(() =>
-    formatHierarchicalL10nLabel(this.documentCoverage(), this.coverageVocabulary()),
-  );
-
-  readonly documentSubjects = computed(() => {
-    const d = this.doc();
-    const subjects = d?.properties['dc:subjects'] as string[] | undefined;
-    return subjects ?? [];
-  });
-
-  readonly documentSubjectsDisplay = computed(() =>
-    this.documentSubjects()
-      .map((id) => formatHierarchicalL10nLabel(id, this.subjectVocabulary()))
-      .join(', '),
-  );
 
   readonly fileMimeType = computed(() => {
     const d = this.doc();
@@ -891,40 +908,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         mimeType: (f.file['mime-type'] as string) ?? '',
         url: (f.file['data'] as string) ?? '',
       }));
-  });
-
-  /** Mirrors nuxeo-web-ui `nuxeo-document-collections`: shows each entry's `title`. */
-  readonly collections = computed(() => {
-    const d = this.doc();
-    if (!d) return [];
-    const cols = d.contextParameters?.['collections'] as
-      Array<{ uid: string; title: string; path: string; type?: string }> | undefined;
-    // Web UI uses contextParameters.favorites for the star; collections enricher
-    // also lists the Favorites folder (type Favorites) — exclude it here.
-    return (cols ?? []).filter((col) => col.type !== 'Favorites');
-  });
-
-  /** Mirrors nuxeo-ui-elements FiltersBehavior.hasCollections (section hidden when false). */
-  readonly hasCollections = computed(() => this.collections().length > 0);
-
-  readonly creator = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:creator'] as string) ?? '';
-  });
-
-  readonly created = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:created'] as string) ?? '';
-  });
-
-  readonly modified = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:modified'] as string) ?? d?.lastModified ?? '';
-  });
-
-  readonly expires = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:expired'] as string) ?? '';
   });
 
   // Permissions tab computed
@@ -1019,6 +1002,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   runToolbarAction(action: ExtensionActionDescriptor): void {
     if (!this.isToolbarActionEnabled(action)) return;
     this.actionRegistry.execute(action, this.extensionRuleContext.context());
+  }
+
+  runToolbarEntry(entry: NxsToolbarAction): void {
+    const action = this.toolbarActions().find((candidate) => candidate.id === entry.id);
+    if (action) this.runToolbarAction(action);
   }
 
   /** A manifest's `tooltip` wins; otherwise Unlock names who holds the lock. Null falls back to the label. */
@@ -3122,10 +3110,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     // By id, not by literal 4: a manifest that hides or reorders a tab moves it.
     const index = this.detailTabs().findIndex((tab) => tab.id === 'app.tabs.publishing');
     if (index < 0) return;
-    const g = this.detailTabGroup();
-    if (g) {
-      g.selectedIndex = index;
-    }
     this.onTabChange(index);
   }
 
@@ -3752,7 +3736,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   // ── Panel Sub-Tab Switching ──
 
-  switchPanelSubTab(tab: 'properties' | 'comments' | 'activity'): void {
+  switchPanelSubTab(tab: string): void {
+    if (tab !== 'properties' && tab !== 'comments' && tab !== 'activity') return;
     this.panelSubTab.set(tab);
     if (tab === 'comments' && !this.commentsLoaded) {
       this.loadComments();
@@ -4434,8 +4419,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       : 'document-detail.show-details';
   }
 
+  /** The close button leaves with the panel, so focus goes to the button that reopens it. */
   closePropertiesPanel(): void {
     this.propertiesPanelOpen.set(false);
+    (this.panelToggle()?.nativeElement as HTMLElement | undefined)?.focus();
   }
 
   openPropertiesPanel(): void {

@@ -214,9 +214,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   }
 
   function offered(id: string): ExtensionActionDescriptor {
-    const found = [...component.toolbarActions(), ...component.overflowActions()].find(
-      (a) => a.id === id,
-    );
+    const found = component.toolbarActions().find((a) => a.id === id);
     if (!found) {
       throw new Error(`toolbar action "${id}" is not offered for this document`);
     }
@@ -887,22 +885,22 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   });
 
   describe('vocabularies', () => {
-    it('resolves the document category from the nature vocabulary', async () => {
+    it('labels the nature from the nature vocabulary for the properties panel', async () => {
       mockDirectoryService.getEntries.mockReturnValue(of([directoryEntry('contract', 'Contract')]));
       await build(doc({ properties: { 'dc:nature': 'contract' } }));
 
-      expect(component.documentCategory()).toBe('Contract');
+      expect(component.vocabularyLabel()('nature', 'contract')).toBe('Contract');
     });
 
-    it('shows no category when the nature vocabulary fails to load', async () => {
+    it('keeps the nature ID when the nature vocabulary fails to load', async () => {
       mockDirectoryService.getEntries.mockReturnValue(throwError(() => new Error('500')));
       await build(doc({ properties: { 'dc:nature': 'contract' } }));
 
       expect(component.natureVocabulary()).toEqual([]);
-      expect(component.documentCategory()).toBe('contract');
+      expect(component.vocabularyLabel()('nature', 'contract')).toBe('contract');
     });
 
-    it('resolves hierarchical coverage and subject labels', async () => {
+    it('labels hierarchical coverage and subjects from their own vocabularies', async () => {
       mockDirectoryService.getAllL10nEntries.mockReturnValue(
         of([l10nEntry('europe', 'Europe'), l10nEntry('europe/france', 'France', 'europe')]),
       );
@@ -912,8 +910,8 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         }),
       );
 
-      expect(component.documentCoverageDisplay()).toContain('France');
-      expect(component.documentSubjectsDisplay()).toContain('Europe');
+      expect(component.vocabularyLabel()('l10ncoverage', 'europe/france')).toContain('France');
+      expect(component.vocabularyLabel()('l10nsubjects', 'europe')).toContain('Europe');
     });
 
     it('empties both hierarchical vocabularies when the lookup fails', async () => {

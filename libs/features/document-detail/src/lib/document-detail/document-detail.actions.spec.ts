@@ -215,9 +215,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
    * here is the correct outcome.
    */
   function offered(id: string): ExtensionActionDescriptor {
-    const found = [...component.toolbarActions(), ...component.overflowActions()].find(
-      (a) => a.id === id,
-    );
+    const found = component.toolbarActions().find((a) => a.id === id);
     if (!found) {
       throw new Error(`toolbar action "${id}" is not offered for this document`);
     }
@@ -637,7 +635,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     it('offers neither half to a read-only user on an unlocked document', async () => {
       await build(doc({ contextParameters: { permissions: ['Read'] } }));
 
-      const ids = [...component.toolbarActions(), ...component.overflowActions()].map((a) => a.id);
+      const ids = component.toolbarActions().map((a) => a.id);
 
       expect(ids).not.toContain('app.toolbar.lock');
       expect(ids).not.toContain('app.toolbar.unlock');

@@ -283,8 +283,8 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
   }
 
   /**
-   * NXENG-915. The properties sidebar is an `<aside>`, so it carries an implicit
-   * `role="complementary"`. A complementary landmark with no accessible name is announced
+   * NXENG-915. The properties sidebar is a `complementary` landmark (`nxs-details-panel` sets the
+   * role an `<aside>` used to imply). A complementary landmark with no accessible name is announced
    * only as "complementary", so a screen-reader user navigating by landmark cannot tell what
    * the region is — WCAG 2.1 1.3.1 Info and Relationships, level A.
    *
@@ -301,8 +301,11 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     it('names the properties sidebar landmark', async () => {
       await render({});
 
-      const panel = fixture.nativeElement.querySelector('aside.properties-panel') as HTMLElement;
+      const panel = fixture.nativeElement.querySelector(
+        'nxs-details-panel.properties-panel',
+      ) as HTMLElement;
       expect(panel).toBeTruthy();
+      expect(panel.getAttribute('role')).toBe('complementary');
       expect(panel.getAttribute('aria-label')).toBe('Document properties');
     });
 
@@ -310,10 +313,82 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       await render({});
 
       const tabList = fixture.nativeElement.querySelector(
-        'mat-tab-group.detail-tabs .mat-mdc-tab-list[role="tablist"]',
+        'nxs-tabs.detail-tabs .mat-mdc-tab-list[role="tablist"]',
       ) as HTMLElement | null;
 
       expect(tabList?.getAttribute(MAT_TAB_LIST_KEYDOWN_ATTR)).toBe('true');
+    });
+  });
+
+  describe('details panel', () => {
+    const viewLabels = (): string[] =>
+      [...fixture.nativeElement.querySelectorAll('.properties-panel [role="tab"]')].map(
+        (el) => (el as HTMLElement).textContent?.trim() ?? '',
+      );
+
+    it('offers Comments only on a document with the Commentable facet, as Web UI does', async () => {
+      await render({});
+      expect(viewLabels()).toEqual(['Properties', 'Activity']);
+
+      await render({}, doc({ facets: ['Commentable'] }));
+      expect(viewLabels()).toEqual(['Properties', 'Comments', 'Activity']);
+    });
+
+    it('lists the collections the document is in, leaving out Favorites (NXSAT-191)', async () => {
+      await render(
+        {},
+        doc({
+          contextParameters: {
+            permissions: ['Read'],
+            collections: [
+              { uid: 'fav-1', title: 'My Favorites', type: 'Favorites' },
+              { uid: 'col-1', title: 'Project Alpha', type: 'Collection' },
+            ],
+          },
+        }),
+      );
+
+      const panel = fixture.nativeElement.querySelector('.detail-properties') as HTMLElement;
+      expect(panel.textContent).toContain('Project Alpha');
+      expect(panel.textContent).not.toContain('My Favorites');
+    });
+
+    it('shows no Collections heading when Favorites is the only membership', async () => {
+      await render(
+        {},
+        doc({
+          contextParameters: {
+            permissions: ['Read'],
+            collections: [{ uid: 'fav-1', title: 'My Favorites', type: 'Favorites' }],
+          },
+        }),
+      );
+
+      const headings = [
+        ...fixture.nativeElement.querySelectorAll('.detail-properties [role="heading"]'),
+      ].map((el) => (el as HTMLElement).textContent?.trim());
+      expect(headings).not.toContain('Collections');
+    });
+
+    it('puts focus back on the toggle when the panel closes', async () => {
+      await render({});
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        (
+          fixture.nativeElement.querySelector(
+            '.properties-panel .nxs-details-panel__close',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(fixture.nativeElement.querySelector('.properties-panel')).toBeNull();
+        expect(document.activeElement).toBe(
+          fixture.nativeElement.querySelector('.panel-toggle-btn'),
+        );
+      } finally {
+        fixture.nativeElement.remove();
+      }
     });
   });
 
@@ -334,7 +409,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     }
 
     const layoutIn = (): HTMLElement | null =>
-      fixture.nativeElement.querySelector('aside.properties-panel lib-document-layout');
+      fixture.nativeElement.querySelector('nxs-details-panel.properties-panel lib-document-layout');
 
     it('shows a Claim the fields of its own schema, with its values', async () => {
       vi.spyOn(console, 'warn').mockImplementation(() => undefined);
@@ -707,7 +782,9 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(viewBody().textContent).toContain('CLAIM VIEW');
       expect(tabLabels()).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
       expect(actionIds()).toContain('app.toolbar.edit');
-      expect(fixture.nativeElement.querySelector('aside.properties-panel')).toBeTruthy();
+      expect(
+        fixture.nativeElement.querySelector('nxs-details-panel.properties-panel'),
+      ).toBeTruthy();
 
       const annotations = [...fixture.nativeElement.querySelectorAll('.mat-mdc-tab')].find((el) =>
         (el as HTMLElement).textContent?.includes('Annotations'),
@@ -835,9 +912,11 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       doc({ type: 'Note', properties: { 'note:note': 'hello', 'note:mime_type': 'text/plain' } });
 
     const propLabels = (): string[] =>
-      [...fixture.nativeElement.querySelectorAll('aside.properties-panel .prop-label')].map(
-        (el) => (el as HTMLElement).textContent?.trim() ?? '',
-      );
+      [
+        ...fixture.nativeElement.querySelectorAll(
+          'nxs-details-panel.properties-panel .nxs-properties-panel__label',
+        ),
+      ].map((el) => (el as HTMLElement).textContent?.trim() ?? '');
 
     /** The document viewer in the selected tab only, so the View tab's viewer cannot answer. */
     const viewerControls = (): boolean | undefined =>
@@ -874,6 +953,14 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
 
       await render({}, doc({ type: 'File' }));
       expect(propLabels()).not.toContain('Format');
+    });
+
+    it('shows the file name only for a document with a stored main file (NXSAT-190)', async () => {
+      await render({}, note());
+      expect(propLabels()).not.toContain('File name');
+
+      await render({}, doc({ properties: file('a.pdf', 'application/pdf') }));
+      expect(propLabels()).toContain('File name');
     });
 
     it('offers the main-file controls on a File but not on a Note in the Annotations tab', async () => {
