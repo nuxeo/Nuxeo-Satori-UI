@@ -29,6 +29,8 @@ export class DocumentDetailService {
       properties: '*',
       'enrichers.document':
         'acls,permissions,renditions,favorites,subscribedNotifications,collections,preview,thumbnail',
+      // Nuxeo omits `lockOwner` / `lockCreated` unless asked, so a locked document reads as unlocked.
+      'fetch-document': 'lock',
     });
   }
 
@@ -140,17 +142,19 @@ export class DocumentDetailService {
   }
 
   lockDocument(uid: string): Observable<NuxeoDocument> {
-    return this.api.post<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}/@op/Document.Lock`, {
-      params: {},
-      context: {},
-    });
+    return this.api.post<NuxeoDocument>(
+      `/nuxeo/api/v1/id/${uid}/@op/Document.Lock`,
+      { params: {}, context: {} },
+      { 'fetch-document': 'lock' },
+    );
   }
 
   unlockDocument(uid: string): Observable<NuxeoDocument> {
-    return this.api.post<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}/@op/Document.Unlock`, {
-      params: {},
-      context: {},
-    });
+    return this.api.post<NuxeoDocument>(
+      `/nuxeo/api/v1/id/${uid}/@op/Document.Unlock`,
+      { params: {}, context: {} },
+      { 'fetch-document': 'lock' },
+    );
   }
 
   addToFavorites(uid: string): Observable<NuxeoDocument> {

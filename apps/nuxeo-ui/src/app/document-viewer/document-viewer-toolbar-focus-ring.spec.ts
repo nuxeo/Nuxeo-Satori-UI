@@ -1,7 +1,7 @@
 /**
- * NXENG-799 / NXENG-816 / NXENG-817 — Image toolbar icon buttons (Toggle fit, Zoom in, Rotate
- * left, …) must show a keyboard focus indicator on the light toolbar strip (IBM
- * `style_focus_visible` / 922184956, WCAG 2.4.7 / 1.4.11).
+ * NXENG-799 / NXENG-816 / NXENG-817 / NXSAT-524 — Image toolbar icon buttons (Toggle fit, Zoom
+ * in, Zoom out, Rotate left, …) must show a keyboard focus indicator on the light toolbar strip
+ * (IBM `style_focus_visible` / 922184956, 2140832667, WCAG 2.4.7 / 1.4.11).
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -115,7 +115,7 @@ describe('DocumentViewer image toolbar focus ring by theme (NXENG-799 / NXENG-81
   });
 
   afterEach(() => {
-    for (const label of ['Toggle fit', 'Zoom in', 'Rotate left']) {
+    for (const label of ['Toggle fit', 'Zoom in', 'Zoom out', 'Rotate left']) {
       const button = fixture.nativeElement.querySelector(
         `.viewer-toolbar button[aria-label="${label}"]`,
       ) as HTMLButtonElement | null;
@@ -146,6 +146,10 @@ describe('DocumentViewer image toolbar focus ring by theme (NXENG-799 / NXENG-81
 
   function zoomInButton(): HTMLButtonElement {
     return toolbarButton('Zoom in');
+  }
+
+  function zoomOutButton(): HTMLButtonElement {
+    return toolbarButton('Zoom out');
   }
 
   function rotateLeftButton(): HTMLButtonElement {
@@ -209,6 +213,7 @@ describe('DocumentViewer image toolbar focus ring by theme (NXENG-799 / NXENG-81
 
       assertFocusRingContrast(button, toolbar, label);
       assertFocusRingContrast(zoomInButton(), toolbar, `${label} — Zoom in (NXENG-816)`);
+      assertFocusRingContrast(zoomOutButton(), toolbar, `${label} — Zoom out (NXSAT-524)`);
 
       const rotate = rotateLeftButton();
       assertFocusRingContrast(rotate, toolbar, `${label} — Rotate left`);

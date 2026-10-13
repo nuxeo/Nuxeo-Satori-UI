@@ -1,4 +1,4 @@
-@if (loading()) {
+﻿@if (loading()) {
   <div class="detail-loading">
     <mat-spinner
       diameter="40"
@@ -18,6 +18,7 @@
   <div class="detail-header">
     <button
       mat-icon-button
+      class="detail-header-go-back-btn"
       (click)="goBack()"
       [attr.aria-label]="'document-detail.document-detail.go-back' | translate"
     >
@@ -163,21 +164,28 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="action.tooltip ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
+          [matTooltip]="toolbarActionTooltip(action)"
           [disabled]="!isToolbarActionEnabled(action)"
+          disabledInteractive
+          [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            toolbarActionLabel(action)
+          }}</span>
+          <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }
       <button
         mat-icon-button
         [matMenuTriggerFor]="moreMenu"
         [matTooltip]="'document-detail.document-detail.more-actions' | translate"
-        [attr.aria-label]="'document-detail.document-detail.more-actions' | translate"
       >
-        <mat-icon>more_vert</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'document-detail.document-detail.more-actions' | translate
+        }}</span>
+        <mat-icon aria-hidden="true">more_vert</mat-icon>
       </button>
     </div>
 
@@ -188,6 +196,8 @@
           type="button"
           [attr.data-action-id]="action.id"
           [disabled]="!isToolbarActionEnabled(action)"
+          [matTooltip]="toolbarTooltip(action) ?? ''"
+          matTooltipPosition="left"
           (click)="runToolbarAction(action)"
         >
           @if (action.icon) {
@@ -909,7 +919,7 @@
                       {{ 'document-detail.document-detail.date' | translate }}
                     </th>
                     <td mat-cell *matCellDef="let entry">
-                      {{ entry.eventDate | date: ('document-detail.mmmm-d-yyyy' | translate) }}
+                      {{ entry.eventDate | date: 'longDate' }}
                     </td>
                   </ng-container>
 
@@ -1824,7 +1834,10 @@
                           matChipRemove
                           [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
                         >
-                          <mat-icon>cancel</mat-icon>
+                          <mat-icon
+                            aria-hidden="true"
+                            class="detail-tag-chip-remove-icon"
+                          ></mat-icon>
                         </button>
                       </mat-chip-row>
                     }

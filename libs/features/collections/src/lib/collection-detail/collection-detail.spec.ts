@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { HttpErrorResponse } from '@angular/common/http';
 import { provideZonelessChangeDetection } from '@angular/core';
 import {
   ActivatedRoute,
@@ -63,8 +64,8 @@ const mockDetailService = {
   fetchThumbnail: vi.fn((): Observable<Blob | null> => of(null)),
   fetchPdfRendition: vi.fn(obs(new Blob())),
   exportXml: vi.fn(obs(new Blob())),
-  lockDocument: vi.fn(obs(undefined)),
-  unlockDocument: vi.fn(obs(undefined)),
+  lockDocument: vi.fn((): Observable<NuxeoDocument | undefined> => of(undefined)),
+  unlockDocument: vi.fn((): Observable<NuxeoDocument | undefined> => of(undefined)),
   subscribe: vi.fn(obs(undefined)),
   unsubscribe: vi.fn(obs(undefined)),
   trashDocument: vi.fn(obs(undefined)),
@@ -496,6 +497,221 @@ describe('CollectionDetailComponent', () => {
       component.toggleLock();
 
       expect(component.lockOwner()).toBeNull();
+    });
+  });
+
+  describe('lock owner and who may unlock', () => {
+    const LOCKED_AT = '2026-08-24T10:00:00.000Z';
+    /** What Nuxeo's lock policy leaves a non-owner with ReadWrite: Write is gone, Read is not. */
+    const readOnly = { permissions: ['Read', 'ReadWrite', 'Browse'] };
+
+    function load(collection: NuxeoDocument): void {
+      mockDetailService.getFullDocument.mockReturnValue(of(collection));
+      component['loadCollection']();
+    }
+
+    it('opens a collection locked earlier as locked, with its owner and date', () => {
+      load(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT }));
+
+      expect(component.isLocked()).toBe(true);
+      expect(component.lockOwner()).toBe('alice');
+      expect(component.lockTooltip()).toBe('Locked by alice on August 24, 2026');
+    });
+
+    it('keeps the lock state when the full read fails and the fallback answers', () => {
+      component.isLocked.set(false);
+      mockDetailService.getFullDocument.mockReturnValue(throwError(() => new Error('enricher')));
+      mockCollectionService.getById.mockReturnValue(
+        of(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT })),
+      );
+
+      component['loadCollection']();
+
+      expect(component.isLocked()).toBe(true);
+      expect(component.lockTooltip()).toBe('Locked by alice on August 24, 2026');
+    });
+
+    it.each([
+      [
+        'succeeds',
+        (pending: Subject<NuxeoDocument>) =>
+          pending.next(docWith({ lockOwner: TEST_USERNAME, lockCreated: LOCKED_AT })),
+      ],
+      [
+        'is refused',
+        (pending: Subject<NuxeoDocument>) => pending.error(new HttpErrorResponse({ status: 409 })),
+      ],
+    ])('ignores a Lock that %s after navigating to another collection', (_how, settle) => {
+      load(docWith({ lockOwner: null, lockCreated: null }));
+      const pending = new Subject<NuxeoDocument>();
+      mockDetailService.lockDocument.mockReturnValue(pending);
+
+      component.toggleLock();
+      component['collectionUid'] = 'collection-2';
+      mockSnackBar.open.mockClear();
+      settle(pending);
+
+      expect(mockDetailService.lockDocument).toHaveBeenCalledWith('collection-1');
+      expect(component.isLocked()).toBe(false);
+      expect(component.lockOwner()).toBeNull();
+      expect(component.actionInProgress()).toBeNull();
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+    });
+
+    it('offers no lock action while the next collection is still loading', () => {
+      load(docWith({}));
+      mockDetailService.getFullDocument.mockReturnValue(new Subject<NuxeoDocument | null>());
+      component['collectionUid'] = 'collection-2';
+
+      component['loadCollection']();
+      component.toggleLock();
+
+      expect(component.showsLockAction()).toBe(false);
+      expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+    });
+
+    it('lets a lock request from the previous collection neither hold nor clear the busy flag', () => {
+      load(docWith({ lockOwner: null, lockCreated: null }));
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.lockDocument.mockReturnValueOnce(first);
+      component.toggleLock();
+
+      // What the route subscription does before it switches `collectionUid`.
+      component['releaseLockRequest']();
+      component['collectionUid'] = 'collection-2';
+      expect(component.actionInProgress()).toBeNull();
+
+      load(docWith({ uid: 'collection-2', lockOwner: null, lockCreated: null }));
+      mockDetailService.lockDocument.mockReturnValueOnce(new Subject<NuxeoDocument>());
+      component.toggleLock();
+      first.next(docWith({ lockOwner: TEST_USERNAME, lockCreated: LOCKED_AT }));
+
+      expect(mockDetailService.lockDocument).toHaveBeenLastCalledWith('collection-2');
+      expect(component.actionInProgress()).toBe('lock');
+      expect(component.isLocked()).toBe(false);
+    });
+
+    it('ignores a read that lands after navigating to another collection', () => {
+      const late = new Subject<NuxeoDocument | null>();
+      mockDetailService.getFullDocument.mockReturnValue(late);
+      component['loadCollection']();
+      component['collectionUid'] = 'collection-2';
+      load(docWith({ uid: 'collection-2', lockOwner: null, lockCreated: null }));
+
+      late.next(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT }));
+
+      expect(component.collection()?.uid).toBe('collection-2');
+      expect(component.isLocked()).toBe(false);
+    });
+
+    it('ignores a fallback that lands after navigating to another collection', () => {
+      const late = new Subject<NuxeoDocument | null>();
+      mockDetailService.getFullDocument.mockReturnValue(throwError(() => new Error('enricher')));
+      mockCollectionService.getById.mockReturnValue(late);
+      component['loadCollection']();
+      component['collectionUid'] = 'collection-2';
+      load(docWith({ uid: 'collection-2', lockOwner: null, lockCreated: null }));
+
+      late.next(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT }));
+
+      expect(component.collection()?.uid).toBe('collection-2');
+      expect(component.isLocked()).toBe(false);
+    });
+
+    it('keeps a reader read-only when the fallback answers for a locked collection', () => {
+      mockDetailService.getFullDocument.mockReturnValue(throwError(() => new Error('enricher')));
+      mockCollectionService.getById.mockReturnValue(
+        of(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT, contextParameters: readOnly })),
+      );
+
+      component['loadCollection']();
+
+      expect(component.showsLockAction()).toBe(true);
+      expect(component.canEditCollection()).toBe(false);
+    });
+
+    it('does not carry a previous lock into a fallback read of an unlocked collection', () => {
+      load(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT }));
+      mockDetailService.getFullDocument.mockReturnValue(throwError(() => new Error('enricher')));
+      mockCollectionService.getById.mockReturnValue(
+        of(docWith({ lockOwner: null, lockCreated: null })),
+      );
+
+      component['loadCollection']();
+
+      expect(component.isLocked()).toBe(false);
+      expect(component.lockOwner()).toBeNull();
+    });
+
+    it('has no lock tooltip while unlocked', () => {
+      load(docWith({ lockOwner: null, lockCreated: null }));
+
+      expect(component.isLocked()).toBe(false);
+      expect(component.lockTooltip()).toBeNull();
+    });
+
+    it('shows a locked collection to a user the lock policy left read-only, without letting them unlock', () => {
+      load(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT, contextParameters: readOnly }));
+
+      expect(component.showsLockAction()).toBe(true);
+      expect(component.canEditCollection()).toBe(false);
+
+      component.toggleLock();
+
+      expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        "You can't unlock this document because it is locked by another user.",
+        'OK',
+        expect.anything(),
+      );
+    });
+
+    it('offers no lock action on a version, which carries the Immutable facet', () => {
+      load(docWith({ lockOwner: 'alice', lockCreated: LOCKED_AT, facets: ['Immutable'] }));
+
+      expect(component.showsLockAction()).toBe(false);
+    });
+
+    it('offers no lock action on the repository root', () => {
+      load(docWith({ type: 'Root' }));
+
+      expect(component.showsLockAction()).toBe(false);
+    });
+
+    it('does not offer Lock to a read-only user on an unlocked collection', () => {
+      load(docWith({ contextParameters: readOnly }));
+
+      expect(component.showsLockAction()).toBe(false);
+    });
+
+    it('records the owner and date the server returns from Lock', () => {
+      load(docWith({}));
+      mockDetailService.lockDocument.mockReturnValue(
+        of(docWith({ lockOwner: TEST_USERNAME, lockCreated: '2026-09-01T08:00:00.000Z' })),
+      );
+
+      component.toggleLock();
+
+      expect(component.lockTooltip()).toBe(`Locked by ${TEST_USERNAME} on September 1, 2026`);
+    });
+
+    it.each([
+      [false, 409, 'Document already locked by another user, please refresh your page.'],
+      [false, 403, "You don't have permission to lock this document."],
+      [true, 409, "You can't unlock this document because it is locked by another user."],
+      [true, 403, "You don't have permission to unlock this document."],
+      [true, 500, 'Action failed'],
+    ])('locked=%s: explains a %i refusal specifically', (locked, status, message) => {
+      load(docWith(locked ? { lockOwner: TEST_USERNAME, lockCreated: LOCKED_AT } : {}));
+      const refusal = throwError(() => new HttpErrorResponse({ status }));
+      mockDetailService.lockDocument.mockReturnValue(refusal);
+      mockDetailService.unlockDocument.mockReturnValue(refusal);
+
+      component.toggleLock();
+
+      expect(mockSnackBar.open).toHaveBeenCalledWith(message, 'OK', expect.anything());
+      expect(component.isLocked()).toBe(locked);
+      expect(component.actionInProgress()).toBeNull();
     });
   });
 

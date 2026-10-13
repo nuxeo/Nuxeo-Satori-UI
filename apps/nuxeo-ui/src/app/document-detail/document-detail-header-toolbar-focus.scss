@@ -1,4 +1,5 @@
-// NXENG-808 / IBM 673904446 — header extension mat-icon-button focus (global: component SCSS at budget).
+// NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504, NXSAT-491 / IBM 1365203900 —
+// header toolbar mat-icon-button focus (Content Lake ingest included; global: component SCSS at budget).
 .detail-header .header-actions button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--agentic-document-detail-header-focus-outline);
   outline-offset: 2px;
@@ -7,4 +8,10 @@
 .detail-header .header-actions button.mat-mdc-icon-button:focus-visible {
   outline: 2px solid var(--agentic-document-detail-header-focus-outline);
   outline-offset: 2px;
+}
+
+// The highlighted padlock on a locked document (global for the same budget reason). Never on a
+// disabled one, so the highlight does not read as "you can press this".
+.detail-header .header-actions button.toolbar-action--active:not(.mat-mdc-button-disabled) {
+  color: var(--mat-sys-primary);
 }

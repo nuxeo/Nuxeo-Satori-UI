@@ -992,7 +992,6 @@
       "notifications-enabled": "Notifications activées",
       "removed-from-clipboard": "Supprimé du presse-papiers"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "M'avertir",
     "remove-from-clipboard": "Supprimer du presse-papiers",
     "share-fallback-title": "Collection",
@@ -1061,6 +1060,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Abandonner",
     "email-example": "nom@entreprise.com",
+    "lock": {
+      "already-locked": "Document déjà verrouillé par un autre utilisateur, veuillez rafraîchir votre page.",
+      "lock-no-permission": "Vous n'avez pas l'autorisation de verrouiller ce document.",
+      "locked-by": "Verrouillé par {{ owner }} le {{ date }}",
+      "locked-by-another-user": "Vous ne pouvez pas déverrouiller ce document car il est verrouillé par un autre utilisateur.",
+      "unlock-no-permission": "Vous n'avez pas l'autorisation de déverrouiller ce document."
+    },
     "ok": "OK",
     "page-number": "Page {{ page }}",
     "page-of": "Page {{ page }} sur {{ total }}",
@@ -1426,7 +1432,6 @@
       "workflow-abandoned": "Flux de travail abandonné.",
       "workflow-started-successfully": "Flux de travail démarré avec succès"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "Aligner au centre",
       "align-left": "Aligner à gauche",

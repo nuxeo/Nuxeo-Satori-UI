@@ -992,7 +992,6 @@
       "notifications-enabled": "Meldingen ingeschakeld",
       "removed-from-clipboard": "Verwijderd uit klembord"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "Mij informeren",
     "remove-from-clipboard": "Verwijderen uit klembord",
     "share-fallback-title": "Collectie",
@@ -1061,6 +1060,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Ontsla",
     "email-example": "naam@bedrijf.nl",
+    "lock": {
+      "already-locked": "Document is al vergrendeld door een andere gebruiker, vernieuw uw pagina.",
+      "lock-no-permission": "U hebt geen toestemming om dit document te vergrendelen.",
+      "locked-by": "Door {{ owner }} op {{ date }} vergrendeld",
+      "locked-by-another-user": "U kunt dit document niet ontgrendelen omdat het door een andere gebruiker is vergrendeld.",
+      "unlock-no-permission": "U hebt geen toestemming om dit document te ontgrendelen."
+    },
     "ok": "OK",
     "page-number": "Pagina {{ page }}",
     "page-of": "Pagina {{ page }} van {{ total }}",
@@ -1426,7 +1432,6 @@
       "workflow-abandoned": "Werkstroom afgebroken.",
       "workflow-started-successfully": "Werkstroom gestart"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "Centreren",
       "align-left": "Links uitlijnen",

@@ -40,8 +40,10 @@
  *
  * ## What this capture does and does not cover
  *
- * Fifteen cases: eight routes, plus view-mode and column-panel states that a single visit per route
- * does not reach. Three of the seven rule classes were only visible in those extra states.
+ * Sixteen cases: eight routes, plus view-mode and column-panel states that a single visit per route
+ * does not reach, and a Picture document whose `.picture-cards` metadata strip is not reached by
+ * opening an arbitrary File blob. Three of the seven rule classes were only visible in those extra
+ * states.
  *
  * The **login surface is still not covered**, and that is a harness limitation rather than a choice:
  * the runner sets `httpCredentials`, so the app authenticates before the login page can render. The
@@ -89,7 +91,10 @@ const ADF_HX_UPSTREAM = ['aria-required-children'];
 export default async function run(page, h) {
   h.step('Precondition: a backend is reachable, so data-bearing screens can be scanned');
   const probe = await page.request
-    .get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false })
+    .get(`${h.baseUrl}/nuxeo/api/v1/me`, {
+      failOnStatusCode: false,
+      headers: nuxeoApiRequestHeaders(),
+    })
     .catch(() => null);
   h.requirePrecondition(
     'Nuxeo API answers through the dev proxy',
@@ -199,9 +204,36 @@ export default async function run(page, h) {
   await h.screenshot('a11y-browse-adf-hx');
 
   h.step(
+    'Document detail — Picture metadata strip (NXENG-812 / NXSAT-493 / WCAG 1.4.3 on .info-label)',
+  );
+  const pictureUid = await findPictureWithPictureCardsUid(page, h.baseUrl);
+  h.check(
+    'a Picture with picture:info and picture:views exists',
+    pictureUid !== null,
+    'repository query returned no Picture whose metadata strip renders — .picture-cards was NOT scanned',
+  );
+  if (pictureUid) {
+    await h.goToDoc(pictureUid);
+    await h.expectVisible('document detail rendered', 'lib-document-detail');
+    await h.expectVisible('document viewer rendered', 'lib-document-viewer');
+    const stripLabelVisible = await h.expectVisible(
+      'picture metadata .info-label on the light strip',
+      'lib-document-viewer .picture-cards .info-label',
+      30_000,
+    );
+    if (stripLabelVisible) {
+      await h.expectNoA11yViolations(
+        'document detail (picture metadata strip): no WCAG 2.1 AA violations',
+        { ignore: KNOWN_VIOLATIONS },
+      );
+      await h.screenshot('a11y-document-detail-picture-metadata');
+    }
+  }
+
+  h.step(
     'Document detail — Replace main file with tooltip open (NXENG-771 / WCAG 2.5.3 label-in-name)',
   );
-  const docUid = await findFileWithMainBlobUid(page);
+  const docUid = await findFileWithMainBlobUid(page, h.baseUrl);
   h.check(
     'a File with a persisted main blob exists',
     docUid !== null,
@@ -381,20 +413,47 @@ const FILE_WITH_MAIN_BLOB_NXQL =
   'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND file:content/name IS NOT NULL ' +
   'ORDER BY dc:created';
 
+const PICTURE_WITH_METADATA_NXQL =
+  "SELECT * FROM Picture WHERE ecm:mixinType <> 'HiddenInNavigation' " +
+  'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND picture:info/width > 0 ' +
+  'AND picture:info/height > 0 ORDER BY dc:created';
+
 /**
- * First File uid whose main blob responds on `@blob/file:content`, paging NXQL until exhausted.
+ * Explicit Basic auth for `page.request` calls to `/nuxeo/api/*`.
+ *
+ * Context `httpCredentials` cover same-origin UI navigation; absolute API URLs through the dev
+ * proxy (especially hosted beta) still need an `Authorization` header — see
+ * `phase-runner.mjs` (defaults) and `apps/nuxeo-ui-e2e/src/fixtures.ts` (Nuxeo does not
+ * challenge unauthenticated API calls).
+ *
+ * @param {Record<string, string>} [extra]
+ * @returns {Record<string, string>}
+ */
+function nuxeoApiRequestHeaders(extra = {}) {
+  const user = process.env['NUXEO_USER'] ?? 'Administrator';
+  const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
+  return {
+    ...extra,
+    Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
+  };
+}
+
+/**
+ * First Picture uid with hydrated `picture:info` and `picture:views`, paging NXQL until exhausted.
  *
  * @param {import('@playwright/test').Page} page
+ * @param {string} baseUrl
  * @returns {Promise<string | null>}
  */
-async function findFileWithMainBlobUid(page) {
+async function findPictureWithPictureCardsUid(page, baseUrl) {
   for (let pageIndex = 0; ; pageIndex++) {
-    const response = await page.request.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
+    const response = await page.request.get(`${baseUrl}/nuxeo/api/v1/search/lang/NXQL/execute`, {
       params: {
-        query: FILE_WITH_MAIN_BLOB_NXQL,
+        query: PICTURE_WITH_METADATA_NXQL,
         pageSize: '20',
         currentPageIndex: String(pageIndex),
       },
+      headers: nuxeoApiRequestHeaders({ 'X-NXproperties': '*' }),
     });
     if (!response.ok()) {
       return null;
@@ -410,9 +469,63 @@ async function findFileWithMainBlobUid(page) {
       if (typeof uid !== 'string') {
         continue;
       }
-      const head = await page.request.head(`/nuxeo/api/v1/id/${uid}/@blob/file:content`, {
+      const doc = await page.request.get(`${baseUrl}/nuxeo/api/v1/id/${uid}`, {
         failOnStatusCode: false,
+        headers: nuxeoApiRequestHeaders({ 'X-NXproperties': '*' }),
       });
+      if (!doc.ok()) {
+        continue;
+      }
+      const payload = await doc.json();
+      const info = payload?.properties?.['picture:info'];
+      const views = payload?.properties?.['picture:views'];
+      const width = Number(info?.width ?? 0);
+      const height = Number(info?.height ?? 0);
+      if (width > 0 && height > 0 && Array.isArray(views) && views.length > 0) {
+        return uid;
+      }
+    }
+    if (!isNextPageAvailable) {
+      return null;
+    }
+  }
+}
+
+/**
+ * First File uid whose main blob responds on `@blob/file:content`, paging NXQL until exhausted.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} baseUrl
+ * @returns {Promise<string | null>}
+ */
+async function findFileWithMainBlobUid(page, baseUrl) {
+  for (let pageIndex = 0; ; pageIndex++) {
+    const response = await page.request.get(`${baseUrl}/nuxeo/api/v1/search/lang/NXQL/execute`, {
+      params: {
+        query: FILE_WITH_MAIN_BLOB_NXQL,
+        pageSize: '20',
+        currentPageIndex: String(pageIndex),
+      },
+      headers: nuxeoApiRequestHeaders(),
+    });
+    if (!response.ok()) {
+      return null;
+    }
+    const body = await response.json();
+    const entries = Array.isArray(body.entries) ? body.entries : [];
+    const isNextPageAvailable = body.isNextPageAvailable === true;
+    if (entries.length === 0 && isNextPageAvailable) {
+      return null;
+    }
+    for (const entry of entries) {
+      const uid = entry?.uid;
+      if (typeof uid !== 'string') {
+        continue;
+      }
+      const head = await page.request.head(
+        `${baseUrl}/nuxeo/api/v1/id/${uid}/@blob/file:content`,
+        { failOnStatusCode: false, headers: nuxeoApiRequestHeaders() },
+      );
       if (head.ok()) {
         return uid;
       }

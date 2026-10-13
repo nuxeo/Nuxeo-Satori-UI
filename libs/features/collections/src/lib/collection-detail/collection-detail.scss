@@ -604,3 +604,8 @@ sat-breadcrumbs {
   border-top: 1px solid #e0e0e0;
   font-size: 12px;
 }
+
+// The highlighted padlock Web UI shows on a locked document, only where the user may unlock it.
+.header-actions button.lock-toggle--active:not(.mat-mdc-button-disabled) {
+  color: var(--mat-sys-primary);
+}
