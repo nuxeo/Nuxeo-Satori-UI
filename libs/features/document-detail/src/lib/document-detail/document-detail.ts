@@ -1278,6 +1278,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.versionsLoading.set(false);
     this.versionDropdownOpen.set(false);
     this.actionInProgress.set(null);
+    this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
     this.keActionInFlight.set(null);
@@ -2004,16 +2005,21 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   openStartProcess(): void {
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.showStartProcessPanel.set(true);
     this.workflowsLoading.set(true);
-    this.detailService.getRunnableWorkflows(this.docUid).subscribe({
+    this.detailService.getRunnableWorkflows(requestedFor).subscribe({
       next: (models) => {
+        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.availableWorkflows.set(models);
         this.workflowsLoading.set(false);
       },
       error: () => {
-        this.availableWorkflows.set([]);
-        this.workflowsLoading.set(false);
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.availableWorkflows.set([]);
+          this.workflowsLoading.set(false);
+        }
       },
     });
   }
@@ -3361,8 +3367,14 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private refreshPublishedDocs(): void {
-    this.detailService.getPublishedVersions(this.docUid).subscribe({
-      next: (res) => this.publishedDocs.set(res.entries),
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
+    this.detailService.getPublishedVersions(requestedFor).subscribe({
+      next: (res) => {
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.publishedDocs.set(res.entries);
+        }
+      },
     });
   }
 
