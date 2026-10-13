@@ -72,7 +72,7 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
    */
   'app.rules.hasFile': (context) => {
     const content = context.document?.properties?.['file:content'];
-    return typeof content === 'object' && content !== null;
+    return typeof content === 'object' && content !== null && !Array.isArray(content);
   },
   /** The focused document is in the trash — gates the whole write half of the toolbar. */
   'app.rules.isTrashed': (context) => isTrashedDocument(context.document),

@@ -94,8 +94,9 @@ import {
 } from '@nuxeo-satori/platform/components';
 
 /**
- * The property each member column sorts by on the server. Nuxeo Web UI's collection view sorts
- * these three, and `default_content_collection` was checked to accept each.
+ * The property each member column sorts by on the server: the three columns this page shows, each
+ * of which Nuxeo Web UI's collection view also sorts, and `default_content_collection` was checked
+ * to accept.
  */
 const MEMBER_SORT_FIELDS: Readonly<Record<string, string>> = {
   title: 'dc:title',

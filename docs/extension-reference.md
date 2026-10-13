@@ -649,10 +649,12 @@ theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
 the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An override of yours
 implements the matching `Nxs…Inputs` interface.
 
-**Registered, not yet rendered by a packaged screen.** The product registers both, but its screens
-still use the `sat-*` elements directly until they move onto these IDs. Today the IDs render where a
-host resolves them — a `lib-extension-outlet` with a `componentId`, or a Layer 2 component composing
-`NxsTagComponent` and the rest from `/components` directly — and in the library's Storybook.
+**Where packaged screens render them.** Browse and the collection page render their breadcrumb
+trail through `nxs.primitives.breadcrumbs`, and `nxs-document-list` renders each row's type through
+`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`, so an override of
+those three IDs reaches them. Every other screen still uses the `sat-*` elements directly until it
+moves onto these IDs; there the IDs render only where a host resolves them — a
+`lib-extension-outlet` with a `componentId` — and in the library's Storybook.
 
 ### `nxs-` components registered for a slot
 

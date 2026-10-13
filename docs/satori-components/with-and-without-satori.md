@@ -317,7 +317,7 @@ The page gives the menu its entries and runs the one chosen. An entry that is no
 
 ![Pager: without Satori on the left, with Satori on the right](pager-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same range and Previous and Next buttons in both; the theme sets the type and the buttons' style. It shows "of N" only when Nuxeo counted the list, which it does only when everything fits on one page, so a folder's second page reads "51–100".
+The same range and Previous and Next buttons in both; the theme sets the type and the buttons' style. It shows "of N" only when Nuxeo counted the list. Nuxeo counts a folder's children only when they fit on one page, so a folder's second page reads "51–100"; it counts a collection's members on every page.
 
 ### Document list
 
@@ -428,7 +428,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori; but its own screens currently use `<sat-avatar>`, `<sat-category-tag>`, `<sat-status-tag>` and `<sat-breadcrumbs>` directly, so in practice the app looks as it always has, and a manifest cannot swap these in our own screens.
+The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's and a manifest can swap them. Its other screens still use `<sat-avatar>`, `<sat-category-tag>`, `<sat-status-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and a manifest cannot swap them.
 
 Only things rendered by ID, such as customer extensions, go through the choice.
 

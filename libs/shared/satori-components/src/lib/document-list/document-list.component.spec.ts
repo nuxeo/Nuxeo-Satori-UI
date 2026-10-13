@@ -202,6 +202,18 @@ describe('NxsDocumentListComponent', () => {
       expect(tabbable[0]).toBe(rows()[0]);
     });
 
+    it('takes a control that arrives after its row out of the Tab sequence too', async () => {
+      // A component resolved by ID renders in a later pass than its row, with nothing the list
+      // tracks having changed.
+      const late = document.createElement('button');
+      late.textContent = 'Late';
+      rows()[0].querySelector('td:nth-child(3)')?.append(late);
+      expect(late.tabIndex).toBe(0);
+      fixture.componentRef.changeDetectorRef.markForCheck();
+      await render();
+      expect(late.getAttribute('tabindex')).toBe('-1');
+    });
+
     it('renders the type through the registered tag, and the contributor through the avatar', () => {
       const cells = rows()[0].querySelectorAll('td');
       expect(cells[2].querySelector('lib-extension-outlet nxs-tag')?.textContent?.trim()).toBe(

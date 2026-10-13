@@ -209,7 +209,7 @@ const SORT_FIELDS: Readonly<Record<string, string>> = {
   author: 'dc:creator',
 };
 
-/** One page of a folder; Web UI pages its folder view by 40, and the page has always held 50. */
+/** One page of a folder: the 50 entries browse has always asked for, now with the rest reachable. */
 const PAGE_SIZE = 50;
 
 @Component({

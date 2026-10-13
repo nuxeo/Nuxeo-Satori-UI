@@ -232,7 +232,8 @@ export class BrowseService {
     return this.api.get<NuxeoDocumentList>(
       '/nuxeo/api/v1/search/pp/default_content_collection/execute',
       params,
-      { properties: '*' },
+      // `permissions`, as `getChildren` asks for, so a row's actions read its own permissions.
+      { properties: '*', 'enrichers.document': 'permissions' },
     );
   }
 

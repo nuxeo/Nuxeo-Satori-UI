@@ -178,6 +178,7 @@ describe('app.rules.hasFile', () => {
     ['no file', withContent(null)],
     ['no file property at all', doc('Note')],
     ['a string where the blob should be', withContent('photo.jpg')],
+    ['a list where the blob should be', withContent([{ name: 'photo.jpg' }])],
   ])('is false with %s', (_case, document) => {
     expect(registry.evaluate('app.rules.hasFile', on(document))).toBe(false);
   });

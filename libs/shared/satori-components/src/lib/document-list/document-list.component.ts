@@ -5,7 +5,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   ElementRef,
-  afterRenderEffect,
+  afterEveryRender,
   booleanAttribute,
   computed,
   effect,
@@ -250,11 +250,10 @@ export class NxsDocumentListComponent {
     });
 
     // Every control inside a row leaves the Tab sequence, including the ones a resolved component
-    // or a menu renders, so a page of fifty rows is one Tab stop, not a hundred and fifty.
-    afterRenderEffect({
+    // or a menu renders, so a page of fifty rows is one Tab stop, not a hundred and fifty. After
+    // every render, because a component resolved by ID can arrive in a later one than its row.
+    afterEveryRender({
       write: () => {
-        this.documents();
-        this.rowActions();
         for (const control of this.host.nativeElement.querySelectorAll<HTMLElement>(ROW_CONTROLS)) {
           if (control.getAttribute('tabindex') !== '-1') control.setAttribute('tabindex', '-1');
         }

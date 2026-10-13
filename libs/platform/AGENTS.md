@@ -348,7 +348,8 @@ The shipped guardrail fails an override that does not.
 
 **What overriding does not reach:** a component used **by class** rather than resolved by ID. An
 override changes every place that renders the ID through `lib-extension-outlet`, and nothing that
-composed `NxsTagComponent` directly. Today no packaged screen resolves the four primitive IDs yet — see
+composed `NxsTagComponent` directly. Browse's breadcrumbs, and the type tag and avatar in each row of
+`nxs-document-list`, resolve their IDs; other packaged screens do not yet — see
 `extension-reference.md` §6a for where they do render.
 
 ### Placeable — the slots that render a component by ID

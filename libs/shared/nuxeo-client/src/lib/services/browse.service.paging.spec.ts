@@ -156,6 +156,8 @@ describe('BrowseService paging — Root, Domain, Favorites and Collection', () =
         (r) => r.url === '/nuxeo/api/v1/search/pp/default_content_collection/execute',
       );
       expect(req.request.params.get('queryParams')).toBe(`${type}-uid`);
+      // Each row's own permissions, which its menu's rules read.
+      expect(req.request.headers.get('enrichers.document')).toBe('permissions');
       expectPaged(req, '1');
       expect(req.request.params.get('sortBy')).toBe('dc:title');
       expect(req.request.params.get('sortOrder')).toBe('DESC');
