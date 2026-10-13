@@ -11,12 +11,12 @@ export interface NxsSearchFilters {
   readonly fulltext: string;
   /** Modification-date ranges, the `dc_modified_agg` buckets — see {@link NXS_MODIFIED_RANGES}. */
   readonly modified: readonly string[];
-  /** One author's username, sent as `dc_creator_agg`. */
-  readonly author: string;
-  /** One collection's id, sent as `ecm_collections`. */
-  readonly collection: string;
-  /** One tag label, sent as `ecm_tags`. */
-  readonly tag: string;
+  /** Authors' usernames, the `dc_creator_agg` buckets. */
+  readonly authors: readonly string[];
+  /** Collection ids, sent as `ecm_collections`. */
+  readonly collections: readonly string[];
+  /** Tag labels, sent as `ecm_tags`. */
+  readonly tags: readonly string[];
   /** Nature vocabulary ids, the `dc_nature_agg` buckets. */
   readonly nature: readonly string[];
   /** Subject vocabulary ids, the `dc_subjects_agg` buckets. */
@@ -36,9 +36,9 @@ export interface NxsSearchFilters {
 export const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters = Object.freeze({
   fulltext: '',
   modified: [],
-  author: '',
-  collection: '',
-  tag: '',
+  authors: [],
+  collections: [],
+  tags: [],
   nature: [],
   subjects: [],
   coverage: [],
@@ -87,9 +87,9 @@ export function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<stri
   put('subjects', filters.subjects);
   put('coverage', filters.coverage);
   put('size', filters.size);
-  put('author', filters.author);
-  put('collection', filters.collection);
-  put('tag', filters.tag);
+  put('author', filters.authors);
+  put('collection', filters.collections);
+  put('tag', filters.tags);
   return record;
 }
 
@@ -108,15 +108,15 @@ export function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<stri
  */
 export function nxsSearchFiltersToSavedParams(filters: NxsSearchFilters): Record<string, string> {
   const params: Record<string, string> = {};
-  const values = (key: string, value: string | readonly string[]) => {
-    params[key] = JSON.stringify(uniqueValues(typeof value === 'string' ? [value] : value));
+  const values = (key: string, value: readonly string[]) => {
+    params[key] = JSON.stringify(uniqueValues(value));
   };
   if (filters.query.trim()) params['q'] = filters.query.trim();
   params['ecm_fulltext'] = filters.fulltext.trim();
   values('dc_modified_agg', filters.modified);
-  values('dc_creator_agg', filters.author);
-  values('ecm_collections', filters.collection);
-  values('ecm_tags', filters.tag);
+  values('dc_creator_agg', filters.authors);
+  values('ecm_collections', filters.collections);
+  values('ecm_tags', filters.tags);
   values('dc_nature_agg', filters.nature);
   values('dc_subjects_agg', filters.subjects);
   values('dc_coverage_agg', filters.coverage);
@@ -154,8 +154,9 @@ export function nxsSearchFiltersToQuery(
  * (`dc_modified_agg`, `ecm_collections`, …) and the record keys {@link nxsSearchFiltersToRecord}
  * writes, which earlier saved searches also carry, with or without a `defaults:` prefix. Where both
  * are present the page-provider key wins, as the server applies it. A value may be a string, a
- * comma-separated string, a JSON array in a string, or an array; anything else is ignored. The
- * earlier `moreThan1YearAgo` range reads as `priorToLastYear`.
+ * comma-separated string, a JSON array in a string, or an array, whose entries may be strings,
+ * numbers, or objects with a string `id` or `uid` — the collection entries Web UI keeps; anything else
+ * is ignored. The earlier `moreThan1YearAgo` range reads as `priorToLastYear`.
  */
 export function nxsSearchFiltersFromParams(
   params: Readonly<Record<string, unknown>> | null | undefined,
@@ -175,7 +176,6 @@ export function nxsSearchFiltersFromParams(
     }
     return [];
   };
-  const one = (...keys: string[]): string => list(...keys)[0] ?? '';
   const text = (...keys: string[]): string => {
     for (const key of keys) {
       const value = raw(key);
@@ -192,9 +192,9 @@ export function nxsSearchFiltersFromParams(
         (value) => MODIFIED_ALIASES[value] ?? value,
       ),
     ),
-    author: one('dc_creator_agg', 'dc_creator', 'author'),
-    collection: one('ecm_collections', 'collection_agg', 'collection'),
-    tag: one('ecm_tags', 'tag'),
+    authors: list('dc_creator_agg', 'dc_creator', 'author'),
+    collections: list('ecm_collections', 'collection_agg', 'collection'),
+    tags: list('ecm_tags', 'tag'),
     nature: list('dc_nature_agg', 'nature', 'dc_nature'),
     subjects: list('dc_subjects_agg', 'subjects', 'dc_subjects'),
     coverage: list('dc_coverage_agg', 'coverage', 'dc_coverage'),
@@ -214,9 +214,9 @@ export function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): 
     JSON.stringify([
       filters.query.trim(),
       filters.fulltext.trim(),
-      filters.author.trim(),
-      filters.collection.trim(),
-      filters.tag.trim(),
+      sorted(filters.authors),
+      sorted(filters.collections),
+      sorted(filters.tags),
       sorted(filters.modified),
       sorted(filters.nature),
       sorted(filters.subjects),
@@ -278,9 +278,15 @@ function uniqueValues(values: readonly string[]): string[] {
 /** The values in a saved parameter: an array, a JSON array in a string, or a comma-separated string. */
 function toValues(value: unknown): string[] {
   if (Array.isArray(value)) {
-    return value
-      .filter((entry) => typeof entry === 'string' || typeof entry === 'number')
-      .map(String);
+    return value.flatMap((entry): string[] => {
+      if (typeof entry === 'string' || typeof entry === 'number') return [String(entry)];
+      if (entry && typeof entry === 'object') {
+        const record = entry as Record<string, unknown>;
+        const id = typeof record['id'] === 'string' ? record['id'] : record['uid'];
+        if (typeof id === 'string') return [id];
+      }
+      return [];
+    });
   }
   if (typeof value !== 'string') return [];
   const text = value.trim();

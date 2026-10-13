@@ -45,12 +45,13 @@
       [placeholder]="'satori-components.search-filters.authors-placeholder' | translate"
       [value]="authorText()"
       [matAutocomplete]="authorsPanel"
-      (input)="onAuthorInput($any($event.target).value)"
+      (input)="authorText.set($any($event.target).value)"
     />
     <mat-autocomplete
       #authorsPanel="matAutocomplete"
       class="nxs-search-filters__panel"
-      (optionSelected)="selectAuthor($event.option.value)"
+      [displayWith]="emptyDisplay"
+      (optionSelected)="addChoice('authors', $event.option.value)"
     >
       @for (option of authorOptions(); track option.value) {
         <mat-option [value]="option.value">{{ option.value }} ({{ option.count }})</mat-option>
@@ -60,6 +61,14 @@
         }}</mat-option>
       }
     </mat-autocomplete>
+    <ng-container
+      [ngTemplateOutlet]="chips"
+      [ngTemplateOutletContext]="{
+        field: 'authors',
+        values: filters().authors,
+        titleKey: 'satori-components.search-filters.chosen-authors',
+      }"
+    />
   </div>
 
   <div class="nxs-search-filters__field">
@@ -74,13 +83,13 @@
       [value]="collectionText()"
       [matAutocomplete]="collectionsPanel"
       (focus)="onCollectionsFocus()"
-      (input)="onCollectionInput($any($event.target).value)"
+      (input)="collectionText.set($any($event.target).value)"
     />
     <mat-autocomplete
       #collectionsPanel="matAutocomplete"
       class="nxs-search-filters__panel"
-      [displayWith]="collectionDisplay"
-      (optionSelected)="selectCollection($event.option.value)"
+      [displayWith]="emptyDisplay"
+      (optionSelected)="addChoice('collections', $event.option.value)"
     >
       @if (collectionsState() === 'loading') {
         <mat-option disabled class="nxs-search-filters__hint">{{
@@ -100,6 +109,14 @@
         }
       }
     </mat-autocomplete>
+    <ng-container
+      [ngTemplateOutlet]="chips"
+      [ngTemplateOutletContext]="{
+        field: 'collections',
+        values: filters().collections,
+        titleKey: 'satori-components.search-filters.chosen-collections',
+      }"
+    />
   </div>
 
   <div class="nxs-search-filters__field">
@@ -118,14 +135,15 @@
     <mat-autocomplete
       #tagsPanel="matAutocomplete"
       class="nxs-search-filters__panel"
-      (optionSelected)="selectTag($event.option.value)"
+      [displayWith]="emptyDisplay"
+      (optionSelected)="addChoice('tags', $event.option.value)"
     >
       @if (!tagText().trim()) {
         <mat-option disabled class="nxs-search-filters__hint">{{
           'satori-components.search-filters.tags-hint' | translate
         }}</mat-option>
       } @else {
-        @for (label of tagSuggestions(); track label) {
+        @for (label of tagOptions(); track label) {
           <mat-option [value]="label">{{ label }}</mat-option>
         } @empty {
           <mat-option disabled class="nxs-search-filters__hint">{{
@@ -135,6 +153,14 @@
         }
       }
     </mat-autocomplete>
+    <ng-container
+      [ngTemplateOutlet]="chips"
+      [ngTemplateOutletContext]="{
+        field: 'tags',
+        values: filters().tags,
+        titleKey: 'satori-components.search-filters.chosen-tags',
+      }"
+    />
   </div>
 
   @for (group of groups().after; track group.field) {
@@ -159,6 +185,28 @@
     {{ 'satori-components.search-filters.save-as' | translate }}
   </button>
 </div>
+
+<ng-template #chips let-field="field" let-values="values" let-titleKey="titleKey">
+  @if (values.length > 0) {
+    <mat-chip-set class="nxs-search-filters__chips" [attr.aria-label]="titleKey | translate">
+      @for (value of values; track value) {
+        <mat-chip (removed)="removeChoice(field, value)">
+          {{ field === 'collections' ? collectionTitle(value) : value }}
+          <button
+            matChipRemove
+            type="button"
+            [attr.aria-label]="
+              'satori-components.search-filters.remove'
+                | translate: { value: field === 'collections' ? collectionTitle(value) : value }
+            "
+          >
+            <mat-icon aria-hidden="true">cancel</mat-icon>
+          </button>
+        </mat-chip>
+      }
+    </mat-chip-set>
+  }
+</ng-template>
 
 <ng-template #checkboxGroup let-group>
   <div class="nxs-search-filters__field">

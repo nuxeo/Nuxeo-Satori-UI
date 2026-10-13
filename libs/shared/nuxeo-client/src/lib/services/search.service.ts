@@ -447,6 +447,13 @@ export class SearchService {
     const modifiedDateValues = [
       ...new Set(parseList(modifiedDate).map((value) => MODIFIED_RANGE_ALIASES[value] ?? value)),
     ];
+    // One author, collection or tag as before, or several as a JSON array — never split on commas,
+    // which a username or a tag label may contain.
+    const parseValues = (value: string): string[] =>
+      value.trim().startsWith('[') ? parseList(value) : value.trim() ? [value.trim()] : [];
+    const authorValues = [...new Set(parseValues(author))];
+    const collectionValues = [...new Set(parseValues(collection))];
+    const tagValues = [...new Set(parseValues(tag))];
     const natureValues = parseList(nature);
     const subjectValues = parseList(subjects);
     const coverageValues = parseList(coverage);
@@ -456,14 +463,14 @@ export class SearchService {
       httpParams = httpParams.set('dc_modified_agg', JSON.stringify(modifiedDateValues));
     }
 
-    if (author.trim()) {
-      httpParams = httpParams.set('dc_creator_agg', JSON.stringify([author.trim()]));
+    if (authorValues.length > 0) {
+      httpParams = httpParams.set('dc_creator_agg', JSON.stringify(authorValues));
     }
 
     // `ecm_collections` is the parameter `default_search` filters collection membership on, as
     // Web UI's search form sends it. It has no aggregate, so there is no `collection_agg` bucket.
-    if (collection.trim()) {
-      httpParams = httpParams.set('ecm_collections', JSON.stringify([collection.trim()]));
+    if (collectionValues.length > 0) {
+      httpParams = httpParams.set('ecm_collections', JSON.stringify(collectionValues));
     }
 
     if (natureValues.length > 0) {
@@ -482,8 +489,8 @@ export class SearchService {
       httpParams = httpParams.set('dc_subjects_agg', JSON.stringify([...new Set(subjectValues)]));
     }
 
-    if (tag.trim()) {
-      httpParams = httpParams.set('ecm_tags', JSON.stringify([tag.trim()]));
+    if (tagValues.length > 0) {
+      httpParams = httpParams.set('ecm_tags', JSON.stringify(tagValues));
     }
 
     if (q.trim()) {

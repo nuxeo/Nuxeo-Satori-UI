@@ -2300,5 +2300,9 @@
   "satori-components.saved-search-actions.share": "Menu entry that opens the dialog where the open saved search is shared with other users or groups. A VERB.",
   "satori-components.saved-search-actions.delete": "Menu entry that deletes the open saved search, after a confirmation. A VERB.",
   "search.message.failed-to-open-saved-search": "Error message shown when a saved search the user chose could not be read from the server; the filters are left as they were.",
-  "search.message.failed-to-delete-saved-search": "Error message shown when deleting the open saved search failed on the server."
+  "search.message.failed-to-delete-saved-search": "Error message shown when deleting the open saved search failed on the server.",
+  "satori-components.search-filters.remove": "Accessible name of the small x button on a chosen author, collection or tag in the search filters; it removes that one choice. {{ value }} is the author, collection or tag shown on the chip. A VERB phrase.",
+  "satori-components.search-filters.chosen-authors": "Accessible name of the set of chips below the Authors box of the search filters: the authors the user has chosen to filter on, each removable.",
+  "satori-components.search-filters.chosen-collections": "Accessible name of the set of chips below the Collections box of the search filters: the collections the user has chosen to filter on, each removable.",
+  "satori-components.search-filters.chosen-tags": "Accessible name of the set of chips below the Tags box of the search filters: the tags the user has chosen to filter on, each removable."
 }

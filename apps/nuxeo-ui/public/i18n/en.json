@@ -2150,7 +2150,11 @@
       },
       "no-available-results": "No available results",
       "reset": "Reset",
-      "save-as": "Save As"
+      "save-as": "Save As",
+      "remove": "Remove {{ value }}",
+      "chosen-authors": "Chosen authors",
+      "chosen-collections": "Chosen collections",
+      "chosen-tags": "Chosen tags"
     },
     "saved-search-select": {
       "label": "Saved Searches",

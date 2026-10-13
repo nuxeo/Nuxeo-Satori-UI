@@ -20,8 +20,11 @@ of search results, in a drawer or a side panel, wherever the user narrows a sear
   whole result set rather than the page shown, as Web UI's checkbox aggregations do. A range filter
   lists every range; a terms filter lists the buckets with results, and keeps a selected value the
   server no longer returns so it can still be cleared.
-- **When each change applies.** Full text applies on Enter, or when it is cleared; a checkbox, or a
-  chosen author, collection or tag, applies at once.
+- **When each change applies.** Full text applies on Enter, or when it is cleared; a checkbox, or an
+  author, collection or tag added or removed, applies at once.
+- **Several authors, collections and tags.** Each choice is added as a chip below its box, with a
+  button to remove it, as Web UI's multiple-choice fields do; a choice already made is not offered
+  again.
 - **Lookups of its own.** Collections lists the user's collections, read when the box is first
   focused; Tags suggests the tags that start with what is typed.
 - **Opens what is chosen.** A group with a selection opens, so a loaded saved search shows what it
@@ -112,7 +115,9 @@ Focus Collections: the list says the collections could not be loaded.
 - **Labelled fields.** Full text, Authors, Collections and Tags each have a visible label tied to the
   box; the placeholder is a hint, not the name.
 - **Comboboxes.** Authors, Collections and Tags are Material autocompletes: **Down** opens the list,
-  **Up** and **Down** move through it, **Enter** chooses, **Escape** closes.
+  **Up** and **Down** move through it, **Enter** adds the choice, **Escape** closes.
+- **Chips.** Each choice is a chip in a set named for its field ("Chosen authors"); its remove button is named
+  "Remove" and the choice, and **Backspace** or **Delete** on a focused chip removes it.
 - **Groups.** Each collapsible group's heading is a button that says whether it is expanded
   (`aria-expanded`) and controls its list; the open list is a named group of checkboxes, each with
   its count in its name.

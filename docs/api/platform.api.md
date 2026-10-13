@@ -510,9 +510,9 @@ class NxsSavedSearchSelectComponent {
 interface NxsSearchFilters {
     readonly fulltext: string;
     readonly modified: readonly string[];
-    readonly author: string;
-    readonly collection: string;
-    readonly tag: string;
+    readonly authors: readonly string[];
+    readonly collections: readonly string[];
+    readonly tags: readonly string[];
     readonly nature: readonly string[];
     readonly subjects: readonly string[];
     readonly coverage: readonly string[];
@@ -544,9 +544,9 @@ class NxsSearchFiltersComponent {
     protected readonly authorOptions: _angular_core.Signal<NxsFacetOption[]>;
     protected readonly collections: _angular_core.WritableSignal<readonly SearchCollectionOption[]>;
     protected readonly collectionsState: _angular_core.WritableSignal<"failed" | "idle" | "loaded" | "loading">;
-    protected readonly collectionOptions: _angular_core.Signal<readonly SearchCollectionOption[]>;
-    protected readonly collectionDisplay: (id: string | null) => string;
-    protected readonly tagSuggestions: _angular_core.WritableSignal<readonly string[]>;
+    protected readonly collectionOptions: _angular_core.Signal<SearchCollectionOption[]>;
+    protected readonly emptyDisplay: () => string;
+    protected readonly tagOptions: _angular_core.Signal<string[]>;
     constructor();
     protected isExpanded(field: CheckboxField): boolean;
     protected toggleGroup(field: CheckboxField): void;
@@ -555,14 +555,12 @@ class NxsSearchFiltersComponent {
     protected optionLabelKey(group: CheckboxGroup, value: string): string | null;
     protected applyFulltext(): void;
     protected clearFulltext(): void;
-    protected onAuthorInput(value: string): void;
-    protected selectAuthor(value: string): void;
+    protected addChoice(field: ChoiceField, value: string): void;
+    protected removeChoice(field: ChoiceField, value: string): void;
     protected onCollectionsFocus(): void;
-    protected onCollectionInput(value: string): void;
-    protected selectCollection(id: string): void;
     protected onTagInput(value: string): void;
-    protected selectTag(label: string): void;
     protected resetFilters(): void;
+    protected collectionTitle(id: string): string;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSearchFiltersComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, { "filters": { "alias": "filters"; "required": false; "isSignal": true; }; "aggregations": { "alias": "aggregations"; "required": false; "isSignal": true; }; }, { "filters": "filtersChange"; "filtersReset": "filtersReset"; "saveAs": "saveAs"; }, never, never, true, never>;
     }

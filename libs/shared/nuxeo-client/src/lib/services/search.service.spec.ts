@@ -139,6 +139,26 @@ describe('SearchService', () => {
       expect(request.params.get('dc_nature_agg')).toBe('["[not json"]');
     });
 
+    it('takes several authors, collections and tags as JSON arrays, never split on commas', async () => {
+      const { request } = await send({
+        author: '["Smith, J","jdoe","jdoe"]',
+        collection: '["col-a","col-b"]',
+        tag: '["urgent","legal"]',
+      });
+      expect(JSON.parse(request.params.get('dc_creator_agg') ?? '[]')).toEqual([
+        'Smith, J',
+        'jdoe',
+      ]);
+      expect(request.params.get('ecm_collections')).toBe('["col-a","col-b"]');
+      expect(request.params.get('ecm_tags')).toBe('["urgent","legal"]');
+    });
+
+    it('reads one plain author or tag as one value, a comma in it included', async () => {
+      const { request } = await send({ author: 'Smith, J', tag: 'q1' });
+      expect(request.params.get('dc_creator_agg')).toBe('["Smith, J"]');
+      expect(request.params.get('ecm_tags')).toBe('["q1"]');
+    });
+
     it('sends the author and tag as one-value arrays, JSON-encoded so quotes survive', async () => {
       const { request } = await send({ author: 'o"brien', tag: 'q1 "draft"' });
       expect(JSON.parse(request.params.get('dc_creator_agg') ?? '[]')).toEqual(['o"brien']);

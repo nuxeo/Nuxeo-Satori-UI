@@ -74,7 +74,8 @@ const SELECTED: NxsSearchFilters = {
   ...NXS_EMPTY_SEARCH_FILTERS,
   fulltext: 'contract',
   modified: ['lastMonth'],
-  author: 'jdoe',
+  authors: ['jdoe', 'asmith'],
+  tags: ['archive'],
   nature: ['contract'],
   coverage: ['asia/Japan'],
 };
@@ -92,7 +93,6 @@ const meta: Meta<NxsSearchFiltersComponent> = {
   args: {
     filters: NXS_EMPTY_SEARCH_FILTERS,
     aggregations: AGGREGATIONS,
-    filtersChange: fn(),
     filtersReset: fn(),
     saveAs: fn(),
   },
@@ -105,13 +105,13 @@ const meta: Meta<NxsSearchFiltersComponent> = {
       control: 'object',
       description: "The server's aggregates for the query: each choice's count.",
     },
-    filtersChange: { control: false, description: 'The filters the user changed.' },
     filtersReset: { control: false, description: 'Reset was pressed; the filters are now empty.' },
     saveAs: { control: false, description: 'Save as was pressed.' },
   },
   decorators: [applicationConfig({ providers: [lookups(() => of(COLLECTIONS))] })],
+  // `filtersChange` is the two-way binding's event, which Storybook's arg types leave out.
   render: (args) => ({
-    props: args,
+    props: { ...args, filtersChange: fn().mockName('filtersChange') },
     template: `<div style="width: min(320px, 100%); height: 640px; display: flex">
   <nxs-search-filters
     style="flex: 1"
@@ -133,8 +133,9 @@ type Story = StoryObj<NxsSearchFiltersComponent>;
 export const NothingChosen: Story = {};
 
 /**
- * A query with choices made: the groups with a selection open. Asia/Japan is selected but the
- * server returned no bucket for it, so it is listed without a count and can still be cleared.
+ * A query with choices made: two authors and a tag as chips, and the groups with a selection open.
+ * Asia/Japan is selected but the server returned no bucket for it, so it is listed without a count
+ * and can still be cleared.
  */
 export const WithChoices: Story = { args: { filters: SELECTED } };
 

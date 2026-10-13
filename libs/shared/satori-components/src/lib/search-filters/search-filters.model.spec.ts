@@ -37,9 +37,9 @@ const EVERYTHING = filters({
   query: 'ecm:primaryType = "File"',
   fulltext: `"exact phrase" o'brien te*t`,
   modified: ['last24h', 'priorToLastYear'],
-  author: 'o"brien',
-  collection: 'col-1',
-  tag: 'q1 "draft"',
+  authors: ['o"brien', 'jdoe'],
+  collections: ['col-1', 'col-2'],
+  tags: ['q1 "draft"', 'legal'],
   nature: ['article', 'report'],
   subjects: ['art', 'art/cinema'],
   coverage: ['Paris, France', 'europe/France'],
@@ -49,7 +49,9 @@ const EVERYTHING = filters({
 describe('search filters — the record a host keeps', () => {
   it('leaves out every empty field', () => {
     expect(nxsSearchFiltersToRecord(NXS_EMPTY_SEARCH_FILTERS)).toEqual({});
-    expect(nxsSearchFiltersToRecord(filters({ fulltext: '   ', nature: [' ', ''] }))).toEqual({});
+    expect(
+      nxsSearchFiltersToRecord(filters({ fulltext: '   ', nature: [' ', ''], tags: [' '] })),
+    ).toEqual({});
   });
 
   it('writes each field under its key, trimmed, multi-value fields as JSON arrays once each', () => {
@@ -58,10 +60,10 @@ describe('search filters — the record a host keeps', () => {
         filters({
           fulltext: ' contract ',
           nature: ['article', ' article', 'report'],
-          author: 'jdoe',
+          authors: ['jdoe'],
         }),
       ),
-    ).toEqual({ ecm_fulltext: 'contract', nature: '["article","report"]', author: 'jdoe' });
+    ).toEqual({ ecm_fulltext: 'contract', nature: '["article","report"]', author: '["jdoe"]' });
   });
 
   it('reads back what it wrote, for every field, a comma inside a value included', () => {
@@ -75,9 +77,9 @@ describe('search filters — a saved search’s params', () => {
       q: 'ecm:primaryType = "File"',
       ecm_fulltext: `"exact phrase" o'brien te*t`,
       dc_modified_agg: '["last24h","priorToLastYear"]',
-      dc_creator_agg: '["o\\"brien"]',
-      ecm_collections: '["col-1"]',
-      ecm_tags: '["q1 \\"draft\\""]',
+      dc_creator_agg: '["o\\"brien","jdoe"]',
+      ecm_collections: '["col-1","col-2"]',
+      ecm_tags: '["q1 \\"draft\\"","legal"]',
       dc_nature_agg: '["article","report"]',
       dc_subjects_agg: '["art","art/cinema"]',
       dc_coverage_agg: '["Paris, France","europe/France"]',
@@ -129,8 +131,8 @@ describe('search filters — a saved search’s params', () => {
       filters({
         fulltext: 'newupload',
         modified: ['lastWeek'],
-        author: 'Administrator',
-        tag: 'q1',
+        authors: ['Administrator'],
+        tags: ['q1'],
         subjects: ['art'],
         size: ['small'],
       }),
@@ -144,7 +146,7 @@ describe('search filters — a saved search’s params', () => {
         dc_nature_agg: '',
         ecm_collections: '["col-9"]',
       }),
-    ).toEqual(filters({ coverage: ['Paris, France'], collection: 'col-9' }));
+    ).toEqual(filters({ coverage: ['Paris, France'], collections: ['col-9'] }));
   });
 
   it('reads a search saved earlier under the short names, comma-separated', () => {
@@ -167,9 +169,9 @@ describe('search filters — a saved search’s params', () => {
         fulltext: 'probe',
         modified: ['last24h', 'lastWeek'],
         nature: ['article'],
-        author: 'Administrator',
-        collection: 'abc',
-        tag: 't1',
+        authors: ['Administrator'],
+        collections: ['abc'],
+        tags: ['t1'],
         size: ['tiny'],
         subjects: ['art'],
         coverage: ['europe/France'],
@@ -198,9 +200,38 @@ describe('search filters — a saved search’s params', () => {
   it('does not read the coverage aggregate as a collection', () => {
     // The old reader fell back to `dc_coverage_agg` for the collection, so a saved coverage choice
     // came back as a collection filter too.
-    expect(nxsSearchFiltersFromParams({ dc_coverage_agg: '["europe/France"]' }).collection).toBe(
-      '',
+    expect(
+      nxsSearchFiltersFromParams({ dc_coverage_agg: '["europe/France"]' }).collections,
+    ).toEqual([]);
+  });
+
+  it('keeps every author, collection and tag of a search Web UI saved with several', () => {
+    // Web UI's Authors, Collections and Tags are multiple-choice (`multiple="true"`).
+    expect(
+      nxsSearchFiltersFromParams({
+        dc_creator_agg: ['alice', 'bob'],
+        ecm_collections: ['col-a', 'col-b'],
+        ecm_tags: ['urgent', 'legal'],
+      }),
+    ).toEqual(
+      filters({
+        authors: ['alice', 'bob'],
+        collections: ['col-a', 'col-b'],
+        tags: ['urgent', 'legal'],
+      }),
     );
+  });
+
+  it('reads collection entries Web UI keeps as objects, by their id or uid', () => {
+    expect(
+      nxsSearchFiltersFromParams({
+        ecm_collections: [
+          { id: 'col-a', displayLabel: 'Projects' },
+          { uid: 'col-b' },
+          { title: 'x' },
+        ],
+      }).collections,
+    ).toEqual(['col-a', 'col-b']);
   });
 
   it('keeps full text that looks like JSON or has commas as it is', () => {
@@ -218,7 +249,7 @@ describe('search filters — a saved search’s params', () => {
       nxsSearchFiltersFromParams({
         ecm_fulltext: 42,
         dc_nature_agg: { key: 'article' },
-        dc_subjects_agg: [{ id: 'art' }, 7, 'sciences'],
+        dc_subjects_agg: [{ label: 'art' }, 7, 'sciences', null],
       }),
     ).toEqual(filters({ subjects: ['7', 'sciences'] }));
     expect(nxsSearchFiltersFromParams(null)).toEqual(NXS_EMPTY_SEARCH_FILTERS);
@@ -236,9 +267,9 @@ describe('search filters — the query', () => {
       q: 'ecm:primaryType = "File"',
       ecmFulltext: `"exact phrase" o'brien te*t`,
       modifiedDate: '["last24h","priorToLastYear"]',
-      author: 'o"brien',
-      collection: 'col-1',
-      tag: 'q1 "draft"',
+      author: '["o\\"brien","jdoe"]',
+      collection: '["col-1","col-2"]',
+      tag: '["q1 \\"draft\\"","legal"]',
       nature: '["article","report"]',
       subjects: '["art","art/cinema"]',
       coverage: '["Paris, France","europe/France"]',
@@ -284,9 +315,9 @@ describe('search filters — comparing', () => {
     for (const change of [
       { query: 'q' },
       { fulltext: 'y' },
-      { author: 'a' },
-      { collection: 'c' },
-      { tag: 't' },
+      { authors: ['a'] },
+      { collections: ['c'] },
+      { tags: ['t'] },
       { modified: ['last24h'] },
       { nature: ['n'] },
       { subjects: ['s'] },

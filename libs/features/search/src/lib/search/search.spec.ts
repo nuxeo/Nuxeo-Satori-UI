@@ -1139,7 +1139,7 @@ describe('SearchComponent', () => {
       // Trimmed, and empty/whitespace-only filters omitted entirely rather than sent as ''.
       // An empty string is a value the server would filter on.
       expect(request['q']).toBe('hello');
-      expect(request['author']).toBe('alice');
+      expect(request['author']).toBe('["alice"]');
       expect(request['size']).toBe('["large"]');
       expect('tag' in request).toBe(false);
       expect('nature' in request).toBe(false);

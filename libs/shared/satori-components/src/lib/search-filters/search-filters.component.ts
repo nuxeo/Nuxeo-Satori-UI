@@ -16,6 +16,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
@@ -39,6 +40,8 @@ import {
 
 /** A group of checkboxes, and which field of the filters it edits. */
 type CheckboxField = 'modified' | 'nature' | 'subjects' | 'coverage' | 'size';
+/** A typeahead whose choices collect as chips, as Web UI's multiple-choice fields do. */
+type ChoiceField = 'authors' | 'collections' | 'tags';
 
 interface CheckboxGroup {
   readonly field: CheckboxField;
@@ -72,8 +75,9 @@ let nextId = 0;
  *
  * It edits `filters` and nothing else: the host turns them into a query and passes the server's
  * `aggregations` for that query back, which give each choice its count, as Web UI's checkbox
- * aggregations do. Full text applies on Enter; a checkbox or a chosen author, collection or tag
- * applies at once. It looks up the user's collections and the tag suggestions itself.
+ * aggregations do. Full text applies on Enter; a checkbox, or an author, collection or tag added or
+ * removed, applies at once. Authors, collections and tags take several values, as in Web UI. It
+ * looks up the user's collections and the tag suggestions itself.
  */
 @Component({
   selector: 'nxs-search-filters',
@@ -84,6 +88,7 @@ let nextId = 0;
     MatAutocompleteModule,
     MatButtonModule,
     MatCheckboxModule,
+    MatChipsModule,
     MatIconModule,
     NgTemplateOutlet,
     TranslatePipe,
@@ -164,26 +169,34 @@ export class NxsSearchFiltersComponent {
     };
   });
 
-  /** The authors the server counted for this query, narrowed by what is typed. */
+  /** The authors the server counted for this query, not yet chosen, narrowed by what is typed. */
   protected readonly authorOptions = computed(() => {
     const term = this.authorText().trim().toLowerCase();
-    const options = nxsTermOptions(this.aggregations().dc_creator_agg, []);
-    return term ? options.filter((option) => option.value.toLowerCase().includes(term)) : options;
+    const chosen = this.filters().authors;
+    return nxsTermOptions(this.aggregations().dc_creator_agg, []).filter(
+      (option) =>
+        !chosen.includes(option.value) && (!term || option.value.toLowerCase().includes(term)),
+    );
   });
 
   protected readonly collections = signal<readonly SearchCollectionOption[]>([]);
   protected readonly collectionsState = signal<'idle' | 'loading' | 'loaded' | 'failed'>('idle');
   protected readonly collectionOptions = computed(() => {
     const term = this.collectionText().trim().toLowerCase();
-    const all = this.collections();
-    return term ? all.filter((option) => option.title.toLowerCase().includes(term)) : all;
+    const chosen = this.filters().collections;
+    return this.collections().filter(
+      (option) =>
+        !chosen.includes(option.id) && (!term || option.title.toLowerCase().includes(term)),
+    );
   });
 
-  /** What the collections box shows for a chosen id: its title once the collections are known. */
-  protected readonly collectionDisplay = (id: string | null): string =>
-    this.collectionTitle(id ?? '');
+  /** A choice leaves its box empty: it is shown as a chip below it. */
+  protected readonly emptyDisplay = (): string => '';
 
-  protected readonly tagSuggestions = signal<readonly string[]>([]);
+  private readonly tagSuggestions = signal<readonly string[]>([]);
+  protected readonly tagOptions = computed(() =>
+    this.tagSuggestions().filter((label) => !this.filters().tags.includes(label)),
+  );
   private readonly tagTerms = new Subject<string>();
 
   constructor() {
@@ -192,10 +205,11 @@ export class NxsSearchFiltersComponent {
       const filters = this.filters();
       untracked(() => {
         this.fulltextDraft.set(filters.fulltext);
-        this.authorText.set(filters.author);
-        this.collectionText.set(this.collectionTitle(filters.collection));
-        this.tagText.set(filters.tag);
         this.expandSelected(filters);
+        // Chosen collections are shown by title, which needs the user's collections.
+        if (filters.collections.length > 0 && this.collectionsState() === 'idle') {
+          this.loadCollections();
+        }
       });
     });
 
@@ -247,17 +261,24 @@ export class NxsSearchFiltersComponent {
     this.update({ fulltext: '' });
   }
 
-  protected onAuthorInput(value: string): void {
-    this.authorText.set(value);
-    if (!value.trim() && this.filters().author) this.update({ author: '' });
+  protected addChoice(field: ChoiceField, value: string): void {
+    const text = { authors: this.authorText, collections: this.collectionText, tags: this.tagText };
+    text[field].set('');
+    if (field === 'tags') this.tagSuggestions.set([]);
+    if (!value || this.filters()[field].includes(value)) return;
+    this.update({ [field]: [...this.filters()[field], value] });
   }
 
-  protected selectAuthor(value: string): void {
-    this.update({ author: value });
+  protected removeChoice(field: ChoiceField, value: string): void {
+    this.update({ [field]: this.filters()[field].filter((entry) => entry !== value) });
   }
 
   protected onCollectionsFocus(): void {
     if (this.collectionsState() === 'loading' || this.collectionsState() === 'loaded') return;
+    this.loadCollections();
+  }
+
+  private loadCollections(): void {
     this.collectionsState.set('loading');
     this.searchService
       .getUserCollections()
@@ -266,32 +287,15 @@ export class NxsSearchFiltersComponent {
         next: (collections) => {
           this.collections.set(collections);
           this.collectionsState.set('loaded');
-          this.collectionText.set(this.collectionTitle(this.filters().collection));
         },
         error: () => this.collectionsState.set('failed'),
       });
   }
 
-  protected onCollectionInput(value: string): void {
-    this.collectionText.set(value);
-    if (!value.trim() && this.filters().collection) this.update({ collection: '' });
-  }
-
-  protected selectCollection(id: string): void {
-    this.update({ collection: id });
-  }
-
   protected onTagInput(value: string): void {
     this.tagText.set(value);
     this.tagTerms.next(value.trim());
-    if (!value.trim()) {
-      this.tagSuggestions.set([]);
-      if (this.filters().tag) this.update({ tag: '' });
-    }
-  }
-
-  protected selectTag(label: string): void {
-    this.update({ tag: label });
+    if (!value.trim()) this.tagSuggestions.set([]);
   }
 
   protected resetFilters(): void {
@@ -300,8 +304,7 @@ export class NxsSearchFiltersComponent {
   }
 
   /** The title a collection id is shown with, once the user's collections are known. */
-  private collectionTitle(id: string): string {
-    if (!id) return '';
+  protected collectionTitle(id: string): string {
     return this.collections().find((option) => option.id === id)?.title ?? id;
   }
 

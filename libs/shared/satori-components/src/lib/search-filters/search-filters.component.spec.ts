@@ -85,6 +85,25 @@ describe('NxsSearchFiltersComponent', () => {
     return [...(group?.querySelectorAll<HTMLElement>('mat-checkbox') ?? [])];
   }
 
+  /** The chips under a box, by their text, and their remove buttons' names. */
+  function chips(labelText: string): { text: string[]; remove: string[] } {
+    const field = input(labelText).closest('.nxs-search-filters__field');
+    const set = [...(field?.querySelectorAll<HTMLElement>('mat-chip') ?? [])];
+    return {
+      text: set.map((chip) => (chip.textContent ?? '').replace(/cancel\s*$/, '').trim()),
+      remove: set.map((chip) => chip.querySelector('button')?.getAttribute('aria-label') ?? ''),
+    };
+  }
+
+  function removeChip(labelText: string, index: number): void {
+    const field = input(labelText).closest('.nxs-search-filters__field');
+    field?.querySelectorAll<HTMLButtonElement>('mat-chip button')[index]?.click();
+  }
+
+  const panelOptions = () => [
+    ...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option'),
+  ];
+
   function type(field: HTMLInputElement, value: string): void {
     field.value = value;
     field.dispatchEvent(new Event('input'));
@@ -203,7 +222,7 @@ describe('NxsSearchFiltersComponent', () => {
       expect(el().querySelector('.nxs-search-filters__clear')).toBeNull();
     });
 
-    it('offers the authors the server counted, narrowed by what is typed, and applies the one chosen', async () => {
+    it('offers the authors the server counted, narrowed by what is typed, and adds several', async () => {
       const box = input('Authors');
       let options = await openPanel(box);
       expect(options.map((node) => node.textContent?.trim())).toEqual([
@@ -213,17 +232,32 @@ describe('NxsSearchFiltersComponent', () => {
 
       type(box, 'JD');
       await render();
-      options = [
-        ...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option'),
-      ];
+      options = panelOptions();
       expect(options.map((node) => node.textContent?.trim())).toEqual(['jdoe (2)']);
       options[0].click();
       await render();
-      expect(host.filters().author).toBe('jdoe');
+      expect(host.filters().authors).toEqual(['jdoe']);
+      expect(box.value).toBe('');
 
-      type(box, '');
+      // A chosen author is not offered again; the next one is added beside it.
+      options = await openPanel(box);
+      expect(options.map((node) => node.textContent?.trim())).toEqual(['Administrator (40)']);
+      options[0].click();
       await render();
-      expect(host.filters().author).toBe('');
+      expect(host.filters().authors).toEqual(['jdoe', 'Administrator']);
+      expect(chips('Authors')).toEqual({
+        text: ['jdoe', 'Administrator'],
+        remove: ['Remove jdoe', 'Remove Administrator'],
+      });
+      // Named apart from the box, which is "Authors".
+      const set = input('Authors')
+        .closest('.nxs-search-filters__field')
+        ?.querySelector('mat-chip-set');
+      expect(set?.getAttribute('aria-label')).toBe('Chosen authors');
+
+      removeChip('Authors', 0);
+      await render();
+      expect(host.filters().authors).toEqual(['Administrator']);
     });
 
     it('says no author matches when none does', async () => {
@@ -233,7 +267,7 @@ describe('NxsSearchFiltersComponent', () => {
       expect(options.map((node) => node.textContent?.trim())).toEqual(['No results found']);
     });
 
-    it('reads the collections once, on the first focus, and shows a chosen one by its title', async () => {
+    it('reads the collections once, on the first focus, and shows chosen ones by title', async () => {
       const box = input('Collections');
       let options = await openPanel(box);
       await openPanel(box);
@@ -242,17 +276,22 @@ describe('NxsSearchFiltersComponent', () => {
 
       type(box, 'boa');
       await render();
-      options = [
-        ...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option'),
-      ];
+      options = panelOptions();
       options[0].click();
       await render();
-      expect(host.filters().collection).toBe('col-2');
-      expect(box.value).toBe('Board');
+      expect(host.filters().collections).toEqual(['col-2']);
+      expect(box.value).toBe('');
+      expect(chips('Collections')).toEqual({ text: ['Board'], remove: ['Remove Board'] });
 
-      type(box, '');
+      options = await openPanel(box);
+      expect(options.map((node) => node.textContent?.trim())).toEqual(['Claims (4)']);
+      options[0].click();
       await render();
-      expect(host.filters().collection).toBe('');
+      expect(host.filters().collections).toEqual(['col-2', 'col-1']);
+
+      removeChip('Collections', 1);
+      await render();
+      expect(host.filters().collections).toEqual(['col-2']);
     });
 
     it('says the collections are loading, then could not be read', async () => {
@@ -264,9 +303,7 @@ describe('NxsSearchFiltersComponent', () => {
 
       pending.error({ status: 500 });
       await render();
-      options = [
-        ...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option'),
-      ];
+      options = panelOptions();
       expect(options.map((node) => node.textContent?.trim())).toEqual([
         'Could not load your collections.',
       ]);
@@ -281,7 +318,7 @@ describe('NxsSearchFiltersComponent', () => {
       expect(getUserCollections).toHaveBeenCalledTimes(2);
     });
 
-    it('suggests tags for what is typed, debounced, and applies the one chosen', async () => {
+    it('suggests tags for what is typed, debounced, and adds the ones chosen', async () => {
       vi.useFakeTimers();
       try {
         const box = input('Tags');
@@ -296,26 +333,33 @@ describe('NxsSearchFiltersComponent', () => {
         await render();
         expect(getTagSuggestions).toHaveBeenCalledTimes(1);
         expect(getTagSuggestions).toHaveBeenCalledWith('an');
-        options = [
-          ...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option'),
-        ];
+        options = panelOptions();
         expect(options.map((node) => node.textContent?.trim())).toEqual(['annual']);
 
         options[0].click();
         await render();
-        expect(host.filters().tag).toBe('annual');
+        expect(host.filters().tags).toEqual(['annual']);
+        expect(box.value).toBe('');
+
+        type(box, 'a');
+        vi.advanceTimersByTime(250);
+        await render();
+        options = panelOptions();
+        // `annual` is chosen already, so only `archive` is offered.
+        expect(options.map((node) => node.textContent?.trim())).toEqual(['archive']);
+        options[0].click();
+        await render();
+        expect(host.filters().tags).toEqual(['annual', 'archive']);
 
         type(box, 'zz');
         vi.advanceTimersByTime(250);
         await render();
-        options = [
-          ...document.querySelectorAll<HTMLElement>('.nxs-search-filters__panel mat-option'),
-        ];
+        options = panelOptions();
         expect(options.map((node) => node.textContent?.trim())).toEqual(['No results for zz']);
 
-        type(box, '');
+        removeChip('Tags', 0);
         await render();
-        expect(host.filters().tag).toBe('');
+        expect(host.filters().tags).toEqual(['archive']);
       } finally {
         vi.useRealTimers();
       }
@@ -323,23 +367,22 @@ describe('NxsSearchFiltersComponent', () => {
   });
 
   describe('filters set from outside', () => {
-    it('shows them in every box and opens the groups that have a selection', async () => {
+    it('shows them, chosen values as chips, and opens the groups that have a selection', async () => {
       host.filters.set({
         ...NXS_EMPTY_SEARCH_FILTERS,
         fulltext: 'invoice',
-        author: 'jdoe',
-        tag: 'q1',
-        collection: 'col-9',
+        authors: ['jdoe', 'asmith'],
+        tags: ['q1'],
         nature: ['gone'],
         size: ['tiny'],
       });
       await render();
 
       expect(input('Full Text').value).toBe('invoice');
-      expect(input('Authors').value).toBe('jdoe');
-      expect(input('Tags').value).toBe('q1');
-      // The collections are not read yet, so the id is all there is to show.
-      expect(input('Collections').value).toBe('col-9');
+      expect(chips('Authors').text).toEqual(['jdoe', 'asmith']);
+      expect(chips('Tags').text).toEqual(['q1']);
+      expect(chips('Collections').text).toEqual([]);
+      expect(getUserCollections).not.toHaveBeenCalled();
       expect(toggle('Nature').getAttribute('aria-expanded')).toBe('true');
       expect(toggle('Size').getAttribute('aria-expanded')).toBe('true');
       // A selected value the server no longer returns is still there, ticked, to be cleared.
@@ -348,12 +391,11 @@ describe('NxsSearchFiltersComponent', () => {
       expect(checkboxes('Size')[0].querySelector<HTMLInputElement>('input')?.checked).toBe(true);
     });
 
-    it('shows a collection by its title once the collections are read', async () => {
-      host.filters.set({ ...NXS_EMPTY_SEARCH_FILTERS, collection: 'col-1' });
+    it('reads the collections to show chosen ones by title, an unknown one by its id', async () => {
+      host.filters.set({ ...NXS_EMPTY_SEARCH_FILTERS, collections: ['col-1', 'col-gone'] });
       await render();
-      input('Collections').dispatchEvent(new Event('focus'));
-      await render();
-      expect(input('Collections').value).toBe('Claims');
+      expect(getUserCollections).toHaveBeenCalledTimes(1);
+      expect(chips('Collections').text).toEqual(['Claims', 'col-gone']);
     });
   });
 
