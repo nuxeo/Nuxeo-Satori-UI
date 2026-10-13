@@ -124,6 +124,21 @@ describe('SearchService', () => {
       expect(request.params.get('common_size_agg')).toBe('["tiny","huge"]');
     });
 
+    it('takes a list as a JSON array, so a value containing a comma stays one value', async () => {
+      const { request } = await send({
+        coverage: '["Paris, France","europe/Spain"," "]',
+        modifiedDate: '["moreThan1YearAgo"]',
+        nature: '[not json',
+      });
+      expect(JSON.parse(request.params.get('dc_coverage_agg') ?? '[]')).toEqual([
+        'Paris, France',
+        'europe/Spain',
+      ]);
+      expect(request.params.get('dc_modified_agg')).toBe('["priorToLastYear"]');
+      // Not a JSON array, so read as comma-separated, as before.
+      expect(request.params.get('dc_nature_agg')).toBe('["[not json"]');
+    });
+
     it('sends the author and tag as one-value arrays, JSON-encoded so quotes survive', async () => {
       const { request } = await send({ author: 'o"brien', tag: 'q1 "draft"' });
       expect(JSON.parse(request.params.get('dc_creator_agg') ?? '[]')).toEqual(['o"brien']);

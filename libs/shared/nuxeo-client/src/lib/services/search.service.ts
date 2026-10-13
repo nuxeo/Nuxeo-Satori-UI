@@ -414,11 +414,27 @@ export class SearchService {
       pageSize = 40,
     } = params;
 
-    const parseList = (value: string): string[] =>
-      value
+    // A list is a JSON array, which keeps a value containing a comma whole, or comma-separated.
+    const parseList = (value: string): string[] => {
+      const text = value.trim();
+      if (text.startsWith('[')) {
+        try {
+          const parsed: unknown = JSON.parse(text);
+          if (Array.isArray(parsed)) {
+            return parsed
+              .filter((entry): entry is string => typeof entry === 'string')
+              .map((v) => v.trim())
+              .filter(Boolean);
+          }
+        } catch {
+          // Not JSON: read it as comma-separated below.
+        }
+      }
+      return text
         .split(',')
         .map((v) => v.trim())
         .filter(Boolean);
+    };
 
     let httpParams = new HttpParams()
       .set('currentPageIndex', pageIndex)

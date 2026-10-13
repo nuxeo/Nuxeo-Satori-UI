@@ -189,10 +189,12 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-43 exported symbol(s).
+60 exported symbol(s).
 
 ```ts
+const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
+const NXS_MODIFIED_RANGES: readonly ["last24h", "lastWeek", "lastMonth", "lastYear", "priorToLastYear"];
 const NXS_PERMISSIONS_PANEL_ID = "nxs.components.permissionsPanel";
 const NXS_PRIMITIVE_IDS: Readonly<{
     readonly avatar: "nxs.primitives.avatar";
@@ -201,6 +203,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly richTooltip: "nxs.primitives.richTooltip";
     }>;
 }
+const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
 const NXS_TOAST_DURATION = 4000;
 class NxsActionMenuComponent {
     readonly actions: _angular_core.InputSignal<readonly NxsMenuAction[]>;
@@ -324,6 +327,11 @@ class NxsErrorStateComponent {
     }
 }
 type NxsErrorStatus = 401 | 403 | 404 | 500;
+interface NxsFacetOption {
+    readonly value: string;
+    readonly count: number | null;
+    }
+}
 class NxsFavoriteToggleComponent {
     readonly documentId: _angular_core.InputSignal<string>;
     readonly favorite: _angular_core.ModelSignal<boolean>;
@@ -455,6 +463,110 @@ interface NxsRichTooltipInputs {
     readonly icon: InputSignal<string>;
     }
 }
+class NxsSavedSearchActionsComponent {
+    readonly savedSearchId: _angular_core.InputSignal<string>;
+    readonly dirty: _angular_core.InputSignal<boolean>;
+    readonly hasFilters: _angular_core.InputSignal<boolean>;
+    readonly saveAs: _angular_core.OutputEmitterRef<void>;
+    readonly save: _angular_core.OutputEmitterRef<void>;
+    readonly rename: _angular_core.OutputEmitterRef<void>;
+    readonly share: _angular_core.OutputEmitterRef<void>;
+    readonly remove: _angular_core.OutputEmitterRef<void>;
+    protected readonly canEdit: _angular_core.Signal<boolean>;
+    protected readonly isSaved: _angular_core.Signal<boolean>;
+    protected readonly showSaveAs: _angular_core.Signal<boolean>;
+    protected readonly showSave: _angular_core.Signal<boolean>;
+    protected readonly showMenu: _angular_core.Signal<boolean>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSavedSearchActionsComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSavedSearchActionsComponent, "nxs-saved-search-actions", never, { "savedSearchId": { "alias": "savedSearchId"; "required": false; "isSignal": true; }; "dirty": { "alias": "dirty"; "required": false; "isSignal": true; }; "hasFilters": { "alias": "hasFilters"; "required": false; "isSignal": true; }; }, { "saveAs": "saveAs"; "save": "save"; "rename": "rename"; "share": "share"; "remove": "remove"; }, never, never, true, never>;
+    }
+}
+interface NxsSavedSearchChoice {
+    readonly id: string;
+    readonly title: string;
+    }
+}
+class NxsSavedSearchSelectComponent {
+    readonly selectedId: _angular_core.InputSignal<string>;
+    readonly selectedTitle: _angular_core.InputSignal<string>;
+    readonly pageProvider: _angular_core.InputSignal<string>;
+    readonly refresh: _angular_core.InputSignal<number>;
+    readonly selectedChange: _angular_core.OutputEmitterRef<NxsSavedSearchChoice>;
+    protected readonly inputId: string;
+    protected readonly text: _angular_core.WritableSignal<string>;
+    protected readonly searches: _angular_core.WritableSignal<readonly SavedSearchOption[]>;
+    protected readonly state: _angular_core.WritableSignal<"idle" | "loaded" | "loading">;
+    protected readonly options: _angular_core.Signal<readonly SavedSearchOption[]>;
+    constructor();
+    protected load(): void;
+    protected onInput(value: string): void;
+    protected choose(id: string): void;
+    protected restore(): void;
+    protected readonly display: (id: string | null) => string;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSavedSearchSelectComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSavedSearchSelectComponent, "nxs-saved-search-select", never, { "selectedId": { "alias": "selectedId"; "required": false; "isSignal": true; }; "selectedTitle": { "alias": "selectedTitle"; "required": false; "isSignal": true; }; "pageProvider": { "alias": "pageProvider"; "required": false; "isSignal": true; }; "refresh": { "alias": "refresh"; "required": false; "isSignal": true; }; }, { "selectedChange": "selectedChange"; }, never, never, true, never>;
+    }
+}
+interface NxsSearchFilters {
+    readonly fulltext: string;
+    readonly modified: readonly string[];
+    readonly author: string;
+    readonly collection: string;
+    readonly tag: string;
+    readonly nature: readonly string[];
+    readonly subjects: readonly string[];
+    readonly coverage: readonly string[];
+    readonly size: readonly string[];
+    readonly query: string;
+    }
+}
+class NxsSearchFiltersComponent {
+    readonly filters: _angular_core.ModelSignal<NxsSearchFilters>;
+    readonly aggregations: _angular_core.InputSignal<SearchAggregations>;
+    readonly filtersReset: _angular_core.OutputEmitterRef<void>;
+    readonly saveAs: _angular_core.OutputEmitterRef<void>;
+    protected readonly ids: {
+    fulltext: string;
+    authors: string;
+    collections: string;
+    tags: string;
+    group: (field: string) => string;
+    };
+    protected readonly hasFilters: _angular_core.Signal<boolean>;
+    protected readonly fulltextDraft: _angular_core.WritableSignal<string>;
+    protected readonly authorText: _angular_core.WritableSignal<string>;
+    protected readonly collectionText: _angular_core.WritableSignal<string>;
+    protected readonly tagText: _angular_core.WritableSignal<string>;
+    protected readonly groups: _angular_core.Signal<{
+    before: CheckboxGroup[];
+    after: CheckboxGroup[];
+    }>;
+    protected readonly authorOptions: _angular_core.Signal<NxsFacetOption[]>;
+    protected readonly collections: _angular_core.WritableSignal<readonly SearchCollectionOption[]>;
+    protected readonly collectionsState: _angular_core.WritableSignal<"failed" | "idle" | "loaded" | "loading">;
+    protected readonly collectionOptions: _angular_core.Signal<readonly SearchCollectionOption[]>;
+    protected readonly collectionDisplay: (id: string | null) => string;
+    protected readonly tagSuggestions: _angular_core.WritableSignal<readonly string[]>;
+    constructor();
+    protected isExpanded(field: CheckboxField): boolean;
+    protected toggleGroup(field: CheckboxField): void;
+    protected isChecked(field: CheckboxField, value: string): boolean;
+    protected toggleOption(field: CheckboxField, value: string): void;
+    protected optionLabelKey(group: CheckboxGroup, value: string): string | null;
+    protected applyFulltext(): void;
+    protected clearFulltext(): void;
+    protected onAuthorInput(value: string): void;
+    protected selectAuthor(value: string): void;
+    protected onCollectionsFocus(): void;
+    protected onCollectionInput(value: string): void;
+    protected selectCollection(id: string): void;
+    protected onTagInput(value: string): void;
+    protected selectTag(label: string): void;
+    protected resetFilters(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSearchFiltersComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, { "filters": { "alias": "filters"; "required": false; "isSignal": true; }; "aggregations": { "alias": "aggregations"; "required": false; "isSignal": true; }; }, { "filters": "filtersChange"; "filtersReset": "filtersReset"; "saveAs": "saveAs"; }, never, never, true, never>;
+    }
+}
 class NxsSpinnerComponent {
     readonly diameter: _angular_core.InputSignalWithTransform<number, unknown>;
     readonly label: _angular_core.InputSignal<string>;
@@ -508,6 +620,19 @@ class NxsToastService {
     }
 }
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
+function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
+function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
+function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
+function nxsSearchFiltersFromParams(params: Readonly<Record<string, unknown>> | null | undefined): NxsSearchFilters;
+function nxsSearchFiltersToQuery(filters: NxsSearchFilters, page?: {
+    quickFilters?: string;
+    sortBy?: string | null;
+    sortOrder?: 'asc' | 'desc' | null;
+    }): SearchQueryParams;
+}
+function nxsSearchFiltersToRecord(filters: NxsSearchFilters): Record<string, string>;
+function nxsSearchFiltersToSavedParams(filters: NxsSearchFilters): Record<string, string>;
+function nxsTermOptions(aggregation: AggregateResult | undefined, selected: readonly string[]): NxsFacetOption[];
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
 function provideNxsComponents(): EnvironmentProviders;
 function provideNxsThumbnailCache(): Provider;
@@ -1912,8 +2037,10 @@ class SearchService {
     getSavedSearchById(id: string): Observable<Record<string, string>>;
     saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>;
     updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown>;
+    renameSavedSearch(id: string, title: string, pageProviderName?: string): Observable<unknown>;
     deleteSavedSearch(id: string): Observable<unknown>;
     search(params: SearchQueryParams): Observable<SearchResponse>;
+    getTagSuggestions(term: string): Observable<string[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<SearchService, never>;
     static ɵprov: i0.ɵɵInjectableDeclaration<SearchService>;
     }

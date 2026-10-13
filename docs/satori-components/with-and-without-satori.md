@@ -306,6 +306,45 @@ The folder header's "More actions" button with its menu open, opened with Enter 
 
 The page gives the menu its entries and runs the one chosen. An entry that is not allowed is shown disabled; one hidden by the configuration is not listed, and with none left, no button renders.
 
+### Search filters
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsSearchFiltersComponent`           |
+| Registered ID   | —                                     |
+| With Satori     | Same component; theme only            |
+| Storybook story | `search-search-filters--with-choices` |
+
+![Search filters: without Satori on the left, with Satori on the right](search-filters-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The search filters with a full-text term, a date range, an author and a nature chosen: the same boxes, collapsible groups and checkboxes in both, each choice with the count the server gave it. The theme sets the type, the colours of the checkboxes and the buttons, and the focus rings.
+
+### Saved search select
+
+| Field           | Value                                  |
+| --------------- | -------------------------------------- |
+| Component       | `NxsSavedSearchSelectComponent`        |
+| Registered ID   | —                                      |
+| With Satori     | Same component; theme only             |
+| Storybook story | `search-saved-search-select--one-open` |
+
+![Saved search select: without Satori on the left, with Satori on the right](saved-search-select-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The box listing the user's saved searches, with one open: the same labelled box and list in both; the theme sets the type and the colours.
+
+### Saved search actions
+
+| Field           | Value                                               |
+| --------------- | --------------------------------------------------- |
+| Component       | `NxsSavedSearchActionsComponent`                    |
+| Registered ID   | —                                                   |
+| With Satori     | Same component; theme only                          |
+| Storybook story | `search-saved-search-actions--changed-saved-search` |
+
+![Saved search actions: without Satori on the left, with Satori on the right](saved-search-actions-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Save as, Save and the menu button for a saved search the user owns, with its filters changed. The same buttons in both; the theme sets their shape and colours. On a search shared read-only only Save as is offered, in both.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -357,26 +396,29 @@ The components in the library today:
 
 <!-- satori:comparison:summary -->
 
-| Component          | Registered ID (if any)                                                                                                  | Differs with Satori?         |
-| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Avatar             | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
-| Tag                | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
-| Breadcrumbs        | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
-| Rich tooltip       | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
-| Icon               | —                                                                                                                       | Same component; theme only   |
-| Document type icon | —                                                                                                                       | Same component; theme only   |
-| Thumbnail          | —                                                                                                                       | Same component; theme only   |
-| Folder header      | —                                                                                                                       | Same component; theme only   |
-| Domain hint        | —                                                                                                                       | Same component; theme only   |
-| Empty state        | —                                                                                                                       | Same component; theme only   |
-| Error state        | —                                                                                                                       | Same component; theme only   |
-| Spinner            | —                                                                                                                       | Same component; theme only   |
-| Toast              | —                                                                                                                       | Same component; theme only   |
-| Column picker      | —                                                                                                                       | Same component; theme only   |
-| Permissions panel  | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
-| Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
-| Favorite toggle    | —                                                                                                                       | Same component; theme only   |
-| Action menu        | —                                                                                                                       | Same component; theme only   |
+| Component            | Registered ID (if any)                                                                                                  | Differs with Satori?         |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Avatar               | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
+| Tag                  | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
+| Breadcrumbs          | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
+| Rich tooltip         | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
+| Icon                 | —                                                                                                                       | Same component; theme only   |
+| Document type icon   | —                                                                                                                       | Same component; theme only   |
+| Thumbnail            | —                                                                                                                       | Same component; theme only   |
+| Folder header        | —                                                                                                                       | Same component; theme only   |
+| Domain hint          | —                                                                                                                       | Same component; theme only   |
+| Empty state          | —                                                                                                                       | Same component; theme only   |
+| Error state          | —                                                                                                                       | Same component; theme only   |
+| Spinner              | —                                                                                                                       | Same component; theme only   |
+| Toast                | —                                                                                                                       | Same component; theme only   |
+| Column picker        | —                                                                                                                       | Same component; theme only   |
+| Permissions panel    | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
+| Nuxeo Drive dialog   | —                                                                                                                       | Same component; theme only   |
+| Favorite toggle      | —                                                                                                                       | Same component; theme only   |
+| Action menu          | —                                                                                                                       | Same component; theme only   |
+| Search filters       | —                                                                                                                       | Same component; theme only   |
+| Saved search select  | —                                                                                                                       | Same component; theme only   |
+| Saved search actions | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 
