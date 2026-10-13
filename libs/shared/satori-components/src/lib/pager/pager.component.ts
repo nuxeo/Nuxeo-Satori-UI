@@ -12,6 +12,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import { nxsVisibleText } from '../visible-text';
+
 /**
  * Previous and Next for a list the server pages, with the range on screen.
  *
@@ -44,7 +46,10 @@ export class NxsPagerComponent {
   readonly hasNextPage = input(false, { transform: booleanAttribute });
   /** Disables both buttons while a page loads. */
   readonly disabled = input(false, { transform: booleanAttribute });
-  /** The navigation landmark's accessible name, already translated. Blank names it "Pages". */
+  /**
+   * The navigation landmark's accessible name, already translated. Blank, or only whitespace or
+   * zero-width characters, names it "Pages".
+   */
   readonly label = input('');
 
   /** The page index to load: one less or one more than `pageIndex`. */
@@ -61,7 +66,7 @@ export class NxsPagerComponent {
   });
   protected readonly canPrevious = computed(() => !this.disabled() && this.pageIndex() > 0);
   protected readonly canNext = computed(() => !this.disabled() && this.hasNextPage());
-  protected readonly ownLabel = computed(() => this.label().trim());
+  protected readonly ownLabel = computed(() => nxsVisibleText(this.label()));
 
   previous(): void {
     if (this.canPrevious()) this.pageChange.emit(this.pageIndex() - 1);

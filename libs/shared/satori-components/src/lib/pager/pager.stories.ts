@@ -42,7 +42,8 @@ const meta: Meta<NxsPagerComponent> = {
     disabled: { control: 'boolean', description: 'Disables both buttons while a page loads.' },
     label: {
       control: 'text',
-      description: 'The landmark’s accessible name, already translated. Blank names it “Pages”.',
+      description:
+        'The landmark’s accessible name, already translated. Blank, or only whitespace or zero-width characters, names it “Pages”.',
     },
     pageChange: { control: false, description: 'The page index to load.' },
   },

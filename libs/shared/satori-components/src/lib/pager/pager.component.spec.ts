@@ -108,14 +108,16 @@ describe('NxsPagerComponent', () => {
     expect(next()?.getAttribute('aria-label')).toBe('Next page');
   });
 
-  it('takes the landmark name it is given, and ignores one that is only whitespace', async () => {
+  it('takes the landmark name it is given, and ignores one that shows nothing', async () => {
     host.label.set('Pages of Invoices');
     await render();
     expect(el().querySelector('nav')?.getAttribute('aria-label')).toBe('Pages of Invoices');
 
-    host.label.set('   ');
-    await render();
-    expect(el().querySelector('nav')?.getAttribute('aria-label')).toBe('Pages');
+    for (const blank of ['   ', '\u200b', ' \u2060 ']) {
+      host.label.set(blank);
+      await render();
+      expect(el().querySelector('nav')?.getAttribute('aria-label')).toBe('Pages');
+    }
   });
 
   it('announces the range politely when it changes', () => {

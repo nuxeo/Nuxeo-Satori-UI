@@ -225,11 +225,14 @@ describe('NxsDocumentListComponent', () => {
       expect(el().querySelector('table')?.getAttribute('aria-rowcount')).toBe('-1');
     });
 
-    it('falls back to the path for a document with no title', async () => {
-      host.documents.set([doc(9, { title: '  ' })]);
-      await render();
-      expect(rows()[0].getAttribute('aria-label')).toBe('/default-domain/workspaces/ws/report-9');
-    });
+    it.each(['  ', '\u200b', ' \u2060 '])(
+      'falls back to the path for a document whose title shows nothing (%j)',
+      async (title) => {
+        host.documents.set([doc(9, { title })]);
+        await render();
+        expect(rows()[0].getAttribute('aria-label')).toBe('/default-domain/workspaces/ws/report-9');
+      },
+    );
 
     it('keeps a page of fifty rows to one Tab stop, row menus included', async () => {
       const many = Array.from({ length: 50 }, (_, i) => doc(i + 1));

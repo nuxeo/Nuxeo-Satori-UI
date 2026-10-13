@@ -46,6 +46,7 @@ import { NXS_PRIMITIVE_IDS, type NxsAvatarColor } from '../primitives';
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
 import { NxsTagComponent } from '../tag/tag.component';
 import { NxsThumbnailComponent } from '../thumbnail/thumbnail.component';
+import { nxsVisibleText } from '../visible-text';
 
 /** One column of a document list. */
 export interface NxsDocumentListColumn {
@@ -326,7 +327,7 @@ export class NxsDocumentListComponent {
   }
 
   protected rowName(doc: NuxeoDocument): string {
-    return doc.title?.trim() || doc.path || doc.uid;
+    return nxsVisibleText(doc.title) || doc.path || doc.uid;
   }
 
   protected accessibleName(doc: NuxeoDocument): string {
@@ -343,7 +344,7 @@ export class NxsDocumentListComponent {
 
   /** Never empty: an empty string crashes Satori's avatar inside change detection. */
   protected initials(name: string): string {
-    return name.trim() || '?';
+    return nxsVisibleText(name) || '?';
   }
 
   protected avatarColor(name: string): NxsAvatarColor {
