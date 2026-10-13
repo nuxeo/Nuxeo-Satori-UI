@@ -1227,7 +1227,8 @@ also keeps each entry's effect to a single surface, as every other slot does, an
 What these slots do **not** do:
 
 - **Not the dialog around the form.** The Edit dialog's title, Save and Cancel are the host's; the
-  dialog still opens only for a user with Write on the document.
+  dialog still opens only where `app.toolbar.edit`'s rule allows it: not in the trash, not
+  `Immutable`, not a Note, and Write or WriteProperties on the document (`app.rules.canWrite`).
 - **Not a security control.** A field your component does not show is still writable through the
   REST API by anyone with Write, and Nuxeo's own constraints still apply to what you send.
 

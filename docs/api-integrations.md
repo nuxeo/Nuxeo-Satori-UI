@@ -330,7 +330,8 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 | `sortBy`           | `query.sortBy`: `eventId`, `eventDate`, `principalName` or `category`     |
 | `sortOrder`        | `query.sortOrder`, `desc` unless given                                    |
 
-Every `query` field is optional and sent only when set. Measured on the shared Nuxeo
+Every `query` field is optional and sent only when set; `sortOrder` goes with `sortBy`, `desc`
+unless given. Measured on the shared Nuxeo
 (2026-10-13): each one filters or sorts the whole audit trail on the server, a bare day
 (`2026-10-13`) is read as midnight in the server's zone, and an end of `2026-10-13` excludes
 that day — so `nxs-document-history` sends instants, with the end at the start of the day after

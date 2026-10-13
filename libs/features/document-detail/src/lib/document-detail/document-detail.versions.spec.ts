@@ -120,7 +120,9 @@ const mockDetailService = {
   getVersionsDirect: vi.fn((_uid: string): Observable<NuxeoDocument[]> =>
     of([version(2), version(1)]),
   ),
-  getPublishedVersions: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
+  getPublishedVersions: vi.fn((_uid: string): Observable<{ entries: unknown[] }> =>
+    of({ entries: [] }),
+  ),
   getSectionTree: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
   getAuditLog: vi.fn((): Observable<Record<string, unknown>> =>

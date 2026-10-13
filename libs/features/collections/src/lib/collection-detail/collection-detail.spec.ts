@@ -335,7 +335,7 @@ describe('CollectionDetailComponent', () => {
     });
 
     it('lists only the collection’s own pending and effective shares, as Web UI', () => {
-      const share = (id: string, status: string) => ({
+      const share = (id: string, status: NuxeoAce['status']): NuxeoAce => ({
         id,
         username: `transient/${id}@example.com`,
         permission: 'Read',
