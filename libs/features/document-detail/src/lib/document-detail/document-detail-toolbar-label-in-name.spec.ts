@@ -53,4 +53,3 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(loop).toContain('[attr.data-action-id]="action.id"');
   });
 });
-
