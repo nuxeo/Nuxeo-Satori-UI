@@ -1520,7 +1520,6 @@
     "version-latest-entry": "เวอร์ชันล่าสุด",
     "version-modified-by": "แก้ไขเมื่อ {{ when }} โดย {{ who }}",
     "version-restore": "กู้คืน {{ version }}",
-    "version-restore-confirm-message": "การกู้คืนเวอร์ชัน {{ version }} จะแทนที่เนื้อหาปัจจุบันของเอกสาร รวมถึงการเปลี่ยนแปลงที่ทำหลังจากเวอร์ชันล่าสุด",
     "version-restore-confirm-title": "คุณแน่ใจหรือไม่",
     "version-viewing": "คุณกำลังดูเวอร์ชัน {{ version }}",
     "visual-editor": "ตัวแก้ไขแบบภาพ",

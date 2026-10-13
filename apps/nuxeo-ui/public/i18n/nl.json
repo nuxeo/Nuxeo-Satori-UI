@@ -1520,7 +1520,6 @@
     "version-latest-entry": "Nieuwste versie",
     "version-modified-by": "Aangepast {{ when }} door {{ who }}",
     "version-restore": "{{ version }} herstellen",
-    "version-restore-confirm-message": "Als u versie {{ version }} herstelt, wordt de huidige inhoud van het document vervangen, inclusief wijzigingen sinds de laatste versie.",
     "version-restore-confirm-title": "Weet u het zeker?",
     "version-viewing": "U bekijkt versie {{ version }}.",
     "visual-editor": "Visuele editor",

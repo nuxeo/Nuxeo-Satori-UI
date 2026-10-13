@@ -374,6 +374,30 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       );
     });
 
+    it('clears the previous document’s publications when the route moves', async () => {
+      // `loadPublishingData()` skips its own fetch while `publishedDocs` is non-empty, so a
+      // stale array did not merely show the wrong count: opening the tab left Unpublish bound
+      // to the previous document's proxies, and indefinitely so if the new count request failed.
+      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
+      const proxy = live({ uid: 'proxy-of-live', path: '/sections/a' });
+      mockDetailService.getPublishedVersions.mockReturnValue(of({ entries: [proxy] }));
+      await render(live(), { paramMap: route });
+      expect(fixture.componentInstance.publishedDocs().map((d) => d.uid)).toEqual([
+        'proxy-of-live',
+      ]);
+
+      // The next document's count never answers, which is the worst case for a stale array.
+      mockDetailService.getPublishedVersions.mockReturnValue(new Subject());
+      mockDetailService.getFullDocument.mockImplementation((uid) =>
+        of(uid === 'v-0-1' ? version(1) : live()),
+      );
+      route.next(convertToParamMap({ uid: 'v-0-1' }));
+      await settle();
+
+      expect(fixture.componentInstance.publishedDocs()).toEqual([]);
+      expect(fixture.componentInstance.publishLoading()).toBe(false);
+    });
+
     it('drops comments that arrive after the route moved on', async () => {
       const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
       await render(live(), { paramMap: route });
@@ -504,6 +528,22 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       );
       expect(mockDetailService.restoreVersion).not.toHaveBeenCalled();
       expect(navigate).not.toHaveBeenCalled();
+    });
+
+    it('scopes the warning to every change after the restored version, not since the last one', async () => {
+      // "changes made since the last version" described only unsaved edits. Restoring 0.1 while
+      // 0.2 exists also replaces what 0.2 contributed, so the version named has to be this one.
+      dialogResult = false;
+      await render(version(1));
+
+      await click('.version-banner-restore');
+
+      const message = mockDialog.open.mock.calls.at(-1)?.[1]?.data as { message: string };
+      expect(message.message).toBe(
+        "Restoring version 0.1 replaces the document's current content, " +
+          'including any changes made after version 0.1.',
+      );
+      expect(message.message).not.toContain('the last version');
     });
 
     it('restores on confirmation and returns to the live document', async () => {
