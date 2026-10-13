@@ -44,7 +44,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatSortModule, Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
@@ -177,6 +176,8 @@ import {
   type StoryboardItem,
   type VideoInfo,
   type VideoSource,
+  DateMaskPipe,
+  provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
   MatTabListKeydownDirective,
 } from '@nuxeo-satori/platform/ui';
@@ -315,6 +316,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   selector: 'lib-document-detail',
   standalone: true,
   imports: [
+    DateMaskPipe,
     CdkAriaLive,
     DescriptorLabelPipe,
     TranslatePipe,
@@ -348,7 +350,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     SatBreadcrumbsComponent,
     SatTagModule,
   ],
-  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter()],
+  providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './document-detail.html',
   styleUrls: [
     './document-detail.scss',
