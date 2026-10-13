@@ -391,6 +391,8 @@ class NxsDocumentToolbarComponent {
     protected readonly ownLabel: _angular_core.Signal<string>;
     protected readonly ownMoreLabel: _angular_core.Signal<string>;
     protected tooltipOf(action: NxsToolbarAction): string;
+    protected extraOf(action: NxsToolbarAction): string;
+    protected nameOf(action: NxsToolbarAction): string;
     protected run(action: NxsToolbarAction): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "moreLabel": { "alias": "moreLabel"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, ["*"], true, never>;

@@ -587,22 +587,13 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.toolbarTooltip(relabelled)).toBe('Release the lock');
     });
 
-    it('keeps the descriptor in toolbarActionLabel and appends supplemental tooltip text', async () => {
+    /** nxs-document-toolbar names the button "Unlock. Locked by …" from these two (NXSAT-528). */
+    it('hands the toolbar the Unlock label and who holds the lock as its tooltip', async () => {
       await build(lockedByAlice());
 
-      const unlock = offered('app.toolbar.unlock');
-      expect(component.toolbarActionTooltip(unlock)).toBe('Locked by alice on August 24, 2026');
-      expect(component.toolbarActionLabel(unlock)).toBe(
-        'Unlock. Locked by alice on August 24, 2026',
-      );
-
-      const relabelled = { ...unlock, tooltip: 'Release the lock' };
-      expect(component.toolbarActionTooltip(relabelled)).toBe('Release the lock');
-      expect(component.toolbarActionLabel(relabelled)).toBe('Unlock. Release the lock');
-
-      const silenced = { ...unlock, tooltip: '' };
-      expect(component.toolbarActionTooltip(silenced)).toBe('Unlock');
-      expect(component.toolbarActionLabel(silenced)).toBe('Unlock');
+      const unlock = component.toolbarEntries().find((entry) => entry.id === 'app.toolbar.unlock');
+      expect(unlock?.label).toBe('Unlock');
+      expect(unlock?.tooltip).toBe('Locked by alice on August 24, 2026');
     });
 
     it('shows the closed padlock, marked active, while locked and the open one while unlocked', async () => {

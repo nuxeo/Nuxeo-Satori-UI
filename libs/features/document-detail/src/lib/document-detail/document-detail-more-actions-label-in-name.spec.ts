@@ -1,15 +1,23 @@
 /**
  * NXSAT-539 / IBM 2618099297 — header More actions must not expose the more_vert ligature as
  * visible label text that conflicts with the accessible name (WCAG 2.5.3 label-in-name).
+ *
+ * The trigger is `nxs-document-toolbar`'s; the page passes it its wording.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const templatePath = join(dirname(fileURLToPath(import.meta.url)), 'document-detail.html');
+const here = dirname(fileURLToPath(import.meta.url));
+const templatePath = join(here, 'document-detail.html');
+const toolbarTemplatePath = join(
+  here,
+  '../../../../../shared/satori-components/src/lib/document-toolbar/document-toolbar.component.html',
+);
 
 const MORE_ACTIONS_KEY = 'document-detail.document-detail.more-actions';
+const MORE_NAME = `ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)`;
 
 function headerMoreActionsButtonMarkup(html: string): string {
   const needle = '[matMenuTriggerFor]="moreMenu"';
@@ -39,17 +47,25 @@ function visuallyHiddenAccessibleName(markup: string): string {
   return span!;
 }
 
+const squash = (text: string): string => text.replace(/\s+/g, ' ');
+
 describe('Document detail header More actions label in name (NXSAT-539)', () => {
   it('keeps More actions tooltip text in a cdk-visually-hidden span and hides the icon ligature', () => {
-    const html = readFileSync(templatePath, 'utf8');
-    const moreButton = headerMoreActionsButtonMarkup(html);
+    const moreButton = headerMoreActionsButtonMarkup(readFileSync(toolbarTemplatePath, 'utf8'));
     const moreOpeningTag = openingTag(moreButton);
 
-    expect(moreOpeningTag).toContain(`[matTooltip]="'${MORE_ACTIONS_KEY}' | translate"`);
+    expect(squash(moreOpeningTag)).toContain(squash(`[matTooltip]=" ${MORE_NAME} "`));
     expect(moreOpeningTag).not.toContain('[attr.aria-label]');
 
     const hiddenName = visuallyHiddenAccessibleName(moreButton);
-    expect(hiddenName).toContain(`'${MORE_ACTIONS_KEY}' | translate`);
+    expect(squash(hiddenName)).toContain(MORE_NAME);
     expect(moreButton).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
+  });
+
+  it('gives the trigger the page’s own translated wording', () => {
+    const html = readFileSync(templatePath, 'utf8');
+    const open = html.indexOf('<nxs-document-toolbar');
+    const tag = html.slice(open, html.indexOf('>', open) + 1);
+    expect(tag).toContain(`[moreLabel]="'${MORE_ACTIONS_KEY}' | translate"`);
   });
 });

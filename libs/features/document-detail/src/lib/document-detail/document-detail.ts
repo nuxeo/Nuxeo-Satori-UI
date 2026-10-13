@@ -1063,29 +1063,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return action.id === 'app.toolbar.unlock' ? this.lockedByLabel() : null;
   }
 
-  private toolbarDescriptorLabel(action: ExtensionActionDescriptor): string {
-    return descriptorLabel(action, (key) => this.translate.instant(key));
-  }
-
-  /** Hover text: supplemental lock/manifest tooltip when set, otherwise the action label. */
-  toolbarActionTooltip(action: ExtensionActionDescriptor): string {
-    const tip = this.toolbarTooltip(action);
-    if (tip !== null && tip !== '') {
-      return tip;
-    }
-    return this.toolbarDescriptorLabel(action);
-  }
-
-  /** Accessible name: always includes the descriptor label; appends non-empty tooltip text when it differs. */
-  toolbarActionLabel(action: ExtensionActionDescriptor): string {
-    const label = this.toolbarDescriptorLabel(action);
-    const tip = this.toolbarTooltip(action);
-    if (tip === null || tip === '' || tip === label) {
-      return label;
-    }
-    return `${label}. ${tip}`;
-  }
-
   /** The highlighted padlock Web UI shows on a locked document. */
   isToolbarActionActive(action: ExtensionActionDescriptor): boolean {
     return action.id === 'app.toolbar.unlock' && this.isLocked();

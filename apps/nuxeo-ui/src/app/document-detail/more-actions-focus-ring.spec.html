@@ -1,6 +1,7 @@
 <!--
-  Sliced from libs/features/document-detail/.../document-detail.html (detail-header through
-  moreMenu). document-detail-more-actions-focus-ring.spec.ts asserts this structure matches prod.
+  Mirrors document-detail.html from detail-header to its toolbar: the page renders its header
+  actions, More actions included, through nxs-document-toolbar.header-actions.
+  document-detail-more-actions-focus-ring.spec.ts asserts this structure matches prod.
 -->
 <div class="detail-header more-actions-focus-ring-host">
   <button mat-icon-button class="detail-header-go-back-btn" type="button" aria-label="Go back">
@@ -9,11 +10,9 @@
   <div class="header-info">
     <div class="header-title" role="heading" aria-level="1">Title</div>
   </div>
-  <div class="header-actions">
-    <button mat-icon-button type="button" [matMenuTriggerFor]="moreMenu">
-      <span class="cdk-visually-hidden" cdkAriaLive="off">More actions</span>
-      <mat-icon aria-hidden="true">more_vert</mat-icon>
-    </button>
-  </div>
-  <mat-menu #moreMenu="matMenu"></mat-menu>
+  <nxs-document-toolbar
+    class="header-actions"
+    [actions]="actions"
+    [moreLabel]="'document-detail.document-detail.more-actions' | translate"
+  />
 </div>

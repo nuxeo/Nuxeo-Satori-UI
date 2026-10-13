@@ -54,6 +54,13 @@ describe('NxsDocumentToolbarComponent', () => {
   const inline = (id: string): HTMLButtonElement | null =>
     el().querySelector(`.nxs-document-toolbar__action[data-action-id="${id}"]`);
   const more = (): HTMLButtonElement | null => el().querySelector('.nxs-document-toolbar__more');
+  /** The name a button's content gives it, minus what is hidden from assistive technology. */
+  const nameOf = (button: Element | null): string => {
+    if (!button) throw new Error('no such button');
+    const copy = button.cloneNode(true) as Element;
+    copy.querySelectorAll('[aria-hidden="true"]').forEach((node) => node.remove());
+    return (copy.textContent ?? '').replace(/\s+/g, ' ').trim();
+  };
   const menuItem = (id: string): HTMLButtonElement | null =>
     document.querySelector(`[role="menuitem"][data-action-id="${id}"]`);
   const tooltipOf = (node: Element | null): MatTooltip => {
@@ -89,10 +96,28 @@ describe('NxsDocumentToolbarComponent', () => {
   });
 
   it('names each icon button by its label and shows the tooltip it was given, else the label', () => {
-    expect(inline('app.toolbar.edit')?.getAttribute('aria-label')).toBe('Edit');
+    expect(nameOf(inline('app.toolbar.edit'))).toBe('Edit');
     expect(tooltipOf(inline('app.toolbar.edit')).message).toBe('Edit');
     expect(tooltipOf(inline('app.toolbar.unlock')).message).toBe('Locked by Jane on May 3, 2026');
-    expect(inline('app.toolbar.unlock')?.getAttribute('aria-label')).toBe('Unlock');
+  });
+
+  it('carries what the tooltip adds into the name, so the keyboard hears the lock owner', () => {
+    expect(nameOf(inline('app.toolbar.unlock'))).toBe('Unlock. Locked by Jane on May 3, 2026');
+  });
+
+  it('names icon buttons with text rather than aria-label, and hides the icon ligature (WCAG 2.5.3)', () => {
+    for (const button of Array.from(el().querySelectorAll('.nxs-document-toolbar__action'))) {
+      expect(button.hasAttribute('aria-label')).toBe(false);
+      expect(button.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
+    }
+    expect(more()?.hasAttribute('aria-label')).toBe(false);
+    expect(more()?.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('does not repeat a tooltip that only restates the label', async () => {
+    host.actions.set([{ id: 'x', label: 'Share', icon: 'share', tooltip: 'Share' }]);
+    await render();
+    expect(nameOf(inline('x'))).toBe('Share');
   });
 
   it('treats a blank tooltip as absent rather than rendering an empty bubble', async () => {
@@ -137,7 +162,7 @@ describe('NxsDocumentToolbarComponent', () => {
   it('labels the group and the menu button with its own English when the host passes none', () => {
     const group = el().querySelector('[role="group"]');
     expect(group?.getAttribute('aria-label')).toBe('Document actions');
-    expect(more()?.getAttribute('aria-label')).toBe('More actions');
+    expect(nameOf(more())).toBe('More actions');
     expect(tooltipOf(more()).message).toBe('More actions');
   });
 
@@ -146,7 +171,7 @@ describe('NxsDocumentToolbarComponent', () => {
     host.moreLabel.set(' More ');
     await render();
     expect(el().querySelector('[role="group"]')?.getAttribute('aria-label')).toBe('File actions');
-    expect(more()?.getAttribute('aria-label')).toBe('More');
+    expect(nameOf(more())).toBe('More');
   });
 
   it('drops the menu button when nothing overflows, rather than opening an empty menu', async () => {
@@ -159,6 +184,13 @@ describe('NxsDocumentToolbarComponent', () => {
     host.actions.set([{ id: 'x', label: 'Share' }]);
     await render();
     expect(inline('x')?.textContent?.trim()).toBe('Share');
+  });
+
+  it('keeps a text entry named by its visible label, followed by what the tooltip adds', async () => {
+    host.actions.set([{ id: 'x', label: 'Share', tooltip: 'Shared with 3 people' }]);
+    await render();
+    expect(nameOf(inline('x'))).toBe('Share. Shared with 3 people');
+    expect(nameOf(inline('x')).startsWith('Share')).toBe(true);
   });
 
   it('renders projected controls inside the group, before the actions', () => {

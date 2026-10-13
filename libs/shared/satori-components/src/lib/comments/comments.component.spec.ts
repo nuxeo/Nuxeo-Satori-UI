@@ -328,6 +328,22 @@ describe('NxsCommentsComponent', () => {
       expect(texts('.nxs-comments__text')).toEqual(['Other document']);
       expect(commentBox().value).toBe('');
     });
+
+    it('drops a thread that arrives after it moved to another document', async () => {
+      const late = new Subject<NuxeoDocumentList>();
+      documents.getAllComments.mockImplementation((uid: string) =>
+        uid === DOC ? late : of(list(entry('o1', 'jdoe', 'Other document', 'doc-2'))),
+      );
+      fixture = TestBed.createComponent(HostComponent);
+      host = fixture.componentInstance;
+      await settle();
+      host.uid.set('doc-2');
+      await settle();
+      late.next(THREAD);
+      await settle();
+      expect(texts('.nxs-comments__text')).toEqual(['Other document']);
+      expect(host.thread.map((c) => c.id)).toEqual(['o1']);
+    });
   });
 
   describe('who may change what', () => {

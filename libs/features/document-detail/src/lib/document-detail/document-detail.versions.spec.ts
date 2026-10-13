@@ -213,7 +213,13 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
         { provide: ContentLakeIngestService, useValue: mockContentLake },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
-        { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
+        {
+          provide: AppConfigService,
+          useValue: {
+            manifest: signal({ extensionLayers: [] }),
+            featureToggle: (_key: string, fallback: boolean) => fallback,
+          },
+        },
         provideSatoriExtensions({
           slots: {
             [EXTENSION_SLOTS.toolbar]: PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
@@ -396,27 +402,6 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
       expect(fixture.componentInstance.publishedDocs()).toEqual([]);
       expect(fixture.componentInstance.publishLoading()).toBe(false);
-    });
-
-    it('drops comments that arrive after the route moved on', async () => {
-      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
-      await render(live(), { paramMap: route });
-      const late = new Subject<{ entries: unknown[] }>();
-      mockDetailService.getAllComments.mockReturnValueOnce(late);
-      fixture.componentInstance.loadComments();
-      mockDetailService.getFullDocument.mockImplementation((uid) =>
-        of(uid === 'v-0-1' ? version(1) : live()),
-      );
-      route.next(convertToParamMap({ uid: 'v-0-1' }));
-      await settle();
-      late.next({
-        entries: [
-          { uid: 'c1', properties: { 'comment:parentId': 'doc-live', 'comment:text': 'live' } },
-        ],
-      });
-      await settle();
-
-      expect(fixture.componentInstance.repliesMap()).toEqual({});
     });
 
     it("drops the live document's workflows when they arrive after a version opened", async () => {

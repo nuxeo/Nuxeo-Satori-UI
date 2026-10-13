@@ -106,8 +106,11 @@ No overflow entries: no menu button.
 
 - **A named group.** The row is a `group` named "Document actions" (or `label`). It is not an ARIA
   `toolbar`, so **Tab** moves between its buttons as it does everywhere else on the page.
-- **Named icon buttons.** Each inline button is named by its label; its icon is hidden from
-  assistive technology. Its tooltip shows on hover and keyboard focus.
+- **Named icon buttons.** Each inline button is named by its label, followed by its tooltip when
+  the tooltip says more — "Unlock. Locked by Jane on May 3, 2026" — so a screen-reader user hears
+  what a mouse user reads. The name is visually hidden text rather than `aria-label`, and the icon
+  is hidden from assistive technology, so the icon's ligature never reads as a visible label the
+  name lacks (WCAG 2.5.3). The tooltip shows on hover and keyboard focus.
 - **Disabled controls.** An inline disabled button is announced as unavailable
   (`aria-disabled="true"`) and keeps focus so its tooltip can be read. A disabled menu entry is
   skipped by the arrow keys.

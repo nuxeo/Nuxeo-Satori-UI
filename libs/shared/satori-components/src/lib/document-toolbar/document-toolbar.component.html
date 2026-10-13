@@ -6,6 +6,8 @@
   <ng-content />
 
   @for (action of inline(); track action.id) {
+    <!-- The name is text, not aria-label: an icon ligature beside an aria-label reads as a
+         visible label the name does not contain (WCAG 2.5.3, IBM label_name_visible). -->
     <button
       mat-icon-button
       type="button"
@@ -13,15 +15,18 @@
       [class.nxs-document-toolbar__action--active]="action.active"
       [attr.data-action-id]="action.id"
       [matTooltip]="tooltipOf(action)"
-      [attr.aria-label]="action.label"
       [disabled]="!!action.disabled"
       disabledInteractive
       (click)="run(action)"
     >
       @if (action.icon) {
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{ nameOf(action) }}</span>
         <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
       } @else {
-        <span class="nxs-document-toolbar__text" aria-hidden="true">{{ action.label }}</span>
+        <span class="nxs-document-toolbar__text">{{ action.label }}</span>
+        @if (extraOf(action); as extra) {
+          <span class="cdk-visually-hidden" cdkAriaLive="off">. {{ extra }}</span>
+        }
       }
     </button>
   }
@@ -35,10 +40,10 @@
       [matTooltip]="
         ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
       "
-      [attr.aria-label]="
-        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
-      "
     >
+      <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+        ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
+      }}</span>
       <mat-icon aria-hidden="true">more_vert</mat-icon>
     </button>
   }

@@ -1,3 +1,4 @@
+import { CdkAriaLive } from '@angular/cdk/a11y';
 import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -9,7 +10,10 @@ import { TranslatePipe } from '@ngx-translate/core';
 export interface NxsToolbarAction {
   /** The action's registered ID; rendered as `data-action-id`. */
   readonly id: string;
-  /** What the control says, already translated. The accessible name of an icon button. */
+  /**
+   * What the control says, already translated. An icon button's accessible name starts with it
+   * and goes on with its tooltip when that says more.
+   */
   readonly label: string;
   /** A Material icon ligature. Decorative; an inline control without one shows its label. */
   readonly icon?: string;
@@ -37,7 +41,14 @@ export interface NxsToolbarAction {
   standalone: true,
   templateUrl: './document-toolbar.component.html',
   styleUrl: './document-toolbar.component.scss',
-  imports: [MatButtonModule, MatIconModule, MatMenuModule, MatTooltipModule, TranslatePipe],
+  imports: [
+    CdkAriaLive,
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    MatTooltipModule,
+    TranslatePipe,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-document-toolbar' },
 })
@@ -63,6 +74,21 @@ export class NxsDocumentToolbarComponent {
   /** A tooltip only when there is one to show: Material renders an empty one as a blank bubble. */
   protected tooltipOf(action: NxsToolbarAction): string {
     return (action.tooltip ?? '').trim() || action.label;
+  }
+
+  /** What the tooltip adds to the label, if anything — "Locked by Jane on 3 May" on Unlock. */
+  protected extraOf(action: NxsToolbarAction): string {
+    const tip = (action.tooltip ?? '').trim();
+    return tip && tip !== action.label ? tip : '';
+  }
+
+  /**
+   * An icon button's accessible name: its label, then what its tooltip adds, so a keyboard or
+   * screen-reader user hears the lock owner a mouse user reads.
+   */
+  protected nameOf(action: NxsToolbarAction): string {
+    const extra = this.extraOf(action);
+    return extra ? `${action.label}. ${extra}` : action.label;
   }
 
   /**
