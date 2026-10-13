@@ -221,13 +221,15 @@
         </button>
         <button
           mat-icon-button
-          [matTooltip]="'shared-ui.document-viewer.remove' | translate"
-          [attr.aria-label]="'shared-ui.document-viewer.remove-main-file' | translate"
+          [matTooltip]="'shared-ui.document-viewer.remove-main-file' | translate"
           class="footer-remove-btn"
           [disabled]="mainFileActionInProgress() === 'remove-main'"
           (click)="removeMainFileClicked.emit()"
         >
-          <mat-icon>cancel</mat-icon>
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            'shared-ui.document-viewer.remove-main-file' | translate
+          }}</span>
+          <mat-icon aria-hidden="true">cancel</mat-icon>
         </button>
       }
     </div>
