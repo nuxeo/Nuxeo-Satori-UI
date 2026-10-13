@@ -1327,7 +1327,11 @@
       "enter-a-valid-date": "Enter a valid date",
       "expires": "Expires",
       "nature": "Nature",
+      "not-accepted": "Nuxeo did not accept this value.",
       "save": "Save",
+      "save-failed": "The changes could not be saved. Try again.",
+      "save-forbidden": "You do not have permission to change this document.",
+      "saving": "Saving",
       "search": "Search…",
       "search-coverage": "Search Coverage",
       "search-nature": "Search Nature",
@@ -1520,6 +1524,7 @@
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."
   },
   "document-layouts": {
+    "loading-form": "Loading the form",
     "no": "No",
     "sections": "Property sections",
     "yes": "Yes"
@@ -2002,6 +2007,40 @@
       "add": "Add to favorites",
       "label": "Favorite",
       "remove": "Remove from favorites"
+    },
+    "metadata-editor": {
+      "add-item": "Add to {{label}}",
+      "coverage": "Coverage",
+      "description": "Description",
+      "error": {
+        "date": "Enter a valid date for {{label}}.",
+        "integer": "{{label}} must be a whole number.",
+        "invalid": "{{label}} is not valid.",
+        "item": "One of the values of {{label}} is not valid.",
+        "max-length": "{{label}} must be at most {{count}} characters.",
+        "maximum": "{{label}} must be {{bound}} or less.",
+        "maximum-exclusive": "{{label}} must be less than {{bound}}.",
+        "min-length": "{{label}} must be at least {{count}} characters.",
+        "minimum": "{{label}} must be {{bound}} or more.",
+        "minimum-exclusive": "{{label}} must be more than {{bound}}.",
+        "number": "{{label}} must be a number.",
+        "pattern": "{{label}} is not in the expected format.",
+        "required": "{{label}} is required."
+      },
+      "expires": "Expires",
+      "item": "{{label}} {{index}}",
+      "nature": "Nature",
+      "no-value": "No value",
+      "remove": "Remove",
+      "remove-item": "Remove {{label}} {{index}}",
+      "remove-value": "Remove {{name}}",
+      "search": "Search",
+      "search-in": "Search {{label}}",
+      "sections": "Metadata sections",
+      "subjects": "Subjects",
+      "summary-one": "1 field needs a correction before you can save.",
+      "summary-other": "{{count}} fields need a correction before you can save.",
+      "title": "Title"
     },
     "permissions-panel": {
       "add": "Add",

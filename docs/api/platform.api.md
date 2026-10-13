@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-54 exported symbol(s).
+61 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -339,6 +339,39 @@ interface NxsDriveDialogData {
     readonly folderPath?: string;
     }
 }
+interface NxsEditorConstraints {
+    readonly pattern?: string;
+    readonly minLength?: number;
+    readonly maxLength?: number;
+    readonly minimum?: number;
+    readonly maximum?: number;
+    readonly minimumInclusive?: boolean;
+    readonly maximumInclusive?: boolean;
+    }
+}
+type NxsEditorDisplay = 'sections' | 'tabs';
+interface NxsEditorField {
+    readonly xpath: string;
+    readonly label: string;
+    readonly definition: NxsEditorFieldType;
+    readonly multiline?: boolean;
+    }
+}
+interface NxsEditorFieldType {
+    readonly type: string;
+    readonly directory?: string;
+    readonly fields?: Readonly<Record<string, NxsEditorFieldType>>;
+    readonly required?: boolean;
+    readonly constraints?: NxsEditorConstraints;
+    }
+}
+interface NxsEditorSection {
+    readonly id: string;
+    readonly heading: string | null;
+    readonly fields: readonly NxsEditorField[];
+    }
+}
+type NxsEditorValues = Readonly<Record<string, unknown>>;
 class NxsEmptyStateComponent {
     readonly heading: InputSignal<string>;
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
@@ -398,6 +431,63 @@ interface NxsMenuAction {
     readonly label: string;
     readonly icon?: string;
     readonly disabled?: boolean;
+    }
+}
+class NxsMetadataEditorComponent {
+    readonly sections: _angular_core.InputSignal<readonly NxsEditorSection[]>;
+    readonly display: _angular_core.InputSignal<NxsEditorDisplay>;
+    readonly values: _angular_core.InputSignal<Readonly<Record<string, unknown>>>;
+    readonly dublinCore: _angular_core.InputSignal<boolean>;
+    readonly disabled: _angular_core.InputSignal<boolean>;
+    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
+    readonly tabsLabel: _angular_core.InputSignal<string>;
+    readonly validChange: _angular_core.OutputEmitterRef<boolean>;
+    protected readonly id: string;
+    protected readonly form: FormGroup<Record<string, AbstractControl<any, any, any>>>;
+    protected readonly structure: _angular_core.WritableSignal<number>;
+    protected readonly submitted: _angular_core.WritableSignal<boolean>;
+    protected readonly invalidCount: _angular_core.WritableSignal<number>;
+    protected readonly selectedTab: _angular_core.WritableSignal<number>;
+    protected readonly panelSearch: _angular_core.WritableSignal<string>;
+    protected readonly standardFields: _angular_core.Signal<readonly EditorField[]>;
+    protected readonly typeSections: _angular_core.Signal<readonly NxsEditorSection[]>;
+    protected readonly tabs: _angular_core.Signal<readonly NxsTab[]>;
+    protected readonly errorMatcher: ErrorStateMatcher;
+    protected readonly l10nEntryLabel: typeof l10nEntryLabel;
+    protected readonly directoryPickerLabel: typeof directoryPickerLabel;
+    constructor();
+    validate(): boolean;
+    dirtyProperties(): Record<string, unknown>;
+    properties(): Record<string, unknown>;
+    showServerErrors(errors: Readonly<Record<string, string>>): string[];
+    protected kindOf(definition: NxsEditorFieldType, depth: number): FieldKind;
+    protected controlFor(field: EditorField): AbstractControl | null;
+    protected asControl(control: AbstractControl): FormControl;
+    protected asArray(control: AbstractControl): FormArray;
+    protected subFields(definition: NxsEditorFieldType): readonly EditorField[];
+    protected subControl(group: AbstractControl, name: string): AbstractControl | null;
+    protected showError(control: AbstractControl): boolean;
+    protected errorOf(control: AbstractControl): FieldError | null;
+    protected errorText(error: FieldError, label: string): string;
+    protected search(event: Event): void;
+    protected isRequired(definition: NxsEditorFieldType): boolean;
+    protected inputType(definition: NxsEditorFieldType): 'number' | 'text';
+    protected step(definition: NxsEditorFieldType): string | null;
+    protected readOnlyText(control: AbstractControl): string;
+    protected flatOptions(directory: string): readonly DirectoryEntry[];
+    protected groupedOptions(directory: string): ReturnType<typeof groupL10nChildrenByParent>;
+    protected usesL10n(directory: string): boolean;
+    protected vocabularyLabel(directory: string, id: unknown): string;
+    protected listValue(control: AbstractControl): readonly unknown[];
+    protected panelToggled(): void;
+    protected clearValue(control: AbstractControl, multiple: boolean): void;
+    protected removeItem(control: AbstractControl, index: number): void;
+    protected addItem(control: AbstractControl, definition: NxsEditorFieldType, event: MatChipInputEvent): void;
+    protected addComplexItem(control: AbstractControl, definition: NxsEditorFieldType, depth: number): void;
+    protected removeComplexItem(control: AbstractControl, index: number): void;
+    protected selectTab(index: number): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsMetadataEditorComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsMetadataEditorComponent, "nxs-metadata-editor", never, { "sections": { "alias": "sections"; "required": false; "isSignal": true; }; "display": { "alias": "display"; "required": false; "isSignal": true; }; "values": { "alias": "values"; "required": false; "isSignal": true; }; "dublinCore": { "alias": "dublinCore"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "tabsLabel": { "alias": "tabsLabel"; "required": false; "isSignal": true; }; }, { "validChange": "validChange"; }, never, never, true, never>;
     }
 }
 class NxsPermissionsPanelComponent {
@@ -635,7 +725,7 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo-satori/platform/extensions
 
-58 exported symbol(s).
+60 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
@@ -661,6 +751,11 @@ class DescriptorLabelPipe implements PipeTransform {
     static ɵpipe: _angular_core.ɵɵPipeDeclaration<DescriptorLabelPipe, "descriptorLabel", true>;
     }
 }
+interface DocumentLayoutChange {
+    readonly properties: Readonly<Record<string, unknown>>;
+    readonly valid: boolean;
+    }
+}
 const EMPTY_EXTENSION_RULE_CONTEXT: ExtensionRuleContext;
 const EXTENSION_SLOTS: {
     readonly navbar: "navbar";
@@ -672,6 +767,9 @@ const EXTENSION_SLOTS: {
     readonly tabs: "tabs";
     readonly documentList: "documentList";
     readonly documentView: "documentView";
+    readonly documentMetadata: "documentMetadata";
+    readonly documentEdit: "documentEdit";
+    readonly documentCreate: "documentCreate";
 };
 interface ExtensionActionDescriptor extends ExtensionElement {
     readonly label: string;
@@ -730,6 +828,12 @@ interface ExtensionConfig {
     readonly $version?: string;
     readonly slots?: Readonly<Record<ExtensionSlotId, readonly ExtensionElement[]>>;
     readonly overrides?: Readonly<Record<string, ExtensionOverride>>;
+    }
+}
+interface ExtensionDocumentLayoutDescriptor extends ExtensionElement {
+    readonly rule?: ExtensionRule;
+    readonly componentId?: string;
+    readonly inputs?: Readonly<Record<string, unknown>>;
     }
 }
 interface ExtensionDocumentViewDescriptor extends ExtensionElement {

@@ -31,6 +31,15 @@ export {
 export { NxsFolderHeaderComponent } from './lib/folder-header/folder-header.component';
 export type { NxsHeadingLevel } from './lib/heading-level';
 export { NxsIconComponent } from './lib/icon/icon.component';
+export { NxsMetadataEditorComponent } from './lib/metadata-editor/metadata-editor.component';
+export type {
+  NxsEditorConstraints,
+  NxsEditorDisplay,
+  NxsEditorField,
+  NxsEditorFieldType,
+  NxsEditorSection,
+  NxsEditorValues,
+} from './lib/metadata-editor/metadata-editor.model';
 export {
   NXS_PERMISSIONS_PANEL_ID,
   NxsPermissionsPanelComponent,

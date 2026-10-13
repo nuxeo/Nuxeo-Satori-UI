@@ -483,3 +483,126 @@ describe('applyLayoutFile', () => {
     expect(layout.sections[0]?.fields[0]?.definition).toEqual({ type: 'blob' });
   });
 });
+
+describe('edit and create layouts', () => {
+  /** Field shapes as `/config/schemas/<name>` answers them, constraints included. */
+  const POLICY = {
+    name: 'policy',
+    '@prefix': 'pol',
+    fields: {
+      number: {
+        type: 'string',
+        constraints: [
+          { name: 'NotNullConstraint', parameters: {} },
+          { name: 'PatternConstraint', parameters: { Pattern: '[A-Z]{2}-\\d+' } },
+          { name: 'string', parameters: {} },
+        ],
+      },
+      notes: {
+        type: 'string',
+        constraints: [{ name: 'LengthConstraint', parameters: { Minimum: '3', Maximum: '2000' } }],
+      },
+      premium: {
+        type: 'double',
+        constraints: [
+          {
+            name: 'NumericIntervalConstraint',
+            parameters: {
+              Minimum: '0',
+              MinimumInclusive: 'false',
+              Maximum: '1000000',
+              MaximumInclusive: 'true',
+            },
+          },
+        ],
+      },
+      codes: {
+        type: 'string[]',
+        constraints: [],
+        itemConstraints: [{ name: 'LengthConstraint', parameters: { Maximum: '8' } }],
+      },
+      scan: { type: 'blob', constraints: [] },
+      scans: { type: 'blob[]', constraints: [] },
+    },
+  };
+
+  const policyType = (): DocumentTypeDefinition => {
+    const schema = readSchema(POLICY);
+    if (!schema) throw new Error('fixture did not read');
+    return { name: 'Policy', schemas: [schema] };
+  };
+
+  it('reads required, pattern, length and interval constraints, and item constraints of a list', () => {
+    const fields = readSchema(POLICY)?.fields ?? {};
+    expect(fields['number']).toEqual({
+      type: 'string',
+      required: true,
+      constraints: { pattern: '[A-Z]{2}-\\d+' },
+    });
+    expect(fields['notes']?.constraints).toEqual({ minLength: 3, maxLength: 2000 });
+    expect(fields['premium']?.constraints).toEqual({
+      minimum: 0,
+      minimumInclusive: false,
+      maximum: 1000000,
+    });
+    expect(fields['codes']?.constraints).toEqual({ maxLength: 8 });
+    expect(fields['scan']).toEqual({ type: 'blob' });
+  });
+
+  it('ignores a bound it cannot read rather than inventing one', () => {
+    const schema = readSchema({
+      name: 's',
+      fields: {
+        a: {
+          type: 'long',
+          constraints: [{ name: 'NumericIntervalConstraint', parameters: { Minimum: '' } }],
+        },
+        b: {
+          type: 'string',
+          constraints: [{ name: 'LengthConstraint', parameters: { Maximum: 'many' } }],
+        },
+        c: { type: 'string', constraints: [{ name: 'PatternConstraint', parameters: {} }, 'junk'] },
+      },
+    });
+    expect(schema?.fields).toEqual({
+      a: { type: 'long' },
+      b: { type: 'string' },
+      c: { type: 'string' },
+    });
+  });
+
+  it('leaves file fields out of the generated edit and create forms, not out of metadata', () => {
+    const xpaths = (mode: 'metadata' | 'edit' | 'create') =>
+      generateLayout(policyType(), mode).sections.flatMap((s) => s.fields.map((f) => f.xpath));
+    expect(xpaths('metadata')).toContain('pol:scan');
+    for (const mode of ['edit', 'create'] as const) {
+      expect(xpaths(mode)).toEqual(['pol:codes', 'pol:notes', 'pol:number', 'pol:premium']);
+      expect(generateLayout(policyType(), mode).mode).toBe(mode);
+    }
+  });
+
+  it('lets a layout file make a field required, never optional', () => {
+    const read = readLayoutFile({
+      version: 1,
+      sections: [
+        {
+          id: 'a',
+          fields: [
+            { field: 'pol:notes', required: true },
+            { field: 'pol:number', required: false },
+            { field: 'pol:premium', required: 'yes' },
+          ],
+        },
+      ],
+    });
+    if ('invalid' in read) throw new Error(read.invalid);
+    const { layout } = applyLayoutFile(policyType(), 'edit', read);
+    expect(
+      layout.sections[0]?.fields.map((f) => [f.xpath, f.definition.required ?? false]),
+    ).toEqual([
+      ['pol:notes', true],
+      ['pol:number', true],
+      ['pol:premium', false],
+    ]);
+  });
+});

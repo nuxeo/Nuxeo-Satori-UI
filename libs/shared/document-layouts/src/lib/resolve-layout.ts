@@ -4,6 +4,7 @@ import {
   DocumentTypeDefinition,
   DocumentTypeSchema,
   LayoutField,
+  LayoutFieldConstraints,
   LayoutFieldType,
   LayoutMode,
   ResolvedLayout,
@@ -70,16 +71,68 @@ function directoryOf(constraints: unknown): string | undefined {
   return undefined;
 }
 
+/** A constraint parameter as Nuxeo serialises it, always a string: `"2000"`, `"false"`. */
+function numberParameter(parameters: Record<string, unknown>, name: string): number | undefined {
+  const value = parameters[name];
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const parsed = Number(value);
+  return value !== '' && Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function flagParameter(parameters: Record<string, unknown>, name: string): boolean | undefined {
+  const value = parameters[name];
+  return value === 'false' || value === false ? false : undefined;
+}
+
+type ReadConstraints = { -readonly [K in keyof LayoutFieldConstraints]: LayoutFieldConstraints[K] };
+
+/** `NotNullConstraint`, and the pattern, length and interval constraints a form can check. */
+function readConstraints(raw: unknown): { required: boolean; constraints: ReadConstraints } {
+  const constraints: ReadConstraints = {};
+  let required = false;
+  for (const constraint of Array.isArray(raw) ? raw : []) {
+    if (!isRecord(constraint)) continue;
+    const parameters = isRecord(constraint['parameters']) ? constraint['parameters'] : {};
+    switch (constraint['name']) {
+      case 'NotNullConstraint':
+        required = true;
+        break;
+      case 'PatternConstraint':
+        if (typeof parameters['Pattern'] === 'string') constraints.pattern = parameters['Pattern'];
+        break;
+      case 'LengthConstraint':
+        constraints.minLength = numberParameter(parameters, 'Minimum');
+        constraints.maxLength = numberParameter(parameters, 'Maximum');
+        break;
+      case 'NumericIntervalConstraint':
+        constraints.minimum = numberParameter(parameters, 'Minimum');
+        constraints.maximum = numberParameter(parameters, 'Maximum');
+        constraints.minimumInclusive = flagParameter(parameters, 'MinimumInclusive');
+        constraints.maximumInclusive = flagParameter(parameters, 'MaximumInclusive');
+        break;
+    }
+  }
+  for (const key of Object.keys(constraints) as (keyof ReadConstraints)[]) {
+    if (constraints[key] === undefined) delete constraints[key];
+  }
+  return { required, constraints };
+}
+
 /** A field as Nuxeo answers it: a bare type string, or an object when constraints or sub-fields apply. */
 function readFieldType(raw: unknown): LayoutFieldType | null {
   if (typeof raw === 'string') return { type: raw };
   if (!isRecord(raw) || typeof raw['type'] !== 'string') return null;
   const directory = directoryOf(raw['constraints']) ?? directoryOf(raw['itemConstraints']);
   const fields = isRecord(raw['fields']) ? readFields(raw['fields']) : undefined;
+  const { required, constraints } = readConstraints(raw['constraints']);
+  const items = readConstraints(raw['itemConstraints']).constraints;
+  const checks = { ...items, ...constraints };
   return {
     type: raw['type'],
     ...(directory ? { directory } : {}),
     ...(fields ? { fields } : {}),
+    ...(required ? { required } : {}),
+    ...(Object.keys(checks).length ? { constraints: checks } : {}),
   };
 }
 
@@ -180,7 +233,10 @@ export function facetSchemasToRead(
   );
 }
 
-function sectionsOf(schemas: readonly DocumentTypeSchema[]) {
+/** A form has no control for a file: files are added and replaced through Attachments. */
+const isFile = (definition: LayoutFieldType): boolean => /^blob(\[\])?$/.test(definition.type);
+
+function sectionsOf(schemas: readonly DocumentTypeSchema[], mode: LayoutMode) {
   return schemas
     .filter((schema) => !PRESENTED_SCHEMAS.has(schema.name))
     .sort((a, b) => byName(a.name, b.name))
@@ -188,6 +244,7 @@ function sectionsOf(schemas: readonly DocumentTypeSchema[]) {
       id: schema.name,
       label: { keys: [schemaLabelKey(schema.name)], fallback: humanize(schema.name) },
       fields: Object.keys(schema.fields)
+        .filter((name) => mode === 'metadata' || !isFile(schema.fields[name]))
         .sort(byName)
         .map((name) => field(`${schema.prefix}:${name}`, name, schema.fields[name])),
     }))
@@ -197,14 +254,15 @@ function sectionsOf(schemas: readonly DocumentTypeSchema[]) {
 /**
  * No layout file for this type and mode: one section per schema the panel does not already
  * present. The type's own come first, then those the document's dynamic facets added, so a
- * facet on one document never moves the sections every document of its type shows.
+ * facet on one document never moves the sections every document of its type shows. The edit and
+ * create forms leave out file fields.
  */
 export function generateLayout(
   type: DocumentTypeDefinition,
   mode: LayoutMode,
   facetSchemas: readonly DocumentTypeSchema[] = [],
 ): ResolvedLayout {
-  const sections = [...sectionsOf(type.schemas), ...sectionsOf(facetSchemas)];
+  const sections = [...sectionsOf(type.schemas, mode), ...sectionsOf(facetSchemas, mode)];
   return { type: type.name, mode, source: 'generated', display: 'sections', sections };
 }
 
@@ -256,7 +314,10 @@ export function applyLayoutFile(
         skipped.push(entry.field);
         return [];
       }
-      return [field(entry.field, match.name, match.definition, entry.label, entry.labelKey)];
+      const definition = entry.required
+        ? { ...match.definition, required: true }
+        : match.definition;
+      return [field(entry.field, match.name, definition, entry.label, entry.labelKey)];
     }),
   }));
   return {

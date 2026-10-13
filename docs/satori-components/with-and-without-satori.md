@@ -366,6 +366,21 @@ A File's properties: its state, version, publications, dates, creator and contri
 
 Every value is a label or a name: a directory entry or a user that arrives as an object never shows as `[object Object]`. Tags show only on a document that can be tagged.
 
+### Metadata editor
+
+| Field           | Value                                      |
+| --------------- | ------------------------------------------ |
+| Component       | `NxsMetadataEditorComponent`               |
+| Registered ID   | —                                          |
+| With Satori     | Same component; theme only                 |
+| Storybook story | `documents-metadata-editor--customer-type` |
+
+![Metadata editor: without Satori on the left, with Satori on the right](metadata-editor-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Editing a customer "Policy" type: the Dublin Core fields, then its section with a policy number, a premium, a checkbox, product codes, a holder, contacts and a signed copy shown read-only. The same controls in both; the theme sets the type, the outlines and the chips.
+
+It checks the schema's rules as the user types and on Save, names the field in every message, and sends only what changed.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -441,6 +456,7 @@ The components in the library today:
 | Tabs               | —                                                                                                                       | Same component; theme only   |
 | Details panel      | —                                                                                                                       | Same component; theme only   |
 | Properties panel   | —                                                                                                                       | Same component; theme only   |
+| Metadata editor    | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 
