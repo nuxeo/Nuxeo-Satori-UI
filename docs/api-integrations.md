@@ -1644,6 +1644,35 @@ Nuxeo returns, so the Permissions tab's card, the panel and all three dialogs sh
 
 ---
 
+## 30c. Versions — List, Create, Restore and Publish a Version (NXSAT-308)
+
+| Field       | Value                                                                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service** | `DocumentDetailService`, called by `nxs-manage-versions`, `nxs-create-version-dialog` (`libs/shared/satori-components/src/lib/`) and document detail       |
+| **List**    | `POST /nuxeo/api/v1/id/:liveUid/@op/Document.GetVersions`, header `properties: *` (`getVersionsDirect`) — the live document's, also when a version is open |
+| **Create**  | `POST /nuxeo/api/v1/id/:uid/@op/Document.CreateVersion` — `increment: Minor \| Major`, `saveDocument: true` (`createVersion`)                              |
+| **Restore** | `POST /nuxeo/api/v1/id/:versionUid/@op/Document.RestoreVersion` — `checkout: false` (`restoreVersion`)                                                     |
+| **Publish** | `POST /nuxeo/api/v1/automation/Document.PublishToSection` — input the document on screen, a version included (`publishDocument`)                           |
+
+**Behaviour measured on the shared Nuxeo (2026-10-13):**
+
+- `Document.GetVersions` reads the repository, so a version created a moment before is listed;
+  the NXQL list (`getVersions`) is OpenSearch-backed and may lag. Entries come unsorted for the
+  list's purpose; `nxs-manage-versions` sorts them by number, newest first, as Web UI does.
+- A ReadWrite user's `permissions` enricher includes `WriteVersion`; Read plus WriteProperties
+  does not. Create, restore and publish are gated on `WriteVersion`, as Web UI gates them.
+- `Document.RestoreVersion` with `checkout: false` leaves the live document checked in at the
+  restored number (0.1, not 0.1+).
+- `Document.PublishToSection` on a version, as a ReadWrite user, returns 200 and creates a
+  publication of that version (1.0) in the section. Web UI 2025.21.0's `isPublishable` offers it.
+- A comment on a version (`POST /id/:versionUid/@comment`) is accepted (201), as Web UI's thread
+  allows.
+
+**Usage:** the version control in document detail's properties panel, the version banner's
+Restore, and the Publish action on the live document and on a version.
+
+---
+
 ## Administration — Recently Created Users and Groups
 
 | Field           | Value                                                                       |
