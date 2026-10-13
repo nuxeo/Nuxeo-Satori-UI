@@ -8,7 +8,11 @@ import {
   input,
 } from '@angular/core';
 import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
-import type { NxsBreadcrumbItem, NxsBreadcrumbsInputs } from '@nuxeo-satori/platform/components';
+import {
+  nxsVisibleText,
+  type NxsBreadcrumbItem,
+  type NxsBreadcrumbsInputs,
+} from '@nuxeo-satori/platform/components';
 
 /**
  * `nxs.primitives.breadcrumbs` on Satori's `sat-breadcrumbs`, which collapses a long trail.
@@ -47,7 +51,7 @@ export class NxsSatoriBreadcrumbsComponent implements NxsBreadcrumbsInputs {
         if (!nav) return;
         const current = nav.getAttribute('aria-label');
         if (current !== this.shownName) this.satoriName = current;
-        this.shownName = this.label().trim() || this.satoriName;
+        this.shownName = nxsVisibleText(this.label()) || this.satoriName;
         if (this.shownName === null) nav.removeAttribute('aria-label');
         else if (this.shownName !== current) nav.setAttribute('aria-label', this.shownName);
       },

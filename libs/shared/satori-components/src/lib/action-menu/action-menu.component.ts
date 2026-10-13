@@ -5,6 +5,8 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
+import { nxsVisibleText } from '../visible-text';
+
 /** One entry in an action menu. */
 export interface NxsMenuAction {
   /** The action's registered ID; rendered as `data-action-id`. */
@@ -49,6 +51,6 @@ export class NxsActionMenuComponent {
   /** The entry the user chose. Never a disabled one. */
   readonly selected = output<NxsMenuAction>();
 
-  /** The label as assistive technology computes it: whitespace alone is no name. */
-  protected readonly ownLabel = computed(() => this.label().trim());
+  /** The label as a reader gets it: whitespace or zero-width characters alone are no name. */
+  protected readonly ownLabel = computed(() => nxsVisibleText(this.label()));
 }

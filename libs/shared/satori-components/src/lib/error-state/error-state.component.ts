@@ -11,6 +11,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import type { NxsHeadingLevel } from '../heading-level';
+import type { NxsErrorStateInputs } from '../primitives';
+import { nxsVisibleText } from '../visible-text';
 import type { NxsErrorStatus } from './error-status';
 
 interface Variant {
@@ -53,6 +55,9 @@ const VARIANTS: Readonly<Record<NxsErrorStatus, Variant>> = {
  * It is an alert because it replaces a loader the user was waiting on. Retry is offered only for a
  * server error, and only when the host asks for it: retrying a 401, 403 or 404 gets the same answer.
  * Anything else the host offers — "Go back" — is projected.
+ *
+ * Registered as `nxs.primitives.errorState`, so a customer can replace it by ID; a host rendering it
+ * that way passes `retryHandler`, because the outlet binds no outputs.
  */
 @Component({
   selector: 'nxs-error-state',
@@ -63,7 +68,7 @@ const VARIANTS: Readonly<Record<NxsErrorStatus, Variant>> = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-error-state', role: 'alert', '[attr.data-status]': 'status()' },
 })
-export class NxsErrorStateComponent {
+export class NxsErrorStateComponent implements NxsErrorStateInputs {
   /** Which variant: the HTTP status the failure stands for. */
   readonly status = input<NxsErrorStatus>(500);
   /** What failed, already translated. Blank, or only whitespace, shows the variant's own heading. */
@@ -76,11 +81,22 @@ export class NxsErrorStateComponent {
   /** Offer Retry for a server error. Accepts a bare attribute, `retryable`. */
   readonly retryable = input(false, { transform: booleanAttribute });
 
+  /**
+   * Called when Retry is pressed, before `retry` is emitted — for a host that renders the component
+   * by ID, where no output can be bound.
+   */
+  readonly retryHandler = input<(() => void) | null>(null);
+
   /** Retry was pressed. */
   readonly retry = output<void>();
 
   protected readonly variant = computed(() => VARIANTS[this.status()]);
-  /** The host's heading as a reader gets it: whitespace alone is no heading. */
-  protected readonly ownHeading = computed(() => this.heading().trim());
+  /** The host's heading as a reader gets it: whitespace or zero-width characters alone are none. */
+  protected readonly ownHeading = computed(() => nxsVisibleText(this.heading()));
   protected readonly canRetry = computed(() => this.retryable() && this.status() === 500);
+
+  protected pressRetry(): void {
+    this.retryHandler()?.();
+    this.retry.emit();
+  }
 }

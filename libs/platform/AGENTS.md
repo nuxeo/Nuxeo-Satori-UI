@@ -301,6 +301,11 @@ import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
 />
 ```
 
+- **A form field that picks something is an `nxs-` picker.** `nxs-user-group-picker`,
+  `nxs-vocabulary-select`, `nxs-tag-input`, `nxs-document-reference-input` and `nxs-date-input` each
+  work with `ngModel` or a form control, or a two-way `value`, and search as Web UI's matching widget
+  does. Text typed and not chosen is an `nxsChooseFromList` error on the form; a date that is not one
+  is `nxsDateParse`.
 - **Import only the entry point.** A path past it fails the shipped guardrail like any other
   deep import.
 - **The type declarations are the list of what exists.** Do not take a component's existence
@@ -315,7 +320,7 @@ Two kinds of ID are addressable, so you can replace what renders under them with
 tabs render yours, with `documentId` and `permissionsChanged`, a callback to invoke after a write
 so the host re-reads the external-user section it owns.
 
-**The four primitives**, each with a Material and a Satori implementation:
+**The primitives**, each with a Material implementation, and all but the error state with a Satori one:
 
 | ID                           | Contract to implement  | Material, from `/components` | Satori, from `/components-satori` |
 | ---------------------------- | ---------------------- | ---------------------------- | --------------------------------- |
@@ -323,6 +328,7 @@ so the host re-reads the external-user section it owns.
 | `nxs.primitives.breadcrumbs` | `NxsBreadcrumbsInputs` | `nxs-breadcrumbs`            | `sat-breadcrumbs`                 |
 | `nxs.primitives.tag`         | `NxsTagInputs`         | `nxs-tag`                    | `sat-category-tag`                |
 | `nxs.primitives.richTooltip` | `NxsRichTooltipInputs` | `nxs-rich-tooltip`           | `sat-rich-tooltip`                |
+| `nxs.primitives.errorState`  | `NxsErrorStateInputs`  | `nxs-error-state`            | — (needs Satori 1.0)              |
 
 `provideNxsComponents()` registers them on Material. Only with GitHub Packages access, add
 `provideNxsSatoriComponents()` from `@nuxeo-satori/platform/components-satori` after it to
@@ -348,7 +354,7 @@ The shipped guardrail fails an override that does not.
 
 **What overriding does not reach:** a component used **by class** rather than resolved by ID. An
 override changes every place that renders the ID through `lib-extension-outlet`, and nothing that
-composed `NxsTagComponent` directly. Today no packaged screen resolves the four primitive IDs yet — see
+composed `NxsTagComponent` directly. Today no packaged screen resolves the primitive IDs yet — see
 `extension-reference.md` §6a for where they do render.
 
 ### Placeable — the slots that render a component by ID
@@ -377,8 +383,9 @@ not a registration, so give an object like that plain keys. It fails a registrat
 - **does not resolve** — an `import()` path that is not a file in your library, or a class name
   the file does not export. The registry swallows a failed load, so this is otherwise a blank
   slot with no error anywhere;
-- **is not a component** — the class has no `@Component` of its own, so the outlet cannot create
-  it;
+- **is not a component** — the class has no `@Component` of its own, imported from `@angular/core`
+  under any name (a `Component` from another package, or one no import binds, does not count), so
+  the outlet cannot create it;
 - **no spec names** — by its ID as a string, the key expression it is registered under, or its
   class, each as a whole: a spec that names only `acme.panel.claimsExtra` or
   `AcmeClaimsComponentFake` does not name `acme.panel.claims` or `AcmeClaimsComponent`;

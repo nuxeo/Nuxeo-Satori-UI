@@ -14,6 +14,7 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
   NxsBreadcrumbsComponent,
+  NxsErrorStateComponent,
   NxsRichTooltipComponent,
   NxsTagComponent,
   provideNxsComponents,
@@ -46,6 +47,12 @@ describe('provideNxsSatoriComponents', () => {
   it('re-registers every primitive ID on Satori when listed after the Material registration', () => {
     const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
     for (const [id, , satori] of PAIRS) expect(components.peek(id)).toBe(satori);
+  });
+
+  // Satori's error states ship only in Satori 1.0 (Angular 22); the installable Satori has none.
+  it('leaves the error state on Material, which Satori cannot replace yet', () => {
+    const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
+    expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {
@@ -144,8 +151,8 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(exposedImages(host)).toEqual([]);
   });
 
-  it.each(['   ', '\u00a0', '\u3000'])(
-    'treats a whitespace-only label %j as no label, as Material does',
+  it.each(['   ', '\u00a0', '\u3000', '\u200b', '\ufeff\u2060'])(
+    'treats a label of only whitespace or zero-width characters %j as no label, as Material does',
     async (label) => {
       const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: 'NK', label });
       const avatar = host.querySelector('nxs-satori-avatar');
@@ -174,6 +181,11 @@ describe('the Satori primitives, rendered by ID', () => {
       expect(host.querySelector('nxs-satori-avatar sat-avatar')?.textContent?.trim()).toBe('');
     },
   );
+
+  it('shows one initial at size 24, as Material does', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: 'nk', size: '24' });
+    expect(host.querySelector('nxs-satori-avatar sat-avatar')?.textContent?.trim()).toBe('N');
+  });
 
   it('shows the initials Material shows: trimmed, upper-cased, at most two', async () => {
     const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: ' nkx ' });

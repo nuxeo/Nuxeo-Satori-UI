@@ -28,6 +28,8 @@ error toast.
   replaces the whole page.
 - **Theme colours.** The text takes the theme's `on-surface` colours, not its error red, so it reads
   like the rest of the page; only the icon takes the error colour.
+- **Replaceable by ID.** It is registered as `nxs.primitives.errorState`, so your own error state can
+  take its place on every screen that renders the ID.
 
 ## Demo showcase
 
@@ -81,8 +83,14 @@ a bare attribute, and `retry` is emitted when Retry is pressed.
 
 The error state needs no providers. Its variants' headings, explanations and Retry are translated
 with ngx-translate, under `satori-components.error-state.*`; `providePlatformEnglishFallback()`
-supplies the English when your catalogue does not. It has no registered ID: place it in a template by
-its selector.
+supplies the English when your catalogue does not.
+
+Place it in a template by its selector, or render the ID `nxs.primitives.errorState`
+(`NXS_PRIMITIVE_IDS.errorState`) through `lib-extension-outlet` with the same inputs. The outlet binds
+no outputs, so a host rendering the ID passes `retryHandler`, a function called when Retry is pressed.
+A replacement you register under the ID implements `NxsErrorStateInputs`. Satori's own error states
+arrive with Satori 1.0, which needs a newer Angular than this package supports, so until then the ID
+renders this component with or without `provideNxsSatoriComponents()`.
 
 ## Where its data comes from
 
@@ -122,6 +130,13 @@ inside.
 A 401 with no heading of the screen's own.
 
 <Canvas of={ErrorStateStories.SessionEnded} />
+
+### By registered ID
+
+Rendered through `lib-extension-outlet` by its ID. Press Retry: the `retryHandler` the host passes is
+called.
+
+<Canvas of={ErrorStateStories.ByRegisteredId} />
 
 ## Accessibility
 

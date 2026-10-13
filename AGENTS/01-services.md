@@ -273,6 +273,7 @@ deleteGroup(groupname: string): Observable<void>
 addTag(uid: string, label: string): Observable<unknown>
 removeTag(uid: string, label: string): Observable<unknown>
 searchTags(term: string): Observable<string[]>
+suggestTags(term: string): Observable<string[]> // Tag.Suggestion, as Web UI; searchTags' directory 404s on Nuxeo 2025
 ```
 
 ---

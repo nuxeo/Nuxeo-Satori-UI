@@ -1,0 +1,81 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TagInputStories from './tag-input.stories';
+
+<Meta of={TagInputStories} name="Overview" />
+
+# Tag input
+
+The tag input is a field of tags. It suggests tags documents already have as the user types, as Web
+UI's `nuxeo-tag-suggestion` does, and adds new ones. Use it wherever a user edits a list of tags: a
+document's properties, a search filter.
+
+## Key features
+
+- **Suggests existing tags** from the first character, 300 milliseconds after the last key.
+- **Adds new ones** with **Enter**, a comma, or the "Add" entry at the top of the list. Turn that off
+  with `allowNew` set to `false` to allow only tags that exist.
+- **One of each.** A label is trimmed, and one the field already holds, whatever its case, is not
+  added again or suggested.
+- **A form control, not a document editor.** The value is the list of labels, in the order they were
+  added; your component saves it.
+
+## Demo showcase
+
+Type `conf` and choose confidential, then type `renewal` and press **Enter**.
+
+<Canvas of={TagInputStories.AddingTags} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsTagInputComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+export const usageHtml = `<nxs-tag-input [label]="'acme.document.tags' | translate" [formControl]="tags" />`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`label` is the only required input. To save a document's tags, compare the value with the tags it
+had and call `TagService.addTag` and `removeTag` for the difference. The input needs the platform's
+`TagService`. Its statuses, the "Add" entry and the chips' remove buttons are translated under
+`satori-components.pickers.*` and `satori-components.tag-input.*`; `providePlatformEnglishFallback()`
+supplies the English. It has no registered ID: place it in a template by its selector.
+
+## Where its data comes from
+
+Suggestions come from Nuxeo's `Tag.Suggestion` operation, as in Web UI, through
+`TagService.suggestTags`. The field writes nothing: tagging a document is the host's call, and Nuxeo
+checks the user may write to it.
+
+**In these stories** `TagService` is an in-memory fake holding five tags.
+
+## Examples
+
+### With tags
+
+<Canvas of={TagInputStories.WithTags} />
+
+### Existing tags only
+
+<Canvas of={TagInputStories.ExistingTagsOnly} />
+
+### Disabled
+
+<Canvas of={TagInputStories.Disabled} />
+
+## Accessibility
+
+- **A combobox inside a chip grid.** The input is named by its label; the arrow keys move through
+  the suggestions and **Enter** chooses one. With no suggestion active, **Enter** or a comma adds the
+  typed text.
+- **Chips.** Each tag is a chip with a remove button named "Remove" and the tag; **Backspace** in the
+  empty input moves to the last chip, and the arrow keys move between chips.
+- **Statuses are announced.** The number of suggestions, "No results" and a failed search are
+  announced politely.

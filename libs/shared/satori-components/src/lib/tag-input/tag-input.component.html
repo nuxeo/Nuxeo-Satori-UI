@@ -1,0 +1,69 @@
+<mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
+  <mat-label>{{ label() }}</mat-label>
+  <mat-chip-grid
+    #grid
+    [disabled]="isDisabled()"
+    [required]="required()"
+    [errorStateMatcher]="errorState"
+  >
+    @for (tag of value(); track tag) {
+      <mat-chip-row [attr.data-tag]="tag" (removed)="remove(tag)">
+        {{ tag }}
+        <button
+          matChipRemove
+          type="button"
+          [attr.aria-label]="'satori-components.pickers.remove' | translate: { name: tag }"
+        >
+          <mat-icon aria-hidden="true">cancel</mat-icon>
+        </button>
+      </mat-chip-row>
+    }
+    <input
+      autocomplete="off"
+      [matChipInputFor]="grid"
+      [matChipInputSeparatorKeyCodes]="separators"
+      [matAutocomplete]="auto"
+      [value]="text()"
+      (matChipInputTokenEnd)="tokenEnd($event)"
+      (input)="onInput($event)"
+      (blur)="blurred()"
+    />
+  </mat-chip-grid>
+  @if (missing()) {
+    <mat-error>{{ 'satori-components.pickers.required' | translate }}</mat-error>
+  }
+  @if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+  <mat-autocomplete #auto="matAutocomplete" (optionSelected)="add($event.option.value)">
+    @if (addable(); as typed) {
+      <mat-option [value]="typed" class="nxs-tag-input__new">{{
+        'satori-components.tag-input.add' | translate: { tag: typed }
+      }}</mat-option>
+    }
+    @switch (finder.state().status) {
+      @case ('searching') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.searching' | translate
+        }}</mat-option>
+      }
+      @case ('failed') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.failed' | translate
+        }}</mat-option>
+      }
+      @case ('none') {
+        @if (!addable()) {
+          <mat-option disabled class="nxs-picker__status">{{
+            'satori-components.pickers.no-results' | translate
+          }}</mat-option>
+        }
+      }
+      @case ('found') {
+        @for (tag of suggestions(); track tag) {
+          <mat-option [value]="tag" [attr.data-tag]="tag">{{ tag }}</mat-option>
+        }
+      }
+    }
+  </mat-autocomplete>
+</mat-form-field>

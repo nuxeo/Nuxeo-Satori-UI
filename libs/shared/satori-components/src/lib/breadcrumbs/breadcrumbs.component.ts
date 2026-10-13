@@ -1,8 +1,9 @@
-import { ChangeDetectionStrategy, Component, input } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { RouterLink } from '@angular/router';
 
 import type { NxsBreadcrumbItem, NxsBreadcrumbsInputs } from '../primitives';
+import { nxsVisibleText } from '../visible-text';
 
 /**
  * A breadcrumb trail — the Material implementation of `nxs.primitives.breadcrumbs`.
@@ -25,8 +26,13 @@ export class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
    * plain link, and one with neither is text — the current page, when it is the last.
    */
   readonly items = input.required<readonly NxsBreadcrumbItem[]>();
-  /** The navigation landmark's accessible name, already translated, such as "Breadcrumbs". */
+  /**
+   * The navigation landmark's accessible name, already translated, such as "Breadcrumbs". Blank, or
+   * only whitespace or zero-width characters, leaves the landmark unnamed rather than named " ".
+   */
   readonly label = input('');
+
+  protected readonly name = computed(() => nxsVisibleText(this.label()));
 
   protected linkKind(item: NxsBreadcrumbItem): 'router' | 'href' | 'text' {
     if (item.routerLink !== undefined) return 'router';

@@ -15,6 +15,7 @@ import { provideTranslateService } from '@ngx-translate/core';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
+import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
@@ -29,12 +30,14 @@ describe('provideNxsComponents', () => {
     return TestBed.inject(ExtensionComponentRegistry);
   }
 
-  it('registers the four primitive IDs to their Material implementations', () => {
+  it('registers every primitive ID to its Material implementation', () => {
     const components = registry([provideNxsComponents()]);
     expect(components.peek(NXS_PRIMITIVE_IDS.avatar)).toBe(NxsAvatarComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.breadcrumbs)).toBe(NxsBreadcrumbsComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.tag)).toBe(NxsTagComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.richTooltip)).toBe(NxsRichTooltipComponent);
+    expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
+    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(5);
   });
 
   it('registers nothing under those IDs when it is not provided', () => {
@@ -87,5 +90,40 @@ describe('provideNxsComponents', () => {
     const tag = (fixture.nativeElement as HTMLElement).querySelector('nxs-tag');
     expect(tag?.textContent?.trim()).toBe('Invoice');
     expect(tag?.classList).toContain('nxs-tag--teal');
+  });
+
+  it('renders the error state by ID, calling the retry handler the outlet passes', async () => {
+    const retries: number[] = [];
+    @Component({
+      standalone: true,
+      imports: [ExtensionOutletComponent],
+      template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,
+    })
+    class OutletHostComponent {
+      readonly id = NXS_PRIMITIVE_IDS.errorState;
+      readonly inputs = {
+        status: 500,
+        heading: 'Failed to load folder contents.',
+        retryable: true,
+        retryHandler: () => retries.push(1),
+      };
+    }
+
+    TestBed.configureTestingModule({
+      imports: [OutletHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideTranslateService(),
+        provideRouter([]),
+        provideNxsComponents(),
+      ],
+    });
+    const fixture = TestBed.createComponent(OutletHostComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const state = (fixture.nativeElement as HTMLElement).querySelector('nxs-error-state');
+    expect(state?.querySelector('h2')?.textContent?.trim()).toBe('Failed to load folder contents.');
+    state?.querySelector('button')?.click();
+    expect(retries).toEqual([1]);
   });
 });

@@ -6,7 +6,13 @@ export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
 } from './lib/column-picker/column-picker.component';
+export { NxsDateInputComponent } from './lib/date-input/date-input.component';
 export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.component';
+export {
+  NxsDocumentReferenceInputComponent,
+  nxsDocumentSuggestionQuery,
+  type NxsDocumentReference,
+} from './lib/document-reference-input/document-reference-input.component';
 export { NxsDomainHintComponent } from './lib/domain-hint/domain-hint.component';
 export {
   NxsDriveDialogComponent,
@@ -28,8 +34,15 @@ export {
   NxsPermissionsPanelComponent,
 } from './lib/permissions-panel/permissions-panel.component';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
+export { NxsTagInputComponent } from './lib/tag-input/tag-input.component';
 export { provideNxsThumbnailCache } from './lib/thumbnail/thumbnail-cache';
 export { NxsThumbnailComponent } from './lib/thumbnail/thumbnail.component';
+export {
+  NxsUserGroupPickerComponent,
+  type NxsPrincipal,
+  type NxsPrincipalSearch,
+} from './lib/user-group-picker/user-group-picker.component';
+export { NxsVocabularySelectComponent } from './lib/vocabulary-select/vocabulary-select.component';
 export {
   NXS_TOAST_DURATION,
   NxsToastService,
@@ -49,9 +62,11 @@ export {
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
   type NxsBreadcrumbsInputs,
+  type NxsErrorStateInputs,
   type NxsRichTooltipInputs,
   type NxsTagColor,
   type NxsTagInputs,
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
+export { nxsInitials, nxsVisibleText } from './lib/visible-text';
 // satori:export:components — `satori-component` inserts above this line

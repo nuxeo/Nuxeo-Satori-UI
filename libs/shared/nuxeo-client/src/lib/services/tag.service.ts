@@ -41,4 +41,25 @@ export class TagService {
         ),
       );
   }
+
+  /**
+   * Existing tags matching `term`, as Web UI's tag suggestion lists them: the `Tag.Suggestion`
+   * operation. `searchTags` reads a `label_tag_entry` directory, which a stock Nuxeo 2025 answers
+   * with 404.
+   */
+  suggestTags(term: string): Observable<string[]> {
+    return this.api
+      .post<TagSuggestion[]>(
+        '/nuxeo/api/v1/automation/Tag.Suggestion',
+        { params: { searchTerm: term }, context: {} },
+        { 'Content-Type': 'application/json' },
+      )
+      .pipe(map((entries) => entries.map((entry) => entry.displayLabel || entry.id)));
+  }
+}
+
+/** One entry `Tag.Suggestion` answers with. */
+interface TagSuggestion {
+  readonly id: string;
+  readonly displayLabel?: string;
 }
