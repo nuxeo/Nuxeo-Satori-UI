@@ -1,5 +1,11 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  type EnvironmentProviders,
+  type Provider,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
 import { throwError } from 'rxjs';
@@ -119,7 +125,7 @@ describe('NxsDocumentListComponent', () => {
     target.dispatchEvent(new KeyboardEvent('keydown', { key: name, bubbles: true, ...init }));
   }
 
-  async function configure(providers: unknown[] = []): Promise<void> {
+  async function configure(providers: (Provider | EnvironmentProviders)[] = []): Promise<void> {
     announce = vi.fn().mockResolvedValue(undefined);
     await TestBed.configureTestingModule({
       imports: [HostComponent],
@@ -130,7 +136,7 @@ describe('NxsDocumentListComponent', () => {
           provide: DocumentDetailService,
           useValue: { fetchThumbnail: () => throwError(() => ({ status: 404 })) },
         },
-        ...(providers as never[]),
+        ...providers,
       ],
     }).compileComponents();
     fixture = TestBed.createComponent(HostComponent);

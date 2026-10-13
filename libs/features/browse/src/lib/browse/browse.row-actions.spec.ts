@@ -9,6 +9,7 @@ import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import {
+  AppExtensionsService,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   PACKAGED_ROW_ACTIONS,
@@ -299,11 +300,7 @@ describe('BrowseComponent — row actions', () => {
       'acme.rowActions.audit': { execute: (context) => seen.push(context.document?.uid) },
     });
     vi.spyOn(TestBed.inject(ExtensionActionRegistry), 'execute');
-    const resolve = vi.spyOn(
-      (component as unknown as { extensions: { resolve: (...args: unknown[]) => unknown } })
-        .extensions,
-      'resolve',
-    );
+    const resolve = vi.spyOn(TestBed.inject(AppExtensionsService), 'resolve');
     resolve.mockReturnValue([custom]);
     run('acme.rowActions.audit', note);
     expect(seen).toEqual(['note']);

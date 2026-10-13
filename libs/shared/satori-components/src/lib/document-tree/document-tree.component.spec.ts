@@ -2,7 +2,7 @@ import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
-import { Observable, Subject, of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { NxsDocumentTreeComponent } from './document-tree.component';
@@ -411,7 +411,7 @@ describe('NxsDocumentTreeComponent', () => {
     it('shows a named spinner while the tree loads', async () => {
       const pending = new Subject<{ root: NuxeoDocument; entries: NuxeoDocument[] }>();
       await create('/');
-      browse.getNavTreeBootstrap.mockReturnValue(pending as Observable<never>);
+      browse.getNavTreeBootstrap.mockReturnValue(pending);
       host.tree().reload();
       await render();
       expect(el().querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe(

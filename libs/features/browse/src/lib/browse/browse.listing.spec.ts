@@ -73,8 +73,10 @@ const emptyAuditLog = {
 
 const browse = {
   getByPath: vi.fn((): BrowseReturn<'getByPath'> => of(folder)),
-  getBrowseFolderContents: vi.fn((): BrowseReturn<'getBrowseFolderContents'> =>
-    of({ folder, entries: [], totalSize: 0 }),
+  getBrowseFolderContents: vi.fn(
+    (
+      ..._args: Parameters<BrowseService['getBrowseFolderContents']>
+    ): BrowseReturn<'getBrowseFolderContents'> => of({ folder, entries: [], totalSize: 0 }),
   ),
   getFolderContext: vi.fn((): BrowseReturn<'getFolderContext'> => of(folder)),
   getChildren: vi.fn((): BrowseReturn<'getChildren'> => EMPTY),
@@ -244,11 +246,7 @@ describe('BrowseComponent — rendered document list', () => {
   }
 
   function lastRequest(): { path: string; page: { currentPageIndex?: number; sort?: unknown } } {
-    const [path, , page] = browse.getBrowseFolderContents.mock.calls.at(-1) as unknown as [
-      string,
-      number,
-      { currentPageIndex?: number; sort?: unknown },
-    ];
+    const [path, , page = {}] = browse.getBrowseFolderContents.mock.calls.at(-1) ?? [''];
     return { path, page };
   }
 

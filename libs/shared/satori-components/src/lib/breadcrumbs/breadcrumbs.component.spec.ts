@@ -158,9 +158,9 @@ describe('NxsBreadcrumbsComponent folding', () => {
 
   beforeEach(async () => {
     resize = null;
-    globalThis.ResizeObserver = class {
-      constructor(callback: () => void) {
-        resize = callback;
+    globalThis.ResizeObserver = class implements ResizeObserver {
+      constructor(callback: ResizeObserverCallback) {
+        resize = () => callback([], this);
       }
       observe(): void {
         /* the test calls `resize` itself */
@@ -171,7 +171,7 @@ describe('NxsBreadcrumbsComponent folding', () => {
       disconnect(): void {
         resize = null;
       }
-    } as unknown as typeof ResizeObserver;
+    };
     await TestBed.configureTestingModule({
       imports: [NxsBreadcrumbsComponent],
       providers: [provideZonelessChangeDetection(), provideRouter([])],
