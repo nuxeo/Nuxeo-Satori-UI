@@ -547,14 +547,16 @@ describe('CollectionDetailComponent', () => {
 
       component.toggleLock();
       component['collectionUid'] = 'collection-2';
-      mockSnackBar.open.mockClear();
+      toast.show.mockClear();
+      toast.error.mockClear();
       settle(pending);
 
       expect(mockDetailService.lockDocument).toHaveBeenCalledWith('collection-1');
       expect(component.isLocked()).toBe(false);
       expect(component.lockOwner()).toBeNull();
       expect(component.actionInProgress()).toBeNull();
-      expect(mockSnackBar.open).not.toHaveBeenCalled();
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('offers no lock action while the next collection is still loading', () => {
@@ -658,10 +660,8 @@ describe('CollectionDetailComponent', () => {
       component.toggleLock();
 
       expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
+      expect(toast.error).toHaveBeenCalledWith(
         "You can't unlock this document because it is locked by another user.",
-        'OK',
-        expect.anything(),
       );
     });
 
@@ -708,7 +708,7 @@ describe('CollectionDetailComponent', () => {
 
       component.toggleLock();
 
-      expect(mockSnackBar.open).toHaveBeenCalledWith(message, 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith(message);
       expect(component.isLocked()).toBe(locked);
       expect(component.actionInProgress()).toBeNull();
     });
