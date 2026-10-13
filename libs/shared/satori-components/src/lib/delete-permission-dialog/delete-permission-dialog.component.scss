@@ -24,3 +24,16 @@
     border-bottom: 1px solid var(--nxs-delete-permission-dialog-border);
   }
 }
+
+// A spinning icon, not a progress indicator, inside the button: a progressbar there is an
+// interactive element nested in another (axe nested-interactive), and a spinner breaks the
+// button's layout (AGENTS/08-bug-patterns.md 15).
+.nxs-spinning {
+  animation: nxs-spin 1s linear infinite;
+}
+
+@keyframes nxs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

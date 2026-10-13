@@ -136,7 +136,9 @@ describe('NxsDeletePermissionDialogComponent', () => {
     expect(removePermissionById).toHaveBeenCalledTimes(1);
     expect(deleteButton().disabled).toBe(true);
     expect(cancelButton().disabled).toBe(true);
-    expect(deleteButton().querySelector('mat-progress-spinner')?.getAttribute('aria-label')).toBe(
+    expect(deleteButton().querySelector('[role="progressbar"]')).toBeNull();
+    expect(deleteButton().querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
+    expect(deleteButton().textContent?.replace('autorenew', '').trim()).toBe(
       'Deleting the permission',
     );
     pending.next({});

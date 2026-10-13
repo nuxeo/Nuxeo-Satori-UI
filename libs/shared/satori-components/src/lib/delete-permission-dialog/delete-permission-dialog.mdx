@@ -93,7 +93,8 @@ Press **Delete**: Nuxeo answers 403, and the toast says the change was refused.
   confirmation. Its title is a heading that Material's dialog uses as its accessible name.
 - **A real table.** The entry is a one-row table whose column headers are `th scope="col"`, so each
   value is read with its column's name.
-- **Progress has a name.** While Nuxeo deletes the entry, the Delete button shows a spinner named
-  "Deleting the permission", and both buttons are disabled so it cannot be pressed twice.
+- **Progress has a name.** While Nuxeo deletes the entry, the Delete button reads "Deleting the
+  permission" beside a turning icon hidden from assistive technology — text, not a progress
+  indicator nested in the button — and both buttons are disabled so it cannot be pressed twice.
 - **Keyboard.** Material's dialog keeps focus inside, closes on **Escape** and returns focus to the
   button that opened it.

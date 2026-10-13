@@ -3,6 +3,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
+import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -11,7 +12,6 @@ import {
   type NuxeoDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
-import { NxsSpinnerComponent } from '../spinner/spinner.component';
 import { NxsToastService, provideNxsToast } from '../toast/toast.service';
 
 /** What `nxs-create-version-dialog` versions. */
@@ -43,9 +43,9 @@ export type NxsCreateVersionDialogResult = NuxeoDocument | undefined;
     FormsModule,
     MatButtonModule,
     MatDialogModule,
+    MatIconModule,
     MatRadioModule,
     TranslatePipe,
-    NxsSpinnerComponent,
   ],
   providers: [provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,

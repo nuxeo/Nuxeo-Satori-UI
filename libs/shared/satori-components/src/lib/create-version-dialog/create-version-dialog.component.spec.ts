@@ -100,7 +100,9 @@ describe('NxsCreateVersionDialogComponent', () => {
     createButton().click();
     await settle();
     expect(createButton().disabled).toBe(true);
-    expect(createButton().querySelector('[role="progressbar"]')?.getAttribute('aria-label')).toBe(
+    expect(createButton().querySelector('[role="progressbar"]')).toBeNull();
+    expect(createButton().querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
+    expect(createButton().textContent?.replace('autorenew', '').trim()).toBe(
       'Creating the version',
     );
     createButton().click();

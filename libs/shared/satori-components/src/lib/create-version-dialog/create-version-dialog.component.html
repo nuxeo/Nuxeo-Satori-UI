@@ -35,10 +35,8 @@
     (click)="create()"
   >
     @if (saving()) {
-      <nxs-spinner
-        diameter="18"
-        [label]="'satori-components.create-version-dialog.creating' | translate"
-      />
+      <mat-icon class="nxs-spinning" aria-hidden="true">autorenew</mat-icon>
+      {{ 'satori-components.create-version-dialog.creating' | translate }}
     } @else {
       {{ 'satori-components.create-version-dialog.create' | translate }}
     }

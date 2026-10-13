@@ -8,6 +8,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -18,7 +19,6 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { failureKey, nxsAceTimeFrame, principalLabel } from '../permission-dialog-support';
-import { NxsSpinnerComponent } from '../spinner/spinner.component';
 import { NxsToastService, provideNxsToast } from '../toast/toast.service';
 
 /** What the delete-permission dialog needs from the page that opens it. */
@@ -43,7 +43,7 @@ export interface NxsDeletePermissionDialogData {
   standalone: true,
   templateUrl: './delete-permission-dialog.component.html',
   styleUrl: './delete-permission-dialog.component.scss',
-  imports: [MatButton, MatDialogModule, NxsSpinnerComponent, TranslatePipe],
+  imports: [MatButton, MatDialogModule, MatIcon, TranslatePipe],
   providers: [provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-delete-permission-dialog' },

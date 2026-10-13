@@ -33,10 +33,8 @@
     (click)="confirm()"
   >
     @if (deleting()) {
-      <nxs-spinner
-        diameter="18"
-        [label]="'satori-components.permission-dialogs.delete.deleting' | translate"
-      />
+      <mat-icon class="nxs-spinning" aria-hidden="true">autorenew</mat-icon>
+      {{ 'satori-components.permission-dialogs.delete.deleting' | translate }}
     } @else {
       {{ 'satori-components.permission-dialogs.delete.delete' | translate }}
     }
