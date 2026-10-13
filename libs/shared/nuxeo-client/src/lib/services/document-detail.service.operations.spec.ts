@@ -65,6 +65,19 @@ describe('DocumentDetailService', () => {
       expect((await pending).uid).toBe('doc-1');
     });
 
+    it('asks for the lock, which Nuxeo otherwise leaves out of the response', async () => {
+      // Without `fetch-document: lock` a locked document arrives with no `lockOwner` and
+      // no `lockCreated`, and every page reading it shows the document as unlocked.
+      const pending = firstValueFrom(service.getFullDocument('doc-1'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1');
+      expect(req.request.headers.get('fetch-document')).toBe('lock');
+      req.flush(doc({ lockOwner: 'alice', lockCreated: '2026-10-09T06:27:22.039Z' }));
+      expect(await pending).toMatchObject({
+        lockOwner: 'alice',
+        lockCreated: '2026-10-09T06:27:22.039Z',
+      });
+    });
+
     it('propagates a 404 rather than emitting an empty document', async () => {
       const pending = firstValueFrom(service.getFullDocument('ghost'));
       httpMock
@@ -340,6 +353,22 @@ describe('DocumentDetailService', () => {
         await pending;
       });
     }
+
+    it('asks for the lock on Lock, so the caller learns the owner and date the server recorded', async () => {
+      const pending = firstValueFrom(service.lockDocument('doc-1'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.Lock');
+      expect(req.request.headers.get('fetch-document')).toBe('lock');
+      req.flush(doc({ lockOwner: 'satori-admin', lockCreated: '2026-10-09T06:27:22.039Z' }));
+      expect(await pending).toMatchObject({ lockOwner: 'satori-admin' });
+    });
+
+    it('asks for the lock on Unlock too, so the response says the lock is gone', async () => {
+      const pending = firstValueFrom(service.unlockDocument('doc-1'));
+      const req = httpMock.expectOne('/nuxeo/api/v1/id/doc-1/@op/Document.Unlock');
+      expect(req.request.headers.get('fetch-document')).toBe('lock');
+      req.flush(doc({ lockOwner: null, lockCreated: null }));
+      expect(await pending).toMatchObject({ lockOwner: null });
+    });
 
     it('subscribes with the default notification set', async () => {
       const pending = firstValueFrom(service.subscribe('doc-1'));

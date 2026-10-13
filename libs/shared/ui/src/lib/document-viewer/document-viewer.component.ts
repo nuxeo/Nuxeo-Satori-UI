@@ -12,6 +12,7 @@ import { SafeResourceUrl, SafeHtml } from '@angular/platform-browser';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTooltipModule } from '@angular/material/tooltip';
+import { CdkAriaLive } from '@angular/cdk/a11y';
 // Shared rather than local: this normalisation guards three separate served-type checks, and a
 // divergence between them would be a bypass.
 import { mediaTypeEssence } from '@nuxeo-satori/platform/nuxeo-client';
@@ -99,7 +100,14 @@ export interface VideoInfo {
 @Component({
   selector: 'lib-document-viewer',
   standalone: true,
-  imports: [NxsSpinnerComponent, TranslatePipe, MatIconModule, MatButtonModule, MatTooltipModule],
+  imports: [
+    NxsSpinnerComponent,
+    TranslatePipe,
+    MatIconModule,
+    MatButtonModule,
+    MatTooltipModule,
+    CdkAriaLive,
+  ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './document-viewer.component.html',
   styleUrl: './document-viewer.component.scss',

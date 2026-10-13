@@ -1,7 +1,9 @@
 /**
- * NXENG-801 — `.format-type` on the fixed light `.picture-cards` strip uses a scoped host token so
- * contrast stays ≥4.5:1 even when theme surface-variant drifts (e.g. dark palette).
- * Per-theme Karma coverage: `apps/nuxeo-ui/.../document-viewer-format-type-contrast.spec.ts`.
+ * NXENG-801 / NXSAT-494 — `.format-type` and `.format-size` on the fixed light `.picture-cards`
+ * strip use scoped host tokens so contrast stays ≥4.5:1 even when theme surface-variant drifts
+ * (e.g. dark palette). IBM 1406866183 (NXENG-837) targets `.format-size`.
+ * Per-theme Karma coverage (including `.format-size` host-token sentinel wiring for NXSAT-494):
+ * `apps/nuxeo-ui/.../document-viewer-format-type-contrast.spec.ts`.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -60,7 +62,7 @@ function opaqueBackdrop(element: HTMLElement): number[] {
   return [255, 255, 255];
 }
 
-describe('DocumentViewerComponent — format-type text contrast (NXENG-801)', () => {
+describe('DocumentViewerComponent — format-type text contrast (NXENG-801 / NXSAT-494)', () => {
   let fixture: ComponentFixture<DocumentViewerComponent>;
   let originalTheme: string | null;
 

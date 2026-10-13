@@ -992,7 +992,6 @@
       "notifications-enabled": "Notifications enabled",
       "removed-from-clipboard": "Removed from clipboard"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "Notify Me",
     "remove-from-clipboard": "Remove from Clipboard",
     "share-fallback-title": "Collection",
@@ -1061,6 +1060,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "Dismiss",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "Document already locked by another user, please refresh your page.",
+      "lock-no-permission": "You don't have permission to lock this document.",
+      "locked-by": "Locked by {{ owner }} on {{ date }}",
+      "locked-by-another-user": "You can't unlock this document because it is locked by another user.",
+      "unlock-no-permission": "You don't have permission to unlock this document."
+    },
     "ok": "OK",
     "page-number": "Page {{ page }}",
     "page-of": "Page {{ page }} of {{ total }}",
@@ -1424,7 +1430,6 @@
       "workflow-abandoned": "Workflow abandoned.",
       "workflow-started-successfully": "Workflow started successfully"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "Align center",
       "align-left": "Align left",
@@ -2311,6 +2316,7 @@
     "document-viewer": {
       "additional-formats": "Additional Formats",
       "annotations-are-not-available-for-this": "Annotations are not available for this document.",
+      "annotations-frame": "Annotations for {{ name }}",
       "audio-codec": "Audio Codec",
       "bit-depth-per-channel": "Bit Depth per Channel",
       "color-profile": "Color Profile",
@@ -2333,9 +2339,12 @@
       "iptc-rights": "Rights",
       "iptc-source": "Source",
       "loading": "Loading",
+      "note-frame": "Note content for {{ name }}",
       "open-with-nuxeo-drive": "Open with Nuxeo Drive",
+      "pdf-frame": "PDF preview of {{ name }}",
       "picture-info": "Picture Info",
       "preview": "Preview",
+      "preview-frame": "Preview of {{ name }}",
       "preview-not-available": "Preview not available",
       "remove": "Remove",
       "remove-main-file": "Remove main file",

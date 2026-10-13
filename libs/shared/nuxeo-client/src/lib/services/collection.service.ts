@@ -14,6 +14,8 @@ export class CollectionService {
   getById(uid: string): Observable<NuxeoDocument> {
     return this.api.get<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}`, undefined, {
       properties: 'dublincore',
+      'enrichers.document': 'permissions',
+      'fetch-document': 'lock',
     });
   }
 

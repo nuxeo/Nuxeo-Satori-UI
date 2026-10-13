@@ -1,0 +1,5 @@
+// NXENG-826 — arrow_back via codepoint (no ligature text; legacy Material Icons font).
+.detail-header mat-icon.detail-header-go-back-icon::before {
+  content: '\e5c4';
+  font: 24px/1 'Material Icons';
+}

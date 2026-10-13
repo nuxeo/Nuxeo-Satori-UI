@@ -6189,6 +6189,306 @@ function checkCatalogueValuesAreRenderable() {
 }
 
 /**
+ * A date format pattern is not a translatable string.
+ *
+ * ## The defect
+ *
+ * `collections.mmmm-d-yyyy` and `document-detail.mmmm-d-yyyy` both held `MMMM d, yyyy`, and
+ * both were bound as the `DatePipe` format:
+ *
+ *     {{ entry.eventDate | date: ('collections.mmmm-d-yyyy' | translate) }}
+ *
+ * `M`, `d` and `y` are **locale-independent** tokens in Angular. Translating them cannot
+ * localize anything: the French catalogue rendered `octobre 12, 2026` — a French month name
+ * in the English field order — and a plausible translation such as `jj/mm/aaaa` would render
+ * literal `j`s. Meanwhile the two keys were pushed to Crowdin and the translation crew was
+ * billed to translate a format string. Reported by the translators, not by us (NXSAT-628).
+ *
+ * The fix is Angular's named formats (`longDate`, `mediumDate`, …), which read the registered
+ * locale data. Nothing stopped the keys being created, though: the extraction codemod slugs a
+ * key from its value, and `mmmm-d-yyyy` is the codemod recording that it took `MMMM d, yyyy`
+ * for prose. So this gate exists to stop the class returning the same way.
+ *
+ * ## Two arms, because either alone has a hole
+ *
+ * **Arm 1 — a catalogue value that is nothing but a date pattern.** This is the arm that
+ * satisfies the reporter: a pattern sitting in `en.json` is pushed to Crowdin whether or not
+ * anything renders it, so scoping only to values the templates use would leave the complaint
+ * unaddressed.
+ *
+ * **Arm 2 — a `date:` format that comes from `translate`.** Arm 1 has one exemption (below),
+ * and an exemption with nothing behind it is a loophole: binding the exempted key as a
+ * `DatePipe` format would reintroduce exactly this bug past a green Arm 1. Arm 2 fails on the
+ * *shape* of the binding and does not care which key or value is involved, so it closes that
+ * and also catches a pattern assembled at runtime.
+ *
+ * ## Why `common.date-mask` is exempt, by key
+ *
+ * `common.date-mask` is `mm/dd/yyyy` and is a date pattern by any test this gate could apply.
+ * It is also a genuine user-facing string: the `[placeholder]` on nine date inputs, telling a
+ * person what to type. It is read by a human, never handed to `DatePipe` — Arm 2 is what
+ * enforces that — so it is legitimately translatable and must stay in the catalogue.
+ *
+ * It is exempted by key rather than by a cleverer value test on purpose. No property of the
+ * *string* `mm/dd/yyyy` distinguishes it from the patterns this gate exists to reject; only
+ * its use does. A heuristic pretending otherwise would be a rule whose real behaviour nobody
+ * could predict, and the next genuine placeholder would need the same escape hatch anyway.
+ * A named exemption with a reason is honest about being a judgement.
+ *
+ * (It is on hold for translation for an unrelated reason — the date inputs parse typed text
+ * as US month/day/year in every locale, NXSAT-629 — which its translator note records. That
+ * is a note to Crowdin, not something this gate asserts.)
+ */
+function checkNoTranslatableDatePatterns() {
+  /**
+   * Keys whose value is a date pattern but which are genuine user-facing text.
+   * Keep this list at zero or one entries; every addition needs the reason written here.
+   */
+  const EXEMPT_KEYS = new Set([
+    // Placeholder text on a date input — read by a person, never a `DatePipe` format.
+    'common.date-mask',
+  ]);
+
+  /** `/ - . , :` and space are the punctuation allowed between a pattern's fields. */
+  const FIELD_SEPARATORS = /^[/\-.,: ]+$/;
+
+  /**
+   * What may sit between two fields: punctuation, or a short non-ASCII literal.
+   *
+   * The non-ASCII half is not decoration. `yyyy年MM月dd日` is the ordinary Japanese date
+   * pattern and `d MMMM ค.ศ. yyyy` the Thai one, and the first version of this rule required
+   * the whole value to be ASCII — so the gate was blind in exactly the three catalogues
+   * (`ja`, `th`, `zh`) where a translator is most likely to produce one.
+   *
+   * Three characters is the ceiling, and it is what keeps prose out: a date literal is a
+   * marker (`年`, `月`, `日`, `ค.ศ.`), while CJK prose runs far longer. Measured over all
+   * 14,952 values in the seven shipped catalogues, this flags nothing but the exempt key.
+   */
+  const isLiteralSegment = (segment) => {
+    const characters = [...segment];
+    const nonAscii = characters.filter((character) => /[^\x00-\x7F]/.test(character));
+    if (nonAscii.length === 0) return FIELD_SEPARATORS.test(segment);
+    if (nonAscii.length > 3) return false;
+    return characters.every(
+      (character) => /[^\x00-\x7F]/.test(character) || /[/\-.,: ]/.test(character),
+    );
+  };
+
+  /**
+   * A value is a bare date pattern when every one of its alphabetic runs is a single letter
+   * repeated — `MMMM`, `d`, `yyyy`, `jj`, `aaaa` — and everything between those runs is a
+   * date separator.
+   *
+   * That shape is what makes this safe to run over ~14,000 catalogue entries. Testing for
+   * "contains only date-pattern characters" flags `Address` (`dd`, `ss`) and `May`; requiring
+   * each *word* to be one repeated letter does not, because a word of prose almost never is.
+   * `OK`, `N/A`, `e.g.`, `All` and `Up to date` all survive on that rule alone.
+   *
+   * **A single field counts.** This required two words at first, which let a one-field pattern
+   * — `yyyy`, `MMMM`, `dd` — through the gate that exists to reject patterns, and nothing else
+   * would have caught it. The worry behind the two-word rule was prose: a lone word of one
+   * repeated letter. Measured across all seven shipped catalogues, there are **zero** such
+   * values, and `OK` and `N/A` are unreachable anyway because neither has a word of two or
+   * more identical letters. So the floor is one word, still at least two characters long —
+   * which is what keeps a bare `a` or `I` out.
+   *
+   * **No length ceiling.** There was a 24-character cap, which excluded
+   * `EEEE, dd MMMM yyyy HH:mm:ss` — a longer pattern is a *more* complete one, so the cap
+   * was strictly backwards, rejecting the candidates it should have been surest about. It
+   * was never load-bearing either: prose cannot satisfy the word-shape rule at any length,
+   * because every alphabetic word would have to be one letter repeated.
+   *
+   * **A digit in the unquoted residue disqualifies.** An unquoted `2026` means the value is a
+   * rendered date or ordinary text, not a pattern. This was implicit while the rule was
+   * ASCII-only; it has to be explicit now that literals are allowed through.
+   *
+   * It is tested against the residue, not the raw value, because a quoted literal may legally
+   * contain a digit: `yyyy 'Q1'` is as much a pattern as `d 'de' MMMM 'de' y`. Run against the
+   * raw value — as it first was — the digit rule and the quoted-literal rule below contradicted
+   * each other, and the digit won, so any pattern carrying a quoted digit left the gate silently.
+   *
+   * **Quoted runs are literals, not words.** Angular escapes literal text in a pattern with
+   * single quotes — `d 'de' MMMM 'de' y` is the Spanish long date, `d 'at' HH:mm` a common
+   * shape. Read naively, `de` and `at` are ordinary words, which fails the one-repeated-letter
+   * test and let a value that is *entirely* a date pattern through. They are stripped before
+   * the shape test, so they are judged as separators.
+   *
+   * Only BALANCED quotes are stripped, which is what keeps an apostrophe out of it: `Don't`
+   * and `L'élément` have one quote and are left intact, so they are still read as prose.
+   * `L'ami d'Henri` has two, so `'ami d'` is stripped — and `L` and `Henri` are still prose,
+   * so it is still not flagged.
+   *
+   * **Two pattern shapes are knowingly out of reach**, and the rule is stated as "every word is
+   * one letter repeated, one of them twice or more" rather than "no date pattern survives",
+   * because the stronger claim would not be true:
+   *
+   * - adjacent fields with no separator (`yyyyMMdd`), because a word of several distinct
+   *   letters is what tells `Address` from a pattern;
+   * - every field one character long (`M/d/y`), because the two-character floor is what tells
+   *   `N/A` and `e.g.` from a pattern.
+   *
+   * The obvious remedy — tokenize only the letters Angular recognizes as fields — is worse than
+   * the gap. `j` is not an Angular field, so `jj/mm/aaaa` would stop being flagged, and a
+   * translator localizing the letters is the defect this gate was written for (NXSAT-628); the
+   * selftest has that exact control. `May` is `M`+`a`+`y`, all three recognized, so admitting
+   * adjacent single-character fields flags it. Both shapes are absent from every catalogue and
+   * template here, and arm 2 still catches either one the moment it is bound as a format.
+   */
+  const QUOTED_LITERAL = /'[^']*'/g;
+
+  const isBareDatePattern = (value) => {
+    const bare = value.replace(QUOTED_LITERAL, ' ');
+    if (/\d/.test(bare)) return false;
+    const words = bare.split(/[^A-Za-z]+/).filter(Boolean);
+    const separators = bare.split(/[A-Za-z]+/).filter(Boolean);
+    if (words.length === 0) return false;
+    if (!separators.every(isLiteralSegment)) return false;
+    if (!words.every((word) => new Set(word.toLowerCase()).size === 1)) return false;
+    return words.some((word) => word.length >= 2);
+  };
+
+  // ---- arm 1: catalogue values ----
+
+  const isCatalogue = (path) =>
+    /(^|\/)i18n\/[a-z]{2}(-[A-Za-z]{2,4})?\.json$/.test(path) && !isGeneratedLocale(path);
+  const catalogues = [...walk('apps', isCatalogue), ...walk('libs', isCatalogue)].filter(
+    (path) => !/^apps\/nuxeo-satori-template\//.test(path),
+  );
+  if (catalogues.length === 0) {
+    fail('No catalogues were found, so the date-pattern gate asserted nothing.');
+    return;
+  }
+
+  for (const file of catalogues) {
+    let parsed;
+    try {
+      parsed = JSON.parse(read(file));
+    } catch {
+      continue; // checkTranslationCatalogues reports malformed JSON, and names the file.
+    }
+
+    const entries = [];
+    const collect = (node, prefix) => {
+      for (const [key, value] of Object.entries(node)) {
+        const path = prefix ? `${prefix}.${key}` : key;
+        if (value && typeof value === 'object') collect(value, path);
+        else entries.push([path, value]);
+      }
+    };
+    collect(parsed, '');
+
+    for (const [key, value] of entries) {
+      if (typeof value !== 'string') continue;
+      if (EXEMPT_KEYS.has(key)) continue;
+      if (!isBareDatePattern(value)) continue;
+      fail(
+        `${file} maps \`${key}\` to "${value}", which is a date format pattern rather than ` +
+          'text a user reads.\n' +
+          "    Angular's `M`, `d` and `y` are locale-INDEPENDENT tokens, so translating them " +
+          'cannot localize a date — it renders the English field order with a translated ' +
+          'month name, or literal letters. Use a named format (`longDate`, `mediumDate`, ' +
+          '`short`), which reads the locale data registered in `register-locale-data.ts`, and ' +
+          'delete the key so Crowdin stops charging to translate it.',
+      );
+    }
+  }
+
+  // ---- arm 2: a DatePipe format that comes from the catalogue, IN A TEMPLATE ----
+  //
+  // The scope is the template, and the contract is no wider than that. A component can resolve
+  // a key in TypeScript — `this.translate.instant('common.date-mask')` — and bind the result as
+  // `| date: dateFormat`, and neither arm sees it: arm 1 skips the exempt key, and there is no
+  // `date: (` or `| translate` in the HTML for this arm to match.
+  //
+  // So this arm does NOT make the `common.date-mask` exemption airtight in general; it closes
+  // the template path, which is the one both real call sites used and the one a translator's
+  // key reaches by default. Catching the TypeScript path means deciding whether an arbitrary
+  // string variable holds a translated date pattern, which is a different and much weaker kind
+  // of check — a name-matching heuristic over `.instant(` call sites. Saying so is better than
+  // a guarantee that reads as total and is not: the exemption is narrow, and server-side
+  // behaviour does not depend on it.
+
+  const templates = [
+    ...walk('apps', (path) => /\.html$/.test(path)),
+    ...walk('libs', (path) => /\.html$/.test(path)),
+  ];
+  if (templates.length === 0) {
+    fail('No templates were found, so the date-pipe half of this gate asserted nothing.');
+    return;
+  }
+
+  // `| date: (` — then the matching close paren, found by counting depth.
+  //
+  // Two things this is deliberately NOT. It is not line-scoped: Prettier wraps a long
+  // interpolation, so the line-scoped first version missed exactly the bindings most likely
+  // to exist — the deeply indented ones, which is what both of the real call sites were.
+  //
+  // And the span is not `[^)]*`, which stops at the FIRST close paren and so could not see
+  // `date: (formatKey() | translate)` — the inner `()` ended the match before `translate` was
+  // reached. A format supplied by a method or a signal is the same defect wearing a call, and
+  // within a template the arm holds regardless of key or value, so depth counting it is.
+  const DATE_FORMAT_OPEN = /\|\s*date:\s*\(/g;
+  const TRANSLATE_IN_SPAN = /\|\s*translate\b/;
+
+  /**
+   * The index of the `)` matching the `(` at `open`, or -1 if it never closes.
+   *
+   * Parentheses are only counted OUTSIDE a string literal. A naive depth count closes the span
+   * at the `)` inside the key of `date: ('x)' | translate)`, which leaves `| translate` outside
+   * the inspected text and passes a binding this arm exists to reject.
+   *
+   * BOTH quote styles count, and only the ACTIVE delimiter closes the literal it opened. An
+   * expression is usually written inside a double-quoted attribute and so uses `'` — but a text
+   * interpolation, or an expression in a single-quoted attribute, may legally use `"`, and
+   * `date: ("x)" | translate)` hides the same `)` just as well. Tracking only one style left
+   * the other shape passing.
+   *
+   * Tracking the active delimiter is what makes that safe: a `"` inside a single-quoted string
+   * does not open anything, so the attribute's own quotes cannot be mistaken for a literal.
+   */
+  const matchingParen = (text, open) => {
+    let depth = 0;
+    let delimiter = null;
+    for (let at = open; at < text.length; at += 1) {
+      const character = text[at];
+      if (delimiter) {
+        // A backslash escapes the next character, so `\'` does not end the literal.
+        if (character === '\\') at += 1;
+        else if (character === delimiter) delimiter = null;
+        continue;
+      }
+      if (character === "'" || character === '"') delimiter = character;
+      else if (character === '(') depth += 1;
+      else if (character === ')') {
+        depth -= 1;
+        if (depth === 0) return at;
+      }
+      // An unbalanced `(` would otherwise run to end of file and swallow every later
+      // binding into one span. An interpolation cannot cross `}}`, so stop there.
+      else if (text.startsWith('}}', at)) return -1;
+    }
+    return -1;
+  };
+
+  for (const file of templates) {
+    const text = read(file);
+    for (const match of text.matchAll(DATE_FORMAT_OPEN)) {
+      const open = match.index + match[0].length - 1;
+      const close = matchingParen(text, open);
+      if (close === -1) continue;
+      if (!TRANSLATE_IN_SPAN.test(text.slice(open, close))) continue;
+      const line = text.slice(0, match.index).split('\n').length;
+      fail(
+        `${file}:${line} passes a translated string to \`DatePipe\` as its format.\n` +
+          '    The format argument is a pattern, not prose: its tokens are the same in every ' +
+          'language, so routing it through `translate` can only break the render. Use a named ' +
+          "format — `| date: 'longDate'` — and let the registered locale data choose the order.",
+      );
+    }
+  }
+}
+
+/**
  * A class that uses `this.translate` must actually inject it.
  *
  * Five classes reached CI using `this.translate.instant(...)` with no
@@ -8048,6 +8348,7 @@ const GUARDRAILS = [
   checkNoHardcodedImperativeUiText,
   checkTranslateIsInjectedWhereUsed,
   checkCatalogueValuesAreRenderable,
+  checkNoTranslatableDatePatterns,
   checkNoStaleAgnosticClaim,
   checkTranslationCatalogues,
   checkCataloguesAreTranslated,

@@ -17,6 +17,7 @@
       @for (rid of [arenderReloadId()]; track rid) {
         <iframe
           [src]="arenderUrl()"
+          [title]="'shared-ui.document-viewer.annotations-frame' | translate: { name: fileName() }"
           class="viewer-iframe arender-frame"
           allow="fullscreen"
         ></iframe>
@@ -59,6 +60,7 @@
           <iframe
             class="viewer-iframe viewer-html-frame"
             [srcdoc]="noteContent()"
+            [title]="'shared-ui.document-viewer.note-frame' | translate: { name: fileName() }"
             sandbox="allow-same-origin"
           ></iframe>
         }
@@ -69,13 +71,25 @@
           <pre class="viewer-preformatted">{{ noteContent() }}</pre>
         }
         @case ('pdf') {
-          <iframe [src]="blobUrl()" class="viewer-iframe"></iframe>
+          <iframe
+            [src]="blobUrl()"
+            [title]="'shared-ui.document-viewer.pdf-frame' | translate: { name: fileName() }"
+            class="viewer-iframe"
+          ></iframe>
         }
         @case ('pdfRendition') {
-          <iframe [src]="blobUrl()" class="viewer-iframe"></iframe>
+          <iframe
+            [src]="blobUrl()"
+            [title]="'shared-ui.document-viewer.pdf-frame' | translate: { name: fileName() }"
+            class="viewer-iframe"
+          ></iframe>
         }
         @case ('preview') {
-          <iframe [src]="previewUrl()" class="viewer-iframe"></iframe>
+          <iframe
+            [src]="previewUrl()"
+            [title]="'shared-ui.document-viewer.preview-frame' | translate: { name: fileName() }"
+            class="viewer-iframe"
+          ></iframe>
         }
         @default {
           <div class="viewer-placeholder">
@@ -177,10 +191,12 @@
       <button
         mat-icon-button
         [matTooltip]="'shared-ui.document-viewer.preview' | translate"
-        [attr.aria-label]="'shared-ui.document-viewer.preview' | translate"
         (click)="previewClicked.emit()"
       >
-        <mat-icon>visibility</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'shared-ui.document-viewer.preview' | translate
+        }}</span>
+        <mat-icon aria-hidden="true">visibility</mat-icon>
       </button>
       <button
         mat-icon-button
