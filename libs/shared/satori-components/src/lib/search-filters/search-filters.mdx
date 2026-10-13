@@ -40,15 +40,13 @@ Choose a date range, or open Nature and tick a value: `filtersChange` reports th
 
 ## Usage
 
-<Source
-  language="typescript"
-  dark
-  code={`import {
+export const usageTs = `import {
   NxsSearchFiltersComponent,
   nxsSearchFiltersToQuery,
   type NxsSearchFilters,
-} from '@nuxeo-satori/platform/components';`}
-/>
+} from '@nuxeo-satori/platform/components';`;
+
+<Source language="typescript" dark code={usageTs} />
 
 export const usageHtml = `<nxs-search-filters
   [(filters)]="filters"
