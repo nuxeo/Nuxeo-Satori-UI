@@ -378,6 +378,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "shared-ui.message.link-copied-to-clipboard": "Link copied to clipboard",
   "shared-ui.message.select-two-different-documents-to-compare": "Select two different documents to compare.",
   "shared-ui.saved-search-dialog.cancel": "Cancel",
+  "shared-ui.saved-search-dialog.no-slash": "You cannot use the character '/' in the name",
   "shared-ui.saved-search-dialog.save": "Save",
   "shared-ui.selection-topbar.clear": "Clear",
   "shared-ui.selection-topbar.close": "Close",

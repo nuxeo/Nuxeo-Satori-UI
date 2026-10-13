@@ -2448,7 +2448,8 @@
     },
     "saved-search-dialog": {
       "cancel": "Cancel",
-      "save": "Save"
+      "save": "Save",
+      "no-slash": "You cannot use the character '/' in the name"
     },
     "selection-topbar": {
       "clear": "Clear",

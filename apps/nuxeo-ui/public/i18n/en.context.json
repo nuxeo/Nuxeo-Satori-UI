@@ -2304,5 +2304,6 @@
   "satori-components.search-filters.remove": "Accessible name of the small x button on a chosen author, collection or tag in the search filters; it removes that one choice. {{ value }} is the author, collection or tag shown on the chip. A VERB phrase.",
   "satori-components.search-filters.chosen-authors": "Accessible name of the set of chips below the Authors box of the search filters: the authors the user has chosen to filter on, each removable.",
   "satori-components.search-filters.chosen-collections": "Accessible name of the set of chips below the Collections box of the search filters: the collections the user has chosen to filter on, each removable.",
-  "satori-components.search-filters.chosen-tags": "Accessible name of the set of chips below the Tags box of the search filters: the tags the user has chosen to filter on, each removable."
+  "satori-components.search-filters.chosen-tags": "Accessible name of the set of chips below the Tags box of the search filters: the tags the user has chosen to filter on, each removable.",
+  "shared-ui.saved-search-dialog.no-slash": "Error under the name box of the dialog that names a saved search, shown when the name contains a slash, which the server refuses; Save stays disabled until it is removed. Keep the slash character '/' as it is."
 }

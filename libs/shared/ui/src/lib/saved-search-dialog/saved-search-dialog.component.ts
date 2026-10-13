@@ -53,6 +53,12 @@ export const SAVED_SEARCH_DIALOG_OPTIONS: Partial<MatDialogConfig> = {
         }
       }
 
+      .saved-search-error {
+        margin: 6px 0 0;
+        color: var(--mat-sys-error, currentColor);
+        font: var(--mat-sys-body-small, inherit);
+      }
+
       mat-dialog-actions {
         padding: 16px 24px 20px;
         flex-wrap: wrap;
@@ -66,7 +72,12 @@ export class SavedSearchDialogComponent {
   readonly data = inject<SavedSearchDialogData>(MAT_DIALOG_DATA, { optional: true }) ?? {};
   readonly name = signal(this.data.initialValue ?? '');
 
-  readonly canSave = () => this.name().trim().length > 0;
+  /**
+   * A saved search is a document named after its title, and a document name cannot hold a `/` —
+   * the server answers 400. Web UI's save dialog says so the same way (`searchForm.savePopup.error`).
+   */
+  readonly hasSlash = () => this.name().includes('/');
+  readonly canSave = () => this.name().trim().length > 0 && !this.hasSlash();
 
   onInput(value: string): void {
     this.name.set(value);

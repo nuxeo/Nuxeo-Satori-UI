@@ -1603,6 +1603,12 @@ Measured on the local 2025 instance:
   as an array.
 - A `PUT` without `pageProviderName` is refused with `400`; with it and without `params` the stored
   parameters are kept, which is what renaming relies on.
+- A saved search is a document named after its title, so a title with `/` is refused with `400`
+  ("A DocumentModel's name cannot contain slash character"). The name dialog refuses it first, with
+  Web UI's message.
+- The server drops the short names `nature` and `coverage` at save time — it maps them onto the
+  saved-search document's own `dc:nature` and `dc:coverage` — so searches saved under them never kept
+  those two filters.
 - A `PUT`'s `params` are merged into the stored ones: a parameter left out keeps its saved value. So
   Save writes every filter parameter, an empty one as `[]` or `""`, as Web UI writes its whole form;
   without that, a filter the user removed stayed in the saved search.
