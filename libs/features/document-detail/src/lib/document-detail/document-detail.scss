@@ -228,22 +228,6 @@ sat-breadcrumbs {
   }
 }
 
-// NXENG-773 / IBM 247628794 — Material `mat-icon-button` suppresses the default ring and
-// `apps/nuxeo-ui/src/styles.scss` has no global fallback, so keyboard focus changed no pixels.
-// IBM Equal Access `style_focus_visible` reads `:focus` only — keep a standalone selector, not
-// a comma list with `:focus-visible` (see AGENTS/08-bug-patterns.md §17).
-//
-// Positive `outline-offset` paints outside the button; the pixels behind it are the tab header's
-// fixed `#fff` (`.detail-tabs .mat-mdc-tab-header` below), not the themed page chrome. In dark
-// and kawaii, `--mat-sys-primary` resolves too pale on that surface (1.71:1). Use the same
-// indigo as `.panel-toggle-btn:hover` so 1.4.11 holds on the white header in every theme.
-.panel-toggle-btn.mat-mdc-icon-button:focus {
-  outline-style: solid;
-  outline-width: 2px;
-  outline-color: var(--agentic-document-detail-panel-toggle-focus-outline);
-  outline-offset: 2px;
-}
-
 // Tabs — compact, left-aligned (matching Figma)
 .detail-tabs {
   flex: 1;
