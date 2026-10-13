@@ -327,6 +327,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   styleUrls: [
     './document-detail.scss',
     './document-detail-go-back-icon.scss',
+    './document-detail-tag-chip-remove-icon.scss',
     './document-detail-go-back-focus.scss',
     './document-detail-panel-close-focus.scss',
     './document-detail-tab-focus.scss',

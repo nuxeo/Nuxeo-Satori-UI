@@ -893,7 +893,7 @@
                       {{ 'document-detail.document-detail.date' | translate }}
                     </th>
                     <td mat-cell *matCellDef="let entry">
-                      {{ entry.eventDate | date: ('document-detail.mmmm-d-yyyy' | translate) }}
+                      {{ entry.eventDate | date: 'longDate' }}
                     </td>
                   </ng-container>
 
@@ -1808,7 +1808,7 @@
                           matChipRemove
                           [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
                         >
-                          <mat-icon>cancel</mat-icon>
+                          <mat-icon aria-hidden="true" class="detail-tag-chip-remove-icon"></mat-icon>
                         </button>
                       </mat-chip-row>
                     }

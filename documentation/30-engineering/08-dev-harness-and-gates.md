@@ -2,16 +2,29 @@
 title: Dev Harness & Gates
 parent: Engineering
 order: 8
-last_reviewed: 2026-10-08
-repo_commit: 2898046
+last_reviewed: 2026-10-12
+repo_commit: 9c438365
 audience: engineering
 ---
 
 # The Development Harness and its Gates
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> for §3, §8, the `supply-chain` and `guardrails` rows of §2 and the CI-only rows of §7, re-verified
-> against `GUARDRAILS`, `supply-chain.mjs` and `.github/workflows/` at that commit. The rest was last reviewed on 2026-10-05 at `b32d4c8`, the
+> **Last reviewed:** 2026-10-12 · **Repository:** `9c438365` (`fix/nxsat-628`) for the
+> `checkNoTranslatableDatePatterns` row of §2 **only** — added by NXSAT-628 and verified against
+> `GUARDRAILS` and its **21** controls (13 negative, 8 positive) in
+> `review-guardrails.selftest.mjs` at that commit. `9c438365` is cited rather than the revision
+> that first added the row, because the row's guarantee was not fully enforced until the
+> single-field, multiline, non-ASCII, long-pattern, quoted-literal, nested-call, digit-in-literal
+> and quoted-parenthesis cases were closed — the last of these in both the single- and
+> double-quoted form — so a stamp naming an earlier commit would have vouched for a gate that did
+> not yet hold.
+> Nothing else on this page was re-read at that revision, so the two entries below still stand
+> for the rest of it.
+>
+> §3, §8, the `supply-chain` and `guardrails` rows of §2 and the CI-only rows of §7 were reviewed
+> on 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`), re-verified against
+> `GUARDRAILS`, `supply-chain.mjs` and `.github/workflows/` at that commit. The rest was last
+> reviewed on 2026-10-05 at `b32d4c8`, the
 > revision that implements the 24-gate set and the 23-control lockfile suite described below.
 > This is the **development-time** harness. For the customer-facing runtime AI features see
 > [Runtime AI Features](10-runtime-ai-features.md).
@@ -135,6 +148,7 @@ stopped at the general-purpose checks and every i18n and packaging check was add
 | `checkNoHardcodedImperativeUiText`            | No hard-coded snackbar, toast or error text built in TypeScript                                                           |
 | `checkTranslateIsInjectedWhereUsed`           | A class using `this.translate` injects `TranslateService` — otherwise a runtime crash on the first error path             |
 | `checkCatalogueValuesAreRenderable`           | A catalogue value is the text a user sees — no HTML entities or markup copied from a template                             |
+| `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern — every alphabetic run one letter repeated, one of them twice or more — and no template binds a `DatePipe` format that comes from `translate` |
 | `checkNoStaleAgnosticClaim`                   | A comment saying a library has no dependency on something is still true of that library                                   |
 | `checkTranslationCatalogues`                  | Every `i18n/<locale>.json` parses to an object of keys and ends with a newline                                            |
 | `checkCataloguesAreTranslated`                | A non-English catalogue translates something, rather than being a copy of `en.json`                                       |
