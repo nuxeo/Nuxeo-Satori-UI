@@ -330,6 +330,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     './document-detail-tag-chip-remove-icon.scss',
     './document-detail-go-back-focus.scss',
     './document-detail-panel-close-focus.scss',
+    './document-detail-version-select-focus.scss',
     './document-detail-tab-focus.scss',
   ],
 })

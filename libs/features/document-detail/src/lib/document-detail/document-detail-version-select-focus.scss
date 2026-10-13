@@ -1,0 +1,9 @@
+// NXSAT-545 / IBM 2851011211 — standalone sheet so document-detail.scss stays under the 36 kB cap.
+.version-select {
+  background: var(--document-detail-properties-panel-surface);
+}
+
+.version-select:focus {
+  outline: 2px solid var(--document-detail-properties-label-muted);
+  outline-offset: -2px;
+}
