@@ -21,11 +21,10 @@ function toolbarActionsLoopMarkup(html: string): string {
 describe('Document detail toolbar label in name (NXSAT-528)', () => {
   it('names extension toolbar icon buttons via cdk-visually-hidden text and hides icon ligatures', () => {
     const loop = toolbarActionsLoopMarkup(readFileSync(templatePath, 'utf8'));
-    expect(loop).toContain('[matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"');
-    expect(loop).not.toContain('[attr.aria-label]="action | descriptorLabel"');
-    expect(loop).toContain('toolbarTooltip(action) || (action | descriptorLabel)');
-    expect(loop).toContain('<span class="cdk-visually-hidden" cdkAriaLive="off">');
-    expect(loop).toContain('<mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>');
+    expect(loop).toMatch(/\[matTooltip\]="toolbarActionLabel\(action\)"/);
+    expect(loop).not.toMatch(/\[attr\.aria-label\]="action \| descriptorLabel"/);
+    expect(loop).toMatch(/cdk-visually-hidden[\s\S]*toolbarActionLabel\(action\)/);
+    expect(loop).toMatch(/<mat-icon\s+aria-hidden="true">\{\{\s*action\.icon\s*\}\}<\/mat-icon>/);
   });
 
   it('names the More actions menu trigger without a conflicting icon ligature', () => {
@@ -35,17 +34,17 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     const openIndex = html.lastIndexOf('<button', triggerIndex);
     const closeIndex = html.indexOf('</button>', triggerIndex);
     const moreBlock = html.slice(openIndex, closeIndex + '</button>'.length);
-    expect(moreBlock).toContain('cdk-visually-hidden');
+    expect(moreBlock).toMatch(/cdk-visually-hidden/);
     expect(moreBlock).toContain('document-detail.document-detail.more-actions');
-    expect(moreBlock).not.toContain('[attr.aria-label]');
-    expect(moreBlock).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
+    expect(moreBlock).not.toMatch(/\[attr\.aria-label\]/);
+    expect(moreBlock).toMatch(/<mat-icon\s+aria-hidden="true">more_vert<\/mat-icon>/);
   });
 
-  it('includes custom unlock/manifest tooltip text in the accessible name when non-empty', () => {
+  it('derives tooltip and accessible name from toolbarActionLabel (unlock / manifest tooltips)', () => {
     const loop = toolbarActionsLoopMarkup(readFileSync(templatePath, 'utf8'));
-    expect(loop).toMatch(
-      /toolbarTooltip\(action\)\s*\|\|\s*\(action \| descriptorLabel\)/,
-    );
+    expect(loop).toMatch(/toolbarActionLabel\(action\)/);
+    expect(loop).not.toMatch(/toolbarTooltip\(action\)\s*\?\?/);
+    expect(loop).not.toMatch(/toolbarTooltip\(action\)\s*\|\|/);
   });
 
   it('keeps data-action-id on toolbar buttons for IBM scan selectors (e.g. app.toolbar.addToCollection)', () => {
@@ -53,3 +52,4 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(loop).toContain('[attr.data-action-id]="action.id"');
   });
 });
+

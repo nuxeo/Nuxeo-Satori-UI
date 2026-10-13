@@ -15,6 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AppExtensionsService,
   DescriptorLabelPipe,
+  descriptorLabel,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionComponentRegistry,
@@ -1031,6 +1032,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   toolbarTooltip(action: ExtensionActionDescriptor): string | null {
     if (action.tooltip !== undefined) return action.tooltip;
     return action.id === 'app.toolbar.unlock' ? this.lockedByLabel() : null;
+  }
+
+  /** Shared by matTooltip and the visually hidden name — empty custom tooltip falls back to the descriptor label. */
+  toolbarActionLabel(action: ExtensionActionDescriptor): string {
+    const tip = this.toolbarTooltip(action);
+    if (tip !== null && tip !== '') {
+      return tip;
+    }
+    return descriptorLabel(action, (key) => this.translate.instant(key));
   }
 
   /** The highlighted padlock Web UI shows on a locked document. */
