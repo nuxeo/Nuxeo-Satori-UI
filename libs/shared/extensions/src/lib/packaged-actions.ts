@@ -117,7 +117,14 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     label: 'Edit',
     icon: 'edit',
     order: 10,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', not('app.rules.isNote')),
+    // Not `Immutable`: Nuxeo marks versions and publications so, and a version's `permissions`
+    // enricher still lists `Write` while the server refuses the edit. Web UI hides Edit on both.
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+      not('app.rules.isNote'),
+    ),
   },
   {
     // A Note's body belongs to the inline editor in the View tab, so this pencil
@@ -128,7 +135,12 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     label: 'Edit properties',
     icon: 'edit',
     order: 10,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', 'app.rules.isNote'),
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+      'app.rules.isNote',
+    ),
   },
   {
     id: 'app.toolbar.addToCollection',

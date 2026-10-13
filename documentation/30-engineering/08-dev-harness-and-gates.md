@@ -128,45 +128,45 @@ CI. The checks are whatever its `GUARDRAILS` array registers — 36 at the commi
 listed here in that order. This section said "11 checks" while the array held 35: the table had
 stopped at the general-purpose checks and every i18n and packaging check was added after it.
 
-| Check                                         | Enforces                                                                                                                  |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| `checkThemeTokens`                            | Colour literals come from a themed namespace with a fallback, or declare a `--*` token                                    |
-| `checkDocsNumbering`                          | No duplicate `## n.` section numbers in `docs/`                                                                           |
-| `checkNoReviewCorpusChurn`                    | Review bookkeeping does not travel in a pull request — the findings record lives on Confluence                            |
-| `checkVitestProjects`                         | A project with an `@nx/vitest:test` target has a Vite config                                                              |
-| `checkBlobUrlLifecycle`                       | Every file creating an object URL revokes one — **repo-wide**                                                             |
-| `checkNoNuxeoUrlInImgSrc`                     | No `<img [src]>` bound to a Nuxeo URL                                                                                     |
-| `checkNoAttrPrefixedLiteralAttributes`        | No `[attr.aria-*]`, `[attr.role]` or `[attr.title]` on a literal attribute — a silent accessible-name miss                |
-| `checkTypeSafetyEscapes`                      | Warns on `as unknown as` / `as never`                                                                                     |
-| `checkHardcodedSecrets`                       | Credential-shaped literals                                                                                                |
-| `checkAngularDevAssets`                       | Dev-only assets do not ship                                                                                               |
-| `checkAdfHxWorkaroundIds`                     | A `WORKAROUND(adf-hx): W<n>` marker has a register row **and vice versa**                                                 |
-| `checkNoAdfHxInPublicApi`                     | No adf-hx type reachable through a library barrel, walking the re-export graph                                            |
-| `checkNoHardcodedUiText`                      | No hard-coded user-facing string in any template, repo-wide                                                               |
-| `checkNoHardcodedDescriptorText`              | No hard-coded label in a descriptor — nav entries, actions, columns — which the template check cannot see                 |
-| `checkNoHardcodedDialogText`                  | No hard-coded title, message or button label in a dialog's data object                                                    |
-| `checkNoHardcodedImperativeUiText`            | No hard-coded snackbar, toast or error text built in TypeScript                                                           |
-| `checkTranslateIsInjectedWhereUsed`           | A class using `this.translate` injects `TranslateService` — otherwise a runtime crash on the first error path             |
-| `checkCatalogueValuesAreRenderable`           | A catalogue value is the text a user sees — no HTML entities or markup copied from a template                             |
+| Check                                         | Enforces                                                                                                                                                                                |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `checkThemeTokens`                            | Colour literals come from a themed namespace with a fallback, or declare a `--*` token                                                                                                  |
+| `checkDocsNumbering`                          | No duplicate `## n.` section numbers in `docs/`                                                                                                                                         |
+| `checkNoReviewCorpusChurn`                    | Review bookkeeping does not travel in a pull request — the findings record lives on Confluence                                                                                          |
+| `checkVitestProjects`                         | A project with an `@nx/vitest:test` target has a Vite config                                                                                                                            |
+| `checkBlobUrlLifecycle`                       | Every file creating an object URL revokes one — **repo-wide**                                                                                                                           |
+| `checkNoNuxeoUrlInImgSrc`                     | No `<img [src]>` bound to a Nuxeo URL                                                                                                                                                   |
+| `checkNoAttrPrefixedLiteralAttributes`        | No `[attr.aria-*]`, `[attr.role]` or `[attr.title]` on a literal attribute — a silent accessible-name miss                                                                              |
+| `checkTypeSafetyEscapes`                      | Warns on `as unknown as` / `as never`                                                                                                                                                   |
+| `checkHardcodedSecrets`                       | Credential-shaped literals                                                                                                                                                              |
+| `checkAngularDevAssets`                       | Dev-only assets do not ship                                                                                                                                                             |
+| `checkAdfHxWorkaroundIds`                     | A `WORKAROUND(adf-hx): W<n>` marker has a register row **and vice versa**                                                                                                               |
+| `checkNoAdfHxInPublicApi`                     | No adf-hx type reachable through a library barrel, walking the re-export graph                                                                                                          |
+| `checkNoHardcodedUiText`                      | No hard-coded user-facing string in any template, repo-wide                                                                                                                             |
+| `checkNoHardcodedDescriptorText`              | No hard-coded label in a descriptor — nav entries, actions, columns — which the template check cannot see                                                                               |
+| `checkNoHardcodedDialogText`                  | No hard-coded title, message or button label in a dialog's data object                                                                                                                  |
+| `checkNoHardcodedImperativeUiText`            | No hard-coded snackbar, toast or error text built in TypeScript                                                                                                                         |
+| `checkTranslateIsInjectedWhereUsed`           | A class using `this.translate` injects `TranslateService` — otherwise a runtime crash on the first error path                                                                           |
+| `checkCatalogueValuesAreRenderable`           | A catalogue value is the text a user sees — no HTML entities or markup copied from a template                                                                                           |
 | `checkNoTranslatableDatePatterns`             | No catalogue value is a bare date pattern — every alphabetic run one letter repeated, one of them twice or more — and no template binds a `DatePipe` format that comes from `translate` |
-| `checkNoStaleAgnosticClaim`                   | A comment saying a library has no dependency on something is still true of that library                                   |
-| `checkTranslationCatalogues`                  | Every `i18n/<locale>.json` parses to an object of keys and ends with a newline                                            |
-| `checkCataloguesAreTranslated`                | A non-English catalogue translates something, rather than being a copy of `en.json`                                       |
-| `checkCataloguePlaceholders`                  | A translation keeps every `{{ placeholder }}` its English source has, and adds none                                       |
-| `checkAdvertisedLocalesShip`                  | Every advertised locale ships a catalogue, and the default is one of them                                                 |
-| `checkCrowdinConfig`                          | `crowdin-conf.yml` exists, declares a source, and both sync workflows name it                                             |
-| `checkPackagedConfigIsNotADemo`               | The packaged Marketplace config ships Nuxeo defaults, not a demo rebrand                                                  |
-| `checkInstallerOwnsNoCustomerFile`            | The Marketplace package installs no configuration file, and no copy that refuses to overwrite                             |
-| `checkTranslationContext`                     | Translator context exists for every string, and for no string that no longer exists                                       |
-| `checkTranslatorNotesFlagProductsAndAcronyms` | Notes on strings naming a product say "do not translate", and notes on acronyms expand them                               |
-| `checkPlatformEnglishFallback`                | The English `@nuxeo-satori/platform` ships matches the application's, for exactly the keys the package uses               |
-| `checkTranslatorContextPush`                  | The translator-context push can reach every context file in the repository                                                |
-| `checkNoProseInComponentInputs`               | No prose in a plain attribute on a component — it is an `@Input`, not HTML                                                |
-| `checkNoTemplateSyntaxInDocumentShell`        | No Angular template syntax in `index.html`, which Angular never compiles                                                  |
-| `checkNoRootAbsoluteShippedAssetPaths`        | A shipped asset is referenced relative to `<base href>`, never from the server root — the packaged app lives under a path |
-| `checkShippedDefaultLanguage`                 | The shipped Layer 0 default language is a locale that ships — never the `zz` pseudo-locale                                |
-| `checkAccessibleNameFallbacks`                | Every key bound to an accessible name survives a failed catalogue fetch                                                   |
-| `checkLocaleDataRegistered`                   | Every locale with a catalogue has Angular locale data registered, so dates and numbers format in it                       |
+| `checkNoStaleAgnosticClaim`                   | A comment saying a library has no dependency on something is still true of that library                                                                                                 |
+| `checkTranslationCatalogues`                  | Every `i18n/<locale>.json` parses to an object of keys and ends with a newline                                                                                                          |
+| `checkCataloguesAreTranslated`                | A non-English catalogue translates something, rather than being a copy of `en.json`                                                                                                     |
+| `checkCataloguePlaceholders`                  | A translation keeps every `{{ placeholder }}` its English source has, and adds none                                                                                                     |
+| `checkAdvertisedLocalesShip`                  | Every advertised locale ships a catalogue, and the default is one of them                                                                                                               |
+| `checkCrowdinConfig`                          | `crowdin-conf.yml` exists, declares a source, and both sync workflows name it                                                                                                           |
+| `checkPackagedConfigIsNotADemo`               | The packaged Marketplace config ships Nuxeo defaults, not a demo rebrand                                                                                                                |
+| `checkInstallerOwnsNoCustomerFile`            | The Marketplace package installs no configuration file, and no copy that refuses to overwrite                                                                                           |
+| `checkTranslationContext`                     | Translator context exists for every string, and for no string that no longer exists                                                                                                     |
+| `checkTranslatorNotesFlagProductsAndAcronyms` | Notes on strings naming a product say "do not translate", and notes on acronyms expand them                                                                                             |
+| `checkPlatformEnglishFallback`                | The English `@nuxeo-satori/platform` ships matches the application's, for exactly the keys the package uses                                                                             |
+| `checkTranslatorContextPush`                  | The translator-context push can reach every context file in the repository                                                                                                              |
+| `checkNoProseInComponentInputs`               | No prose in a plain attribute on a component — it is an `@Input`, not HTML                                                                                                              |
+| `checkNoTemplateSyntaxInDocumentShell`        | No Angular template syntax in `index.html`, which Angular never compiles                                                                                                                |
+| `checkNoRootAbsoluteShippedAssetPaths`        | A shipped asset is referenced relative to `<base href>`, never from the server root — the packaged app lives under a path                                                               |
+| `checkShippedDefaultLanguage`                 | The shipped Layer 0 default language is a locale that ships — never the `zz` pseudo-locale                                                                                              |
+| `checkAccessibleNameFallbacks`                | Every key bound to an accessible name survives a failed catalogue fetch                                                                                                                 |
+| `checkLocaleDataRegistered`                   | Every locale with a catalogue has Angular locale data registered, so dates and numbers format in it                                                                                     |
 
 Two of these were **diff-scoped** until 2026-08-24, meaning every violation predating the
 check was permanently exempt — not a rule, a rule for new code. Four real blob-URL leaks

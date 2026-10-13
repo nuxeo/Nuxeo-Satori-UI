@@ -1,0 +1,39 @@
+// NXSAT-332 — standalone stylesheet so the main document-detail bundle stays under the 36 kB cap.
+.version-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  padding: 8px 16px;
+  background: var(--mat-sys-surface-container-high);
+  color: var(--mat-sys-on-surface);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  flex-shrink: 0;
+
+  .version-banner-icon {
+    color: var(--mat-sys-on-surface-variant);
+    font-size: 22px;
+    width: 22px;
+    height: 22px;
+  }
+
+  // Grows to push the actions right; below its basis the actions wrap onto their own line
+  // rather than squeezing each other at 320 CSS pixels (WCAG 1.4.10).
+  .version-banner-text {
+    flex: 1 1 12rem;
+    font-size: 13px;
+    font-weight: 500;
+  }
+
+  .version-banner-latest,
+  .version-banner-restore {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+
+  .version-banner-restore mat-icon {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+  }
+}
