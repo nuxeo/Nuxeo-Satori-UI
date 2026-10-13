@@ -812,14 +812,35 @@ journeyTest('document-detail', async ({ signedIn: page, a11y }) => {
 
   await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
   await emitScreenReport(a11y, journeyReportName('document-detail'));
+});
 
+/**
+ * Document detail — header **More actions** overflow trigger keyboard focus (NXSAT-535).
+ *
+ * Separate journey project so the a11y-scout accumulator stays one scan per worker/report
+ * (`emitScreenReport` requires `pagesScanned.length === 1`). NXENG-808 keeps the Add to
+ * collection pre-scan on `document-detail` above.
+ */
+journeyTest('document-detail-more-actions', async ({ signedIn: page, a11y }) => {
+  await page.goto('/#/browse', { waitUntil: 'networkidle' });
+  const { uid, title } = await firstFileWithMainBlob(page);
+
+  await page.goto(`/#/doc/${uid}`, { waitUntil: 'networkidle' });
+
+  await expect(
+    page.locator('lib-document-detail'),
+    'lib-document-detail must render',
+  ).toBeVisible();
+  await expect(
+    page.locator('lib-document-detail'),
+    `the detail view must show "${title}" — an error panel is visible too, and would scan clean`,
+  ).toContainText(title);
+  await waitForScreenSettled(page, 'lib-document-detail', true);
+  await expectSurfaceUsable(page, 'lib-document-detail', 'document detail');
   await enterDocumentDetailHeaderMoreActionsFocusState(page);
+
   await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
-  await emitScreenReport(
-    a11y,
-    `${journeyReportName('document-detail')}-header-more-actions`,
-    'header More actions overflow trigger focused (NXSAT-535)',
-  );
+  await emitScreenReport(a11y, journeyReportName('document-detail-more-actions'));
 });
 
 // ─────────────────────────── core flows ───────────────────────────
