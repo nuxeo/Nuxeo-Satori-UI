@@ -296,7 +296,6 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "shared-ui.document-viewer.preview": "Preview",
   "shared-ui.document-viewer.preview-frame": "Preview of {{ name }}",
   "shared-ui.document-viewer.preview-not-available": "Preview not available",
-  "shared-ui.document-viewer.remove": "Remove",
   "shared-ui.document-viewer.remove-main-file": "Remove main file",
   "shared-ui.document-viewer.replace-main-file": "Replace main file",
   "shared-ui.document-viewer.resolution": "Resolution",

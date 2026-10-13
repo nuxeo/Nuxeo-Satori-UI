@@ -1,4 +1,4 @@
-@if (loading()) {
+﻿@if (loading()) {
   <div class="detail-loading">
     <nxs-spinner diameter="40" [label]="'document-detail.document-detail.loading' | translate" />
   </div>
@@ -34,7 +34,7 @@
       ></sat-breadcrumbs>
     </div>
     <div class="header-actions">
-      @if (!isTrashed() && supportsTextKnowledgeEnrichment()) {
+      @if (!isTrashed() && !isVersionView() && supportsTextKnowledgeEnrichment()) {
         <div class="ke-action-group">
           <button
             type="button"
@@ -81,7 +81,7 @@
         </div>
       }
 
-      @if (!isTrashed() && supportsImageKnowledgeEnrichment()) {
+      @if (!isTrashed() && !isVersionView() && supportsImageKnowledgeEnrichment()) {
         <div class="ke-action-group">
           <button
             type="button"
@@ -100,7 +100,7 @@
         </div>
       }
 
-      @if (!isTrashed() && showsContentLakeIngestAction()) {
+      @if (!isTrashed() && !isVersionView() && showsContentLakeIngestAction()) {
         @if (contentLakeIngestInFlight() || contentLakePresenceChecking()) {
           <span
             class="content-lake-ingest-loader"
@@ -165,23 +165,30 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
+          [matTooltip]="toolbarActionTooltip(action)"
           [disabled]="!isToolbarActionEnabled(action)"
           disabledInteractive
           [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            toolbarActionLabel(action)
+          }}</span>
+          <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }
       <button
         mat-icon-button
+        type="button"
+        class="toolbar-more-actions-btn"
         [matMenuTriggerFor]="moreMenu"
         [matTooltip]="'document-detail.document-detail.more-actions' | translate"
-        [attr.aria-label]="'document-detail.document-detail.more-actions' | translate"
       >
-        <mat-icon>more_vert</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'document-detail.document-detail.more-actions' | translate
+        }}</span>
+        <mat-icon aria-hidden="true">more_vert</mat-icon>
       </button>
     </div>
 
@@ -246,6 +253,30 @@
         >
           <mat-icon>delete_forever</mat-icon>
           {{ 'document-detail.document-detail.delete-permanently' | translate }}
+        </button>
+      }
+    </div>
+  }
+
+  @if (isVersionView()) {
+    <div class="version-banner">
+      <mat-icon class="version-banner-icon">info</mat-icon>
+      <span class="version-banner-text">{{
+        'document-detail.version-viewing' | translate: { version: versionLabel() }
+      }}</span>
+      <button mat-button type="button" class="version-banner-latest" (click)="showLatestVersion()">
+        {{ 'document-detail.version-go-to-latest' | translate }}
+      </button>
+      @if (canRestoreVersion()) {
+        <button
+          mat-flat-button
+          type="button"
+          class="version-banner-restore"
+          (click)="confirmRestoreVersion()"
+          [disabled]="actionInProgress() === 'restore'"
+        >
+          <mat-icon>restore</mat-icon>
+          {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
         </button>
       }
     </div>
@@ -1461,7 +1492,7 @@
                               />
                             </div>
                           } @else {
-                            @if (doc()?.isCheckedOut && canWriteDoc()) {
+                            @if (doc()?.isCheckedOut && canCreateVersion()) {
                               <button
                                 class="version-dropdown-item version-dropdown-create"
                                 (click)="versionDropdownOpen.set(false); openCreateVersionDialog()"
@@ -1472,45 +1503,45 @@
                                 }}</span>
                               </button>
                             }
-                            <button
-                              class="version-dropdown-item version-dropdown-item--current"
-                              (click)="versionDropdownOpen.set(false)"
-                            >
-                              <span class="version-dropdown-label">{{
-                                'document-detail.version-latest'
-                                  | translate: { version: versionLabel() }
-                              }}</span>
-                            </button>
+                            @if (isVersionView()) {
+                              <button
+                                class="version-dropdown-item version-dropdown-latest"
+                                (click)="showLatestVersion()"
+                              >
+                                <span class="version-dropdown-label">{{
+                                  'document-detail.version-latest-entry' | translate
+                                }}</span>
+                              </button>
+                            } @else {
+                              <button
+                                class="version-dropdown-item version-dropdown-item--current"
+                                (click)="versionDropdownOpen.set(false)"
+                              >
+                                <span class="version-dropdown-label">{{
+                                  'document-detail.version-latest'
+                                    | translate: { version: versionLabel() }
+                                }}</span>
+                              </button>
+                            }
                             @for (v of versions(); track v.uid) {
-                              @if (canWriteDoc()) {
-                                <button class="version-dropdown-item" (click)="restoreVersion(v)">
-                                  <span class="version-dropdown-label">{{ versionString(v) }}</span>
-                                  <span class="version-dropdown-meta">{{
-                                    'document-detail.version-modified-by'
-                                      | translate
-                                        : {
-                                            when: relativeTime(v.lastModified),
-                                            who:
-                                              v.properties['dc:lastContributor'] ??
-                                              ('document-detail.unknown' | translate),
-                                          }
-                                  }}</span>
-                                </button>
-                              } @else {
-                                <div class="version-dropdown-item version-dropdown-item--readonly">
-                                  <span class="version-dropdown-label">{{ versionString(v) }}</span>
-                                  <span class="version-dropdown-meta">{{
-                                    'document-detail.version-modified-by'
-                                      | translate
-                                        : {
-                                            when: relativeTime(v.lastModified),
-                                            who:
-                                              v.properties['dc:lastContributor'] ??
-                                              ('document-detail.unknown' | translate),
-                                          }
-                                  }}</span>
-                                </div>
-                              }
+                              <button
+                                class="version-dropdown-item"
+                                [class.version-dropdown-item--current]="v.uid === doc()?.uid"
+                                [attr.aria-current]="v.uid === doc()?.uid ? 'true' : null"
+                                (click)="openVersion(v)"
+                              >
+                                <span class="version-dropdown-label">{{ versionString(v) }}</span>
+                                <span class="version-dropdown-meta">{{
+                                  'document-detail.version-modified-by'
+                                    | translate
+                                      : {
+                                          when: relativeTime(v.lastModified),
+                                          who:
+                                            v.properties['dc:lastContributor'] ??
+                                            ('document-detail.unknown' | translate),
+                                        }
+                                }}</span>
+                              </button>
                             }
                             @if (versions().length === 0) {
                               <div class="version-dropdown-empty">
@@ -1523,7 +1554,7 @@
                         </div>
                       }
                     </div>
-                  } @else if (canWriteDoc()) {
+                  } @else if (canCreateVersion()) {
                     <button
                       mat-flat-button
                       color="primary"
@@ -1653,7 +1684,7 @@
             }
 
             <div class="prop-field prop-field--tags">
-              <span class="prop-label">{{
+              <span class="prop-label" id="document-detail-inline-tags-label">{{
                 'document-detail.document-detail.tags' | translate
               }}</span>
               @if (canWriteDoc()) {
@@ -1664,7 +1695,7 @@
                 >
                   <mat-chip-grid
                     #tagChipGrid
-                    [attr.aria-label]="'document-detail.document-detail.document-tags' | translate"
+                    [attr.aria-labelledby]="'document-detail-inline-tags-label'"
                   >
                     @for (tag of tags(); track $index) {
                       <mat-chip-row (removed)="removeInlineTag(tag)">
@@ -1683,6 +1714,7 @@
                     }
                     <input
                       name="tagInput"
+                      [attr.aria-labelledby]="'document-detail-inline-tags-label'"
                       [placeholder]="
                         tags().length
                           ? ''

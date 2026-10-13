@@ -791,10 +791,15 @@ export class DocumentDetailService {
     );
   }
 
+  /**
+   * Replace the live document's content with a version's. `checkout: false` leaves it checked
+   * in at that version (`0.1`), as Web UI does; `true` leaves it checked out (`0.2+`), which
+   * reads as unversioned changes the user never made.
+   */
   restoreVersion(versionUid: string): Observable<NuxeoDocument> {
     return this.api.post<NuxeoDocument>(
       `/nuxeo/api/v1/id/${versionUid}/@op/Document.RestoreVersion`,
-      { params: { checkout: true }, context: {} },
+      { params: { checkout: false }, context: {} },
       { 'Content-Type': 'application/json' },
     );
   }
