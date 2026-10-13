@@ -6,7 +6,12 @@ import type {
   NxsAvatarSize,
 } from '@nuxeo-satori/platform/components';
 
-/** `nxs.primitives.avatar` on Satori's `sat-avatar`, with the same accessible name as Material's. */
+/**
+ * `nxs.primitives.avatar` on Satori's `sat-avatar`, with the same accessible name as Material's.
+ *
+ * `sat-avatar` is itself `role="img"` and takes no name, so this host is the one image and
+ * `sat-avatar` is presentational inside it.
+ */
 @Component({
   selector: 'nxs-satori-avatar',
   standalone: true,
@@ -16,9 +21,9 @@ import type {
   host: {
     class: 'nxs-satori-avatar',
     style: 'display: inline-flex',
-    '[attr.role]': "label() ? 'img' : null",
-    '[attr.aria-label]': 'label() || null',
-    '[attr.aria-hidden]': "label() ? null : 'true'",
+    '[attr.role]': "name() ? 'img' : null",
+    '[attr.aria-label]': 'name() || null',
+    '[attr.aria-hidden]': "name() ? null : 'true'",
   },
 })
 export class NxsSatoriAvatarComponent implements NxsAvatarInputs {
@@ -26,6 +31,9 @@ export class NxsSatoriAvatarComponent implements NxsAvatarInputs {
   readonly color = input<NxsAvatarColor>('blue');
   readonly size = input<NxsAvatarSize>('36');
   readonly label = input('');
+
+  /** Material's rule: the label without the whitespace around it, and blank means decorative. */
+  protected readonly name = computed(() => this.label().trim());
 
   /**
    * Material's display value, never empty: at size 24 `sat-avatar` reads `initials()[0]`, which

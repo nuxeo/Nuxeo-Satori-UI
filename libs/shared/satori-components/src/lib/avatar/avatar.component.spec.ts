@@ -45,6 +45,27 @@ describe('NxsAvatarComponent', () => {
     expect(host.getAttribute('aria-hidden')).toBe('true');
   });
 
+  // A translation that resolves to whitespace must not leave an image with no usable name.
+  it.each(['   ', '\t\n', '\u00a0', '\u3000'])(
+    'is decorative, and hidden, when the label is only whitespace (%j)',
+    async (label) => {
+      const host = await render({ initials: 'NK', label });
+      expect(host.hasAttribute('role')).toBe(false);
+      expect(host.hasAttribute('aria-label')).toBe(false);
+      expect(host.getAttribute('aria-hidden')).toBe('true');
+    },
+  );
+
+  it.each(['Zoë Ångström', '李雷', 'نرسيمها كوبولا'])(
+    'is an image named %j, without the whitespace around it',
+    async (name) => {
+      const host = await render({ initials: 'NK', label: ` ${name}\u00a0` });
+      expect(host.getAttribute('role')).toBe('img');
+      expect(host.getAttribute('aria-label')).toBe(name);
+      expect(host.hasAttribute('aria-hidden')).toBe(false);
+    },
+  );
+
   it('defaults to blue at 36px', async () => {
     const host = await render({ initials: 'NK' });
     expect(host.classList).toContain('nxs-avatar--blue');

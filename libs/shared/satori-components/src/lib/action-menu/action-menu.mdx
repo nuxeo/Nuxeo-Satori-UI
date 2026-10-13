@@ -33,10 +33,7 @@ Open the menu and choose an entry: the Actions panel records `selected` with it.
 
 ## Usage
 
-<Source
-  language="typescript"
-  dark
-  code={`import { NxsActionMenuComponent, type NxsMenuAction } from '@nuxeo-satori/platform/components';
+export const usageTs = `import { NxsActionMenuComponent, type NxsMenuAction } from '@nuxeo-satori/platform/components';
 import {
   EXTENSION_SLOTS,
   descriptorLabel,
@@ -44,35 +41,42 @@ import {
 } from '@nuxeo-satori/platform/extensions';
 
 readonly actions = computed<readonly ExtensionActionDescriptor[]>(() =>
-this.extensions.resolve<ExtensionActionDescriptor>(
-EXTENSION_SLOTS.contextMenu,
-this.ruleContext.context(),
-),
+  this.extensions.resolve<ExtensionActionDescriptor>(
+    EXTENSION_SLOTS.contextMenu,
+    this.ruleContext.context(),
+  ),
 );
 
 readonly entries = computed<readonly NxsMenuAction[]>(() =>
-this.actions().map((action) => ({
-id: action.id,
-label: descriptorLabel(action, (key) => this.translate.instant(key)),
-icon: action.icon,
-disabled: !this.extensions.evaluateRule(action.enabledRule, this.ruleContext.context()),
-})),
+  this.actions().map((action) => ({
+    id: action.id,
+    label: descriptorLabel(action, (key) => this.translate.instant(key)),
+    icon: action.icon,
+    disabled: !this.extensions.evaluateRule(action.enabledRule, this.ruleContext.context()),
+  })),
 );
 
 run(entry: NxsMenuAction): void {
-const action = this.actions().find((candidate) => candidate.id === entry.id);
-if (action) this.registry.execute(action, this.ruleContext.context());
-}`}
+  const action = this.actions().find((candidate) => candidate.id === entry.id);
+  if (action) this.registry.execute(action, this.ruleContext.context());
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
 />
+
+export const usageHtml = `<nxs-action-menu
+  [actions]="entries()"
+  [label]="'acme.claims.more-actions' | translate"
+  (selected)="run($event)"
+/>`;
 
 <Source
   language="html"
   dark
-  code={`<nxs-action-menu
-  [actions]="entries()"
-  [label]="'acme.claims.more-actions' | translate"
-  (selected)="run($event)"
-/>`}
+  code={usageHtml}
 />
 
 `actions` and `label` are required. `label` is the button's accessible name and tooltip, already

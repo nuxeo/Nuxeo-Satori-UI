@@ -50,6 +50,8 @@ export const NXS_PERMISSIONS_PANEL_ID = 'nxs.components.permissionsPanel';
 
 type LoadError = 'denied' | 'not-found' | 'failed';
 
+let nextId = 0;
+
 /** One row of the local table: an ACE the server holds, or one the user is adding. */
 interface LocalItem {
   readonly key: string;
@@ -129,6 +131,9 @@ export class NxsPermissionsPanelComponent {
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);
+
+  /** Starts every id the template sets, so two panels on one page never share one. */
+  protected readonly idPrefix = `nxs-permissions-${nextId++}`;
 
   protected readonly localColumns = [
     'principal',

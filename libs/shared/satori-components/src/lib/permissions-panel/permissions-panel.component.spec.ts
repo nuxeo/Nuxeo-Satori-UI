@@ -1,5 +1,6 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { By } from '@angular/platform-browser';
 import { Subject, map, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -107,6 +108,16 @@ class HostComponent {
   readonly uid = signal('doc-1');
   readonly changed = vi.fn();
 }
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  template: `
+    <nxs-permissions-panel documentId="doc-1" />
+    <nxs-permissions-panel documentId="doc-2" />
+  `,
+})
+class TwoPanelsHostComponent {}
 
 describe('NxsPermissionsPanelComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
@@ -648,6 +659,54 @@ describe('NxsPermissionsPanelComponent', () => {
       });
     });
 
+    it('names a new grant the server refused, keeps it staged as new, and sends it again on the next save', async () => {
+      const withAnn = serverDoc([
+        { username: 'parity-user', permission: 'AddChildren', label: 'Parity User' },
+        { username: 'members', permission: 'ReadWrite', label: 'Members group' },
+        { username: 'ann', permission: 'ReadWrite' },
+      ]);
+      await mount(PARITY, PARITY, PARITY, PARITY, withAnn);
+      documents.addPermission.mockReturnValueOnce(
+        throwError(() => ({ status: 400, error: { message: 'User ann does not exist' } })),
+      );
+      panel()['openAdd']();
+      panel()['onPrincipalSelected']({
+        id: 'ann',
+        displayLabel: 'Ann Smith',
+        type: 'USER_TYPE',
+        prefixed_id: 'user:ann',
+      });
+      panel()['editorPermission'].set('ReadWrite');
+      panel()['applyEditor']();
+      await render();
+      buttonByText('Save')?.click();
+      await render();
+
+      const alert = el().querySelector('[role="alert"]')?.textContent ?? '';
+      expect(alert).toContain('Saved 0 of 1 changes. The server refused the next one:');
+      expect(alert).toContain('ann — Edit (ReadWrite)');
+      expect(alert).toContain('User ann does not exist');
+      expect(alert).not.toContain("You don't have permission");
+      // Nothing was written, so the host has nothing to re-read.
+      expect(fixture.componentInstance.changed).not.toHaveBeenCalled();
+      expect(text()).toContain('1 unsaved change');
+      const pendingRow = Array.from(rows(0)).at(-1)?.textContent?.replace(/\s+/g, ' ') ?? '';
+      expect(pendingRow).toMatch(/Ann Smith\s*ann/);
+      expect(pendingRow).toContain('New');
+      expect(addedItem()).toMatchObject({ principal: 'ann', permission: 'ReadWrite' });
+
+      buttonByText('Save')?.click();
+      await render();
+      expect(documents.addPermission).toHaveBeenCalledTimes(2);
+      expect(documents.addPermission).toHaveBeenLastCalledWith(
+        'doc-1',
+        expect.objectContaining({ username: 'ann', permission: 'ReadWrite' }),
+      );
+      expect(panel()['outcome']()?.kind).toBe('saved');
+      expect(panel()['pendingCount']()).toBe(0);
+      expect(el().querySelector('[role="alert"]')).toBeNull();
+    });
+
     it('keeps the refused change and every change after it, which were never sent, staged', async () => {
       const afterRemoval = serverDoc([{ username: 'members', permission: 'ReadWrite' }], {
         inherited: [{ username: 'Administrator', permission: 'Everything' }],
@@ -1132,6 +1191,53 @@ describe('NxsPermissionsPanelComponent', () => {
       expect(panel()['snapshot']()?.uid).toBe('doc-2');
       expect(text()).toContain('Other document');
     });
+  });
+
+  it('keeps its ids to itself when two panels share a page', async () => {
+    const withOtherList = (uid: string) => {
+      const doc = serverDoc([{ username: 'members', permission: 'ReadWrite' }], {
+        uid,
+        inherited: [{ username: 'Administrator', permission: 'Everything' }],
+      });
+      (contextOf(doc)['acls'] as unknown[]).push({
+        name: 'workflow-acl',
+        aces: [aceOf({ username: 'reviewers', permission: 'Write' })],
+      });
+      return doc;
+    };
+    documents.getDocumentPermissions.mockImplementation((uid) => of(withOtherList(uid)));
+    const page = TestBed.createComponent(TwoPanelsHostComponent);
+    page.detectChanges();
+    await page.whenStable();
+    const panels = page.debugElement.queryAll(By.directive(NxsPermissionsPanelComponent));
+    expect(panels).toHaveLength(2);
+    // With the Add form open, every id the template sets is on the page.
+    for (const each of panels)
+      (each.componentInstance as NxsPermissionsPanelComponent)['openAdd']();
+    page.detectChanges();
+    await page.whenStable();
+
+    const ids = Array.from(
+      (page.nativeElement as HTMLElement).querySelectorAll('[id]'),
+      (node) => node.id,
+    );
+    expect(ids.filter((id, index) => ids.indexOf(id) !== index)).toEqual([]);
+    for (const each of panels) {
+      const root = each.nativeElement as HTMLElement;
+      const labelled = Array.from(root.querySelectorAll('[aria-labelledby], label[for]'));
+      expect(root.querySelectorAll('section[aria-labelledby]')).toHaveLength(3);
+      expect(root.querySelectorAll('table[aria-labelledby]')).toHaveLength(3);
+      expect(root.querySelector('form[aria-labelledby]')).not.toBeNull();
+      for (const node of labelled) {
+        const refs = `${node.getAttribute('aria-labelledby') ?? ''} ${node.getAttribute('for') ?? ''}`;
+        for (const id of refs.split(/\s+/).filter(Boolean)) {
+          expect(root.contains(document.getElementById(id)), `#${id} inside its own panel`).toBe(
+            true,
+          );
+        }
+      }
+    }
+    page.destroy();
   });
 
   it('names an entry with no principal, and a failure with no reason', async () => {

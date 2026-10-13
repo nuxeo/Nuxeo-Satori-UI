@@ -139,6 +139,69 @@ describe('NxsRichTooltipComponent', () => {
     expect(new Set(ids).size).toBe(2);
   });
 
+  // jsdom has no layout, so each case states the geometry a browser would report: a viewport of
+  // `viewport` px, the component's box at `left`–`right`, and a panel `panel` px wide.
+  describe('inside a narrow viewport', () => {
+    function layout(geometry: { viewport: number; left: number; right: number; panel: number }) {
+      vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(geometry.viewport);
+      vi.spyOn(required<HTMLElement>('nxs-rich-tooltip'), 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(geometry.left, 0, geometry.right - geometry.left, 40),
+      );
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (
+        this: HTMLElement,
+      ) {
+        return this.classList.contains('nxs-rich-tooltip__panel') ? geometry.panel : 0;
+      });
+    }
+
+    async function openPanel(): Promise<HTMLElement> {
+      trigger().click();
+      await settle();
+      return required<HTMLElement>('.nxs-rich-tooltip__panel');
+    }
+
+    afterEach(() => vi.restoreAllMocks());
+
+    it('stays where it opens when it fits', async () => {
+      layout({ viewport: 1280, left: 100, right: 140, panel: 320 });
+      expect((await openPanel()).style.translate).toBe('');
+    });
+
+    it('moves back inside the viewport from its inline-end edge', async () => {
+      layout({ viewport: 320, left: 280, right: 320, panel: 304 });
+      expect((await openPanel()).style.translate).toBe('-272px');
+    });
+
+    it('keeps clear of the inline-start edge', async () => {
+      layout({ viewport: 320, left: 0, right: 40, panel: 200 });
+      expect((await openPanel()).style.translate).toBe('8px');
+    });
+
+    describe('right to left', () => {
+      beforeEach(() => required<HTMLElement>('nxs-rich-tooltip').setAttribute('dir', 'rtl'));
+
+      it('opens toward the left, and moves back inside from the left edge', async () => {
+        layout({ viewport: 320, left: 0, right: 40, panel: 200 });
+        expect((await openPanel()).style.translate).toBe('168px');
+      });
+
+      it('keeps clear of the right edge', async () => {
+        layout({ viewport: 320, left: 280, right: 320, panel: 200 });
+        expect((await openPanel()).style.translate).toBe('-8px');
+      });
+    });
+
+    it('moves again when the window is resized while it is open', async () => {
+      layout({ viewport: 1280, left: 280, right: 320, panel: 304 });
+      const opened = await openPanel();
+      expect(opened.style.translate).toBe('');
+      layout({ viewport: 320, left: 280, right: 320, panel: 304 });
+      window.dispatchEvent(new Event('resize'));
+      await settle();
+      expect(opened.style.translate).toBe('-272px');
+    });
+  });
+
   it('refuses to render without its text inputs', () => {
     const bare = TestBed.createComponent(NxsRichTooltipComponent);
     expect(() => bare.detectChanges()).toThrow(/NG0950/);

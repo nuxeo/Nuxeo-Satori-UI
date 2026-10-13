@@ -1,6 +1,8 @@
+import type { Type } from '@angular/core';
 import { Markdown, Source, Title, useOf } from '@storybook/addon-docs/blocks';
 import { createElement as h, Fragment, type ReactElement, type ReactNode } from 'react';
 
+import { apiBindings, apiMethods, type ApiBinding } from './api-members';
 import {
   compodoc,
   type CompodocInterface,
@@ -56,29 +58,51 @@ function table(headers: readonly string[], rows: readonly (readonly ReactNode[])
 const heading = (level: 'h2' | 'h3', id: string, text: string): ReactElement =>
   h(level, { id }, text);
 
-function inputsTable(inputs: readonly CompodocMember[]): ReactNode {
+/** A binding's JSDoc, and for a `model()` how the two halves of `[(name)]` fit together. */
+function bindingDescription(binding: ApiBinding, side: 'input' | 'output'): ReactNode {
+  const text = binding.doc ? description(binding.doc) : NONE;
+  if (!binding.twoWay) return text;
+  const twoWay = code(`[(${binding.twoWay})]`);
+  const note =
+    side === 'input'
+      ? h('p', null, 'Two-way: ', twoWay, ' binds it with ', code(`${binding.twoWay}Change`), '.')
+      : h('p', null, 'Emits the new value of ', code(binding.twoWay), ', for ', twoWay, '.');
+  return h(Fragment, null, text, note);
+}
+
+function inputsTable(inputs: readonly ApiBinding[]): ReactNode {
   if (inputs.length === 0) return h('p', null, 'None.');
   return table(
     ['Name', 'Type', 'Required', 'Default', 'Description'],
     inputs.map((input) => [
       code(input.name),
-      input.type ? code(input.type) : NONE,
-      input.required ? 'Yes' : 'No',
-      !input.required && input.defaultValue !== undefined ? code(input.defaultValue) : NONE,
-      description(input),
+      input.doc?.type ? code(input.doc.type) : NONE,
+      input.doc?.required ? 'Yes' : 'No',
+      !input.doc?.required && input.doc?.defaultValue !== undefined
+        ? code(input.doc.defaultValue)
+        : NONE,
+      bindingDescription(input, 'input'),
     ]),
   );
 }
 
-function outputsTable(outputs: readonly CompodocMember[]): ReactNode {
+function outputsTable(outputs: readonly ApiBinding[]): ReactNode {
   if (outputs.length === 0) return h('p', null, 'None.');
   return table(
     ['Name', 'Emits', 'Description'],
     outputs.map((output) => [
       code(output.name),
-      output.type ? code(output.type) : NONE,
-      description(output),
+      output.doc?.type ? code(output.doc.type) : NONE,
+      bindingDescription(output, 'output'),
     ]),
+  );
+}
+
+function methodsTable(methods: readonly CompodocMethod[]): ReactNode {
+  if (methods.length === 0) return h('p', null, 'None.');
+  return table(
+    ['Method', 'Description'],
+    methods.map((method) => [code(signature(method)), description(method)]),
   );
 }
 
@@ -160,14 +184,15 @@ function namedInterfaces(typeTexts: readonly string[]): CompodocInterface[] {
 /**
  * The API page: the `autodocs` page of every story file, renamed in `main.ts`.
  *
- * Every row is read from Compodoc's output for the component the meta names — its inputs with
- * their type, whether they are required, their default and their JSDoc, its outputs with what they
- * emit, and the library interfaces those types use — so the page cannot drift from the component.
- * What the component is for and how to use it is on its Overview page.
+ * The inputs and outputs are the ones Angular's compiled metadata gives the component the meta
+ * names, under the names a template binds — an alias, or `<name>Change` for a `model()` — and each
+ * row's type, required flag, default and JSDoc are Compodoc's, as are its public methods and the
+ * library interfaces those types use, so the page cannot drift from the component. What the
+ * component is for and how to use it is on its Overview page.
  */
 export function ApiPage(): ReactElement {
   const { preparedMeta } = useOf('meta', ['meta']);
-  const component = preparedMeta.component as { readonly name?: string } | undefined;
+  const component = preparedMeta.component as Type<unknown> | undefined;
   const parameters = (preparedMeta.parameters['docs'] as { api?: ApiParameters } | undefined)?.api;
   const entry = compodoc.components.find((candidate) => candidate.name === component?.name);
 
@@ -185,11 +210,14 @@ export function ApiPage(): ReactElement {
     );
   }
 
-  const inputs = entry.inputsClass ?? [];
-  const outputs = entry.outputsClass ?? [];
+  const { inputs, outputs } = apiBindings(component, entry);
+  const methods = apiMethods(entry);
   const types = namedInterfaces([
-    ...inputs.map((input) => input.type ?? ''),
-    ...outputs.map((output) => output.type ?? ''),
+    ...[...inputs, ...outputs].map((binding) => binding.doc?.type ?? ''),
+    ...methods.flatMap((method) => [
+      ...(method.args ?? []).map((arg) => arg.type ?? ''),
+      method.returnType ?? '',
+    ]),
     ...(parameters?.types ?? []),
   ]);
 
@@ -200,10 +228,10 @@ export function ApiPage(): ReactElement {
     h(
       'p',
       null,
-      'The inputs and outputs of ',
+      'The inputs, outputs and public methods of ',
       code(`<${entry.selector ?? component.name}>`),
-      ', read from the component’s source by Compodoc. Its Overview page says what it is for and ',
-      'how to use it.',
+      ', under the names a template binds; their types, defaults and descriptions are read from ',
+      'the component’s source by Compodoc. Its Overview page says what it is for and how to use it.',
     ),
     h(Source, {
       language: 'typescript',
@@ -214,6 +242,8 @@ export function ApiPage(): ReactElement {
     inputsTable(inputs),
     heading('h2', 'outputs', 'Outputs'),
     outputsTable(outputs),
+    heading('h2', 'methods', 'Methods'),
+    methodsTable(methods),
     types.length > 0 ? heading('h2', 'types', 'Types') : null,
     ...types.map(interfaceSection),
   );

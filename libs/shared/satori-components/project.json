@@ -14,7 +14,7 @@
       "options": {
         "command": "compodoc -p libs/shared/satori-components/tsconfig.lib.json -e json -d libs/shared/satori-components --disablePrivate --disableProtected --disableInternal --disableLifeCycleHooks --disableSourceCode --disableTemplateTab --disableStyleTab"
       },
-      "$comment": "Writes the gitignored `documentation.json` the API pages are read from, leaving out private, protected, `@internal` and lifecycle members and the source, templates and styles Storybook does not read. `typecheck`, `storybook` and `build-storybook` depend on it, so the arguments are written once and `typecheck` compares the shape in `.storybook/compodoc.ts` with the JSON Compodoc writes; no declaration stands in for a missing file."
+      "$comment": "Writes the gitignored `documentation.json` the API pages are read from, leaving out private, protected, `@internal` and lifecycle members and the source, templates and styles Storybook does not read. `typecheck`, `test`, `storybook` and `build-storybook` depend on it, so the arguments are written once and `typecheck` compares the shape in `.storybook/compodoc.ts` with the JSON Compodoc writes; no declaration stands in for a missing file."
     },
     "typecheck": {
       "executor": "nx:run-commands",
@@ -25,14 +25,16 @@
       "options": {
         "command": "ngc -p libs/shared/satori-components/tsconfig.lib.json --outDir dist/out-tsc/libs/shared/satori-components && tsc -p libs/shared/satori-components/.storybook/tsconfig.json --noEmit"
       },
-      "$comment": "The second half type-checks the stories and the `.storybook/` sources, which `tsconfig.lib.json` excludes and Vitest never compiles."
+      "$comment": "The second half type-checks the stories and the `.storybook/` sources, which `tsconfig.lib.json` excludes. Vitest runs `.storybook/api-members.spec.ts` and the helper it imports, but strips their types rather than checking them."
     },
     "test": {
       "executor": "@nx/vitest:test",
+      "dependsOn": ["compodoc"],
       "outputs": ["{options.reportsDirectory}"],
       "options": {
         "reportsDirectory": "coverage/libs/shared/satori-components"
-      }
+      },
+      "$comment": "Depends on `compodoc` for `.storybook/api-members.spec.ts`, which checks the API page's rows against both Compodoc's `documentation.json` and Angular's compiled metadata."
     },
     "lint": {
       "executor": "@nx/eslint:lint"

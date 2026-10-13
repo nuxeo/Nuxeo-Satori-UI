@@ -28,16 +28,22 @@ the page title.
 
 ## Usage
 
+export const usageTs = `import { NxsBreadcrumbsComponent, type NxsBreadcrumbItem } from '@nuxeo-satori/platform/components';
+
+protected readonly trail: NxsBreadcrumbItem[] = [
+  { label: 'Domain', routerLink: ['/browse'], queryParams: { path: '/default-domain' } },
+  {
+    label: 'Workspaces',
+    routerLink: ['/browse'],
+    queryParams: { path: '/default-domain/workspaces' },
+  },
+  { label: 'Contracts' },
+];`;
+
 <Source
   language="typescript"
   dark
-  code={`import { NxsBreadcrumbsComponent, type NxsBreadcrumbItem } from '@nuxeo-satori/platform/components';
-
-protected readonly trail: NxsBreadcrumbItem[] = [
-{ label: 'Domain', routerLink: ['/browse'], queryParams: { path: '/default-domain' } },
-{ label: 'Workspaces', routerLink: ['/browse'], queryParams: { path: '/default-domain/workspaces' } },
-{ label: 'Contracts' },
-];`}
+  code={usageTs}
 />
 
 <Source
@@ -54,13 +60,15 @@ already provides. Pass labels already translated.
 `provideNxsComponents()` registers the breadcrumbs as `nxs.primitives.breadcrumbs`, exported as
 `NXS_PRIMITIVE_IDS.breadcrumbs`. Render the ID with the same inputs:
 
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="breadcrumbsId"
+  [componentInputs]="{ items: trail, label: 'Breadcrumbs' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet
-  [componentId]="breadcrumbsId"
-  [componentInputs]="{ items: trail, label: 'Breadcrumbs' }"
-/>`}
+  code={byRegisteredIdHtml}
 />
 
 ## Examples
@@ -107,13 +115,14 @@ What looks and behaves differently:
 
 - **Long trails.** Satori's breadcrumbs collapse the middle of a trail that does not fit into a menu.
   The built-in breadcrumbs wrap onto further lines instead.
-- **Landmark name.** Satori's breadcrumbs name the landmark from Satori's own translations and do not
-  read `label`. The built-in breadcrumbs use `label`.
+- **Landmark name.** Both name the landmark from `label`. Without one, Satori's breadcrumbs use
+  Satori's own translation and the built-in breadcrumbs leave the landmark unnamed.
 - **Styling.** Satori's breadcrumbs use Satori's type, colours and chevron icon. The built-in
   breadcrumbs use your Material theme.
 
 Satori's breadcrumbs need `provideSatori()` for their icon and Satori's translations loaded in
-ngx-translate; without the translations the landmark's name shows as a raw key.
+ngx-translate; without the translations the "Show more breadcrumbs" button's name, and the
+landmark's name when `label` is blank, show as raw keys.
 
 This Storybook is built without access to GitHub Packages, so every example here shows the built-in
 breadcrumbs. Satori's breadcrumbs are shown in Satori's documentation.

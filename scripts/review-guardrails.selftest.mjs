@@ -7399,6 +7399,375 @@ expectGreen(
   }),
 );
 
+// A multi-line code sample lives in an `export const`, because MDX strips leading spaces from an
+// attribute's continuation lines; what it holds is code, not page structure.
+expectRed(
+  'an Overview whose missing section appears only inside an exported code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      sections: NXS_OVERVIEW_SECTIONS.slice(0, 4),
+      extra: 'export const sampleTs = `const a = 1;\n## Accessibility\n`;\n',
+    }),
+  }),
+  null,
+  /has no `## Accessibility` section/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'pipes inside an exported code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      extra: 'export const sampleTs = `type A =\n  | a | b |\n  | c | d |`;\n',
+    }),
+  }),
+);
+
+/*
+ * A component the library ships without exporting it: a module the barrel exports opens it, as
+ * `NxsToastService` opens `NxsToastComponent`. Removing both its stories and its Overview used to
+ * leave both checks green, because each read only the components the barrel names.
+ */
+const NXS_NOTICE = `${NXS_ROOT}/src/lib/notice`;
+const NXS_NOTICE_STORY = `${NXS_NOTICE}/notice.stories.ts`;
+const NXS_NOTICE_OVERVIEW = `${NXS_NOTICE}/notice.mdx`;
+const nxsNoticeStory = (imports = "import { NxsNoticeService } from './notice.service';") =>
+  `import type { Meta, StoryObj } from '@storybook/angular';\n${imports}\n` +
+  "const meta: Meta = { title: 'States/Notice' };\nexport default meta;\n" +
+  'export const Shown: StoryObj = { render: () => ({ props: { open: NxsNoticeService } }) };\n';
+// The service module also exports a constant that opens nothing, as `NXS_TOAST_DURATION` does.
+const NXS_NOTICE_LIB = (extra = {}) => ({
+  [`${NXS_ROOT}/src/index.ts`]:
+    "export { NxsThingComponent } from './lib/thing/thing.component';\n" +
+    'export {\n  NxsNoticeService,\n  provideNxsNotice,\n  NXS_NOTICE_DURATION,\n' +
+    "} from './lib/notice/notice.service';\n",
+  [`${NXS_NOTICE}/notice.component.ts`]:
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'nxs-notice', standalone: true, template: '' })\n" +
+    'export class NxsNoticeComponent {}\n',
+  [`${NXS_NOTICE}/notice.service.ts`]:
+    "import { Injectable } from '@angular/core';\n" +
+    "import { NxsNoticeComponent } from './notice.component';\n" +
+    'export const NXS_NOTICE_DURATION = 4000;\n' +
+    '@Injectable()\nexport class NxsNoticeService {\n  readonly content = NxsNoticeComponent;\n}\n' +
+    'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+  ...extra,
+});
+const nxsNoticeOverview = (imports = "import * as Stories from './notice.stories';") =>
+  nxsOverview({ imports, canvas: '<Canvas of={Stories.Shown} />' });
+
+expectRed(
+  'a component a service opens, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory(), ...NXS_NOTICE_LIB() }),
+  null,
+  /ships `NxsNoticeComponent` \(.*notice\.component\.ts\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no story documents it/,
+);
+
+expectGreen(
+  'a component a service opens, with a story importing the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({ [NXS_NOTICE_STORY]: nxsNoticeStory() }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, with a story importing it through the published entry point',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { NxsNoticeService } from '@nuxeo-satori/platform/components';",
+      ),
+    }),
+  }),
+);
+
+// A library whose only components are ones a service opens is held to the same rule.
+const NXS_SERVICE_ONLY_BARREL = {
+  [`${NXS_ROOT}/src/index.ts`]:
+    'export {\n  NxsNoticeService,\n  provideNxsNotice,\n  NXS_NOTICE_DURATION,\n' +
+    "} from './lib/notice/notice.service';\n",
+};
+
+expectRed(
+  'a library that exports no component and ships one through a service, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK(NXS_NOTICE_LIB(NXS_SERVICE_ONLY_BARREL)),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a library that exports no component and ships one through a service, with no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(NXS_NOTICE_LIB({ ...NXS_SERVICE_ONLY_BARREL, [NXS_NOTICE_STORY]: nxsNoticeStory() })),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+expectGreen(
+  'a library that exports no component and ships one through a service, storied and documented',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      ...NXS_SERVICE_ONLY_BARREL,
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+);
+
+// A namespace import of a component module opens what it exports, as a named import does.
+const NXS_NOTICE_SERVICE_VIA = (importLine, use) => ({
+  [`${NXS_NOTICE}/notice.service.ts`]:
+    `import { Injectable } from '@angular/core';\n${importLine}\n` +
+    'export const NXS_NOTICE_DURATION = 4000;\n' +
+    `@Injectable()\nexport class NxsNoticeService {\n  readonly content = ${use};\n}\n` +
+    'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+});
+
+// What opens the component is the export whose declaration reaches it, not any sibling export.
+expectRed(
+  'a component a service opens, whose only story imports a constant that opens nothing',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory("import { NXS_NOTICE_DURATION } from './notice.service';"),
+    }),
+  }),
+  null,
+  /ships `NxsNoticeComponent` \(.*\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no story documents it/,
+);
+
+expectRed(
+  'a component a service opens, whose Overview attaches to a story importing a constant that opens nothing',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { NXS_NOTICE_DURATION } from '@nuxeo-satori/platform/components';",
+      ),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, with a story importing only the provider that returns the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory("import { provideNxsNotice } from './notice.service';"),
+    }),
+  }),
+);
+
+expectRed(
+  'a component a service opens through a namespace import, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB(
+      NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+    ),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a component a service opens through a namespace import, with neither a story nor an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB(
+      NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+    ),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+expectGreen(
+  'a component a service opens through a namespace import, with a story importing the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      ...NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+    }),
+  }),
+);
+
+// A default import cannot be followed to the class it names, so it is refused, not read as nothing.
+expectRed(
+  'a service that imports the default export of a component module',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      ...NXS_NOTICE_SERVICE_VIA("import Notice from './notice.component';", 'Notice'),
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+    }),
+  }),
+  null,
+  /notice\.service\.ts imports the default export of .*notice\.component\.ts, which exports components, so which component it opens was not read/,
+);
+
+// A type-only import is erased, so a story that has one opens nothing.
+expectRed(
+  'a component a service opens, whose only story imports the service as a type',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import type { NxsNoticeService } from './notice.service';",
+      ),
+    }),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+// A story of another component that happens to use the service does not document what it opens.
+expectRed(
+  'a component a service opens, whose only story names another component',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports:
+        "import { NxsThingComponent } from './thing.component';\n" +
+        "import { NxsNoticeService } from '../notice/notice.service';",
+    }),
+    ...NXS_NOTICE_LIB(),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+// A component an exported component's own module uses is part of that component, not shipped.
+falsePositiveControls += 1;
+expectGreen(
+  "a component imported by an exported component's module, with no story of its own",
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_COMPONENT]: nxsComponent({ imports: "import { NxsPartComponent } from './part';" }),
+    [`${NXS_ROOT}/src/lib/thing/part.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-part', standalone: true, template: '' })\n" +
+      'export class NxsPartComponent {}\n',
+  }),
+);
+
+// Exporting a constant beside the component does not make the component's module an opener.
+falsePositiveControls += 1;
+expectGreen(
+  "a component imported by an exported component's module that also exports a constant",
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [`${NXS_ROOT}/src/index.ts`]:
+      "export { NXS_THING_ID, NxsThingComponent } from './lib/thing/thing.component';\n",
+    [NXS_COMPONENT]:
+      nxsComponent({ imports: "import { NxsPartComponent } from './part';" }) +
+      "export const NXS_THING_ID = 'nxs.components.thing';\n",
+    [`${NXS_ROOT}/src/lib/thing/part.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-part', standalone: true, template: '' })\n" +
+      'export class NxsPartComponent {}\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a service that imports a component only as a type',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [`${NXS_NOTICE}/notice.service.ts`]:
+        "import { Injectable } from '@angular/core';\n" +
+        "import type { NxsNoticeComponent } from './notice.component';\n" +
+        '@Injectable()\nexport class NxsNoticeService {\n  content?: NxsNoticeComponent;\n}\n' +
+        'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+    }),
+  }),
+);
+
+expectRed(
+  'a component a service opens, with neither a story nor an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(NXS_NOTICE_LIB()),
+  null,
+  /ships `NxsNoticeComponent` \(.*notice\.component\.ts\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no Overview page documents it/,
+);
+
+expectGreen(
+  'a component a service opens, with a story importing the service and its Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+);
+
+expectRed(
+  'a component a service opens, whose Overview attaches to a story importing the service as a type',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { type NxsNoticeService } from './notice.service';",
+      ),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+// An Overview counts for what its own story file opens, not for whatever sits beside it.
+expectRed(
+  'a component a service opens, whose only Overview attaches to a story file that does not open it',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE,
+      [`${NXS_ROOT}/src/lib/by-id.mdx`]: nxsOverview({
+        imports: "import * as Stories from './by-id.stories';",
+        canvas: '<Canvas of={Stories.Registered} />',
+      }),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
 // `/components-satori` — the one place in the family allowed to import @hylandsoftware/satori-ui
 
 const NXS_SAT_ROOT = 'libs/shared/satori-components-satori';

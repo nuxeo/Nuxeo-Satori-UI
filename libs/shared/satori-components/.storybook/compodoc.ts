@@ -18,6 +18,7 @@ export interface CompodocComponent {
   readonly selector?: string;
   readonly inputsClass?: readonly CompodocMember[];
   readonly outputsClass?: readonly CompodocMember[];
+  readonly methodsClass?: readonly CompodocMethod[];
 }
 
 export interface CompodocInterface {
@@ -26,7 +27,7 @@ export interface CompodocInterface {
   readonly properties?: readonly CompodocMember[];
 }
 
-/** One method of a service, as Compodoc reports it. */
+/** One public method of a service or component, as Compodoc reports it. */
 export interface CompodocMethod {
   readonly name: string;
   readonly args?: readonly {
@@ -54,7 +55,7 @@ export interface CompodocJson {
 
 /**
  * Compodoc's output for the library, written by the project's `compodoc` target, which
- * `typecheck`, `storybook` and `build-storybook` run first. TypeScript checks the JSON Compodoc
+ * `typecheck`, `test`, `storybook` and `build-storybook` run first. TypeScript checks the JSON Compodoc
  * wrote against this shape, so a field the pages read that Compodoc writes differently fails
  * `typecheck` rather than rendering an empty column.
  */

@@ -52,9 +52,18 @@
   );
 }
 
+// No theme role is teal, so a teal hue is tinted toward the theme's surface and text, which keeps
+// it teal in light and dark themes alike. 20% and 65% hold 4.5:1 on Material's light and dark.
 :host(.nxs-avatar--teal) {
-  --nxs-avatar-background: var(--nxs-avatar-teal-background, var(--mat-sys-secondary-container));
-  --nxs-avatar-foreground: var(--nxs-avatar-teal-foreground, var(--mat-sys-on-secondary-container));
+  --nxs-avatar-teal: #008080;
+  --nxs-avatar-background: var(
+    --nxs-avatar-teal-background,
+    color-mix(in srgb, var(--nxs-avatar-teal) 20%, var(--mat-sys-surface))
+  );
+  --nxs-avatar-foreground: var(
+    --nxs-avatar-teal-foreground,
+    color-mix(in srgb, var(--nxs-avatar-teal) 65%, var(--mat-sys-on-surface))
+  );
 }
 
 :host(.nxs-avatar--green) {

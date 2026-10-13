@@ -18,6 +18,8 @@ clutter the page if it were always shown. For one word or a short phrase, a plai
   panel does not cover the page or trap focus.
 - **Announced when it opens.** The panel opens inside a live region, so a screen reader reads it
   without the user moving to it.
+- **Stays on screen.** The panel is never wider than the window, and moves sideways to stay inside
+  it when the button sits near either edge, in left-to-right and right-to-left layouts alike.
 - **Any icon.** `info` by default; any Material Icons ligature through `icon`.
 - **Replaceable by ID.** It is registered as `nxs.primitives.richTooltip`, so Satori's rich tooltip
   or your own can take its place.
@@ -36,14 +38,16 @@ Select the button to open the panel. The **Open** story in the sidebar shows it 
   code={`import { NxsRichTooltipComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-<Source
-  language="html"
-  dark
-  code={`<nxs-rich-tooltip
+export const usageHtml = `<nxs-rich-tooltip
   [heading]="'acme.versioning.title' | translate"
   [content]="'acme.versioning.help' | translate"
   [triggerLabel]="'acme.versioning.about' | translate"
-/>`}
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 `heading`, `content` and `triggerLabel` are required, already translated. Used directly, the rich
@@ -54,13 +58,15 @@ tooltip needs no providers.
 `provideNxsComponents()` registers the rich tooltip as `nxs.primitives.richTooltip`, exported as
 `NXS_PRIMITIVE_IDS.richTooltip`:
 
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="tooltipId"
+  [componentInputs]="{ heading: 'Versioning', content: 'A new version is created each time you check in.', triggerLabel: 'About versioning' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet
-  [componentId]="tooltipId"
-  [componentInputs]="{ heading: 'Versioning', content: 'A new version is created each time you check in.', triggerLabel: 'About versioning' }"
-/>`}
+  code={byRegisteredIdHtml}
 />
 
 ## Examples

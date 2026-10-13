@@ -37,31 +37,42 @@ The listing the server failed to answer. Press **Retry**: the Actions panel reco
 
 ## Usage
 
-<Source
-  language="typescript"
-  dark
-  code={`import { NxsErrorStateComponent, nxsErrorStatus, type NxsErrorStatus } from '@nuxeo-satori/platform/components';
+export const usageTs = `import {
+  NxsErrorStateComponent,
+  nxsErrorStatus,
+  type NxsErrorStatus,
+} from '@nuxeo-satori/platform/components';
 
 readonly error = signal<string | null>(null);
 readonly errorStatus = signal<NxsErrorStatus>(500);
 
 load(): void {
-this.claims.list().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-next: (rows) => this.rows.set(rows),
-error: (err: unknown) => {
-this.errorStatus.set(nxsErrorStatus(err));
-this.error.set(this.translate.instant('acme.claims.failed-to-load'));
-},
-});
-}`}
+  this.claims
+    .list()
+    .pipe(takeUntilDestroyed(this.destroyRef))
+    .subscribe({
+      next: (rows) => this.rows.set(rows),
+      error: (err: unknown) => {
+        this.errorStatus.set(nxsErrorStatus(err));
+        this.error.set(this.translate.instant('acme.claims.failed-to-load'));
+      },
+    });
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
 />
+
+export const usageHtml = `@if (error(); as message) {
+  <nxs-error-state [status]="errorStatus()" [heading]="message" retryable (retry)="load()" />
+}`;
 
 <Source
   language="html"
   dark
-  code={`@if (error(); as message) {
-  <nxs-error-state [status]="errorStatus()" [heading]="message" retryable (retry)="load()" />
-}`}
+  code={usageHtml}
 />
 
 `status` is `401`, `403`, `404` or `500` (the default). `heading` is text you have already

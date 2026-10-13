@@ -218,6 +218,7 @@ class NxsAvatarComponent implements NxsAvatarInputs {
     readonly color: _angular_core.InputSignal<NxsAvatarColor>;
     readonly size: _angular_core.InputSignal<NxsAvatarSize>;
     readonly label: _angular_core.InputSignal<string>;
+    protected readonly name: _angular_core.Signal<string>;
     protected readonly shownInitials: _angular_core.Signal<string>;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsAvatarComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsAvatarComponent, "nxs-avatar", never, { "initials": { "alias": "initials"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; "size": { "alias": "size"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
@@ -364,6 +365,7 @@ interface NxsMenuAction {
 class NxsPermissionsPanelComponent {
     readonly documentId: _angular_core.InputSignal<string>;
     readonly permissionsChanged: _angular_core.InputSignal<(() => void) | null>;
+    protected readonly idPrefix: string;
     protected readonly localColumns: string[];
     protected readonly inheritedColumns: string[];
     protected readonly otherColumns: string[];
@@ -437,6 +439,8 @@ class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     readonly icon: _angular_core.InputSignal<string>;
     protected readonly open: _angular_core.WritableSignal<boolean>;
     protected readonly panelId: string;
+    protected readonly shift: _angular_core.WritableSignal<number>;
+    constructor();
     protected toggle(): void;
     protected closeAndRefocus(): void;
     protected onFocusOut(event: FocusEvent): void;

@@ -70,11 +70,13 @@ screens that render those IDs do not change.
 This step is optional. Point the `@hylandsoftware` scope at GitHub Packages in your `.npmrc`, with a
 token that can read packages:
 
+export const installingSatorisComponentsText = `@hylandsoftware:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}`;
+
 <Source
   language="text"
   dark
-  code={`@hylandsoftware:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=\${GITHUB_TOKEN}`}
+  code={installingSatorisComponentsText}
 />
 
 <Source language="bash" dark code="npm install @hylandsoftware/satori-ui" />
@@ -86,10 +88,7 @@ addressed by ID. The components also need ngx-translate. Text you pass to a comp
 already translated, but some components translate their own labels and buttons.
 `providePlatformEnglishFallback()` supplies English for those labels when your catalogue does not.
 
-<Source
-  language="typescript"
-  dark
-  code={`import { provideHttpClient } from '@angular/common/http';
+export const providersTs = `import { provideHttpClient } from '@angular/common/http';
 import { ApplicationConfig } from '@angular/core';
 import { provideTranslateService } from '@ngx-translate/core';
 import { provideNxsComponents } from '@nuxeo-satori/platform/components';
@@ -105,7 +104,12 @@ export const appConfig: ApplicationConfig = {
     }),
     provideNxsComponents(),
   ],
-};`}
+};`;
+
+<Source
+  language="typescript"
+  dark
+  code={providersTs}
 />
 
 With Satori's components installed, add `provideNxsSatoriComponents()` **after**
@@ -114,10 +118,7 @@ Satori's theme and icons, from `provideSatori()`, and Satori's own translations 
 `provideAndConfigureSatoriUITranslations()` loads them, or you can load them through your own
 translation loader.
 
-<Source
-  language="typescript"
-  dark
-  code={`import { provideSatori } from '@hylandsoftware/satori-ui/providers';
+export const providersTs2 = `import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { provideAndConfigureSatoriUITranslations } from '@hylandsoftware/satori-ui/translations';
 import { provideNxsComponents } from '@nuxeo-satori/platform/components';
 import { provideNxsSatoriComponents } from '@nuxeo-satori/platform/components-satori';
@@ -129,26 +130,33 @@ export const appConfig: ApplicationConfig = {
     provideNxsComponents(),
     provideNxsSatoriComponents(),
   ],
-};`}
+};`;
+
+<Source
+  language="typescript"
+  dark
+  code={providersTs2}
 />
 
 ## Using a component
 
 Every component is standalone. Import it where you use it:
 
-<Source
-  language="typescript"
-  dark
-  code={`import { Component } from '@angular/core';
+export const usingAComponentTs = `import { Component } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
 
 @Component({
-selector: 'acme-results',
-imports: [NxsSpinnerComponent, TranslatePipe],
-template: \`<nxs-spinner [label]="'acme.results.loading' | translate" />\`,
+  selector: 'acme-results',
+  imports: [NxsSpinnerComponent, TranslatePipe],
+  template: \`<nxs-spinner [label]="'acme.results.loading' | translate" />\`,
 })
-export class AcmeResultsComponent {}`}
+export class AcmeResultsComponent {}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usingAComponentTs}
 />
 
 Pass text already translated, as above. The components ship no translations for the text you give
@@ -217,43 +225,49 @@ application can replace the component everywhere it appears without changing tho
 The four `nxs.primitives.*` IDs are exported as `NXS_PRIMITIVE_IDS`, and the permissions panel's as
 `NXS_PERMISSIONS_PANEL_ID`. Render an ID with `lib-extension-outlet`, passing the component's inputs:
 
-<Source
-  language="typescript"
-  dark
-  code={`import { Component } from '@angular/core';
+export const registeringByIdTs = `import { Component } from '@angular/core';
 import { NXS_PRIMITIVE_IDS } from '@nuxeo-satori/platform/components';
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 
 @Component({
-selector: 'acme-document-type',
-imports: [ExtensionOutletComponent],
-template: \`
-<lib-extension-outlet
-[componentId]="tagId"
-[componentInputs]="{ label: 'Invoice', color: 'purple' }"
-/>
-\`,
+  selector: 'acme-document-type',
+  imports: [ExtensionOutletComponent],
+  template: \`
+    <lib-extension-outlet
+      [componentId]="tagId"
+      [componentInputs]="{ label: 'Invoice', color: 'purple' }"
+    />
+  \`,
 })
 export class AcmeDocumentTypeComponent {
-protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
-}`}
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={registeringByIdTs}
 />
 
 To replace a component, register your own under its ID, after the providers above. It takes the same
 inputs: for the four primitives, implement the matching interface (`NxsTagInputs` for the tag, and
 so on).
 
+export const registeringByIdTs2 = `import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+
+providers: [
+  provideNxsComponents(),
+  provideSatoriExtensions({
+    components: {
+      'nxs.primitives.tag': () => import('./acme-tag').then((m) => m.AcmeTagComponent),
+    },
+  }),
+];`;
+
 <Source
   language="typescript"
   dark
-  code={`import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
-
-providers: [
-provideNxsComponents(),
-provideSatoriExtensions({
-components: { 'nxs.primitives.tag': () => import('./acme-tag').then((m) => m.AcmeTagComponent) },
-}),
-];`}
+  code={registeringByIdTs2}
 />
 
 The four primitives below are rendered by ID. This Storybook is built without access to GitHub

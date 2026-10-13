@@ -7476,6 +7476,238 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
 }
 
 /**
+ * Where each value a module exports is declared, by public name, as `{ file, name }` — the module
+ * and the name it is declared under there — following re-exports: `export class|function|const|
+ * let|var|enum X`, `export { a as b } from './m'`, `export * from './m'` and a bare `export { X }`
+ * of a local declaration or an import. Type-only exports are left out.
+ */
+function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
+  const found = new Map();
+  if (ancestors.has(file) || !fileExists(file)) return found;
+  const seen = new Set(ancestors).add(file);
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const imported = new Map();
+  const declared = new Set();
+  const isExported = (statement) =>
+    statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const bindings = statement.importClause?.namedBindings;
+      if (statement.importClause?.isTypeOnly || !bindings || !ts.isNamedImports(bindings)) continue;
+      for (const element of bindings.elements) {
+        if (element.isTypeOnly) continue;
+        imported.set(element.name.text, {
+          specifier: statement.moduleSpecifier.text,
+          name: (element.propertyName ?? element.name).text,
+        });
+      }
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        const name = declaration.name.text;
+        declared.add(name);
+        if (isExported(statement)) found.set(name, { file, name });
+      }
+    } else if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    ) {
+      const name = statement.name.text;
+      declared.add(name);
+      if (isExported(statement)) found.set(name, { file, name });
+    }
+  }
+  for (const statement of source.statements) {
+    if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) continue;
+    const target =
+      statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+        ? resolveFile(file, statement.moduleSpecifier.text, pathMaps)
+        : null;
+    if (!statement.exportClause) {
+      if (target)
+        for (const [name, origin] of valueExportOrigins(target, pathMaps, seen))
+          found.set(name, origin);
+      continue;
+    }
+    if (!ts.isNamedExports(statement.exportClause)) continue;
+    for (const element of statement.exportClause.elements) {
+      if (element.isTypeOnly) continue;
+      const local = (element.propertyName ?? element.name).text;
+      let origin = null;
+      if (statement.moduleSpecifier) {
+        origin = target ? (valueExportOrigins(target, pathMaps, seen).get(local) ?? null) : null;
+      } else if (declared.has(local)) {
+        origin = { file, name: local };
+      } else if (imported.has(local)) {
+        const { specifier, name } = imported.get(local);
+        const from = resolveFile(file, specifier, pathMaps);
+        origin = from ? (valueExportOrigins(from, pathMaps, seen).get(name) ?? null) : null;
+      }
+      if (origin) found.set(element.name.text, origin);
+    }
+  }
+  return found;
+}
+
+/**
+ * The components the library ships without exporting them, keyed `file#className`.
+ *
+ * A module the barrel exports something other than a component from can still put a component on
+ * screen: `NxsToastService` opens `NxsToastComponent` through `MatSnackBar`, and no host names the
+ * component. Such a component is any `@Component` class one of those modules imports by value —
+ * by name, or through a namespace import of its module, which counts every component that module
+ * exports — and the barrel does not export. A default import from a module that exports components
+ * cannot be followed to a class, so it fails rather than reading as opening nothing. A module that
+ * declares an exported component is left out, whatever else it exports: what it imports is part of
+ * that component, documented with it.
+ *
+ * Each comes with the exports that open it, per module: those whose declaration reaches the
+ * component's import, directly or through the module's other declarations — `provideNxsToast()`
+ * returns `NxsToastService`, which opens the toast — and not a sibling such as
+ * `NXS_TOAST_DURATION`. Its stories and Overview are reached through one of those.
+ * `satori-comparison-doc.mjs` follows the same edge for its page, by module.
+ */
+function openedComponentClasses(barrel, pathMaps, exported) {
+  const shipped = new Set(
+    [...exported.values()].map(({ file, className }) => `${file}#${className}`),
+  );
+  const exportedNames = new Set(exported.keys());
+  const componentModules = new Set([...exported.values()].map(({ file }) => file));
+  // Opener module → the names it declares that the barrel exports → their public names.
+  const openers = new Map();
+  for (const [name, origin] of valueExportOrigins(barrel, pathMaps)) {
+    if (exportedNames.has(name) || componentModules.has(origin.file)) continue;
+    const declarations = openers.get(origin.file) ?? new Map();
+    declarations.set(origin.name, [...(declarations.get(origin.name) ?? []), name]);
+    openers.set(origin.file, declarations);
+  }
+  const opened = new Map();
+  for (const [module, declarations] of openers) {
+    const source = ts.createSourceFile(module, read(module), ts.ScriptTarget.Latest, true);
+    const reach = localReach(source);
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
+        continue;
+      const clause = statement.importClause;
+      if (!clause || clause.isTypeOnly) continue;
+      const target = resolveFile(module, statement.moduleSpecifier.text, pathMaps);
+      if (!target) continue;
+      const components = exportedComponentClasses(target, pathMaps);
+      if (clause.name && components.size > 0) {
+        fail(
+          `${module} imports the default export of ${target}, which exports components, so which ` +
+            'component it opens was not read. Import the component by name.',
+        );
+      }
+      // Each imported component, with the local name the module's declarations refer to it by.
+      const bindings = clause.namedBindings;
+      const imported = !bindings
+        ? []
+        : ts.isNamespaceImport(bindings)
+          ? [...components.keys()].map((name) => [name, bindings.name.text])
+          : bindings.elements
+              .filter((element) => !element.isTypeOnly)
+              .map((element) => [(element.propertyName ?? element.name).text, element.name.text]);
+      for (const [name, local] of imported) {
+        const declared = components.get(name);
+        if (!declared) continue;
+        const key = `${declared.file}#${declared.className}`;
+        if (shipped.has(key)) continue;
+        const through = [...declarations].filter(([declaration]) =>
+          reach.get(declaration)?.has(local),
+        );
+        if (through.length === 0) continue;
+        const entry = opened.get(key) ?? { ...declared, openers: new Map() };
+        const byModule = entry.openers.get(module) ?? new Map();
+        for (const [declaration, names] of through) byModule.set(declaration, names);
+        entry.openers.set(module, byModule);
+        opened.set(key, entry);
+      }
+    }
+  }
+  return opened;
+}
+
+/**
+ * The names each top-level declaration of a module reaches: every identifier in it, and every one
+ * the module's other declarations it names reach in turn. Generous on purpose — a property or a
+ * type that happens to share a name counts — so a component is never missed, only over-counted.
+ */
+function localReach(source) {
+  const direct = new Map();
+  const identifiers = (node, into) => {
+    if (ts.isIdentifier(node)) into.add(node.text);
+    // `forEachChild` stops at the first callback that returns something truthy.
+    ts.forEachChild(node, (child) => {
+      identifiers(child, into);
+    });
+    return into;
+  };
+  for (const statement of source.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          direct.set(declaration.name.text, identifiers(declaration, new Set()));
+        }
+      }
+    } else if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    ) {
+      direct.set(statement.name.text, identifiers(statement, new Set()));
+    }
+  }
+  const reach = new Map();
+  for (const name of direct.keys()) {
+    const seen = new Set();
+    const queue = [name];
+    while (queue.length > 0) {
+      for (const next of direct.get(queue.pop()) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        if (direct.has(next)) queue.push(next);
+      }
+    }
+    reach.set(name, seen);
+  }
+  return reach;
+}
+
+/**
+ * The opened components (see `openedComponentClasses`) a story file reaches through its value
+ * imports: an import counts when it is one of the exports that open the component. A type-only
+ * import is erased, so it opens nothing.
+ */
+function openedThrough(imports, opened, pathMaps) {
+  const keys = new Set();
+  for (const { file, name, typeOnly } of imports.values()) {
+    if (typeOnly) continue;
+    const origin = valueExportOrigins(file, pathMaps).get(name);
+    if (!origin) continue;
+    for (const [key, { openers }] of opened) {
+      if (openers.get(origin.file)?.has(origin.name)) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+/** How a component the barrel ships only through `openers` is reached, for a failure message. */
+const openedVia = (openers) =>
+  [...openers]
+    .map(
+      ([module, declarations]) =>
+        `${[...declarations.values()]
+          .flat()
+          .map((n) => `\`${n}\``)
+          .join(', ')} (${module})`,
+    )
+    .join(' or ');
+
+/**
  * A story file's default-exported meta and its top-level names, read from its syntax tree.
  *
  * `meta` is the object literal Storybook reads — the default export itself, a variable it names, or
@@ -7486,7 +7718,8 @@ function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
  * the key is a method or an accessor. With `resolveIdentifier`, a value that is a bare name is
  * replaced by the top-level constant it names (`tags: TAGS`).
  *
- * `imports` maps each named import to the file it resolves to and the name it is exported under;
+ * `imports` maps each named import to the file it resolves to, the name it is exported under and
+ * whether it is type-only;
  * `namedExports` lists the file's named exports, under the names they are exported as.
  */
 function readStoryFile(storyFile, pathMaps) {
@@ -7519,6 +7752,7 @@ function readStoryFile(storyFile, pathMaps) {
         imports.set(element.name.text, {
           file: target,
           name: (element.propertyName ?? element.name).text,
+          typeOnly: Boolean(statement.importClause.isTypeOnly || element.isTypeOnly),
         });
       }
     } else if (ts.isVariableStatement(statement)) {
@@ -7593,9 +7827,10 @@ function readStoryFile(storyFile, pathMaps) {
  * its API page; that is checked here because this is where the meta is read. A missing tag fails
  * the file; it does not change which components the file is counted as documenting. A meta that
  * names no component has no inputs or outputs to list, so it needs no API page — it is documented
- * by an Overview instead, which `checkSatoriComponentsHaveOverviews` requires.
+ * by an Overview instead, which `checkSatoriComponentsHaveOverviews` requires. Such a file counts
+ * for the components in `opened` its imports reach: the toast's stories import `NxsToastService`.
  */
-function storiedComponents(storyFile, pathMaps) {
+function storiedComponents(storyFile, pathMaps, opened = new Map()) {
   const covered = new Set();
   const {
     meta: defaultExport,
@@ -7690,6 +7925,10 @@ function storiedComponents(storyFile, pathMaps) {
   if (stories.length === 0) return covered;
 
   const value = metaProperty('component');
+  if (value === null) {
+    for (const key of openedThrough(imports, opened, pathMaps)) covered.add(key);
+    return covered;
+  }
   if (!value || !ts.isIdentifier(value)) return covered;
   const origin = imports.get(value.text);
   if (!origin) return covered;
@@ -7761,19 +8000,24 @@ function storybookStoryGlobs(main) {
  * class, or names it with no story exported, does not count. Every story meta that names a
  * component must carry the `autodocs` tag, so the component has its API page (see
  * `storiedComponents`).
+ *
+ * A component the library ships without exporting it — opened by a module the barrel exports, as
+ * `NxsToastService` opens `NxsToastComponent` (see `openedComponentClasses`) — needs a story too:
+ * one whose meta names no component and that imports what opens it.
  */
 function checkSatoriComponentsHaveStories() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
   const pathMaps = tsconfigPathMaps();
   const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
-  if (exported.size === 0) return;
+  const opened = openedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps, exported);
+  if (exported.size === 0 && opened.size === 0) return;
 
   const STORY_GLOB = '../src/**/*.stories.ts';
   const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;
   if (!fileExists(main)) {
     fail(
-      `${main} does not exist, so the ${exported.size} component(s) ${SATORI_COMPONENTS_BARREL} ` +
-        'exports have no Storybook to be documented in.',
+      `${main} does not exist, so the ${exported.size + opened.size} component(s) ` +
+        `${SATORI_COMPONENTS_BARREL} ships have no Storybook to be documented in.`,
     );
   } else {
     const globs = storybookStoryGlobs(main);
@@ -7795,7 +8039,7 @@ function checkSatoriComponentsHaveStories() {
   for (const story of walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) =>
     path.endsWith('.stories.ts'),
   )) {
-    for (const key of storiedComponents(story, pathMaps)) covered.add(key);
+    for (const key of storiedComponents(story, pathMaps, opened)) covered.add(key);
   }
   for (const [name, { file, className }] of exported) {
     if (covered.has(`${file}#${className}`)) continue;
@@ -7804,6 +8048,14 @@ function checkSatoriComponentsHaveStories() {
         `a \`*.stories.ts\` beside it whose default-exported meta says \`component: ${className}\`, ` +
         'with at least one story exported — Storybook is the library’s documentation and the ' +
         'agent’s usage reference.',
+    );
+  }
+  for (const [key, { file, className, openers }] of opened) {
+    if (covered.has(key)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} ships \`${className}\` (${file}) through ${openedVia(openers)}, ` +
+        'and no story documents it. Add a `*.stories.ts` whose default-exported meta names no ' +
+        'component and that imports what opens it, with at least one story exported.',
     );
   }
 }
@@ -7819,9 +8071,10 @@ const SATORI_COMPONENTS_OVERVIEW_SECTIONS = [
 
 /**
  * An MDX page's structure, read from its text once code and comments are taken out: fenced code
- * blocks, `{/* … *\/}` comments and every template literal inside braces (`code={`…`}`), which is
- * where the pages put their code samples. What is left is the page's imports, its blocks and its
- * headings.
+ * blocks, `{/* … *\/}` comments, every template literal inside braces (`code={`…`}`) and every
+ * one an `export const` holds, which is where the pages put their code samples — a multi-line one
+ * in an `export const`, because MDX strips leading spaces from an attribute's continuation lines.
+ * What is left is the page's imports, its blocks and its headings.
  *
  * `namespaces` maps each `import * as X from '…'` to the file it resolves to (`null` when it names
  * none); `metas` lists each `<Meta … />` with its `of={X}` (`undefined` when `of` is not a plain
@@ -7832,6 +8085,7 @@ function readMdxPage(mdxFile, pathMaps) {
   const text = read(mdxFile)
     .replace(/^```[\s\S]*?^```/gm, '')
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/^export\s+const\s+\w+\s*=\s*`(?:\\[\s\S]|[^`\\])*`;?/gm, '')
     .replace(/\{\s*`(?:\\[\s\S]|[^`\\])*`\s*\}/g, '{}');
   const namespaces = new Map();
   for (const [, name, , specifier] of text.matchAll(
@@ -7859,7 +8113,9 @@ function readMdxPage(mdxFile, pathMaps) {
  * — the glob `.storybook/main.ts` loads, which is checked too — that namespace-imports a story file
  * and attaches to it with `<Meta of={Stories} name="Overview" />`. It counts for the component that
  * story file's meta names as `component:`. A story file whose meta names no component has no API
- * page (see `storiedComponents`), so it needs an Overview of its own.
+ * page (see `storiedComponents`), so it needs an Overview of its own, which counts for the
+ * components its imports open: a component the library ships without exporting it (see
+ * `openedComponentClasses`) needs an Overview attached to such a story file.
  *
  * Each Overview has the sections in `SATORI_COMPONENTS_OVERVIEW_SECTIONS` and at least one live
  * preview, `<Canvas of={Stories.Name} />`. Two faults Storybook builds without complaint are read on
@@ -7871,7 +8127,8 @@ function checkSatoriComponentsHaveOverviews() {
   if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
   const pathMaps = tsconfigPathMaps();
   const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
-  if (exported.size === 0) return;
+  const opened = openedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps, exported);
+  if (exported.size === 0 && opened.size === 0) return;
 
   const OVERVIEW_GLOB = '../src/**/*.mdx';
   const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;
@@ -7899,7 +8156,8 @@ function checkSatoriComponentsHaveOverviews() {
       const declared = exportedComponentClasses(origin.file, pathMaps).get(origin.name);
       documents = declared ? `${declared.file}#${declared.className}` : undefined;
     }
-    storyFiles.set(story, { documents, exports: new Set(namedExports), overview: false });
+    const opens = documents === null ? openedThrough(imports, opened, pathMaps) : new Set();
+    storyFiles.set(story, { documents, opens, exports: new Set(namedExports), overview: false });
   }
 
   const sectionList = SATORI_COMPONENTS_OVERVIEW_SECTIONS.map((s) => `\`## ${s}\``).join(', ');
@@ -7979,6 +8237,19 @@ function checkSatoriComponentsHaveOverviews() {
         `it. Add an \`*.mdx\` beside its stories that does \`import * as Stories from ` +
         `'./<name>.stories'\` and \`<Meta of={Stories} name="Overview" />\`, whose story file's ` +
         `meta says \`component: ${className}\`, with ${sectionList} and at least one ` +
+        '`<Canvas of={Stories.<Story>} />`.',
+    );
+  }
+  const documentedOpened = new Set(
+    [...storyFiles.values()].filter((s) => s.overview).flatMap((s) => [...s.opens]),
+  );
+  for (const [key, { file, className, openers }] of opened) {
+    if (documentedOpened.has(key)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} ships \`${className}\` (${file}) through ${openedVia(openers)}, ` +
+        'and no Overview page documents it. Add an `*.mdx` with `<Meta of={Stories} ' +
+        'name="Overview" />` attached to a story file whose meta names no component and that ' +
+        `imports what opens it, with ${sectionList} and at least one ` +
         '`<Canvas of={Stories.<Story>} />`.',
     );
   }

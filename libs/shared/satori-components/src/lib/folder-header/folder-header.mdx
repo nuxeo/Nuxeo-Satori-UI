@@ -34,17 +34,19 @@ the right. Use it at the top of a page that lists what a container holds.
   code={`import { NxsFolderHeaderComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-<Source
-  language="html"
-  dark
-  code={`<nxs-folder-header
+export const usageHtml = `<nxs-folder-header
   [heading]="title()"
   [subheading]="typeName()"
   [documentType]="type()"
 >
   <nxs-breadcrumbs nxsFolderHeaderDetail [items]="trail()" [label]="'acme.breadcrumbs' | translate" />
   <button mat-stroked-button type="button" (click)="share()">{{ 'acme.share' | translate }}</button>
-</nxs-folder-header>`}
+</nxs-folder-header>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 Every input is optional. Pass text already translated. Used directly, the folder header needs no
