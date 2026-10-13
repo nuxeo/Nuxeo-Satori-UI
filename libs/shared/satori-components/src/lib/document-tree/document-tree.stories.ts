@@ -117,9 +117,7 @@ export const FromTheKeyboard: Story = {
     const current = await canvas.findByRole('treeitem', { current: 'page' });
     current.focus();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
-    const legal = canvas
-      .getAllByRole('treeitem')
-      .find((node) => node.textContent?.includes('Legal'));
+    const legal = canvas.getByText('Legal').closest('[role="treeitem"]');
     await waitFor(() => expect(legal).toHaveFocus());
     await userEvent.keyboard('{Enter}');
     await expect(args.navigate).toHaveBeenCalledWith(

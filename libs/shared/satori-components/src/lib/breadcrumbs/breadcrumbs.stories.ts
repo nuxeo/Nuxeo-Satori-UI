@@ -99,10 +99,14 @@ export const CollapsedTrail: Story = {
   play: async ({ canvas, userEvent }) => {
     const more = await canvas.findByRole('button', { name: 'Show more breadcrumbs' });
     await expect(canvas.getByRole('link', { name: 'Domain' })).toBeVisible();
-    await expect(canvas.getByText('Acme')).toHaveAttribute('aria-current', 'page');
+    await expect(within(canvas.getByRole('navigation')).getByText('Acme')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
     await userEvent.click(more);
     const menu = within(canvas.getByRole('link', { name: 'Domain' }).ownerDocument.body);
-    await expect(await menu.findByRole('menuitem', { name: 'Workspaces' })).toBeVisible();
+    const workspaces = await menu.findByRole('menuitem', { name: 'Workspaces' });
+    await waitFor(() => expect(workspaces).toBeVisible());
   },
 };
 
