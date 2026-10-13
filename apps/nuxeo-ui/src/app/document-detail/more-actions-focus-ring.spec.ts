@@ -1,11 +1,11 @@
 /**
  * NXSAT-535 / IBM 2589851771 — document-detail header "More actions" menu trigger must show a
- * keyboard focus indicator (WCAG 2.1 SC 2.4.7). Material icon buttons suppress the default ring;
+ * keyboard focus indicator (WCAG 2.1 SC 2.4.7). Host markup mirrors production
+ * `document-detail.html` (see `document-detail-more-actions-focus-ring.spec.ts` and
+ * `document-detail-slots.spec.ts` on the rendered component).
+ *
  * Karma loads `apps/nuxeo-ui/src/styles.scss` (see `angular.json`), which `@use`s
  * `document-detail-header-toolbar-focus.scss` — the same path production uses.
- *
- * Same IBM `style_focus_visible` constraints as NXENG-808 / toolbar-icon-focus-ring.spec.ts:
- * standalone `:focus` selector, token wiring, and outline width/style when focused.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -43,7 +43,7 @@ describe('Document detail More actions — keyboard focus indicator (NXSAT-535 /
     fixture.detectChanges();
     await fixture.whenStable();
     const button = fixture.nativeElement.querySelector(
-      '[data-testid="more-actions-btn"]',
+      '.detail-header .header-actions button[aria-label="More actions"]',
     ) as HTMLButtonElement;
     const header = fixture.nativeElement.querySelector('.detail-header') as HTMLElement;
     return { fixture, button, header };
@@ -53,6 +53,7 @@ describe('Document detail More actions — keyboard focus indicator (NXSAT-535 /
     const { fixture, button } = await mount();
     try {
       expect(button.getAttribute('aria-label')).toBe('More actions');
+      expect(button.classList.contains('mat-mdc-icon-button')).toBe(true);
       button.focus();
       expect(document.activeElement).toBe(button);
 
