@@ -272,6 +272,11 @@ describe('readSnapshot', () => {
     expect(readSnapshot(doc([], { permissions: ['Read', 'Browse'] })).canManage).toBe(false);
   });
 
+  it('never offers editing on a version, though its enricher repeats the live document', () => {
+    expect(readSnapshot(doc([], {}, { isVersion: true })).canManage).toBe(false);
+    expect(readSnapshot(doc([], {}, { isVersion: false })).canManage).toBe(true);
+  });
+
   it('refuses a read that carried no ACLs rather than showing none', () => {
     expect(() => readSnapshot(doc(undefined))).toThrow(/carried no ACLs/);
   });
