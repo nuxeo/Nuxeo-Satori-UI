@@ -589,6 +589,24 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.toolbarTooltip(relabelled)).toBe('Release the lock');
     });
 
+    it('keeps the descriptor in toolbarActionLabel and appends supplemental tooltip text', async () => {
+      await build(lockedByAlice());
+
+      const unlock = offered('app.toolbar.unlock');
+      expect(component.toolbarActionTooltip(unlock)).toBe('Locked by alice on August 24, 2026');
+      expect(component.toolbarActionLabel(unlock)).toBe(
+        'Unlock. Locked by alice on August 24, 2026',
+      );
+
+      const relabelled = { ...unlock, tooltip: 'Release the lock' };
+      expect(component.toolbarActionTooltip(relabelled)).toBe('Release the lock');
+      expect(component.toolbarActionLabel(relabelled)).toBe('Unlock. Release the lock');
+
+      const silenced = { ...unlock, tooltip: '' };
+      expect(component.toolbarActionTooltip(silenced)).toBe('Unlock');
+      expect(component.toolbarActionLabel(silenced)).toBe('Unlock');
+    });
+
     it('shows the closed padlock, marked active, while locked and the open one while unlocked', async () => {
       await build(lockedByAlice());
       const unlock = offered('app.toolbar.unlock');

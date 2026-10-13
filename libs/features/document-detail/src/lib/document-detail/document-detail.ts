@@ -15,6 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   AppExtensionsService,
   DescriptorLabelPipe,
+  descriptorLabel,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionComponentRegistry,
@@ -1032,6 +1033,29 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   toolbarTooltip(action: ExtensionActionDescriptor): string | null {
     if (action.tooltip !== undefined) return action.tooltip;
     return action.id === 'app.toolbar.unlock' ? this.lockedByLabel() : null;
+  }
+
+  private toolbarDescriptorLabel(action: ExtensionActionDescriptor): string {
+    return descriptorLabel(action, (key) => this.translate.instant(key));
+  }
+
+  /** Hover text: supplemental lock/manifest tooltip when set, otherwise the action label. */
+  toolbarActionTooltip(action: ExtensionActionDescriptor): string {
+    const tip = this.toolbarTooltip(action);
+    if (tip !== null && tip !== '') {
+      return tip;
+    }
+    return this.toolbarDescriptorLabel(action);
+  }
+
+  /** Accessible name: always includes the descriptor label; appends non-empty tooltip text when it differs. */
+  toolbarActionLabel(action: ExtensionActionDescriptor): string {
+    const label = this.toolbarDescriptorLabel(action);
+    const tip = this.toolbarTooltip(action);
+    if (tip === null || tip === '' || tip === label) {
+      return label;
+    }
+    return `${label}. ${tip}`;
   }
 
   /** The highlighted padlock Web UI shows on a locked document. */
