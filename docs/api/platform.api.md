@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-48 exported symbol(s).
+49 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -242,6 +242,10 @@ interface NxsBreadcrumbItem {
 class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
     readonly items: _angular_core.InputSignal<readonly NxsBreadcrumbItem[]>;
     readonly label: _angular_core.InputSignal<string>;
+    protected readonly folded: _angular_core.WritableSignal<number>;
+    protected readonly hiddenItems: _angular_core.Signal<NxsBreadcrumbItem[]>;
+    protected readonly entries: _angular_core.Signal<readonly TrailEntry[]>;
+    constructor();
     protected linkKind(item: NxsBreadcrumbItem): 'href' | 'router' | 'text';
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsBreadcrumbsComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsBreadcrumbsComponent, "nxs-breadcrumbs", never, { "items": { "alias": "items"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
@@ -333,6 +337,7 @@ class NxsDocumentListComponent {
     protected actionsFor(doc: NuxeoDocument): readonly NxsMenuAction[];
     protected isSelected(doc: NuxeoDocument): boolean;
     protected isFolder(doc: NuxeoDocument): boolean;
+    protected hasThumbnail(doc: NuxeoDocument): boolean;
     protected icon(doc: NuxeoDocument): string;
     protected rowName(doc: NuxeoDocument): string;
     protected rowIndex(index: number): number;
@@ -364,6 +369,29 @@ interface NxsDocumentListRowAction {
 interface NxsDocumentListSort {
     readonly key: string;
     readonly direction: 'asc' | 'desc';
+    }
+}
+class NxsDocumentTreeComponent {
+    readonly currentPath: _angular_core.InputSignal<string>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly navigate: _angular_core.OutputEmitterRef<NuxeoDocument>;
+    protected readonly status: _angular_core.WritableSignal<"error" | "loading" | "ready">;
+    protected readonly loadError: _angular_core.WritableSignal<NxsErrorStatus>;
+    protected readonly focusKey: _angular_core.WritableSignal<string | null>;
+    protected readonly topNodes: _angular_core.Signal<readonly TreeNode[]>;
+    protected readonly showRootBack: _angular_core.Signal<boolean>;
+    protected readonly rows: _angular_core.Signal<readonly TreeRow[]>;
+    protected readonly currentKey: _angular_core.Signal<string | null>;
+    protected rowFor(key: string): TreeRow | undefined;
+    protected readonly tabStop: _angular_core.Signal<string>;
+    constructor();
+    reload(): void;
+    protected nodeLabel(node: TreeNode): string;
+    protected onItemClick(event: MouseEvent, row: TreeRow): void;
+    protected onKeydown(event: KeyboardEvent, row: TreeRow): void;
+    protected openRoot(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentTreeComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentTreeComponent, "nxs-document-tree", never, { "currentPath": { "alias": "currentPath"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; }, { "navigate": "navigate"; }, never, never, true, never>;
     }
 }
 class NxsDomainHintComponent {

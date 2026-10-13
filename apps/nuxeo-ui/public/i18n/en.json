@@ -1768,8 +1768,8 @@
   },
   "nav": {
     "clipboard": {
-      "aria-label-one": "{{ name }}, {{ count }} item",
       "aria-label-many": "{{ name }}, {{ count }} items",
+      "aria-label-one": "{{ name }}, {{ count }} item",
       "copy": "Copy",
       "empty": "Clipboard is empty",
       "hint": "Use \"Add to Clipboard\" on documents or collections to add items here.",
@@ -1821,6 +1821,7 @@
       "retry": "Retry"
     },
     "tree": {
+      "label": "Folders",
       "retry": "Retry",
       "root": "Root",
       "toggle": "Toggle {{ name }}"
@@ -1986,6 +1987,16 @@
       "sort-cleared": "Sort cleared, showing the default order",
       "sorted-ascending": "Sorted by {{ column }}, ascending",
       "sorted-descending": "Sorted by {{ column }}, descending"
+    },
+    "document-tree": {
+      "children-failed": "The folders in {{ name }} could not be loaded",
+      "children-failed-row": "Could not load the folders. Retry",
+      "children-forbidden": "You do not have access to the folders in {{ name }}",
+      "children-forbidden-row": "You do not have access to these folders",
+      "empty": "No folders to show",
+      "load-failed": "The folders could not be loaded",
+      "loading": "Loading folders",
+      "root": "Root"
     },
     "drive-dialog": {
       "checking": "Checking Nuxeo Drive...",

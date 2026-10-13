@@ -99,6 +99,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'collections.collection-detail.members-of': 'Members of {{ name }}',
   'login.skip-link': 'Skip to sign in',
   // The repository root's name in the navigation tree, also the `name` in its toggle's accessible name.
+  'nav.tree.label': 'Folders',
   'nav.tree.root': 'Root',
   'admin.admin-users-groups-page.show-more-members-one': 'Show {{ count }} more member',
   'admin.admin-users-groups-page.show-more-members-many': 'Show {{ count }} more members',
@@ -317,6 +318,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.document-list.row-actions': 'Actions for {{ name }}',
   'satori-components.document-list.select': 'Select {{ name }}',
   'satori-components.document-list.select-page': 'Select all on this page',
+  'satori-components.document-tree.loading': 'Loading folders',
   'satori-components.drive-dialog.close': 'Close',
   'satori-components.drive-dialog.name': 'Nuxeo Drive',
   'satori-components.drive-dialog.title': 'Download Nuxeo Drive Client',

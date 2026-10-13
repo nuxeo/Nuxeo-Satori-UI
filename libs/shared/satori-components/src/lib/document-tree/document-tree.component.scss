@@ -1,0 +1,112 @@
+:host {
+  display: block;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-document-tree__state {
+  display: flex;
+  justify-content: center;
+  padding: 16px 0;
+}
+
+.nxs-document-tree__empty {
+  margin: 0;
+  padding: 12px 16px;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-document-tree__back {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}
+
+:host-context([dir='rtl']) .nxs-document-tree__back-icon {
+  transform: scaleX(-1);
+}
+
+.nxs-document-tree__tree,
+.nxs-document-tree__group {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nxs-document-tree__item {
+  outline: none;
+
+  &:focus-visible > .nxs-document-tree__row {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}
+
+.nxs-document-tree__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding-inline-end: 8px;
+  border-radius: 4px;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container-high);
+  }
+}
+
+.nxs-document-tree__row--current {
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+  font-weight: 500;
+
+  &:hover {
+    background: var(--mat-sys-secondary-container);
+  }
+}
+
+.nxs-document-tree__row--error {
+  color: var(--mat-sys-error);
+}
+
+.nxs-document-tree__toggle {
+  display: inline-flex;
+  flex: 0 0 20px;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+}
+
+.nxs-document-tree__arrow {
+  transition: transform 0.15s;
+}
+
+.nxs-document-tree__arrow--open {
+  transform: rotate(90deg);
+}
+
+:host-context([dir='rtl']) .nxs-document-tree__arrow:not(.nxs-document-tree__arrow--open) {
+  transform: scaleX(-1);
+}
+
+.nxs-document-tree__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

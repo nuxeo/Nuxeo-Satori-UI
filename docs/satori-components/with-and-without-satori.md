@@ -334,6 +334,19 @@ A folder's first page: the same table, sort headers, checkboxes and pager in bot
 
 The list itself has no Satori counterpart today; Satori's row-state layer, when it arrives, is meant to sit on this same Material table.
 
+### Document tree
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsDocumentTreeComponent`                  |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `navigation-document-tree--inside-a-domain` |
+
+![Document tree: without Satori on the left, with Satori on the right](document-tree-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A domain's branch expanded down to the folder on screen, which is highlighted as the current one. The same rows, arrows and highlight in both; the theme sets the type and the highlight's colour. A folder that holds no folder has no arrow, as in Nuxeo Web UI.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -406,6 +419,7 @@ The components in the library today:
 | Action menu        | —                                                                                                                       | Same component; theme only   |
 | Pager              | —                                                                                                                       | Same component; theme only   |
 | Document list      | —                                                                                                                       | Same component; theme only   |
+| Document tree      | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

@@ -13,6 +13,7 @@ export {
   type NxsDocumentListRowAction,
   type NxsDocumentListSort,
 } from './lib/document-list/document-list.component';
+export { NxsDocumentTreeComponent } from './lib/document-tree/document-tree.component';
 export { NxsDomainHintComponent } from './lib/domain-hint/domain-hint.component';
 export {
   NxsDriveDialogComponent,
