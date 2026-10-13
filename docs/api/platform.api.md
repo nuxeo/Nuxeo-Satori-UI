@@ -421,6 +421,14 @@ class NxsDocumentHistoryComponent {
     protected readonly filtered: _angular_core.Signal<boolean>;
     protected readonly eventTypes: _angular_core.WritableSignal<readonly DirectoryEntry[]>;
     protected readonly categories: _angular_core.WritableSignal<readonly DirectoryEntry[]>;
+    protected readonly eventOptions: _angular_core.Signal<{
+    id: string;
+    label: string;
+    }[]>;
+    protected readonly categoryOptions: _angular_core.Signal<{
+    id: string;
+    label: string;
+    }[]>;
     constructor();
     protected setFilter<K extends keyof NxsHistoryFilters>(key: K, value: NxsHistoryFilters[K]): void;
     protected typeUser(text: string): void;

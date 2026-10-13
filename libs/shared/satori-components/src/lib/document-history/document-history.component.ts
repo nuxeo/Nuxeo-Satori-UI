@@ -74,6 +74,22 @@ function humanise(id: string): string {
   return id.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 }
 
+/** "eventDocumentCategory" → "Document". */
+function humaniseCategory(id: string): string {
+  return humanise(id)
+    .replace(/^Event /, '')
+    .replace(/ Category$/, '');
+}
+
+/**
+ * A vocabulary's label, or the id made readable when the vocabulary only repeats it — the stock
+ * `eventTypes` entries are labelled with their own ids, which Web UI translates as `eventType.*`.
+ */
+function readable(entry: DirectoryEntry, fallback: (id: string) => string): string {
+  const label = entry.displayLabel?.trim();
+  return label && label !== entry.id ? label : fallback(entry.id);
+}
+
 /**
  * A document's history — Web UI's `nuxeo-document-history`, which is its audit search for one
  * document.
@@ -155,11 +171,17 @@ export class NxsDocumentHistoryComponent {
 
   protected readonly eventTypes = signal<readonly DirectoryEntry[]>([]);
   protected readonly categories = signal<readonly DirectoryEntry[]>([]);
+  protected readonly eventOptions = computed(() =>
+    this.eventTypes().map((e) => ({ id: e.id, label: readable(e, humanise) })),
+  );
+  protected readonly categoryOptions = computed(() =>
+    this.categories().map((e) => ({ id: e.id, label: readable(e, humaniseCategory) })),
+  );
   private readonly eventLabels = computed(
-    () => new Map(this.eventTypes().map((e) => [e.id, e.displayLabel])),
+    () => new Map(this.eventOptions().map((o) => [o.id, o.label])),
   );
   private readonly categoryLabels = computed(
-    () => new Map(this.categories().map((e) => [e.id, e.displayLabel])),
+    () => new Map(this.categoryOptions().map((o) => [o.id, o.label])),
   );
 
   constructor() {
@@ -264,12 +286,7 @@ export class NxsDocumentHistoryComponent {
   }
 
   protected categoryLabel(id: string): string {
-    return (
-      this.categoryLabels().get(id) ??
-      humanise(id)
-        .replace(/^Event /, '')
-        .replace(/ Category$/, '')
-    );
+    return this.categoryLabels().get(id) ?? humaniseCategory(id);
   }
 
   protected initials(user: string): string {

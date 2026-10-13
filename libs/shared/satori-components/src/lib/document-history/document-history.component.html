@@ -50,8 +50,8 @@
       (ngModelChange)="setFilter('eventId', $event)"
     >
       <mat-option value="">{{ 'satori-components.document-history.any' | translate }}</mat-option>
-      @for (type of eventTypes(); track type.id) {
-        <mat-option [value]="type.id">{{ type.displayLabel }}</mat-option>
+      @for (type of eventOptions(); track type.id) {
+        <mat-option [value]="type.id">{{ type.label }}</mat-option>
       }
     </mat-select>
   </mat-form-field>
@@ -64,8 +64,8 @@
       (ngModelChange)="setFilter('category', $event)"
     >
       <mat-option value="">{{ 'satori-components.document-history.any' | translate }}</mat-option>
-      @for (category of categories(); track category.id) {
-        <mat-option [value]="category.id">{{ category.displayLabel }}</mat-option>
+      @for (category of categoryOptions(); track category.id) {
+        <mat-option [value]="category.id">{{ category.label }}</mat-option>
       }
     </mat-select>
   </mat-form-field>

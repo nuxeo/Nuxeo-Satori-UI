@@ -170,6 +170,21 @@ describe('NxsDocumentHistoryComponent', () => {
     expect(rows()[2][3]).toBe('Life Cycle');
   });
 
+  it('makes an action readable when the vocabulary only repeats its id, as Nuxeo’s stock one does', async () => {
+    TestBed.inject(DirectoryService).getEventTypes = () =>
+      of([{ id: 'documentCheckedIn', displayLabel: 'documentCheckedIn' }]) as never;
+    fixture = TestBed.createComponent(HostComponent);
+    host = fixture.componentInstance;
+    documents.getAuditLog.mockReturnValue(of(page([entry(1, { eventId: 'documentCheckedIn' })])));
+    await settle();
+    expect(rows()[0][0]).toBe('Document Checked In');
+    field('Performed action').querySelector<HTMLElement>('.mat-mdc-select-trigger')?.click();
+    await settle();
+    expect(
+      [...document.querySelectorAll('mat-option')].map((o) => o.textContent?.trim()),
+    ).toContain('Document Checked In');
+  });
+
   it('shows the time as well as the day', () => {
     expect(rows()[0][1]).toMatch(/2026.*\d{1,2}:\d{2}/);
   });
