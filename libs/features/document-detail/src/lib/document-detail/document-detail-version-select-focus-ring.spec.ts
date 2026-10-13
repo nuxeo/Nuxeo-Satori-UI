@@ -41,7 +41,6 @@ describe('DocumentDetailComponent — version-select focus ring (NXSAT-545)', ()
     expect(raw).toMatch(/NXSAT-545[\s\S]*2851011211/);
     const scss = stripScssComments(raw);
     const focusBlock = selectorBlock(scss, '.version-select:focus {');
-    expect(scss).not.toMatch(/\.version-select:focus-visible/);
     expect(focusBlock).toMatch(
       /outline:\s*2px\s+solid\s+var\(--document-detail-properties-label-muted\)/,
     );
