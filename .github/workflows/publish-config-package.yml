@@ -1,0 +1,114 @@
+name: Publish Configuration Package
+
+on:
+  # Dispatch only, and deliberately no `pull_request` trigger: `ci.yml` already runs
+  # `nx affected -t build`, and every package under `config-packages/` declares a `build`
+  # target, so a change to one is checked on its own pull request. Adding a second lane
+  # that builds the same zip would duplicate the check without strengthening it. What is
+  # missing is the publish, and publishing is always someone asking for it.
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Directory name under config-packages/, e.g. satori-beta'
+        required: true
+        type: string
+      publishToPreprod:
+        description: 'Publish the built package to Nuxeo Marketplace preprod'
+        type: boolean
+        default: false
+
+concurrency:
+  # Keyed on the package as well as the ref: two different configuration packages have
+  # nothing to serialise against each other, and cancelling an in-flight publish would
+  # leave the Marketplace in a state nobody chose.
+  group: publish-config-package-${{ github.ref }}-${{ inputs.package }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve the package
+        id: resolve
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          # The input is interpolated into a path, so it has to be a single directory name
+          # and nothing more — a slash or a dot would reach outside `config-packages/` and
+          # package bytes from somewhere nobody reviewed.
+          if [[ ! "$PACKAGE" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            echo "::error::'$PACKAGE' is not a configuration package directory name"
+            exit 1
+          fi
+          if [[ ! -f "config-packages/$PACKAGE/build.mjs" ]]; then
+            echo "::error::config-packages/$PACKAGE/build.mjs does not exist"
+            exit 1
+          fi
+          echo "dir=config-packages/$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "out=dist/config-packages/$PACKAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Build the package
+        id: build
+        env:
+          DIR: ${{ steps.resolve.outputs.dir }}
+          OUT: ${{ steps.resolve.outputs.out }}
+        run: |
+          set -euo pipefail
+          # `build.mjs` has no dependencies by design, so there is no `npm ci` here and no
+          # registry token: it runs anywhere Node 20 does. It applies the checks the server
+          # applies and exits non-zero rather than writing a zip Nuxeo would install and
+          # then silently ignore.
+          node "$DIR/build.mjs" --out "$OUT"
+
+          # The zip is named from `package.xml` — `<name>-<version>.zip` — which need not
+          # match the directory, so it is discovered rather than reconstructed here. The
+          # output directory is fresh on a runner, so anything other than exactly one zip
+          # means the build did something unexpected and should not be published.
+          shopt -s nullglob
+          ZIPS=("$OUT"/*.zip)
+          if [[ ${#ZIPS[@]} -ne 1 ]]; then
+            echo "::error::expected exactly one zip in $OUT, found ${#ZIPS[@]}"
+            exit 1
+          fi
+          echo "zip=${ZIPS[0]}" >> "$GITHUB_OUTPUT"
+
+      # Uploaded whatever the run was for. On a build-only run this is how you get the
+      # reviewed bytes out — to inspect them, or to upload them by hand through the
+      # Marketplace web UI if that is the route taken.
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-package-${{ inputs.package }}
+          path: ${{ steps.build.outputs.zip }}
+          retention-days: 30
+          if-no-files-found: error
+
+      # Compares against the string: `github.event.inputs` stringifies booleans, so
+      # `== true` would never match, whether dispatched from the UI or `gh workflow run`.
+      #
+      # The version published is the one declared in `package/package.xml`; unlike
+      # `build-marketplace.yml` nothing stamps a timestamp over it. A configuration
+      # package's version is what `nuxeoctl` compares to decide an upgrade, so it is a
+      # reviewed property of the source, not of the run that shipped it. Raise it in the
+      # same commit as the change, as the package README says.
+      - name: Publish to Nuxeo Marketplace (Preprod)
+        if: github.event.inputs.publishToPreprod == 'true'
+        uses: Alfresco/alfresco-build-tools/.github/actions/nuxeo/nos-publish@v12.10.3
+        with:
+          nos-env: staging
+          nos-username: ${{ secrets.CONNECT_PREPROD_USERNAME }}
+          nos-token: ${{ secrets.CONNECT_PREPROD_PASSWORD }}
+          skip-verify: 'false'
+          package-path: ${{ steps.build.outputs.zip }}
