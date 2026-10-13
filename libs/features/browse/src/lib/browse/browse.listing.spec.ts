@@ -5,8 +5,7 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { ROUTES, Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -424,6 +423,69 @@ describe('BrowseComponent — rendered document list', () => {
       'You do not have access',
     );
     expect(query('nxs-error-state button')).toBeNull();
+  });
+
+  describe('a folder that cannot be opened, after one that could', () => {
+    /** Lets the test navigate: the suite's router has no routes of its own. */
+    const anyUrl = { provide: ROUTES, multi: true, useValue: [{ path: '**', children: [] }] };
+
+    function trail(): { links: (string | null)[]; current: string | undefined } {
+      const nav = query('nxs-breadcrumbs nav');
+      return {
+        links: [...(nav?.querySelectorAll('a') ?? [])].map((a) => a.getAttribute('href')),
+        current: nav?.querySelector('[aria-current="page"]')?.textContent?.trim(),
+      };
+    }
+
+    it('keeps nothing of the folder before: not its title, count, actions or place in the trail', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: [doc({ uid: 'c-1', title: 'Report.pdf' })], totalSize: 1 }),
+      );
+      const component = await render([anyUrl]);
+      await settleOutlets();
+      expect(query('nxs-folder-header .nxs-folder-header__heading')?.textContent?.trim()).toBe(
+        'Workspace',
+      );
+      expect(component.canCreateContentHere()).toBe(true);
+
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+      await TestBed.inject(Router).navigateByUrl(
+        '/browse/default-domain/workspaces/Secret%20files',
+      );
+      await settleOutlets();
+
+      expect(lastRequest().path).toBe('/default-domain/workspaces/Secret files');
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(component.currentDoc()).toBeNull();
+      expect(query('nxs-folder-header .nxs-folder-header__heading')).toBeNull();
+      expect(component.canCreateContentHere()).toBe(false);
+      expect(query('.result-count')).toBeNull();
+      expect(rowTitles()).toEqual([]);
+      expect(trail()).toEqual({
+        links: ['/browse', '/browse/default-domain', '/browse/default-domain/workspaces'],
+        current: 'Secret files',
+      });
+    });
+
+    it('keeps the folder when only another page of it fails', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({
+          folder,
+          entries: [doc({ uid: 'c-1', title: 'First page' })],
+          totalSize: -2,
+          hasNextPage: true,
+        }),
+      );
+      const component = await render();
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 500 })));
+      (query('nxs-document-list .nxs-pager__next') as HTMLButtonElement).click();
+      await settleOutlets();
+
+      expect(lastRequest().page.currentPageIndex).toBe(1);
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+      expect(component.currentDoc()).toBe(folder);
+      expect(trail().current).toBe('Workspace');
+    });
   });
 
   it('says a folder that no longer exists was not found', async () => {

@@ -291,6 +291,10 @@ export class BrowseComponent {
   /** Which error state `error` shows: the status of the request that failed. */
   readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly currentDoc = signal<NuxeoDocument | null>(null);
+  /** The folder the address names when it could not be opened — refused, missing or failing. */
+  private readonly unopenedPath = signal<string | null>(null);
+  /** The address whose folder is on screen, as it was asked for. */
+  private openedPath: string | null = null;
   /** Nuxeo's count of the folder's entries; negative when it did not count them. */
   readonly totalSize = signal(0);
   readonly pageSize = PAGE_SIZE;
@@ -684,16 +688,19 @@ export class BrowseComponent {
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();
     const doc = this.currentDoc();
+    // A folder that could not be opened has no document, so its trail comes from the address and
+    // never ends at the folder shown before it.
+    const path = doc?.path ?? this.unopenedPath();
     const crumbs: NxsBreadcrumbItem[] = [
       { label: this.translate.instant('browse.breadcrumb.root'), routerLink: '/browse' },
     ];
-    if (!doc || doc.path === '/') return crumbs;
-    const parts = doc.path.split('/').filter(Boolean);
+    if (!path || path === '/') return crumbs;
+    const parts = path.split('/').filter(Boolean);
     let accumulated = '';
     for (const part of parts) {
       accumulated += `/${part}`;
-      const isCurrent = accumulated === doc.path;
-      const label = isCurrent ? doc.title : decodeNuxeoPathSegment(part);
+      const isCurrent = accumulated === path;
+      const label = isCurrent && doc ? doc.title : decodeNuxeoPathSegment(part);
       if (isCurrent) {
         crumbs.push({ label });
       } else {
@@ -824,6 +831,16 @@ export class BrowseComponent {
           this.errorStatus.set(payload.error);
           this.error.set(this.translate.instant('browse.message.failed-to-load-folder-contents'));
           this.loading.set(false);
+          // Another folder failing leaves nothing of the one before it — not its title and
+          // actions in the header, its count, nor the end of the trail. The same folder failing
+          // on another page or order keeps them.
+          if (payload.nuxeoPath !== this.openedPath) {
+            this.openedPath = null;
+            this.currentDoc.set(null);
+            this.entries.set([]);
+            this.totalSize.set(-1);
+            this.unopenedPath.set(payload.nuxeoPath);
+          }
           return;
         }
         const { folder, entries, totalSize, redirectTo } = payload.result;
@@ -833,6 +850,8 @@ export class BrowseComponent {
           return;
         }
         this.currentDoc.set(folder);
+        this.openedPath = payload.nuxeoPath;
+        this.unopenedPath.set(null);
         this.browseContext.setFromNuxeoPath(folder.path);
         this.entries.set(entries);
         this.hasNextPage.set(payload.result.hasNextPage === true);
