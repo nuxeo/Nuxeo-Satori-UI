@@ -149,6 +149,9 @@ jobs:
           # The guardrail we hand customers, run against our own reference library — so we
           # do not learn it is broken from a customer's CI log.
           npm run beta:customer-guardrails
+          # The command that regenerates the shared derived files after a merge, held to its
+          # derived-file list and its conflict handling.
+          npm run sync:derived-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
           # instead would be permanently red (9 high, none shipped) and so bypassed.
@@ -208,6 +211,41 @@ jobs:
             if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
           done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
+
+      # The stories' play functions, run in Chromium against the Storybook just built (Codex audit
+      # F08). Storybook runs a play function only when someone opens the story, so one that started
+      # failing stayed green everywhere. Fails on a throwing play — watched as its own event, because
+      # Storybook reports `storyFinished: success` even then — a render error, an uncaught page error
+      # or an untranslated key. axe results from the a11y addon are printed, never judged:
+      # docs/accessibility.md gives that verdict to the axe runtime layer. Only the token-free
+      # Storybook; the Satori adapter's needs GitHub Packages and is not run. Playwright is installed
+      # with --no-save, so the lockfile and `npm ci` are untouched. About two minutes.
+      - name: Storybook interactions (satori-components)
+        shell: bash
+        timeout-minutes: 10
+        env:
+          # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+        run: |
+          set -euo pipefail
+          affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
+          if ! grep -qx satori-components <<<"$affected"; then
+            echo "satori-components is not affected: Storybook interactions NOT RUN"
+            exit 0
+          fi
+          version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
+          npm install --no-save --no-audit --no-fund "@playwright/test@${version}"
+          npx playwright install --with-deps chromium
+          node scripts/storybook-interactions.mjs --json "$RUNNER_TEMP/storybook-interactions.json"
+
+      - name: Upload the Storybook interaction results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: storybook-interactions
+          path: ${{ runner.temp }}/storybook-interactions.json
+          if-no-files-found: ignore
 
       # The three checks that guard the published package. Run unconditionally rather
       # than only when affected: they are ~30s in total, and they are the checks that

@@ -58,7 +58,10 @@ type Story = StoryObj<NxsTagInputComponent>;
 /** Type `con`: contract and confidential are suggested, and the typed text can be added. */
 export const Default: Story = {};
 
-/** A suggestion chosen, then a new tag typed and added with Enter. */
+/**
+ * A suggestion chosen, then a new tag typed and added from its "Add" entry. Enter and a comma add
+ * one too; the spec covers those, since a synthetic key event here carries no `keyCode`.
+ */
 export const AddingTags: Story = {
   play: async ({ canvasElement }) => {
     const field = within(canvasElement).getByRole('combobox', { name: 'Tags' });
@@ -66,7 +69,10 @@ export const AddingTags: Story = {
     await userEvent.click(
       await within(document.body).findByRole('option', { name: 'confidential' }),
     );
-    await userEvent.type(field, 'renewal{Enter}');
+    await userEvent.type(field, 'renewal');
+    await userEvent.click(
+      await within(document.body).findByRole('option', { name: 'Add “renewal”' }),
+    );
     await expect(canvasElement.querySelector('output')).toHaveTextContent('confidential, renewal');
   },
 };

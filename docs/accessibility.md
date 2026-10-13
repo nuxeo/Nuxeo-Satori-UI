@@ -35,8 +35,10 @@ thing that turns a run red and the number anyone quotes.
 **Observation outside the four layers: the component library's Storybook.** Its accessibility
 panel (`@storybook/addon-a11y`) runs axe over every story of `libs/shared/satori-components`. It owns
 no verdict. `.storybook/preview.ts` sets `a11y.test` to `todo`, which reports a violation as a
-warning rather than failing the story, and no CI job runs it. Treat what it shows as a cross-check:
-triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
+warning rather than failing the story. CI's Storybook interaction runner
+(`scripts/storybook-interactions.mjs`) runs every story, play function included, and prints how many
+stories the panel's axe pass found violations in — a count, never a failure. Treat what it shows as a
+cross-check: triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
 its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
 difference between the two is not an engine difference.
 

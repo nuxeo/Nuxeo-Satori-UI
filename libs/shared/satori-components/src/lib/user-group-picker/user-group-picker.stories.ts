@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError, type Observable } from 'rxjs';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   DocumentDetailService,
@@ -171,9 +171,10 @@ export const ServerError: Story = {
   decorators: [applicationConfig({ providers: directory('refused') })],
   play: async ({ canvasElement }) => {
     await userEvent.type(within(canvasElement).getByRole('combobox', { name: 'Grant to' }), 'smi');
-    await expect(
-      await within(document.body).findByRole('option', { name: 'Search failed. Try again.' }),
-    ).toBeVisible();
+    const status = await within(document.body).findByRole('option', {
+      name: 'Search failed. Try again.',
+    });
+    await waitFor(() => expect(status).toBeVisible());
   },
 };
 

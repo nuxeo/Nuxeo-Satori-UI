@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError } from 'rxjs';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   DirectoryService,
@@ -134,11 +134,11 @@ export const LoadFailed: Story = {
   decorators: [applicationConfig({ providers: [vocabularies('refused')] })],
   play: async ({ canvasElement }) => {
     await userEvent.click(within(canvasElement).getByRole('combobox', { name: 'Nature' }));
-    await expect(
-      await within(document.body).findByRole('option', {
-        name: 'Could not load the list. Open it again to try again.',
-      }),
-    ).toBeVisible();
+    const status = await within(document.body).findByRole('option', {
+      name: 'Could not load the list. Open it again to try again.',
+    });
+    // The panel fades in; wait for it rather than judging its first frame.
+    await waitFor(() => expect(status).toBeVisible());
   },
 };
 
