@@ -114,7 +114,7 @@ describe('the named colours', () => {
     ['green', '#dae2f9', 'secondary-fixed'],
     ['orange', '#d7e3ff', 'primary-fixed'],
     ['pink', '#ecdcff', 'tertiary-fixed'],
-  ] as const)('rejects %s on the theme’s %s (%s)', (color, role) => {
+  ] as const)('rejects %s on the theme’s %s (%s)', (color, role, _name) => {
     expect(inRange(hue(rgb(role)), HUE_RANGES[color])).toBe(false);
   });
 
