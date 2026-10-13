@@ -1,6 +1,6 @@
 /**
  * NXSAT-539 / IBM 2618099297 — header More actions must not expose the more_vert ligature as
- * visible label text while aria-label names "More actions" (WCAG 2.5.3 label-in-name).
+ * visible label text that conflicts with the accessible name (WCAG 2.5.3 label-in-name).
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
