@@ -160,7 +160,11 @@ export {
 } from './lib/services/document-import.service';
 export { TaskService } from './lib/services/task.service';
 export { CollectionService } from './lib/services/collection.service';
-export { BrowseService } from './lib/services/browse.service';
+export {
+  BrowseService,
+  type BrowsePageRequest,
+  type BrowseSortEntry,
+} from './lib/services/browse.service';
 export {
   BrowseContextService,
   type ClipboardPasteEvent,

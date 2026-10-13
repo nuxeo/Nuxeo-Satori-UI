@@ -72,13 +72,13 @@ getByPath(nuxeoPath: string): Observable<NuxeoDocument>
 getUserWorkspace(): Observable<NuxeoDocument>  // POST automation/User.GetUserWorkspace (Web UI)
 getRepositoryRoot(): Observable<NuxeoDocument>  // falls back to NXQL when GET /path/ is denied
 getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>  // root + top-level folders for all permission profiles
-getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: { currentPageIndex?: number; sort?: { sortBy: string; sortOrder: 'ASC' | 'DESC' }[] }): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks; `page` is the bridge's server paging and sort; below the root a failure is Nuxeo's own HttpErrorResponse, so map it with nxsErrorStatus()
-getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // Favorites / Collection member listing
+getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: BrowsePageRequest): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks; `page` ({ currentPageIndex?, sort?: { sortBy, sortOrder }[] }) is server paging and sort, honoured by every source — folders, Root, Domain, Favorites and Collection; below the root a failure is Nuxeo's own HttpErrorResponse, so map it with nxsErrorStatus()
+getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // Favorites / Collection member listing, one page in the requested order; a sort key the provider cannot use is HTTP 400
 getFolderContext(nuxeoPath: string): Observable<NuxeoDocument>  // includes @subtypes enricher
 getCreatableSubtypes(nuxeoPath: string): Observable<string[]>  // parsed allowed child types
 getChildren(nuxeoPath: string, pageSize?: number, currentPageIndex?: number): Observable<NuxeoDocumentList>
 getTreeChildren(parentUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // tree_children page provider, all pages
-getNavTreeChildren(parent: NuxeoDocument, pageSize?: number): Observable<NuxeoDocumentList>  // Root/workspaces: tree_children; Domain: @children, folders only, total = folders kept
+getNavTreeChildren(parent: NuxeoDocument, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // Root/workspaces: tree_children; Domain: @children, folders only, total = folders kept; with `page`, Root and Domain answer that one page in that order (a listing), without it Root lists every page (a tree level)
 getFolderIdsWithSubfolders(parentUids: readonly string[]): Observable<ReadonlySet<string> | null>  // one NXQL probe per tree level; null = incomplete, keep arrows
 updateDocument(uid: string, properties: Record<string, unknown>, options?: { enrichPermissions?: boolean }): Observable<NuxeoDocument>
 copyDocuments(uids: string[], targetUid: string): Observable<NuxeoDocument[]>  // Document.Copy automation
@@ -226,7 +226,7 @@ markIngested(documentUids: string[]): Observable<NuxeoDocument[]>
 getById(uid: string): Observable<NuxeoDocument>
 getAll(pageSize?: number): Observable<NuxeoDocumentList>
 getFavorites(userId: string, pageSize?: number): Observable<NuxeoDocumentList>
-getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>
+getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // one page, in the requested order; totalSize is the collection's size on every page
 updateProperties(uid: string, properties: Record<string, unknown>): Observable<NuxeoDocument>
 bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 ```
