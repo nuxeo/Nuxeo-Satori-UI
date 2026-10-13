@@ -10,8 +10,11 @@
     type="button"
     mat-icon-button
     class="panel-toggle-btn"
-    [attr.aria-label]="'document-detail.document-detail.toggle-details-panel' | translate"
+    [matTooltip]="detailsPanelToggleLabelKey() | translate"
+    [attr.aria-label]="detailsPanelToggleLabelKey() | translate"
   >
-    <mat-icon>info_outline</mat-icon>
+    <mat-icon aria-hidden="true">{{
+      propertiesPanelOpen() ? 'info' : 'info_outline'
+    }}</mat-icon>
   </button>
 </div>

@@ -9,11 +9,12 @@
  *
  * Source-level selector contract: `document-detail-panel-toggle-focus-ring.spec.ts`.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 
@@ -55,7 +56,7 @@ function productionTabHeaderBackground(host: HTMLElement): string {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatTabsModule, TranslateModule],
+  imports: [MatButtonModule, MatIconModule, MatTabsModule, MatTooltipModule, TranslateModule],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-toggle-focus.scss',
@@ -63,7 +64,16 @@ function productionTabHeaderBackground(host: HTMLElement): string {
   ],
   templateUrl: './panel-toggle-focus-ring.spec.html',
 })
-class PanelToggleFocusHostComponent {}
+class PanelToggleFocusHostComponent {
+  /** Matches production default: properties panel visible on first paint. */
+  readonly propertiesPanelOpen = signal(true);
+
+  detailsPanelToggleLabelKey(): 'document-detail.hide-details' | 'document-detail.show-details' {
+    return this.propertiesPanelOpen()
+      ? 'document-detail.hide-details'
+      : 'document-detail.show-details';
+  }
+}
 
 describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)', () => {
   let originalTheme: string | null;
@@ -94,6 +104,8 @@ describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)'
     fixture.detectChanges();
     await fixture.whenStable();
     const button = fixture.nativeElement.querySelector('.panel-toggle-btn') as HTMLButtonElement;
+    expect(button.getAttribute('aria-label')).toBe('Hide details');
+    expect(button.getAttribute('aria-label')).not.toBe('Toggle details panel');
     return { fixture, button };
   }
 
@@ -104,6 +116,20 @@ describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)'
       document.documentElement.setAttribute('data-app-theme', theme);
     }
   }
+
+  it('exposes the production show/hide details accessible name (not the retired toggle key)', async () => {
+    const { fixture, button } = await mount();
+    try {
+      expect(button.getAttribute('aria-label')).toBe('Hide details');
+      fixture.componentInstance.propertiesPanelOpen.set(false);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(button.getAttribute('aria-label')).toBe('Show details');
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
 
   it('draws no outline while unfocused', async () => {
     const { fixture, button } = await mount();
