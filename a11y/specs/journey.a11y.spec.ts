@@ -682,9 +682,45 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
  * the journey reached the intended DOM state: control present, tooltip visible, tooltip text
  * matches the control's accessible name (precondition, not axe).
  */
+const DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION = '[data-action-id="app.toolbar.addToCollection"]';
+
 /**
- * NXENG-808 / NXSAT-535 — keyboard focus on the header **More actions** overflow trigger before
- * the journey scan.
+ * NXENG-808 — keyboard focus on a header toolbar icon button before the journey scan.
+ *
+ * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
+ * (`docs/accessibility.md`); this only proves the scan runs with Add to collection focused.
+ */
+async function enterDocumentDetailHeaderToolbarIconFocusState(page: Page): Promise<void> {
+  const addToCollection = page.locator(DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION).first();
+  await expect(
+    addToCollection,
+    'Add to collection must render on a non-trashed document detail header',
+  ).toBeVisible();
+
+  const back = page
+    .locator('.detail-header > button.mat-mdc-icon-button, .detail-header > button.mat-icon-button')
+    .first();
+  await expect(back, 'detail header back button must be focusable').toBeVisible();
+  await back.focus();
+
+  const maxSteps = 120;
+  for (let step = 0; step <= maxSteps; step++) {
+    const onTarget = await page.evaluate((sel) => {
+      const target = document.querySelector(sel);
+      return target !== null && document.activeElement === target;
+    }, DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION);
+    if (onTarget) {
+      return;
+    }
+    if (step === maxSteps) {
+      throw new Error(`Tab did not reach Add to collection within ${maxSteps} steps`);
+    }
+    await page.keyboard.press('Tab');
+  }
+}
+
+/**
+ * NXSAT-535 — keyboard focus on the header **More actions** overflow trigger before a journey scan.
  *
  * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
  * (`docs/accessibility.md`); this only proves the scan runs with that control focused.
@@ -772,10 +808,18 @@ journeyTest('document-detail', async ({ signedIn: page, a11y }) => {
   await waitForScreenSettled(page, 'lib-document-detail', true);
   await expectSurfaceUsable(page, 'lib-document-detail', 'document detail');
   await enterDocumentDetailReplaceMainFileTooltipState(page);
-  await enterDocumentDetailHeaderMoreActionsFocusState(page);
+  await enterDocumentDetailHeaderToolbarIconFocusState(page);
 
   await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
   await emitScreenReport(a11y, journeyReportName('document-detail'));
+
+  await enterDocumentDetailHeaderMoreActionsFocusState(page);
+  await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
+  await emitScreenReport(
+    a11y,
+    `${journeyReportName('document-detail')}-header-more-actions`,
+    'header More actions overflow trigger focused (NXSAT-535)',
+  );
 });
 
 // ─────────────────────────── core flows ───────────────────────────
