@@ -418,6 +418,26 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       const inline = actionIds();
       expect(inline.indexOf('app.toolbar.delete')).toBeLessThan(inline.indexOf('app.toolbar.edit'));
     });
+
+    /** NXSAT-535 / IBM 2589851771 — overflow menu trigger matches header toolbar icon styling. */
+    it('renders the production More actions overflow trigger in .header-actions', async () => {
+      await render({});
+
+      const buttons = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.detail-header .header-actions button.mat-mdc-icon-button',
+        ),
+      ) as HTMLButtonElement[];
+      const button = buttons.find(
+        (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
+      );
+      expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
+      expect(
+        button!.querySelector('.cdk-visually-hidden')?.textContent?.trim(),
+        'More actions visually hidden accessible name',
+      ).toBeTruthy();
+      expect(button!.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
+    });
   });
 
   describe('tabs', () => {
