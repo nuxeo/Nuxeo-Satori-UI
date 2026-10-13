@@ -381,8 +381,11 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       const button = fixture.nativeElement.querySelector(
         '[data-action-id="acme.toolbar.archive"]',
       ) as HTMLElement;
-      expect(button.getAttribute('aria-label')).toBe('Archive');
-      expect(button.textContent).toContain('inventory_2');
+      expect(button.getAttribute('aria-label')).toBeNull();
+      expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Archive');
+      const icon = button.querySelector('mat-icon');
+      expect(icon?.getAttribute('aria-hidden')).toBe('true');
+      expect(icon?.textContent?.trim()).toBe('inventory_2');
     });
 
     /** The shipped default is unchanged: the packaged ids are the ones that render. */
