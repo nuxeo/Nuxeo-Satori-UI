@@ -9,10 +9,12 @@ import {
   inject,
   input,
   model,
+  output,
   signal,
   untracked,
   viewChild,
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import type {
   AbstractControl,
   ControlValueAccessor,
@@ -24,7 +26,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInput, MatInputModule } from '@angular/material/input';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { map, type Observable } from 'rxjs';
+import { Subject, catchError, map, of, switchMap, type Observable } from 'rxjs';
 
 import {
   NuxeoApiBase,
@@ -36,7 +38,7 @@ import { NxsDocTypeIconComponent } from '../doc-type-icon/doc-type-icon.componen
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';
 
-/** A document, as the input offers and returns it. */
+/** A document the input offered: what it shows, and what `documentChange` reports. */
 export interface NxsDocumentReference {
   readonly uid: string;
   readonly title: string;
@@ -64,14 +66,23 @@ export function nxsDocumentSuggestionQuery(term: string, types: readonly string[
   return query;
 }
 
+/** The query that finds the one document a stored uid or path names. Escaped, as above. */
+function lookupQuery(id: string, idProperty: 'uid' | 'path'): string {
+  const field = idProperty === 'path' ? 'ecm:path' : 'ecm:uuid';
+  return `SELECT * FROM Document WHERE ${field} = '${escapeNxqlLiteral(id)}'`;
+}
+
 /**
- * A field that finds a document as the user types and returns a reference to the one chosen — for a
- * property that points at another document, as Web UI's `nuxeo-document-suggestion` is.
+ * A field that finds a document as the user types and returns the uid of the one chosen — for a
+ * property that points at another document, as Web UI's `nuxeo-document-suggestion` is: its value
+ * is what the property stores, the uid, or the path with `idProperty="path"`.
  *
  * It searches the repository's full text from three characters, twenty results at a time, leaving
  * out hidden documents, versions and the trash, as Web UI does; `documentTypes` narrows it further.
- * Each result shows its type icon, title and path. Typing after a choice clears it, and text typed
- * and not chosen is an `nxsChooseFromList` error on the form.
+ * Each result shows its type icon, title and path. A uid or path the form already holds is looked
+ * up to show its title; one the user may not read, or that no longer exists, is kept and shown as it
+ * is. Typing after a choice clears it, and text typed and not chosen is an `nxsChooseFromList` error
+ * on the form. `documentChange` reports the whole document chosen, for a host that shows more.
  */
 @Component({
   selector: 'nxs-document-reference-input',
@@ -97,22 +108,31 @@ export class NxsDocumentReferenceInputComponent
   readonly label = input.required<string>();
   /** Offer only documents of these types, such as `['File', 'Note']`. Every type when empty. */
   readonly documentTypes = input<readonly string[]>([]);
+  /** What the value holds, as Web UI's `idProperty`: the document's uid (the default) or its path. */
+  readonly idProperty = input<'uid' | 'path'>('uid');
   /** Help under the field, already translated. */
   readonly hint = input('');
   /** Marks the field required. With a form, its `Validators.required` does the same. */
   readonly required = input(false, { transform: booleanAttribute });
   /** Shown but not editable. A form's `disable()` does the same. */
   readonly disabled = input(false, { transform: booleanAttribute });
-  /** The document chosen, or `null`. Two-way; a form control carries the same value. */
-  readonly value = model<NxsDocumentReference | null>(null);
+  /** The uid (or path) of the document chosen, or `null`. Two-way; a form control carries it too. */
+  readonly value = model<string | null>(null);
+  /** The document the user chose, or `null` when the choice was cleared. */
+  readonly documentChange = output<NxsDocumentReference | null>();
 
   protected readonly minChars = WEB_UI_MIN_CHARS;
   private readonly api = inject(NuxeoApiBase);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
   private readonly input = viewChild.required(MatInput);
-  private readonly control = new NxsPickerControl<NxsDocumentReference | null>();
+  private readonly control = new NxsPickerControl<string | null>();
+  private readonly lookups = new Subject<string>();
+  /** The value the field last set itself, so its own changes are not mistaken for a host's. */
+  private committed: string | null = null;
 
+  /** The document the value names, once known: chosen here, or looked up from a stored uid. */
+  protected readonly document = signal<NxsDocumentReference | null>(null);
   protected readonly text = signal('');
   protected readonly finder = nxsSearchAsYouType<NxsDocumentReference>(
     (term) => this.find(term),
@@ -129,10 +149,30 @@ export class NxsDocumentReferenceInputComponent
     typeof document === 'string' ? document : (document?.title ?? '');
 
   constructor() {
+    this.lookups
+      .pipe(
+        switchMap((id) =>
+          this.api.nxqlSearch(lookupQuery(id, this.idProperty()), 1).pipe(
+            map((list) => ({ id, found: list.entries?.[0] ? toReference(list.entries[0]) : null })),
+            catchError(() => of({ id, found: null })),
+          ),
+        ),
+        takeUntilDestroyed(),
+      )
+      .subscribe(({ id, found }) => {
+        if (this.value() !== id || !found) return;
+        this.document.set(found);
+        this.text.set(found.title);
+      });
+    // A value set from outside is shown by its id at once, then by its title once looked up.
     effect(() => {
-      const chosen = this.value();
+      const value = this.value();
       untracked(() => {
-        if (chosen) this.text.set(chosen.title);
+        if (value === this.committed) return;
+        this.committed = value;
+        this.document.set(null);
+        this.text.set(value ?? '');
+        if (value) this.lookups.next(value);
       });
     });
     effect(() => {
@@ -167,12 +207,11 @@ export class NxsDocumentReferenceInputComponent
     this.input().updateErrorState();
   }
 
-  writeValue(value: NxsDocumentReference | null): void {
-    this.value.set(value ?? null);
-    this.text.set(value?.title ?? '');
+  writeValue(value: string | null): void {
+    this.value.set(value || null);
   }
 
-  registerOnChange(fn: (value: NxsDocumentReference | null) => void): void {
+  registerOnChange(fn: (value: string | null) => void): void {
     this.control.registerOnChange(fn);
   }
 
@@ -198,18 +237,23 @@ export class NxsDocumentReferenceInputComponent
 
   protected onInput(event: Event): void {
     const typed = (event.target as HTMLInputElement).value;
+    const shown = this.document()?.title ?? this.value();
     this.text.set(typed);
-    if (this.value() && typed !== this.value()?.title) this.choose(null);
+    if (this.value() && typed !== shown) this.choose(null);
     this.finder.query(typed);
   }
 
   protected choose(document: NxsDocumentReference | null): void {
-    this.value.set(document);
+    const id = document ? (this.idProperty() === 'path' ? document.path : document.uid) : null;
+    this.committed = id;
+    this.value.set(id);
+    this.document.set(document);
     if (document) {
       this.text.set(document.title);
       this.finder.reset();
     }
-    this.control.changed(document);
+    this.control.changed(id);
+    this.documentChange.emit(document);
   }
 
   protected clear(): void {

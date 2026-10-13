@@ -15,13 +15,14 @@ property whose values come from a vocabulary.
 - **The whole vocabulary, narrowed as you type.** Focusing the field lists every entry; typing keeps
   those whose label or id contains the text.
 - **Hierarchies, as in Web UI.** An `l10n` vocabulary — `l10nsubjects`, `l10ncoverage` — lists each
-  entry under its parent, and a chosen entry reads `Parent/Child`, such as `Europe/France`. Typing a
+  entry under its parent. A chosen child is stored as Web UI stores it, `europe/France`, and reads
+  `Europe/France`; a parent with no children, such as `antarctica`, is chosen as itself. Typing a
   parent's name finds its children.
 - **One or several.** With `multiple`, each choice is a chip, removed with its button or Backspace,
   and a chosen entry is no longer offered.
 - **Never drops a value.** An id the vocabulary no longer has is kept and shown as it is.
-- **A form control.** The value is an entry id, or a list of ids with `multiple`. Text typed and not
-  chosen is an error on the form, `nxsChooseFromList`.
+- **A form control.** The value is an entry's id — `parent/id` for a child in a hierarchy — or a list
+  of them with `multiple`. Text typed and not chosen is an error on the form, `nxsChooseFromList`.
 
 ## Demo showcase
 
@@ -65,7 +66,7 @@ by page, from `/api/v1/directory/<name>`, with each entry's parent. Both go thro
 focusing the field tries again.
 
 **In these stories** `DirectoryService` is an in-memory fake: `nature` holds four entries and
-`l10ncoverage` two continents and four countries.
+`l10ncoverage` three continents and four countries, held as the server holds them.
 
 ## Examples
 

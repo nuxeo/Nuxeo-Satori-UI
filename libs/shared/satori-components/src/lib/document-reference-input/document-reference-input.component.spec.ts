@@ -54,12 +54,16 @@ describe('nxsDocumentSuggestionQuery', () => {
   template: `<nxs-document-reference-input
     label="Related contract"
     [documentTypes]="types()"
+    [idProperty]="idProperty()"
     [formControl]="reference"
+    (documentChange)="chosen.push($event)"
   />`,
 })
 class HostComponent {
   readonly types = signal<readonly string[]>([]);
-  readonly reference = new FormControl<NxsDocumentReference | null>(null);
+  readonly idProperty = signal<'uid' | 'path'>('uid');
+  readonly reference = new FormControl<string | null>(null);
+  readonly chosen: (NxsDocumentReference | null)[] = [];
 }
 
 describe('NxsDocumentReferenceInputComponent', () => {
@@ -87,9 +91,11 @@ describe('NxsDocumentReferenceInputComponent', () => {
 
   beforeEach(async () => {
     vi.useFakeTimers();
-    nxqlSearch = vi.fn(() =>
-      of({ entries: [doc('c1', 'Supplier contract'), doc('n1', 'Contract notes', 'Note')] }),
-    );
+    const docs = [doc('c1', 'Supplier contract'), doc('n1', 'Contract notes', 'Note')];
+    nxqlSearch = vi.fn((query: string) => {
+      const uid = /ecm:uuid = '([^']*)'/.exec(query)?.[1];
+      return of({ entries: uid === undefined ? docs : docs.filter((d) => d.uid === uid) });
+    });
     await TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [
@@ -132,17 +138,29 @@ describe('NxsDocumentReferenceInputComponent', () => {
     );
   });
 
-  it('returns a reference to the document chosen', async () => {
+  it('returns the uid of the document chosen, as Web UI does, and reports the document', async () => {
     await type('contract');
     options()[1].click();
     await render();
-    expect(host.reference.value).toEqual({
-      uid: 'n1',
-      title: 'Contract notes',
-      type: 'Note',
-      path: '/default-domain/workspaces/Contract notes',
-    });
+    expect(host.reference.value).toBe('n1');
     expect(input().value).toBe('Contract notes');
+    expect(host.chosen).toEqual([
+      {
+        uid: 'n1',
+        title: 'Contract notes',
+        type: 'Note',
+        path: '/default-domain/workspaces/Contract notes',
+      },
+    ]);
+  });
+
+  it('returns the path instead with idProperty="path"', async () => {
+    host.idProperty.set('path');
+    await render();
+    await type('contract');
+    options()[0].click();
+    await render();
+    expect(host.reference.value).toBe('/default-domain/workspaces/Supplier contract');
   });
 
   it('clears the choice when the user types again, and the half-typed text is an error', async () => {
@@ -162,12 +180,39 @@ describe('NxsDocumentReferenceInputComponent', () => {
     ]);
   });
 
-  it('shows a reference the form already holds, and clears it with the x button', async () => {
-    host.reference.setValue({ uid: 'c1', title: 'Supplier contract', type: 'File', path: '/p' });
+  it('looks up the title of a uid the form already holds, and clears it with the x button', async () => {
+    host.reference.setValue('c1');
     await render();
+    expect(nxqlSearch).toHaveBeenLastCalledWith("SELECT * FROM Document WHERE ecm:uuid = 'c1'", 1);
     expect(input().value).toBe('Supplier contract');
     root().querySelector<HTMLButtonElement>('button.nxs-picker__clear')?.click();
     await render();
     expect(host.reference.value).toBeNull();
+    expect(host.chosen).toEqual([null]);
+  });
+
+  it('keeps a uid it cannot look up, shown as it is', async () => {
+    host.reference.setValue('gone');
+    await render();
+    expect(input().value).toBe('gone');
+    expect(host.reference.value).toBe('gone');
+    expect(host.reference.valid).toBe(true);
+  });
+
+  it('keeps a uid whose lookup fails, shown as it is', async () => {
+    nxqlSearch.mockReturnValueOnce(throwError(() => ({ status: 403 })));
+    host.reference.setValue('secret');
+    await render();
+    expect(input().value).toBe('secret');
+    expect(host.reference.value).toBe('secret');
+  });
+
+  it('escapes a stored uid in its lookup', async () => {
+    host.reference.setValue("x' OR 1=1 OR 'y");
+    await render();
+    expect(nxqlSearch).toHaveBeenLastCalledWith(
+      "SELECT * FROM Document WHERE ecm:uuid = 'x\\' OR 1=1 OR \\'y'",
+      1,
+    );
   });
 });

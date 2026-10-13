@@ -1580,7 +1580,9 @@ component `nxs.components.permissionsPanel`.
 document searches run, one for tags, 300 ms after the last key; twenty documents per search. The
 document query is Web UI's `default_document_suggestion` page provider's — `ecm:fulltext LIKE
 '<term>*'`, not hidden, not a version, not trashed — with the term and any document type escaped by
-`escapeNxqlLiteral`, so they stay text in the query.
+`escapeNxqlLiteral`, so they stay text in the query. A uid (or path) the form already holds is looked
+up with `SELECT * FROM Document WHERE ecm:uuid = '<uid>'` (or `ecm:path`), page size 1, escaped the
+same way.
 
 **`TagService.searchTags` is not used:** it reads `/api/v1/directory/label_tag_entry`, which Nuxeo
 2025 answers with `404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never

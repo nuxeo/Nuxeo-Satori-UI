@@ -323,11 +323,14 @@ interface NxsDocumentReference {
 class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly label: _angular_core.InputSignal<string>;
     readonly documentTypes: _angular_core.InputSignal<readonly string[]>;
+    readonly idProperty: _angular_core.InputSignal<"path" | "uid">;
     readonly hint: _angular_core.InputSignal<string>;
     readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly value: _angular_core.ModelSignal<NxsDocumentReference | null>;
+    readonly value: _angular_core.ModelSignal<string | null>;
+    readonly documentChange: _angular_core.OutputEmitterRef<NxsDocumentReference | null>;
     protected readonly minChars = 3;
+    protected readonly document: _angular_core.WritableSignal<NxsDocumentReference | null>;
     protected readonly text: _angular_core.WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsDocumentReference>;
     protected readonly isDisabled: _angular_core.Signal<boolean>;
@@ -338,8 +341,8 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     protected readonly displayWith: (document: NxsDocumentReference | string | null) => string;
     constructor();
     ngDoCheck(): void;
-    writeValue(value: NxsDocumentReference | null): void;
-    registerOnChange(fn: (value: NxsDocumentReference | null) => void): void;
+    writeValue(value: string | null): void;
+    registerOnChange(fn: (value: string | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
     validate(control: AbstractControl): ValidationErrors | null;
@@ -350,7 +353,7 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     protected clear(): void;
     protected blurred(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentReferenceInputComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "documentTypes": { "alias": "documentTypes"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; }, never, never, true, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "documentTypes": { "alias": "documentTypes"; "required": false; "isSignal": true; }; "idProperty": { "alias": "idProperty"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; "documentChange": "documentChange"; }, never, never, true, never>;
     }
 }
 class NxsDomainHintComponent {

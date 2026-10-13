@@ -31,13 +31,15 @@ const coverage = (id: string, parent: string, label: string): L10nDirectoryEntry
   directoryName: 'l10ncoverage',
   properties: { id, parent, ordering: 0, obsolete: 0, label_en: label },
 });
+/** As the server holds `l10ncoverage`: bare ids, each child naming its parent. */
 const COVERAGE = [
   coverage('europe', '', 'Europe'),
   coverage('africa', '', 'Africa'),
-  coverage('europe/France', 'europe', 'France'),
-  coverage('europe/Spain', 'europe', 'Spain'),
-  coverage('africa/Kenya', 'africa', 'Kenya'),
-  coverage('africa/Morocco', 'africa', 'Morocco'),
+  coverage('antarctica', '', 'Antarctica'),
+  coverage('France', 'europe', 'France'),
+  coverage('Spain', 'europe', 'Spain'),
+  coverage('Kenya', 'africa', 'Kenya'),
+  coverage('Morocco', 'africa', 'Morocco'),
 ];
 
 /** `nature` and `l10ncoverage`, answered from memory after 150 ms, or refused. */
@@ -54,7 +56,8 @@ const vocabularies = (answer: 'found' | 'refused' = 'found'): Provider => ({
 /**
  * Chooses one entry, or several, from a Nuxeo vocabulary, as Web UI's
  * `nuxeo-directory-suggestion` does. These stories answer from memory: `nature` with four
- * entries, and the hierarchical `l10ncoverage` with two continents and four countries.
+ * entries, and the hierarchical `l10ncoverage` with three continents and four countries, stored as
+ * Web UI stores them: `europe/France`.
  */
 const meta: Meta<NxsVocabularySelectComponent> = {
   title: 'Pickers/Vocabulary select',

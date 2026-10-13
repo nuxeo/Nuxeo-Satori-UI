@@ -27,12 +27,18 @@ const l10n = (id: string, parent: string, label: string): L10nDirectoryEntry => 
   directoryName: 'l10ncoverage',
   properties: { id, parent, ordering: 0, obsolete: 0, label_en: label },
 });
+/** As the server holds `l10ncoverage`: bare ids, each child naming its parent. */
 const COVERAGE = [
   l10n('europe', '', 'Europe'),
   l10n('africa', '', 'Africa'),
-  l10n('europe/France', 'europe', 'France'),
-  l10n('europe/Spain', 'europe', 'Spain'),
-  l10n('africa/Kenya', 'africa', 'Kenya'),
+  l10n('antarctica', '', 'Antarctica'),
+  l10n('France', 'europe', 'France'),
+  l10n('Spain', 'europe', 'Spain'),
+  l10n('Kenya', 'africa', 'Kenya'),
+  l10n('Georgia', 'asia', 'Georgia'),
+  l10n('asia', '', 'Asia'),
+  l10n('Georgia', 'north-america', 'Georgia'),
+  l10n('north-america', '', 'North America'),
 ];
 
 @Component({
@@ -189,7 +195,7 @@ describe('NxsVocabularySelectComponent', () => {
         (chip) => chip.querySelector('.mat-mdc-chip-action-label')?.textContent?.trim() ?? '',
       );
 
-    it('lists children under their parents', async () => {
+    it('lists children under their parents, and a parent with no children as itself', async () => {
       await focus();
       expect(directories.getAllL10nEntries).toHaveBeenCalledWith('l10ncoverage');
       const groups = [...document.querySelectorAll('mat-optgroup')].map((group) => ({
@@ -198,21 +204,46 @@ describe('NxsVocabularySelectComponent', () => {
       }));
       expect(groups).toEqual([
         { label: 'Africa', options: ['Kenya'] },
+        { label: 'Asia', options: ['Georgia'] },
         { label: 'Europe', options: ['France', 'Spain'] },
+        { label: 'North America', options: ['Georgia'] },
       ]);
+      expect(option('antarctica')?.closest('mat-optgroup')).toBeNull();
     });
 
-    it('adds each choice as a chip reading Parent/Child, and stops offering it', async () => {
+    it('stores each child as parent/id, as Web UI does, on a chip reading Parent/Child', async () => {
       await focus();
       option('europe/France').click();
       await render();
       await type('ken');
       option('africa/Kenya').click();
       await render();
-      await type('e');
-      expect(host.many.value).toEqual(['europe/France', 'africa/Kenya']);
-      expect(chips()).toEqual(['Europe/France', 'Africa/Kenya']);
+      await type('ant');
+      option('antarctica').click();
+      await render();
+      expect(host.many.value).toEqual(['europe/France', 'africa/Kenya', 'antarctica']);
+      expect(chips()).toEqual(['Europe/France', 'Africa/Kenya', 'Antarctica']);
+    });
+
+    it('stops offering an entry once chosen', async () => {
+      host.many.setValue(['europe/France']);
+      await render();
+      await type('eur');
       expect(options()).toEqual(['Spain']);
+    });
+
+    it('keeps two children of one name apart by their parents', async () => {
+      await type('georgia');
+      option('north-america/Georgia').click();
+      await render();
+      expect(host.many.value).toEqual(['north-america/Georgia']);
+      expect(chips()).toEqual(['North America/Georgia']);
+    });
+
+    it('shows a value Web UI stored with the labels of its parent and child', async () => {
+      host.many.setValue(['europe/France']);
+      await render();
+      expect(chips()).toEqual(['Europe/France']);
     });
 
     it('removes a chip with its named button', async () => {

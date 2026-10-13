@@ -8494,9 +8494,9 @@ function* mdxSourceBlocks(text) {
  * whether the code is written inline or in an `export const` it names, is formatted here with the
  * repository's Prettier options and the parser its language calls for, and fails when the result
  * differs or the sample does not parse. A fenced code block is held to the same rule by its info
- * string. `bash`, `text` and any other language are not checked. A multi-line inline sample fails
- * whatever its formatting: MDX strips the indentation of an attribute's continuation lines, so what
- * renders is not what was written.
+ * string. `bash`, `text` and any other language are not checked. An inline sample with an indented
+ * continuation line fails whatever its language: MDX strips that indentation, so what renders is
+ * not what was written. An inline sample on several unindented lines renders as written and passes.
  */
 async function checkMdxCodeSamplesFormatted() {
   const pages = [

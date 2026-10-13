@@ -356,7 +356,7 @@ The same field in both, holding two tags as chips with remove buttons. It sugges
 
 ![Document reference input: without Satori on the left, with Satori on the right](document-reference-input-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The same field in both, holding a reference to a note. It searches the repository's full text from three characters, as Web UI's document suggestion does, and lists each result with its type icon, title and path. Satori has no equivalent.
+The same field in both, holding a note, looked up from its uid. It searches the repository's full text from three characters, as Web UI's document suggestion does, and lists each result with its type icon, title and path. Satori has no equivalent.
 
 ### Date input
 

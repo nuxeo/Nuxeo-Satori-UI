@@ -33,8 +33,6 @@ import {
   directoryPickerLabel,
   directoryUsesL10nLabel,
   filterDirectoryPickerEntries,
-  formatHierarchicalL10nLabel,
-  groupL10nChildrenByParent,
   l10nEntryLabel,
   type L10nDirectoryEntry,
 } from '@nuxeo-satori/platform/nuxeo-client';
@@ -68,8 +66,9 @@ type Loaded =
  * or any directory — as Web UI's `nuxeo-directory-suggestion` does.
  *
  * It lists the whole vocabulary on focus and narrows it as the user types. A hierarchical one —
- * `l10nsubjects`, `l10ncoverage` — is listed under its parents, and a chosen entry reads
- * `Parent/Child`, as in Web UI. With `multiple` each choice is a chip, removed with its button or
+ * `l10nsubjects`, `l10ncoverage` — is listed under its parents, and a chosen child is stored and
+ * shown as Web UI stores it: `europe/France`, labelled `Europe/France`. A parent with no children,
+ * such as `antarctica`, is chosen as itself. With `multiple` each choice is a chip, removed with its button or
  * Backspace. The value is the entry's id, or a list of ids; an id the vocabulary no longer has is
  * kept and shown as it is, so opening a document never drops a value. Text typed and not chosen is
  * an `nxsChooseFromList` error on the form.
@@ -302,20 +301,56 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
   }
 }
 
-/** An l10n vocabulary: children listed under their parents, each chosen one read `Parent/Child`. */
+/**
+ * An l10n vocabulary, as Web UI's directory suggestion offers it: each child under its parent, with
+ * the value `<parent>/<id>` (`_idFunction` in `nuxeo-directory-suggestion`), and a parent that has no
+ * children as an entry of its own. The entries' ids are bare (`France`, parent `europe`), so the
+ * parent is what keeps two children of one name apart.
+ */
 function hierarchical(entries: L10nDirectoryEntry[]): Loaded {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const parentIds = new Set(entries.map((entry) => entry.properties.parent).filter(Boolean));
+  const parentLabel = (id: string) => {
+    const parent = byId.get(id);
+    return parent ? l10nEntryLabel(parent) : id;
+  };
+  const valueOf = (entry: L10nDirectoryEntry) =>
+    entry.properties.parent ? `${entry.properties.parent}/${entry.id}` : entry.id;
+  const selectable = entries.filter((entry) => entry.properties.parent || !parentIds.has(entry.id));
   const labels = new Map(
-    entries
-      .filter((entry) => entry.properties.parent)
-      .map((entry) => [entry.id, formatHierarchicalL10nLabel(entry.id, entries)]),
+    selectable.map((entry) => [
+      valueOf(entry),
+      entry.properties.parent
+        ? `${parentLabel(entry.properties.parent)}/${l10nEntryLabel(entry)}`
+        : l10nEntryLabel(entry),
+    ]),
   );
   return {
     status: 'loaded',
     labels,
-    filter: (text) =>
-      groupL10nChildrenByParent(entries, text).map((group) => ({
-        label: group.parentLabel,
-        entries: group.entries.map((entry) => ({ id: entry.id, label: l10nEntryLabel(entry) })),
-      })),
+    filter: (text) => {
+      const query = text.trim().toLowerCase();
+      const matches = (entry: L10nDirectoryEntry) =>
+        !query ||
+        [
+          l10nEntryLabel(entry),
+          entry.id,
+          entry.properties.parent ? parentLabel(entry.properties.parent) : '',
+        ].some((candidate) => candidate.toLowerCase().includes(query));
+      const groups = new Map<string, Entry[]>();
+      const leaves: Entry[] = [];
+      for (const entry of selectable.filter(matches)) {
+        const option = { id: valueOf(entry), label: l10nEntryLabel(entry) };
+        const parent = entry.properties.parent;
+        if (!parent) leaves.push(option);
+        else groups.set(parent, [...(groups.get(parent) ?? []), option]);
+      }
+      return [
+        ...(leaves.length ? [{ label: '', entries: leaves }] : []),
+        ...[...groups]
+          .map(([parent, children]) => ({ label: parentLabel(parent), entries: children }))
+          .sort((a, b) => a.label.localeCompare(b.label)),
+      ];
+    },
   };
 }
