@@ -328,6 +328,12 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.drive-dialog.close': 'Close',
   'satori-components.drive-dialog.name': 'Nuxeo Drive',
   'satori-components.drive-dialog.title': 'Download Nuxeo Drive Client',
+  'satori-components.create-version-dialog.creating': 'Creating the version',
+  'satori-components.create-version-dialog.kind': 'Version to create',
+  'satori-components.document-history.caption': 'Document history',
+  'satori-components.document-history.filters': 'Filter the history',
+  'satori-components.document-history.loading': 'Loading the history',
+  'satori-components.manage-versions.loading': 'Loading versions',
   'satori-components.error-state.retry': 'Retry',
   'permissions.add-permission-dialog.hi-could-you-comment-on-this':
     'Hi! Could you comment on this document and...',

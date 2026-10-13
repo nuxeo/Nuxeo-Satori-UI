@@ -74,6 +74,49 @@ export function canTagDocument(doc: NuxeoDocument | null | undefined): boolean {
   return !!doc && !doc.isProxy && !doc.isVersion && hasDocumentPermission(doc, WRITE_DOCUMENT);
 }
 
+/** The permission Nuxeo checks to create, restore and publish versions. */
+export const WRITE_VERSION = 'WriteVersion';
+
+/**
+ * Nuxeo flags a record with the `isRecord` field of the document JSON — there is no facet for it.
+ * The public `NuxeoDocument` model does not declare the field, so it is read here rather than
+ * added to that published type.
+ */
+export function isRecordDocument(doc: NuxeoDocument | null | undefined): boolean {
+  return (
+    (doc as (NuxeoDocument & { readonly isRecord?: boolean }) | null | undefined)?.isRecord === true
+  );
+}
+
+/**
+ * Web UI's Create Version gate (`nuxeo-document-create-version`): the live document, not a version
+ * or a record, with the `Versionable` facet, and the user holds `WriteVersion`.
+ */
+export function canCreateDocumentVersion(doc: NuxeoDocument | null | undefined): boolean {
+  return (
+    !!doc &&
+    !doc.isVersion &&
+    !isRecordDocument(doc) &&
+    (doc.facets ?? []).includes('Versionable') &&
+    hasDocumentPermission(doc, WRITE_VERSION)
+  );
+}
+
+/**
+ * Web UI's `isPublishable`: not a proxy, a record or in the trash, the `Publishable` facet, and
+ * `WriteVersion`. A version is publishable — `Document.PublishToSection` publishes it as it is.
+ */
+export function canPublishDocument(doc: NuxeoDocument | null | undefined): boolean {
+  return (
+    !!doc &&
+    !doc.isProxy &&
+    !isRecordDocument(doc) &&
+    doc.isTrashed !== true &&
+    (doc.facets ?? []).includes('Publishable') &&
+    hasDocumentPermission(doc, WRITE_VERSION)
+  );
+}
+
 /** True when the current user can create child documents in a folder. */
 export function canAddChildren(doc: NuxeoDocument | null | undefined): boolean {
   return hasDocumentPermission(doc, ADD_CHILDREN);

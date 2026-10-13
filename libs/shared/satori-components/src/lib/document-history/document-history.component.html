@@ -1,0 +1,192 @@
+<form
+  class="nxs-document-history__filters"
+  role="search"
+  [attr.aria-label]="'satori-components.document-history.filters' | translate"
+  (submit)="$event.preventDefault()"
+>
+  <mat-form-field appearance="outline" subscriptSizing="dynamic" class="nxs-document-history__user">
+    <mat-label>{{ 'satori-components.document-history.user' | translate }}</mat-label>
+    <input
+      matInput
+      name="user"
+      autocomplete="off"
+      [ngModel]="userText()"
+      (ngModelChange)="typeUser($event)"
+    />
+    <mat-hint>{{ 'satori-components.document-history.user-hint' | translate }}</mat-hint>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'satori-components.document-history.from' | translate }}</mat-label>
+    <input
+      matInput
+      name="from"
+      [matDatepicker]="fromPicker"
+      [ngModel]="filters().from"
+      (ngModelChange)="setFilter('from', $event)"
+    />
+    <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
+    <mat-datepicker #fromPicker />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'satori-components.document-history.to' | translate }}</mat-label>
+    <input
+      matInput
+      name="to"
+      [matDatepicker]="toPicker"
+      [ngModel]="filters().to"
+      (ngModelChange)="setFilter('to', $event)"
+    />
+    <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
+    <mat-datepicker #toPicker />
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'satori-components.document-history.action' | translate }}</mat-label>
+    <mat-select
+      name="eventId"
+      [ngModel]="filters().eventId"
+      (ngModelChange)="setFilter('eventId', $event)"
+    >
+      <mat-option value="">{{ 'satori-components.document-history.any' | translate }}</mat-option>
+      @for (type of eventTypes(); track type.id) {
+        <mat-option [value]="type.id">{{ type.displayLabel }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+
+  <mat-form-field appearance="outline" subscriptSizing="dynamic">
+    <mat-label>{{ 'satori-components.document-history.category' | translate }}</mat-label>
+    <mat-select
+      name="category"
+      [ngModel]="filters().category"
+      (ngModelChange)="setFilter('category', $event)"
+    >
+      <mat-option value="">{{ 'satori-components.document-history.any' | translate }}</mat-option>
+      @for (category of categories(); track category.id) {
+        <mat-option [value]="category.id">{{ category.displayLabel }}</mat-option>
+      }
+    </mat-select>
+  </mat-form-field>
+</form>
+
+<div class="nxs-document-history__results" [attr.aria-busy]="loading()">
+  @if (failure(); as status) {
+    <nxs-error-state
+      [status]="status"
+      [heading]="'satori-components.document-history.failed' | translate"
+      [headingLevel]="headingLevel()"
+      [retryable]="status === 500"
+      (retry)="retry()"
+    />
+  } @else if (loading() && entries().length === 0) {
+    <div class="nxs-document-history__loading">
+      <nxs-spinner
+        diameter="32"
+        [label]="'satori-components.document-history.loading' | translate"
+      />
+    </div>
+  } @else if (entries().length === 0) {
+    <nxs-empty-state
+      icon="event_busy"
+      [heading]="
+        (filtered()
+          ? 'satori-components.document-history.no-match'
+          : 'satori-components.document-history.empty'
+        ) | translate
+      "
+      [headingLevel]="headingLevel()"
+    />
+  } @else {
+    <div
+      class="nxs-document-history__table"
+      role="region"
+      tabindex="0"
+      [attr.aria-label]="'satori-components.document-history.caption' | translate"
+    >
+      <table
+        mat-table
+        matSort
+        [dataSource]="entries()"
+        [matSortActive]="sort().by"
+        [matSortDirection]="sort().order"
+        matSortDisableClear
+        (matSortChange)="sorted($event)"
+      >
+        <caption class="cdk-visually-hidden">
+          {{
+            'satori-components.document-history.caption' | translate
+          }}
+        </caption>
+
+        <ng-container matColumnDef="eventId">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>
+            {{ 'satori-components.document-history.action' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let entry">{{ eventLabel(entry.eventId) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="eventDate">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>
+            {{ 'satori-components.document-history.date' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let entry">{{ entry.eventDate | date: 'medium' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="principalName">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>
+            {{ 'satori-components.document-history.user' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let entry">
+            <span class="nxs-document-history__user-cell">
+              <nxs-avatar [initials]="initials(entry.principalName)" size="24" aria-hidden="true" />
+              {{ entry.principalName }}
+            </span>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="category">
+          <th mat-header-cell *matHeaderCellDef mat-sort-header>
+            {{ 'satori-components.document-history.category' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let entry">{{ categoryLabel(entry.category) }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="comment">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.document-history.comment' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let entry" class="nxs-document-history__comment">
+            {{ entry.comment }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="docLifeCycle">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.document-history.state' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let entry">
+            @if (entry.docLifeCycle) {
+              <nxs-tag [label]="entry.docLifeCycle" />
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr mat-row *matRowDef="let row; columns: columns"></tr>
+      </table>
+    </div>
+  }
+
+  @if (total() > 0) {
+    <mat-paginator
+      [length]="total()"
+      [pageSize]="size()"
+      [pageIndex]="pageIndex()"
+      [pageSizeOptions]="[10, 20, 50]"
+      showFirstLastButtons
+      (page)="paged($event)"
+    />
+  }
+</div>

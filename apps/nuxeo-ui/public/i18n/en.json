@@ -2036,8 +2036,38 @@
       "write-comment": "Write a comment here",
       "write-reply": "Write a reply here"
     },
+    "create-version-dialog": {
+      "title": "Create Version for {{document}} - Version {{version}}",
+      "kind": "Version to create",
+      "minor": "Minor version",
+      "major": "Major version",
+      "cancel": "Cancel",
+      "create": "Create Version",
+      "creating": "Creating the version",
+      "created": "Version {{version}} created",
+      "forbidden": "You do not have permission to create a version of this document.",
+      "failed": "The version could not be created."
+    },
     "details-panel": {
       "close": "Close details"
+    },
+    "document-history": {
+      "filters": "Filter the history",
+      "user": "Username",
+      "user-hint": "The exact username",
+      "from": "From",
+      "to": "To",
+      "action": "Performed action",
+      "category": "Category",
+      "any": "Any",
+      "date": "Date",
+      "comment": "Comment",
+      "state": "State",
+      "caption": "Document history",
+      "loading": "Loading the history",
+      "failed": "The history could not be loaded.",
+      "empty": "No history entries yet",
+      "no-match": "No history entries match these filters"
     },
     "document-toolbar": {
       "label": "Document actions",
@@ -2074,6 +2104,18 @@
       "add": "Add to favorites",
       "label": "Favorite",
       "remove": "Remove from favorites"
+    },
+    "manage-versions": {
+      "version": "Version",
+      "create": "Create Version",
+      "unversioned": "Unversioned",
+      "latest": "Latest version",
+      "modified": "Modified {{when}} by {{who}}",
+      "unknown-user": "Unknown",
+      "loading": "Loading versions",
+      "failed": "The versions could not be loaded.",
+      "retry": "Retry",
+      "none": "No previous versions"
     },
     "metadata-editor": {
       "add-item": "Add to {{label}}",

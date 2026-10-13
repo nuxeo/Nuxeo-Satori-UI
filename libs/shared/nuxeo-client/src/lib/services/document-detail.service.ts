@@ -13,7 +13,7 @@ import {
 } from '../utils/permission-notification';
 import { NuxeoDocument, NuxeoDocumentList } from '../models/document.model';
 import { NuxeoWorkflowModel } from '../models/workflow.model';
-import { AuditLogList } from '../models/audit.model';
+import type { AuditLogList, AuditLogQuery } from '../models/audit.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
 import { normalizeDocumentAcls } from '../utils/ace-principal';
 import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-client-reason';
@@ -79,10 +79,29 @@ export class DocumentDetailService {
     });
   }
 
-  getAuditLog(uid: string, pageSize = 50, currentPageIndex = 0): Observable<AuditLogList> {
-    const params = new HttpParams()
+  /**
+   * A document's audit entries, one page. `query` filters and sorts on the server, so a filter
+   * reaches every entry rather than only the page on screen. Dates go as instants: the adapter
+   * reads a bare day as midnight in the server's zone, not the user's.
+   */
+  getAuditLog(
+    uid: string,
+    pageSize = 50,
+    currentPageIndex = 0,
+    query: AuditLogQuery = {},
+  ): Observable<AuditLogList> {
+    let params = new HttpParams()
       .set('pageSize', pageSize)
       .set('currentPageIndex', currentPageIndex);
+    const principal = query.principalName?.trim();
+    if (principal) params = params.set('principalName', principal);
+    for (const eventId of query.eventIds ?? []) params = params.append('eventId', eventId);
+    if (query.eventCategory) params = params.set('eventCategory', query.eventCategory);
+    if (query.startDate) params = params.set('startEventDate', query.startDate.toISOString());
+    if (query.endDate) params = params.set('endEventDate', query.endDate.toISOString());
+    if (query.sortBy) {
+      params = params.set('sortBy', query.sortBy).set('sortOrder', query.sortOrder ?? 'desc');
+    }
     return this.http.get<AuditLogList>(this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@audit`), {
       params,
     });

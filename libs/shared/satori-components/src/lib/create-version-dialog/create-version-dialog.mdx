@@ -1,0 +1,67 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as CreateVersionDialogStories from './create-version-dialog.stories';
+
+<Meta of={CreateVersionDialogStories} name="Overview" />
+
+# Create version dialog
+
+The create version dialog makes a numbered version of a document. It is the counterpart of Web
+UI's `nuxeo-document-create-version` dialog.
+
+## Key features
+
+- **The numbers, not just the words.** Minor and Major each show the version they would create —
+  1.3 and 2.0 for a document at 1.2 — with Major chosen first, as in Web UI.
+- **One request.** Create runs `Document.CreateVersion`, which checks the document in at the new
+  version, and is disabled while it runs.
+- **Says what happened.** A toast names the version created; a refusal reads as one, and the dialog
+  stays open to try again.
+
+## Demo showcase
+
+<Canvas of={CreateVersionDialogStories.MajorChosen} />
+
+## Usage
+
+export const usageTs = `this.dialog
+  .open(NxsCreateVersionDialogComponent, {
+    data: {
+      documentUid: doc.uid,
+      documentTitle: doc.title,
+      major: 1,
+      minor: 2,
+    },
+  })
+  .afterClosed()
+  .subscribe((version) => {
+    if (version) this.reload();
+  });`;
+
+<Source language="typescript" dark code={usageTs} />
+
+It closes with the version created, or with nothing when cancelled. It does not decide who may
+version: open it only where `canCreateDocumentVersion(doc)` holds, as `nxs-manage-versions` does.
+The dialog lists its own toast provider and needs `DocumentDetailService`. Its labels are translated
+under `satori-components.create-version-dialog.*`, with English from
+`providePlatformEnglishFallback()`.
+
+## Examples
+
+### Creating
+
+<Canvas of={CreateVersionDialogStories.Creating} />
+
+### Refused
+
+Create fails with 403: the toast says the user may not version the document.
+
+<Canvas of={CreateVersionDialogStories.Refused} />
+
+## Accessibility
+
+- **A named choice.** Minor and Major are radio buttons in a group named "Version to create"; each
+  is named with its number, "1.3 Minor version".
+- **The dialog's title names the document** and its current version.
+- **Progress is announced.** While it runs, the button holds a progress indicator named "Creating
+  the version".

@@ -456,6 +456,51 @@ Changing an external user's share: whose it is, the right, the dates with the en
 
 It replaces the entry in one call, as Web UI does, and writes back a date the user did not change exactly as Nuxeo holds it.
 
+### Manage versions
+
+| Field           | Value                                    |
+| --------------- | ---------------------------------------- |
+| Component       | `NxsManageVersionsComponent`             |
+| Registered ID   | —                                        |
+| With Satori     | Same component; theme only               |
+| Storybook story | `documents-manage-versions--checked-out` |
+
+![Manage versions: without Satori on the left, with Satori on the right](manage-versions-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document checked out at 1.2+ with its list open: Create Version above the versions, newest first, each with when and by whom it was last changed. The same list in both; the theme sets the type, the menu's surface and the highlight on the focused entry.
+
+It follows Web UI's version control: choosing a version opens it rather than restoring it, Create Version only while there are changes to version and only with `WriteVersion`, and "Unversioned" where the user may not version.
+
+### Create version dialog
+
+| Field           | Value                                  |
+| --------------- | -------------------------------------- |
+| Component       | `NxsCreateVersionDialogComponent`      |
+| Registered ID   | —                                      |
+| With Satori     | Same component; theme only             |
+| Storybook story | `dialogs-create-version--major-chosen` |
+
+![Create version dialog: without Satori on the left, with Satori on the right](create-version-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Creating a version of a contract at 1.2: Minor (1.3) and Major (2.0), with Major chosen. The same dialog in both; the theme sets the type, the radio buttons and the button styles.
+
+It follows Web UI's dialog: the number each choice gives, Major first, and a toast naming the version created.
+
+### Document history
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsDocumentHistoryComponent`         |
+| Registered ID   | —                                     |
+| With Satori     | Same component; theme only            |
+| Storybook story | `documents-document-history--history` |
+
+![Document history: without Satori on the left, with Satori on the right](document-history-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document's history filtered to one user: the filters, then the table of actions with their dates and times, users, categories, comments and states, a page at a time. The same table in both; the theme sets the type, the outlines of the fields and the avatars.
+
+It follows Web UI's audit search: every filter and the sort go to the server, so they reach every entry and not only the page on screen.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -537,6 +582,9 @@ The components in the library today:
 | Delete permission dialog        | —                                                                                                                       | Same component; theme only   |
 | Share with external user dialog | —                                                                                                                       | Same component; theme only   |
 | Update permission dialog        | —                                                                                                                       | Same component; theme only   |
+| Manage versions                 | —                                                                                                                       | Same component; theme only   |
+| Create version dialog           | —                                                                                                                       | Same component; theme only   |
+| Document history                | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

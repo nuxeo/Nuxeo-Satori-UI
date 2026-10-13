@@ -26,7 +26,8 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
-getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number): Observable<AuditLogList>
+getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>
+  // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>
 getSectionTree(): Observable<NuxeoDocumentList>
 unpublishDocument(proxyUid: string): Observable<unknown>

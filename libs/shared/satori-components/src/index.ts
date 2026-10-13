@@ -13,6 +13,16 @@ export {
 export { NxsCommentsComponent } from './lib/comments/comments.component';
 export { NxsTagEditorComponent } from './lib/tag-editor/tag-editor.component';
 export {
+  NxsManageVersionsComponent,
+  nxsVersionLabel,
+} from './lib/manage-versions/manage-versions.component';
+export {
+  NxsCreateVersionDialogComponent,
+  type NxsCreateVersionDialogData,
+  type NxsCreateVersionDialogResult,
+} from './lib/create-version-dialog/create-version-dialog.component';
+export { NxsDocumentHistoryComponent } from './lib/document-history/document-history.component';
+export {
   NxsDeletePermissionDialogComponent,
   type NxsDeletePermissionDialogData,
 } from './lib/delete-permission-dialog/delete-permission-dialog.component';

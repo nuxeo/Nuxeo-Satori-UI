@@ -1,0 +1,116 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ManageVersionsStories from './manage-versions.stories';
+
+<Meta of={ManageVersionsStories} name="Overview" />
+
+# Manage versions
+
+Manage versions is a document's version control: its number, the list of its versions, and
+Create Version. It is the counterpart of Web UI's `nuxeo-document-versions`, as the document's info
+panel shows it.
+
+## Key features
+
+- **The number opens the list.** `1.2`, or `1.2+` while the document is checked out — changed since
+  that version. The list shows every version newest first, by number, with when and by whom it was
+  last changed.
+- **Choosing never restores.** A version the user chooses is emitted as `versionSelected`; the page
+  opens it read-only, where Restore is its own confirmed action.
+- **On a version.** The list leads back to the latest (`latestSelected`), lists the live document's
+  versions, and marks the one on screen.
+- **Create Version as Web UI offers it.** In the list while the document is checked out, and as
+  the whole control while it has no version. Only where `canCreateDocumentVersion(doc)` holds — the
+  live document, not a record, `Versionable`, and `WriteVersion`; otherwise the control reads
+  "Unversioned". It opens `nxs-create-version-dialog` and emits `versionCreated`.
+
+## Demo showcase
+
+<Canvas of={ManageVersionsStories.CheckedOut} />
+
+## Usage
+
+export const usageHtml = `<nxs-properties-panel [document]="doc()">
+  <nxs-manage-versions
+    nxsVersion
+    [document]="doc()"
+    (versionSelected)="openVersion($event)"
+    (latestSelected)="openLatest()"
+    (versionCreated)="reload()"
+  />
+</nxs-properties-panel>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`document` is required and needs the `permissions` enricher, which the gate reads. Navigate in
+`versionSelected` and `latestSelected`; reload the document after `versionCreated`, since it is
+then checked in at the new version. Its labels are translated under
+`satori-components.manage-versions.*`, with English from `providePlatformEnglishFallback()`.
+
+## Where its data comes from
+
+<table>
+  <thead>
+    <tr>
+      <th>What</th>
+      <th>Call</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>The versions</td>
+      <td>
+        <code>getVersionsDirect</code> — <code>Document.GetVersions</code> on the live document,
+        read each time the list opens
+      </td>
+    </tr>
+    <tr>
+      <td>Create Version</td>
+      <td>
+        <code>createVersion</code> — <code>Document.CreateVersion</code>, from the dialog
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+`Document.GetVersions` reads the repository rather than the search index, so a version just created
+is in the list. **In these stories** the service is an in-memory fake; each call is logged in the
+Actions panel.
+
+## Examples
+
+### Checked in
+
+Nothing changed since 1.2, so there is nothing new to version: the list has no Create Version.
+
+<Canvas of={ManageVersionsStories.CheckedIn} />
+
+### Viewing a version
+
+<Canvas of={ManageVersionsStories.ViewingAVersion} />
+
+### No version yet
+
+<Canvas of={ManageVersionsStories.NoVersionYet} />
+
+### Unversioned
+
+Without `WriteVersion`, on a document that is not `Versionable`, or on a record.
+
+<Canvas of={ManageVersionsStories.Unversioned} />
+
+### The list cannot be read
+
+<Canvas of={ManageVersionsStories.ListFails} />
+
+## Accessibility
+
+- **A named menu button.** The number is a button named "Version 1.2+" that says it opens a menu;
+  **Enter** opens the list with focus on its first entry, **Up** and **Down** move, **Escape**
+  closes it and returns focus to the button.
+- **The one on screen is checked.** Versions are menu radio items; the version open is
+  `aria-checked="true"`, the others `false`.
+- **Each entry reads whole.** "1.2 Modified 2 days ago by jdoe", the number and its line read as
+  one.
+- **Progress and failure are announced.** The loading indicator is named "Loading versions"; a
+  failure is an alert with Retry, which answers in place without closing the list.

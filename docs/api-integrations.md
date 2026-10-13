@@ -318,10 +318,23 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Query Parameters:**
 
-| Parameter          | Value          |
-| ------------------ | -------------- |
-| `pageSize`         | `50` (default) |
-| `currentPageIndex` | `0` (default)  |
+| Parameter          | Value                                                                     |
+| ------------------ | ------------------------------------------------------------------------- |
+| `pageSize`         | `50` (default)                                                            |
+| `currentPageIndex` | `0` (default)                                                             |
+| `principalName`    | `query.principalName` — the exact username, as Web UI's user picker sends |
+| `eventId`          | `query.eventIds` — repeated, any of them matches                          |
+| `eventCategory`    | `query.eventCategory`                                                     |
+| `startEventDate`   | `query.startDate` as an ISO instant — inclusive                           |
+| `endEventDate`     | `query.endDate` as an ISO instant — **exclusive**                         |
+| `sortBy`           | `query.sortBy`: `eventId`, `eventDate`, `principalName` or `category`     |
+| `sortOrder`        | `query.sortOrder`, `desc` unless given                                    |
+
+Every `query` field is optional and sent only when set. Measured on the shared Nuxeo
+(2026-10-13): each one filters or sorts the whole audit trail on the server, a bare day
+(`2026-10-13`) is read as midnight in the server's zone, and an end of `2026-10-13` excludes
+that day — so `nxs-document-history` sends instants, with the end at the start of the day after
+the user's "To".
 
 **Request Headers:**
 
@@ -622,7 +635,7 @@ Classic Web UI sends `clientReason=view` when loading blob content for preview a
 | Field           | Value                                                                                            |
 | --------------- | ------------------------------------------------------------------------------------------------ |
 | **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
-| **Method**      | `getAuditLog(uid, pageSize, currentPageIndex)`                                                   |
+| **Method**      | `getAuditLog(uid, pageSize, currentPageIndex, query?)`                                           |
 | **HTTP Method** | `GET`                                                                                            |
 | **Endpoint**    | `/nuxeo/api/v1/id/{uid}/@audit`                                                                  |
 
