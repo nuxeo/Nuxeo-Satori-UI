@@ -17,6 +17,15 @@ function notBusy(operation: string): ExtensionRuleRef {
 }
 
 /**
+ * Nuxeo Web UI never offers locking on a version, an immutable document or the repository
+ * root. Versions carry the `Immutable` facet, so the facet covers both.
+ */
+const LOCKABLE: readonly ExtensionRule[] = [
+  not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+  not({ type: 'app.rules.isType', parameters: ['Root'] }),
+];
+
+/**
  * The bulk actions the product ships with.
  *
  * The same six controls, in the same order, with the same icons and tooltips
@@ -87,7 +96,8 @@ export const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[] = [
  * gating that `document-detail.html` held as fixed markup — the `@if`
  * conditions that wrapped each button are now `rule`s, and the `[disabled]`
  * bindings that read `actionInProgress()` are now `enabledRule`s over
- * `app.rules.isNotBusy`.
+ * `app.rules.isNotBusy`. The lock pair has since moved to Web UI's behaviour:
+ * its icon shows the document's state and Unlock is shown to every reader.
  *
  * `overflow: true` puts an entry behind the "More actions" menu. A manifest
  * promotes one to the toolbar by restating its id with `"overflow": false`.
@@ -138,22 +148,31 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     enabledRule: notBusy('trash'),
   },
   {
+    // The icon shows the document's state, as Web UI's does: open padlock while unlocked.
     id: 'app.toolbar.lock',
     labelKey: 'action.toolbar-lock',
     label: 'Lock',
-    icon: 'lock',
+    icon: 'lock_open',
     order: 40,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', not('app.rules.isLocked')),
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not('app.rules.isLocked'),
+      ...LOCKABLE,
+    ),
     enabledRule: notBusy('lock'),
   },
   {
+    // Shown to anyone who can read a locked document, so they can see who holds it. Nuxeo's
+    // default lock policy takes Write on a locked document away from everyone but its owner and
+    // administrators, so `canWrite` enables it for exactly them; the server still decides.
     id: 'app.toolbar.unlock',
     labelKey: 'action.toolbar-unlock',
     label: 'Unlock',
-    icon: 'lock_open',
+    icon: 'lock',
     order: 40,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite', 'app.rules.isLocked'),
-    enabledRule: notBusy('lock'),
+    rule: every('app.rules.isNotTrashed', 'app.rules.isLocked', ...LOCKABLE),
+    enabledRule: every(notBusy('lock'), 'app.rules.canWrite'),
   },
   {
     id: 'app.toolbar.addToFavorites',

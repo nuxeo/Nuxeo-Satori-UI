@@ -1,0 +1,18 @@
+{
+  "name": "satori-beta",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "tags": ["scope:customer", "type:config"],
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*"],
+      "outputs": ["{workspaceRoot}/dist/config-packages/satori-beta"],
+      "options": {
+        "cwd": "{workspaceRoot}",
+        "command": "node config-packages/satori-beta/build.mjs --out dist/config-packages/satori-beta"
+      }
+    }
+  }
+}

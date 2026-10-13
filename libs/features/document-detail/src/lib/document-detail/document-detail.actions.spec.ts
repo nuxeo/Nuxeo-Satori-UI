@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
@@ -471,6 +471,41 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.isLocked()).toBe(false);
     });
 
+    describe('when a manifest has cleared the Lock rule', () => {
+      /** What `rule: null` in an override leaves: the packaged descriptor, ungated. */
+      function ungated(id: string): ExtensionActionDescriptor {
+        const packaged = PACKAGED_DOCUMENT_TOOLBAR_ACTIONS.find((a) => a.id === id);
+        if (!packaged) throw new Error(`no packaged action "${id}"`);
+        const { rule: _cleared, ...rest } = packaged;
+        return rest;
+      }
+
+      it('still reaches the handler for an ordinary document', async () => {
+        await build();
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
+      });
+
+      it('refuses to lock a version, on which an administrator keeps Write', async () => {
+        await build(doc({ facets: ['Immutable', 'Versionable'] }));
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+        expect(component.isLocked()).toBe(false);
+      });
+
+      it('refuses to lock the repository root', async () => {
+        await build(doc({ type: 'Root' }));
+
+        component.runToolbarAction(ungated('app.toolbar.lock'));
+
+        expect(mockDetailService.lockDocument).not.toHaveBeenCalled();
+      });
+    });
+
     it('ignores a second lock request while the first is still in flight', async () => {
       await build();
       mockDetailService.lockDocument.mockReturnValue(NEVER);
@@ -480,6 +515,226 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       expect(mockDetailService.lockDocument).toHaveBeenCalledTimes(1);
       expect(component.actionInProgress()).toBe('lock');
+    });
+  });
+
+  describe('lock owner and who may unlock', () => {
+    const LOCKED_AT = '2026-08-24T10:00:00.000Z';
+    /** What Nuxeo's lock policy leaves a non-owner with ReadWrite: Write is gone, Read is not. */
+    const NON_OWNER_PERMISSIONS = ['Read', 'ReadWrite', 'ReadProperties', 'Browse'];
+    const lockedByAlice = (permissions: string[] = ['Read', 'Write', 'ReadWrite']): NuxeoDocument =>
+      doc({ lockOwner: 'alice', lockCreated: LOCKED_AT, contextParameters: { permissions } });
+
+    it('opens a document locked earlier as locked, and remembers who holds it since when', async () => {
+      await build(doc({ lockOwner: 'alice', lockCreated: LOCKED_AT }));
+
+      expect(component.isLocked()).toBe(true);
+      expect(component.lockOwner()).toBe('alice');
+      expect(component.lockCreated()).toBe(LOCKED_AT);
+    });
+
+    it('treats a lock date with no owner as locked', async () => {
+      await build(doc({ lockOwner: null, lockCreated: LOCKED_AT }));
+
+      expect(component.isLocked()).toBe(true);
+    });
+
+    it('names the owner and the localised date in the Unlock tooltip', async () => {
+      await build(lockedByAlice());
+
+      expect(component.toolbarTooltip(offered('app.toolbar.unlock'))).toBe(
+        'Locked by alice on August 24, 2026',
+      );
+    });
+
+    it('leaves the tooltip to the label while the document is unlocked', async () => {
+      await build();
+
+      expect(component.toolbarTooltip(offered('app.toolbar.lock'))).toBeNull();
+    });
+
+    it('keeps a manifest tooltip that is deliberately empty', async () => {
+      await build(lockedByAlice());
+
+      const silenced = { ...offered('app.toolbar.unlock'), tooltip: '' };
+
+      expect(component.toolbarTooltip(silenced)).toBe('');
+    });
+
+    it('lets a lock request from the previous document neither hold nor clear the busy flag', async () => {
+      await build();
+      const first = new Subject<NuxeoDocument>();
+      mockDetailService.lockDocument.mockReturnValueOnce(first);
+      component.toggleLock();
+
+      // What the route handler does before it switches `docUid`.
+      component['releaseLockRequest']();
+      component['docUid'] = 'doc-2';
+      expect(component.actionInProgress()).toBeNull();
+
+      mockDetailService.lockDocument.mockReturnValueOnce(NEVER);
+      component.toggleLock();
+      first.next(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }));
+
+      expect(mockDetailService.lockDocument).toHaveBeenLastCalledWith('doc-2');
+      expect(component.actionInProgress()).toBe('lock');
+      expect(component.isLocked()).toBe(false);
+    });
+
+    it('lets a tooltip a manifest sets win over the lock owner', async () => {
+      await build(lockedByAlice());
+
+      const relabelled = { ...offered('app.toolbar.unlock'), tooltip: 'Release the lock' };
+
+      expect(component.toolbarTooltip(relabelled)).toBe('Release the lock');
+    });
+
+    it('shows the closed padlock, marked active, while locked and the open one while unlocked', async () => {
+      await build(lockedByAlice());
+      const unlock = offered('app.toolbar.unlock');
+      expect(unlock.icon).toBe('lock');
+      expect(component.isToolbarActionActive(unlock)).toBe(true);
+
+      component.toggleLock();
+      await fixture.whenStable();
+
+      const lock = offered('app.toolbar.lock');
+      expect(lock.icon).toBe('lock_open');
+      expect(component.isToolbarActionActive(lock)).toBe(false);
+    });
+
+    it('shows a locked document to a user the lock policy has left read-only, with Unlock disabled', async () => {
+      await build(lockedByAlice(NON_OWNER_PERMISSIONS));
+
+      const unlock = offered('app.toolbar.unlock');
+
+      expect(component.isToolbarActionEnabled(unlock)).toBe(false);
+      expect(component.toolbarTooltip(unlock)).toBe('Locked by alice on August 24, 2026');
+    });
+
+    it('does not run a disabled toolbar action', async () => {
+      await build(lockedByAlice(NON_OWNER_PERMISSIONS));
+
+      component.runToolbarAction(offered('app.toolbar.unlock'));
+
+      expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
+      expect(component.isLocked()).toBe(true);
+    });
+
+    it('enables Unlock for the lock owner', async () => {
+      await build(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }));
+
+      expect(component.isToolbarActionEnabled(offered('app.toolbar.unlock'))).toBe(true);
+    });
+
+    it('enables Unlock for an administrator on a lock another user holds', async () => {
+      // An administrator keeps Write and Everything on a document another user locked.
+      await build(lockedByAlice(['Read', 'Write', 'Everything', 'Unlock']));
+
+      expect(component.isToolbarActionEnabled(offered('app.toolbar.unlock'))).toBe(true);
+    });
+
+    it('offers neither half to a read-only user on an unlocked document', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+
+      const ids = [...component.toolbarActions(), ...component.overflowActions()].map((a) => a.id);
+
+      expect(ids).not.toContain('app.toolbar.lock');
+      expect(ids).not.toContain('app.toolbar.unlock');
+    });
+
+    it('offers no lock control on a version, which carries the Immutable facet', async () => {
+      await build(doc({ isVersion: true, facets: ['Immutable', 'Versionable'] }));
+
+      const ids = component.toolbarActions().map((a) => a.id);
+
+      expect(ids).not.toContain('app.toolbar.lock');
+      expect(ids).not.toContain('app.toolbar.unlock');
+    });
+
+    it('offers no lock control on a locked immutable document', async () => {
+      await build(doc({ lockOwner: 'alice', lockCreated: LOCKED_AT, facets: ['Immutable'] }));
+
+      expect(component.toolbarActions().map((a) => a.id)).not.toContain('app.toolbar.unlock');
+    });
+
+    it('offers no lock control on the repository root', async () => {
+      // No `Folderish` facet: the page hands folderish documents to browse before the toolbar
+      // resolves, which would make this pass without the rule being consulted at all.
+      await build(doc({ type: 'Root' }));
+
+      expect(component.toolbarActions().map((a) => a.id)).not.toContain('app.toolbar.lock');
+    });
+
+    it('records the owner and date the server returns from Lock', async () => {
+      await build();
+      mockDetailService.lockDocument.mockReturnValue(
+        of(doc({ lockOwner: 'tester', lockCreated: '2026-09-01T08:00:00.000Z' })),
+      );
+
+      component.toggleLock();
+      await fixture.whenStable();
+
+      expect(component.lockCreated()).toBe('2026-09-01T08:00:00.000Z');
+      expect(component.toolbarTooltip(offered('app.toolbar.unlock'))).toBe(
+        'Locked by tester on September 1, 2026',
+      );
+    });
+
+    it('clears the lock date on unlock', async () => {
+      await build(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }));
+
+      component.toggleLock();
+
+      expect(component.lockCreated()).toBeNull();
+    });
+
+    it.each([
+      [
+        'succeeds',
+        (pending: Subject<NuxeoDocument>) =>
+          pending.next(doc({ lockOwner: 'tester', lockCreated: LOCKED_AT })),
+      ],
+      [
+        'is refused',
+        (pending: Subject<NuxeoDocument>) => pending.error(new HttpErrorResponse({ status: 409 })),
+      ],
+    ])('ignores a Lock that %s after navigating to another document', async (_how, settle) => {
+      await build();
+      const pending = new Subject<NuxeoDocument>();
+      mockDetailService.lockDocument.mockReturnValue(pending);
+
+      component.toggleLock();
+      component['docUid'] = 'doc-2';
+      toast.show.mockClear();
+      toast.error.mockClear();
+      settle(pending);
+
+      expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-1');
+      expect(component.isLocked()).toBe(false);
+      expect(component.lockOwner()).toBeNull();
+      expect(component.actionInProgress()).toBeNull();
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      [false, 409, 'Document already locked by another user, please refresh your page.'],
+      [false, 403, "You don't have permission to lock this document."],
+      [true, 409, "You can't unlock this document because it is locked by another user."],
+      [true, 403, "You don't have permission to unlock this document."],
+      [true, 500, 'Failed to toggle lock'],
+    ])('locked=%s: explains a %i refusal specifically', async (locked, status, message) => {
+      await build(locked ? doc({ lockOwner: 'tester', lockCreated: LOCKED_AT }) : doc());
+      const refusal = throwError(() => new HttpErrorResponse({ status }));
+      mockDetailService.lockDocument.mockReturnValue(refusal);
+      mockDetailService.unlockDocument.mockReturnValue(refusal);
+
+      component.toggleLock();
+
+      expect(toast.error).toHaveBeenCalledWith(message);
+      expect(component.isLocked()).toBe(locked);
+      expect(component.actionInProgress()).toBeNull();
     });
   });
 

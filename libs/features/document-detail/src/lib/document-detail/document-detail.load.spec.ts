@@ -6,6 +6,7 @@ import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
+  type ParamMap,
   provideRouter,
   Router,
   withDisabledInitialNavigation,
@@ -14,7 +15,7 @@ import { MatChipInputEvent } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
-import { Observable, of, throwError } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -185,6 +186,7 @@ describe('DocumentDetailComponent — load chain', () => {
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let router: Router;
   let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
+  let routeParams: BehaviorSubject<ParamMap>;
 
   /**
    * jsdom provides neither `URL.createObjectURL` nor `revokeObjectURL`, and this component
@@ -228,7 +230,7 @@ describe('DocumentDetailComponent — load chain', () => {
         {
           provide: ActivatedRoute,
           useValue: {
-            paramMap: of(convertToParamMap({ uid: 'doc-1' })),
+            paramMap: routeParams,
             queryParamMap: of(convertToParamMap({})),
             snapshot: { queryParamMap: convertToParamMap({}) },
           },
@@ -268,6 +270,7 @@ describe('DocumentDetailComponent — load chain', () => {
     created.length = 0;
     revoked.length = 0;
     toast = { show: vi.fn(), error: vi.fn() };
+    routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({ uid: 'doc-1' }));
 
     // `clearAllMocks` clears call history but NOT implementations installed with
     // `mockReturnValue`, so anything a test overrides must be restored explicitly here or it
@@ -346,6 +349,67 @@ describe('DocumentDetailComponent — load chain', () => {
 
       expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('/browse'), expect.anything());
       spy.mockRestore();
+    });
+
+    /**
+     * The page is reused across `:uid` changes, so a read for the document the user has left can
+     * land after the one they moved to. Applied, it would put the old document's lock state on the
+     * toolbar while `toggleLock()` targets the new uid: Unlock sent to a document nobody locked.
+     */
+    describe('a read that lands after the route has moved on', () => {
+      async function openThenLeave(
+        left: Observable<NuxeoDocument>,
+        next: Observable<NuxeoDocument>,
+      ) {
+        mockDetailService.getFullDocument.mockReturnValueOnce(left).mockReturnValueOnce(next);
+        fixture = TestBed.createComponent(DocumentDetailComponent);
+        component = fixture.componentInstance;
+        await fixture.whenStable();
+        routeParams.next(convertToParamMap({ uid: 'doc-2' }));
+        await fixture.whenStable();
+      }
+
+      it('is dropped, so the toolbar and the lock action describe the current document', async () => {
+        const left = new Subject<NuxeoDocument>();
+        await openThenLeave(left, of(doc({ uid: 'doc-2' })));
+
+        left.next(doc({ lockOwner: 'alice', lockCreated: '2026-08-24T10:00:00.000Z' }));
+        await fixture.whenStable();
+
+        expect(component.doc()?.uid).toBe('doc-2');
+        expect(component.isLocked()).toBe(false);
+        expect(component.lockOwner()).toBeNull();
+
+        component.toggleLock();
+
+        expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
+        expect(mockDetailService.lockDocument).toHaveBeenCalledWith('doc-2');
+      });
+
+      it('does not report its failure on the current document', async () => {
+        const left = new Subject<NuxeoDocument>();
+        const current = new Subject<NuxeoDocument>();
+        await openThenLeave(left, current);
+
+        left.error(new Error('403'));
+        await fixture.whenStable();
+
+        expect(component.error()).toBeNull();
+        expect(component.loading()).toBe(true);
+      });
+
+      it('does not redirect away from the current document when it was folderish', async () => {
+        const spy = vi.spyOn(Router.prototype, 'navigateByUrl');
+        const left = new Subject<NuxeoDocument>();
+        await openThenLeave(left, of(doc({ uid: 'doc-2' })));
+
+        left.next(doc({ type: 'Folder', path: '/default-domain/workspaces/ws' }));
+        await fixture.whenStable();
+
+        expect(spy).not.toHaveBeenCalledWith(expect.stringContaining('/browse'), expect.anything());
+        expect(component.doc()?.uid).toBe('doc-2');
+        spy.mockRestore();
+      });
     });
   });
 

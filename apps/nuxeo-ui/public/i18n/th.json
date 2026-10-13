@@ -992,7 +992,6 @@
       "notifications-enabled": "เปิดใช้งานการแจ้งเตือนแล้ว",
       "removed-from-clipboard": "นำออกจากคลิปบอร์ดแล้ว"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "แจ้งเตือนฉัน",
     "remove-from-clipboard": "นำออกจากคลิปบอร์ด",
     "share-fallback-title": "คอลเลกชัน",
@@ -1061,6 +1060,13 @@
     "date-mask": "mm/dd/yyyy",
     "dismiss": "ยกเลิก",
     "email-example": "name@company.com",
+    "lock": {
+      "already-locked": "เอกสารถูกล็อกโดยผู้ใช้อื่นแล้ว โปรดรีเฟรชหน้า",
+      "lock-no-permission": "คุณไม่มีสิทธิ์ล็อกเอกสารนี้",
+      "locked-by": "ล็อกโดย {{ owner }} เมื่อ {{ date }}",
+      "locked-by-another-user": "คุณไม่สามารถปลดล็อกเอกสารนี้ได้ เนื่องจากถูกล็อกโดยผู้ใช้อื่น",
+      "unlock-no-permission": "คุณไม่มีสิทธิ์ปลดล็อกเอกสารนี้"
+    },
     "ok": "ตกลง",
     "page-number": "หน้า {{ page }}",
     "page-of": "หน้า {{ page }} จาก {{ total }}",
@@ -1424,7 +1430,6 @@
       "workflow-abandoned": "ยกเลิกเวิร์กโฟลว์แล้ว.",
       "workflow-started-successfully": "เริ่มเวิร์กโฟลว์สำเร็จแล้ว"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "จัดกึ่งกลาง",
       "align-left": "จัดชิดซ้าย",

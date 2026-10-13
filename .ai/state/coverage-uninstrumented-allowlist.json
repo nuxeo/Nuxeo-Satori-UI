@@ -54,10 +54,6 @@
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
-    "libs/shared/nuxeo-client/src/lib/queries/nxql-queries.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
     "libs/shared/nuxeo-client/src/lib/saml-login.config.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
@@ -71,10 +67,6 @@
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
     "libs/shared/nuxeo-client/src/lib/services/clipboard-target.service.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/services/collection.service.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },

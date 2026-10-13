@@ -245,6 +245,12 @@ the wrong one. The runtime manifest is served beside it as `manifest.json`; its 
 `extensions`) and it has no `integrations` key at all. An operator who put this block there would
 see no error and no annotation viewer.
 
+`config-packages/satori-beta/` is a worked example: the package the hosted Beta installs, whose
+whole bootstrap fragment is the `integrations.arender` block below. Build it with
+`npx nx build satori-beta` and install the zip with `nuxeoctl mp-install`; until a package is
+installed, the served `bootstrap.json` has only our `defaults` fragment, which has no
+`integrations` key, and the Annotations tab shows the placeholder (NXSAT-301).
+
 The configuration servlet serves the block from your package, after our defaults; nothing is
 edited on the server, and the package installs no configuration file, so an upgrade of ours leaves
 it alone. Under `nx serve`, pass the fragment to

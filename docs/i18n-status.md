@@ -208,6 +208,37 @@ Three lessons from it, each of which cost something:
   `Cannot initialize local storage without a --localstorage-file path`. Under the pinned Node 20
   (`nvm use 20`) all three are green. Always confirm on 20 before believing a red.
 
+### Reopened and re-closed 2026-10-12 (NXSAT-628): the grep above could not see two of them
+
+"Closed" above was true of the eleven call sites that grep finds and false of the product. Two
+more — the History tab's Date column in `document-detail.html` and `collection-detail.html` —
+took their `DatePipe` format from the **translation catalogue**:
+
+```html
+{{ entry.eventDate | date: ('collections.mmmm-d-yyyy' | translate) }}
+```
+
+The grep looks for `toLocaleDateString`, so neither was ever a candidate, and both were already
+using `LOCALE_ID` correctly — they just handed the pipe a hardcoded `MMMM d, yyyy`. `M`, `d` and
+`y` are locale-**independent** tokens, so French rendered `octobre 12, 2026`: the English field
+order wearing a French month name. Measured, not argued — `formatDate` with that pattern against
+`longDate`, in all seven shipped locales, differs in six of them.
+
+Two things worth carrying forward:
+
+- **It was reported by the translators, not by us.** The keys reached Crowdin and Łukasz
+  Biedrzycki asked why format patterns were being sent for translation. No gate was looking: the
+  extraction codemod slugs a key from its value, and `mmmm-d-yyyy` is the codemod recording that
+  it read `MMMM d, yyyy` as prose. `checkNoTranslatableDatePatterns` now fails both halves of
+  that — a catalogue value that is nothing but a date pattern, and any `date:` format routed
+  through `translate`.
+- **"Never hand-edit a non-English catalogue" has one exception, and it is not translation.**
+  Deleting a source key leaves the six non-English catalogues carrying it, which
+  `checkTranslationCatalogues` fails as an _extra_ key. Its own remedy — push sources with
+  `--delete-obsolete` — only runs on merge to `main`, so the pull request cannot be green until
+  the key is gone locally too. Removing it is safe **only because the value was untranslated
+  English**; verify that before deleting, and never remove a real translation.
+
 ### Pluralisation 2026-09-22: ICU deferred, but French is wrong today — and the first reason given was false
 
 The catalogue holds **22** `-one`/`-many` key pairs (`grep -c '\-one":' apps/nuxeo-ui/public/i18n/en.json`),

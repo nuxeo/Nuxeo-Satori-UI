@@ -55,6 +55,13 @@ export {
   stripRedundantMatInputAriaRequired,
 } from './lib/login-mat-input-required-a11y';
 export {
+  MAT_TAB_LIST_IBM_ONKEYDOWN,
+  MAT_TAB_LIST_KEYDOWN_ATTR,
+  observeMatTabListKeyboardA11y,
+  wireMatTabListKeyboardA11y,
+} from './lib/mat-tab-list-keyboard-a11y';
+export { MatTabListKeydownDirective } from './lib/mat-tab-list-keydown.directive';
+export {
   TranslatedDatepickerIntl,
   provideTranslatedDatepickerIntl,
 } from './lib/datepicker-intl/translated-datepicker-intl';

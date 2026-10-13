@@ -175,6 +175,7 @@ import {
   type VideoInfo,
   type VideoSource,
   provideTranslatedDatepickerIntl,
+  MatTabListKeydownDirective,
 } from '@nuxeo-satori/platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
 import {
@@ -308,6 +309,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatButtonModule,
     MatProgressSpinnerModule,
     MatTabsModule,
+    MatTabListKeydownDirective,
     MatTooltipModule,
     MatMenuModule,
     MatDialogModule,
@@ -332,7 +334,14 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   ],
   providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter(), provideNxsToast()],
   templateUrl: './document-detail.html',
-  styleUrls: ['./document-detail.scss', './document-detail-panel-close-focus.scss'],
+  styleUrls: [
+    './document-detail.scss',
+    './document-detail-go-back-icon.scss',
+    './document-detail-tag-chip-remove-icon.scss',
+    './document-detail-go-back-focus.scss',
+    './document-detail-panel-close-focus.scss',
+    './document-detail-tab-focus.scss',
+  ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly translate = inject(TranslateService);
@@ -536,6 +545,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** A storyboard load is already running for the current document. */
   private storyboardInFlight = false;
   private docUid = '';
+  /** Token of the newest `loadDocument` read; the page is reused across `:uid` changes. */
+  private documentLoadGeneration = 0;
   private metadataRefreshAttempt = 0;
   private blobLoadGeneration = 0;
   /** Set when navigating here immediately after create/import with a main blob. */
@@ -637,6 +648,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   // Document action states
   readonly isLocked = signal(false);
   readonly lockOwner = signal<string | null>(null);
+  readonly lockCreated = signal<string | null>(null);
+  /** Token of the lock request that owns `actionInProgress`; navigation invalidates it. */
+  private lockRequest = 0;
   readonly isFavorite = signal(false);
   readonly isSubscribed = signal(false);
   readonly actionInProgress = signal<string | null>(null);
@@ -998,8 +1012,36 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return this.extensions.evaluateRule(action.enabledRule, this.extensionRuleContext.context());
   }
 
+  /**
+   * Inline toolbar buttons are `disabledInteractive` so a disabled one still shows its tooltip,
+   * which means a click reaches here and has to be refused here.
+   */
   runToolbarAction(action: ExtensionActionDescriptor): void {
+    if (!this.isToolbarActionEnabled(action)) return;
     this.actionRegistry.execute(action, this.extensionRuleContext.context());
+  }
+
+  /** A manifest's `tooltip` wins; otherwise Unlock names who holds the lock. Null falls back to the label. */
+  toolbarTooltip(action: ExtensionActionDescriptor): string | null {
+    if (action.tooltip !== undefined) return action.tooltip;
+    return action.id === 'app.toolbar.unlock' ? this.lockedByLabel() : null;
+  }
+
+  /** The highlighted padlock Web UI shows on a locked document. */
+  isToolbarActionActive(action: ExtensionActionDescriptor): boolean {
+    return action.id === 'app.toolbar.unlock' && this.isLocked();
+  }
+
+  private lockedByLabel(): string | null {
+    const owner = this.lockOwner();
+    const created = this.lockCreated();
+    if (!this.isLocked() || !owner || !created) return null;
+    const date = new Date(created).toLocaleDateString(this.locale, {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    });
+    return this.translate.instant('common.lock.locked-by', { owner, date });
   }
 
   /**
@@ -1076,6 +1118,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         this.readFreshBlobNavigationState();
       this.freshNoteDocument = this.readFreshNoteNavigationState();
       this.resetState();
+      this.releaseLockRequest();
       this.docUid = uid;
       this.loadVocabularies();
       this.loadDocument(uid);
@@ -1740,6 +1783,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private loadDocument(uid: string): void {
+    const generation = ++this.documentLoadGeneration;
+    const isCurrent = (): boolean =>
+      generation === this.documentLoadGeneration && uid === this.docUid;
     this.loading.set(true);
     this.error.set(null);
 
@@ -1748,6 +1794,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (doc) => {
+          if (!isCurrent()) return;
           if (isCollectionDocument(doc)) {
             void this.router.navigate(['/collections', doc.uid], { replaceUrl: true });
             return;
@@ -1784,6 +1831,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.maybeBackfillContentLakeMarker(doc);
         },
         error: (err: unknown) => {
+          if (!isCurrent()) return;
           this.errorStatus.set(nxsErrorStatus(err));
           this.error.set(this.translate.instant('document-detail.message.failed-to-load-document'));
           this.loading.set(false);
@@ -1905,8 +1953,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private syncActionStates(doc: NuxeoDocument): void {
-    this.isLocked.set(!!doc.lockOwner);
+    this.isLocked.set(!!(doc.lockOwner || doc.lockCreated));
     this.lockOwner.set(doc.lockOwner ?? null);
+    this.lockCreated.set(doc.lockCreated ?? null);
     this.isFavorite.set(doc.contextParameters?.favorites?.isFavorite ?? false);
     const subs = doc.contextParameters?.subscribedNotifications;
     this.isSubscribed.set(Array.isArray(subs) && subs.length > 0);
@@ -3182,20 +3231,29 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   // ── Document Actions ──
 
   toggleLock(): void {
-    if (this.actionInProgress() || !this.requireWritePermission()) return;
+    if (this.actionInProgress() || !this.isLockable() || !this.requireWritePermission()) return;
+    // Captured before the request: the page is reused across `:uid` changes, so when the response
+    // lands `docUid` and `isLocked()` may describe another document.
+    const uid = this.docUid;
+    const wasLocked = this.isLocked();
+    const request = ++this.lockRequest;
     this.actionInProgress.set('lock');
-    const op = this.isLocked()
-      ? this.detailService.unlockDocument(this.docUid)
-      : this.detailService.lockDocument(this.docUid);
+    const op = wasLocked
+      ? this.detailService.unlockDocument(uid)
+      : this.detailService.lockDocument(uid);
 
-    op.subscribe({
-      next: () => {
-        const wasLocked = this.isLocked();
+    op.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+      next: (updated) => {
+        if (request !== this.lockRequest) return;
+        this.actionInProgress.set(null);
+        if (uid !== this.docUid) return;
         this.isLocked.set(!wasLocked);
         // Nuxeo records the caller as the lock owner; naming a fixed account here
         // told every user someone else held their own lock.
-        this.lockOwner.set(wasLocked ? null : (this.currentUsername() ?? null));
-        this.actionInProgress.set(null);
+        this.lockOwner.set(
+          wasLocked ? null : (updated?.lockOwner ?? this.currentUsername() ?? null),
+        );
+        this.lockCreated.set(wasLocked ? null : (updated?.lockCreated ?? new Date().toISOString()));
         this.toast.show(
           this.translate.instant(
             wasLocked
@@ -3204,11 +3262,33 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           ),
         );
       },
-      error: () => {
+      error: (err: unknown) => {
+        if (request !== this.lockRequest) return;
         this.actionInProgress.set(null);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-toggle-lock'));
+        if (uid !== this.docUid) return;
+        this.toast.error(this.translate.instant(this.lockRefusalKey(err, wasLocked)));
       },
     });
+  }
+
+  /**
+   * On navigation, a lock request for the previous document stops owning the busy flag, so the new
+   * document's controls are not held disabled by it, and its late response cannot clear a newer one.
+   */
+  private releaseLockRequest(): void {
+    this.lockRequest += 1;
+    if (this.actionInProgress() === 'lock') this.actionInProgress.set(null);
+  }
+
+  private lockRefusalKey(err: unknown, wasLocked: boolean): string {
+    switch ((err as { status?: number } | null)?.status) {
+      case 403:
+        return wasLocked ? 'common.lock.unlock-no-permission' : 'common.lock.lock-no-permission';
+      case 409:
+        return wasLocked ? 'common.lock.locked-by-another-user' : 'common.lock.already-locked';
+      default:
+        return 'document-detail.message.failed-to-toggle-lock';
+    }
   }
 
   toggleFavorite(): void {
@@ -3526,6 +3606,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       updated,
       { treatEmptyEnricherAsAbsent: true },
     );
+  }
+
+  /**
+   * The packaged Lock/Unlock rules' Immutable/Root restriction, held here too because a manifest
+   * may clear those rules, and an administrator keeps Write on a version.
+   */
+  private isLockable(): boolean {
+    const d = this.doc();
+    return !d?.facets?.includes('Immutable') && d?.type !== 'Root';
   }
 
   private requireWritePermission(): boolean {

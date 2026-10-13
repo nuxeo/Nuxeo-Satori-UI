@@ -366,8 +366,9 @@
   }
 }
 
-// NXENG-799 / NXENG-816 / NXENG-817 (IBM 922184956) — `style_focus_visible` reads `:focus` only;
-// keep this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
+// NXENG-799 / NXENG-816 / NXENG-817 / NXSAT-524 — image toolbar icon buttons (Zoom out, Zoom in,
+// Toggle fit, …); IBM 922184956, 2140832667. `style_focus_visible` reads `:focus` only — keep
+// this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
 .viewer-toolbar button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;
@@ -425,6 +426,14 @@
   }
 }
 
+// NXSAT-496 / NXSAT-520 / IBM 1425495611, 1924385914 — footer Download (Preview tab) and
+// sibling icon buttons: `style_focus_visible` reads `:focus` only; keep this selector separate
+// from `:focus-visible` (comma lists are not resolved by the scanner).
+.viewer-footer-actions button.mat-mdc-icon-button:focus {
+  outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
+  outline-offset: 2px;
+}
+
 /* ─── Picture metadata cards ─── */
 .picture-cards {
   display: grid;
@@ -467,7 +476,7 @@
 
 .info-label {
   font-size: 12px;
-  /* NXENG-812 — #777 was 4.48:1 on the light strip (IBM 716638997); mat-sys-on-surface-variant fails in dark theme. */
+  /* NXENG-812 / NXSAT-493 / NXSAT-507 — #777 was 4.48:1 on the light strip (IBM 716638997, IBM 1390196018, IBM 1668870227); mat-sys-on-surface-variant fails in dark theme. Runtime axe (phase-6-a11y) owns WCAG clearance; this comment is audit trace only. */
   color: var(--document-viewer-muted-on-light-surface);
   min-width: 0;
   white-space: nowrap;
@@ -504,7 +513,7 @@
   white-space: nowrap;
 }
 
-/* NXENG-768 / NXENG-806 / NXENG-825 — secondary size label in the format row (was #999 ~2.85:1; IBM 626137632, 1088600166). */
+/* NXENG-768 / NXENG-806 / NXENG-825 / NXSAT-494 — secondary size label in the format row (was #999 ~2.85:1; IBM 626137632, 1088600166, 1406866183 / NXENG-837). */
 .format-size {
   color: var(--document-viewer-muted-on-light-surface);
 }
@@ -529,8 +538,9 @@
   }
 }
 
-// NXENG-781 / NXENG-786 / NXENG-800 — IBM `style_focus_visible` (e.g. 368748540) reads `:focus`
-// only; keep this selector separate from `:focus-visible` (comma lists are not resolved).
+// NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / IBM 1635062655 (Download Thumbnail) —
+// IBM `style_focus_visible` reads `:focus` only; keep this selector separate from `:focus-visible`
+// (comma lists are not resolved by the scanner).
 .format-download-btn.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;

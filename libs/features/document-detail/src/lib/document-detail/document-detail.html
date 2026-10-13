@@ -19,10 +19,12 @@
   <div class="detail-header">
     <button
       mat-icon-button
+      class="detail-header-go-back-btn"
       (click)="goBack()"
       [attr.aria-label]="'document-detail.document-detail.go-back' | translate"
     >
-      <mat-icon>arrow_back</mat-icon>
+      <!-- NXENG-826: empty mat-icon + CSS codepoint (legacy Material Icons font — fontIcon needs a class set). -->
+      <mat-icon aria-hidden="true" class="detail-header-go-back-icon"></mat-icon>
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
@@ -163,9 +165,11 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="action.tooltip ?? (action | descriptorLabel)"
+          [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
           [attr.aria-label]="action | descriptorLabel"
           [disabled]="!isToolbarActionEnabled(action)"
+          disabledInteractive
+          [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
           <mat-icon>{{ action.icon }}</mat-icon>
@@ -188,6 +192,8 @@
           type="button"
           [attr.data-action-id]="action.id"
           [disabled]="!isToolbarActionEnabled(action)"
+          [matTooltip]="toolbarTooltip(action) ?? ''"
+          matTooltipPosition="left"
           (click)="runToolbarAction(action)"
         >
           @if (action.icon) {
@@ -352,6 +358,7 @@
       <div class="tabs-header-row">
         <mat-tab-group
           #detailTabGroup
+          libMatTabListKeydown
           class="detail-tabs"
           animationDuration="0ms"
           (selectedIndexChange)="onTabChange($event)"
@@ -754,7 +761,7 @@
                       {{ 'document-detail.document-detail.date' | translate }}
                     </th>
                     <td mat-cell *matCellDef="let entry">
-                      {{ entry.eventDate | date: ('document-detail.mmmm-d-yyyy' | translate) }}
+                      {{ entry.eventDate | date: 'longDate' }}
                     </td>
                   </ng-container>
 
@@ -1667,7 +1674,10 @@
                           matChipRemove
                           [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
                         >
-                          <mat-icon>cancel</mat-icon>
+                          <mat-icon
+                            aria-hidden="true"
+                            class="detail-tag-chip-remove-icon"
+                          ></mat-icon>
                         </button>
                       </mat-chip-row>
                     }
