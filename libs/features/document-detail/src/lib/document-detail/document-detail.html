@@ -1,4 +1,4 @@
-@if (loading()) {
+﻿@if (loading()) {
   <div class="detail-loading">
     <mat-spinner
       diameter="40"
@@ -164,14 +164,15 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
+          [matTooltip]="toolbarActionTooltip(action)"
           [disabled]="!isToolbarActionEnabled(action)"
           disabledInteractive
           [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{ toolbarActionLabel(action) }}</span>
+          <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }
       <button
