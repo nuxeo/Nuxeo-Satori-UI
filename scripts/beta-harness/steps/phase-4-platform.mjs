@@ -40,7 +40,8 @@
  * - Step 9: the published `.d.ts` carries nullable types. A direct regression guard
  *   for the defect where the package was compiled without `strictNullChecks` and
  *   shipped 27 wrongly non-nullable public types.
- * - Step 10: the `exports` map advertises exactly the six expected entry points, by
+ * - Step 10: the `exports` map advertises exactly the expected entry points — the root and six
+ *   subpaths, `./components-satori` among them — by
  *   name, and every `types` file it names exists. An entry pointing at a missing file is an unresolvable import
  *   for a customer, which is how `ng-packagr-lite` shipped four broken subpaths.
  * - Step 11: `private: true` survives into the built artifact, so an accidental
@@ -90,6 +91,7 @@ const EXPECTED_EXPORTS = Object.freeze([
   '.',
   './app-config',
   './components',
+  './components-satori',
   './extensions',
   './nuxeo-client',
   './ui',
@@ -308,13 +310,13 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('The exports map advertises six entry points, all resolvable');
+  h.step('The exports map advertises the root and six subpaths, all resolvable');
 
   const pkg = JSON.parse(readFileSync(join(DIST, 'package.json'), 'utf8'));
   const subpaths = Object.keys(pkg.exports ?? {}).filter((k) => k !== './package.json');
   const { missing: absent, unexpected } = exportsMismatch(pkg.exports);
   h.check(
-    'exactly the six expected entry points are exported',
+    'exactly the expected entry points are exported: the root and six subpaths',
     absent.length === 0 && unexpected.length === 0,
     `missing: ${absent.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}`,
   );
