@@ -650,6 +650,17 @@ still use the `sat-*` elements directly until they move onto these IDs. Today th
 host resolves them — a `lib-extension-outlet` with a `componentId`, or a Layer 2 component composing
 `NxsTagComponent` and the rest from `/components` directly — and in the library's Storybook.
 
+### `nxs-` components registered for a slot
+
+`provideNxsComponents()` registers each of these under an ID ready for the slot named, and nothing
+places them: a manifest entry in that slot does, with `componentId` set to the ID (for `routes`, a
+`path`). `npx nx g ./tools/satori-generators:satori-component` adds a row here with the component.
+
+<!-- satori:register:nxs-components — `satori-component` appends a row to the table below -->
+
+| Component ID | Element | For the slot |
+| ------------ | ------- | ------------ |
+
 ---
 
 ## 7. `documentList` — the packaged columns

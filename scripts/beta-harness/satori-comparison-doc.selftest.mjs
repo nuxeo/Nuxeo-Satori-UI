@@ -70,7 +70,7 @@ export function generatedComponent({ fileName, className, title, componentId }) 
       `![${title}: without Satori on the left, with Satori on the right](${fileName}-side-by-side.png ` +
         `'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')`,
       '',
-      'The same component in both; only the theme differs.',
+      'The same heading in both; the theme sets the type and the colours.',
       '',
     ].join('\n'),
     row: `| ${title} | \`${componentId}\` | ${THEME_ONLY} |`,
@@ -421,7 +421,7 @@ try {
   const spec = {
     fileName: 'claim-summary',
     className: 'NxsClaimSummaryComponent',
-    title: 'Claim Summary',
+    title: 'Claim summary',
     componentId: 'nxs.sidebar.claimSummary',
   };
   const lib = join(tmp, 'libs/shared/satori-components/src');

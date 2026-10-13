@@ -6,6 +6,7 @@ import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
 import { NxsTagComponent } from './tag/tag.component';
+// satori:import:components — `satori-component` inserts above this line
 
 /**
  * Register the library's components by ID, on Material. Needs no Satori.
@@ -30,6 +31,7 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.breadcrumbs]: NxsBreadcrumbsComponent,
       [NXS_PRIMITIVE_IDS.tag]: NxsTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsRichTooltipComponent,
+      // satori:register:components — `satori-component` inserts above this line
     },
   });
 }

@@ -23,6 +23,12 @@
       "schema": "./src/extension-component/schema.json",
       "description": "Scaffold a standalone component in an existing extension library and register it by ID behind a lazy import."
     },
+    "satori-component": {
+      "factory": "./src/satori-component/generator",
+      "schema": "./src/satori-component/schema.json",
+      "description": "Add an nxs- component to the platform's own component library, registered by ID for a slot, with its spec, story, Overview page, export, reference row and with-and-without-Satori section. Internal: customers contribute with extension-component under their own prefix.",
+      "x-satori-internal": true
+    },
     "config-package": {
       "factory": "./src/config-package/generator",
       "schema": "./src/config-package/schema.json",

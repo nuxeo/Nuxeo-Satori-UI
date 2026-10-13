@@ -2,16 +2,18 @@
 title: Skills, Agents & Generators
 parent: Engineering
 order: 9
-last_reviewed: 2026-10-08
-repo_commit: fb97d44
+last_reviewed: 2026-10-12
+repo_commit: 82c78bd
 audience: engineering
 ---
 
 # Skills, Agents and Generators — what the AI tooling actually is
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `fb97d44` (`feature/nxsat-308-dependency-tree-gate`)
-> Only the link to Dev Harness & Gates §2 was re-verified at that commit; the rest of the page was
-> last reviewed on 2026-08-24 at `77265f9`.
+> **Last reviewed:** 2026-10-12 · **Repository:** `82c78bd` (`feature/nxsat-308-agent-surface`)
+> Only §5's generator list and the summary's generator count were verified at that commit, against
+> `tools/satori-generators/generators.json` and the package `beta:publishable` builds. The link to
+> Dev Harness & Gates §2 was re-verified on 2026-10-08 at `fb97d44`; the rest of the page was last
+> reviewed on 2026-08-24 at `77265f9`.
 > Supersedes [`docs/agentic-system-guide.md`](../../docs/agentic-system-guide.md) and the
 > agent-catalog sections of [`docs/agentic-development-system.md`](../../docs/agentic-development-system.md).
 
@@ -168,17 +170,21 @@ the definitions disagree.
 
 ---
 
-## 5. Generators — 4 implemented, and they ship to customers
+## 5. Generators — 6 implemented, 5 of them ship to customers
 
 [`tools/satori-generators`](../../tools/satori-generators), Nx generators compiled into the
-published package.
+published package — all but `satori-component`, which `generators.json` marks
+`x-satori-internal` and `scripts/build-platform-generators.mjs` leaves out, because `nxs-` is our
+prefix.
 
-| Generator             | Produces                                                                                                                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `extension-library`   | A complete Layer 2 library: project config, barrel, `extensions.ts` with marker comments, a rules service, a panel component, a spec asserting registry state, tsconfigs, vite config, README |
-| `extension-rule`      | A rule evaluator spliced into the existing library                                                                                                                                            |
-| `extension-action`    | An action handler                                                                                                                                                                             |
-| `extension-component` | A component + registration                                                                                                                                                                    |
+| Generator             | Produces                                                                                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `extension-library`   | A complete Layer 2 library: project config, barrel, `extensions.ts` with marker comments, a rules service, a panel component, a spec asserting registry state, tsconfigs, vite config, README                                                                                                  |
+| `extension-rule`      | A rule evaluator spliced into the existing library                                                                                                                                                                                                                                             |
+| `extension-action`    | An action handler                                                                                                                                                                                                                                                                              |
+| `extension-component` | A component + registration                                                                                                                                                                                                                                                                     |
+| `config-package`      | A Nuxeo Marketplace package carrying Layer 0 and Layer 1 fragments, with a build target that checks them and writes the installable zip                                                                                                                                                        |
+| `satori-component`    | **Internal.** An `nxs-` component in `libs/shared/satori-components`, registered by ID for a slot: spec rendering it as that slot's host does, story tagged `autodocs`, Overview page, barrel export, `provideNxsComponents()` entry, extension-reference row, with-and-without-Satori section |
 
 ### The splice bug, and why the post-condition assertion exists
 
@@ -256,7 +262,7 @@ the architecture.
 
 |                                                                 |                                                                                          Count |
 | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------: |
-| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 4 generators + 13 skills** |
+| Real, discrete, verifiable components                           |                                   **8 workflows + 2 review agents + 6 generators + 13 skills** |
 | Catalog entries that are context/procedure rather than an agent |                                                                                              8 |
 | Catalog entries not implemented at all                          | **8** (Broken Link, Performance, Refactoring Opportunity, and all six of Tier 4, less overlap) |
 

@@ -1,0 +1,33 @@
+import { ChangeDetectionStrategy, Component, input, type InputSignal } from '@angular/core';<% if (isDocumentView) { %>
+import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';<% } %>
+
+import type { NxsHeadingLevel } from '../heading-level';
+
+/**
+ * `<%= componentId %>`, registered by `provideNxsComponents()` for the `<%= slot %>` slot.
+ *
+ * Text arrives already translated — the library ships no catalogue — so a caller binds
+ * `[heading]="'acme.thing.heading' | translate"`<% if (hostPassesInputs) { %>, and a manifest entry passes it in `inputs`<% } %>.
+ */
+@Component({
+  selector: 'nxs-<%= fileName %>',
+  standalone: true,
+  templateUrl: './<%= fileName %>.component.html',
+  styleUrl: './<%= fileName %>.component.scss',
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  host: { class: 'nxs-<%= fileName %>' },
+})
+export class <%= className %> {
+  /** What this shows, in one line. No heading renders while it is blank. */
+  // Optional because the `tabs` and `sidebar` hosts set no inputs: a required one would throw there.
+  readonly heading = input('');
+  /**
+   * The heading's level in the page outline, rendered as the native `<h1>`–`<h6>`. Set it one
+   * below the heading of the section it sits in, so heading navigation stays in order.
+   */
+  // Annotated rather than inferred: an inferred union is declared in the compiler's type order,
+  // which moves with unrelated code and would change the published API snapshot each time.
+  readonly headingLevel: InputSignal<NxsHeadingLevel> = input<NxsHeadingLevel>(2);<% if (isDocumentView) { %>
+  /** The focused document. The `documentView` host sets it; nothing else should. */
+  readonly document = input<NuxeoDocument | null>(null);<% } %>
+}

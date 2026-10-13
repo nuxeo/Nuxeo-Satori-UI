@@ -146,6 +146,16 @@ for (const asset of assets(join(SRC, 'src'))) {
  * would drift from the first the moment a generator is added.
  */
 const manifest = JSON.parse(readFileSync(join(SRC, 'generators.json'), 'utf8'));
+// `x-satori-internal` generators add to the platform's own source — `satori-component` writes
+// `nxs-` components into `libs/shared/satori-components` — so a customer's workspace has nothing
+// for them to act on, and they are not shipped. Their compiled output is removed below too.
+const internal = Object.entries(manifest.generators ?? {})
+  .filter(([, generator]) => generator['x-satori-internal'] === true)
+  .map(([name]) => name);
+for (const name of internal) {
+  delete manifest.generators[name];
+  rmSync(join(OUT, name), { recursive: true, force: true });
+}
 for (const generator of Object.values(manifest.generators ?? {})) {
   for (const key of ['factory', 'schema']) {
     if (typeof generator[key] === 'string') {

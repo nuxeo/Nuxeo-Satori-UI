@@ -389,11 +389,11 @@ const ALL_GATES = [
   {
     id: 'customer-guardrails',
     label: 'Customer extension guardrails',
-    cmd: 'node',
-    argv: [
-      'libs/platform/guardrails/check-extension-library.mjs',
-      'libs/extensions/acme-extensions',
-    ],
+    // The npm script, so the gate and CI run the same two things: the guardrail against our
+    // reference library, which proves it passes, and its selftest, which proves it can fail.
+    cmd: 'npm',
+    argv: ['run', '--silent', 'beta:customer-guardrails'],
+    echoOnPass: true,
   },
 ];
 

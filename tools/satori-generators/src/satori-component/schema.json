@@ -1,0 +1,32 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriComponent",
+  "title": "Add an nxs- component to the platform's component library",
+  "description": "Scaffolds a standalone nxs- component in libs/shared/satori-components with its spec, story and Storybook Overview page, registers it by ID in provideNxsComponents() for one of the slots that render a component, exports it, documents the ID in docs/extension-reference.md, and adds its section and row to docs/satori-components/with-and-without-satori.md.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Component name, kebab-case. Becomes nxs-<name>, Nxs<Name>Component and nxs.<slot>.<camelCase>.",
+      "$default": { "$source": "argv", "index": 0 },
+      "x-prompt": "Component name (kebab-case, e.g. claim-summary)?",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "slot": {
+      "type": "string",
+      "description": "The slot that will place it. Only these four render a component by ID.",
+      "enum": ["sidebar", "tabs", "documentView", "routes"],
+      "x-prompt": {
+        "message": "Which slot places it?",
+        "type": "list",
+        "items": ["sidebar", "tabs", "documentView", "routes"]
+      }
+    },
+    "project": {
+      "type": "string",
+      "description": "The component library. Only the platform's own carries the nxs- prefix.",
+      "default": "satori-components"
+    }
+  },
+  "required": ["name", "slot"]
+}
