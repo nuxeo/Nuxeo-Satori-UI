@@ -1,4 +1,4 @@
-@if (loading()) {
+﻿@if (loading()) {
   <div class="detail-loading">
     <mat-spinner
       diameter="40"
@@ -164,14 +164,17 @@
           mat-icon-button
           type="button"
           [attr.data-action-id]="action.id"
-          [matTooltip]="toolbarTooltip(action) ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
+          [matTooltip]="toolbarActionTooltip(action)"
           [disabled]="!isToolbarActionEnabled(action)"
           disabledInteractive
           [class.toolbar-action--active]="isToolbarActionActive(action)"
           (click)="runToolbarAction(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            toolbarActionLabel(action)
+          }}</span>
+          <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }
       <button
@@ -1788,7 +1791,7 @@
             }
 
             <div class="prop-field prop-field--tags">
-              <span class="prop-label">{{
+              <span class="prop-label" id="document-detail-inline-tags-label">{{
                 'document-detail.document-detail.tags' | translate
               }}</span>
               @if (canWriteDoc()) {
@@ -1799,7 +1802,7 @@
                 >
                   <mat-chip-grid
                     #tagChipGrid
-                    [attr.aria-label]="'document-detail.document-detail.document-tags' | translate"
+                    [attr.aria-labelledby]="'document-detail-inline-tags-label'"
                   >
                     @for (tag of tags(); track $index) {
                       <mat-chip-row (removed)="removeInlineTag(tag)">
@@ -1818,6 +1821,7 @@
                     }
                     <input
                       name="tagInput"
+                      [attr.aria-labelledby]="'document-detail-inline-tags-label'"
                       [placeholder]="
                         tags().length
                           ? ''
