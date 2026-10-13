@@ -176,11 +176,15 @@
       }
       <button
         mat-icon-button
+        type="button"
+        class="toolbar-more-actions-btn"
         [matMenuTriggerFor]="moreMenu"
         [matTooltip]="'document-detail.document-detail.more-actions' | translate"
-        [attr.aria-label]="'document-detail.document-detail.more-actions' | translate"
       >
-        <mat-icon>more_vert</mat-icon>
+        <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+          'document-detail.document-detail.more-actions' | translate
+        }}</span>
+        <mat-icon aria-hidden="true">more_vert</mat-icon>
       </button>
     </div>
 
@@ -1805,7 +1809,10 @@
                           matChipRemove
                           [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
                         >
-                          <mat-icon aria-hidden="true" class="detail-tag-chip-remove-icon"></mat-icon>
+                          <mat-icon
+                            aria-hidden="true"
+                            class="detail-tag-chip-remove-icon"
+                          ></mat-icon>
                         </button>
                       </mat-chip-row>
                     }
