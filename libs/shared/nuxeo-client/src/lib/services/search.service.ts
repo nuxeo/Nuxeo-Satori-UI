@@ -5,6 +5,7 @@ import type { NuxeoDocumentList } from '../models/document.model';
 import type { AggregateResult } from '../models/asset.model';
 import type { SearchAggregations, SearchResponse, SearchResultItem } from '../models/search.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
+import { TagService } from './tag.service';
 import { docTypeIcon } from '../constants/doc-type-icons';
 import {
   NOTE_DOCUMENT_PICKER_HEADERS,
@@ -80,6 +81,7 @@ const MODIFIED_RANGE_ALIASES: Readonly<Record<string, string>> = {
 @Injectable({ providedIn: 'root' })
 export class SearchService {
   private readonly api = inject(NuxeoApiBase);
+  private readonly tags = inject(TagService);
 
   private readonly savedSearchHighlight =
     'dc:title.fulltext,ecm:binarytext,dc:description.fulltext,ecm:tag,note:note.fulltext,file:content.name';
@@ -570,31 +572,14 @@ export class SearchService {
   }
 
   /**
-   * Tag labels that start with `term`, from Nuxeo's `Tag.Suggestion` — what Web UI's search form
-   * offers in its Tags field. Empty for a blank term, and on failure, so a typeahead stays usable.
+   * Tag labels that start with `term`, from `TagService.suggestTags` (Nuxeo's `Tag.Suggestion`) —
+   * what Web UI's search form offers in its Tags field. Empty for a blank term, and on failure, so a
+   * typeahead stays usable.
    */
   getTagSuggestions(term: string): Observable<string[]> {
     const searchTerm = term.trim();
     if (!searchTerm) return of([]);
-    return this.api
-      .post<unknown>(
-        '/nuxeo/api/v1/automation/Tag.Suggestion',
-        { params: { searchTerm }, context: {} },
-        { 'Content-Type': 'application/json' },
-      )
-      .pipe(
-        map((res) =>
-          (Array.isArray(res) ? res : [])
-            .map((entry) =>
-              entry && typeof entry === 'object'
-                ? (this.asString((entry as Record<string, unknown>)['displayLabel']) ??
-                  this.asString((entry as Record<string, unknown>)['id']))
-                : undefined,
-            )
-            .filter((label): label is string => !!label),
-        ),
-        catchError(() => of<string[]>([])),
-      );
+    return this.tags.suggestTags(searchTerm).pipe(catchError(() => of<string[]>([])));
   }
 
   private asPrincipalName(value: unknown): string {

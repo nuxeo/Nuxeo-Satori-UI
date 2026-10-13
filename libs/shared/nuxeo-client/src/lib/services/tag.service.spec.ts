@@ -35,6 +35,22 @@ describe('TagService.suggestTags', () => {
     expect(labels).toEqual(['contract', 'claims']);
   });
 
+  it('skips an entry with neither a label nor an id', () => {
+    let labels: string[] = [];
+    service.suggestTags('c').subscribe((result) => (labels = result));
+    http
+      .expectOne((r) => r.url.endsWith('/automation/Tag.Suggestion'))
+      .flush([{ id: 'contract', displayLabel: '' }, { other: true }, null, { id: 'claims' }]);
+    expect(labels).toEqual(['contract', 'claims']);
+  });
+
+  it('answers no suggestions when the answer is not a list', () => {
+    let labels: string[] | undefined;
+    service.suggestTags('c').subscribe((result) => (labels = result));
+    http.expectOne((r) => r.url.endsWith('/automation/Tag.Suggestion')).flush({ entries: [] });
+    expect(labels).toEqual([]);
+  });
+
   it('passes a server error on to the caller', () => {
     let status = 0;
     service.suggestTags('c').subscribe({ error: (error) => (status = error.status) });

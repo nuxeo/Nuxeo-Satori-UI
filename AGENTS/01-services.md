@@ -160,7 +160,7 @@ drawer's queue reads `items`. Search for results through the session, not by cal
 search(params: SearchQueryParams): Observable<SearchResponse>
 suggest(searchTerm: string, pageSize?: number): Observable<GlobalSearchSuggestion[]>
 getUserCollections(): Observable<SearchCollectionOption[]>
-getTagSuggestions(term: string): Observable<string[]>          // Tag.Suggestion; [] on failure
+getTagSuggestions(term: string): Observable<string[]>          // TagService.suggestTags; [] when blank or on failure
 getSavedSearches(pageProvider?: string): Observable<SavedSearchOption[]>
 getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON
 saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>

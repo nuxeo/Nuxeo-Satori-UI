@@ -1586,9 +1586,13 @@ document query is Web UI's `default_document_suggestion` page provider's — `ec
 up with `SELECT * FROM Document WHERE ecm:uuid = '<uid>'` (or `ecm:path`), page size 1, escaped the
 same way.
 
-**`TagService.searchTags` is not used:** it reads `/api/v1/directory/label_tag_entry`, which Nuxeo
-2025 answers with `404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never
-suggests anything. `suggestTags` uses the operation Web UI uses, which answered the same server.
+**The tag input does not use `TagService.searchTags`:** it reads
+`/api/v1/directory/label_tag_entry`, which Nuxeo 2025 answers with
+`404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never suggests anything.
+`suggestTags` uses the operation Web UI uses, which answered the same server, and is the one place
+that sends it: the search filters' tags reach it through `SearchService.getTagSuggestions`. The tag
+fields of browse and document detail still call `searchTags`, so they suggest nothing on Nuxeo 2025
+until they move onto `suggestTags`.
 
 `nxs-date-input` makes no request.
 
@@ -1599,19 +1603,19 @@ Storybook; screens move onto them in a later change.
 
 ## 31. Search — `default_search`, Saved Searches and Tag Suggestions
 
-| Field             | Value                                                                                                                     |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| **Service**       | `SearchService` (`libs/shared/nuxeo-client/src/lib/services/search.service.ts`)                                           |
-| **Search**        | `GET /nuxeo/api/v1/search/pp/default_search/execute` (`search`), `enrichers.document=favorites`                           |
-| **Saved: list**   | `GET /nuxeo/api/v1/search/saved?pageProvider=default_search` (`getSavedSearches`)                                         |
-| **Saved: read**   | `GET /nuxeo/api/v1/search/saved/:id` (`getSavedSearchById`)                                                               |
-| **Saved: create** | `POST /nuxeo/api/v1/search/saved` — `entity-type`, `pageProviderName`, `title`, `params` (`saveSavedSearch`)              |
-| **Saved: save**   | `PUT /nuxeo/api/v1/search/saved/:id` — the same body (`updateSavedSearch`)                                                |
-| **Saved: rename** | `PUT /nuxeo/api/v1/search/saved/:id` — `entity-type`, `pageProviderName`, `title`, **no** `params` (`renameSavedSearch`)  |
-| **Saved: delete** | `DELETE /nuxeo/api/v1/search/saved/:id` (`deleteSavedSearch`)                                                             |
-| **Permissions**   | `GET /nuxeo/api/v1/id/:id` with `enrichers.document=permissions` — `WriteProperties` gates Save, Rename, Share and Delete |
-| **Collections**   | `POST /nuxeo/api/v1/automation/User.GetCollections` (`getUserCollections`)                                                |
-| **Tags**          | `POST /nuxeo/api/v1/automation/Tag.Suggestion` — `searchTerm` (`getTagSuggestions`); answers `[{ id, displayLabel }]`     |
+| Field             | Value                                                                                                                                                   |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service**       | `SearchService` (`libs/shared/nuxeo-client/src/lib/services/search.service.ts`)                                                                         |
+| **Search**        | `GET /nuxeo/api/v1/search/pp/default_search/execute` (`search`), `enrichers.document=favorites`                                                         |
+| **Saved: list**   | `GET /nuxeo/api/v1/search/saved?pageProvider=default_search` (`getSavedSearches`)                                                                       |
+| **Saved: read**   | `GET /nuxeo/api/v1/search/saved/:id` (`getSavedSearchById`)                                                                                             |
+| **Saved: create** | `POST /nuxeo/api/v1/search/saved` — `entity-type`, `pageProviderName`, `title`, `params` (`saveSavedSearch`)                                            |
+| **Saved: save**   | `PUT /nuxeo/api/v1/search/saved/:id` — the same body (`updateSavedSearch`)                                                                              |
+| **Saved: rename** | `PUT /nuxeo/api/v1/search/saved/:id` — `entity-type`, `pageProviderName`, `title`, **no** `params` (`renameSavedSearch`)                                |
+| **Saved: delete** | `DELETE /nuxeo/api/v1/search/saved/:id` (`deleteSavedSearch`)                                                                                           |
+| **Permissions**   | `GET /nuxeo/api/v1/id/:id` with `enrichers.document=permissions` — `WriteProperties` gates Save, Rename, Share and Delete                               |
+| **Collections**   | `POST /nuxeo/api/v1/automation/User.GetCollections` (`getUserCollections`)                                                                              |
+| **Tags**          | `POST /nuxeo/api/v1/automation/Tag.Suggestion` — `searchTerm` (`getTagSuggestions`, through `TagService.suggestTags`); answers `[{ id, displayLabel }]` |
 
 **The filters are `default_search`'s own parameters**, as Web UI's search form sends them: full text
 on `ecm_fulltext` (dashes turned into spaces, as Web UI's `formatFulltext` does, since Nuxeo reads
