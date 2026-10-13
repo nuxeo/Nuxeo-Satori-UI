@@ -152,6 +152,8 @@ with Enter. It runs only on its own page, because it moves this page's focus.
   screen reader says where a row sits in the whole list, not only on the page.
 - **Unique names.** Each row is named by its own document's title, and each checkbox says "Select"
   followed by that title. A row's menu is named "Actions for" that title.
+- **Selection on the row.** While the list is `selectable`, each row carries `aria-selected`, so the
+  row itself says whether it is selected, not only its checkbox.
 - **Sorting.** Sortable headers are buttons with `aria-sort` and a description, "Sort by Modified";
   every other header is plain text. A sort change is announced — "Sorted by Modified, descending" —
   and so is clearing it, because most screen readers do not announce a change to `aria-sort`.

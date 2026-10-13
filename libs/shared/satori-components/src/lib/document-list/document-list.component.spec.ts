@@ -404,11 +404,17 @@ describe('NxsDocumentListComponent', () => {
   describe('pointer selection', () => {
     beforeEach(() => configure());
 
-    it('toggles a row with its checkbox', async () => {
+    it('toggles a row with its checkbox, and the row says it is selected', async () => {
       checkbox(1).click();
       await render();
       expect(host.selected()).toEqual(['uid-2']);
       expect(checkbox(1).checked).toBe(true);
+      expect(rows().map((row) => row.getAttribute('aria-selected'))).toEqual([
+        'false',
+        'true',
+        'false',
+        'false',
+      ]);
     });
 
     it('selects a range with Shift and a second checkbox', async () => {
@@ -467,6 +473,7 @@ describe('NxsDocumentListComponent', () => {
       host.selectable.set(false);
       await render();
       expect(el().querySelector('mat-checkbox')).toBeNull();
+      expect(rows().some((row) => row.hasAttribute('aria-selected'))).toBe(false);
       key(rows()[0], ' ');
       key(rows()[0], 'a', { metaKey: true });
       await render();
