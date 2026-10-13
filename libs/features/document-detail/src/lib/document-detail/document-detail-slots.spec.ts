@@ -431,8 +431,11 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       const button = buttons.find(
         (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
       );
-      expect(button).withContext('expected header More actions mat-icon-button').toBeTruthy();
-      expect(button!.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBeTruthy();
+      expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
+      expect(
+        button!.querySelector('.cdk-visually-hidden')?.textContent?.trim(),
+        'More actions visually hidden accessible name',
+      ).toBeTruthy();
       expect(button!.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
     });
   });
