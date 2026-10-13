@@ -1,6 +1,7 @@
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
+import { expect } from 'storybook/test';
 
 import { NXS_PRIMITIVE_IDS } from '../primitives';
 import { provideNxsComponents } from '../provide-nxs-components';
@@ -28,8 +29,17 @@ export const Closed: Story = {};
 
 /** Opened by activating the button, as a user does. Focus stays on the button. */
 export const Open: Story = {
-  play: async ({ canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'About versioning' }));
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'About versioning' });
+    await userEvent.click(trigger);
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const panel = canvasElement.ownerDocument.getElementById(
+      trigger.getAttribute('aria-controls') ?? '',
+    );
+    await expect(panel).toHaveTextContent(args.heading);
+    await expect(panel).toHaveTextContent(args.content);
+    await expect(panel).toBeVisible();
+    await expect(trigger).toHaveFocus();
   },
 };
 

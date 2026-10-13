@@ -1,4 +1,4 @@
-import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
+import { provideRouter, withDisabledInitialNavigation, withHashLocation } from '@angular/router';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { provideAndConfigureSatoriUITranslations } from '@hylandsoftware/satori-ui/translations';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
@@ -14,6 +14,9 @@ import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
  *
  * Also what a host owes Satori: `provideSatori()` for the theme and icons, and Satori's `sat.*`
  * catalogue — here through upstream's `provideAndConfigureSatoriUITranslations`.
+ *
+ * The router is `satori-components`' story router: the breadcrumb's `/browse` link matches a route
+ * that renders nothing, and hash location keeps a followed link inside the story's iframe.
  */
 const meta: Meta = {
   title: 'Primitives/By registered ID',
@@ -21,7 +24,11 @@ const meta: Meta = {
     applicationConfig({
       providers: [
         provideAndConfigureSatoriUITranslations({ fallbackLang: 'en' }),
-        provideRouter([], withDisabledInitialNavigation()),
+        provideRouter(
+          [{ path: 'browse', children: [] }],
+          withHashLocation(),
+          withDisabledInitialNavigation(),
+        ),
         provideSatori(),
         provideNxsComponents(),
         provideNxsSatoriComponents(),

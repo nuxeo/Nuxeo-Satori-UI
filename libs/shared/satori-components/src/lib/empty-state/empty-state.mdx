@@ -33,10 +33,7 @@ empty table or a blank area, so the user knows the place is empty on purpose and
   code={`import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-<Source
-  language="html"
-  dark
-  code={`<nxs-empty-state
+export const usageHtml = `<nxs-empty-state
   [heading]="'acme.results.empty' | translate"
   [message]="'acme.results.empty-hint' | translate"
   icon="search_off"
@@ -44,7 +41,12 @@ empty table or a blank area, so the user knows the place is empty on purpose and
   <button mat-button type="button" (click)="clearFilters()">
     {{ 'acme.results.clear-filters' | translate }}
   </button>
-</nxs-empty-state>`}
+</nxs-empty-state>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 Only `heading` is required, already translated. The library ships no translations for the text you

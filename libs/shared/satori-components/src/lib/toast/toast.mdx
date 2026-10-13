@@ -38,32 +38,34 @@ Select **Save** to show the toast. The code shows the call that opens it.
 List `provideNxsToast()` in your component's `providers`, inject `NxsToastService`, and call it with
 text you have already translated:
 
-<Source
-  language="typescript"
-  dark
-  code={`import { Component, inject } from '@angular/core';
+export const usageTs = `import { Component, inject } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
 
 @Component({
-selector: 'acme-editor',
-templateUrl: './acme-editor.html',
-providers: [provideNxsToast()],
+  selector: 'acme-editor',
+  templateUrl: './acme-editor.html',
+  providers: [provideNxsToast()],
 })
 export class AcmeEditorComponent {
-private readonly toast = inject(NxsToastService);
-private readonly translate = inject(TranslateService);
+  private readonly toast = inject(NxsToastService);
+  private readonly translate = inject(TranslateService);
 
-protected saved(): void {
-this.toast.show(this.translate.instant('acme.editor.saved'));
-}
+  protected saved(): void {
+    this.toast.show(this.translate.instant('acme.editor.saved'));
+  }
 
-protected saveFailed(): void {
-this.toast.error(this.translate.instant('acme.editor.save-failed'), {
-retry: () => this.save(),
-});
-}
-}`}
+  protected saveFailed(): void {
+    this.toast.error(this.translate.instant('acme.editor.save-failed'), {
+      retry: () => this.save(),
+    });
+  }
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
 />
 
 The toast is built on Angular Material's snack bar, which Angular Material provides. Its **Dismiss**

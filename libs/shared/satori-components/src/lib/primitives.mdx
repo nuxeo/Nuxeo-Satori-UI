@@ -119,15 +119,17 @@ in full.
 List `provideNxsSatoriComponents()` after `provideNxsComponents()`: a later registration of the same
 ID wins. Satori's components also need `provideSatori()` and Satori's translations in ngx-translate.
 
-<Source
-  language="typescript"
-  dark
-  code={`providers: [
+export const withSatorisComponentsTs = `providers: [
   provideAndConfigureSatoriUITranslations({ fallbackLang: 'en' }),
   provideSatori(),
   provideNxsComponents(),
   provideNxsSatoriComponents(),
-];`}
+];`;
+
+<Source
+  language="typescript"
+  dark
+  code={withSatorisComponentsTs}
 />
 
 This Storybook is built without access to GitHub Packages, so it cannot render Satori's versions.
@@ -138,23 +140,25 @@ The demo above shows the built-in versions. Satori's are shown in Satori's docum
 Register your component under the ID after the library's providers. It implements the ID's interface,
 so screens pass it the same inputs.
 
-<Source
-  language="typescript"
-  dark
-  code={`import { Component, input } from '@angular/core';
+export const withYourOwnTagTs = `import { Component, input } from '@angular/core';
 import type { NxsTagColor, NxsTagInputs } from '@nuxeo-satori/platform/components';
 import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
 
 @Component({ selector: 'acme-tag', templateUrl: './acme-tag.html' })
 export class AcmeTagComponent implements NxsTagInputs {
-readonly label = input.required<string>();
-readonly color = input<NxsTagColor>('gray');
+  readonly label = input.required<string>();
+  readonly color = input<NxsTagColor>('gray');
 }
 
 providers: [
-provideNxsComponents(),
-provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTagComponent } }),
-];`}
+  provideNxsComponents(),
+  provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTagComponent } }),
+];`;
+
+<Source
+  language="typescript"
+  dark
+  code={withYourOwnTagTs}
 />
 
 ## Accessibility

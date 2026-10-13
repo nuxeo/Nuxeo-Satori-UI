@@ -30,7 +30,7 @@ export const Default: Story = {};
 export const Sizes: Story = {
   parameters: { controls: { disable: true } },
   render: () => ({
-    template: `<div style="display: flex; align-items: center; gap: 12px">
+    template: `<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 12px">
 ${SIZES.map((size) => `  <nxs-avatar initials="NK" size="${size}" label="Narasimha Koppula" />`).join('\n')}
 </div>`,
   }),
@@ -40,7 +40,7 @@ ${SIZES.map((size) => `  <nxs-avatar initials="NK" size="${size}" label="Narasim
 export const Colours: Story = {
   parameters: { controls: { disable: true } },
   render: () => ({
-    template: `<div style="display: flex; gap: 8px">
+    template: `<div style="display: flex; flex-wrap: wrap; gap: 8px">
 ${COLOURS.map((colour) => `  <nxs-avatar initials="NK" color="${colour}" label="Narasimha Koppula" />`).join('\n')}
 </div>`,
   }),

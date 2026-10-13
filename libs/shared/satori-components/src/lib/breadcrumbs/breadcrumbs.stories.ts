@@ -1,8 +1,9 @@
-import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
+import { expect, spyOn, waitFor } from 'storybook/test';
 
+import { provideStoryRouter } from '../../../.storybook/story-router';
 import { NXS_PRIMITIVE_IDS } from '../primitives';
 import { provideNxsComponents } from '../provide-nxs-components';
 import { NxsBreadcrumbsComponent } from './breadcrumbs.component';
@@ -11,9 +12,7 @@ const meta: Meta<NxsBreadcrumbsComponent> = {
   title: 'Primitives/Breadcrumbs',
   component: NxsBreadcrumbsComponent,
   tags: ['autodocs'],
-  decorators: [
-    applicationConfig({ providers: [provideRouter([], withDisabledInitialNavigation())] }),
-  ],
+  decorators: [applicationConfig({ providers: [provideStoryRouter()] })],
   args: {
     label: 'Breadcrumbs',
     items: [
@@ -34,6 +33,27 @@ type Story = StoryObj<NxsBreadcrumbsComponent>;
 
 /** The last item has no link, so it is announced as the current page. */
 export const Trail: Story = {};
+
+/**
+ * Following a router link navigates the story's own router: the iframe's hash changes, the trail
+ * stays on screen, and nothing is logged.
+ */
+export const FollowingALink: Story = {
+  name: 'Following a Link',
+  play: async ({ canvas, userEvent }) => {
+    window.history.replaceState(null, '', `${location.pathname}${location.search}`);
+    const errors = spyOn(console, 'error');
+    try {
+      await userEvent.click(canvas.getByRole('link', { name: 'Domain' }));
+      await waitFor(() => expect(location.hash).toBe('#/browse?path=%2Fdefault-domain'));
+      await expect(location.pathname).toMatch(/\/iframe\.html$/);
+      await expect(canvas.getByRole('link', { name: 'Workspaces' })).toBeVisible();
+      await expect(errors).not.toHaveBeenCalled();
+    } finally {
+      errors.mockRestore();
+    }
+  },
+};
 
 /** Items with `href` are plain links, for pages outside the application. */
 export const PlainLinks: Story = {

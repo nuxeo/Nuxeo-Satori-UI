@@ -30,33 +30,32 @@ and `dismiss`.
 
 ## Usage
 
-<Source
-  language="typescript"
-  dark
-  code={`import {
+export const usageTs = `import {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
 } from '@nuxeo-satori/platform/components';
 
 protected readonly pickerOpen = signal(false);
 protected readonly columns = computed<NxsPickableColumn[]>(() =>
-this.allColumns.map((column) => ({
-key: column.key,
-label: this.translate.instant(column.labelKey),
-visible: this.shown().includes(column.key),
-})),
+  this.allColumns.map((column) => ({
+    key: column.key,
+    label: this.translate.instant(column.labelKey),
+    visible: this.shown().includes(column.key),
+  })),
 );
 
 protected applyColumns(keys: readonly string[]): void {
-this.shown.set([...keys]);
-this.pickerOpen.set(false);
-}`}
-/>
+  this.shown.set([...keys]);
+  this.pickerOpen.set(false);
+}`;
 
 <Source
-  language="html"
+  language="typescript"
   dark
-  code={`<div class="acme-table" style="position: relative">
+  code={usageTs}
+/>
+
+export const usageHtml = `<div class="acme-table" style="position: relative">
   <button mat-icon-button type="button" (click)="pickerOpen.set(true)" [attr.aria-label]="'acme.table.manage-columns' | translate">
     <mat-icon>view_column</mat-icon>
   </button>
@@ -70,7 +69,12 @@ this.pickerOpen.set(false);
     />
   }
   <!-- the table -->
-</div>`}
+</div>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 The panel hangs from the top-right corner of its nearest positioned ancestor, so render it inside

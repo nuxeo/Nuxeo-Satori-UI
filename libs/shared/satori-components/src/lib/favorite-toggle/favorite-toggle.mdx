@@ -44,15 +44,17 @@ Press the star: it fills once the in-memory server confirms.
   code={`import { NxsFavoriteToggleComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-<Source
-  language="html"
-  dark
-  code={`<nxs-favorite-toggle
+export const usageHtml = `<nxs-favorite-toggle
   [documentId]="document.uid"
   [(favorite)]="isFavorite"
   (changed)="onFavoriteChanged($event)"
   (failed)="onFavoriteFailed($event)"
-/>`}
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
 />
 
 `documentId` is the only required input: the uid of the document. `favorite` is whether it is a
@@ -72,17 +74,19 @@ colour; set `--nxs-favorite-toggle-active-color` to change it.
 `nxsToggleFavorite(documentDetailService, documentId, favorite)` runs the same request, dispatches the
 same event, and emits the state the server now holds:
 
-<Source
-  language="typescript"
-  dark
-  code={`import { nxsToggleFavorite } from '@nuxeo-satori/platform/components';
+export const asAMenuEntryTs = `import { nxsToggleFavorite } from '@nuxeo-satori/platform/components';
 
 nxsToggleFavorite(this.documents, document.uid, this.isFavorite())
   .pipe(takeUntilDestroyed(this.destroyRef))
   .subscribe({
     next: (favorite) => this.isFavorite.set(favorite),
     error: () => this.toast.error(this.translate.instant('my-page.favorite-failed')),
-  });`}
+  });`;
+
+<Source
+  language="typescript"
+  dark
+  code={asAMenuEntryTs}
 />
 
 ## Where its data comes from

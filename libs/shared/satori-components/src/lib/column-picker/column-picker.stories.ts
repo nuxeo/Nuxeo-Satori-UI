@@ -27,7 +27,9 @@ const meta: Meta<NxsColumnPickerComponent> = {
   },
   render: (args) => ({
     props: args,
-    template: `<div style="position: relative; width: 420px; height: 360px">
+    // The panel anchors to the right of this box. On a narrow screen the box is the canvas's
+    // width less its 16px padding on each side, so the page does not scroll sideways.
+    template: `<div style="position: relative; width: min(420px, calc(100vw - 32px)); height: 360px">
   <nxs-column-picker
     [columns]="columns"
     [required]="required"

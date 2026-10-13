@@ -2,8 +2,22 @@ import { inject, provideAppInitializer } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { action } from 'storybook/actions';
+import { expect, fn, waitFor, within } from 'storybook/test';
 
 import { NxsToastService, provideNxsToast } from './toast.service';
+
+/** The snack bar opens in the overlay container, outside the story's canvas. */
+const page = (canvasElement: HTMLElement) => within(canvasElement.ownerDocument.body);
+
+/**
+ * The toast showing `text`, once the snack bar has moved it into its live region — it renders the
+ * toast hidden from assistive technology first, and moves it a moment later to announce it.
+ */
+async function announced(canvasElement: HTMLElement, text: string): Promise<HTMLElement> {
+  const message = await page(canvasElement).findByText(text);
+  await waitFor(() => expect(message.closest('[aria-live]')).not.toBeNull());
+  return message;
+}
 
 /**
  * The toast is opened through `NxsToastService`, never placed in a template, so each story's button
@@ -47,8 +61,11 @@ export const Message: StoryObj = {
     props: { save: () => message.toast()?.show('Document saved') },
     template: `<button mat-flat-button type="button" (click)="save()">Save</button>`,
   }),
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ canvas, canvasElement, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    const message = await announced(canvasElement, 'Document saved');
+    await expect(message.closest('[aria-live]')).toHaveAttribute('aria-live', 'polite');
+    await expect(page(canvasElement).getByRole('button', { name: 'Dismiss' })).toBeVisible();
   },
 };
 
@@ -73,16 +90,26 @@ export const ErrorWithRetry: StoryObj = {
     },
     template: `<button mat-flat-button type="button" (click)="save()">Save</button>`,
   }),
-  play: async ({ canvas, userEvent }) => {
+  // Leaves the toast open: the with-and-without-Satori capture screenshots this story.
+  play: async ({ canvas, canvasElement, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Save' }));
+    const message = await announced(canvasElement, 'The document could not be saved.');
+    await expect(message.closest('[aria-live]')).toHaveAttribute('aria-live', 'assertive');
+    const toast = page(canvasElement);
+    await expect(toast.getByRole('button', { name: 'Retry' })).toBeVisible();
+    await expect(toast.getByRole('button', { name: 'Dismiss' })).toBeVisible();
   },
 };
 
 const undoable = withToast();
 
 /** A toast with an action stays until it is dismissed, so a keyboard user has time to reach it. */
-export const WithAnAction: StoryObj = {
+export const WithAnAction: StoryObj<{ readonly undo: () => void }> = {
   name: 'With an Action',
+  args: { undo: fn() },
+  // Storybook's Angular renderer passes `render` only the args whose argType has a control or an
+  // action, and a meta naming no component infers neither.
+  argTypes: { undo: { action: 'undo' } },
   decorators: [undoable.decorator],
   parameters: {
     docs: {
@@ -92,16 +119,19 @@ export const WithAnAction: StoryObj = {
       },
     },
   },
-  render: () => ({
+  render: ({ undo }) => ({
     props: {
       remove: () =>
-        undoable
-          .toast()
-          ?.show('Moved to trash', { action: { label: 'Undo', run: action('undo') } }),
+        undoable.toast()?.show('Moved to trash', { action: { label: 'Undo', run: undo } }),
     },
     template: `<button mat-stroked-button type="button" (click)="remove()">Move to trash</button>`,
   }),
-  play: async ({ canvas, userEvent }) => {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Move to trash' }));
+    await announced(canvasElement, 'Moved to trash');
+    const toast = page(canvasElement);
+    await userEvent.click(toast.getByRole('button', { name: 'Undo' }));
+    await expect(args.undo).toHaveBeenCalledOnce();
+    await waitFor(() => expect(toast.queryByText('Moved to trash')).toBeNull());
   },
 };
