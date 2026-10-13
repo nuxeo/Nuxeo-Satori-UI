@@ -2983,6 +2983,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private reloadDocumentPermissions(): void {
     const requestedFor = this.docUid;
     if (!requestedFor) return;
+    const generation = this.documentLoadGeneration;
     this.permissionsLoading.set(true);
     this.detailService
       .getDocumentPermissions(requestedFor)
@@ -2990,7 +2991,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: (updated) => {
           // Late, this would put the previous document — or its permissions — on the page.
-          if (requestedFor !== this.docUid) return;
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           const existing = this.doc();
           if (!existing) {
             this.doc.set(updated);
@@ -3001,7 +3002,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.permissionsLoading.set(false);
         },
         error: () => {
-          if (requestedFor !== this.docUid) return;
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.permissionsLoading.set(false);
           this.toast(
             this.translate.instant('document-detail.message.failed-to-refresh-permissions'),
@@ -4264,13 +4265,16 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.toast(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
+    const generation = this.documentLoadGeneration;
+    const versionUid = version.uid;
     this.versionDropdownOpen.set(false);
     this.actionInProgress.set('restore');
     this.detailService
-      .restoreVersion(version.uid)
+      .restoreVersion(versionUid)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: () => {
+          if (generation !== this.documentLoadGeneration) return;
           this.actionInProgress.set(null);
           this.toast(
             this.translate.instant('document-detail.restored-to-version', {
@@ -4286,6 +4290,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           }
         },
         error: (err: unknown) => {
+          if (generation !== this.documentLoadGeneration) return;
           this.actionInProgress.set(null);
           this.toast(this.translate.instant(restoreVersionErrorKey(err)));
         },
