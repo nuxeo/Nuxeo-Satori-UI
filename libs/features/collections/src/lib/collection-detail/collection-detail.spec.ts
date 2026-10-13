@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -27,7 +28,12 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { CollectionDetailComponent } from './collection-detail';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import {
+  NxsDeletePermissionDialogComponent,
+  NxsShareExternalDialogComponent,
+  NxsToastService,
+  NxsUpdatePermissionDialogComponent,
+} from '@nuxeo-satori/platform/components';
 
 const TEST_USERNAME = 'jdoe';
 
@@ -61,6 +67,7 @@ const mockCollectionService = {
 
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument | null> => of(null)),
+  getDocumentPermissions: vi.fn((): Observable<NuxeoDocument> => of({} as NuxeoDocument)),
   fetchThumbnail: vi.fn((): Observable<Blob | null> => of(null)),
   fetchPdfRendition: vi.fn(obs(new Blob())),
   exportXml: vi.fn(obs(new Blob())),
@@ -241,6 +248,10 @@ describe('CollectionDetailComponent', () => {
         { provide: CollectionService, useValue: mockCollectionService },
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        {
+          provide: AppConfigService,
+          useValue: { featureToggle: (_id: string, fallback: boolean) => fallback },
+        },
         { provide: MatDialog, useValue: mockDialog },
       ],
     })
@@ -295,20 +306,6 @@ describe('CollectionDetailComponent', () => {
       expect(firstCall).toBe(secondCall); // Same reference = cache hit
     });
 
-    it('should compute localAces', () => {
-      component.collection.set(mockCollection);
-      const aces = component.localAces();
-      expect(aces.length).toBeGreaterThan(0);
-      expect(aces[0]?.username).toBe('admin');
-    });
-
-    it('should compute inheritedAces', () => {
-      component.collection.set(mockCollection);
-      const aces = component.inheritedAces();
-      expect(aces.length).toBeGreaterThan(0);
-      expect(aces[0]?.username).toBe('members');
-    });
-
     it('should compute externalAces', () => {
       const colWithExternal = docWith({
         contextParameters: {
@@ -334,21 +331,32 @@ describe('CollectionDetailComponent', () => {
       });
       component.collection.set(colWithExternal);
       const aces = component.externalAces();
-      expect(aces.length).toBeGreaterThan(0);
-      expect(aces[0]?.externalUser).toBe(true);
+      expect(aces.map((a) => [a.id, a.aclName])).toEqual([['ace-external', 'local']]);
     });
 
-    it('should detect blocked inheritance', () => {
-      const colWithoutInherited = docWith({
-        contextParameters: { acls: [{ name: 'local', aces: [] }] },
+    it('lists only the collection’s own pending and effective shares, as Web UI', () => {
+      const share = (id: string, status: string) => ({
+        id,
+        username: `transient/${id}@example.com`,
+        permission: 'Read',
+        granted: true,
+        creator: 'admin',
+        begin: null,
+        end: '2030-01-01T00:00:00.000Z',
+        status,
+        externalUser: true,
       });
-      component.collection.set(colWithoutInherited);
-      expect(component.isInheritanceBlocked()).toBe(true);
-    });
-
-    it('should detect unblocked inheritance', () => {
-      component.collection.set(mockCollection);
-      expect(component.isInheritanceBlocked()).toBe(false);
+      component.collection.set(
+        docWith({
+          contextParameters: {
+            acls: [
+              { name: 'local', aces: [share('pending', 'pending'), share('archived', 'archived')] },
+              { name: 'inherited', aces: [share('parent', 'effective')] },
+            ],
+          },
+        }),
+      );
+      expect(component.externalAces().map((a) => a.id)).toEqual(['pending']);
     });
 
     it('should check if collection is in clipboard', () => {
@@ -880,34 +888,18 @@ describe('CollectionDetailComponent', () => {
       component.collection.set(mockCollection);
     });
 
-    it('should open the edit dialog and reload when a permission changed', async () => {
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      component.editPermission(ace);
-      await new Promise((r) => setTimeout(r, 10));
-      expect(mockDetailService.getFullDocument).toHaveBeenCalled();
-      expect([...toast.show.mock.calls, ...toast.error.mock.calls].length).toBeGreaterThan(0);
-    });
-
-    it('should not reload when the edit dialog was dismissed', () => {
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
-      mockDetailService.getFullDocument.mockClear();
-      component.editPermission(ace);
-      expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
-    });
-
-    it('should open the delete dialog with the resolved labels', () => {
-      let captured: { permissionLabel?: string; timeFrameLabel?: string } | undefined;
+    it('should open the delete dialog for the entry and the ACL that holds it', () => {
+      let captured: { ace?: { id: string }; acl?: string } | undefined;
       mockDialog.open.mockImplementation((...args: unknown[]) => {
         captured = (args[1] as { data?: typeof captured })?.data;
         return { afterClosed: () => of(false) };
       });
 
-      component.deletePermission(ace);
+      component.deletePermission({ ...ace, aclName: 'local' });
 
-      // Asserted because these are computed, not passed through: a wrong label here is a
-      // confirmation dialog describing a different permission from the one being removed.
-      expect(captured?.permissionLabel).toBe('Edit');
-      expect(captured?.timeFrameLabel).toBe('Permanent');
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsDeletePermissionDialogComponent);
+      expect(captured?.ace?.id).toBe('ace-1');
+      expect(captured?.acl).toBe('local');
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
     });
 
@@ -918,24 +910,60 @@ describe('CollectionDetailComponent', () => {
       expect(mockDetailService.getFullDocument).toHaveBeenCalled();
     });
 
-    it('should open the external edit dialog flagged as external', () => {
-      let captured: { isExternal?: boolean } | undefined;
+    it('offers a Collection’s own rights in the external dialogs, read from the server', () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(
+        of(
+          docWith({
+            contextParameters: {
+              userVisiblePermissions: ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'],
+            },
+          }),
+        ),
+      );
+      let captured: { permissions?: readonly string[] | null } | undefined;
       mockDialog.open.mockImplementation((...args: unknown[]) => {
         captured = (args[1] as { data?: typeof captured })?.data;
         return { afterClosed: () => of(false) };
       });
 
       component.editExternalPermission(ace);
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsUpdatePermissionDialogComponent);
+      expect(captured?.permissions).toEqual(['Read', 'ReadCanCollect', 'ReadWrite', 'Everything']);
 
-      expect(captured?.isExternal).toBe(true);
+      component.shareWithExternal();
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsShareExternalDialogComponent);
+      expect(captured?.permissions).toEqual(['Read', 'ReadCanCollect', 'ReadWrite', 'Everything']);
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
+    });
+
+    it('leaves the dialogs to their default when the rights cannot be read', () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(throwError(() => new Error('500')));
+      let captured: { permissions?: readonly string[] | null } | undefined;
+      mockDialog.open.mockImplementation((...args: unknown[]) => {
+        captured = (args[1] as { data?: typeof captured })?.data;
+        return { afterClosed: () => of(false) };
+      });
+      component.shareWithExternal();
+      expect(captured?.permissions).toBeNull();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
     });
 
     it('should share with an external user and reload', async () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(of(docWith({})));
       mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
+      mockDetailService.getFullDocument.mockClear();
       component.shareWithExternal();
       await new Promise((r) => setTimeout(r, 10));
       expect(mockDetailService.getFullDocument).toHaveBeenCalled();
+    });
+
+    it('offers no external-share actions to a user without WriteSecurity', () => {
+      component.collection.set(docWith({ contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canManagePermissions()).toBe(false);
+      component.collection.set(
+        docWith({ contextParameters: { permissions: ['Read', 'WriteSecurity'] } }),
+      );
+      expect(component.canManagePermissions()).toBe(true);
     });
 
     it('should strip the transient/ prefix from a username', () => {
@@ -976,62 +1004,6 @@ describe('CollectionDetailComponent', () => {
         component.sendNotificationEmail(ace);
         expect(mockDetailService.sendNotificationEmailForPermission).not.toHaveBeenCalled();
       });
-    });
-
-    describe('toggleInheritance', () => {
-      it('should block inheritance when it is currently inherited', () => {
-        mockDetailService.blockPermissionInheritance.mockReturnValue(of(undefined));
-        mockDetailService.unblockPermissionInheritance.mockReturnValue(of(undefined));
-        component.collection.set(mockCollection); // has an `inherited` acl -> not blocked
-        component.actionInProgress.set(null);
-
-        component.toggleInheritance();
-
-        expect(mockDetailService.blockPermissionInheritance).toHaveBeenCalledWith('collection-1');
-        expect(component.actionInProgress()).toBeNull();
-      });
-
-      it('should unblock inheritance when it is currently blocked', () => {
-        mockDetailService.blockPermissionInheritance.mockReturnValue(of(undefined));
-        mockDetailService.unblockPermissionInheritance.mockReturnValue(of(undefined));
-        component.collection.set(
-          docWith({ contextParameters: { acls: [{ name: 'local', aces: [] }] } }),
-        );
-        component.actionInProgress.set(null);
-
-        component.toggleInheritance();
-
-        expect(mockDetailService.unblockPermissionInheritance).toHaveBeenCalledWith('collection-1');
-      });
-
-      it('should clear the in-progress flag on failure', () => {
-        mockDetailService.blockPermissionInheritance.mockReturnValue(
-          throwError(() => new Error('denied')),
-        );
-        component.collection.set(mockCollection);
-        component.actionInProgress.set(null);
-
-        component.toggleInheritance();
-
-        expect(component.actionInProgress()).toBeNull();
-      });
-
-      it('should do nothing when another action is in progress', () => {
-        mockDetailService.blockPermissionInheritance.mockClear();
-        component.actionInProgress.set('trash');
-        component.toggleInheritance();
-        expect(mockDetailService.blockPermissionInheritance).not.toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe('addPermission dialog result', () => {
-    it('should reload when a permission was created', async () => {
-      component['collectionUid'] = 'collection-1';
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      component.addPermission();
-      await new Promise((r) => setTimeout(r, 10));
-      expect(mockDetailService.getFullDocument).toHaveBeenCalled();
     });
   });
 
@@ -1362,24 +1334,6 @@ describe('CollectionDetailComponent', () => {
       const ace = { begin: null, end: '2026-12-31T00:00:00.000Z' } as any;
       const result = component.aceTimeFrame(ace);
       expect(result).toContain('Until');
-    });
-  });
-
-  describe('addPermission', () => {
-    it('should open add permission dialog', () => {
-      component['collectionUid'] = 'collection-1';
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
-      component.addPermission();
-      expect(mockDialog.open).toHaveBeenCalled();
-    });
-
-    it('should reload collection after adding permission', async () => {
-      component['collectionUid'] = 'collection-1';
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      component.addPermission();
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(mockDetailService.getFullDocument).toHaveBeenCalled();
     });
   });
 
