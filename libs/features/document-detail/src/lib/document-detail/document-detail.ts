@@ -1946,15 +1946,18 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   private loadDocumentTasks(uid: string): void {
     this.documentTasksLoading.set(true);
+    const generation = this.documentLoadGeneration;
     const userId = this.currentUsername() ?? 'Administrator';
     this.taskService.getDocumentTasks(uid, userId).subscribe({
       next: (tasks) => {
-        if (uid !== this.docUid) return;
+        if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.documentTasks.set(tasks);
         this.documentTasksLoading.set(false);
       },
       error: () => {
-        if (uid === this.docUid) this.documentTasksLoading.set(false);
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentTasksLoading.set(false);
+        }
       },
     });
   }
@@ -1962,12 +1965,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private loadDocumentWorkflows(uid: string): void {
     // A late answer for the document the route left would put its workflow banner, and
     // its Abandon button, on the page now showing another — a version, say.
+    const generation = this.documentLoadGeneration;
     this.workflowService.getDocumentWorkflows(uid).subscribe({
       next: (wfs) => {
-        if (uid === this.docUid) this.documentWorkflows.set(wfs);
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentWorkflows.set(wfs);
+        }
       },
       error: () => {
-        if (uid === this.docUid) this.documentWorkflows.set([]);
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentWorkflows.set([]);
+        }
       },
     });
   }
