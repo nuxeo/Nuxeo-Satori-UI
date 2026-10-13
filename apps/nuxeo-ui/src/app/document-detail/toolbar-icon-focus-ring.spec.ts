@@ -68,7 +68,8 @@ describe('Document detail toolbar icon button — keyboard focus indicator (NXEN
     const { fixture, button } = await mount();
     try {
       expect(button.getAttribute('data-action-id')).toBe('app.toolbar.edit');
-      expect(button.getAttribute('aria-label')).toBe('Edit');
+      expect(button.getAttribute('aria-label')).toBeNull();
+      expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Edit');
       button.focus();
       expect(document.activeElement).toBe(button);
 
