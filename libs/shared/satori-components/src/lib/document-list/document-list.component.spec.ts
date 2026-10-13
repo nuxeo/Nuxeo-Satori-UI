@@ -157,6 +157,46 @@ describe('NxsDocumentListComponent', () => {
       expect(el().querySelector('table')?.getAttribute('aria-label')).toBe('Contents of Reports');
     });
 
+    it.each([
+      ['distinct titles keep their own', ['A', 'B', 'C'], ['A', 'B', 'C']],
+      [
+        'a repeated title says which of them each is',
+        ['A', 'A', 'B'],
+        ['A (1 of 2)', 'A (2 of 2)', 'B'],
+      ],
+      [
+        'three of one title, apart',
+        ['A', 'B', 'A', 'A'],
+        ['A (1 of 3)', 'B', 'A (2 of 3)', 'A (3 of 3)'],
+      ],
+      [
+        'titles differing only in case read the same',
+        ['Report', 'report'],
+        ['Report (1 of 2)', 'report (2 of 2)'],
+      ],
+      ['surrounding space is not a difference', ['A ', ' A'], ['A (1 of 2)', 'A (2 of 2)']],
+      [
+        'a title that only starts like another is distinct',
+        ['Report', 'Report 2'],
+        ['Report', 'Report 2'],
+      ],
+    ])('names each row uniquely on its page: %s', async (_case, titles, names) => {
+      host.documents.set(titles.map((title, i) => doc(i + 1, { title })));
+      host.rowActions.set({ 'uid-1': [{ id: 'acme.edit', label: 'Edit' }] });
+      await render();
+      expect(rows().map((row) => row.getAttribute('aria-label'))).toEqual(names);
+      expect(rows().map((_, i) => checkbox(i).getAttribute('aria-label'))).toEqual(
+        names.map((name) => `Select ${name}`),
+      );
+      expect(rows()[0].querySelector('nxs-action-menu button')?.getAttribute('aria-label')).toBe(
+        `Actions for ${names[0]}`,
+      );
+      // What the eye reads is the title alone.
+      expect(
+        rows().map((row) => row.querySelector('.nxs-document-list__open')?.textContent?.trim()),
+      ).toEqual(titles.map((title) => title.trim()));
+    });
+
     it('gives every checkbox the name of its own document', () => {
       expect(rows().map((_, i) => checkbox(i).getAttribute('aria-label'))).toEqual([
         'Select Report 1',

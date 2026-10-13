@@ -56,7 +56,7 @@
             [checked]="isSelected(doc)"
             [tabIndex]="-1"
             [aria-label]="
-              'satori-components.document-list.select' | translate: { name: rowName(doc) }
+              'satori-components.document-list.select' | translate: { name: accessibleName(doc) }
             "
             (mousedown)="noteModifiers($event)"
             (keydown)="noteModifiers($event)"
@@ -108,7 +108,8 @@
             <nxs-action-menu
               [actions]="entries"
               [label]="
-                'satori-components.document-list.row-actions' | translate: { name: rowName(doc) }
+                'satori-components.document-list.row-actions'
+                  | translate: { name: accessibleName(doc) }
               "
               (selected)="onRowAction($event, doc)"
             />
@@ -126,7 +127,7 @@
         [attr.data-row]="i"
         [attr.data-uid]="doc.uid"
         [attr.tabindex]="i === activeIndex() ? 0 : -1"
-        [attr.aria-label]="rowName(doc)"
+        [attr.aria-label]="accessibleName(doc)"
         [attr.aria-selected]="selectable() ? isSelected(doc) : null"
         [attr.aria-rowindex]="rowIndex(i)"
         [attr.aria-describedby]="hintId"

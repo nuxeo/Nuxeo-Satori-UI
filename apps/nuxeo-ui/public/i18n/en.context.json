@@ -1698,6 +1698,7 @@
   "satori-components.document-list.keyboard-hint-no-selection": "Hidden help text read by screen readers on each row of a document list that has no selection, explaining its keyboard controls.",
   "satori-components.document-list.loading": "Accessible name of the spinner shown while a page of a document list loads.",
   "satori-components.document-list.row-actions": "Accessible name and tooltip of the three-dot button that opens the menu of actions for one document in a list. {{ name }} is the document's title.",
+  "satori-components.document-list.row-name-repeated": "Accessible name of a row in a document list when another document on the same page has the same title, so screen readers can tell the rows apart. {{ name }} is the document's title; {{ index }} is this row's place among the documents with that title, {{ count }} how many there are. Example: 'Report.pdf (2 of 3)'.",
   "satori-components.document-list.select": "Accessible name of the checkbox that selects one document in a list. {{ name }} is the document's title. Verb, imperative.",
   "satori-components.document-list.select-page": "Accessible name of the checkbox in a document list's header that selects every document on the page shown. Verb, imperative.",
   "satori-components.document-list.selection": "Hidden text of the header cell above a document list's selection checkboxes, so screen readers can name the column. A NOUN.",

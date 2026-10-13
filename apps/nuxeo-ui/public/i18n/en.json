@@ -2000,6 +2000,7 @@
       "keyboard-hint-no-selection": "Arrow keys move between documents. Enter opens.",
       "loading": "Loading documents",
       "row-actions": "Actions for {{ name }}",
+      "row-name-repeated": "{{ name }} ({{ index }} of {{ count }})",
       "select": "Select {{ name }}",
       "select-page": "Select all on this page",
       "selection": "Selection",

@@ -320,6 +320,7 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'satori-components.column-picker.title': 'Column Settings',
   'satori-components.document-list.loading': 'Loading documents',
   'satori-components.document-list.row-actions': 'Actions for {{ name }}',
+  'satori-components.document-list.row-name-repeated': '{{ name }} ({{ index }} of {{ count }})',
   'satori-components.document-list.select': 'Select {{ name }}',
   'satori-components.document-list.select-page': 'Select all on this page',
   'satori-components.document-tree.loading': 'Loading folders',

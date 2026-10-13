@@ -152,6 +152,7 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "satori-components.document-list.keyboard-hint-no-selection": "Arrow keys move between documents. Enter opens.",
   "satori-components.document-list.loading": "Loading documents",
   "satori-components.document-list.row-actions": "Actions for {{ name }}",
+  "satori-components.document-list.row-name-repeated": "{{ name }} ({{ index }} of {{ count }})",
   "satori-components.document-list.select": "Select {{ name }}",
   "satori-components.document-list.select-page": "Select all on this page",
   "satori-components.document-list.selection": "Selection",

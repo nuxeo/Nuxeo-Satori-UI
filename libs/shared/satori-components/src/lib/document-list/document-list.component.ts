@@ -17,11 +17,13 @@ import {
   signal,
   untracked,
 } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
 import { MatCheckboxModule, type MatCheckboxChange } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSortModule, type Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { merge } from 'rxjs';
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import {
   DocTypeLabelPipe,
@@ -200,6 +202,45 @@ export class NxsDocumentListComponent {
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
   private readonly direction = inject(Directionality, { optional: true });
+  private readonly translations = toSignal(
+    merge(this.translate.onLangChange, this.translate.onTranslationChange),
+    { initialValue: null },
+  );
+
+  /**
+   * Each row's accessible name, for the row, its checkbox and its menu: its title, and, where
+   * another document on the page has the same title, its place among them — so no two rows on a
+   * page share a name. Titles that differ only in case or surrounding space read the same aloud,
+   * so they count as the same.
+   */
+  private readonly accessibleNames = computed(() => {
+    this.translations();
+    const documents = this.documents();
+    const same = (doc: NuxeoDocument) => this.rowName(doc).toLocaleLowerCase();
+    const counts = new Map<string, number>();
+    for (const doc of documents) counts.set(same(doc), (counts.get(same(doc)) ?? 0) + 1);
+    const seen = new Map<string, number>();
+    const names = new Map<string, string>();
+    for (const doc of documents) {
+      const name = this.rowName(doc);
+      const count = counts.get(same(doc)) ?? 1;
+      if (count === 1) {
+        names.set(doc.uid, name);
+        continue;
+      }
+      const index = (seen.get(same(doc)) ?? 0) + 1;
+      seen.set(same(doc), index);
+      names.set(
+        doc.uid,
+        this.translate.instant('satori-components.document-list.row-name-repeated', {
+          name,
+          index,
+          count,
+        }),
+      );
+    }
+    return names;
+  });
 
   /** The row in the Tab sequence. */
   protected readonly activeIndex = signal(0);
@@ -286,6 +327,10 @@ export class NxsDocumentListComponent {
 
   protected rowName(doc: NuxeoDocument): string {
     return doc.title?.trim() || doc.path || doc.uid;
+  }
+
+  protected accessibleName(doc: NuxeoDocument): string {
+    return this.accessibleNames().get(doc.uid) ?? this.rowName(doc);
   }
 
   protected rowIndex(index: number): number {
