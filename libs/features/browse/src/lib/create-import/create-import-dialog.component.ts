@@ -1,3 +1,4 @@
+import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
   Component,
   DestroyRef,
@@ -19,7 +20,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule, provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
@@ -59,12 +59,15 @@ import {
   formatHierarchicalL10nLabel,
   createExpiresErrorStateMatcher,
   isExpiresFieldValid,
-  shouldShowExpiresFieldError,
   documentNavigationUrl,
   isCollectionDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  DateMaskPipe,
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo-satori/platform/ui';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */
@@ -161,6 +164,7 @@ const DIALOG_SIZE = {
   selector: 'lib-create-import-dialog',
   standalone: true,
   imports: [
+    DateMaskPipe,
     TranslatePipe,
     MatDialogModule,
     MatButtonModule,
@@ -170,7 +174,6 @@ const DIALOG_SIZE = {
     MatSelectModule,
     MatChipsModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatProgressSpinnerModule,
     MatProgressBarModule,
     MatSnackBarModule,
@@ -178,7 +181,7 @@ const DIALOG_SIZE = {
     MatCheckboxModule,
     FormsModule,
   ],
-  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter()],
+  providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './create-import-dialog.component.html',
   styleUrl: './create-import-dialog.component.scss',
 })
@@ -192,6 +195,8 @@ export class CreateImportDialogComponent implements OnInit {
     MatDialogRef<CreateImportDialogComponent, CreateImportDialogResult>,
   );
   private readonly destroyRef = inject(DestroyRef);
+  private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
+  private readonly dateFormats = inject(MAT_DATE_FORMATS);
   readonly data = inject<CreateImportDialogData>(MAT_DIALOG_DATA);
   private readonly importService = inject(DocumentImportService);
   private readonly browse = inject(BrowseService);
@@ -265,9 +270,7 @@ export class CreateImportDialogComponent implements OnInit {
   coveragePanelSearch = '';
   expires: Date | null = null;
   expiresRawText = '';
-  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() =>
-    shouldShowExpiresFieldError(this.expiresRawText, this.expires),
-  );
+  readonly expiresErrorMatcher = createExpiresErrorStateMatcher(() => this.showExpiresError());
   noteFormat = 'text/html';
   readonly importDocType = signal('');
 
@@ -656,11 +659,25 @@ export class CreateImportDialogComponent implements OnInit {
   }
 
   isExpiresValid(): boolean {
-    return isExpiresFieldValid(this.expiresRawText, this.expires);
+    return this.isExpiresStateValid(this.expiresRawText, this.expires);
+  }
+
+  /**
+   * One Expires check for the live form and for an entry's saved state alike.
+   *
+   * Next saves the form without validating it, so `isImportFormComplete()` alone only ever
+   * described the file on screen: an invalid expiry typed on file 1 was serialized as
+   * `dc:expired: null` and sent when the batch was submitted from file 3.
+   */
+  private isExpiresStateValid(expiresRawText: string, expires: Date | null): boolean {
+    const parsed = expiresRawText.trim()
+      ? this.dateAdapter.parse(expiresRawText, this.dateFormats.parse.dateInput)
+      : expires;
+    return isExpiresFieldValid(expiresRawText, parsed);
   }
 
   showExpiresError(): boolean {
-    return shouldShowExpiresFieldError(this.expiresRawText, this.expires);
+    return !this.isExpiresValid();
   }
 
   /** Type selected and required Dublin Core fields are valid on the current form. */
@@ -678,7 +695,16 @@ export class CreateImportDialogComponent implements OnInit {
     const allCheckedVisited = entries
       .filter((entry) => entry.checked)
       .every((entry) => entry.visited);
-    return onLast || allCheckedVisited;
+    if (!onLast && !allCheckedVisited) return false;
+    // The entry on screen is covered by `isImportFormComplete()` above; its own saved state is
+    // a navigation behind. Every other checked entry is judged on what Next stored for it.
+    const current = this.importFileIndex();
+    return entries.every(
+      (entry, index) =>
+        !entry.checked ||
+        index === current ||
+        this.isExpiresStateValid(entry.state.expiresRawText, entry.state.expires),
+    );
   }
 
   /** Apply To All is only available on the first file while metadata is still being configured. */
@@ -691,6 +717,11 @@ export class CreateImportDialogComponent implements OnInit {
 
   onExpiresInput(event: Event): void {
     this.expiresRawText = (event.target as HTMLInputElement).value;
+    // Parse synchronously so validation and the saved payload agree even before ngModel updates.
+    this.expires = this.dateAdapter.parse(
+      this.expiresRawText.trim(),
+      this.dateFormats.parse.dateInput,
+    );
     const ctrl = this.expiresNgModel?.control;
     if (ctrl) {
       ctrl.markAsDirty();

@@ -11,10 +11,12 @@
     "@angular/core": "^20.3.33",
     "@angular/forms": "^20.3.33",
     "@angular/material": "^20.2.0",
+    "@angular/material-date-fns-adapter": "^20.2.0",
     "@angular/platform-browser": "^20.3.33",
     "@angular/router": "^20.3.33",
     "@hylandsoftware/satori-ui": "^0.2.0",
     "@ngx-translate/core": "^17.0.0",
+    "date-fns": "^2.30.0",
     "rxjs": "^7.8.0"
   },
   "dependencies": {

@@ -1057,7 +1057,7 @@
       "trashed-document-many": "เอกสารในถังขยะ {{ count }} รายการ",
       "trashed-document-one": "เอกสารในถังขยะ {{ count }} รายการ"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "dd/mm/yyyy",
     "dismiss": "ยกเลิก",
     "email-example": "name@company.com",
     "lock": {

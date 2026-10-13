@@ -8,7 +8,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
@@ -19,7 +18,7 @@ import {
   permissionCreateMailFailureMessage,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { provideSatoriDateAdapter, provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
 
 export interface ShareExternalDialogData {
   documentUid: string;
@@ -48,7 +47,7 @@ const PERMISSION_OPTIONS = [
     MatProgressSpinnerModule,
     MatSnackBarModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   templateUrl: './share-external-dialog.html',
   styles: [
     `
