@@ -1,11 +1,13 @@
 /**
- * NXENG-773 / IBM 247628794 — the document-detail details-panel toggle must show a keyboard
- * focus indicator (WCAG 2.1 SC 2.4.7). Material `mat-icon-button` suppresses the default ring
- * and there is no global `:focus-visible` fallback in `styles.scss`.
+ * NXSAT-544 / IBM 2834597055 (NXENG-773 / IBM 247628794) — the document-detail details-panel
+ * toggle must show a keyboard focus indicator (WCAG 2.1 SC 2.4.7). Material `mat-icon-button`
+ * suppresses the default ring and there is no global `:focus-visible` fallback in `styles.scss`.
  *
  * Same IBM `style_focus_visible` constraints as NXENG-872 / NXENG-775: standalone `:focus`
  * selector on the focused control. Contrast is measured against the rendered
  * `.detail-tabs .mat-mdc-tab-header` background from production SCSS, not a duplicated colour.
+ *
+ * Source-level selector contract: `document-detail-panel-toggle-focus-ring.spec.ts`.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -56,13 +58,14 @@ function productionTabHeaderBackground(host: HTMLElement): string {
   imports: [MatButtonModule, MatIconModule, MatTabsModule, TranslateModule],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
+    '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-toggle-focus.scss',
     './panel-toggle-focus-ring.fixture.scss',
   ],
   templateUrl: './panel-toggle-focus-ring.spec.html',
 })
 class PanelToggleFocusHostComponent {}
 
-describe('Document detail panel toggle — keyboard focus indicator (NXENG-773)', () => {
+describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)', () => {
   let originalTheme: string | null;
 
   beforeEach(async () => {
@@ -122,6 +125,22 @@ describe('Document detail panel toggle — keyboard focus indicator (NXENG-773)'
       expect(style.outlineStyle).toBe('solid');
       expect(style.outlineWidth).toBe('2px');
       expect(style.outlineOffset).toBe('2px');
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible)', async () => {
+    const { fixture, button } = await mount();
+    try {
+      button.focus({ focusVisible: false } as FocusOptions);
+      expect(button.matches(':focus')).toBe(true);
+      expect(button.matches(':focus-visible')).toBe(false);
+
+      const style = getComputedStyle(button);
+      expect(style.outlineStyle).toBe('solid');
+      expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
     } finally {
       button.blur();
       fixture.nativeElement.remove();
