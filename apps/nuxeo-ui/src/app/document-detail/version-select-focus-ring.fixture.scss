@@ -3,6 +3,14 @@
  * (same constraint as header-search-focus-ring.spec.ts). The wrapper class applies the
  * production `.version-select:focus:hover` cascade for regression checks.
  */
+.properties-panel.nxsat545-karma-plain-hover .version-select {
+  background: color-mix(
+    in srgb,
+    var(--document-detail-properties-accent) 8%,
+    var(--document-detail-properties-panel-surface)
+  );
+}
+
 .properties-panel.nxsat545-karma-focus-hover .version-select:focus {
   background: color-mix(
     in srgb,

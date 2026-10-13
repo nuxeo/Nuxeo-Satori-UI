@@ -207,6 +207,48 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
     }
   });
 
+  it('keeps panel-surface hover fill and label contrast when unfocused and hovered (dark theme)', async () => {
+    applyTheme('dark');
+    const { fixture, button } = await mount();
+    const panel = fixture.nativeElement.querySelector('.properties-panel') as HTMLElement;
+    try {
+      panel.classList.add('nxsat545-karma-plain-hover');
+      panel.style.setProperty('--document-detail-properties-panel-surface', 'rgb(222, 223, 224)');
+      document.documentElement.style.setProperty('--mat-sys-surface', 'rgb(12, 13, 14)');
+      document.documentElement.style.setProperty('--mat-sys-primary', 'rgb(80, 90, 200)');
+
+      expect(document.activeElement).not.toBe(button);
+
+      const plainHoveredBg = getComputedStyle(button).backgroundColor;
+
+      const surfaceHoverProbe = document.createElement('button');
+      surfaceHoverProbe.type = 'button';
+      surfaceHoverProbe.className = 'version-select nxsat545-simulate-base-hover';
+      surfaceHoverProbe.style.position = 'absolute';
+      surfaceHoverProbe.style.left = '-9999px';
+      panel.appendChild(surfaceHoverProbe);
+      const competingHoverFill = getComputedStyle(surfaceHoverProbe).backgroundColor;
+      surfaceHoverProbe.remove();
+
+      expect(plainHoveredBg).not.toBe(competingHoverFill);
+
+      const style = getComputedStyle(button);
+      const fill = paintedBackground(button);
+      const label = parseColor(style.color);
+      const border = parseColor(style.borderColor);
+
+      expect(contrastRatio(compositeOver(label, fill), fill)).toBeGreaterThanOrEqual(
+        WCAG_AA_NORMAL_TEXT,
+      );
+      expect(contrastRatio(compositeOver(border, fill), fill)).toBeGreaterThanOrEqual(
+        WCAG_1411_UI_COMPONENT,
+      );
+    } finally {
+      panel.classList.remove('nxsat545-karma-plain-hover');
+      fixture.nativeElement.remove();
+    }
+  });
+
   it('keeps label and border contrast on the light panel in dark theme (NXSAT-545)', async () => {
     applyTheme('dark');
     const { fixture, button } = await mount();
