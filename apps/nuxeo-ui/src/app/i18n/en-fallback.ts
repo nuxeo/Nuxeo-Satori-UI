@@ -93,6 +93,10 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'app.dashboard-page.loading': 'Loading',
   'app.login-page.hyland': 'Hyland',
   'app.login-page.log-in': 'Log in',
+  'browse.breadcrumb.label': 'Breadcrumbs',
+  'browse.browse.contents-of': 'Contents of {{ name }}',
+  'collections.collection-detail.breadcrumbs': 'Breadcrumbs',
+  'collections.collection-detail.members-of': 'Members of {{ name }}',
   'login.skip-link': 'Skip to sign in',
   // The repository root's name in the navigation tree, also the `name` in its toggle's accessible name.
   'nav.tree.root': 'Root',

@@ -92,7 +92,6 @@ import {
 
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 
 import {
   ConfirmDialogComponent,
@@ -143,7 +142,9 @@ import { CreateImportDialogComponent } from '../create-import/create-import-dial
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  NXS_PRIMITIVE_IDS,
   NxsActionMenuComponent,
+  NxsBreadcrumbsComponent,
   NxsColumnPickerComponent,
   NxsDocumentListComponent,
   NxsDomainHintComponent,
@@ -156,6 +157,7 @@ import {
   NxsThumbnailComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
+  type NxsBreadcrumbItem,
   type NxsDocumentListColumn,
   type NxsDocumentListRowAction,
   type NxsDocumentListSort,
@@ -207,6 +209,7 @@ const PAGE_SIZE = 50;
   providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
     NxsActionMenuComponent,
+    NxsBreadcrumbsComponent,
     NxsColumnPickerComponent,
     NxsDocumentListComponent,
     NxsDomainHintComponent,
@@ -239,7 +242,6 @@ const PAGE_SIZE = 50;
     MatCheckboxModule,
     SatAvatarModule,
     SatTagModule,
-    SatBreadcrumbsComponent,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
   ],
@@ -659,10 +661,14 @@ export class BrowseComponent {
     return notifs && notifs.length > 0;
   });
 
-  readonly breadcrumbs = computed<SatBreadcrumbsItem[]>(() => {
+  /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
+  readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+
+  readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
+    this.currentLang();
     const doc = this.currentDoc();
-    const crumbs: SatBreadcrumbsItem[] = [
-      { label: this.translate.instant('browse.breadcrumb.root'), href: '/browse' },
+    const crumbs: NxsBreadcrumbItem[] = [
+      { label: this.translate.instant('browse.breadcrumb.root'), routerLink: '/browse' },
     ];
     if (!doc || doc.path === '/') return crumbs;
     const parts = doc.path.split('/').filter(Boolean);
@@ -674,7 +680,7 @@ export class BrowseComponent {
       if (isCurrent) {
         crumbs.push({ label });
       } else {
-        crumbs.push({ label, href: `/browse${accumulated}` });
+        crumbs.push({ label, routerLink: `/browse${accumulated}` });
       }
     }
     return crumbs;
@@ -689,16 +695,6 @@ export class BrowseComponent {
       this.adminAccess.isAdministrator(),
     );
   });
-
-  onBreadcrumbClick(event: MouseEvent): void {
-    const anchor = (event.target as HTMLElement).closest('a');
-    const href = anchor?.getAttribute('href');
-    if (href) {
-      event.preventDefault();
-      this.browseContext.setFromRouterUrl(href);
-      this.router.navigateByUrl(href);
-    }
-  }
 
   /** `enabledRule` renders a menu item disabled rather than hiding it. */
   isContextMenuActionEnabled(action: ExtensionActionDescriptor): boolean {

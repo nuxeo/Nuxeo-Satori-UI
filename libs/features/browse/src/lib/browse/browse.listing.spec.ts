@@ -12,6 +12,7 @@ import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+import { provideNxsComponents } from '@nuxeo-satori/platform/components';
 import {
   BrowseService,
   ClipboardTargetService,
@@ -340,6 +341,28 @@ describe('BrowseComponent — rendered document list', () => {
     (query('nxs-document-list .nxs-pager__previous') as HTMLButtonElement).click();
     await settle();
     expect(lastRequest().page.currentPageIndex).toBe(0);
+  });
+
+  it('renders the breadcrumbs by their registered ID, falling back to the built-in trail', async () => {
+    await render();
+    await settleOutlets();
+
+    const trail = query('nxs-breadcrumbs nav');
+    expect(trail?.getAttribute('aria-label')).toBe('Breadcrumbs');
+    expect([...(trail?.querySelectorAll('a') ?? [])].map((a) => a.getAttribute('href'))).toEqual([
+      '/browse',
+      '/browse/default-domain',
+      '/browse/default-domain/workspaces',
+    ]);
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('Workspace');
+  });
+
+  it('renders whatever is registered under the breadcrumbs ID instead', async () => {
+    await render([provideNxsComponents()]);
+
+    expect(query('lib-extension-outlet nxs-breadcrumbs nav')?.getAttribute('aria-label')).toBe(
+      'Breadcrumbs',
+    );
   });
 
   it('renders the empty state for a folder the server reports as having no children', async () => {

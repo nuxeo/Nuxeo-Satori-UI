@@ -47,11 +47,11 @@ import {
   shouldShowUserWorkspaceBreadcrumbs,
   postTrashBrowseRouterUrl,
   BrowseContextService,
+  decodeNuxeoPathSegment,
   formatAceDateRange,
   permissionRightLabel,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ShareDialogComponent,
@@ -76,7 +76,10 @@ import {
   UpdatePermissionDialogData,
 } from '@agentic-ui/shared-permission-dialogs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import {
+  NXS_PRIMITIVE_IDS,
+  NxsBreadcrumbsComponent,
   NxsDocumentListComponent,
   NxsFolderHeaderComponent,
   NxsSpinnerComponent,
@@ -84,6 +87,7 @@ import {
   provideNxsThumbnailCache,
   NxsToastService,
   provideNxsToast,
+  type NxsBreadcrumbItem,
   type NxsDocumentListColumn,
   type NxsDocumentListSort,
   type NxsErrorStatus,
@@ -106,6 +110,8 @@ const MEMBER_PAGE_SIZE = 50;
   standalone: true,
   providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
   imports: [
+    ExtensionOutletComponent,
+    NxsBreadcrumbsComponent,
     NxsDocumentListComponent,
     NxsFolderHeaderComponent,
     NxsSpinnerComponent,
@@ -127,7 +133,6 @@ const MEMBER_PAGE_SIZE = 50;
     MatDatepickerModule,
     MatNativeDateModule,
     SatAvatarModule,
-    SatBreadcrumbsComponent,
     SatTagModule,
   ],
   templateUrl: './collection-detail.html',
@@ -233,7 +238,9 @@ export class CollectionDetailComponent {
   private sortActive = signal('');
   private sortDirection = signal<'asc' | 'desc' | ''>('');
   private breadcrumbPathCache: string | null = null;
-  private breadcrumbItemsCache: SatBreadcrumbsItem[] = [];
+  private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
+  /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
+  readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
 
   readonly isInClipboard = computed(() =>
     this.clipboardDocs().some((d) => d.uid === this.collectionUid),
@@ -257,7 +264,7 @@ export class CollectionDetailComponent {
 
   private readonly browseContext = inject(BrowseContextService);
 
-  readonly breadcrumbItems = computed<SatBreadcrumbsItem[]>(() => {
+  readonly breadcrumbItems = computed<NxsBreadcrumbItem[]>(() => {
     const col = this.collection();
     if (!col?.path) return [];
 
@@ -271,7 +278,7 @@ export class CollectionDetailComponent {
     let accumulated = '/browse';
     this.breadcrumbItemsCache = segments.map((s) => {
       accumulated += `/${s}`;
-      return { label: decodeURIComponent(s), href: accumulated };
+      return { label: decodeNuxeoPathSegment(s), routerLink: accumulated };
     });
     return this.breadcrumbItemsCache;
   });
@@ -285,15 +292,6 @@ export class CollectionDetailComponent {
       this.adminAccess.isAdministrator(),
     );
   });
-
-  onBreadcrumbClick(event: MouseEvent): void {
-    const anchor = (event.target as HTMLElement).closest('a');
-    const href = anchor?.getAttribute('href');
-    if (href) {
-      event.preventDefault();
-      void this.router.navigateByUrl(href);
-    }
-  }
 
   readonly localAces = computed<NuxeoAce[]>(() => {
     const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;

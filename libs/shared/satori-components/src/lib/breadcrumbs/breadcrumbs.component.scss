@@ -1,14 +1,18 @@
 :host {
+  position: relative;
   display: block;
+  min-width: 0;
+  overflow: hidden;
   font: var(--mat-sys-body-medium);
   color: var(--mat-sys-on-surface-variant);
 }
 
 .nxs-breadcrumbs__list {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   gap: 4px;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -16,8 +20,30 @@
 
 .nxs-breadcrumbs__item {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+// When nothing is left to fold, the first and the last labels are cut short. The last keeps a
+// few characters, so the current page is never hidden.
+.nxs-breadcrumbs__item--first,
+.nxs-breadcrumbs__item--last {
+  flex: 0 1 auto;
+  overflow: hidden;
+
+  .nxs-breadcrumbs__link,
+  .nxs-breadcrumbs__text {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+.nxs-breadcrumbs__item--last {
+  min-width: min(100%, 4em);
 }
 
 .nxs-breadcrumbs__link {
@@ -30,8 +56,34 @@
 }
 
 .nxs-breadcrumbs__separator {
+  flex: 0 0 auto;
   width: 18px;
   height: 18px;
   font-size: 18px;
   color: var(--mat-sys-outline);
+}
+
+:host-context([dir='rtl']) .nxs-breadcrumbs__separator {
+  transform: scaleX(-1);
+}
+
+.nxs-breadcrumbs__overflow {
+  --mat-icon-button-state-layer-size: 28px;
+
+  width: 28px;
+  height: 28px;
+  padding: 2px;
+}
+
+.nxs-breadcrumbs__overflow-measure {
+  display: inline-block;
+  width: 28px;
+}
+
+.nxs-breadcrumbs__measure {
+  position: absolute;
+  top: 0;
+  inset-inline-start: 0;
+  visibility: hidden;
+  pointer-events: none;
 }

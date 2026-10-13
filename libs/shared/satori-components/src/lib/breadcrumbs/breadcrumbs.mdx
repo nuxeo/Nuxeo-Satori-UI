@@ -18,7 +18,10 @@ the page title.
   technology.
 - **Navigation landmark.** The trail is a named `nav` region, so screen reader users can jump to
   it.
-- **Wraps when long.** A trail wider than its container wraps onto further lines.
+- **Folds when long.** It stays on one line. When the trail is wider than its box, the items after
+  the first fold into a "…" menu, furthest from the current page first; the first and the last item
+  always stay, and when even they do not fit, the current page's name is cut short rather than
+  hidden. It unfolds again when the box grows.
 - **Replaceable by ID.** It is registered as `nxs.primitives.breadcrumbs`, so Satori's breadcrumbs
   or your own can take its place.
 
@@ -85,9 +88,22 @@ Items with `href` render as ordinary links, for pages outside the application.
 
 ### A long trail
 
-The trail wraps onto a second line rather than hiding any item.
+In a box wide enough, every item shows on one line.
 
 <Canvas of={BreadcrumbsStories.LongTrail} />
+
+### A trail that does not fit
+
+In a 360-pixel box the middle folds into "…". Open it to reach the folders it holds.
+
+<Canvas of={BreadcrumbsStories.CollapsedTrail} />
+
+### Very narrow
+
+Only the first item, "…" and the current page remain, the page's name cut short with "…" and shown
+in full on hover.
+
+<Canvas of={BreadcrumbsStories.VeryNarrow} />
 
 ### By registered ID
 
@@ -102,7 +118,12 @@ The trail wraps onto a second line rather than hiding any item.
 - **Current page.** A last item without a link has `aria-current="page"`.
 - **Separators.** The chevrons between items are hidden from assistive technology.
 - **Keyboard.** Every link is a native link: **Tab** reaches it and **Enter** follows it. Text items
-  are not focusable.
+  are not focusable. The "…" button is reached the same way and opens a menu: **Up** and **Down**
+  move through the folded items, **Enter** follows one and **Escape** closes the menu.
+- **Folded items.** The "…" button is named "Show more breadcrumbs" (translated under
+  `satori-components.breadcrumbs.show-more`) and says it opens a menu. A folded item is still a link,
+  in the menu, so nothing on the trail is out of reach. A current page cut short keeps its full name
+  for assistive technology, and as a tooltip.
 
 ## Satori and the built-in breadcrumbs
 
@@ -113,8 +134,9 @@ Both take the same inputs.
 
 What looks and behaves differently:
 
-- **Long trails.** Satori's breadcrumbs collapse the middle of a trail that does not fit into a menu.
-  The built-in breadcrumbs wrap onto further lines instead.
+- **Long trails.** Both fold the middle of a trail that does not fit into a "…" menu. In a box of
+  about 110 pixels or less Satori's breadcrumbs hide every item, the current page included; the
+  built-in breadcrumbs keep the first item and the current page, its name cut short.
 - **Landmark name.** Both name the landmark from `label`. Without one, Satori's breadcrumbs use
   Satori's own translation and the built-in breadcrumbs leave the landmark unnamed.
 - **Styling.** Satori's breadcrumbs use Satori's type, colours and chevron icon. The built-in

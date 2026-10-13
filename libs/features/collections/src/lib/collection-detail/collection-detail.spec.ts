@@ -276,10 +276,8 @@ describe('CollectionDetailComponent', () => {
       component.collection.set(mockCollection);
       const items = component.breadcrumbItems();
       expect(items.length).toBeGreaterThan(0);
-      // `SatBreadcrumbsItem` is a union and only one member carries `href`, so narrow rather
-      // than reaching through it.
-      const first = items[0] as { href?: string };
-      expect(first.href).toContain('/browse');
+      expect(items[0].routerLink).toContain('/browse');
+      expect(items.every((item) => item.href === undefined)).toBe(true);
     });
 
     it('should return empty array when collection has no path', () => {
@@ -358,30 +356,17 @@ describe('CollectionDetailComponent', () => {
     });
   });
 
-  describe('onBreadcrumbClick', () => {
-    it('should navigate when anchor clicked', () => {
-      const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-      const mockEvent = {
-        target: { closest: () => ({ getAttribute: () => '/browse/test' }) },
-        preventDefault: vi.fn(),
-      } as any;
-
-      component.onBreadcrumbClick(mockEvent);
-
-      expect(mockEvent.preventDefault).toHaveBeenCalled();
-      expect(navigateSpy).toHaveBeenCalledWith('/browse/test');
-    });
-
-    it('should do nothing if no href', () => {
-      const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-      const mockEvent = {
-        target: { closest: () => null },
-        preventDefault: vi.fn(),
-      } as any;
-
-      component.onBreadcrumbClick(mockEvent);
-
-      expect(navigateSpy).not.toHaveBeenCalled();
+  describe('breadcrumbs', () => {
+    it('links each parent folder in the app, and does not throw on a literal percent sign', () => {
+      component.collection.set(
+        docWith({ path: '/default-domain/workspaces/100% done/Q3 collection' }),
+      );
+      expect(component.breadcrumbItems()).toEqual([
+        { label: 'default-domain', routerLink: '/browse/default-domain' },
+        { label: 'workspaces', routerLink: '/browse/default-domain/workspaces' },
+        { label: '100% done', routerLink: '/browse/default-domain/workspaces/100% done' },
+      ]);
+      expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
     });
   });
 

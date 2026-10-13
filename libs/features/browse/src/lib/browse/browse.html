@@ -65,7 +65,16 @@
 
   <!-- Breadcrumbs -->
   @if (showBreadcrumbs()) {
-    <sat-breadcrumbs [items]="breadcrumbs()" (click)="onBreadcrumbClick($event)"></sat-breadcrumbs>
+    @let trailLabel = 'browse.breadcrumb.label' | translate;
+    <lib-extension-outlet
+      #breadcrumbsOutlet
+      class="browse-breadcrumbs"
+      [componentId]="breadcrumbsId"
+      [componentInputs]="{ items: breadcrumbs(), label: trailLabel }"
+    />
+    @if (breadcrumbsOutlet.unresolved()) {
+      <nxs-breadcrumbs class="browse-breadcrumbs" [items]="breadcrumbs()" [label]="trailLabel" />
+    }
   }
 
   <nxs-domain-hint [documentType]="currentDoc()?.type" [path]="browsePath()" />

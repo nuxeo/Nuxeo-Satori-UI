@@ -98,9 +98,9 @@ Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 1
 
 ![Breadcrumbs: without Satori on the left, with Satori on the right](breadcrumbs-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-The biggest visible difference. When space runs out, Satori's collapse into a "…" menu and the built-in ones wrap onto two lines. Satori has its own chevron icon and a rounded purple focus ring.
+When space runs out, both fold the middle of the trail into a "…" menu ("Show more breadcrumbs"), keeping the first item and the current page. Satori has its own chevron icon and a rounded purple focus ring.
 
-Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page.
+Both name the landmark from our `label`; with no label, Satori's uses its own translation. One gap on the Satori side: at 110 px or narrower Satori hides every item, including the current page, where the built-in breadcrumbs keep the first item and the current page and cut the page's name short.
 
 ### Rich tooltip
 
@@ -354,7 +354,7 @@ Colours are given as background / text.
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Avatar**       | 36 px circle, no border, teal `#c8e1e4`/`#095d5e`                                                                                                                | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
 | **Tag**          | 20 px, 12 px text, padding 2/8, `#ecdcff`/`#5f00c0`, truncates ("In…" in a 40 px box)                                                                            | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
-| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, wraps when narrow                                                        | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
+| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, collapses to "…" ("Show more breadcrumbs")                               | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
 | **Rich tooltip** | Click/Enter/Space, panel under the button (radius 8, max 320 px, kept on screen), closes instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring |
 
 ## What a customer without access also loses
@@ -369,7 +369,6 @@ Only things rendered by ID, such as customer extensions, go through the choice.
 
 ## Known gaps
 
-- Built-in breadcrumbs wrap instead of collapsing.
 - Satori breadcrumbs hide everything at 110 px or less.
 - Storybook's default theme names Roboto but doesn't load it, so the built-in screenshots render in Arial.
 

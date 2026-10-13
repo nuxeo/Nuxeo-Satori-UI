@@ -310,7 +310,7 @@ describe('BrowseComponent', () => {
     });
 
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
+      { label: 'Root', routerLink: '/browse' },
       { label: 'Renamed Domain' },
     ]);
   });
@@ -327,7 +327,7 @@ describe('BrowseComponent', () => {
 
     expect(() => component.breadcrumbs()).not.toThrow();
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
+      { label: 'Root', routerLink: '/browse' },
       { label: 'Current Folder' },
     ]);
   });

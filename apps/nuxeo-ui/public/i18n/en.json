@@ -634,6 +634,7 @@
   "browse": {
     "block": "Block",
     "breadcrumb": {
+      "label": "Breadcrumbs",
       "root": "Root"
     },
     "browse": {
@@ -928,6 +929,7 @@
     "collection-detail": {
       "actions": "Actions",
       "back-to-collections": "Back to collections",
+      "breadcrumbs": "Breadcrumbs",
       "category": "Category",
       "comment": "Comment",
       "date": "Date",

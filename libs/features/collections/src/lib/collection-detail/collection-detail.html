@@ -38,10 +38,15 @@
     >
       @if (showBreadcrumbs() && breadcrumbItems().length) {
         <div class="header-path-row" nxsFolderHeaderDetail>
-          <sat-breadcrumbs
-            [items]="breadcrumbItems()"
-            (click)="onBreadcrumbClick($event)"
-          ></sat-breadcrumbs>
+          @let trailLabel = 'collections.collection-detail.breadcrumbs' | translate;
+          <lib-extension-outlet
+            #breadcrumbsOutlet
+            [componentId]="breadcrumbsId"
+            [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+          />
+          @if (breadcrumbsOutlet.unresolved()) {
+            <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
+          }
         </div>
       }
 
