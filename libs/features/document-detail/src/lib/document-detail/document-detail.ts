@@ -331,6 +331,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     './document-detail-go-back-focus.scss',
     './document-detail-panel-close-focus.scss',
     './document-detail-version-select-focus.scss',
+    './document-detail-panel-toggle-focus.scss',
     './document-detail-tab-focus.scss',
   ],
 })
