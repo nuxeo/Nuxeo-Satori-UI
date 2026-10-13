@@ -2650,6 +2650,7 @@ class SavedSearchDialogComponent {
     readonly dialogRef: MatDialogRef<any, any>;
     readonly data: SavedSearchDialogData;
     readonly name: _angular_core.WritableSignal<string>;
+    protected readonly hasSlash: () => boolean;
     readonly canSave: () => boolean;
     onInput(value: string): void;
     save(): void;

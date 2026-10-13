@@ -76,7 +76,7 @@ export class SavedSearchDialogComponent {
    * A saved search is a document named after its title, and a document name cannot hold a `/` —
    * the server answers 400. Web UI's save dialog says so the same way (`searchForm.savePopup.error`).
    */
-  readonly hasSlash = () => this.name().includes('/');
+  protected readonly hasSlash = () => this.name().includes('/');
   readonly canSave = () => this.name().trim().length > 0 && !this.hasSlash();
 
   onInput(value: string): void {
