@@ -1787,7 +1787,7 @@
             }
 
             <div class="prop-field prop-field--tags">
-              <span class="prop-label">{{
+              <span class="prop-label" id="document-detail-inline-tags-label">{{
                 'document-detail.document-detail.tags' | translate
               }}</span>
               @if (canWriteDoc()) {
@@ -1796,10 +1796,7 @@
                   class="tags-suggestion-field"
                   subscriptSizing="dynamic"
                 >
-                  <mat-chip-grid
-                    #tagChipGrid
-                    [attr.aria-label]="'document-detail.document-detail.document-tags' | translate"
-                  >
+                  <mat-chip-grid #tagChipGrid>
                     @for (tag of tags(); track $index) {
                       <mat-chip-row (removed)="removeInlineTag(tag)">
                         {{ tag }}
@@ -1808,12 +1805,16 @@
                           matChipRemove
                           [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
                         >
-                          <mat-icon aria-hidden="true" class="detail-tag-chip-remove-icon"></mat-icon>
+                          <mat-icon
+                            aria-hidden="true"
+                            class="detail-tag-chip-remove-icon"
+                          ></mat-icon>
                         </button>
                       </mat-chip-row>
                     }
                     <input
                       name="tagInput"
+                      [attr.aria-labelledby]="'document-detail-inline-tags-label'"
                       [placeholder]="
                         tags().length
                           ? ''
