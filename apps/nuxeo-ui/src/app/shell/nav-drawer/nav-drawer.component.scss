@@ -201,6 +201,19 @@
   }
 }
 
+// NXSAT-547 / IBM 2906830030 — style_focus_visible reads :focus only; keep it separate from
+// :focus-visible (comma lists are not resolved by the scanner).
+// Inset ring: `.folder-tree` sets `overflow-x: hidden`, so a positive offset is clipped.
+.tree-back:focus {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: -2px;
+}
+
+.tree-back:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: -2px;
+}
+
 .tree-node {
   display: flex;
   align-items: center;
