@@ -171,7 +171,9 @@
           (click)="runToolbarAction(action)"
         >
           <!-- NXSAT-528: icon ligature text must not compete with the accessible name (IBM label_name_visible). -->
-          <span class="cdk-visually-hidden" cdkAriaLive="off">{{ toolbarActionLabel(action) }}</span>
+          <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+            toolbarActionLabel(action)
+          }}</span>
           <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
         </button>
       }
@@ -1796,7 +1798,10 @@
                   class="tags-suggestion-field"
                   subscriptSizing="dynamic"
                 >
-                  <mat-chip-grid #tagChipGrid>
+                  <mat-chip-grid
+                    #tagChipGrid
+                    [attr.aria-labelledby]="'document-detail-inline-tags-label'"
+                  >
                     @for (tag of tags(); track $index) {
                       <mat-chip-row (removed)="removeInlineTag(tag)">
                         {{ tag }}
