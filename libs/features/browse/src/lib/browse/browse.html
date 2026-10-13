@@ -258,12 +258,12 @@
                   [error]="error() ? errorStatus() : null"
                   [errorHeading]="error() ?? ''"
                   [emptyHeading]="'browse.browse.this-folder-is-empty' | translate"
-                  [rowActions]="collectionRowActions()"
+                  [rowActions]="rowMenus()"
                   (selectedIdsChange)="onListSelectionChange($event)"
                   (sortChange)="onListSortChange($event)"
                   (pageChange)="goToPage($event)"
                   (open)="onRowClick($event)"
-                  (rowAction)="onCollectionRowAction($event)"
+                  (rowAction)="onRowAction($event)"
                   (retry)="loadContent()"
                 />
               </div>

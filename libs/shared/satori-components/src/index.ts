@@ -28,6 +28,11 @@ export {
   nxsToggleFavorite,
 } from './lib/favorite-toggle/toggle-favorite';
 export { NxsFolderHeaderComponent } from './lib/folder-header/folder-header.component';
+export {
+  NxsFolderPickerDialogComponent,
+  type NxsFolderPickerDialogData,
+  type NxsFolderPickerDialogResult,
+} from './lib/folder-picker/folder-picker-dialog.component';
 export type { NxsHeadingLevel } from './lib/heading-level';
 export { NxsIconComponent } from './lib/icon/icon.component';
 export { NxsPagerComponent } from './lib/pager/pager.component';
@@ -35,6 +40,10 @@ export {
   NXS_PERMISSIONS_PANEL_ID,
   NxsPermissionsPanelComponent,
 } from './lib/permissions-panel/permissions-panel.component';
+export {
+  NxsRenameDialogComponent,
+  type NxsRenameDialogData,
+} from './lib/rename-dialog/rename-dialog.component';
 export { NxsSpinnerComponent } from './lib/spinner/spinner.component';
 export { provideNxsThumbnailCache } from './lib/thumbnail/thumbnail-cache';
 export { NxsThumbnailComponent } from './lib/thumbnail/thumbnail.component';

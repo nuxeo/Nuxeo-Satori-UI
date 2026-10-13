@@ -165,7 +165,7 @@ for one browser; it grants nothing and changes nothing on the server.
 
 ## 2. Slots
 
-A slot is a named, ordered list of descriptors. Nine exist for Beta, of which six
+A slot is a named, ordered list of descriptors. Ten exist for Beta, of which seven
 carry packaged entries.
 
 | Slot           | What it addresses                         | Status in Beta                                     |
@@ -176,6 +176,7 @@ carry packaged entries.
 | `routes`       | Application routes                        | Resolves; **no packaged entries** — see section 11 |
 | `toolbar`      | Document-detail toolbar and overflow menu | **Populated** — 16 packaged actions, section 8     |
 | `contextMenu`  | The browse "More actions" menu            | **Populated** — 4 packaged actions, section 10     |
+| `rowActions`   | The menu on each row of browse's list     | **Populated** — 5 packaged actions, section 10a    |
 | `tabs`         | Document-detail tab children              | **Populated** — 6 packaged tabs, section 9         |
 | `documentList` | Document list columns                     | **Populated** — 12 packaged columns, section 7     |
 | `documentView` | The View tab body on document detail      | Resolves; **no packaged entries** — see section 9a |
@@ -358,6 +359,7 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.hasDocument`          | A document is in focus                                            |
 | `app.rules.isType`               | The focused document's type is one of the `parameters`            |
 | `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`   |
+| `app.rules.hasFile`              | The focused document holds a main file (`file:content`)           |
 | `app.rules.isTrashed`            | The focused document is in the trash                              |
 | `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                    |
 
@@ -382,7 +384,9 @@ and negate with `core.not`, or combine with `core.every` — `hasFacet("Versiona
 
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
-when you navigate away, so all nine answer `false` everywhere else. In particular the two
+when you navigate away, so all ten answer `false` everywhere else — with one
+exception: browse's row menu (section 10a) resolves its own slot with each row's
+document in focus, for that slot only. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
 columns by type, because a list has no single focused document. An earlier
 version of this document described the first five as functional with no caveat
@@ -1088,11 +1092,59 @@ header. The actions apply to the folder or document currently open.
 | `app.contextMenu.unsubscribe` | Unsubscribe | `notifications_off` | 20    | subscribed     |
 | `app.contextMenu.export`      | Export      | `ios_share`         | 30    | always         |
 
-**Browse has no per-row menu**, in this build or before it. The slot's
-description in the section 2 table used to read "row-level menu on a document
-list" while the only menu in `browse.html` was this one, which would have sent a
-customer looking for a surface that does not exist. The ID is the contract and
-stays; the description was corrected.
+This menu acts on the folder open. The menu on each row of the list, acting on that row's document,
+is a separate slot, `rowActions` — section 10a.
+
+---
+
+## 10a. `rowActions` — the menu on each row of browse's list
+
+Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
+rendered as the "Actions for …" menu at the end of each row of browse's document list.
+
+Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
+document rules of section 4 read the row's own permissions and properties, not the folder's. A
+row whose entries are all hidden has no menu button.
+
+| ID                        | Label    | Icon                        | Order | Shown when                |
+| ------------------------- | -------- | --------------------------- | ----- | ------------------------- |
+| `app.rowActions.download` | Download | `download`                  | 10    | not trashed, holds a file |
+| `app.rowActions.rename`   | Rename   | `drive_file_rename_outline` | 20    | not trashed, `canWrite`   |
+| `app.rowActions.copyTo`   | Copy to… | `file_copy`                 | 30    | not trashed               |
+| `app.rowActions.moveTo`   | Move to… | `drive_file_move`           | 40    | not trashed, `canRemove`  |
+| `app.rowActions.delete`   | Delete   | `delete`                    | 50    | not trashed, `canRemove`  |
+
+What each does: **Download** saves the document's main file under its own name. **Rename** opens
+`nxs-rename-dialog`, which changes `dc:title` — as Nuxeo Web UI's title edit does, the name in the
+path stays. **Copy to…** and **Move to…** open `nxs-folder-picker-dialog` and run `Document.Copy` or
+`Document.Move` into the folder chosen; a folder cannot be chosen as its own destination, nor, when
+moving, the folder the document is already in. **Delete** asks, then moves the document to the
+trash, as the header's Delete does; a collection goes through the collection's own delete.
+
+A collection listed in browse also keeps its **Edit** entry, first in its menu. That entry is not a
+slot descriptor, and a manifest cannot hide it.
+
+Add your own entry the same way as to any action slot, with a handler that reads the row from the
+context it receives:
+
+```json
+{
+  "slots": {
+    "rowActions": [
+      { "id": "acme.rowActions.audit", "label": "Audit trail", "icon": "fact_check", "order": 25 }
+    ]
+  }
+}
+```
+
+```ts
+inject(ExtensionActionRegistry).register({
+  'acme.rowActions.audit': { execute: (context) => openAudit(context.document) },
+});
+```
+
+As everywhere in this document, hiding an entry is not a permission: Nuxeo checks the copy, the
+move, the rename and the delete on the request itself.
 
 ---
 

@@ -126,6 +126,7 @@ import {
   ExtensionRuleContextService,
   type ExtensionActionDescriptor,
   type ExtensionColumnDescriptor,
+  type ExtensionRuleContext,
 } from '@nuxeo-satori/platform/extensions';
 
 import {
@@ -149,6 +150,8 @@ import {
   NxsDocumentListComponent,
   NxsDomainHintComponent,
   NxsDriveDialogComponent,
+  NxsFolderPickerDialogComponent,
+  NxsRenameDialogComponent,
   NxsErrorStateComponent,
   NxsFolderHeaderComponent,
   NxsPagerComponent,
@@ -163,6 +166,9 @@ import {
   type NxsDocumentListSort,
   type NxsDriveDialogData,
   type NxsErrorStatus,
+  type NxsFolderPickerDialogData,
+  type NxsFolderPickerDialogResult,
+  type NxsRenameDialogData,
   type NxsMenuAction,
   type NxsPickableColumn,
   NxsToastService,
@@ -626,33 +632,35 @@ export class BrowseComponent {
 
   readonly listSelectedIds = computed(() => [...this.selectionService.selectedIds()]);
 
-  /** Edit and Delete on a collection listed here, the one menu a row has carried. */
-  readonly collectionRowActions = computed<Readonly<Record<string, readonly NxsMenuAction[]>>>(
-    () => {
-      this.currentLang();
-      const actions: Record<string, NxsMenuAction[]> = {};
-      for (const doc of this.filteredEntries()) {
-        if (!this.isCollectionEntry(doc)) continue;
-        const entries: NxsMenuAction[] = [];
-        if (this.canEditCollectionEntry(doc)) {
-          entries.push({
-            id: 'collection.edit',
-            label: this.translate.instant('browse.browse.edit'),
-            icon: 'edit',
-          });
-        }
-        if (this.canDeleteCollectionEntry(doc)) {
-          entries.push({
-            id: 'collection.delete',
-            label: this.translate.instant('browse.browse.delete'),
-            icon: 'delete',
-          });
-        }
-        if (entries.length > 0) actions[doc.uid] = entries;
+  /**
+   * Each row's menu: the `rowActions` slot resolved with that row's document in focus, so a rule
+   * reads the row's permissions, not the folder's. A collection listed here also keeps its Edit.
+   */
+  readonly rowMenus = computed<Readonly<Record<string, readonly NxsMenuAction[]>>>(() => {
+    this.currentLang();
+    const base = this.ruleContext.context();
+    const menus: Record<string, NxsMenuAction[]> = {};
+    for (const doc of this.filteredEntries()) {
+      const context = { ...base, document: doc };
+      const entries: NxsMenuAction[] = this.extensions
+        .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
+        .map((action) => ({
+          id: action.id,
+          label: descriptorLabel(action, (key) => this.translate.instant(key)),
+          icon: action.icon,
+          disabled: !this.extensions.evaluateRule(action.enabledRule, context),
+        }));
+      if (this.isCollectionEntry(doc) && this.canEditCollectionEntry(doc)) {
+        entries.unshift({
+          id: 'collection.edit',
+          label: this.translate.instant('browse.browse.edit'),
+          icon: 'edit',
+        });
       }
-      return actions;
-    },
-  );
+      if (entries.length > 0) menus[doc.uid] = entries;
+    }
+    return menus;
+  });
 
   // Subscription state
   readonly isSubscribed = computed(() => {
@@ -727,11 +735,31 @@ export class BrowseComponent {
       'app.contextMenu.subscribe': { execute: () => this.toggleNotify() },
       'app.contextMenu.unsubscribe': { execute: () => this.toggleNotify() },
       'app.contextMenu.export': { execute: () => this.openExportDialog() },
+      'app.rowActions.download': {
+        execute: (context) => this.withRow(context, (doc) => this.downloadEntry(doc)),
+      },
+      'app.rowActions.rename': {
+        execute: (context) => this.withRow(context, (doc) => this.renameEntry(doc)),
+      },
+      'app.rowActions.copyTo': {
+        execute: (context) => this.withRow(context, (doc) => this.copyOrMoveEntry('copy', doc)),
+      },
+      'app.rowActions.moveTo': {
+        execute: (context) => this.withRow(context, (doc) => this.copyOrMoveEntry('move', doc)),
+      },
+      'app.rowActions.delete': {
+        execute: (context) => this.withRow(context, (doc) => this.trashEntry(doc)),
+      },
     });
     this.destroyRef.onDestroy(() => {
       registration.unregister();
       this.ruleContext.flags.set({});
     });
+  }
+
+  /** A row action runs on the row's document, which arrives as the context's focused one. */
+  private withRow(context: ExtensionRuleContext, run: (doc: NuxeoDocument) => void): void {
+    if (context.document) run(context.document);
   }
 
   constructor() {
@@ -947,9 +975,171 @@ export class BrowseComponent {
     }
   }
 
-  onCollectionRowAction({ action, document }: NxsDocumentListRowAction): void {
-    if (action.id === 'collection.edit') this.openEditCollectionDialog(document);
-    else if (action.id === 'collection.delete') this.deleteCollectionEntry(document);
+  /** Runs a row menu's entry through the registry, with the row's document in focus. */
+  onRowAction({ action, document }: NxsDocumentListRowAction): void {
+    if (action.id === 'collection.edit') {
+      this.openEditCollectionDialog(document);
+      return;
+    }
+    const context = { ...this.ruleContext.context(), document };
+    const descriptor = this.extensions
+      .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
+      .find((candidate) => candidate.id === action.id);
+    if (descriptor) this.actionRegistry.execute(descriptor, context);
+  }
+
+  // ── Row actions ──
+
+  /** The row's main file, saved by the browser under the file's own name. */
+  downloadEntry(doc: NuxeoDocument): void {
+    this.detailService
+      .fetchBlob(doc.uid, { clientReason: 'download' })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (blob) => {
+          const content = doc.properties?.['file:content'] as { name?: string } | null | undefined;
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = content?.name || doc.title || 'download';
+          link.click();
+          URL.revokeObjectURL(url);
+        },
+        error: (err: unknown) =>
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(err)
+                ? PERMISSION_DENIED_KEY
+                : 'browse.message.download-failed',
+            ),
+          ),
+      });
+  }
+
+  /** Changes the row's title; its path name stays, so links to it keep working. */
+  renameEntry(doc: NuxeoDocument): void {
+    this.dialog
+      .open<NxsRenameDialogComponent, NxsRenameDialogData, NuxeoDocument>(
+        NxsRenameDialogComponent,
+        {
+          data: { documentId: doc.uid, title: doc.title },
+        },
+      )
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((updated) => {
+        if (!updated) return;
+        this.toast.show(
+          this.translate.instant('browse.message.renamed', { name: updated.title ?? doc.title }),
+        );
+        this.browseContext.requestTreeRefresh();
+        this.loadContent();
+      });
+  }
+
+  /** Chooses a folder, then copies or moves the row there. */
+  copyOrMoveEntry(operation: 'copy' | 'move', doc: NuxeoDocument): void {
+    const here = this.currentDoc()?.path;
+    const data: NxsFolderPickerDialogData = {
+      heading: this.translate.instant(
+        operation === 'copy'
+          ? 'browse.row-actions.copy-heading'
+          : 'browse.row-actions.move-heading',
+        { name: doc.title },
+      ),
+      confirmLabel: this.translate.instant(
+        operation === 'copy' ? 'browse.row-actions.copy-here' : 'browse.row-actions.move-here',
+      ),
+      initialPath: here,
+      excludePath: this.isFolderish(doc) ? doc.path : undefined,
+      currentParentPath: operation === 'move' ? here : undefined,
+    };
+    this.dialog
+      .open<NxsFolderPickerDialogComponent, NxsFolderPickerDialogData, NxsFolderPickerDialogResult>(
+        NxsFolderPickerDialogComponent,
+        { data },
+      )
+      .afterClosed()
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        filter((target): target is NxsFolderPickerDialogResult => !!target),
+        switchMap((target) =>
+          (operation === 'copy'
+            ? this.browseService.copyDocuments([doc.uid], target.uid)
+            : this.browseService.moveDocuments([doc.uid], target.uid)
+          ).pipe(map(() => target)),
+        ),
+      )
+      .subscribe({
+        next: (target) => {
+          this.toast.show(
+            this.translate.instant(
+              operation === 'copy' ? 'browse.message.copied-to' : 'browse.message.moved-to',
+              { name: doc.title, folder: target.title },
+            ),
+          );
+          if (operation === 'move' && this.selectionService.isSelected(doc.uid)) {
+            this.selectionService.toggle(doc.uid);
+          }
+          this.browseContext.requestTreeRefresh();
+          this.loadContent();
+        },
+        error: (err: unknown) =>
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(err)
+                ? PERMISSION_DENIED_KEY
+                : operation === 'copy'
+                  ? 'browse.message.failed-to-copy'
+                  : 'browse.message.failed-to-move',
+            ),
+          ),
+      });
+  }
+
+  /** Moves the row to the trash, after the same confirmation as the header's Delete. */
+  trashEntry(doc: NuxeoDocument): void {
+    if (isCollectionDocument(doc)) {
+      this.deleteCollectionEntry(doc);
+      return;
+    }
+    const guard$ =
+      doc.type === 'Collections' ? this.browseService.hasChildCollections(doc.uid) : of(false);
+    guard$
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        switchMap((blocked) => {
+          if (blocked) {
+            this.showCollectionsFolderDeleteBlockedMessage();
+            return EMPTY;
+          }
+          return this.dialog
+            .open(ConfirmDialogComponent, {
+              data: trashDocumentConfirmData(doc.title, (key, params) =>
+                this.translate.instant(key, params),
+              ),
+            })
+            .afterClosed();
+        }),
+        filter((confirmed) => confirmed === true),
+        switchMap(() => this.detailService.trashDocument(doc.uid)),
+      )
+      .subscribe({
+        next: () => {
+          if (this.selectionService.isSelected(doc.uid)) this.selectionService.toggle(doc.uid);
+          this.toast.show(this.translate.instant('browse.message.moved-to-trash'));
+          this.browseContext.requestTreeRefresh();
+          this.loadContent();
+        },
+        error: (err: unknown) =>
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(err)
+                ? PERMISSION_DENIED_KEY
+                : 'browse.message.failed-to-delete',
+            ),
+          ),
+      });
   }
 
   /** Merge clipboard copy/move API results into the visible folder (Web UI updates listing immediately). */

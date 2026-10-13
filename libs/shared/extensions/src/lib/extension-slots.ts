@@ -41,8 +41,10 @@ export const EXTENSION_SLOTS = {
   routes: 'routes',
   /** Document-detail and browse toolbar actions. */
   toolbar: 'toolbar',
-  /** Row-level context menu on a document list. */
+  /** The browse "More actions" menu, on the folder or document open. */
   contextMenu: 'contextMenu',
+  /** The menu on each row of a document list, acting on that row's document. */
+  rowActions: 'rowActions',
   /** Actions over a multi-document selection. */
   'bulk-actions': 'bulk-actions',
   /** Document-detail tab children. */

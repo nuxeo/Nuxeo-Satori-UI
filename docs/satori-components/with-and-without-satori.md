@@ -347,6 +347,32 @@ The list itself has no Satori counterpart today; Satori's row-state layer, when 
 
 A domain's branch expanded down to the folder on screen, which is highlighted as the current one. The same rows, arrows and highlight in both; the theme sets the type and the highlight's colour. A folder that holds no folder has no arrow, as in Nuxeo Web UI.
 
+### Rename dialog
+
+| Field           | Value                      |
+| --------------- | -------------------------- |
+| Component       | `NxsRenameDialogComponent` |
+| Registered ID   | —                          |
+| With Satori     | Same component; theme only |
+| Storybook story | `dialogs-rename--renaming` |
+
+![Rename dialog: without Satori on the left, with Satori on the right](rename-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same dialog, title field and buttons in both; the theme sets the type, the field's outline and the buttons' style. It changes the document's title, and stays open with the reason when the server refuses.
+
+### Folder picker
+
+| Field           | Value                                      |
+| --------------- | ------------------------------------------ |
+| Component       | `NxsFolderPickerDialogComponent`           |
+| Registered ID   | —                                          |
+| With Satori     | Same component; theme only                 |
+| Storybook story | `dialogs-folder-picker--choosing-a-folder` |
+
+![Folder picker: without Satori on the left, with Satori on the right](folder-picker-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same location trail, folder list and buttons in both; the theme sets the type, the colours and the buttons' style. It only chooses a folder; the page that opened it copies or moves.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -420,6 +446,8 @@ The components in the library today:
 | Pager              | —                                                                                                                       | Same component; theme only   |
 | Document list      | —                                                                                                                       | Same component; theme only   |
 | Document tree      | —                                                                                                                       | Same component; theme only   |
+| Rename dialog      | —                                                                                                                       | Same component; theme only   |
+| Folder picker      | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

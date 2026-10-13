@@ -515,42 +515,29 @@ describe('BrowseComponent — listing state', () => {
     expect(component.canCreateContentHere()).toBe(false);
   });
 
-  it('gives a menu only to the collections visible in the listing', () => {
+  it('keeps Edit in the row menu of a collection visible in the listing, and only there', () => {
     component.entries.set([doc({ uid: 'a', type: 'File' })]);
-    expect(component.collectionRowActions()).toEqual({});
+    expect(component.rowMenus()['a']?.map((entry) => entry.id) ?? []).not.toContain(
+      'collection.edit',
+    );
 
     component.entries.set([doc({ uid: 'c', type: 'Collection' })]);
-    expect(component.collectionRowActions()['c']?.map((entry) => entry.id)).toEqual([
-      'collection.edit',
-      'collection.delete',
-    ]);
+    expect(component.rowMenus()['c']?.map((entry) => entry.id)).toContain('collection.edit');
 
     component.filterType.set('File');
-    expect(component.collectionRowActions()).toEqual({});
+    expect(component.rowMenus()['c']).toBeUndefined();
   });
 
-  it('runs a collection row’s Edit and Delete', () => {
+  it('opens a collection row’s Edit', () => {
     const edit = vi
       .spyOn(component, 'openEditCollectionDialog')
       .mockImplementation(() => undefined);
-    const remove = vi.spyOn(component, 'deleteCollectionEntry').mockImplementation(() => undefined);
     const collection = doc({ uid: 'c', type: 'Collection' });
-
-    component.onCollectionRowAction({
+    component.onRowAction({
       action: { id: 'collection.edit', label: 'Edit' },
       document: collection,
     });
-    component.onCollectionRowAction({
-      action: { id: 'collection.delete', label: 'Delete' },
-      document: collection,
-    });
-    component.onCollectionRowAction({
-      action: { id: 'acme.other', label: 'Other' },
-      document: collection,
-    });
-
     expect(edit).toHaveBeenCalledWith(collection);
-    expect(remove).toHaveBeenCalledWith(collection);
   });
 
   it('showHeaderDelete follows the selection when there is one, and the folder otherwise', () => {

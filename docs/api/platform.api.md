@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-49 exported symbol(s).
+54 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -461,6 +461,41 @@ class NxsFolderHeaderComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFolderHeaderComponent, "nxs-folder-header", never, { "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "subheading": { "alias": "subheading"; "required": false; "isSignal": true; }; "documentType": { "alias": "documentType"; "required": false; "isSignal": true; }; }, {}, never, ["[nxsFolderHeaderDetail]", "*"], true, never>;
     }
 }
+class NxsFolderPickerDialogComponent {
+    protected readonly data: NxsFolderPickerDialogData;
+    protected readonly path: _angular_core.WritableSignal<string>;
+    protected readonly folder: _angular_core.WritableSignal<NuxeoDocument | null>;
+    protected readonly folders: _angular_core.WritableSignal<readonly NuxeoDocument[]>;
+    protected readonly loading: _angular_core.WritableSignal<boolean>;
+    protected readonly failure: _angular_core.WritableSignal<NxsErrorStatus | "not-a-folder" | null>;
+    protected readonly trail: _angular_core.Signal<string[]>;
+    protected readonly canGoUp: _angular_core.Signal<boolean>;
+    protected readonly refusal: _angular_core.Signal<"already" | "inside" | null>;
+    protected readonly canChoose: _angular_core.Signal<boolean>;
+    constructor();
+    protected load(): void;
+    protected open(doc: NuxeoDocument): void;
+    protected up(): void;
+    protected choose(): void;
+    protected cancel(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFolderPickerDialogComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFolderPickerDialogComponent, "nxs-folder-picker-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsFolderPickerDialogData {
+    readonly heading: string;
+    readonly confirmLabel: string;
+    readonly initialPath?: string;
+    readonly excludePath?: string;
+    readonly currentParentPath?: string;
+    }
+}
+interface NxsFolderPickerDialogResult {
+    readonly uid: string;
+    readonly path: string;
+    readonly title: string;
+    }
+}
 type NxsHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 class NxsIconComponent {
     readonly name: _angular_core.InputSignal<string>;
@@ -569,6 +604,25 @@ interface NxsPickableColumn {
     readonly visible: boolean;
     }
 }
+class NxsRenameDialogComponent {
+    protected readonly data: NxsRenameDialogData;
+    protected readonly title: _angular_core.WritableSignal<string>;
+    protected readonly saving: _angular_core.WritableSignal<boolean>;
+    protected readonly failure: _angular_core.WritableSignal<NxsErrorStatus | 409 | null>;
+    protected readonly trimmed: _angular_core.Signal<string>;
+    protected readonly unchanged: _angular_core.Signal<boolean>;
+    protected readonly canSave: _angular_core.Signal<boolean>;
+    protected save(): void;
+    protected cancel(): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRenameDialogComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRenameDialogComponent, "nxs-rename-dialog", never, {}, {}, never, never, true, never>;
+    }
+}
+interface NxsRenameDialogData {
+    readonly documentId: string;
+    readonly title: string;
+    }
+}
 class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     readonly heading: _angular_core.InputSignal<string>;
     readonly content: _angular_core.InputSignal<string>;
@@ -661,7 +715,7 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 
 ## @nuxeo-satori/platform/extensions
 
-58 exported symbol(s).
+59 exported symbol(s).
 
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
@@ -694,6 +748,7 @@ const EXTENSION_SLOTS: {
     readonly routes: "routes";
     readonly toolbar: "toolbar";
     readonly contextMenu: "contextMenu";
+    readonly rowActions: "rowActions";
     readonly 'bulk-actions': "bulk-actions";
     readonly tabs: "tabs";
     readonly documentList: "documentList";
@@ -887,6 +942,7 @@ const PACKAGED_BULK_ACTIONS: readonly ExtensionActionDescriptor[];
 const PACKAGED_DOCUMENT_TABS: readonly ExtensionTabDescriptor[];
 const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescriptor[];
 const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[];
+const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[];
 interface PartitionedExtensionRoutes {
     readonly accepted: readonly ExtensionRouteDescriptor[];
     readonly rejected: readonly RejectedExtensionRoute[];

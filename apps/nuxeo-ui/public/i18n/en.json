@@ -10,6 +10,11 @@
     "context-menu-share": "Share",
     "context-menu-subscribe": "Notify Me",
     "context-menu-unsubscribe": "Unsubscribe",
+    "row-actions-copy-to": "Copy to…",
+    "row-actions-delete": "Delete",
+    "row-actions-download": "Download",
+    "row-actions-move-to": "Move to…",
+    "row-actions-rename": "Rename",
     "toolbar-add-to-clipboard": "Add to Clipboard",
     "toolbar-add-to-collection": "Add to collection",
     "toolbar-add-to-favorites": "Add to Favorites",
@@ -843,6 +848,7 @@
       "action-failed": "Action failed",
       "collection-moved-to-trash": "Collection moved to trash",
       "collection-updated": "Collection updated",
+      "copied-to": "Copied \"{{ name }}\" to {{ folder }}",
       "could-not-load-folder-contents": "Could not load folder contents.",
       "could-not-resolve-a-default-folder-open": "Could not resolve a default folder. Open a folder in Browse first.",
       "could-not-resolve-this-path-try-another": "Could not resolve this path. Try another folder.",
@@ -857,12 +863,14 @@
       "domain-container-guidance": "Open Sections, Templates, or Workspaces, then create content inside those folders.",
       "download-failed": "Download failed.",
       "failed-to-add-tag": "Failed to add tag",
+      "failed-to-copy": "The document could not be copied.",
       "failed-to-delete": "Failed to delete",
       "failed-to-delete-collection": "Failed to delete collection",
       "failed-to-load-collection": "Failed to load collection",
       "failed-to-load-folder-contents": "Failed to load folder contents.",
       "failed-to-load-permissions": "Failed to load permissions",
       "failed-to-load-selected-documents-for-deletion": "Failed to load selected documents for deletion",
+      "failed-to-move": "The document could not be moved.",
       "failed-to-remove-tag": "Failed to remove tag",
       "failed-to-restore-document": "Failed to restore document.",
       "failed-to-send-notification": "Failed to send notification",
@@ -873,6 +881,7 @@
       "file-upload-failed": "File upload failed",
       "inheritance-blocked": "Inheritance blocked",
       "inheritance-unblocked": "Inheritance unblocked",
+      "moved-to": "Moved \"{{ name }}\" to {{ folder }}",
       "moved-to-trash": "Moved to trash",
       "notification-email-sent": "Notification email sent",
       "open-a-folder-to-create-or-import": "Open a folder to create or import content.",
@@ -882,6 +891,7 @@
       "please-select-a-csv-file": "Please select a .csv file.",
       "please-wait-for-the-file-upload-to": "Please wait for the file upload to finish.",
       "remove-all-collections-from-this-folder-before": "Remove all collections from this folder before deleting it.",
+      "renamed": "Renamed to \"{{ name }}\"",
       "restricted-import-location": "Select a different container to create your content.",
       "search-failed": "Search failed",
       "selected-path-is-not-a-folder-choose": "Selected path is not a folder. Choose a folder or go up one level.",
@@ -892,6 +902,12 @@
       "upload-failed": "Upload failed",
       "uploading": "Uploading…",
       "uploading-file-of": "Uploading file {{ index }} of {{ count }}…"
+    },
+    "row-actions": {
+      "copy-heading": "Copy \"{{ name }}\" to",
+      "copy-here": "Copy here",
+      "move-heading": "Move \"{{ name }}\" to",
+      "move-here": "Move here"
     },
     "scope": {
       "create-import": "Create / Import",
@@ -2030,6 +2046,21 @@
       "label": "Favorite",
       "remove": "Remove from favorites"
     },
+    "folder-picker": {
+      "already-here": "The document is already in this folder.",
+      "cancel": "Cancel",
+      "empty": "No folders here. You can choose this folder.",
+      "failed": "The folder could not be loaded.",
+      "folders": "Folders",
+      "forbidden": "You do not have access to this folder.",
+      "inside-itself": "A folder cannot be moved into itself or into a folder inside it.",
+      "loading": "Loading folders",
+      "location": "Location",
+      "not-a-folder": "This is not a folder. Go up and choose a folder.",
+      "not-found": "This folder no longer exists.",
+      "retry": "Retry",
+      "up": "Up one level"
+    },
     "pager": {
       "label": "Pages",
       "next": "Next page",
@@ -2151,6 +2182,17 @@
       "unverified": {
         "heading": "The changes were sent, but reading the permissions back failed, so the panel cannot confirm them. Reload to see what the server holds."
       }
+    },
+    "rename-dialog": {
+      "cancel": "Cancel",
+      "failed": "The title could not be changed. Try again in a moment.",
+      "forbidden": "You do not have permission to rename this document.",
+      "label": "Title",
+      "locked": "This document is locked by someone else, so it cannot be renamed now.",
+      "not-found": "This document no longer exists.",
+      "required": "Enter a title",
+      "save": "Rename",
+      "title": "Rename"
     },
     "toast": {
       "dismiss": "Dismiss",
