@@ -39,13 +39,13 @@ export interface NxsBreadcrumbItem {
 
 /** `nxs.primitives.avatar`. Text inputs arrive already translated. */
 export interface NxsAvatarInputs {
-  /** Up to two characters are shown, upper-cased. */
+  /** Upper-cased: up to two are shown, or one at size `24`. */
   readonly initials: InputSignal<string>;
   readonly color: InputSignal<NxsAvatarColor>;
   readonly size: InputSignal<NxsAvatarSize>;
   /**
-   * The accessible name, usually the person's name. Blank, or only whitespace, makes the avatar
-   * decorative.
+   * The accessible name, usually the person's name. Blank, or only whitespace or zero-width
+   * characters, makes the avatar decorative.
    */
   readonly label: InputSignal<string>;
 }

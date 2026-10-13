@@ -144,8 +144,8 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(exposedImages(host)).toEqual([]);
   });
 
-  it.each(['   ', '\u00a0', '\u3000'])(
-    'treats a whitespace-only label %j as no label, as Material does',
+  it.each(['   ', '\u00a0', '\u3000', '\u200b', '\ufeff\u2060'])(
+    'treats a label of only whitespace or zero-width characters %j as no label, as Material does',
     async (label) => {
       const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: 'NK', label });
       const avatar = host.querySelector('nxs-satori-avatar');
@@ -174,6 +174,11 @@ describe('the Satori primitives, rendered by ID', () => {
       expect(host.querySelector('nxs-satori-avatar sat-avatar')?.textContent?.trim()).toBe('');
     },
   );
+
+  it('shows one initial at size 24, as Material does', async () => {
+    const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: 'nk', size: '24' });
+    expect(host.querySelector('nxs-satori-avatar sat-avatar')?.textContent?.trim()).toBe('N');
+  });
 
   it('shows the initials Material shows: trimmed, upper-cased, at most two', async () => {
     const host = await renderById(NXS_PRIMITIVE_IDS.avatar, { initials: ' nkx ' });

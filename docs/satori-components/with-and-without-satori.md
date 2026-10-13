@@ -72,7 +72,7 @@ Every component in the library, with the same inputs on both sides: on the left 
 
 ![Avatar: without Satori on the left, with Satori on the right](avatar-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-Both are 36 px teal circles. Satori's has a thin white border and uses Noto Sans; the built-in one blends teal with the Material theme's surface and text, so it is a little darker and greyer. At size 24, Satori shows one initial and the built-in version two. Screen readers hear one image, named by `label`, on both sides.
+Both are 36 px teal circles. Satori's has a thin white border and uses Noto Sans; the built-in one blends teal with the Material theme's surface and text, so it is a little darker and greyer. Each of the eight colour names is its own hue on both sides, in any theme. At size 24 both show one initial. Screen readers hear one image, named by `label`, on both sides; a label of only spaces or invisible characters makes both decorative.
 
 ### Tag
 
@@ -85,7 +85,7 @@ Both are 36 px teal circles. Satori's has a thin white border and uses Noto Sans
 
 ![Tag: without Satori on the left, with Satori on the right](tag-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 12 px — with softer colours. The built-in one shortens long text with "…"; Satori's never shortens and spills out of a narrow box.
+Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 12 px — with softer colours. Neither cuts a long label short: the built-in one wraps it onto a further line inside the tag, as Web UI's tags do, while Satori's stays on one line and spills out of a narrow box.
 
 ### Breadcrumbs
 
@@ -324,8 +324,8 @@ Colours are given as background / text.
 
 | Primitive        | Without Satori (built-in, Material theme)                                                                                                                        | With Satori (`sat-*`, Satori theme)                                                                                                                       |
 | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Avatar**       | 36 px circle, no border, teal `#c8e1e4`/`#095d5e`                                                                                                                | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
-| **Tag**          | 20 px, 12 px text, padding 2/8, `#ecdcff`/`#5f00c0`, truncates ("In…" in a 40 px box)                                                                            | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
+| **Avatar**       | 36 px circle, no border, teal `#d2e6e9`/`#076768`                                                                                                                | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
+| **Tag**          | 20 px, 12 px text, padding 2/8, purple `#e9d7f0`/`#602072`, wraps a long label inside the tag                                                                    | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
 | **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, wraps when narrow                                                        | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
 | **Rich tooltip** | Click/Enter/Space, panel under the button (radius 8, max 320 px, kept on screen), closes instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring |
 

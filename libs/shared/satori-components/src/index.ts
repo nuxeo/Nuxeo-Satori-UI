@@ -54,4 +54,5 @@ export {
   type NxsTagInputs,
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
+export { nxsInitials, nxsVisibleText } from './lib/visible-text';
 // satori:export:components — `satori-component` inserts above this line

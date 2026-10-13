@@ -1,4 +1,4 @@
-<nav class="nxs-breadcrumbs__nav" [attr.aria-label]="label() || null">
+<nav class="nxs-breadcrumbs__nav" [attr.aria-label]="name() || null">
   <ol class="nxs-breadcrumbs__list">
     @for (item of items(); track $index; let last = $last) {
       <li class="nxs-breadcrumbs__item">

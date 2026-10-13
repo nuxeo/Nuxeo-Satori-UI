@@ -129,6 +129,12 @@ justified when the owning layer **structurally cannot** reach the state, and it 
 invariant rather than restate the conformance verdict. If the owning layer can reach it, extend
 the owner.
 
+`libs/shared/satori-components/src/lib/named-colors.spec.ts` is the second case. It holds the
+built-in avatar's and tag's eight named colours at 4.5:1 in the Material themes this repository
+compiles, because no screen renders those components in every colour — screens use Satori's — so
+the axe layer has no node to judge. It computes from the palette and the compiled theme values; a
+host's own `--nxs-*` colours are outside it, and the published WCAG number still comes from axe.
+
 ## Baselines and suppression
 
 Three mechanisms exist today. The standard is **one shape**, and it is the one

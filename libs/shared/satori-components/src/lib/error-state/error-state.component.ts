@@ -11,6 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import type { NxsHeadingLevel } from '../heading-level';
+import { nxsVisibleText } from '../visible-text';
 import type { NxsErrorStatus } from './error-status';
 
 interface Variant {
@@ -80,7 +81,7 @@ export class NxsErrorStateComponent {
   readonly retry = output<void>();
 
   protected readonly variant = computed(() => VARIANTS[this.status()]);
-  /** The host's heading as a reader gets it: whitespace alone is no heading. */
-  protected readonly ownHeading = computed(() => this.heading().trim());
+  /** The host's heading as a reader gets it: whitespace or zero-width characters alone are none. */
+  protected readonly ownHeading = computed(() => nxsVisibleText(this.heading()));
   protected readonly canRetry = computed(() => this.retryable() && this.status() === 500);
 }

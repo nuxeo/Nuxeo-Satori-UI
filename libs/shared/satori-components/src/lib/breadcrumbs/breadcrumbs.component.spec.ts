@@ -78,6 +78,19 @@ describe('NxsBreadcrumbsComponent', () => {
     expect(host.querySelector('nav')?.hasAttribute('aria-label')).toBe(false);
   });
 
+  it.each(['   ', '\u00a0', '\u200b', ' \u2060 '])(
+    'leaves the landmark unnamed when the label is only whitespace or zero-width characters (%j)',
+    async (label) => {
+      const host = await render({ items: TRAIL, label });
+      expect(host.querySelector('nav')?.hasAttribute('aria-label')).toBe(false);
+    },
+  );
+
+  it('names the landmark without the whitespace around its label', async () => {
+    const host = await render({ items: TRAIL, label: ' Breadcrumbs\u200b ' });
+    expect(host.querySelector('nav')?.getAttribute('aria-label')).toBe('Breadcrumbs');
+  });
+
   it('renders an empty list for an empty trail', async () => {
     const host = await render({ items: [] });
     expect(host.querySelector('ol')?.children.length).toBe(0);
