@@ -136,6 +136,42 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
     }
   });
 
+  it('overrides document-detail.scss :hover fill while focused (including dark theme)', async () => {
+    applyTheme('dark');
+    const { fixture, button } = await mount();
+    try {
+      button.focus({ focusVisible: false } as FocusOptions);
+
+      let focusHoverRule = '';
+      for (const sheet of Array.from(document.styleSheets)) {
+        let sheetRules: CSSRuleList;
+        try {
+          sheetRules = sheet.cssRules;
+        } catch {
+          continue;
+        }
+        for (const rule of Array.from(sheetRules)) {
+          const styleRule = rule as CSSStyleRule;
+          const selector = (styleRule.selectorText ?? '').replace(/\[_ngcontent-[^\]]+\]/g, '');
+          if (selector.includes('.version-select:focus:hover')) {
+            focusHoverRule = styleRule.cssText;
+          }
+        }
+      }
+
+      expect(focusHoverRule).toContain('color-mix');
+      expect(focusHoverRule).toContain('--document-detail-properties-panel-surface');
+
+      const focusedFill = getComputedStyle(button).backgroundColor;
+      button.blur();
+      button.focus({ focusVisible: false } as FocusOptions);
+      expect(getComputedStyle(button).backgroundColor).toBe(focusedFill);
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
+
   for (const theme of [...COMPILED_THEME_BASES, null] as const) {
     const label = theme ?? 'no data-app-theme (first paint)';
 

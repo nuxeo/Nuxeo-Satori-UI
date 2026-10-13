@@ -4,6 +4,17 @@
 }
 
 .version-select:focus {
+  background: var(--document-detail-properties-panel-surface);
+  outline: 2px solid var(--document-detail-properties-label-muted);
+  outline-offset: -2px;
+}
+
+.version-select:focus:hover {
+  background: color-mix(
+    in srgb,
+    var(--mat-sys-primary) 8%,
+    var(--document-detail-properties-panel-surface)
+  );
   outline: 2px solid var(--document-detail-properties-label-muted);
   outline-offset: -2px;
 }

@@ -12,8 +12,8 @@ describe('DocumentDetailComponent — version-select focus ring (NXSAT-545)', ()
   const componentPath = join(import.meta.dirname, 'document-detail.ts');
   it('declares a standalone :focus ring on the version selector', () => {
     const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(/\.version-select:focus\s*\{/);
-    expect(scss).not.toMatch(/\.version-select:focus,\s/);
+    expect(scss).toMatch(/\.version-select:focus(?:,\s*\.version-select:focus:hover)?\s*\{/);
+    expect(scss).not.toMatch(/\.version-select:focus-visible/);
     expect(scss).toMatch(
       /\.version-select:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--document-detail-properties-label-muted\)/,
     );
@@ -25,10 +25,19 @@ describe('DocumentDetailComponent — version-select focus ring (NXSAT-545)', ()
     expect(source).toMatch(/['"]\.\/document-detail-version-select-focus\.scss['"]/);
   });
 
-  it('pins version-select fill to the light properties panel surface', () => {
+  it('pins version-select fill to the properties panel surface (with hover tint) on focus and focus+hover', () => {
     const scss = readFileSync(scssPath, 'utf8');
     expect(scss).toMatch(
       /\.version-select[\s\S]*background:\s*var\(--document-detail-properties-panel-surface\)/,
+    );
+    expect(scss).toMatch(
+      /\.version-select:focus:hover[\s\S]*color-mix\([\s\S]*var\(--document-detail-properties-panel-surface\)/,
+    );
+    expect(scss).toMatch(
+      /\.version-select:focus:hover[\s\S]*color-mix\([\s\S]*var\(--mat-sys-primary\)\s+8%/,
+    );
+    expect(scss).toMatch(
+      /\.version-select:focus\s*\{[\s\S]*background:\s*var\(--document-detail-properties-panel-surface\)/,
     );
   });
 });
