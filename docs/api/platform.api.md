@@ -242,7 +242,6 @@ interface NxsBreadcrumbItem {
 class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
     readonly items: _angular_core.InputSignal<readonly NxsBreadcrumbItem[]>;
     readonly label: _angular_core.InputSignal<string>;
-    protected readonly folded: _angular_core.WritableSignal<number>;
     protected readonly hiddenItems: _angular_core.Signal<NxsBreadcrumbItem[]>;
     protected readonly entries: _angular_core.Signal<readonly TrailEntry[]>;
     constructor();

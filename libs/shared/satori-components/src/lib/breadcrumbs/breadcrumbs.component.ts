@@ -62,7 +62,7 @@ export class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly destroyRef = inject(DestroyRef);
   /** The items folded into the "…" menu, as last measured. */
-  protected readonly fold = signal<BreadcrumbFold>(
+  private readonly fold = signal<BreadcrumbFold>(
     { start: 1, count: 0 },
     { equal: (a, b) => a.start === b.start && a.count === b.count },
   );
