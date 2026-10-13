@@ -124,9 +124,15 @@ export const Editable: Story = {
   decorators: [withTags(TAGGED)],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('button', { name: 'Remove tag contract' })).toBeVisible();
-    const box = canvas.getByRole('combobox', { name: 'Add tags to this document' });
-    await userEvent.type(box, 'Q3 Report{Enter}');
+    await expect(await canvas.findByRole('button', { name: 'Remove tag contract' })).toBeVisible();
+    const box = await canvas.findByRole('combobox', { name: 'Add tags to this document' });
+    await userEvent.type(box, 'Q3 Report');
+    // Chosen with the pointer: Material reads `keyCode`, which the synthetic Enter lacks.
+    await userEvent.click(
+      await within(canvasElement.ownerDocument.body).findByRole('option', {
+        name: 'New tag q3 report',
+      }),
+    );
     await waitFor(() =>
       expect(canvas.getByRole('button', { name: 'Remove tag q3report' })).toBeVisible(),
     );

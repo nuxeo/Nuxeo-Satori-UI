@@ -120,12 +120,14 @@ type Story = StoryObj<NxsManageVersionsComponent>;
 export const CheckedOut: Story = {
   decorators: [withVersions()],
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Version 1.2+' }));
+    await userEvent.click(
+      await within(canvasElement).findByRole('button', { name: 'Version 1.2+' }),
+    );
     const menu = within(canvasElement.ownerDocument.body);
     await waitFor(() =>
       expect(menu.getByRole('menuitemradio', { name: /^1\.2 Modified/ })).toBeVisible(),
     );
-    await expect(menu.getByRole('menuitem', { name: 'Create Version' })).toBeVisible();
+    await expect(await menu.findByRole('menuitem', { name: 'Create Version' })).toBeVisible();
   },
 };
 

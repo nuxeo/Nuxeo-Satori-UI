@@ -168,7 +168,7 @@ export const History: Story = {
     await waitFor(() =>
       expect(canvas.getByRole('table', { name: 'Document history' })).toBeVisible(),
     );
-    await userEvent.type(canvas.getByRole('textbox', { name: 'Username' }), 'jdoe');
+    await userEvent.type(await canvas.findByRole('textbox', { name: 'Username' }), 'jdoe');
     await waitFor(() => expect(canvas.getAllByRole('row')).toHaveLength(5));
   },
 };

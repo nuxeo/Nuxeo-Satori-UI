@@ -1,5 +1,5 @@
 import { moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, fn, waitFor, within } from 'storybook/test';
 
 import { NxsTabBodyDirective, type NxsTab } from './tab-body.directive';
 import { NxsTabsComponent } from './tabs.component';
@@ -62,11 +62,19 @@ export const SelectedByTheHost: Story = { args: { selectedIndex: 3 } };
 export const SelectedFromTheKeyboard: Story = {
   play: async ({ args, canvasElement }) => {
     const canvas = within(canvasElement);
-    canvas.getByRole('tab', { name: /View/ }).focus();
-    await userEvent.keyboard('{ArrowRight}{Enter}');
-    await expect(canvas.getByRole('tab', { name: /Permissions/ })).toHaveAttribute(
-      'aria-selected',
-      'true',
+    const view = await canvas.findByRole('tab', { name: /View/ });
+    view.focus();
+    // With `keyCode`, as a browser sends it: Material's key manager reads it and the synthetic
+    // `userEvent.keyboard` events leave it unset.
+    fireEvent.keyDown(view, { key: 'ArrowRight', code: 'ArrowRight', keyCode: 39 });
+    const permissions = canvas.getByRole('tab', { name: /Permissions/ });
+    await waitFor(() => expect(permissions).toHaveFocus());
+    fireEvent.keyDown(permissions, { key: 'Enter', code: 'Enter', keyCode: 13 });
+    await waitFor(() =>
+      expect(canvas.getByRole('tab', { name: /Permissions/ })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      ),
     );
     await expect(args.selectedTabChange).toHaveBeenCalled();
   },

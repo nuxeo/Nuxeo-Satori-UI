@@ -78,7 +78,7 @@ export const ReadOnlyUser: Story = {
 export const MoreActionsOpen: Story = {
   // Leaves the menu open: the with-and-without-Satori capture screenshots this story.
   play: async ({ args, canvasElement }) => {
-    within(canvasElement).getByRole('button', { name: 'More actions' }).focus();
+    (await within(canvasElement).findByRole('button', { name: 'More actions' })).focus();
     await userEvent.keyboard('{Enter}');
     const menu = within(await within(canvasElement.ownerDocument.body).findByRole('menu'));
     await waitFor(() =>

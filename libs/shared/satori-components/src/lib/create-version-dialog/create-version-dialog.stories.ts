@@ -88,7 +88,7 @@ export const MajorChosen: Story = {
   decorators: [withDialog()],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(canvas.getByRole('radio', { name: /2\.0 Major version/ })).toBeChecked();
+    await expect(await canvas.findByRole('radio', { name: /2\.0 Major version/ })).toBeChecked();
     await userEvent.click(canvas.getByRole('radio', { name: /1\.3 Minor version/ }));
     await expect(canvas.getByRole('radio', { name: /1\.3 Minor version/ })).toBeChecked();
   },
@@ -98,7 +98,9 @@ export const MajorChosen: Story = {
 export const Creating: Story = {
   decorators: [withDialog(() => NEVER)],
   play: async ({ canvasElement }) => {
-    await userEvent.click(within(canvasElement).getByRole('button', { name: 'Create Version' }));
+    await userEvent.click(
+      await within(canvasElement).findByRole('button', { name: 'Create Version' }),
+    );
   },
 };
 

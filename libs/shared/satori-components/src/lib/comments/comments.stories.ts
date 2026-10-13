@@ -250,9 +250,9 @@ export const Thread: Story = {
     const canvas = within(canvasElement);
     await waitFor(() => expect(canvas.getByText(/Figures for March/)).toBeVisible());
     await expect(
-      canvas.getAllByRole('button', { name: /^Actions for the comment by/ }),
+      await canvas.findAllByRole('button', { name: /^Actions for the comment by/ }),
     ).toHaveLength(1);
-    await expect(canvas.getByRole('button', { name: /2 replies/ })).toBeVisible();
+    await expect(await canvas.findByRole('button', { name: /2 replies/ })).toBeVisible();
   },
 };
 
