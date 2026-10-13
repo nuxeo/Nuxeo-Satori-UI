@@ -652,6 +652,7 @@
       "card-view": "Card view",
       "category": "Category",
       "clear": "Clear",
+      "clear-uploads": "Clear",
       "close-column-picker": "Close column picker",
       "close-panel": "Close panel",
       "collection-actions": "Collection actions",
@@ -666,6 +667,7 @@
       "delete": "Delete",
       "done": "Done",
       "download-all": "Download All",
+      "drop-to-upload": "Drop files to upload them to {{ name }}",
       "edit": "Edit",
       "export-csv": "Export CSV",
       "filter-by-title": "Filter by title...",
@@ -712,6 +714,7 @@
       "trash-is-empty": "Trash is empty",
       "type": "Type",
       "upload-with-nuxeo-drive": "Upload with Nuxeo Drive",
+      "uploads": "Uploads",
       "user": "User",
       "user-group": "User / Group",
       "username": "Username"
@@ -900,6 +903,7 @@
       "subscribed-to-notifications": "Subscribed to notifications",
       "unsubscribed": "Unsubscribed",
       "upload-failed": "Upload failed",
+      "upload-in-progress": "Wait for the files being uploaded to finish before dropping more.",
       "uploading": "Uploading…",
       "uploading-file-of": "Uploading file {{ index }} of {{ count }}…"
     },
@@ -2022,6 +2026,10 @@
       "platform": "Platform",
       "title": "Download Nuxeo Drive Client"
     },
+    "dropzone": {
+      "choose-file": "Choose a file",
+      "choose-files": "Choose files"
+    },
     "error-state": {
       "forbidden": {
         "heading": "You do not have access",
@@ -2197,6 +2205,19 @@
     "toast": {
       "dismiss": "Dismiss",
       "retry": "Retry"
+    },
+    "upload-queue": {
+      "done": "Uploaded",
+      "failed": "Could not be uploaded",
+      "forbidden": "You do not have permission to add documents here",
+      "not-found": "The folder no longer exists",
+      "progress": "Uploading {{ name }}",
+      "remove": "Remove {{ name }}",
+      "retry": "Retry {{ name }}",
+      "summary": "{{ done }} of {{ total }} uploaded",
+      "summary-failed": "{{ count }} could not be uploaded",
+      "uploading": "Uploading, {{ percent }}%",
+      "waiting": "Waiting"
     }
   },
   "search": {

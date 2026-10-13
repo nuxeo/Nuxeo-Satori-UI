@@ -20,6 +20,7 @@ import {
   BrowseService,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   TagService,
   type NuxeoDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
@@ -104,6 +105,7 @@ describe('BrowseComponent — row actions', () => {
     trashDocument: vi.fn(() => of(undefined)),
   };
   const toast = { show: vi.fn(), error: vi.fn() };
+  const importService = { importFiles: vi.fn() };
 
   async function settle(): Promise<void> {
     fixture.detectChanges();
@@ -138,6 +140,7 @@ describe('BrowseComponent — row actions', () => {
           },
         },
         { provide: TagService, useValue: { searchTags: () => of([]) } },
+        { provide: DocumentImportService, useValue: importService },
         { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
         provideSatoriExtensions({ slots: { [EXTENSION_SLOTS.rowActions]: PACKAGED_ROW_ACTIONS } }),
       ],
@@ -304,5 +307,76 @@ describe('BrowseComponent — row actions', () => {
     resolve.mockReturnValue([custom]);
     run('acme.rowActions.audit', note);
     expect(seen).toEqual(['note']);
+  });
+
+  describe('files dropped on the list', () => {
+    const scan = new File(['a'], 'scan.pdf');
+    const memo = new File(['b'], 'memo.pdf');
+
+    it('accepts a drop where the user may create content, named for the folder', () => {
+      const list = fixture.nativeElement.querySelector('nxs-document-list');
+      expect(component.canCreateContentHere()).toBe(true);
+      expect(list).not.toBeNull();
+    });
+
+    it('uploads the dropped files into the folder on screen, one queue entry each', () => {
+      importService.importFiles.mockImplementation((_path, _files, options) => {
+        options?.onProgress?.({ phase: 'uploading', percent: 75, fileIndex: 1, fileCount: 2 });
+        return of([doc({ uid: 'd1' }), doc({ uid: 'd2' })]);
+      });
+      browse.getBrowseFolderContents.mockClear();
+
+      component.uploadDropped([scan, memo]);
+
+      expect(importService.importFiles).toHaveBeenCalledWith(
+        '/default-domain/workspaces/ws-1',
+        [scan, memo],
+        expect.objectContaining({ onProgress: expect.any(Function) }),
+      );
+      expect(component.droppedUploads.items().map((item) => item.state)).toEqual(['done', 'done']);
+      expect(toast.show).toHaveBeenCalledWith('Created 2 files.');
+      expect(browse.getBrowseFolderContents).toHaveBeenCalled();
+    });
+
+    it('says a refused upload is refused, and retries only what was not created', () => {
+      importService.importFiles.mockImplementationOnce((_path, _files, options) => {
+        options?.onProgress?.({ phase: 'creating', percent: 50, fileIndex: 0, fileCount: 2 });
+        options?.onProgress?.({ phase: 'uploading', percent: 60, fileIndex: 1, fileCount: 2 });
+        return throwError(() => ({ status: 403 }));
+      });
+      component.uploadDropped([scan, memo]);
+      expect(toast.error).toHaveBeenCalledWith('You do not have permission to perform this action');
+      expect(component.droppedUploads.items().map((item) => item.state)).toEqual([
+        'done',
+        'failed',
+      ]);
+
+      importService.importFiles.mockReturnValueOnce(of([doc({ uid: 'd2' })]));
+      component.runDroppedUploads();
+      expect(importService.importFiles).toHaveBeenLastCalledWith(
+        '/default-domain/workspaces/ws-1',
+        [memo],
+        expect.anything(),
+      );
+    });
+
+    it('turns away a second drop while the first still uploads', () => {
+      importService.importFiles.mockReturnValue(EMPTY);
+      component.uploadDropped([scan]);
+      component.uploadDropped([memo]);
+      expect(importService.importFiles).toHaveBeenCalledTimes(1);
+      expect(toast.show).toHaveBeenCalledWith(
+        'Wait for the files being uploaded to finish before dropping more.',
+      );
+    });
+
+    it('uploads nothing where the user may not create content', () => {
+      component.currentDoc.set({
+        ...folder,
+        contextParameters: { permissions: ['Read'] },
+      } as NuxeoDocument);
+      component.uploadDropped([scan]);
+      expect(importService.importFiles).not.toHaveBeenCalled();
+    });
   });
 });

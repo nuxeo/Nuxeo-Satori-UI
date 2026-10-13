@@ -56,6 +56,7 @@ import {
   nuxeoPathsEqualFlexible,
   DocumentDetailService,
   DirectoryService,
+  DocumentImportService,
   SelectionService,
   TagService,
   docTypeIcon,
@@ -158,6 +159,8 @@ import {
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
+  NxsUploadQueue,
+  NxsUploadQueueComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   type NxsBreadcrumbItem,
@@ -224,6 +227,7 @@ const PAGE_SIZE = 50;
     NxsPagerComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
+    NxsUploadQueueComponent,
     DocTypeLabelPipe,
     TranslatePipe,
     DatePipe,
@@ -272,6 +276,11 @@ export class BrowseComponent {
   private readonly actionRegistry = inject(ExtensionActionRegistry);
   private readonly dialog = inject(MatDialog);
   private readonly toast = inject(NxsToastService);
+  private readonly importService = inject(DocumentImportService);
+  /** Files dropped on the list: each one's progress and outcome, through the import's own queue. */
+  readonly droppedUploads = new NxsUploadQueue();
+  /** The folder the dropped files go into, kept for a retry after the page has moved on. */
+  private droppedUploadPath: string | null = null;
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly adminAccess = inject(ADMIN_ACCESS_CHECKS);
 
@@ -986,6 +995,63 @@ export class BrowseComponent {
       .resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.rowActions, context)
       .find((candidate) => candidate.id === action.id);
     if (descriptor) this.actionRegistry.execute(descriptor, context);
+  }
+
+  // ── Files dropped on the list ──
+
+  /** Uploads files dropped on the list into the folder on screen, as Create / Import's do. */
+  uploadDropped(files: readonly File[]): void {
+    const folder = this.currentDoc();
+    if (!folder || !this.canCreateContentHere()) return;
+    if (this.droppedUploads.busy()) {
+      this.toast.show(this.translate.instant('browse.message.upload-in-progress'));
+      return;
+    }
+    this.droppedUploads.clearDone();
+    this.droppedUploads.stage(files);
+    this.droppedUploadPath = folder.path;
+    this.runDroppedUploads();
+  }
+
+  /** Uploads what is pending in the dropped files' queue: all of them, or what failed last time. */
+  runDroppedUploads(): void {
+    const path = this.droppedUploadPath;
+    const files = this.droppedUploads.pending();
+    if (!path || files.length === 0 || this.droppedUploads.busy()) return;
+    this.droppedUploads.start();
+    this.importService
+      .importFiles(path, files, {
+        onProgress: (progress) => this.droppedUploads.progress(progress),
+      })
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (docs) => {
+          this.droppedUploads.complete(docs);
+          this.toast.show(
+            this.translate.instant(
+              docs.length === 1
+                ? 'common.count.created-file-one'
+                : 'common.count.created-file-many',
+              { count: docs.length },
+            ),
+          );
+          this.afterDroppedUpload(path);
+        },
+        error: (err: unknown) => {
+          this.droppedUploads.fail(err);
+          this.toast.error(
+            this.translate.instant(
+              isPermissionDeniedError(err) ? PERMISSION_DENIED_KEY : 'browse.message.upload-failed',
+            ),
+          );
+          if (this.droppedUploads.done().length > 0) this.afterDroppedUpload(path);
+        },
+      });
+  }
+
+  private afterDroppedUpload(path: string): void {
+    this.browseContext.requestTreeRefresh();
+    if (nuxeoPathsEqualFlexible(path, this.currentDoc()?.path ?? '')) this.loadContent();
   }
 
   // ── Row actions ──

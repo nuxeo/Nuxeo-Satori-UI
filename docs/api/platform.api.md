@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-54 exported symbol(s).
+60 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -414,6 +414,21 @@ class NxsDriveDialogComponent {
 }
 interface NxsDriveDialogData {
     readonly folderPath?: string;
+    }
+}
+class NxsDropzoneComponent {
+    readonly label: _angular_core.InputSignal<string>;
+    readonly buttonLabel: _angular_core.InputSignal<string>;
+    readonly multiple: _angular_core.InputSignalWithTransform<boolean, unknown>;
+    readonly accept: _angular_core.InputSignal<string>;
+    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
+    readonly files: _angular_core.OutputEmitterRef<readonly File[]>;
+    protected readonly drop: NxsFileDropTracker;
+    protected choose(): void;
+    protected onPicked(event: Event): void;
+    protected onDrop(event: DragEvent): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDropzoneComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDropzoneComponent, "nxs-dropzone", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "buttonLabel": { "alias": "buttonLabel"; "required": false; "isSignal": true; }; "multiple": { "alias": "multiple"; "required": false; "isSignal": true; }; "accept": { "alias": "accept"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "files": "files"; }, never, never, true, never>;
     }
 }
 class NxsEmptyStateComponent {
@@ -698,6 +713,52 @@ class NxsToastService {
     static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
     }
 }
+interface NxsUploadItem {
+    readonly id: string;
+    readonly file: File;
+    readonly state: NxsUploadState;
+    readonly percent: number;
+    readonly error: NxsErrorStatus | null;
+    readonly document: NuxeoDocument | null;
+    }
+}
+interface NxsUploadProgress {
+    readonly percent: number;
+    readonly fileIndex?: number;
+    readonly fileCount?: number;
+    }
+}
+class NxsUploadQueue {
+    readonly items: _angular_core.Signal<readonly NxsUploadItem[]>;
+    readonly busy: _angular_core.Signal<boolean>;
+    readonly done: _angular_core.Signal<NxsUploadItem[]>;
+    readonly failed: _angular_core.Signal<NxsUploadItem[]>;
+    stage(files: readonly File[]): void;
+    pending(): File[];
+    start(): void;
+    progress(progress: NxsUploadProgress): void;
+    complete(documents: readonly NuxeoDocument[]): void;
+    fail(error: unknown): void;
+    remove(id: string): void;
+    clearDone(): void;
+    clear(): void;
+    }
+}
+class NxsUploadQueueComponent {
+    readonly items: _angular_core.InputSignal<readonly NxsUploadItem[]>;
+    readonly label: _angular_core.InputSignal<string>;
+    readonly remove: _angular_core.OutputEmitterRef<string>;
+    readonly retry: _angular_core.OutputEmitterRef<string>;
+    protected readonly doneCount: _angular_core.Signal<number>;
+    protected readonly failedCount: _angular_core.Signal<number>;
+    protected readonly started: _angular_core.Signal<boolean>;
+    protected size(bytes: number): string;
+    protected removable(item: NxsUploadItem): boolean;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUploadQueueComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUploadQueueComponent, "nxs-upload-queue", never, { "items": { "alias": "items"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; }, { "remove": "remove"; "retry": "retry"; }, never, never, true, never>;
+    }
+}
+type NxsUploadState = 'done' | 'failed' | 'staged' | 'uploading' | 'waiting';
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsToggleFavorite(documents: Pick<DocumentDetailService, 'addToFavorites' | 'removeFromFavorites'>, documentId: string, favorite: boolean): Observable<boolean>;
 function provideNxsComponents(): EnvironmentProviders;

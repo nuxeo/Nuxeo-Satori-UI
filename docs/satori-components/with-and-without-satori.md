@@ -373,6 +373,32 @@ The same dialog, title field and buttons in both; the theme sets the type, the f
 
 The same location trail, folder list and buttons in both; the theme sets the type, the colours and the buttons' style. It only chooses a folder; the page that opened it copies or moves.
 
+### Dropzone
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsDropzoneComponent`           |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `upload-dropzone--several-files` |
+
+![Dropzone: without Satori on the left, with Satori on the right](dropzone-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same dashed area, text and button in both; the theme sets the type, the outline and the button's style. Files dragged over it light it up in the theme's primary container colour.
+
+### Upload queue
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsUploadQueueComponent`        |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `upload-upload-queue--uploading` |
+
+![Upload queue: without Satori on the left, with Satori on the right](upload-queue-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+An upload in progress: one file uploaded, one on its way with its own progress bar, one waiting. The same list in both; the theme sets the type, the icons' colours and the progress bar's colour.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -448,6 +474,8 @@ The components in the library today:
 | Document tree      | —                                                                                                                       | Same component; theme only   |
 | Rename dialog      | —                                                                                                                       | Same component; theme only   |
 | Folder picker      | —                                                                                                                       | Same component; theme only   |
+| Dropzone           | —                                                                                                                       | Same component; theme only   |
+| Upload queue       | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

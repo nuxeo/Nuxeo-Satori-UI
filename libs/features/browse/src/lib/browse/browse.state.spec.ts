@@ -15,6 +15,7 @@ import {
   CURRENT_USERNAME,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   PERMISSION_DENIED_KEY,
   SelectionService,
   TagService,
@@ -137,6 +138,7 @@ describe('BrowseComponent — listing state', () => {
         provideZonelessChangeDetection(),
         provideRouter([{ path: '**', children: [] }], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: detail },
         {
           provide: DirectoryService,

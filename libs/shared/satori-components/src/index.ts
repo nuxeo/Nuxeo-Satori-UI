@@ -15,6 +15,7 @@ export {
 } from './lib/document-list/document-list.component';
 export { NxsDocumentTreeComponent } from './lib/document-tree/document-tree.component';
 export { NxsDomainHintComponent } from './lib/domain-hint/domain-hint.component';
+export { NxsDropzoneComponent } from './lib/dropzone/dropzone.component';
 export {
   NxsDriveDialogComponent,
   type NxsDriveDialogData,
@@ -58,6 +59,13 @@ export {
 export { NxsAvatarComponent } from './lib/avatar/avatar.component';
 export { NxsBreadcrumbsComponent } from './lib/breadcrumbs/breadcrumbs.component';
 export { NxsTagComponent } from './lib/tag/tag.component';
+export {
+  NxsUploadQueue,
+  type NxsUploadItem,
+  type NxsUploadProgress,
+  type NxsUploadState,
+} from './lib/upload-queue/upload-queue';
+export { NxsUploadQueueComponent } from './lib/upload-queue/upload-queue.component';
 export { NxsRichTooltipComponent } from './lib/rich-tooltip/rich-tooltip.component';
 export {
   NXS_PRIMITIVE_IDS,

@@ -265,6 +265,11 @@
                   (open)="onRowClick($event)"
                   (rowAction)="onRowAction($event)"
                   (retry)="loadContent()"
+                  [dropEnabled]="canCreateContentHere()"
+                  [dropLabel]="
+                    'browse.browse.drop-to-upload' | translate: { name: currentDoc()?.title ?? '' }
+                  "
+                  (filesDropped)="uploadDropped($event)"
                 />
               </div>
             } @else if (loading()) {
@@ -348,6 +353,32 @@
                 [hasNextPage]="hasNextPage()"
                 (pageChange)="goToPage($event)"
               />
+            }
+            @if (droppedUploads.items().length > 0) {
+              <section
+                class="browse-uploads"
+                [attr.aria-label]="'browse.browse.uploads' | translate"
+              >
+                <div class="browse-uploads__header">
+                  <span class="browse-uploads__title">{{
+                    'browse.browse.uploads' | translate
+                  }}</span>
+                  <button
+                    mat-button
+                    type="button"
+                    [disabled]="droppedUploads.busy()"
+                    (click)="droppedUploads.clear()"
+                  >
+                    {{ 'browse.browse.clear-uploads' | translate }}
+                  </button>
+                </div>
+                <nxs-upload-queue
+                  [items]="droppedUploads.items()"
+                  [label]="'browse.browse.uploads' | translate"
+                  (remove)="droppedUploads.remove($event)"
+                  (retry)="runDroppedUploads()"
+                />
+              </section>
             }
           </mat-tab>
 

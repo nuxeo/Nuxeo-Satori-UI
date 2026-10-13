@@ -430,6 +430,21 @@ sat-breadcrumbs {
   min-height: 0;
 }
 
+.browse-uploads {
+  margin-top: 12px;
+}
+
+.browse-uploads__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.browse-uploads__title {
+  font: var(--mat-sys-title-small);
+}
+
 .browse-table-wrapper {
   flex: 1;
   overflow: auto;
