@@ -3910,10 +3910,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   loadComments(): void {
     const requestedFor = this.docUid;
     if (!requestedFor) return;
+    const generation = this.documentLoadGeneration;
     this.commentsLoading.set(true);
     this.detailService.getAllComments(requestedFor).subscribe({
       next: (res) => {
-        if (requestedFor !== this.docUid) return;
+        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
         const all = (res.entries ?? []).map((e) => ({
           id: e.uid,
           parentId: (e.properties['comment:parentId'] as string) ?? this.docUid,
@@ -3942,7 +3943,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
         this.commentsLoaded = true;
       },
       error: () => {
-        if (requestedFor === this.docUid) this.commentsLoading.set(false);
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.commentsLoading.set(false);
+        }
       },
     });
   }
@@ -4209,18 +4212,21 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   loadVersions(): void {
     const requestedFor = this.docUid;
     if (!requestedFor) return;
+    const generation = this.documentLoadGeneration;
     this.versionsLoading.set(true);
     this.detailService.getVersions(this.liveDocumentUid()).subscribe({
       next: (res) => {
         // A list that arrives after the route moved on belongs to the previous document; marking
         // it loaded would skip the next document's own fetch.
-        if (requestedFor !== this.docUid) return;
+        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.versions.set(res.entries ?? []);
         this.versionsLoading.set(false);
         this.versionsLoaded = true;
       },
       error: () => {
-        if (requestedFor === this.docUid) this.versionsLoading.set(false);
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.versionsLoading.set(false);
+        }
       },
     });
   }
