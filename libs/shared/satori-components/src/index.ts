@@ -7,6 +7,12 @@ export {
   type NxsPickableColumn,
 } from './lib/column-picker/column-picker.component';
 export { NxsDocTypeIconComponent } from './lib/doc-type-icon/doc-type-icon.component';
+export {
+  NxsDocumentListComponent,
+  type NxsDocumentListColumn,
+  type NxsDocumentListRowAction,
+  type NxsDocumentListSort,
+} from './lib/document-list/document-list.component';
 export { NxsDomainHintComponent } from './lib/domain-hint/domain-hint.component';
 export {
   NxsDriveDialogComponent,
@@ -23,6 +29,7 @@ export {
 export { NxsFolderHeaderComponent } from './lib/folder-header/folder-header.component';
 export type { NxsHeadingLevel } from './lib/heading-level';
 export { NxsIconComponent } from './lib/icon/icon.component';
+export { NxsPagerComponent } from './lib/pager/pager.component';
 export {
   NXS_PERMISSIONS_PANEL_ID,
   NxsPermissionsPanelComponent,

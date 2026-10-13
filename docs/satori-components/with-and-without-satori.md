@@ -306,6 +306,34 @@ The folder header's "More actions" button with its menu open, opened with Enter 
 
 The page gives the menu its entries and runs the one chosen. An entry that is not allowed is shown disabled; one hidden by the configuration is not listed, and with none left, no button renders.
 
+### Pager
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsPagerComponent`              |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `tables-pager--uncounted-folder` |
+
+![Pager: without Satori on the left, with Satori on the right](pager-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The same range and Previous and Next buttons in both; the theme sets the type and the buttons' style. It shows "of N" only when Nuxeo counted the list, which it does only when everything fits on one page, so a folder's second page reads "51–100".
+
+### Document list
+
+| Field           | Value                                   |
+| --------------- | --------------------------------------- |
+| Component       | `NxsDocumentListComponent`              |
+| Registered ID   | —                                       |
+| With Satori     | Same component; theme only              |
+| Storybook story | `tables-document-list--folder-contents` |
+
+![Document list: without Satori on the left, with Satori on the right](document-list-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A folder's first page: the same table, sort headers, checkboxes and pager in both. The theme sets the type, the colours and the header's surface. The type tag and the contributor's avatar in each row render whatever is registered under `nxs.primitives.tag` and `nxs.primitives.avatar`, so with Satori registered they are Satori's own tag and avatar, and without it the built-in ones.
+
+The list itself has no Satori counterpart today; Satori's row-state layer, when it arrives, is meant to sit on this same Material table.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -377,6 +405,8 @@ The components in the library today:
 | Nuxeo Drive dialog | —                                                                                                                       | Same component; theme only   |
 | Favorite toggle    | —                                                                                                                       | Same component; theme only   |
 | Action menu        | —                                                                                                                       | Same component; theme only   |
+| Pager              | —                                                                                                                       | Same component; theme only   |
+| Document list      | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

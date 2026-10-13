@@ -1964,6 +1964,21 @@
       "reset": "Reset",
       "title": "Column Settings"
     },
+    "document-list": {
+      "actions": "Actions",
+      "drop": "Drop files to upload them here",
+      "empty": "Nothing here yet",
+      "keyboard-hint": "Arrow keys move between documents. Space selects, Shift extends the selection, Enter opens.",
+      "keyboard-hint-no-selection": "Arrow keys move between documents. Enter opens.",
+      "loading": "Loading documents",
+      "row-actions": "Actions for {{ name }}",
+      "select": "Select {{ name }}",
+      "select-page": "Select all on this page",
+      "sort-by": "Sort by {{ column }}",
+      "sort-cleared": "Sort cleared, showing the default order",
+      "sorted-ascending": "Sorted by {{ column }}, ascending",
+      "sorted-descending": "Sorted by {{ column }}, descending"
+    },
     "drive-dialog": {
       "checking": "Checking Nuxeo Drive...",
       "close": "Close",
@@ -1995,6 +2010,14 @@
       "add": "Add to favorites",
       "label": "Favorite",
       "remove": "Remove from favorites"
+    },
+    "pager": {
+      "label": "Pages",
+      "next": "Next page",
+      "past-end": "No more items",
+      "previous": "Previous page",
+      "range": "{{ first }}–{{ last }}",
+      "range-of": "{{ first }}–{{ last }} of {{ total }}"
     },
     "permissions-panel": {
       "add": "Add",
