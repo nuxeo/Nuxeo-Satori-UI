@@ -64,6 +64,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo-satori/platform/ui';
@@ -163,6 +164,7 @@ const DIALOG_SIZE = {
   selector: 'lib-create-import-dialog',
   standalone: true,
   imports: [
+    DateMaskPipe,
     TranslatePipe,
     MatDialogModule,
     MatButtonModule,

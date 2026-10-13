@@ -174,6 +174,7 @@ import {
   type StoryboardItem,
   type VideoInfo,
   type VideoSource,
+  DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
   MatTabListKeydownDirective,
@@ -288,6 +289,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   selector: 'lib-document-detail',
   standalone: true,
   imports: [
+    DateMaskPipe,
     CdkAriaLive,
     DescriptorLabelPipe,
     TranslatePipe,

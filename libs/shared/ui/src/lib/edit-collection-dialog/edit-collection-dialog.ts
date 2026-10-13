@@ -32,6 +32,7 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
+import { DateMaskPipe } from '../date-adapter/date-mask.pipe';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
 export interface EditCollectionDialogData {
@@ -42,6 +43,7 @@ export interface EditCollectionDialogData {
   selector: 'lib-edit-collection-dialog',
   standalone: true,
   imports: [
+    DateMaskPipe,
     TranslatePipe,
     FormsModule,
     MatDialogModule,

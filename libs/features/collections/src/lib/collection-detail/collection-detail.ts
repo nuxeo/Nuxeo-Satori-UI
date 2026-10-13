@@ -67,6 +67,7 @@ import {
   ConfirmDialogData,
   EditCollectionDialogComponent,
   EditCollectionDialogData,
+  DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo-satori/platform/ui';
@@ -87,6 +88,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
   standalone: true,
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
+    DateMaskPipe,
     TranslatePipe,
     DatePipe,
     FormsModule,
