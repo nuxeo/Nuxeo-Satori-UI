@@ -1,7 +1,8 @@
 /**
  * NXSAT-535 / IBM 2589851771 — document detail header "More actions" keyboard focus indicator.
  * Source-level IBM `style_focus_visible` contract (production template + global toolbar ring).
- * Runtime geometry: `apps/nuxeo-ui/.../more-actions-focus-ring.spec.ts`.
+ * Computed outline geometry: `apps/nuxeo-ui/.../more-actions-focus-ring.spec.ts`.
+ * Live-route focus visibility: `a11y/specs/journey.a11y.spec.ts` (a11y-scout `focusChecks`).
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';

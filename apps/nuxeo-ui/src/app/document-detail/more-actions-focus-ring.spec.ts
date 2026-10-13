@@ -1,11 +1,16 @@
 /**
- * NXSAT-535 / IBM 2589851771 — document-detail header "More actions" menu trigger must show a
- * keyboard focus indicator (WCAG 2.1 SC 2.4.7). Host markup mirrors production
- * `document-detail.html` (see `document-detail-more-actions-focus-ring.spec.ts` and
- * `document-detail-slots.spec.ts` on the rendered component).
+ * NXSAT-535 / IBM 2589851771 — document-detail header "More actions" menu trigger keyboard focus
+ * styling contract. Material icon buttons suppress the default ring; the overflow trigger is a
+ * header toolbar `mat-icon-button` styled via `document-detail-header-toolbar-focus.scss` (same
+ * path as prod). Host markup mirrors production `document-detail.html` (see
+ * `document-detail-more-actions-focus-ring.spec.ts` and `document-detail-slots.spec.ts`).
  *
- * Karma loads `apps/nuxeo-ui/src/styles.scss` (see `angular.json`), which `@use`s
- * `document-detail-header-toolbar-focus.scss` — the same path production uses.
+ * Karma loads `apps/nuxeo-ui/src/styles.scss` (see `angular.json`), which `@use`s the shared
+ * header toolbar focus sheet — the same path production uses.
+ *
+ * What these tests do NOT cover: focus visibility on a live document-detail route. That verdict
+ * belongs to a11y-scout (`docs/accessibility.md` §28–33); this Karma suite only asserts SCSS
+ * wiring and computed outline geometry on a synthetic host.
  */
 import { CdkAriaLive } from '@angular/cdk/a11y';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
@@ -26,7 +31,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 })
 class MoreActionsFocusHostComponent {}
 
-describe('Document detail More actions — keyboard focus indicator (NXSAT-535 / IBM 2589851771)', () => {
+describe('Document detail More actions — focus ring SCSS contract (NXSAT-535 / IBM 2589851771)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [MoreActionsFocusHostComponent],

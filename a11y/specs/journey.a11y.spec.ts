@@ -682,19 +682,21 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
  * the journey reached the intended DOM state: control present, tooltip visible, tooltip text
  * matches the control's accessible name (precondition, not axe).
  */
-const DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION = '[data-action-id="app.toolbar.addToCollection"]';
-
 /**
- * NXENG-808 — keyboard focus on a header toolbar icon button before the journey scan.
+ * NXENG-808 / NXSAT-535 — keyboard focus on the header **More actions** overflow trigger before
+ * the journey scan.
  *
  * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
- * (`docs/accessibility.md`); this only proves the scan runs with Add to collection focused.
+ * (`docs/accessibility.md`); this only proves the scan runs with that control focused.
  */
-async function enterDocumentDetailHeaderToolbarIconFocusState(page: Page): Promise<void> {
-  const addToCollection = page.locator(DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION).first();
+async function enterDocumentDetailHeaderMoreActionsFocusState(page: Page): Promise<void> {
+  const moreActions = page
+    .locator('.detail-header .header-actions button.mat-mdc-icon-button')
+    .filter({ has: page.locator('mat-icon[aria-hidden="true"]', { hasText: 'more_vert' }) })
+    .first();
   await expect(
-    addToCollection,
-    'Add to collection must render on a non-trashed document detail header',
+    moreActions,
+    'More actions overflow trigger must render on a non-trashed document detail header',
   ).toBeVisible();
 
   const back = page
@@ -705,15 +707,24 @@ async function enterDocumentDetailHeaderToolbarIconFocusState(page: Page): Promi
 
   const maxSteps = 120;
   for (let step = 0; step <= maxSteps; step++) {
-    const onTarget = await page.evaluate((sel) => {
-      const target = document.querySelector(sel);
-      return target !== null && document.activeElement === target;
-    }, DOCUMENT_DETAIL_TOOLBAR_ADD_TO_COLLECTION);
+    const onTarget = await page.evaluate(() => {
+      const buttons = document.querySelectorAll(
+        '.detail-header .header-actions button.mat-mdc-icon-button',
+      );
+      for (const target of buttons) {
+        const icon = target.querySelector('mat-icon[aria-hidden="true"]');
+        if (icon?.textContent?.trim() !== 'more_vert') {
+          continue;
+        }
+        return document.activeElement === target;
+      }
+      return false;
+    });
     if (onTarget) {
       return;
     }
     if (step === maxSteps) {
-      throw new Error(`Tab did not reach Add to collection within ${maxSteps} steps`);
+      throw new Error(`Tab did not reach More actions within ${maxSteps} steps`);
     }
     await page.keyboard.press('Tab');
   }
@@ -761,7 +772,7 @@ journeyTest('document-detail', async ({ signedIn: page, a11y }) => {
   await waitForScreenSettled(page, 'lib-document-detail', true);
   await expectSurfaceUsable(page, 'lib-document-detail', 'document detail');
   await enterDocumentDetailReplaceMainFileTooltipState(page);
-  await enterDocumentDetailHeaderToolbarIconFocusState(page);
+  await enterDocumentDetailHeaderMoreActionsFocusState(page);
 
   await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
   await emitScreenReport(a11y, journeyReportName('document-detail'));
