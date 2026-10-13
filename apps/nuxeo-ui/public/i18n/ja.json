@@ -1520,7 +1520,6 @@
     "version-latest-entry": "最新バージョン",
     "version-modified-by": "{{ who }} が {{ when }} に変更",
     "version-restore": "{{ version }} を復元",
-    "version-restore-confirm-message": "バージョン {{ version }} を復元すると、前回のバージョン以降の変更を含め、文書の現在の内容が置き換えられます。",
     "version-restore-confirm-title": "よろしいですか?",
     "version-viewing": "バージョン {{ version }} を表示しています。",
     "visual-editor": "ビジュアルエディター",

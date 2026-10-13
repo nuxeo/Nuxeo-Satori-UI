@@ -1295,6 +1295,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.historyLoaded = false;
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
+    // Not just the `publishTabLoaded` flag above: `loadPublishingData()` skips its own fetch
+    // while this array is non-empty, so the previous document's entries would both show in the
+    // side panel's count and keep Unpublish pointing at its proxies — indefinitely if the new
+    // document's count request then failed.
+    this.publishedDocs.set([]);
+    this.publishLoading.set(false);
   }
 
   generateSummary(): void {
@@ -4286,7 +4292,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .open(ConfirmDialogComponent, {
         data: {
           title: this.translate.instant('document-detail.version-restore-confirm-title'),
-          message: this.translate.instant('document-detail.version-restore-confirm-message', {
+          message: this.translate.instant('document-detail.version-restore-replaces-content', {
             version: label,
           }),
           confirmLabel: this.translate.instant('document-detail.version-restore', {

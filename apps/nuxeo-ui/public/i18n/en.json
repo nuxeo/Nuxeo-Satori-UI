@@ -1520,8 +1520,8 @@
     "version-latest-entry": "Latest version",
     "version-modified-by": "Modified {{ when }} by {{ who }}",
     "version-restore": "Restore {{ version }}",
-    "version-restore-confirm-message": "Restoring version {{ version }} replaces the document's current content, including any changes made since the last version.",
     "version-restore-confirm-title": "Are you sure?",
+    "version-restore-replaces-content": "Restoring version {{ version }} replaces the document's current content, including any changes made after version {{ version }}.",
     "version-viewing": "You're viewing the {{ version }} version.",
     "visual-editor": "Visual editor",
     "workflow-started-on-document": "You started a {{ workflow }} workflow on this document."

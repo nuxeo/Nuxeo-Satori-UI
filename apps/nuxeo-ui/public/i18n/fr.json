@@ -1520,7 +1520,6 @@
     "version-latest-entry": "Dernière version",
     "version-modified-by": "Modifié {{ when }} par {{ who }}",
     "version-restore": "Restaurer {{ version }}",
-    "version-restore-confirm-message": "La restauration de la version {{ version }} remplace le contenu actuel du document, y compris les modifications faites depuis la dernière version.",
     "version-restore-confirm-title": "Êtes-vous sûr ?",
     "version-viewing": "Vous consultez la version {{ version }}.",
     "visual-editor": "Editeur visuel",
