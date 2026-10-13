@@ -1597,304 +1597,55 @@
           }
           @case ('comments') {
             <div class="comments-panel">
-              @if (commentsLoading()) {
-                <div class="panel-loading">
-                  <nxs-spinner
-                    diameter="28"
-                    [label]="'document-detail.document-detail.loading' | translate"
-                  />
-                </div>
-              } @else {
-                <!-- AI Sentiment Analysis -->
-                @if (featureFlags.aiEnabled() && comments().length > 0) {
-                  <div class="sentiment-toolbar">
-                    <button
-                      class="ai-sentiment-btn"
-                      (click)="analyzeCommentSentiment()"
-                      [disabled]="aiSentimentLoading()"
-                    >
-                      @if (aiSentimentLoading()) {
-                        <mat-spinner
-                          diameter="16"
-                          [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                        />
-                      } @else {
-                        <mat-icon>psychology</mat-icon>
-                      }
-                      {{ 'document-detail.document-detail.analyze-sentiment' | translate }}
-                    </button>
-                  </div>
-
-                  @if (aiThreadSummary()) {
-                    <div class="sentiment-summary-panel">
-                      <div class="sentiment-summary-header">
-                        <mat-icon>forum</mat-icon>
-                        <span>{{
-                          'document-detail.document-detail.thread-summary' | translate
-                        }}</span>
-                      </div>
-                      <p class="sentiment-summary-text">{{ aiThreadSummary() }}</p>
-                    </div>
-                  }
-                }
-
-                <!-- Existing comments -->
-                @for (comment of comments(); track comment.id) {
-                  <div class="comment-card">
-                    <div class="comment-header">
-                      <sat-avatar
-                        [initials]="comment.author"
-                        [category]="avatarColor(comment.author)"
-                        size="28"
-                        [borderless]="true"
-                        aria-hidden="true"
+              @if (featureFlags.aiEnabled() && comments().length > 0) {
+                <div class="sentiment-toolbar">
+                  <button
+                    class="ai-sentiment-btn"
+                    (click)="analyzeCommentSentiment()"
+                    [disabled]="aiSentimentLoading()"
+                  >
+                    @if (aiSentimentLoading()) {
+                      <mat-spinner
+                        diameter="16"
+                        [attr.aria-label]="'document-detail.document-detail.loading' | translate"
                       />
-                      <span class="comment-author">{{ comment.author }}</span>
-                      <span class="comment-time">{{ relativeTime(comment.creationDate) }}</span>
-                      @if (isCommentEdited(comment)) {
-                        <span class="comment-edited">(edited)</span>
-                      }
-                      @if (aiSentimentMap()[comment.id]; as sent) {
+                    } @else {
+                      <mat-icon>psychology</mat-icon>
+                    }
+                    {{ 'document-detail.document-detail.analyze-sentiment' | translate }}
+                  </button>
+                </div>
+
+                @if (aiThreadSummary()) {
+                  <div class="sentiment-summary-panel">
+                    <div class="sentiment-summary-header">
+                      <mat-icon>forum</mat-icon>
+                      <span>{{
+                        'document-detail.document-detail.thread-summary' | translate
+                      }}</span>
+                    </div>
+                    <p class="sentiment-summary-text">{{ aiThreadSummary() }}</p>
+                  </div>
+                }
+              }
+              @if (doc(); as commented) {
+                <nxs-comments [documentUid]="commented.uid" (threadChange)="comments.set($event)">
+                  <ng-template nxsCommentExtra let-comment>
+                    @if (aiSentimentMap()[comment.id]; as sent) {
+                      <div class="comment-sentiment">
                         <span class="sentiment-badge sentiment-{{ sent.sentiment }}">
                           {{ sent.sentiment }}
                         </span>
-                      }
-                      @if (canWriteDoc()) {
-                        <button
-                          mat-icon-button
-                          [matMenuTriggerFor]="commentMenu"
-                          class="comment-menu-btn"
-                          [attr.aria-label]="
-                            'document-detail.document-detail.comment-actions' | translate
-                          "
-                        >
-                          <mat-icon>more_vert</mat-icon>
-                        </button>
-                        <mat-menu #commentMenu="matMenu">
-                          <button mat-menu-item (click)="startEditComment(comment)">
-                            <mat-icon>edit</mat-icon>
-                            {{ 'document-detail.document-detail.edit' | translate }}
-                          </button>
-                          <button mat-menu-item (click)="deleteComment(comment)">
-                            <mat-icon>delete</mat-icon>
-                            {{ 'document-detail.document-detail.delete' | translate }}
-                          </button>
-                        </mat-menu>
-                      }
-                    </div>
-                    @if (editingCommentId() === comment.id) {
-                      <div class="comment-edit-row">
-                        <input
-                          class="comment-edit-input"
-                          [value]="editingCommentText()"
-                          (input)="editingCommentText.set($any($event.target).value)"
-                          (keydown.enter)="saveEditComment()"
-                        />
-                        <button
-                          mat-icon-button
-                          (click)="saveEditComment()"
-                          [disabled]="commentSaving()"
-                          [matTooltip]="'document-detail.document-detail.save' | translate"
-                          [attr.aria-label]="'document-detail.document-detail.save' | translate"
-                        >
-                          <mat-icon>check</mat-icon>
-                        </button>
-                        <button
-                          mat-icon-button
-                          (click)="cancelEditComment()"
-                          [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                          [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                        >
-                          <mat-icon>close</mat-icon>
-                        </button>
-                      </div>
-                    } @else {
-                      <p class="comment-text">{{ comment.text }}</p>
-                      @if (aiSentimentMap()[comment.id]; as sentItem) {
-                        @if (sentItem.summary; as sentSummary) {
+                        @if (sent.summary; as sentSummary) {
                           <p class="sentiment-inline-summary">
                             <mat-icon class="sentiment-inline-icon">auto_awesome</mat-icon>
                             {{ sentSummary }}
                           </p>
                         }
-                      }
-                    }
-
-                    @if (canWriteDoc()) {
-                      <div class="comment-footer">
-                        <button class="reply-toggle-btn" (click)="startReply(comment.id)">
-                          <mat-icon class="reply-icon">reply</mat-icon>
-                          {{ 'document-detail.document-detail.reply' | translate }}
-                        </button>
                       </div>
                     }
-
-                    @if (replyCount(comment.id) > 0) {
-                      <div class="reply-summary">
-                        {{ replyCount(comment.id) }}
-                        {{
-                          replyCount(comment.id) === 1
-                            ? ('document-detail.reply' | translate)
-                            : ('document-detail.replies' | translate)
-                        }}
-                        · Last reply
-                        {{ lastReplyTime(comment.id) }}
-                      </div>
-                      <div class="replies-section">
-                        @for (reply of repliesMap()[comment.id]; track reply.id) {
-                          <div class="reply-card">
-                            <div class="comment-header">
-                              <sat-avatar
-                                [initials]="reply.author"
-                                [category]="avatarColor(reply.author)"
-                                size="24"
-                                [borderless]="true"
-                                aria-hidden="true"
-                              />
-                              <span class="comment-author">{{ reply.author }}</span>
-                              <span class="comment-time">{{
-                                relativeTime(reply.creationDate)
-                              }}</span>
-                              @if (isCommentEdited(reply)) {
-                                <span class="comment-edited">(edited)</span>
-                              }
-                              @if (canWriteDoc()) {
-                                <button
-                                  mat-icon-button
-                                  [matMenuTriggerFor]="replyMenu"
-                                  class="comment-menu-btn"
-                                  [attr.aria-label]="
-                                    'document-detail.document-detail.reply-actions' | translate
-                                  "
-                                >
-                                  <mat-icon>more_vert</mat-icon>
-                                </button>
-                                <mat-menu #replyMenu="matMenu">
-                                  <button mat-menu-item (click)="startEditComment(reply)">
-                                    <mat-icon>edit</mat-icon>
-                                    {{ 'document-detail.document-detail.edit' | translate }}
-                                  </button>
-                                  <button mat-menu-item (click)="deleteComment(reply, comment.id)">
-                                    <mat-icon>delete</mat-icon>
-                                    {{ 'document-detail.document-detail.delete' | translate }}
-                                  </button>
-                                </mat-menu>
-                              }
-                            </div>
-                            @if (editingCommentId() === reply.id) {
-                              <div class="comment-edit-row">
-                                <input
-                                  class="comment-edit-input"
-                                  [value]="editingCommentText()"
-                                  (input)="editingCommentText.set($any($event.target).value)"
-                                  (keydown.enter)="saveEditComment()"
-                                />
-                                <button
-                                  mat-icon-button
-                                  (click)="saveEditComment()"
-                                  [disabled]="commentSaving()"
-                                  [matTooltip]="'document-detail.document-detail.save' | translate"
-                                  [attr.aria-label]="
-                                    'document-detail.document-detail.save' | translate
-                                  "
-                                >
-                                  <mat-icon>check</mat-icon>
-                                </button>
-                                <button
-                                  mat-icon-button
-                                  (click)="cancelEditComment()"
-                                  [matTooltip]="
-                                    'document-detail.document-detail.cancel' | translate
-                                  "
-                                  [attr.aria-label]="
-                                    'document-detail.document-detail.cancel' | translate
-                                  "
-                                >
-                                  <mat-icon>close</mat-icon>
-                                </button>
-                              </div>
-                            } @else {
-                              <p class="comment-text reply-text">{{ reply.text }}</p>
-                            }
-                          </div>
-                        }
-                      </div>
-                    }
-
-                    @if (canWriteDoc() && replyingToId() === comment.id) {
-                      <div class="reply-input-row">
-                        <input
-                          class="new-comment-input reply-input"
-                          [placeholder]="
-                            'document-detail.document-detail.write-a-reply-here' | translate
-                          "
-                          [value]="replyText()"
-                          (input)="replyText.set($any($event.target).value)"
-                          (keydown.enter)="submitReply(comment.id)"
-                        />
-                        @if (replyText().trim()) {
-                          <button
-                            mat-icon-button
-                            (click)="submitReply(comment.id)"
-                            [disabled]="commentSaving()"
-                            [matTooltip]="'document-detail.document-detail.submit' | translate"
-                            [attr.aria-label]="'document-detail.document-detail.submit' | translate"
-                          >
-                            <mat-icon>check</mat-icon>
-                          </button>
-                          <button
-                            mat-icon-button
-                            (click)="cancelReply()"
-                            [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                            [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                          >
-                            <mat-icon>close</mat-icon>
-                          </button>
-                        }
-                      </div>
-                    }
-                  </div>
-                }
-
-                @if (comments().length === 0) {
-                  <p class="section-empty">
-                    {{ 'document-detail.document-detail.no-comments-yet' | translate }}
-                  </p>
-                }
-
-                @if (canWriteDoc()) {
-                  <!-- New comment input -->
-                  <div class="new-comment-row">
-                    <input
-                      class="new-comment-input"
-                      [placeholder]="
-                        'document-detail.document-detail.write-a-comment-here' | translate
-                      "
-                      [value]="newCommentText()"
-                      (input)="newCommentText.set($any($event.target).value)"
-                      (keydown.enter)="submitComment()"
-                    />
-                    @if (newCommentText().trim()) {
-                      <button
-                        mat-icon-button
-                        (click)="submitComment()"
-                        [disabled]="commentSaving()"
-                        [matTooltip]="'document-detail.document-detail.submit' | translate"
-                        [attr.aria-label]="'document-detail.document-detail.submit' | translate"
-                      >
-                        <mat-icon>check</mat-icon>
-                      </button>
-                      <button
-                        mat-icon-button
-                        (click)="cancelNewComment()"
-                        [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                        [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                      >
-                        <mat-icon>close</mat-icon>
-                      </button>
-                    }
-                  </div>
-                }
+                  </ng-template>
+                </nxs-comments>
               }
             </div>
           }

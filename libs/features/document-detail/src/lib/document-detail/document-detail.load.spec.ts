@@ -1033,44 +1033,6 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
 
-  describe('comments', () => {
-    it('loads comments for the document', async () => {
-      // Shape matters: the component reads `res.entries`, so returning a bare array made
-      // `.map` throw as an unhandled error while the test still passed.
-      // Shape matters twice over: the component reads `res.entries`, and then reads
-      // `e.properties['comment:*']` off each entry. A bare array made `.map` throw, and an
-      // entry without `properties` made the property read throw — both as UNHANDLED errors
-      // while the test still reported green.
-      mockDetailService.getAllComments.mockReturnValue(
-        of({
-          entries: [
-            {
-              uid: 'c1',
-              properties: {
-                'comment:parentId': 'doc-1',
-                'comment:text': 'hello',
-                'comment:author': 'alice',
-                'comment:creationDate': '2026-08-24T10:00:00.000Z',
-              },
-            },
-          ],
-        }),
-      );
-      await build();
-
-      component.loadComments();
-
-      expect(mockDetailService.getAllComments).toHaveBeenCalledWith('doc-1');
-    });
-
-    it('survives a failed comment load', async () => {
-      mockDetailService.getAllComments.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      expect(() => component.loadComments()).not.toThrow();
-    });
-  });
-
   describe('permissions tab', () => {
     it('merges refreshed permissions into the document already on screen', async () => {
       await build();

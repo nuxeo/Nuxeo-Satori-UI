@@ -7,6 +7,11 @@ export {
   type NxsPickableColumn,
 } from './lib/column-picker/column-picker.component';
 export {
+  NxsCommentExtraDirective,
+  type NxsCommentContext,
+} from './lib/comments/comment-extra.directive';
+export { NxsCommentsComponent } from './lib/comments/comments.component';
+export {
   NxsDetailsPanelComponent,
   type NxsDetailsPanelTab,
 } from './lib/details-panel/details-panel.component';

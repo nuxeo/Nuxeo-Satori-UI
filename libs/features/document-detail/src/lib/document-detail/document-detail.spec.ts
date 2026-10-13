@@ -23,7 +23,6 @@ import {
   DocumentDetailService,
   NuxeoApiBase,
   PERMISSION_DENIED_KEY,
-  type NuxeoComment,
   type NuxeoDocument,
   TagService,
   TaskService,
@@ -501,84 +500,6 @@ describe('DocumentDetailComponent', () => {
       expect(toast.error).toHaveBeenCalledWith(
         TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
       );
-    });
-
-    it('submitComment is blocked for read-only users', () => {
-      component.doc.set(readOnlyDoc);
-      component.newCommentText.set('hello');
-
-      component.submitComment();
-
-      expect(toast.error).toHaveBeenCalledWith(
-        TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      );
-    });
-  });
-
-  describe('comment replies (NXSAT-184)', () => {
-    const writableDoc: NuxeoDocument = {
-      ...STUB_DOC,
-      contextParameters: { permissions: ['Read', 'Write'] },
-    };
-
-    const parentComment: NuxeoComment = {
-      id: 'comment-1',
-      parentId: 'doc-uid-1',
-      text: 'Parent comment',
-      author: 'tester',
-      creationDate: '2026-01-01T00:00:00Z',
-      modificationDate: '2026-01-01T00:00:00Z',
-    };
-
-    const reply: NuxeoComment = {
-      id: 'reply-1',
-      parentId: 'comment-1',
-      text: 'Original reply',
-      author: 'tester',
-      creationDate: '2026-01-01T01:00:00Z',
-      modificationDate: '2026-01-01T01:00:00Z',
-    };
-
-    beforeEach(() => {
-      component.doc.set(writableDoc);
-      component.comments.set([parentComment]);
-      component.repliesMap.set({ 'comment-1': [reply] });
-      vi.spyOn(component['dialog'], 'open').mockReturnValue({
-        afterClosed: () => of(true),
-      } as never);
-    });
-
-    it('saveEditComment updates a reply in repliesMap', async () => {
-      const updatedReply: NuxeoComment = {
-        ...reply,
-        text: 'Edited reply',
-        modificationDate: '2026-01-02T00:00:00Z',
-      };
-      mockDocumentDetailService.updateComment.mockReturnValue(of(updatedReply));
-      component.editingCommentId.set('reply-1');
-      component.editingCommentText.set('Edited reply');
-
-      component.saveEditComment();
-      await fixture.whenStable();
-
-      expect(mockDocumentDetailService.updateComment).toHaveBeenCalledWith(
-        'doc-uid-1',
-        'reply-1',
-        'Edited reply',
-      );
-      expect(component.repliesMap()['comment-1']).toEqual([updatedReply]);
-      expect(component.editingCommentId()).toBeNull();
-    });
-
-    it('deleteComment removes a reply from repliesMap', async () => {
-      mockDocumentDetailService.deleteComment.mockReturnValue(of(void 0));
-
-      component.deleteComment(reply, 'comment-1');
-      await fixture.whenStable();
-
-      expect(mockDocumentDetailService.deleteComment).toHaveBeenCalledWith('doc-uid-1', 'reply-1');
-      expect(component.repliesMap()['comment-1']).toEqual([]);
-      expect(toast.show).toHaveBeenCalledWith('Reply deleted');
     });
   });
 

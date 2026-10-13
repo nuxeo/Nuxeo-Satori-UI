@@ -180,6 +180,23 @@ const mockDirectoryService = {
 
 const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
 
+/** A raw comment document, as `getAllComments` returns them. */
+function commentEntry(
+  uid: string,
+  text: string,
+  parentId = 'doc-1',
+): { uid: string; properties: Record<string, unknown> } {
+  return {
+    uid,
+    properties: {
+      'comment:parentId': parentId,
+      'comment:text': text,
+      'comment:author': 'alice',
+      'comment:creationDate': '2026-08-24T10:00:00.000Z',
+    },
+  };
+}
+
 describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
   let fixture: ComponentFixture<DocumentDetailComponent>;
 
@@ -332,6 +349,63 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
 
       await render({}, doc({ facets: ['Commentable'] }));
       expect(viewLabels()).toEqual(['Properties', 'Comments', 'Activity']);
+    });
+
+    describe('comments', () => {
+      async function showComments(): Promise<HTMLElement | null> {
+        fixture.componentInstance.switchPanelSubTab('comments');
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        return fixture.nativeElement.querySelector('.properties-panel nxs-comments');
+      }
+
+      it('shows the open document’s thread and keeps it for the sentiment analysis', async () => {
+        mockDetailService.getAllComments.mockReturnValueOnce(
+          of({
+            entries: [
+              commentEntry('c1', 'top level'),
+              commentEntry('r1', 'a reply', 'c1'),
+              commentEntry('r2', 'another reply', 'c1'),
+            ],
+          }),
+        );
+        await render({}, doc({ facets: ['Commentable'] }));
+
+        const thread = await showComments();
+
+        expect(mockDetailService.getAllComments).toHaveBeenCalledWith('doc-1');
+        expect(thread?.textContent).toContain('top level');
+        expect(thread?.textContent).toContain('2 replies');
+        expect(fixture.componentInstance.comments().map((c) => c.id)).toEqual(['c1', 'r1', 'r2']);
+      });
+
+      it('lets a reader without Write comment, as Web UI does', async () => {
+        await render(
+          {},
+          doc({ facets: ['Commentable'], contextParameters: { permissions: ['Read'] } }),
+        );
+
+        const thread = await showComments();
+
+        expect(thread?.querySelector('textarea')).not.toBeNull();
+      });
+
+      it('shows a sentiment result under the comment it is about', async () => {
+        mockDetailService.getAllComments.mockReturnValueOnce(
+          of({ entries: [commentEntry('c1', 'great work')] }),
+        );
+        await render({}, doc({ facets: ['Commentable'] }));
+        fixture.componentInstance.aiSentimentMap.set({
+          c1: { id: 'c1', sentiment: 'positive', summary: 'Praise for the work' },
+        });
+
+        const thread = await showComments();
+
+        const sentiment = thread?.querySelector('.comment-sentiment');
+        expect(sentiment?.textContent).toContain('positive');
+        expect(sentiment?.textContent).toContain('Praise for the work');
+      });
     });
 
     it('lists the collections the document is in, leaving out Favorites (NXSAT-191)', async () => {

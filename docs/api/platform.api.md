@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-61 exported symbol(s).
+64 exported symbol(s).
 
 ```ts
 const NXS_FAVORITES_CHANGED_EVENT = "favorites-changed";
@@ -269,6 +269,68 @@ class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
     protected cancel(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsColumnPickerComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsColumnPickerComponent, "nxs-column-picker", never, { "columns": { "alias": "columns"; "required": true; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "defaults": { "alias": "defaults"; "required": false; "isSignal": true; }; }, { "apply": "apply"; "dismiss": "dismiss"; }, never, never, true, never>;
+    }
+}
+interface NxsCommentContext {
+    readonly $implicit: NuxeoComment;
+    }
+}
+class NxsCommentExtraDirective {
+    readonly template: TemplateRef<NxsCommentContext>;
+    static ngTemplateContextGuard(_directive: NxsCommentExtraDirective, _context: unknown): _context is NxsCommentContext;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsCommentExtraDirective, never>;
+    static ɵdir: _angular_core.ɵɵDirectiveDeclaration<NxsCommentExtraDirective, "ng-template[nxsCommentExtra]", never, {}, {}, never, never, true, never>;
+    }
+}
+class NxsCommentsComponent {
+    readonly documentUid: _angular_core.InputSignal<string>;
+    readonly readOnly: _angular_core.InputSignal<boolean>;
+    readonly pageSize: _angular_core.InputSignalWithTransform<number, unknown>;
+    readonly maxChars: _angular_core.InputSignalWithTransform<number, unknown>;
+    readonly threadChange: _angular_core.OutputEmitterRef<readonly NuxeoComment[]>;
+    protected readonly extra: _angular_core.Signal<NxsCommentExtraDirective | undefined>;
+    protected readonly id: string;
+    protected readonly loading: _angular_core.WritableSignal<boolean>;
+    protected readonly failed: _angular_core.WritableSignal<boolean>;
+    protected readonly saving: _angular_core.WritableSignal<boolean>;
+    protected readonly comments: _angular_core.WritableSignal<readonly NuxeoComment[]>;
+    protected readonly replies: _angular_core.WritableSignal<Readonly<Record<string, readonly NuxeoComment[]>>>;
+    protected readonly allShown: _angular_core.WritableSignal<boolean>;
+    protected readonly opened: _angular_core.WritableSignal<ReadonlySet<string>>;
+    protected readonly allRepliesShown: _angular_core.WritableSignal<ReadonlySet<string>>;
+    protected readonly fullText: _angular_core.WritableSignal<ReadonlySet<string>>;
+    protected readonly editing: _angular_core.WritableSignal<string | null>;
+    protected readonly editText: _angular_core.WritableSignal<string>;
+    protected readonly newText: _angular_core.WritableSignal<string>;
+    protected readonly replyTexts: _angular_core.WritableSignal<Readonly<Record<string, string>>>;
+    protected readonly shown: _angular_core.Signal<readonly NuxeoComment[]>;
+    protected readonly hiddenCount: _angular_core.Signal<number>;
+    constructor();
+    reload(): void;
+    protected repliesOf(id: string): readonly NuxeoComment[];
+    protected shownReplies(id: string): readonly NuxeoComment[];
+    protected lastReply(id: string): string;
+    protected canModify(comment: NuxeoComment): boolean;
+    protected initial(author: string): string;
+    protected color(author: string): ReturnType<typeof avatarColor>;
+    protected when(date: string | undefined): string;
+    protected edited(comment: NuxeoComment): boolean;
+    protected truncated(comment: NuxeoComment): boolean;
+    protected shortText(comment: NuxeoComment): string;
+    protected showFullText(comment: NuxeoComment): void;
+    protected showAllReplies(id: string): void;
+    protected textOf(event: Event): string;
+    protected setReplyText(id: string, value: string): void;
+    protected replyText(id: string): string;
+    protected openReplies(id: string, focusBox?: boolean): void;
+    protected submitComment(): void;
+    protected submitReply(parent: NuxeoComment): void;
+    protected choose(action: 'delete' | 'edit', comment: NuxeoComment, parent: NuxeoComment | null): void;
+    protected menuClosed(): void;
+    protected cancelEdit(): void;
+    protected saveEdit(comment: NuxeoComment, parent: NuxeoComment | null): void;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsCommentsComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsCommentsComponent, "nxs-comments", never, { "documentUid": { "alias": "documentUid"; "required": true; "isSignal": true; }; "readOnly": { "alias": "readOnly"; "required": false; "isSignal": true; }; "pageSize": { "alias": "pageSize"; "required": false; "isSignal": true; }; "maxChars": { "alias": "maxChars"; "required": false; "isSignal": true; }; }, { "threadChange": "threadChange"; }, ["extra"], never, true, never>;
     }
 }
 class NxsDetailsPanelComponent {

@@ -199,6 +199,8 @@ import {
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  NxsCommentExtraDirective,
+  NxsCommentsComponent,
   NxsDetailsPanelComponent,
   NxsDocumentToolbarComponent,
   NxsDriveDialogComponent,
@@ -305,6 +307,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   selector: 'lib-document-detail',
   standalone: true,
   imports: [
+    NxsCommentExtraDirective,
+    NxsCommentsComponent,
     NxsDetailsPanelComponent,
     NxsDocumentToolbarComponent,
     NxsErrorStateComponent,
@@ -661,17 +665,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** Autocomplete selection also fires matChipInputTokenEnd — skip the duplicate add. */
   private skipNextChipInput = false;
 
-  // Comments state
-  readonly comments = signal<NuxeoComment[]>([]);
-  readonly commentsLoading = signal(false);
-  readonly newCommentText = signal('');
-  readonly editingCommentId = signal<string | null>(null);
-  readonly editingCommentText = signal('');
-  readonly commentSaving = signal(false);
-  readonly repliesMap = signal<Record<string, NuxeoComment[]>>({});
-  readonly replyingToId = signal<string | null>(null);
-  readonly replyText = signal('');
-  private commentsLoaded = false;
+  /** The thread `nxs-comments` loaded, comments and replies, for the sentiment analysis. */
+  readonly comments = signal<readonly NuxeoComment[]>([]);
 
   // Panel activity state (recent activity for the side panel)
   readonly panelActivity = signal<AuditEntry[]>([]);
@@ -1170,8 +1165,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.arenderUrl.set(null);
     this.error.set(null);
     this.comments.set([]);
-    this.repliesMap.set({});
-    this.commentsLoaded = false;
     this.panelActivity.set([]);
     this.panelActivityLoaded = false;
     this.versions.set([]);
@@ -3738,219 +3731,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   switchPanelSubTab(tab: string): void {
     if (tab !== 'properties' && tab !== 'comments' && tab !== 'activity') return;
     this.panelSubTab.set(tab);
-    if (tab === 'comments' && !this.commentsLoaded) {
-      this.loadComments();
-    }
     if (tab === 'activity' && !this.panelActivityLoaded) {
       this.loadPanelActivity();
     }
-  }
-
-  // ── Comments ──
-
-  loadComments(): void {
-    if (!this.docUid) return;
-    this.commentsLoading.set(true);
-    this.detailService.getAllComments(this.docUid).subscribe({
-      next: (res) => {
-        const all = (res.entries ?? []).map((e) => ({
-          id: e.uid,
-          parentId: (e.properties['comment:parentId'] as string) ?? this.docUid,
-          text: (e.properties['comment:text'] as string) ?? '',
-          author: (e.properties['comment:author'] as string) ?? '',
-          creationDate:
-            (e.properties['comment:creationDate'] as string) ??
-            (e.properties['dc:created'] as string) ??
-            '',
-          modificationDate:
-            (e.properties['comment:modificationDate'] as string) ??
-            (e.properties['dc:modified'] as string) ??
-            '',
-        }));
-        const topLevel = all.filter((c) => c.parentId === this.docUid);
-        const replies: Record<string, NuxeoComment[]> = {};
-        for (const c of all) {
-          if (c.parentId !== this.docUid) {
-            if (!replies[c.parentId]) replies[c.parentId] = [];
-            replies[c.parentId].push(c);
-          }
-        }
-        this.comments.set(topLevel);
-        this.repliesMap.set(replies);
-        this.commentsLoading.set(false);
-        this.commentsLoaded = true;
-      },
-      error: () => this.commentsLoading.set(false),
-    });
-  }
-
-  submitComment(): void {
-    const text = this.newCommentText().trim();
-    if (!text || this.commentSaving() || !this.requireWritePermission()) return;
-    this.commentSaving.set(true);
-    this.detailService.createComment(this.docUid, text).subscribe({
-      next: (comment) => {
-        this.comments.update((list) => [comment, ...list]);
-        this.newCommentText.set('');
-        this.commentSaving.set(false);
-      },
-      error: () => {
-        this.commentSaving.set(false);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-add-comment'));
-      },
-    });
-  }
-
-  cancelNewComment(): void {
-    this.newCommentText.set('');
-  }
-
-  startEditComment(comment: NuxeoComment): void {
-    if (!this.requireWritePermission()) return;
-    this.editingCommentId.set(comment.id);
-    this.editingCommentText.set(comment.text);
-  }
-
-  cancelEditComment(): void {
-    this.editingCommentId.set(null);
-    this.editingCommentText.set('');
-  }
-
-  saveEditComment(): void {
-    const id = this.editingCommentId();
-    const text = this.editingCommentText().trim();
-    if (!id || !text || this.commentSaving() || !this.requireWritePermission()) return;
-    this.commentSaving.set(true);
-    this.detailService
-      .updateComment(this.docUid, id, text)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (updated) => {
-          if (this.comments().some((c) => c.id === id)) {
-            this.comments.update((list) => list.map((c) => (c.id === id ? updated : c)));
-          } else {
-            this.repliesMap.update((map) => {
-              const next = { ...map };
-              for (const parentId of Object.keys(next)) {
-                const replies = next[parentId];
-                if (replies.some((r) => r.id === id)) {
-                  next[parentId] = replies.map((r) => (r.id === id ? updated : r));
-                  break;
-                }
-              }
-              return next;
-            });
-          }
-          this.editingCommentId.set(null);
-          this.editingCommentText.set('');
-          this.commentSaving.set(false);
-        },
-        error: () => {
-          this.commentSaving.set(false);
-          this.toast.error(
-            this.translate.instant('document-detail.message.failed-to-update-comment'),
-          );
-        },
-      });
-  }
-
-  deleteComment(comment: NuxeoComment, parentCommentId?: string): void {
-    if (!this.requireWritePermission()) return;
-    const isReply = !!parentCommentId;
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: this.translate.instant(isReply ? 'confirm.delete-reply' : 'confirm.delete-comment'),
-        message: this.translate.instant(
-          isReply ? 'confirm.delete-reply-question' : 'confirm.delete-comment-question',
-        ),
-        confirmLabel: this.translate.instant('confirm.delete'),
-      } as ConfirmDialogData,
-    });
-
-    dialogRef
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((confirmed) => {
-        if (!confirmed) return;
-        this.detailService
-          .deleteComment(this.docUid, comment.id)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: () => {
-              if (parentCommentId) {
-                this.repliesMap.update((map) => ({
-                  ...map,
-                  [parentCommentId]: (map[parentCommentId] ?? []).filter(
-                    (r) => r.id !== comment.id,
-                  ),
-                }));
-                this.toast.show(this.translate.instant('document-detail.message.reply-deleted'));
-              } else {
-                this.comments.update((list) => list.filter((c) => c.id !== comment.id));
-                this.repliesMap.update((map) => {
-                  const { [comment.id]: _removed, ...rest } = map;
-                  return rest;
-                });
-                this.toast.show(this.translate.instant('document-detail.message.comment-deleted'));
-              }
-            },
-            error: () =>
-              this.toast.error(
-                this.translate.instant(
-                  isReply
-                    ? 'document-detail.message.failed-to-delete-reply'
-                    : 'document-detail.message.failed-to-delete-comment',
-                ),
-              ),
-          });
-      });
-  }
-
-  startReply(commentId: string): void {
-    if (!this.requireWritePermission()) return;
-    this.replyingToId.set(commentId);
-    this.replyText.set('');
-  }
-
-  cancelReply(): void {
-    this.replyingToId.set(null);
-    this.replyText.set('');
-  }
-
-  submitReply(commentId: string): void {
-    const text = this.replyText().trim();
-    if (!text || this.commentSaving() || !this.requireWritePermission()) return;
-    this.commentSaving.set(true);
-    this.detailService.createReply(this.docUid, commentId, text).subscribe({
-      next: (reply) => {
-        const correctedReply = { ...reply, parentId: commentId };
-        this.repliesMap.update((m) => ({
-          ...m,
-          [commentId]: [...(m[commentId] ?? []), correctedReply],
-        }));
-        this.replyingToId.set(null);
-        this.replyText.set('');
-        this.commentSaving.set(false);
-      },
-      error: () => {
-        this.commentSaving.set(false);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-add-reply'));
-      },
-    });
-  }
-
-  replyCount(commentId: string): number {
-    return (this.repliesMap()[commentId] ?? []).length;
-  }
-
-  lastReplyTime(commentId: string): string {
-    const replies = this.repliesMap()[commentId];
-    if (!replies?.length) return '';
-    return this.relativeTime(replies[replies.length - 1].creationDate);
-  }
-
-  isCommentEdited(comment: NuxeoComment): boolean {
-    return !!comment.modificationDate && comment.modificationDate !== comment.creationDate;
   }
 
   /**

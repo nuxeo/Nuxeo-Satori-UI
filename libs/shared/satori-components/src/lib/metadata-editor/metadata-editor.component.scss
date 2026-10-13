@@ -73,7 +73,8 @@
   align-self: flex-start;
 }
 
-.nxs-metadata-editor__error {
+// Scoped to the host: the theme's `.mat-typography p` margin outranks a single class.
+:host .nxs-metadata-editor__error {
   margin: 0;
   font-size: 0.75rem;
   color: var(--nxs-metadata-editor-error);

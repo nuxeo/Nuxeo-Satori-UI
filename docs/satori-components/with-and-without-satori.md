@@ -381,6 +381,21 @@ Editing a customer "Policy" type: the Dublin Core fields, then its section with 
 
 It checks the schema's rules as the user types and on Save, names the field in every message, and sends only what changed.
 
+### Comments
+
+| Field           | Value                        |
+| --------------- | ---------------------------- |
+| Component       | `NxsCommentsComponent`       |
+| Registered ID   | —                            |
+| With Satori     | Same component; theme only   |
+| Storybook story | `documents-comments--thread` |
+
+![Comments: without Satori on the left, with Satori on the right](comments-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document's comment thread signed in as one of its authors: three comments, the first with its two replies folded behind "2 replies", the last cut short behind "Show all", Edit and Delete on the user's own comment only, and the comment box. The same thread in both; the theme sets the type, the avatars, the outline of the box and the link colour.
+
+It follows Web UI's thread: the newest page first, replies only on top-level comments, Edit and Delete for the author and administrators, a confirmation before deleting, Ctrl+Enter to submit.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -457,6 +472,7 @@ The components in the library today:
 | Details panel      | —                                                                                                                       | Same component; theme only   |
 | Properties panel   | —                                                                                                                       | Same component; theme only   |
 | Metadata editor    | —                                                                                                                       | Same component; theme only   |
+| Comments           | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 
