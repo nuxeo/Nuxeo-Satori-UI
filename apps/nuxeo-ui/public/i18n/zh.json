@@ -1520,7 +1520,6 @@
     "version-latest-entry": "最新版本",
     "version-modified-by": "由 {{ who }} 于 {{ when }} 修改",
     "version-restore": "恢复 {{ version }}",
-    "version-restore-confirm-message": "恢复版本 {{ version }} 将替换文档的当前内容，包括自上一个版本以来所做的更改。",
     "version-restore-confirm-title": "确定吗？",
     "version-viewing": "您正在查看 {{ version }} 版本。",
     "visual-editor": "可视化编辑器",
