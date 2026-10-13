@@ -24,7 +24,10 @@ does, as **Rename**. It writes the new title itself and closes with the updated 
 
 ## Usage
 
-export const usageTs = `import { NxsRenameDialogComponent, type NxsRenameDialogData } from '@nuxeo-satori/platform/components';
+export const usageTs = `import {
+  NxsRenameDialogComponent,
+  type NxsRenameDialogData,
+} from '@nuxeo-satori/platform/components';
 
 this.dialog
   .open<NxsRenameDialogComponent, NxsRenameDialogData, NuxeoDocument>(NxsRenameDialogComponent, {

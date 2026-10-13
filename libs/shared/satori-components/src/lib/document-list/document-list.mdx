@@ -53,7 +53,14 @@ load(pageIndex: number, sort: NxsDocumentListSort | null): void {
   this.browse
     .getBrowseFolderContents(this.path, 50, {
       currentPageIndex: pageIndex,
-      sort: sort ? [{ sortBy: SORT_FIELDS[sort.key], sortOrder: sort.direction === 'asc' ? 'ASC' : 'DESC' }] : [],
+      sort: sort
+        ? [
+            {
+              sortBy: SORT_FIELDS[sort.key],
+              sortOrder: sort.direction === 'asc' ? 'ASC' : 'DESC',
+            },
+          ]
+        : [],
     })
     .subscribe({
       next: (page) => this.page.set(page),
