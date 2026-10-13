@@ -144,11 +144,29 @@ readonly selectedSavedSearchTitle: Signal<string>
 readonly savedSearchVersion: Signal<number>
 
 markSavedSearchDirty(): void
+```
+
+`SearchSession` in `libs/features/search` keeps the filters and the open saved search here, runs
+the one search the page and the drawer show, and publishes its `items` and `aggregations` here; the
+drawer's queue reads `items`. Search for results through the session, not by calling
+`SearchService.search` beside it.
+
+## SearchService (`search.service.ts`)
+
+`default_search`, saved searches and the lookups the search filters use. See
+`docs/api-integrations.md` §31 for the parameters and the server's behaviour.
+
+```typescript
+search(params: SearchQueryParams): Observable<SearchResponse>
 suggest(searchTerm: string, pageSize?: number): Observable<GlobalSearchSuggestion[]>
 getUserCollections(): Observable<SearchCollectionOption[]>
+getTagSuggestions(term: string): Observable<string[]>          // Tag.Suggestion; [] on failure
 getSavedSearches(pageProvider?: string): Observable<SavedSearchOption[]>
-getSavedSearchById(id: string): Observable<Record<string, string>>
+getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON
 saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>
+updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown>
+renameSavedSearch(id: string, title: string, pageProviderName?: string): Observable<unknown>  // keeps params
+deleteSavedSearch(id: string): Observable<unknown>
 ```
 
 ---

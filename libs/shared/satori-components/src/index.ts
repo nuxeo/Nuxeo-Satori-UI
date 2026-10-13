@@ -94,4 +94,26 @@ export {
 } from './lib/primitives';
 export { provideNxsComponents } from './lib/provide-nxs-components';
 export { nxsInitials, nxsVisibleText } from './lib/visible-text';
+export { NxsSearchFiltersComponent } from './lib/search-filters/search-filters.component';
+export {
+  NXS_EMPTY_SEARCH_FILTERS,
+  NXS_MODIFIED_RANGES,
+  NXS_SIZE_RANGES,
+  nxsHasSearchFilters,
+  nxsRangeOptions,
+  nxsSameSearchFilters,
+  nxsSavedParamsToClear,
+  nxsSearchFiltersFromParams,
+  nxsSearchFiltersToQuery,
+  nxsSearchFiltersToRecord,
+  nxsSearchFiltersToSavedParams,
+  nxsTermOptions,
+  type NxsFacetOption,
+  type NxsSearchFilters,
+} from './lib/search-filters/search-filters.model';
+export {
+  NxsSavedSearchSelectComponent,
+  type NxsSavedSearchChoice,
+} from './lib/saved-search-select/saved-search-select.component';
+export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 // satori:export:components — `satori-component` inserts above this line

@@ -6,10 +6,17 @@
     type="text"
     [attr.aria-label]="data.title || ('ui.saved-search' | translate)"
     [value]="name()"
+    [attr.aria-invalid]="hasSlash()"
+    [attr.aria-describedby]="hasSlash() ? 'saved-search-dialog-error' : null"
     [placeholder]="data.placeholder || ('ui.enter-a-name-for-your-saved' | translate)"
     (input)="onInput($any($event.target).value)"
     (keydown.enter)="save()"
   />
+  @if (hasSlash()) {
+    <p class="saved-search-error" id="saved-search-dialog-error" role="alert">
+      {{ 'shared-ui.saved-search-dialog.no-slash' | translate }}
+    </p>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

@@ -464,6 +464,45 @@ The same dashed area, text and button in both; the theme sets the type, the outl
 
 An upload in progress: one file uploaded, one on its way with its own progress bar, one waiting. The same list in both; the theme sets the type, the icons' colours and the progress bar's colour.
 
+### Search filters
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsSearchFiltersComponent`           |
+| Registered ID   | —                                     |
+| With Satori     | Same component; theme only            |
+| Storybook story | `search-search-filters--with-choices` |
+
+![Search filters: without Satori on the left, with Satori on the right](search-filters-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The search filters with a full-text term, a date range, an author and a nature chosen: the same boxes, collapsible groups and checkboxes in both, each choice with the count the server gave it. The theme sets the type, the colours of the checkboxes and the buttons, and the focus rings.
+
+### Saved search select
+
+| Field           | Value                                  |
+| --------------- | -------------------------------------- |
+| Component       | `NxsSavedSearchSelectComponent`        |
+| Registered ID   | —                                      |
+| With Satori     | Same component; theme only             |
+| Storybook story | `search-saved-search-select--one-open` |
+
+![Saved search select: without Satori on the left, with Satori on the right](saved-search-select-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The box listing the user's saved searches, with one open: the same labelled box and list in both; the theme sets the type and the colours.
+
+### Saved search actions
+
+| Field           | Value                                               |
+| --------------- | --------------------------------------------------- |
+| Component       | `NxsSavedSearchActionsComponent`                    |
+| Registered ID   | —                                                   |
+| With Satori     | Same component; theme only                          |
+| Storybook story | `search-saved-search-actions--changed-saved-search` |
+
+![Saved search actions: without Satori on the left, with Satori on the right](saved-search-actions-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Save as, Save and the menu button for a saved search the user owns, with its filters changed. The same buttons in both; the theme sets their shape and colours. On a search shared read-only only Save as is offered, in both.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -546,6 +585,9 @@ The components in the library today:
 | Folder picker            | —                                                                                                                       | Same component; theme only   |
 | Dropzone                 | —                                                                                                                       | Same component; theme only   |
 | Upload queue             | —                                                                                                                       | Same component; theme only   |
+| Search filters           | —                                                                                                                       | Same component; theme only   |
+| Saved search select      | —                                                                                                                       | Same component; theme only   |
+| Saved search actions     | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

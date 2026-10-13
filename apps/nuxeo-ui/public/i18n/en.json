@@ -2229,6 +2229,63 @@
       "dismiss": "Dismiss",
       "retry": "Retry"
     },
+    "search-filters": {
+      "fulltext": "Full Text",
+      "fulltext-placeholder": "Search for something...",
+      "clear-fulltext": "Clear full text",
+      "modified": {
+        "title": "Modification Date",
+        "last24h": "Last 24h",
+        "last-week": "Last week",
+        "last-month": "Last month",
+        "last-year": "Last year",
+        "prior-to-last-year": "More than a year ago"
+      },
+      "authors": "Authors",
+      "authors-placeholder": "Search for authors...",
+      "collections": "Collections",
+      "collections-placeholder": "Select a value.",
+      "loading-collections": "Loading collections...",
+      "collections-failed": "Could not load your collections.",
+      "tags": "Tags",
+      "tags-placeholder": "e.g. events, boston",
+      "tags-hint": "Please enter 1 or more characters",
+      "no-results": "No results found",
+      "no-results-for": "No results for {{ term }}",
+      "nature": "Nature",
+      "subjects": "Subjects",
+      "coverage": "Coverage",
+      "size": {
+        "title": "Size",
+        "tiny": "Less than 100 KB",
+        "small": "Between 100 KB and 1 MB",
+        "medium": "Between 1 MB and 10 MB",
+        "big": "Between 10 MB and 100 MB",
+        "huge": "More than 100 MB"
+      },
+      "no-available-results": "No available results",
+      "reset": "Reset",
+      "save-as": "Save As",
+      "remove": "Remove {{ value }}",
+      "chosen-authors": "Chosen authors",
+      "chosen-collections": "Chosen collections",
+      "chosen-tags": "Chosen tags"
+    },
+    "saved-search-select": {
+      "label": "Saved Searches",
+      "placeholder": "Search Filters",
+      "loading": "Loading saved searches...",
+      "none": "No saved searches",
+      "no-match": "No matching saved searches"
+    },
+    "saved-search-actions": {
+      "save-as": "Save As",
+      "save": "Save",
+      "more": "Saved search actions",
+      "rename": "Rename",
+      "share": "Share",
+      "delete": "Delete"
+    },
     "upload-queue": {
       "done": "Uploaded",
       "failed": "Could not be uploaded",
@@ -2291,7 +2348,9 @@
       "failed-to-download-document": "Failed to download document.",
       "failed-to-load-search-results": "Failed to load search results.",
       "failed-to-update-favorites": "Failed to update favorites.",
-      "nxql-query-execution-failed-the-generated-query": "NXQL query execution failed. The generated query may be invalid."
+      "nxql-query-execution-failed-the-generated-query": "NXQL query execution failed. The generated query may be invalid.",
+      "failed-to-open-saved-search": "Could not open the saved search.",
+      "failed-to-delete-saved-search": "Could not delete the saved search."
     },
     "no-results-for": "No results for {{ term }}",
     "quick-filter": {
@@ -2524,7 +2583,8 @@
     },
     "saved-search-dialog": {
       "cancel": "Cancel",
-      "save": "Save"
+      "save": "Save",
+      "no-slash": "You cannot use the character '/' in the name"
     },
     "selection-topbar": {
       "clear": "Clear",

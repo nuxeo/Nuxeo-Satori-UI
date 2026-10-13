@@ -1,0 +1,98 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as SavedSearchActionsStories from './saved-search-actions.stories';
+
+<Meta of={SavedSearchActionsStories} name="Overview" />
+
+# Saved search actions
+
+The saved search actions are what the user can do with the search they are looking at: save it as a
+new saved search, and — on an open saved search they may change — save their changes into it, rename
+it, share it or delete it. They follow Web UI's `nuxeo-saved-search-actions`. Use them above a list of
+search results.
+
+## Key features
+
+- **Save as, whenever there is something to save.** Shown with a filter set, and on any open saved
+  search, including one shared with the user read-only, so they can keep a copy of their own.
+- **Save, only once something changed.** Shown when `dirty` is true on a saved search the user may
+  change.
+- **Rename, Share and Delete, behind a menu.** Shown on a saved search the user may change.
+- **The server decides who may change it.** When a saved search opens, the component reads its
+  permissions and offers the changes only with `WriteProperties`, as Web UI does. While that is read,
+  or if it cannot be, they stay hidden. Nuxeo still checks each request.
+- **Emits, does not act.** Each action is an output; your component asks for a name or a confirmation
+  and sends the request.
+
+## Demo showcase
+
+A saved search the user owns, with its filters changed: Save as, Save and the menu.
+
+<Canvas of={SavedSearchActionsStories.ChangedSavedSearch} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsSavedSearchActionsComponent } from '@nuxeo-satori/platform/components';`}
+/>
+
+export const usageHtml = `<nxs-saved-search-actions
+  [savedSearchId]="savedSearchId()"
+  [dirty]="dirty()"
+  [hasFilters]="hasFilters()"
+  (saveAs)="saveAs()"
+  (save)="save()"
+  (rename)="rename()"
+  (share)="share()"
+  (remove)="deleteSavedSearch()"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`savedSearchId` is the open saved search, or an empty string for none. `dirty` says whether the
+filters differ from that search's; `hasFilters` whether any filter is set. Rename with
+`SearchService.renameSavedSearch`, which keeps the stored filters; save with `updateSavedSearch` and
+`nxsSearchFiltersToSavedParams`.
+
+Its labels are translated with ngx-translate under `satori-components.saved-search-actions.*`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not. It needs
+`HttpClient` and the platform's `DocumentDetailService`. It has no registered ID: place it in a
+template by its selector.
+
+## Where its data comes from
+
+The permission check is `DocumentDetailService.getDocumentPermissions(savedSearchId)`, the saved
+search document's `permissions` enricher, read each time another saved search opens.
+
+**In these stories** `DocumentDetailService` is an in-memory fake; nothing is sent to a server.
+
+## Examples
+
+### Filters set, nothing saved yet
+
+<Canvas of={SavedSearchActionsStories.UnsavedFilters} />
+
+### An unchanged saved search
+
+<Canvas of={SavedSearchActionsStories.UnchangedSavedSearch} />
+
+### Shared read-only
+
+The user may not change it, so only Save as is offered.
+
+<Canvas of={SavedSearchActionsStories.SharedReadOnly} />
+
+## Accessibility
+
+- **Buttons with names.** Save as and Save are labelled buttons; the menu button is named "Saved
+  search actions". Their icons are hidden from assistive technology.
+- **Menu.** A Material menu: **Enter** or **Space** opens it, **Up** and **Down** move, **Enter**
+  chooses, **Escape** closes and returns focus to the button.
+- **Nothing to offer.** With nothing to save the component renders no control at all, rather than
+  disabled ones.
