@@ -412,6 +412,31 @@ describe('NxsMetadataEditorComponent', () => {
     expect(errors()).not.toContain('Already used by another policy');
   });
 
+  it('keeps a message that arrives while saving once the form is enabled again, and focuses its field', async () => {
+    host.disabled.set(true);
+    await settle();
+    expect(host.editor().showServerErrors({ 'dc:description': 'Too long.' })).toEqual([]);
+    host.disabled.set(false);
+    await settle();
+    await settle();
+    expect(errors()).toContain('Too long.');
+    expect(summary()).toBe('1 field needs a correction before you can save.');
+    expect(document.activeElement?.getAttribute('data-xpath')).toBe('dc:description');
+    expect(host.editor().validate()).toBe(false);
+    await type('dc:description', 'Shorter');
+    expect(errors()).not.toContain('Too long.');
+    expect(host.editor().validate()).toBe(true);
+  });
+
+  it('shows a message filed under a complex field on the group, tied to it', async () => {
+    host.editor().showServerErrors({ 'pol:holder': 'Holder is not valid.' });
+    await settle();
+    const group = field<HTMLFieldSetElement>('pol:holder');
+    const message = group.querySelector('.nxs-metadata-editor__error');
+    expect(message?.textContent?.trim()).toBe('Holder is not valid.');
+    expect(group.getAttribute('aria-describedby')).toBe(message?.id);
+  });
+
   it('gives every value for a create, in the shape the server takes', () => {
     expect(host.editor().properties()).toMatchObject({
       'dc:title': 'Quarterly report',

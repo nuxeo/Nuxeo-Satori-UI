@@ -21,6 +21,7 @@ import {
   FormControl,
   FormGroup,
   ReactiveFormsModule,
+  ValidatorFn,
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -233,6 +234,14 @@ export class NxsMetadataEditorComponent {
   private readonly detached = new FormControl();
   private readonly detachedList = new FormArray<AbstractControl>([]);
   private valid = true;
+  /**
+   * The server's message per field, with the value it refused. Held as a validator rather than
+   * set once with `setErrors`, because re-enabling the form after a save re-runs every validator
+   * and would drop it; it lapses as soon as the value differs from the one refused.
+   */
+  private readonly serverMessages = new Map<string, { message: string; refused: string }>();
+  /** Server messages arrived while the form was disabled: reveal them once it is enabled. */
+  private revealOnEnable = false;
 
   protected readonly standardFields = computed<readonly EditorField[]>(() =>
     this.dublinCore() ? DUBLIN_CORE : [],
@@ -319,12 +328,15 @@ export class NxsMetadataEditorComponent {
         unplaced.push(message);
         continue;
       }
-      control.setErrors({ ...control.errors, server: message });
+      this.serverMessages.set(xpath, { message, refused: JSON.stringify(control.getRawValue()) });
       control.markAsTouched();
+      control.updateValueAndValidity({ emitEvent: false });
     }
     this.submitted.set(true);
+    this.form.updateValueAndValidity();
     this.invalidCount.set(this.countInvalid());
-    if (this.form.invalid) this.revealFirstInvalid();
+    if (this.form.disabled) this.revealOnEnable = true;
+    else if (this.form.invalid) this.revealFirstInvalid();
     return unplaced;
   }
 
@@ -494,20 +506,24 @@ export class NxsMetadataEditorComponent {
       for (const xpath of Object.keys(this.form.controls))
         this.form.removeControl(xpath, { emitEvent: false });
       this.builtFrom = values;
+      this.serverMessages.clear();
       this.submitted.set(false);
       this.invalidCount.set(0);
     }
     const wanted = new Set(fields.map((field) => field.xpath));
     for (const xpath of Object.keys(this.form.controls)) {
-      if (!wanted.has(xpath)) this.form.removeControl(xpath, { emitEvent: false });
+      if (wanted.has(xpath)) continue;
+      this.form.removeControl(xpath, { emitEvent: false });
+      this.serverMessages.delete(xpath);
     }
     const directories = new Set<string>();
     for (const field of fields) {
       directoriesOf(field.definition, directories);
       if (this.form.controls[field.xpath]) continue;
-      this.form.addControl(field.xpath, buildControl(field.definition, values[field.xpath]), {
-        emitEvent: false,
-      });
+      const control = buildControl(field.definition, values[field.xpath]);
+      control.addValidators(this.heldServerMessage(field.xpath));
+      control.updateValueAndValidity({ emitEvent: false });
+      this.form.addControl(field.xpath, control, { emitEvent: false });
     }
     this.applyDisabled(untracked(this.disabled));
     this.loadVocabularies(directories);
@@ -525,6 +541,20 @@ export class NxsMetadataEditorComponent {
       const control = this.form.controls[field.xpath];
       if (control) this.lockReadOnly(field.definition, control, 0);
     }
+    this.statusChanged();
+    if (this.revealOnEnable) {
+      this.revealOnEnable = false;
+      if (this.form.invalid) this.revealFirstInvalid();
+    }
+  }
+
+  private heldServerMessage(xpath: string): ValidatorFn {
+    return (control) => {
+      const held = this.serverMessages.get(xpath);
+      return held && JSON.stringify(control.getRawValue()) === held.refused
+        ? { server: held.message }
+        : null;
+    };
   }
 
   /** `enable()` reaches every control; a file or an unsupported shape stays read-only. */

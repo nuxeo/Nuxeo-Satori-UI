@@ -242,8 +242,23 @@
       </mat-form-field>
     }
     @case ('complex') {
-      <fieldset class="nxs-metadata-editor__group" [attr.data-xpath]="path">
+      @let groupInvalid = showError(control) && !!error;
+      <fieldset
+        class="nxs-metadata-editor__group"
+        [attr.data-xpath]="path"
+        [attr.aria-describedby]="groupInvalid ? id + '-' + path + '-error' : null"
+      >
         <legend>{{ label }}</legend>
+        @if (groupInvalid) {
+          <p
+            class="nxs-metadata-editor__error"
+            tabindex="-1"
+            data-nxs-invalid="true"
+            [id]="id + '-' + path + '-error'"
+          >
+            {{ errorText(error, label) }}
+          </p>
+        }
         @for (sub of subFields(definition); track sub.xpath) {
           @if (subControl(control, sub.xpath); as child) {
             <ng-container
