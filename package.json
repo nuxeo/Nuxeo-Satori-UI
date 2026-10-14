@@ -98,9 +98,6 @@
     "node": "20.x"
   },
   "dependencies": {
-    "@alfresco/adf-core": "9.0.0",
-    "@alfresco/adf-extensions": "9.0.0",
-    "@alfresco/adf-hx-content-services": "7.20.0-automate.292",
     "@angular/animations": "~20.3.33",
     "@angular/cdk": "~20.2.0",
     "@angular/common": "~20.3.33",
@@ -112,7 +109,6 @@
     "@angular/platform-browser": "~20.3.33",
     "@angular/platform-browser-dynamic": "~20.3.33",
     "@angular/router": "~20.3.33",
-    "@hylandsoftware/hxcs-js-client": "2.0.111",
     "@hylandsoftware/satori-ui": "^0.2.1",
     "@mat-datetimepicker/core": "16.0.1",
     "@ngx-translate/core": "^17.0.0",
@@ -129,7 +125,6 @@
     "zone.js": "~0.15.0"
   },
   "devDependencies": {
-    "@alfresco/js-api": "10.0.0",
     "@analogjs/vite-plugin-angular": "~1.22.5",
     "@analogjs/vitest-angular": "~1.22.5",
     "@angular-devkit/build-angular": "~20.3.0",

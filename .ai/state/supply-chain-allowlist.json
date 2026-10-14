@@ -39,8 +39,9 @@
     "`unreferencedDependencies` excuses a production dependency that no source file imports. Four",
     "of these turned out to be genuinely unused — `openai`, `express`, `cors`, `dotenv` — and were",
     "removed rather than listed. An entry here means the package is required by something other",
-    "than an import: the Angular runtime, or a version pin that satisfies an adf-core peer. If the",
-    "package becomes referenced, or stops being a dependency, its entry fails as unnecessary."
+    "than an import: the Angular runtime, or a version pin. The pins listed today are left over from",
+    "adf-core, which left the tree in NXSAT-637; NXSAT-672 removes them. If the package becomes",
+    "referenced, or stops being a dependency, its entry fails as unnecessary."
   ],
   "advisories": {
     "quill": {
@@ -93,13 +94,12 @@
   "unreferencedDependencies": {
     "tslib": "Emitted helper library. The TypeScript compiler generates imports of it into the build output; no source file names it.",
     "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source.",
-    "@angular/material-date-fns-adapter": "Version pin only. @alfresco/adf-core declares it as an unbounded `>=` peer, so without an exact pin a clean install floats it to the Angular 22 line and the build dies with `Unsupported enum value`. See docs/adf-hx-upstream-findings.md 2.1.",
-    "@mat-datetimepicker/core": "Version pin only, and one of the two that deliberately differ from adf-core's suggestion: its major track is offset from Angular's, so 16.0.1 is correct for Angular 20.",
-    "date-fns": "Version pin only, to keep @angular/material-date-fns-adapter and adf-core agreeing on one copy.",
-    "pdfjs-dist": "Version pin only, and the second deliberate deviation: 4.x downgrades a shared native package, so 6.2.108 is pinned.",
-    "minimatch": "Version pin only. Declared as a `>=10.0.0` peer by @alfresco/adf-core.",
-    "angular-oauth2-oidc": "Version pin only. A direct dependency of @alfresco/adf-core; pinned here so a clean install cannot float it.",
-    "@alfresco/adf-extensions": "Required at runtime by the two ADF packages, not by our source. @alfresco/adf-core declares it as a `>=9.0.0` peer, and both adf-core and @alfresco/adf-hx-content-services import it from their shipped bundles. Our extension engine stopped importing it in NXSAT-308 (own filterEnabled, sortByOrder and mergeObjects) and it is no longer a @nuxeo-satori/platform peer. Leaves with adf-core and adf-hx in the NXSAT-308 removal commit.",
-    "ng-mocks": "Not a library: `file:tools/stubs/ng-mocks`, a stub that replaces the real test-mocking package because @alfresco/adf-hx-content-services imports `ngMocks` from its shipped /ui bundle (see scripts/beta-harness/no-test-libs-in-bundle.mjs). Our source never imports it. Until NXSAT-308 this check counted the stub's own doc comment as an import. Leaves with adf-hx."
+    "@angular/material-date-fns-adapter": "Version pin left over from ADF. @alfresco/adf-core declared it as an unbounded `>=` peer, so without an exact pin a clean install floated it to the Angular 22 line and the build died with `Unsupported enum value` (docs/adf-hx-upstream-findings.md 2.1). adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
+    "@mat-datetimepicker/core": "Version pin left over from ADF: an @alfresco/adf-core peer, and one of the two pins that deliberately differed from adf-core's suggestion, because its major track is offset from Angular's (16.0.1 for Angular 20). adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
+    "date-fns": "Version pin left over from ADF, which kept @angular/material-date-fns-adapter and adf-core on one copy. adf-core left the tree in NXSAT-637; the adapter's peer is now the only edge to it, and NXSAT-672 drops both.",
+    "pdfjs-dist": "Version pin left over from ADF: an @alfresco/adf-core peer, and the second deliberate deviation, because 4.x downgrades a shared native package (6.2.108). adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
+    "minimatch": "Version pin left over from ADF: @alfresco/adf-core declared it as a `>=10.0.0` peer. adf-core left the tree in NXSAT-637, but the pin still decides which copy is hoisted for the dev tooling that requests minimatch (nx, eslint, glob and others), so NXSAT-672 re-decides it rather than just deleting it.",
+    "angular-oauth2-oidc": "Version pin left over from ADF: a direct dependency of @alfresco/adf-core, pinned so a clean install could not float it. adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
+    "ng-mocks": "Not a library: `file:tools/stubs/ng-mocks`, a stub that stood in for the real test-mocking package because @alfresco/adf-hx-content-services imported `ngMocks` from its shipped /ui bundle (see scripts/beta-harness/no-test-libs-in-bundle.mjs). Our source never imports it. adf-hx left the tree in NXSAT-637; the stub and this entry go in NXSAT-672."
   }
 }

@@ -29,8 +29,9 @@
  * supply-chain surface for no benefit.
  *
  * The check needs an exception list because a package can be genuinely required and never appear in
- * an import: Angular's runtime needs `tslib` and `@angular/animations`, and seven packages exist
- * only to pin versions that `@alfresco/adf-core` requires as peers or dependencies. Every exception
+ * an import: Angular's runtime needs `tslib` and `@angular/animations`, and the rest are version
+ * pins left over from `@alfresco/adf-core`, which left the tree in NXSAT-637 — NXSAT-672 removes
+ * them. Every exception
  * carries a reason, and an exception that stops being needed fails the check as unnecessary — so
  * the list cannot rot into a place where things are hidden.
  *
