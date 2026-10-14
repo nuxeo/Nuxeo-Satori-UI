@@ -30,21 +30,6 @@
               },
               {
                 "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-hx-content-services/icons/assets",
-                "output": "assets"
-              },
-              {
-                "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-hx-content-services/ui/assets",
-                "output": "assets"
-              },
-              {
-                "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-hx-content-services/services/assets",
-                "output": "assets"
-              },
-              {
-                "glob": "**/*",
                 "input": "node_modules/@hylandsoftware/satori-ui/i18n",
                 "output": "assets/satori-ui/i18n"
               }
@@ -89,21 +74,6 @@
                   "glob": "**/*",
                   "input": "apps/nuxeo-ui/public",
                   "ignore": ["i18n/*.context.json"]
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-hx-content-services/icons/assets",
-                  "output": "assets"
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-hx-content-services/ui/assets",
-                  "output": "assets"
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-hx-content-services/services/assets",
-                  "output": "assets"
                 },
                 {
                   "glob": "**/*",

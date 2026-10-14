@@ -107,34 +107,13 @@ const UPSTREAM_MARKERS = ['adf-datatable', 'adf-enterprise-adf-hx'];
  * empty catalogue passed. So did a truncated one, and so did a 0-byte file.
  *
  * `key` is a dotted path that must resolve to a non-empty string. Each one is a key the
- * application actually renders, not the first key in the file: `MANAGE_VERSIONS.DIALOG.TITLE`
- * is the heading that shipped raw and is the reason two of these entries exist at all.
+ * application actually renders, not the first key in the file: `MANAGE_VERSIONS.DIALOG.TITLE`,
+ * adf-hx's versions-panel heading that once shipped raw, is the reason the list exists at all.
  */
-const REQUIRED_FILES = [
-  // Added after the adopted versions panel shipped with `MANAGE_VERSIONS.DIALOG.TITLE` as its
-  // heading: a catalogue whose file is not shipped fails **silently**, because a loader catches
-  // the 404 and returns `{}`. Nothing else in the pipeline notices.
-  {
-    path: 'assets/adf-enterprise-adf-hx-content-services-ui/i18n/en.json',
-    key: 'MANAGE_VERSIONS.DIALOG.TITLE',
-    why: "adf-hx's UI catalogue — MANAGE_VERSIONS, DOCUMENT_LIST, DOCUMENT_TREE and the rest.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-hx-content-services/ui/assets in angular.json.',
-  },
-  {
-    path: 'assets/adf-enterprise-adf-hx-content-services-services/i18n/en.json',
-    key: 'PERMISSION_LEVEL.LABEL.READ',
-    why: "adf-hx's services catalogue — DOWNLOAD_STATUS, PERMISSION_LEVEL.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-hx-content-services/services/assets in angular.json.',
-  },
-  {
-    path: 'assets/images/Folder.svg',
-    // Not JSON, so assert the markup instead. A 0-byte or HTML-error-page SVG renders as
-    // a broken image, which is the same class of silent failure as an empty catalogue.
-    contains: '<svg',
-    why: "adf-hx's own icon set, referenced by the document tree and list as assets/images/*.svg.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-hx-content-services/icons/assets in angular.json.',
-  },
-];
+// Empty since adf-hx's two catalogues and its icon set left with the package. satori-ui's
+// catalogue (`assets/satori-ui/i18n`) is also copied in by a glob and fetched at runtime, and is
+// not listed yet.
+const REQUIRED_FILES = [];
 
 /** @type {{ pattern: string, file: string, count: number, why: string, fix: string }[]} */
 const hits = [];

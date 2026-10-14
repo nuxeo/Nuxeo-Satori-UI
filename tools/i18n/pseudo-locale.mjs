@@ -124,11 +124,7 @@ console.log(`apps/nuxeo-ui/public/i18n/zz.json — ${count(en)} keys`);
  * stops being read. `node_modules` is disposable and this writes only the extra locale, so a
  * reinstall undoes it.
  */
-const UPSTREAM = [
-  'node_modules/@alfresco/adf-hx-content-services/ui/assets/adf-enterprise-adf-hx-content-services-ui/i18n',
-  'node_modules/@alfresco/adf-hx-content-services/services/assets/adf-enterprise-adf-hx-content-services-services/i18n',
-  'node_modules/@hylandsoftware/satori-ui/i18n',
-];
+const UPSTREAM = ['node_modules/@hylandsoftware/satori-ui/i18n'];
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '../..');
 for (const dir of UPSTREAM) {
   const source = join(REPO, dir, 'en.json');
