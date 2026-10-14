@@ -355,7 +355,13 @@ export const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[] = [
     label: 'Rename',
     icon: 'drive_file_rename_outline',
     order: 20,
-    rule: every('app.rules.isNotTrashed', 'app.rules.canWrite'),
+    // Not `Immutable`, as Edit: a version's or publication's `permissions` still list `Write`
+    // while the server refuses to change its title.
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+    ),
   },
   {
     id: 'app.rowActions.copyTo',

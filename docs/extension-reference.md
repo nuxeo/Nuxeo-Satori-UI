@@ -1268,13 +1268,17 @@ Each row resolves the slot with **that row's document in focus**, so `rule`, `en
 document rules of section 4 read the row's own permissions and properties, not the folder's. A
 row whose entries are all hidden has no menu button.
 
-| ID                        | Label    | Icon                        | Order | Shown when                |
-| ------------------------- | -------- | --------------------------- | ----- | ------------------------- |
-| `app.rowActions.download` | Download | `download`                  | 10    | not trashed, holds a file |
-| `app.rowActions.rename`   | Rename   | `drive_file_rename_outline` | 20    | not trashed, `canWrite`   |
-| `app.rowActions.copyTo`   | Copy to… | `file_copy`                 | 30    | not trashed               |
-| `app.rowActions.moveTo`   | Move to… | `drive_file_move`           | 40    | not trashed, `canRemove`  |
-| `app.rowActions.delete`   | Delete   | `delete`                    | 50    | not trashed, `canRemove`  |
+| ID                        | Label    | Icon                        | Order | Shown when                                |
+| ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |
+| `app.rowActions.download` | Download | `download`                  | 10    | not trashed, holds a file                 |
+| `app.rowActions.rename`   | Rename   | `drive_file_rename_outline` | 20    | not trashed, `canWrite`, not `Immutable`¹ |
+| `app.rowActions.copyTo`   | Copy to… | `file_copy`                 | 30    | not trashed                               |
+| `app.rowActions.moveTo`   | Move to… | `drive_file_move`           | 40    | not trashed, `canRemove`                  |
+| `app.rowActions.delete`   | Delete   | `delete`                    | 50    | not trashed, `canRemove`                  |
+
+¹ As Edit in section 8: Nuxeo marks versions and publications `Immutable`, and their
+`permissions` enricher still lists `Write` while the server refuses to change them, so a
+publication listed in a section offers no Rename.
 
 What each does: **Download** saves the document's main file under its own name. **Rename** opens
 `nxs-rename-dialog`, which changes `dc:title` — as Nuxeo Web UI's title edit does, the name in the

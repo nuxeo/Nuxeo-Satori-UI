@@ -80,6 +80,13 @@ const readOnly = doc({
   contextParameters: { permissions: ['Read'] },
 });
 const subfolder = doc({ uid: 'sub', title: 'Sub', type: 'Folder', facets: ['Folderish'] });
+/** A section's publication: Nuxeo marks it `Immutable`, and its permissions still list Write. */
+const publication = doc({
+  uid: 'pub',
+  title: 'Published report',
+  isProxy: true,
+  facets: ['Immutable', 'Versionable', 'Publishable'],
+});
 
 describe('BrowseComponent — row actions', () => {
   let fixture: ComponentFixture<BrowseComponent>;
@@ -89,7 +96,7 @@ describe('BrowseComponent — row actions', () => {
   const browse = {
     getByPath: vi.fn(() => of(folder)),
     getBrowseFolderContents: vi.fn(() =>
-      of({ folder, entries: [report, note, readOnly, subfolder], totalSize: 4 }),
+      of({ folder, entries: [report, note, readOnly, subfolder, publication], totalSize: 5 }),
     ),
     getFolderContext: vi.fn(() => of(folder)),
     hasChildCollections: vi.fn(() => of(false)),
@@ -169,6 +176,11 @@ describe('BrowseComponent — row actions', () => {
     // A Note holds no file; a read-only document can only be copied.
     expect(menu('note')).not.toContain('app.rowActions.download');
     expect(menu('ro')).toEqual(['app.rowActions.copyTo']);
+  });
+
+  it('offers no Rename on an Immutable row, as Edit is not offered on one', () => {
+    expect(menu('pub')).not.toContain('app.rowActions.rename');
+    expect(menu('pub')).toContain('app.rowActions.copyTo');
   });
 
   it('renders the menu on the row, named for it, and runs the chosen entry', async () => {
