@@ -127,21 +127,38 @@ describe('NxsShareExternalDialogComponent', () => {
     expect(another().disabled).toBe(false);
   });
 
-  it('accepts a dotted domain and refuses an address without one, or with an empty label', async () => {
+  it('judges every address as the old check did, but for an empty domain label', async () => {
     await open();
     for (const [email, valid] of [
       ['ext@example.com', true],
       ['jane.doe@mail.example.co.uk', true],
       ['a@b.c', true],
+      ['x.@y.z', true],
+      ['.x@y.z', true],
+      ['a@-b.c', true],
+      ['a@b_c.d', true],
+      ['a@[1.2.3.4]', true],
+      ['"q"@b.c', true],
+      ['a@b.é', true],
       ['a@b', false],
+      ['@b.c', false],
+      ['a@', false],
       ['a b@c.d', false],
+      ['a@b c.d', false],
       ['a@b@c.d', false],
       ['a@.b', false],
       ['a@b.', false],
-      ['a@b..c', false],
     ] as const) {
       await fillValid(email);
       expect(create().disabled, email).toBe(!valid);
+    }
+  });
+
+  it('refuses an empty label inside or at the end of the domain, which the old check let through', async () => {
+    await open();
+    for (const email of ['a@b..c', 'a@.b.c', 'a@b.c.']) {
+      await fillValid(email);
+      expect(create().disabled, email).toBe(true);
     }
   });
 

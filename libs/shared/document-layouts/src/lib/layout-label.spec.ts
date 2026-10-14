@@ -92,6 +92,23 @@ describe('documentToCreate', () => {
     expect(documentToCreate('Claim', '///').path).toBe('/');
   });
 
+  it('gives each folder path the result the old trailing-slash pattern gave', () => {
+    for (const [folder, path] of [
+      ['', '/'],
+      ['/', '/'],
+      ['ws', 'ws/'],
+      ['ws/', 'ws/'],
+      ['/ws/claims', '/ws/claims/'],
+      ['//ws', '//ws/'],
+      ['/ws/ ', '/ws/ /'],
+      ['/ws/\n', '/ws/\n/'],
+      ['/ws\\', '/ws\\/'],
+      ['/a/b//c//', '/a/b//c/'],
+    ] as const) {
+      expect(documentToCreate('Claim', folder).path, JSON.stringify(folder)).toBe(path);
+    }
+  });
+
   it('reads a folder path of 100,000 slashes without stalling', () => {
     const started = performance.now();
     expect(documentToCreate('Claim', `${'/'.repeat(100_000)}x`).path).toHaveLength(100_002);
