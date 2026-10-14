@@ -175,26 +175,28 @@ const SPECIFIER_CONTROLS = [
  * configuration), every entry of an `@import` list, quoted or as `url(…)`, and `meta.load-css()`.
  *
  * Indented Sass (`indented`) ends a rule at the end of its line rather than at `;`, and may write
- * an `@import` list unquoted.
+ * an `@import` list unquoted. Uses proper masking to ignore commented directives and strings.
  */
 export function sassLoadedUrls(body, { indented = false } = {}) {
+  const mask = maskStylesheet(body);
+  const statement = indented
+    ? /(?:^|\n)[ \t]*@(use|forward|import)\b([^\n]*)/dg
+    : /(?:^|[;{}])\s*@(use|forward|import)\b([^;{}]*)/dg;
+  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([^'"\n]*)\3/dg;
   const urls = [];
-  const rules = indented
-    ? /@(use|forward|import)[ \t]+([^\n]*)/g
-    : /@(use|forward|import)\s+([^;{}]*)/g;
-  for (const rule of body.matchAll(rules)) {
-    let strings = [...rule[2].matchAll(/['"]([^'"]+)['"]|url\(\s*([^'"()\s]+)\s*\)/g)].map(
-      (match) => match[1] ?? match[2],
-    );
-    if (indented && rule[1] === 'import' && strings.length === 0) {
-      strings = rule[2]
-        .split(',')
-        .map((url) => url.trim())
-        .filter(Boolean);
+  for (const s of mask.matchAll(statement)) {
+    const [from, to] = s.indices[2];
+    for (const t of mask.slice(from, to).matchAll(target)) {
+      const span = t.indices[2] ?? t.indices[4];
+      const url = body.slice(from + span[0], from + span[1]).replace(/^~/, '');
+      urls.push(url);
+      if (s[1] !== 'import') break;
     }
-    urls.push(...(rule[1] === 'import' ? strings : strings.slice(0, 1)));
   }
-  for (const call of body.matchAll(/load-css\(\s*['"]([^'"]+)['"]/g)) urls.push(call[1]);
+  for (const call of mask.matchAll(/load-css\(\s*(['"]?)([^'")\s]+)\1\s*\)/g)) {
+    const span = call.indices[2] ?? call.indices[3];
+    urls.push(body.slice(span[0], span[1]));
+  }
   return urls;
 }
 
