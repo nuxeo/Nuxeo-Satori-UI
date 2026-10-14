@@ -59,7 +59,7 @@ Leaving out `provideNxsSatoriComponents()` gives the built-in versions; nothing 
 
 ## Side by side
 
-Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The four primitives render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
+Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The four primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
 
 ### Avatar
 
@@ -702,13 +702,13 @@ It follows Web UI's audit search: every filter and the sort go to the server, so
 
 ## Full screenshots
 
-Storybook's "Primitives/By registered ID" story renders all four registered IDs with one template and the same inputs.
+Storybook's "Primitives/By registered ID" story renders the four registered IDs that have a Satori variant — avatar, tag, breadcrumbs and rich tooltip — with one template and the same inputs. The fifth, `nxs.primitives.errorState`, has no Satori variant yet, so the story leaves it out.
 
-![All four primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
+![The four primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
-![All four primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
+![The four primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
 
-![All four primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
+![The four primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
 
 ## Detailed differences
 
