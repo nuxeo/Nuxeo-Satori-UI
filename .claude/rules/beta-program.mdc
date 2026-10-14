@@ -33,7 +33,6 @@ hardcoded; behaviour needing code must not be faked in configuration.
 - **No customer-facing configuration inside the packaged web directory** — `install.xml` copies it with `overwrite="true"` and will destroy it on upgrade.
 - **No new hardcoded action lists, nav entries or theme values.** Route them through Layer 0 or 1.
 - **Every new service method needs a unit test including its error path.**
-- Reuse the twelve upstream API tokens rather than re-declaring them locally.
 
 ## Iteration protocol — do not skip
 

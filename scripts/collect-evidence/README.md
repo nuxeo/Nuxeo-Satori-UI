@@ -70,8 +70,8 @@ export const scenes = [
     async run(page, h) {
       await h.login();
       await h.goTo('/#/browse');
-      await h.expectVisible('folder list renders', 'hxp-document-list');
-      await h.shot('browse-list', { highlight: 'hxp-document-list' });
+      await h.expectVisible('folder list renders', 'nxs-document-list');
+      await h.shot('browse-list', { highlight: 'nxs-document-list' });
     },
   },
 ];
