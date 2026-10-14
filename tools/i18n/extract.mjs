@@ -71,7 +71,6 @@ const NAMESPACE = {
   'libs/features/search': 'search',
   'libs/features/tasks': 'tasks',
   'libs/features/trash': 'trash',
-  'libs/shared/adf-hx-bridge': 'hxp',
   'libs/shared/permission-dialogs': 'permissions',
   'libs/shared/ui': 'shared-ui',
 };

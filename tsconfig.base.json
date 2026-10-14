@@ -30,8 +30,6 @@
       "@agentic-ui/feature-tasks": ["libs/features/tasks/src/index.ts"],
       "@agentic-ui/feature-trash": ["libs/features/trash/src/index.ts"],
       "@agentic-ui/shared-permission-dialogs": ["libs/shared/permission-dialogs/src/index.ts"],
-      "@agentic-ui/shared/adf-hx-bridge": ["libs/shared/adf-hx-bridge/src/index.ts"],
-      "@agentic-ui/shared/adf-hx-bridge/providers": ["libs/shared/adf-hx-bridge/src/providers.ts"],
       "@agentic-ui/shared/ai-client": ["libs/shared/ai-client/src/index.ts"],
       "@agentic-ui/shared/document-layouts": ["libs/shared/document-layouts/src/index.ts"],
       "@agentic-ui/shared/kd-client": ["libs/shared/kd-client/src/index.ts"],
