@@ -193,7 +193,7 @@ export function sassLoadedUrls(body, { indented = false } = {}) {
       if (s[1] !== 'import') break;
     }
   }
-  for (const call of mask.matchAll(/load-css\(\s*(['"]?)([^'")\s]+)\1\s*\)/dg)) {
+  for (const call of mask.matchAll(/load-css\(\s*(['"])([^'"]*)\1/dg)) {
     if (call.indices[2]) {
       const [start, end] = call.indices[2];
       urls.push(body.slice(start, end));
