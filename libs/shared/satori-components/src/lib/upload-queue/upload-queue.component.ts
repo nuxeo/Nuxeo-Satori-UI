@@ -1,4 +1,14 @@
-import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  type ElementRef,
+  afterRenderEffect,
+  computed,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
@@ -42,6 +52,28 @@ export class NxsUploadQueueComponent {
     () => this.items().filter((item) => item.state === 'failed').length,
   );
   protected readonly started = computed(() => this.items().some((item) => item.state !== 'staged'));
+  /**
+   * Whether the list scrolls. A file waiting or uploading has no button, so a long run can leave
+   * nothing in the list to focus; the list then takes focus itself, so the keyboard can scroll it.
+   * Measured when the files change and when the list changes size with the same files, as on zoom.
+   */
+  protected readonly scrolls = signal(false);
+
+  private readonly list = viewChild<ElementRef<HTMLElement>>('list');
+
+  constructor() {
+    afterRenderEffect(() => {
+      this.items();
+      this.measure();
+    });
+    afterRenderEffect((onCleanup) => {
+      const list = this.list()?.nativeElement;
+      if (!list || typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(() => this.measure());
+      observer.observe(list);
+      onCleanup(() => observer.disconnect());
+    });
+  }
 
   protected size(bytes: number): string {
     if (!Number.isFinite(bytes) || bytes < 0) return '';
@@ -58,5 +90,10 @@ export class NxsUploadQueueComponent {
 
   protected removable(item: NxsUploadItem): boolean {
     return item.state === 'staged' || item.state === 'failed' || item.state === 'done';
+  }
+
+  private measure(): void {
+    const list = this.list()?.nativeElement;
+    this.scrolls.set(!!list && list.scrollHeight > list.clientHeight);
   }
 }

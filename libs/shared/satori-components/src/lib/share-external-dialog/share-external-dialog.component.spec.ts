@@ -127,6 +127,49 @@ describe('NxsShareExternalDialogComponent', () => {
     expect(another().disabled).toBe(false);
   });
 
+  it("keeps the old check's verdict on representative addresses without an empty domain label", async () => {
+    await open();
+    for (const [email, valid] of [
+      ['ext@example.com', true],
+      ['jane.doe@mail.example.co.uk', true],
+      ['a@b.c', true],
+      ['x.@y.z', true],
+      ['.x@y.z', true],
+      ['a@-b.c', true],
+      ['a@b_c.d', true],
+      ['a@[1.2.3.4]', true],
+      ['"q"@b.c', true],
+      ['a@b.é', true],
+      ['a@b', false],
+      ['@b.c', false],
+      ['a@', false],
+      ['a b@c.d', false],
+      ['a@b c.d', false],
+      ['a@b@c.d', false],
+      ['a@.b', false],
+      ['a@b.', false],
+    ] as const) {
+      await fillValid(email);
+      expect(create().disabled, email).toBe(!valid);
+    }
+  });
+
+  it('refuses an empty label inside or at the end of the domain, which the old check let through', async () => {
+    await open();
+    for (const email of ['a@b..c', 'a@.b.c', 'a@b.c.']) {
+      await fillValid(email);
+      expect(create().disabled, email).toBe(true);
+    }
+  });
+
+  it('checks a pasted address of 50,000 characters without stalling the dialog', async () => {
+    await open();
+    const started = performance.now();
+    await type(emailBox(), `a@${'.'.repeat(50_000)} x`);
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(create().disabled).toBe(true);
+  });
+
   it('flags an invalid email once the user leaves the box, and ties the message to it', async () => {
     await open();
     await type(emailBox(), 'not-an-email');
