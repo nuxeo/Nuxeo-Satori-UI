@@ -27,6 +27,16 @@ const LABELLED_PERMISSIONS = new Set([
   'ManageWorkflows',
   'ReadCanCollect',
   'CanAskForPublishing',
+  // The atomic permissions Web UI labels too (label.security.permission.*).
+  'Browse',
+  'ReadChildren',
+  'ReadLifeCycle',
+  'ReadProperties',
+  'ReadSecurity',
+  'WriteLifeCycle',
+  'WriteProperties',
+  'ManageLegalHold',
+  'ManageRecord',
 ]);
 
 /**

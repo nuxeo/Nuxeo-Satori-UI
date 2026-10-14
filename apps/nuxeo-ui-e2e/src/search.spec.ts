@@ -11,18 +11,21 @@ import { type Page, type Request } from '@playwright/test';
  */
 
 /**
- * The drawer's full-text input. It is rendered by `lib-search-filters-drawer` in the app shell's
- * navigation drawer, through an extension outlet — not inside `lib-search` — so a locator scoped
- * to `lib-search` finds nothing.
+ * The drawer's full-text input: `nxs-search-filters`, rendered by `lib-search-filters-drawer` in the
+ * app shell's navigation drawer, through an extension outlet — not inside `lib-search` — so a
+ * locator scoped to `lib-search` finds nothing.
  */
 function fullTextInput(page: Page) {
-  return page.locator('lib-search-filters-drawer input.filter-input').first();
+  return page.locator('lib-search-filters-drawer nxs-search-filters input[type="search"]').first();
 }
 
 const PAGE_PROVIDER = '/search/pp/default_search/execute';
 const NXQL = '/search/lang/NXQL/execute';
 
-/** Longer than the drawer's 150 ms baseline-count debounce, so that search lands inside it. */
+/**
+ * Long enough for a delayed duplicate to land inside it: the drawer once sent its own count search
+ * 150 ms after the page's.
+ */
 const QUIET_MS = 1_000;
 
 interface SentSearch {
@@ -40,11 +43,10 @@ interface SentSearch {
  * Type `term` into the drawer's full-text input, press Enter, and return **every** search request
  * that produced, once all of them have answered and nothing new has started for `QUIET_MS`.
  *
- * Every one, because Enter sends more than one and they are indistinguishable on the wire:
- * `lib-search`'s results request and the drawer's own baseline-count search
- * (`refreshBaselineCounts`, debounced 150 ms) both call `SearchService.search` with the same term.
- * Judging only the first response to arrive let a test pass on the baseline while the results
- * request failed.
+ * Every one, so a duplicate is counted rather than hidden. Enter used to send three identical
+ * requests — `lib-search`'s results, the shell nav drawer's and the filters drawer's count search —
+ * and judging only the first response to arrive let a test pass on a duplicate while the results
+ * request failed. `SearchSession` now sends one, which `one Enter sends one search` asserts.
  *
  * Captured after the page has settled and before Enter, which is the only thing that makes the
  * drawer search. Matched on the endpoint rather than the term, so a term that was dropped, or moved
@@ -114,6 +116,15 @@ async function describeSearch(request: Request): Promise<Omit<SentSearch, 'label
 }
 
 test.describe('search', () => {
+  test('one Enter sends one search', async ({ signedIn: page }) => {
+    const sent = await searchesSentFor(page, 'contract');
+    expect(
+      sent.map((s) => s.label),
+      'the page and the drawer share one request',
+    ).toHaveLength(1);
+    expect(sent[0].params.get('ecm_fulltext')).toBe('contract');
+  });
+
   test('returns results from the index', async ({ signedIn: page }) => {
     await page.goto('/#/search', { waitUntil: 'networkidle' });
 

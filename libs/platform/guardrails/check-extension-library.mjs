@@ -325,7 +325,8 @@ if (!barrel) {
  * - **Resolves.** `ExtensionComponentRegistry.resolve()` returns `null` for a loader that rejects,
  *   on purpose, so the outlet renders nothing and logs nothing. A wrong `import()` path or class
  *   name is a blank panel with no error anywhere; this is the only place it can be seen. The class
- *   must carry `@Component`: anything else resolves, then the outlet cannot create it.
+ *   must carry `@Component` imported from `@angular/core`: anything else resolves, then the outlet
+ *   cannot create it.
  * - **Named by a spec.** Check 3 asks for one registry assertion in the library. A component no
  *   spec names — by its ID as a string, its key expression or its class, each whole, so
  *   `'acme.panel.claimsExtra'` does not name `acme.panel.claims` — is a registration nothing proves.
@@ -363,6 +364,7 @@ const PRIMITIVE_CONTRACTS = {
   breadcrumbs: 'NxsBreadcrumbsInputs',
   tag: 'NxsTagInputs',
   richTooltip: 'NxsRichTooltipInputs',
+  errorState: 'NxsErrorStateInputs',
 };
 
 const COMPONENTS_KEY = String.raw`(?:\bcomponents|'components'|"components")\s*:\s*`;
@@ -461,18 +463,17 @@ const namesString = (text, id) =>
   new RegExp(String.raw`(['"\x60])${escapeRegExp(id)}\1`).test(text);
 
 /**
- * The argument text of the `@Component(…)` decorating class `name` in `text`, or `null`.
+ * The argument text of the decorator, under one of `names`, on class `name` in `text`, or `null`.
  *
  * The decorator on that class, not the first `selector:` anywhere in the file: a file can declare
  * several classes, and a class with no `@Component` is not a component at all. Only whitespace and
- * other argument-less or flat decorators may sit between the two. `Component` is matched under
- * whatever name the file imports it from `@angular/core`.
+ * other argument-less or flat decorators may sit between the two.
  */
-function componentDecorator(text, name) {
+function componentDecorator(text, name, names) {
+  if (names.length === 0) return null;
   const declared = new RegExp(String.raw`(?:export\s+)?class\s+${name}\b`).exec(text);
   if (!declared) return null;
   const before = text.slice(0, declared.index);
-  const names = ['Component', ...localNames(text, 'Component', isAngularCore)];
   const decorator = new RegExp(String.raw`@(?:${names.map(escapeRegExp).join('|')})\s*\(`, 'g');
   let args = null;
   for (const m of before.matchAll(decorator)) {
@@ -490,29 +491,35 @@ function componentDecorator(text, name) {
   return args;
 }
 
-/** Each `import …{ … } from '…'` in `text`, a default import beside the braces included. */
+/**
+ * Each `import …{ … } from '…'` in `text`, a default import beside the braces included, and whether
+ * the whole statement is `import type`.
+ */
 function* namedImports(text) {
   for (const m of text.matchAll(
-    /import\s*(?:type\s+)?(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g,
+    /import\s*(type\s+)?(?:[\w$]+\s*,\s*)?\{([^}]*)\}\s*from\s*['"]([^'"]+)['"]/g,
   )) {
-    yield { clause: m[1], from: m[2] };
+    yield { clause: m[2], from: m[3], typeOnly: Boolean(m[1]) };
   }
 }
 
 /**
  * The names `text` can use for `name` exported by a module `isFrom` accepts: each local binding,
- * aliased or not, and `ns.name` for a namespace import.
+ * aliased or not, and `ns.name` for a namespace import. With `values`, a type-only import is left
+ * out: TypeScript erases it, so it names nothing at run time.
  */
-function localNames(text, name, isFrom) {
+function localNames(text, name, isFrom, { values = false } = {}) {
   const locals = [];
-  for (const { clause, from } of namedImports(text)) {
-    if (isFrom(from))
-      for (const b of bindings(clause)) if (b.imported === name) locals.push(b.local);
+  for (const { clause, from, typeOnly } of namedImports(text)) {
+    if (!isFrom(from) || (values && typeOnly)) continue;
+    for (const b of bindings(clause)) {
+      if (b.imported === name && !(values && b.typeOnly)) locals.push(b.local);
+    }
   }
   for (const m of text.matchAll(
-    /import\s*(?:type\s+)?\*\s*as\s+([\w$]+)\s*from\s*['"]([^'"]+)['"]/g,
+    /import\s*(type\s+)?\*\s*as\s+([\w$]+)\s*from\s*['"]([^'"]+)['"]/g,
   )) {
-    if (isFrom(m[2])) locals.push(`${m[1]}.${name}`);
+    if (isFrom(m[3]) && !(values && m[1])) locals.push(`${m[2]}.${name}`);
   }
   return locals;
 }
@@ -650,11 +657,25 @@ for (const { file, key, className, exported, target, from } of contributions) {
     continue;
   }
   const componentSource = sources.get(declared.file);
-  const decorator = componentDecorator(componentSource, declared.name);
+  // Only Angular's `Component`, under whatever name the file imports it by value: a `Component`
+  // from another package, or one no import binds, leaves no component definition for the outlet.
+  const decorator = componentDecorator(
+    componentSource,
+    declared.name,
+    localNames(componentSource, 'Component', isAngularCore, { values: true }),
+  );
   if (decorator === null) {
+    const lookalike = componentDecorator(componentSource, declared.name, [
+      'Component',
+      ...localNames(componentSource, 'Component', () => true),
+    ]);
     fail(
-      `${where} as \`${declared.name}\`, which ${rel(declared.file)} declares without ` +
-        '`@Component`. It resolves, then the outlet cannot create it, so the slot renders nothing.',
+      lookalike === null
+        ? `${where} as \`${declared.name}\`, which ${rel(declared.file)} declares without ` +
+            '`@Component`. It resolves, then the outlet cannot create it, so the slot renders nothing.'
+        : `${where} as \`${declared.name}\`, which ${rel(declared.file)} decorates with a ` +
+            "`@Component` not imported from '@angular/core'. Angular compiles no component from " +
+            'it, so the outlet cannot create it and the slot renders nothing.',
     );
     continue;
   }

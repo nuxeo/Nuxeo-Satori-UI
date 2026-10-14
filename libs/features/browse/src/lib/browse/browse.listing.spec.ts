@@ -5,13 +5,13 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+import { ROUTES, Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+import { provideNxsComponents } from '@nuxeo-satori/platform/components';
 import {
   BrowseService,
   ClipboardTargetService,
@@ -73,8 +73,10 @@ const emptyAuditLog = {
 
 const browse = {
   getByPath: vi.fn((): BrowseReturn<'getByPath'> => of(folder)),
-  getBrowseFolderContents: vi.fn((): BrowseReturn<'getBrowseFolderContents'> =>
-    of({ folder, entries: [], totalSize: 0 }),
+  getBrowseFolderContents: vi.fn(
+    (
+      ..._args: Parameters<BrowseService['getBrowseFolderContents']>
+    ): BrowseReturn<'getBrowseFolderContents'> => of({ folder, entries: [], totalSize: 0 }),
   ),
   getFolderContext: vi.fn((): BrowseReturn<'getFolderContext'> => of(folder)),
   getChildren: vi.fn((): BrowseReturn<'getChildren'> => EMPTY),
@@ -207,20 +209,45 @@ describe('BrowseComponent — rendered document list', () => {
     fixture.detectChanges();
   }
 
+  /** The list's tag and avatar outlets learn from a promise that their IDs are unregistered here. */
+  async function settleOutlets(): Promise<void> {
+    await new Promise((resolve) => setTimeout(resolve));
+    await settle();
+  }
+
   function query(selector: string): HTMLElement | null {
     return fixture.nativeElement.querySelector(selector) as HTMLElement | null;
   }
 
+  const ROW = 'nxs-document-list tr.nxs-document-list__row';
+
   function rowTitles(): string[] {
-    return [...fixture.nativeElement.querySelectorAll('.browse-row .doc-title')].map((el) =>
-      (el as HTMLElement).textContent?.trim(),
+    return [...fixture.nativeElement.querySelectorAll(`${ROW} .nxs-document-list__open`)].map(
+      (el) => (el as HTMLElement).textContent?.trim(),
     ) as string[];
   }
 
+  /** The column headers, without the selection and actions columns, which have no label of their own. */
   function headerLabels(): string[] {
-    return [...fixture.nativeElement.querySelectorAll('.browse-table thead .th-label')].map((el) =>
-      (el as HTMLElement).textContent?.trim(),
-    ) as string[];
+    return [
+      ...fixture.nativeElement.querySelectorAll(
+        'nxs-document-list thead th:not(.nxs-document-list__select):not(.nxs-document-list__actions)',
+      ),
+    ].map((el) => (el as HTMLElement).textContent?.trim()) as string[];
+  }
+
+  function sortControl(label: string): HTMLElement {
+    const header = [...fixture.nativeElement.querySelectorAll('nxs-document-list thead th')].find(
+      (el) => (el as HTMLElement).textContent?.trim() === label,
+    ) as HTMLElement | undefined;
+    const control = header?.querySelector('.mat-sort-header-container') as HTMLElement | null;
+    if (!control) throw new Error(`no sort control on ${label}`);
+    return control;
+  }
+
+  function lastRequest(): { path: string; page: { currentPageIndex?: number; sort?: unknown } } {
+    const [path, , page = {}] = browse.getBrowseFolderContents.mock.calls.at(-1) ?? [''];
+    return { path, page };
   }
 
   it('shows the spinner and no rows while the folder request is still pending', async () => {
@@ -229,7 +256,7 @@ describe('BrowseComponent — rendered document list', () => {
     const component = await render();
 
     expect(component.loading()).toBe(true);
-    expect(query('.browse-loading nxs-spinner')).not.toBeNull();
+    expect(query('nxs-document-list nxs-spinner')).not.toBeNull();
     expect(rowTitles()).toEqual([]);
   });
 
@@ -250,15 +277,99 @@ describe('BrowseComponent — rendered document list', () => {
     expect(component.loading()).toBe(false);
     expect(rowTitles()).toEqual(['Budget.xlsx', 'Notes.txt']);
     expect(query('.result-count')?.textContent).toContain('2 results');
-    expect(query('.browse-empty')).toBeNull();
+    expect(query('nxs-document-list nxs-empty-state')).toBeNull();
+    expect(query('nxs-document-list table')?.getAttribute('aria-label')).toBe(
+      'Contents of Workspace',
+    );
+  });
+
+  it('shows no count for a folder Nuxeo did not count, rather than calling a page the total', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'Budget.xlsx' })],
+        totalSize: -2,
+        hasNextPage: true,
+      }),
+    );
+
+    await render();
+
+    expect(rowTitles()).toEqual(['Budget.xlsx']);
+    expect(query('.result-count')).toBeNull();
+  });
+
+  it('asks the server for the first page of the folder, in its own order', async () => {
+    await render();
+
+    expect(lastRequest()).toEqual({
+      path: '/',
+      page: { currentPageIndex: 0, sort: [] },
+    });
+  });
+
+  it('pages on the server: Next asks for page two, Previous for page one', async () => {
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-1', title: 'First page' })],
+        totalSize: -2,
+        hasNextPage: true,
+      }),
+    );
+    const component = await render();
+
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({
+        folder,
+        entries: [doc({ uid: 'c-51', title: 'Second page' })],
+        totalSize: -2,
+        hasNextPage: false,
+      }),
+    );
+    (query('nxs-document-list .nxs-pager__next') as HTMLButtonElement).click();
+    await settle();
+
+    expect(lastRequest().page.currentPageIndex).toBe(1);
+    expect(component.pageIndex()).toBe(1);
+    expect(rowTitles()).toEqual(['Second page']);
+    expect(query('nxs-document-list .nxs-pager__range')?.textContent?.trim()).toBe('51–51');
+
+    (query('nxs-document-list .nxs-pager__previous') as HTMLButtonElement).click();
+    await settle();
+    expect(lastRequest().page.currentPageIndex).toBe(0);
+  });
+
+  it('renders the breadcrumbs by their registered ID, falling back to the built-in trail', async () => {
+    await render();
+    await settleOutlets();
+
+    const trail = query('nxs-breadcrumbs nav');
+    expect(trail?.getAttribute('aria-label')).toBe('Breadcrumbs');
+    expect([...(trail?.querySelectorAll('a') ?? [])].map((a) => a.getAttribute('href'))).toEqual([
+      '/browse',
+      '/browse/default-domain',
+      '/browse/default-domain/workspaces',
+    ]);
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent?.trim()).toBe('Workspace');
+  });
+
+  it('renders whatever is registered under the breadcrumbs ID instead', async () => {
+    await render([provideNxsComponents()]);
+
+    expect(query('lib-extension-outlet nxs-breadcrumbs nav')?.getAttribute('aria-label')).toBe(
+      'Breadcrumbs',
+    );
   });
 
   it('renders the empty state for a folder the server reports as having no children', async () => {
     const component = await render();
 
     expect(component.entries()).toEqual([]);
-    expect(query('.browse-empty')?.textContent).toContain('This folder is empty');
-    expect(query('.browse-table')).toBeNull();
+    expect(query('nxs-document-list nxs-empty-state')?.textContent).toContain(
+      'This folder is empty',
+    );
+    expect(query('nxs-document-list table')).toBeNull();
   });
 
   it('renders a retryable error and stops loading when the folder request fails', async () => {
@@ -273,7 +384,7 @@ describe('BrowseComponent — rendered document list', () => {
       'Failed to load folder contents.',
     );
     expect(query('nxs-error-state button')?.textContent).toContain('Retry');
-    expect(query('.browse-loading')).toBeNull();
+    expect(query('nxs-document-list nxs-spinner')).toBeNull();
   });
 
   it('reloads the folder and clears the error when Retry is pressed', async () => {
@@ -305,7 +416,74 @@ describe('BrowseComponent — rendered document list', () => {
     expect(query('nxs-error-state .nxs-error-state__message')?.textContent).toContain(
       'You do not have permission to see this.',
     );
+    // A refusal is not a breakage: the host's "Failed to load" heading is for a server error.
+    expect(query('nxs-error-state .nxs-error-state__heading')?.textContent?.trim()).toBe(
+      'You do not have access',
+    );
     expect(query('nxs-error-state button')).toBeNull();
+  });
+
+  describe('a folder that cannot be opened, after one that could', () => {
+    /** Lets the test navigate: the suite's router has no routes of its own. */
+    const anyUrl = { provide: ROUTES, multi: true, useValue: [{ path: '**', children: [] }] };
+
+    function trail(): { links: (string | null)[]; current: string | undefined } {
+      const nav = query('nxs-breadcrumbs nav');
+      return {
+        links: [...(nav?.querySelectorAll('a') ?? [])].map((a) => a.getAttribute('href')),
+        current: nav?.querySelector('[aria-current="page"]')?.textContent?.trim(),
+      };
+    }
+
+    it('keeps nothing of the folder before: not its title, count, actions or place in the trail', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({ folder, entries: [doc({ uid: 'c-1', title: 'Report.pdf' })], totalSize: 1 }),
+      );
+      const component = await render([anyUrl]);
+      await settleOutlets();
+      expect(query('nxs-folder-header .nxs-folder-header__heading')?.textContent?.trim()).toBe(
+        'Workspace',
+      );
+      expect(component.canCreateContentHere()).toBe(true);
+
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 403 })));
+      await TestBed.inject(Router).navigateByUrl(
+        '/browse/default-domain/workspaces/Secret%20files',
+      );
+      await settleOutlets();
+
+      expect(lastRequest().path).toBe('/default-domain/workspaces/Secret files');
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('403');
+      expect(component.currentDoc()).toBeNull();
+      expect(query('nxs-folder-header .nxs-folder-header__heading')).toBeNull();
+      expect(component.canCreateContentHere()).toBe(false);
+      expect(query('.result-count')).toBeNull();
+      expect(rowTitles()).toEqual([]);
+      expect(trail()).toEqual({
+        links: ['/browse', '/browse/default-domain', '/browse/default-domain/workspaces'],
+        current: 'Secret files',
+      });
+    });
+
+    it('keeps the folder when only another page of it fails', async () => {
+      browse.getBrowseFolderContents.mockReturnValue(
+        of({
+          folder,
+          entries: [doc({ uid: 'c-1', title: 'First page' })],
+          totalSize: -2,
+          hasNextPage: true,
+        }),
+      );
+      const component = await render();
+      browse.getBrowseFolderContents.mockReturnValue(throwError(() => ({ status: 500 })));
+      (query('nxs-document-list .nxs-pager__next') as HTMLButtonElement).click();
+      await settleOutlets();
+
+      expect(lastRequest().page.currentPageIndex).toBe(1);
+      expect(query('nxs-error-state')?.getAttribute('data-status')).toBe('500');
+      expect(component.currentDoc()).toBe(folder);
+      expect(trail().current).toBe('Workspace');
+    });
   });
 
   it('says a folder that no longer exists was not found', async () => {
@@ -350,7 +528,7 @@ describe('BrowseComponent — rendered document list', () => {
     await settle();
 
     // The row's nxs-thumbnail owns the URL: it fetched the rendition, minted the URL and draws it.
-    const img = query('.browse-row nxs-thumbnail.doc-thumb img') as HTMLImageElement | null;
+    const img = query(`${ROW} nxs-thumbnail img`) as HTMLImageElement | null;
     expect(img).not.toBeNull();
     expect(img?.getAttribute('src')).toBe(createdObjectUrls[0]);
     expect(createdObjectUrls).toHaveLength(1);
@@ -369,8 +547,8 @@ describe('BrowseComponent — rendered document list', () => {
     await settle();
 
     expect(createdObjectUrls).toEqual([]);
-    expect(query('.browse-row nxs-thumbnail img')).toBeNull();
-    expect(query('.browse-row nxs-thumbnail mat-icon.doc-icon')).not.toBeNull();
+    expect(query(`${ROW} nxs-thumbnail img`)).toBeNull();
+    expect(query(`${ROW} nxs-thumbnail mat-icon.nxs-document-list__icon`)).not.toBeNull();
   });
 
   it('navigates into a folder row and to the document view for a file row', async () => {
@@ -393,7 +571,7 @@ describe('BrowseComponent — rendered document list', () => {
 
     await render();
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
-    const rows = fixture.nativeElement.querySelectorAll('.browse-row') as NodeListOf<HTMLElement>;
+    const rows = fixture.nativeElement.querySelectorAll(ROW) as NodeListOf<HTMLElement>;
 
     rows[0].click();
     expect(navigate).toHaveBeenCalledWith('/browse/default-domain/workspaces/ws-1/sub');
@@ -409,17 +587,17 @@ describe('BrowseComponent — rendered document list', () => {
 
     await render();
     const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
-    const checkbox = query('.cell-checkbox input[type="checkbox"]') as HTMLInputElement;
+    const checkbox = query(`${ROW} input[type="checkbox"]`) as HTMLInputElement;
     checkbox.click();
     await settle();
 
     expect(TestBed.inject(SelectionService).selectedIds()).toEqual(new Set(['file-1']));
     expect(TestBed.inject(SelectionService).selectedItems()[0].name).toBe('Readme.md');
     expect(navigate).not.toHaveBeenCalled();
-    expect(query('.browse-row')?.classList.contains('browse-row--selected')).toBe(true);
+    expect(query(ROW)?.classList.contains('nxs-document-list__row--selected')).toBe(true);
   });
 
-  it('reorders the rendered rows when a column header is clicked, and reverses on a second click', async () => {
+  it('asks the server for a column’s order and keeps the rows in the order it answers', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
       of({
         folder,
@@ -435,19 +613,42 @@ describe('BrowseComponent — rendered document list', () => {
     const component = await render();
     expect(rowTitles()).toEqual(['Zebra', 'apple', 'Mango']);
 
-    const titleHeader = fixture.nativeElement.querySelectorAll(
-      '.browse-table thead .sortable-th',
-    )[0] as HTMLElement;
-
-    titleHeader.click();
+    component.goToPage(1);
     await settle();
-    expect(component.browseSortDir()).toBe('asc');
-    expect(rowTitles()).toEqual(['apple', 'Mango', 'Zebra']);
-
-    titleHeader.click();
+    sortControl('Title').click();
     await settle();
-    expect(component.browseSortDir()).toBe('desc');
-    expect(rowTitles()).toEqual(['Zebra', 'Mango', 'apple']);
+    // A new order is a new set of pages, so it starts again from the first.
+    expect(lastRequest().page).toEqual({
+      currentPageIndex: 0,
+      sort: [{ sortBy: 'dc:title', sortOrder: 'ASC' }],
+    });
+    expect(component.listSort()).toEqual({ key: 'title', direction: 'asc' });
+    // Whatever the server answered, in the order it answered: the page is never sorted here.
+    expect(rowTitles()).toEqual(['Zebra', 'apple', 'Mango']);
+
+    sortControl('Title').click();
+    await settle();
+    expect(lastRequest().page.sort).toEqual([{ sortBy: 'dc:title', sortOrder: 'DESC' }]);
+
+    sortControl('Last Contributor').click();
+    await settle();
+    expect(lastRequest().page.sort).toEqual([{ sortBy: 'dc:lastContributor', sortOrder: 'ASC' }]);
+  });
+
+  it('keeps a column the server cannot sort by out of the sort controls', async () => {
+    localStorage.setItem('browse_column_settings', JSON.stringify(['title', 'type', 'version']));
+    browse.getBrowseFolderContents.mockReturnValue(
+      of({ folder, entries: [doc({ uid: 'c-1', title: 'Readme.md' })], totalSize: 1 }),
+    );
+
+    await render();
+
+    const typeHeader = [
+      ...fixture.nativeElement.querySelectorAll('nxs-document-list thead th'),
+    ].find((el) => (el as HTMLElement).textContent?.trim() === 'Type') as HTMLElement;
+    expect(typeHeader.hasAttribute('aria-sort')).toBe(false);
+    expect(typeHeader.querySelector('.mat-sort-header-container')).toBeNull();
+    expect(sortControl('Title')).toBeTruthy();
   });
 
   it('filters the rendered rows by title and reports the filtered count', async () => {
@@ -584,10 +785,8 @@ describe('BrowseComponent — rendered document list', () => {
   });
 
   /**
-   * Seen red on purpose by reverting `[initials]` to `lastContributor(doc)`:
-   * `TypeError: Cannot read properties of undefined (reading 'toUpperCase')`
-   * thrown from `SatAvatar._displayedInitials` during change detection, which
-   * takes down the whole listing rather than one cell.
+   * An empty initial crashes Satori's avatar inside change detection, which takes down the whole
+   * listing rather than one cell, so the list passes `?` for a document with no contributor.
    */
   it('renders a row whose document has no last contributor instead of throwing', async () => {
     browse.getBrowseFolderContents.mockReturnValue(
@@ -602,7 +801,8 @@ describe('BrowseComponent — rendered document list', () => {
 
     expect(component.lastContributor(component.entries()[0])).toBe('');
     expect(rowTitles()).toEqual(['Imported.pdf']);
-    expect(query('.cell-lastContributor sat-avatar span')?.textContent?.trim()).toBe('?');
+    await settleOutlets();
+    expect(query(`${ROW} nxs-avatar`)?.textContent?.trim()).toBe('?');
   });
 
   it('uses the contributor initial when the document does have a last contributor', async () => {
@@ -618,8 +818,9 @@ describe('BrowseComponent — rendered document list', () => {
 
     await render();
 
-    expect(query('.cell-lastContributor sat-avatar span')?.textContent?.trim()).toBe('J');
-    expect(query('.cell-lastContributor')?.textContent).toContain('jdoe');
+    await settleOutlets();
+    expect(query(`${ROW} nxs-avatar`)?.textContent?.trim()).toBe('J');
+    expect(query(`${ROW} .nxs-document-list__person`)?.textContent).toContain('jdoe');
   });
 
   it('does not load activity for the synthetic repository root', async () => {
@@ -666,12 +867,11 @@ describe('BrowseComponent — rendered document list', () => {
       }),
     );
 
-    const component = await render();
+    await render();
 
-    expect(component.hasCollectionEntries()).toBe(true);
-    expect(query('.browse-table thead th.col-checkbox')).not.toBeNull();
-    expect(query('.browse-table thead th.col-actions')).not.toBeNull();
-    expect(unlabelledHeaders('.browse-table')).toEqual([]);
+    expect(query('nxs-document-list thead th.nxs-document-list__select')).not.toBeNull();
+    expect(query('nxs-document-list thead th.nxs-document-list__actions')).not.toBeNull();
+    expect(unlabelledHeaders('nxs-document-list')).toEqual([]);
   });
 
   it('gives every local-permissions header cell text, including the actions column', async () => {

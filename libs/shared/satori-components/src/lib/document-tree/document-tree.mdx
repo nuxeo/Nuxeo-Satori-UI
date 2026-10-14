@@ -1,0 +1,109 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DocumentTreeStories from './document-tree.stories';
+
+<Meta of={DocumentTreeStories} name="Overview" />
+
+# Document tree
+
+The document tree is the repository's folders as a tree: the domains at the root, and inside a
+domain that domain's branch, expanded down to the folder the page shows, which is marked as the
+current page. Use it beside a folder listing, in a drawer, so the user sees where they are and can
+move to another folder in one step.
+
+## Key features
+
+- **Follows the page.** Give it the path on screen and it expands each folder down to it, loading
+  what it has not loaded, and folds away the branch it left.
+- **The current folder is marked.** The folder on screen is `aria-current="page"` and the selected
+  row, styled as such. A path the tree cannot show, such as a document's, marks its nearest folder.
+- **Arrows only where there is something to open.** For each level it asks Nuxeo, in one query,
+  which folders hold a folder, so a leaf has no expand arrow, as in Nuxeo Web UI. When Nuxeo cannot
+  say, the arrow stays rather than hiding a branch.
+- **No silent failure.** If the tree cannot load, it shows an error state chosen by status: a 403
+  says the user has no access, a server error offers Retry. If one folder's folders fail, a row under
+  it says so and retries when activated, and the failure is announced.
+- **The host navigates.** Choosing a folder emits it with `navigate`. The root arrives as a document
+  whose path is `/`; a repository with a single domain opens that domain instead, as Web UI does.
+
+## Demo showcase
+
+<Canvas of={DocumentTreeStories.InsideADomain} />
+
+## Usage
+
+export const usageTs = `import { NxsDocumentTreeComponent } from '@nuxeo-satori/platform/components';
+import { documentNavigationUrl, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+
+readonly tree = viewChild(NxsDocumentTreeComponent);
+
+openFolder(doc: NuxeoDocument): void {
+  void this.router.navigateByUrl(doc.path === '/' ? '/browse' : documentNavigationUrl(doc));
+}
+
+afterFolderCreated(): void {
+  this.tree()?.reload();
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-document-tree
+  [label]="'acme.folders' | translate"
+  [currentPath]="currentPath()"
+  (navigate)="openFolder($event)"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`label` is required, already translated. `currentPath` is the Nuxeo path the page shows, `/` by
+default. Call `reload()` after something changes the folders — a folder created, moved, renamed or
+deleted — and the tree reads them again. Its own words — the root's name, the loader, the error rows
+and the announcements — are translated with ngx-translate under `satori-components.document-tree.*`,
+and `providePlatformEnglishFallback()` supplies the English when your catalogue does not.
+
+## Where its data comes from
+
+The tree reads the repository through `BrowseService`, with the application's sign-in: the root and
+its domains through `getNavTreeBootstrap`, which also serves a user who may read only some domains
+or workspaces; each folder's folders through `getNavTreeChildren`, the `tree_children` page provider
+Web UI's tree uses; and, in one query per level, which of them hold a folder, through
+`getFolderIdsWithSubfolders`. Nuxeo checks every request: the tree shows only what the user may read.
+
+**In these stories** the repository is a fixed set of folders answered from memory, and choosing a
+folder only records it in the Actions panel.
+
+## Examples
+
+### At the repository root
+
+<Canvas of={DocumentTreeStories.AtTheRoot} />
+
+### The keyboard
+
+The **From the keyboard** story in the sidebar moves down two rows and opens Legal with Enter. It
+runs only on its own page, because it moves this page's focus.
+
+### A folder that failed
+
+<Canvas of={DocumentTreeStories.AFolderThatFailed} />
+
+### The tree refused
+
+<Canvas of={DocumentTreeStories.TreeRefused} />
+
+## Accessibility
+
+- **A tree.** It is a `tree` named by `label`; each folder is a `treeitem` with `aria-level`,
+  `aria-setsize` and `aria-posinset`, and `aria-expanded` when it can open. A folder's folders are a
+  `group` inside it.
+- **Where the user is.** The current folder is `aria-current="page"` and `aria-selected="true"`;
+  every other row is `aria-selected="false"`.
+- **Keyboard.** One row is in the Tab sequence: the current folder, until the user moves. **Up** and
+  **Down** move between rows, **Home** and **End** go to the first and last. **Right** expands a
+  folder, or steps into its first folder when it is open; **Left** collapses it, or steps out to its
+  parent. **Enter** opens the folder; **Space** expands or collapses it. In a right-to-left page,
+  Right and Left swap.
+- **Loading and failures.** A folder loading its folders is `aria-busy`. A failure is a row of its
+  own, reached with the arrows like any other, and is announced assertively; Enter or Space on it
+  tries again.
+- **The arrow** is decorative: the row says whether it is expanded.

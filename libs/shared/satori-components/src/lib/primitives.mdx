@@ -10,11 +10,13 @@ Four components here are also in Satori's own component library: the avatar, the
 tag and the rich tooltip. Each one is registered under an ID. A screen that renders the ID, rather
 than the component, shows whichever version the application registered: Satori's, when
 `@nuxeo-satori/platform/components-satori` is installed and provided, or the built-in version
-otherwise.
+otherwise. A fifth, the error state, is registered the same way; Satori's own error states arrive with
+Satori 1.0, which needs a newer Angular than this package supports, so it renders the built-in
+version either way for now.
 
 ## Key features
 
-- **Four IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
+- **Five IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
   passes the same values whichever is registered.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
@@ -25,7 +27,8 @@ otherwise.
 
 ## Demo showcase
 
-The four IDs rendered through `lib-extension-outlet`, as a screen renders them.
+The four IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them.
+The error state's own page shows it by ID.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -97,16 +100,34 @@ The four IDs rendered through `lib-extension-outlet`, as a screen renders them.
         Rich tooltip (<code>sat-rich-tooltip</code>)
       </td>
     </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.errorState</code>
+      </td>
+      <td>
+        <code>status</code>, <code>heading</code>, <code>headingLevel</code>, <code>retryable</code>,
+        <code>retryHandler</code>
+      </td>
+      <td>
+        <code>NxsErrorStateInputs</code>
+      </td>
+      <td>None yet: Satori 1.0's error states</td>
+    </tr>
   </tbody>
 </table>
 
 The IDs are exported as `NXS_PRIMITIVE_IDS` from `@nuxeo-satori/platform/components`. Render one
 with `lib-extension-outlet` from `@nuxeo-satori/platform/extensions`:
 
+export const byIdHtml = `<lib-extension-outlet
+  [componentId]="ids.tag"
+  [componentInputs]="{ label: 'Invoice', color: 'purple' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet [componentId]="ids.tag" [componentInputs]="{ label: 'Invoice', color: 'purple' }" />`}
+  code={byIdHtml}
 />
 
 `provideNxsComponents()` registers the built-in versions. Each component's own page lists its inputs
@@ -186,8 +207,8 @@ providers: [
         <code>nxs.primitives.avatar</code>
       </td>
       <td>
-        Satori's has a thin border and its own colours, and shows one initial at 24 pixels. The
-        built-in one follows your Material theme.
+        Satori's has a thin border, and its shades come from Satori's theme. The built-in one blends
+        the same hues with your Material theme's surface and text.
       </td>
     </tr>
     <tr>
@@ -202,7 +223,10 @@ providers: [
       <td>
         <code>nxs.primitives.tag</code>
       </td>
-      <td>Satori's uses its own colours. The built-in one follows your Material theme.</td>
+      <td>
+        Satori's uses its own shades and never wraps, spilling out of a narrow box. The built-in one
+        blends the same hues with your theme, and wraps a long label.
+      </td>
     </tr>
     <tr>
       <td>

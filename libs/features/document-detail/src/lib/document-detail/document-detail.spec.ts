@@ -23,7 +23,6 @@ import {
   DocumentDetailService,
   NuxeoApiBase,
   PERMISSION_DENIED_KEY,
-  type NuxeoComment,
   type NuxeoDocument,
   TagService,
   TaskService,
@@ -124,7 +123,7 @@ const mockARenderService = {
 };
 
 const mockTagService = {
-  addTag: () => of(null),
+  addTag: () => of([]),
 };
 
 const mockAiGatewayService = {
@@ -239,28 +238,52 @@ describe('DocumentDetailComponent', () => {
     });
   });
 
-  describe('indexing properties File Name (NXSAT-190)', () => {
-    it('hides File Name for Note documents without a file blob', () => {
-      component.doc.set(NOTE_DOC);
-
-      expect(component.hasPersistedMainBlob()).toBe(false);
-    });
-
-    it('shows File Name when file:content has a persisted blob', () => {
+  describe('details panel heading', () => {
+    it('names the panel after the main file when there is one', () => {
       component.doc.set({
         ...STUB_DOC,
-        title: 'File_loremIpsum-5.pdf',
+        title: 'Quarterly',
         properties: {
-          'file:content': {
-            name: 'File_loremIpsum-5.pdf',
-            length: '1024',
-            digest: 'abc123',
-          },
+          'file:content': { name: 'File_loremIpsum-5.pdf', length: '1024', digest: 'abc123' },
         },
       });
 
-      expect(component.hasPersistedMainBlob()).toBe(true);
       expect(component.fileName()).toBe('File_loremIpsum-5.pdf');
+    });
+
+    it('falls back to the title for a note', () => {
+      component.doc.set(NOTE_DOC);
+
+      expect(component.fileName()).toBe(NOTE_DOC.title);
+    });
+  });
+
+  describe('details panel views', () => {
+    it('offers Comments only with the Commentable facet', () => {
+      component.doc.set({ ...STUB_DOC, facets: [] });
+      expect(component.panelViews().map((view) => view.id)).toEqual(['properties', 'activity']);
+
+      component.doc.set({ ...STUB_DOC, facets: ['Commentable'] });
+      expect(component.panelViews().map((view) => view.id)).toEqual([
+        'properties',
+        'comments',
+        'activity',
+      ]);
+    });
+
+    it('falls back to Properties when the selected view is not offered', () => {
+      component.doc.set({ ...STUB_DOC, facets: ['Commentable'] });
+      component.panelSubTab.set('comments');
+      expect(component.activePanelView()).toBe('comments');
+
+      component.doc.set({ ...STUB_DOC, facets: [] });
+      expect(component.activePanelView()).toBe('properties');
+    });
+
+    it('ignores a view ID it does not know', () => {
+      component.panelSubTab.set('activity');
+      component.switchPanelSubTab('claims');
+      expect(component.panelSubTab()).toBe('activity');
     });
   });
 
@@ -467,164 +490,16 @@ describe('DocumentDetailComponent', () => {
       );
     });
 
-    it('openCreateVersionDialog is blocked for read-only users', () => {
+    it('openPublishDialog is blocked for read-only users', () => {
       component.doc.set(readOnlyDoc);
       const dialogSpy = vi.spyOn(component['dialog'], 'open');
 
-      component.openCreateVersionDialog();
+      component.openPublishDialog();
 
       expect(dialogSpy).not.toHaveBeenCalled();
       expect(toast.error).toHaveBeenCalledWith(
         TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
       );
-    });
-
-    it('submitComment is blocked for read-only users', () => {
-      component.doc.set(readOnlyDoc);
-      component.newCommentText.set('hello');
-
-      component.submitComment();
-
-      expect(toast.error).toHaveBeenCalledWith(
-        TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      );
-    });
-  });
-
-  describe('comment replies (NXSAT-184)', () => {
-    const writableDoc: NuxeoDocument = {
-      ...STUB_DOC,
-      contextParameters: { permissions: ['Read', 'Write'] },
-    };
-
-    const parentComment: NuxeoComment = {
-      id: 'comment-1',
-      parentId: 'doc-uid-1',
-      text: 'Parent comment',
-      author: 'tester',
-      creationDate: '2026-01-01T00:00:00Z',
-      modificationDate: '2026-01-01T00:00:00Z',
-    };
-
-    const reply: NuxeoComment = {
-      id: 'reply-1',
-      parentId: 'comment-1',
-      text: 'Original reply',
-      author: 'tester',
-      creationDate: '2026-01-01T01:00:00Z',
-      modificationDate: '2026-01-01T01:00:00Z',
-    };
-
-    beforeEach(() => {
-      component.doc.set(writableDoc);
-      component.comments.set([parentComment]);
-      component.repliesMap.set({ 'comment-1': [reply] });
-      vi.spyOn(component['dialog'], 'open').mockReturnValue({
-        afterClosed: () => of(true),
-      } as never);
-    });
-
-    it('saveEditComment updates a reply in repliesMap', async () => {
-      const updatedReply: NuxeoComment = {
-        ...reply,
-        text: 'Edited reply',
-        modificationDate: '2026-01-02T00:00:00Z',
-      };
-      mockDocumentDetailService.updateComment.mockReturnValue(of(updatedReply));
-      component.editingCommentId.set('reply-1');
-      component.editingCommentText.set('Edited reply');
-
-      component.saveEditComment();
-      await fixture.whenStable();
-
-      expect(mockDocumentDetailService.updateComment).toHaveBeenCalledWith(
-        'doc-uid-1',
-        'reply-1',
-        'Edited reply',
-      );
-      expect(component.repliesMap()['comment-1']).toEqual([updatedReply]);
-      expect(component.editingCommentId()).toBeNull();
-    });
-
-    it('deleteComment removes a reply from repliesMap', async () => {
-      mockDocumentDetailService.deleteComment.mockReturnValue(of(void 0));
-
-      component.deleteComment(reply, 'comment-1');
-      await fixture.whenStable();
-
-      expect(mockDocumentDetailService.deleteComment).toHaveBeenCalledWith('doc-uid-1', 'reply-1');
-      expect(component.repliesMap()['comment-1']).toEqual([]);
-      expect(toast.show).toHaveBeenCalledWith('Reply deleted');
-    });
-  });
-
-  describe('properties panel collections (NXSAT-191)', () => {
-    it('excludes Favorites from collections shown in the Properties panel', () => {
-      component.doc.set({
-        ...STUB_DOC,
-        contextParameters: {
-          collections: [
-            {
-              uid: 'fav-1',
-              title: 'My Favorites',
-              path: '/default-domain/UserWorkspaces/user5/Favorites',
-              type: 'Favorites',
-            },
-            {
-              uid: 'col-1',
-              title: 'Project Alpha',
-              path: '/default-domain/UserWorkspaces/user5/Collections/project-alpha',
-              type: 'Collection',
-            },
-          ],
-        },
-      });
-
-      expect(component.collections()).toEqual([
-        {
-          uid: 'col-1',
-          title: 'Project Alpha',
-          path: '/default-domain/UserWorkspaces/user5/Collections/project-alpha',
-          type: 'Collection',
-        },
-      ]);
-    });
-
-    it('returns empty when only Favorites membership exists', () => {
-      component.doc.set({
-        ...STUB_DOC,
-        contextParameters: {
-          collections: [
-            {
-              uid: 'fav-1',
-              title: 'My Favorites',
-              path: '/default-domain/UserWorkspaces/user5/Favorites',
-              type: 'Favorites',
-            },
-          ],
-        },
-      });
-
-      expect(component.collections()).toEqual([]);
-      expect(component.hasCollections()).toBe(false);
-    });
-
-    it('hasCollections is true only when a user collection remains after filtering', () => {
-      component.doc.set({
-        ...STUB_DOC,
-        contextParameters: {
-          collections: [
-            {
-              uid: 'col-1',
-              title: 'Project Alpha',
-              path: '/default-domain/UserWorkspaces/user5/Collections/project-alpha',
-              type: 'Collection',
-            },
-          ],
-        },
-      });
-
-      expect(component.hasCollections()).toBe(true);
     });
   });
 
@@ -701,16 +576,9 @@ describe('DocumentDetailComponent', () => {
 });
 
 describe('DocumentDetailComponent — tablist keydown wiring (NXENG-821)', () => {
-  const dir = import.meta.dirname;
-
-  it('binds libMatTabListKeydown on the main detail tab group in document-detail.html', () => {
-    const html = readFileSync(join(dir, 'document-detail.html'), 'utf8');
-    expect(html).toMatch(/<mat-tab-group[\s\S]*?libMatTabListKeydown[\s\S]*?class="detail-tabs"/);
-  });
-
-  it('imports MatTabListKeydownDirective on DocumentDetailComponent', () => {
-    const source = readFileSync(join(dir, 'document-detail.ts'), 'utf8');
-    expect(source).toContain('MatTabListKeydownDirective');
-    expect(source).toMatch(/imports:[\s\S]*MatTabListKeydownDirective/);
+  it('renders the detail tabs through nxs-tabs, which owns the tablist key handler', () => {
+    const html = readFileSync(join(import.meta.dirname, 'document-detail.html'), 'utf8');
+    expect(html).toMatch(/<nxs-tabs[^>]*class="detail-tabs"/);
+    expect(html).not.toContain('<mat-tab-group');
   });
 });

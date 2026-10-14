@@ -1,0 +1,52 @@
+:host {
+  display: block;
+  min-width: 0;
+}
+
+.nxs-saved-search-select__label {
+  display: block;
+  margin-bottom: 4px;
+  font: var(--mat-sys-label-medium, inherit);
+  color: var(--mat-sys-on-surface-variant, inherit);
+}
+
+.nxs-saved-search-select__wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.nxs-saved-search-select__input {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 6px 28px 6px 8px;
+  border: 1px solid var(--mat-sys-outline, currentColor);
+  border-radius: 4px;
+  background: var(--mat-sys-surface, transparent);
+  color: var(--mat-sys-on-surface, inherit);
+  font: var(--mat-sys-body-medium, inherit);
+  text-overflow: ellipsis;
+
+  // IBM Equal Access's style_focus_visible reads `:focus` only, so the ring is also drawn on a
+  // standalone `:focus` (NXSAT-547).
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary, currentColor);
+    outline-offset: 1px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary, currentColor);
+    outline-offset: 1px;
+  }
+
+  &::placeholder {
+    color: var(--mat-sys-on-surface-variant, inherit);
+  }
+}
+
+.nxs-saved-search-select__arrow {
+  position: absolute;
+  right: 4px;
+  pointer-events: none;
+  color: var(--mat-sys-on-surface-variant, inherit);
+}

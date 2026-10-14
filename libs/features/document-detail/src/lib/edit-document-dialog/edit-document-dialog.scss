@@ -1,0 +1,29 @@
+:host {
+  display: block;
+}
+
+mat-dialog-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 12px !important;
+}
+
+.edit-document-dialog__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+mat-dialog-actions {
+  display: flex;
+  padding: 8px 24px 16px;
+}
+
+.edit-document-dialog__spacer {
+  flex: 1;
+}

@@ -11,7 +11,6 @@ import {
   Router,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { MatChipInputEvent } from '@angular/material/chips';
 import { MatDialog } from '@angular/material/dialog';
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
@@ -109,6 +108,7 @@ const mockDetailService = {
   updateComment: vi.fn((): Observable<unknown> => of({})),
   deleteComment: vi.fn((): Observable<void> => of(undefined)),
   getVersions: vi.fn((): Observable<unknown[]> => of([])),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<unknown[]> => of([])),
   getSectionTree: vi.fn((): Observable<unknown[]> => of([])),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -159,8 +159,8 @@ const mockARenderService = {
   getPreviewerUrl: vi.fn((): Observable<string | null> => of(null)),
 };
 const mockTagService = {
-  addTag: vi.fn((): Observable<unknown> => of({})),
-  removeTag: vi.fn((): Observable<void> => of(undefined)),
+  addTag: vi.fn((): Observable<string[]> => of([])),
+  removeTag: vi.fn((): Observable<string[]> => of([])),
   searchTags: vi.fn((): Observable<unknown[]> => of([])),
 };
 const mockAiGateway = {
@@ -721,151 +721,6 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(component.actionInProgress()).toBeNull();
     });
   });
-  describe('audit / history tab', () => {
-    const entry = (over: Partial<AuditEntry> = {}): AuditEntry =>
-      ({
-        eventId: 'documentModified',
-        eventDate: '2026-08-20T10:00:00.000Z',
-        principalName: 'alice',
-        category: 'eventDocumentCategory',
-        comment: '',
-        docLifeCycle: 'project',
-        ...over,
-      }) as AuditEntry;
-
-    it('loads the audit log and records the total from resultsCount', async () => {
-      mockDetailService.getAuditLog.mockReturnValue(of({ entries: [entry()], resultsCount: 7 }));
-      await build();
-
-      component.loadAuditLog();
-
-      expect(mockDetailService.getAuditLog).toHaveBeenCalledWith('doc-1', 20, 0);
-      expect(component.auditEntries().length).toBe(1);
-      expect(component.auditTotalSize()).toBe(7);
-      expect(component.auditLoading()).toBe(false);
-    });
-
-    it('falls back to the entry count when the server sends no total', async () => {
-      mockDetailService.getAuditLog.mockReturnValue(of({ entries: [entry(), entry()] }));
-      await build();
-
-      component.loadAuditLog();
-
-      expect(component.auditTotalSize()).toBe(2);
-    });
-
-    it('does not query the audit log for a document the user cannot audit', async () => {
-      await build(doc({ contextParameters: { permissions: [] } }));
-      mockDetailService.getAuditLog.mockClear();
-
-      component.loadAuditLog();
-
-      expect(mockDetailService.getAuditLog).not.toHaveBeenCalled();
-      expect(component.auditEntries()).toEqual([]);
-      expect(component.auditTotalSize()).toBe(0);
-      expect(component.auditLoading()).toBe(false);
-    });
-
-    it('clears the loading flag when the audit request fails', async () => {
-      mockDetailService.getAuditLog.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      component.loadAuditLog();
-
-      expect(component.auditLoading()).toBe(false);
-    });
-
-    it('re-queries with the new page size and index on pagination', async () => {
-      await build();
-      mockDetailService.getAuditLog.mockClear();
-      mockDetailService.getAuditLog.mockReturnValue(of({ entries: [], resultsCount: 0 }));
-
-      component.onAuditPageChange({ pageSize: 50, pageIndex: 3, length: 200 } as PageEvent);
-
-      expect(component.auditPageSize()).toBe(50);
-      expect(component.auditPageIndex()).toBe(3);
-      expect(mockDetailService.getAuditLog).toHaveBeenCalledWith('doc-1', 50, 3);
-    });
-
-    describe('filteredAuditEntries', () => {
-      beforeEach(async () => {
-        await build();
-        component.auditEntries.set([
-          entry({ principalName: 'alice', eventDate: '2026-08-10T10:00:00.000Z' }),
-          entry({
-            principalName: 'bob',
-            eventId: 'documentCreated',
-            category: 'eventLifeCycleCategory',
-            eventDate: '2026-08-20T10:00:00.000Z',
-          }),
-          entry({ principalName: 'carol', eventDate: '2026-08-30T10:00:00.000Z' }),
-        ]);
-        component.filterUsername.set('');
-        component.filterDateFrom.set(null);
-        component.filterDateTo.set(null);
-        component.filterAction.set('');
-        component.filterCategory.set('');
-      });
-
-      it('returns everything when no filter is set', () => {
-        expect(component.filteredAuditEntries().length).toBe(3);
-      });
-
-      it('filters by username case-insensitively', () => {
-        component.filterUsername.set('ALI');
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual(['alice']);
-      });
-
-      it('filters by a start date', () => {
-        component.filterDateFrom.set(new Date('2026-08-20T00:00:00.000Z'));
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'bob',
-          'carol',
-        ]);
-      });
-
-      it('includes the whole of the end date rather than midnight', () => {
-        // The implementation pushes `dateTo` to 23:59:59.999 deliberately; a naive comparison
-        // would drop every entry recorded later in the selected day.
-        component.filterDateTo.set(new Date('2026-08-20T00:00:00.000Z'));
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'alice',
-          'bob',
-        ]);
-      });
-
-      it('filters by action and by category', () => {
-        component.filterAction.set('documentCreated');
-        expect(component.filteredAuditEntries().length).toBe(1);
-        component.filterAction.set('');
-        component.filterCategory.set('eventLifeCycleCategory');
-        expect(component.filteredAuditEntries().length).toBe(1);
-      });
-
-      it('sorts both ways without mutating the source signal', () => {
-        const before = component.auditEntries().map((e) => e.principalName);
-
-        component.onAuditSort({ active: 'principalName', direction: 'asc' } as Sort);
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'alice',
-          'bob',
-          'carol',
-        ]);
-
-        component.onAuditSort({ active: 'principalName', direction: 'desc' } as Sort);
-        expect(component.filteredAuditEntries().map((e) => e.principalName)).toEqual([
-          'carol',
-          'bob',
-          'alice',
-        ]);
-
-        // The sort copies before sorting; sorting the signal's value in place would make the
-        // rendered order depend on how many times the computed had been read.
-        expect(component.auditEntries().map((e) => e.principalName)).toEqual(before);
-      });
-    });
-  });
-
   describe('trash and permanent delete', () => {
     it('trashes after confirmation and navigates away', async () => {
       await build();
@@ -952,122 +807,35 @@ describe('DocumentDetailComponent — load chain', () => {
     });
   });
 
-  describe('inline tags', () => {
-    /**
-     * Tags arrive through the Material chip input, so the entry point takes a
-     * `MatChipInputEvent` and clears the chip itself. Built here rather than calling the private
-     * `applyInlineTag` directly, so the clear-and-apply sequencing is exercised too.
-     */
-    function chipInput(value: string): MatChipInputEvent {
-      return {
-        value,
-        chipInput: { clear: vi.fn() },
-        input: document.createElement('input'),
-      } as unknown as MatChipInputEvent;
-    }
+  describe('tags', () => {
+    it('keeps the document in step with the tags the tag editor saved', async () => {
+      await build(doc({ properties: { 'nxtag:tags': [{ label: 'old', username: 'jdoe' }] } }));
 
-    it('appends a new tag to the document without refetching it', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'existing' }] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
+      component.setTags(['old', 'q3report']);
 
-      component.addInlineTagFromChip(chipInput('fresh'));
-
-      expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'fresh');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['existing', 'fresh']);
-      expect(component.tagAdding()).toBe(false);
+      expect(component.doc()?.properties['nxtag:tags']).toEqual([
+        { label: 'old' },
+        { label: 'q3report' },
+      ]);
+      expect(component.tags()).toEqual(['old', 'q3report']);
     });
 
-    it('normalises string tags to objects when appending', async () => {
-      // Nuxeo returns `nxtag:tags` as strings on some deployments and objects on others; the
-      // component normalises so the template does not have to.
-      await build(doc({ properties: { 'nxtag:tags': ['plain'] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
-
-      component.addInlineTagFromChip(chipInput('added'));
-
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags).toEqual([{ label: 'plain' }, { label: 'added' }]);
+    it('lets a user with Write tag the document itself, as Web UI does', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(true);
     });
 
-    it('does not duplicate a tag that is already present', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'dup' }] } }));
-      mockTagService.addTag.mockReturnValue(of({}));
-
-      component.addInlineTagFromChip(chipInput('dup'));
-
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['dup']);
+    it('does not let a user tag without Write, even with WriteProperties', async () => {
+      await build(doc({ contextParameters: { permissions: ['Read', 'WriteProperties'] } }));
+      expect(component.canTag()).toBe(false);
     });
 
-    it('releases the adding flag and warns when adding a tag fails', async () => {
-      await build();
-      mockTagService.addTag.mockReturnValue(throwError(() => new Error('boom')));
+    it('does not let anyone tag a version or a proxy', async () => {
+      await build(doc({ isVersion: true, contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(false);
 
-      component.addInlineTagFromChip(chipInput('nope'));
-
-      expect(component.tagAdding()).toBe(false);
-      expect(toast.error).toHaveBeenCalledWith('Failed to add tag');
-    });
-
-    it('removes a tag from the document', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'keep' }, { label: 'drop' }] } }));
-      mockTagService.removeTag.mockReturnValue(of(undefined));
-
-      component.removeInlineTag('drop');
-
-      expect(mockTagService.removeTag).toHaveBeenCalledWith('doc-1', 'drop');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['keep']);
-    });
-
-    it('warns and leaves the tags alone when removal fails', async () => {
-      await build(doc({ properties: { 'nxtag:tags': [{ label: 'keep' }] } }));
-      mockTagService.removeTag.mockReturnValue(throwError(() => new Error('boom')));
-
-      component.removeInlineTag('keep');
-
-      expect(toast.error).toHaveBeenCalledWith('Failed to remove tag');
-      const tags = component.doc()?.properties['nxtag:tags'] as Array<{ label: string }>;
-      expect(tags.map((t) => t.label)).toEqual(['keep']);
-    });
-  });
-
-  describe('comments', () => {
-    it('loads comments for the document', async () => {
-      // Shape matters: the component reads `res.entries`, so returning a bare array made
-      // `.map` throw as an unhandled error while the test still passed.
-      // Shape matters twice over: the component reads `res.entries`, and then reads
-      // `e.properties['comment:*']` off each entry. A bare array made `.map` throw, and an
-      // entry without `properties` made the property read throw — both as UNHANDLED errors
-      // while the test still reported green.
-      mockDetailService.getAllComments.mockReturnValue(
-        of({
-          entries: [
-            {
-              uid: 'c1',
-              properties: {
-                'comment:parentId': 'doc-1',
-                'comment:text': 'hello',
-                'comment:author': 'alice',
-                'comment:creationDate': '2026-08-24T10:00:00.000Z',
-              },
-            },
-          ],
-        }),
-      );
-      await build();
-
-      component.loadComments();
-
-      expect(mockDetailService.getAllComments).toHaveBeenCalledWith('doc-1');
-    });
-
-    it('survives a failed comment load', async () => {
-      mockDetailService.getAllComments.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      expect(() => component.loadComments()).not.toThrow();
+      await build(doc({ isProxy: true, contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canTag()).toBe(false);
     });
   });
 

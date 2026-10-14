@@ -1,0 +1,45 @@
+:host {
+  display: block;
+  --nxs-update-permission-dialog-muted: var(--mat-sys-on-surface-variant);
+  --nxs-update-permission-dialog-error: var(--mat-sys-error);
+}
+
+.nxs-update-permission-dialog__content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: min(460px, 80vw);
+}
+
+// Paragraph margins are scoped to the host: the theme's `.mat-typography p` outranks one class.
+:host .nxs-update-permission-dialog__principal {
+  margin: 0 0 12px;
+  font-size: 14px;
+  color: var(--nxs-update-permission-dialog-muted);
+}
+
+.nxs-update-permission-dialog__label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.nxs-update-permission-dialog__time-frame {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+
+.nxs-update-permission-dialog__dates {
+  display: flex;
+  gap: 16px;
+
+  mat-form-field {
+    flex: 1;
+  }
+}
+
+:host .nxs-update-permission-dialog__error {
+  margin: -4px 0 8px;
+  font-size: 12px;
+  color: var(--nxs-update-permission-dialog-error);
+}

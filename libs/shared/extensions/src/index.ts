@@ -36,7 +36,9 @@ export {
   type ExtensionActionDescriptor,
   type ExtensionActionHandler,
   type ExtensionActionRegistration,
+  type DocumentLayoutChange,
   type ExtensionColumnDescriptor,
+  type ExtensionDocumentLayoutDescriptor,
   type ExtensionDocumentViewDescriptor,
   type ExtensionRouteDescriptor,
   type ExtensionTabDescriptor,
@@ -45,6 +47,7 @@ export {
   PACKAGED_BROWSE_CONTEXT_MENU,
   PACKAGED_BULK_ACTIONS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
+  PACKAGED_ROW_ACTIONS,
 } from './lib/packaged-actions';
 export { PACKAGED_DOCUMENT_TABS } from './lib/packaged-tabs';
 export { PACKAGED_BROWSE_COLUMNS } from './lib/packaged-columns';

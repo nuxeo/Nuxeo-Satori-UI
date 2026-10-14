@@ -189,6 +189,8 @@ describe('DocumentDetailService', () => {
       expect(query).toContain('ecm:proxyVersionableId = "doc-1"');
       // Newest first, and version-ordered within a day.
       expect(req.request.params.get('sortOrder')).toBe('desc,desc,desc');
+      // Unpublish and Republish are gated on each proxy's own WriteVersion.
+      expect(req.request.headers.get('enrichers.document')).toBe('permissions');
       req.flush({ entries: [], resultsCount: 0 });
       await pending;
     });
@@ -1229,6 +1231,61 @@ describe('DocumentDetailService', () => {
         .expectOne('/nuxeo/api/v1/automation/UserGroup.Suggestion')
         .flush({}, { status: 500, statusText: 'Server Error' });
       await expect(pending).rejects.toBeDefined();
+    });
+  });
+
+  describe('getAuditLog', () => {
+    it('asks for one page and nothing else when there is no query', () => {
+      service.getAuditLog('doc-1', 20, 2).subscribe();
+      const req = httpMock.expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit');
+      expect(req.request.method).toBe('GET');
+      expect(req.request.params.keys().sort()).toEqual(['currentPageIndex', 'pageSize']);
+      expect(req.request.params.get('pageSize')).toBe('20');
+      expect(req.request.params.get('currentPageIndex')).toBe('2');
+      req.flush({ entries: [], resultsCount: 0 });
+    });
+
+    it('sends the filters and the sort to the server, as Web UI’s audit search does', () => {
+      service
+        .getAuditLog('doc-1', 20, 0, {
+          principalName: '  jdoe ',
+          eventIds: ['documentModified', 'documentLocked'],
+          eventCategory: 'eventDocumentCategory',
+          startDate: new Date('2026-10-12T18:30:00.000Z'),
+          endDate: new Date('2026-10-13T18:30:00.000Z'),
+          sortBy: 'principalName',
+          sortOrder: 'asc',
+        })
+        .subscribe();
+      const req = httpMock.expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit');
+      expect(req.request.params.get('principalName')).toBe('jdoe');
+      expect(req.request.params.getAll('eventId')).toEqual(['documentModified', 'documentLocked']);
+      expect(req.request.params.get('eventCategory')).toBe('eventDocumentCategory');
+      expect(req.request.params.get('startEventDate')).toBe('2026-10-12T18:30:00.000Z');
+      expect(req.request.params.get('endEventDate')).toBe('2026-10-13T18:30:00.000Z');
+      expect(req.request.params.get('sortBy')).toBe('principalName');
+      expect(req.request.params.get('sortOrder')).toBe('asc');
+      req.flush({ entries: [], resultsCount: 0 });
+    });
+
+    it('leaves out a blank user and sorts newest first by default', () => {
+      service
+        .getAuditLog('doc-1', 20, 0, { principalName: '   ', sortBy: 'eventDate' })
+        .subscribe();
+      const req = httpMock.expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit');
+      expect(req.request.params.has('principalName')).toBe(false);
+      expect(req.request.params.get('sortOrder')).toBe('desc');
+      req.flush({ entries: [], resultsCount: 0 });
+    });
+
+    it('passes a refusal through to the caller', async () => {
+      const pending = firstValueFrom(service.getAuditLog('doc-1')).catch(
+        (err: { status: number }) => err.status,
+      );
+      httpMock
+        .expectOne((r) => r.url === '/nuxeo/api/v1/id/doc-1/@audit')
+        .flush('Forbidden', { status: 403, statusText: 'Forbidden' });
+      expect(await pending).toBe(403);
     });
   });
 

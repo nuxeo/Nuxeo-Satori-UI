@@ -60,7 +60,11 @@ tooltip needs no providers.
 
 export const byRegisteredIdHtml = `<lib-extension-outlet
   [componentId]="tooltipId"
-  [componentInputs]="{ heading: 'Versioning', content: 'A new version is created each time you check in.', triggerLabel: 'About versioning' }"
+  [componentInputs]="{
+    heading: 'Versioning',
+    content: 'A new version is created each time you check in.',
+    triggerLabel: 'About versioning',
+  }"
 />`;
 
 <Source

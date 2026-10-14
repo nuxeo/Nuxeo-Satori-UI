@@ -1,0 +1,26 @@
+:host {
+  --nxs-document-toolbar-active: var(--mat-sys-primary);
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.nxs-document-toolbar__group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nxs-document-toolbar__action,
+.nxs-document-toolbar__more {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// Never on a disabled control, so the highlight does not read as "you can press this".
+.nxs-document-toolbar__action--active:not(.mat-mdc-button-disabled) {
+  color: var(--nxs-document-toolbar-active);
+}
+
+.nxs-document-toolbar__text {
+  font-size: 12px;
+  font-weight: 500;
+}

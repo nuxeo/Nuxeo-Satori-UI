@@ -7339,11 +7339,14 @@ function componentDecoratorNames(source) {
   for (const statement of source.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
     if (statement.moduleSpecifier.text !== '@angular/core') continue;
+    // A type-only import is erased, so it cannot decorate anything.
+    if (statement.importClause?.isTypeOnly) continue;
     const bindings = statement.importClause?.namedBindings;
     if (!bindings) continue;
     if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
     else {
       for (const element of bindings.elements) {
+        if (element.isTypeOnly) continue;
         if ((element.propertyName ?? element.name).text === 'Component') {
           names.add(element.name.text);
         }
@@ -8262,6 +8265,315 @@ function checkSatoriComponentsHaveOverviews() {
   }
 }
 
+/** The `@Component` classes `file` declares, exported or not. */
+function declaredComponentClasses(file) {
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const { names, namespaces } = componentDecoratorNames(source);
+  const isComponentDecorator = (decorator) => {
+    if (!ts.isCallExpression(decorator.expression)) return false;
+    const callee = decorator.expression.expression;
+    if (ts.isIdentifier(callee)) return names.has(callee.text);
+    return (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text) &&
+      callee.name.text === 'Component'
+    );
+  };
+  return source.statements
+    .filter(
+      (statement) =>
+        ts.isClassDeclaration(statement) &&
+        statement.name &&
+        (ts.getDecorators(statement) ?? []).some(isComponentDecorator),
+    )
+    .map((statement) => statement.name.text);
+}
+
+/**
+ * Every component in the library family has a spec that imports it (register item 21).
+ *
+ * The coverage floor cannot ask this: a component whose class has no logic is covered in full the
+ * moment anything imports its module, so a template-only component with no spec at all passes 90%.
+ * Read from each library's sources, every `@Component` class whether the barrel exports it or not;
+ * Storybook stories and specs are not components. A spec covers a component when it imports the
+ * class by value — from its own module, or through a module that re-exports it, such as the barrel
+ * or `@nuxeo-satori/platform/components` — so a same-named fake declared in the spec, a type-only
+ * import, or a name in a comment or a string covers nothing. A component the barrel ships only by
+ * opening it, as `NxsToastService` opens `NxsToastComponent` (see `openedComponentClasses`), is
+ * covered by a spec that imports what opens it.
+ */
+function checkSatoriComponentsHaveSpecs() {
+  const pathMaps = tsconfigPathMaps();
+  const isSource = (path) =>
+    /\.ts$/.test(path) && !/\.(spec|test|stories)\.ts$/.test(path) && !path.endsWith('.d.ts');
+  for (const { root, barrel } of SATORI_LIBRARIES) {
+    const sources = walk(`${root}/src`, isSource);
+    if (sources.length === 0) continue;
+    const components = sources.flatMap((file) =>
+      declaredComponentClasses(file).map((className) => ({ file, className })),
+    );
+    if (components.length === 0) continue;
+    const exported = fileExists(barrel) ? exportedComponentClasses(barrel, pathMaps) : new Map();
+    const opened = fileExists(barrel)
+      ? openedComponentClasses(barrel, pathMaps, exported)
+      : new Map();
+
+    const covered = new Set();
+    for (const spec of walk(root, (path) => /\.(spec|test)\.ts$/.test(path))) {
+      const { imports } = readStoryFile(spec, pathMaps);
+      for (const { file, name, typeOnly } of imports.values()) {
+        if (typeOnly) continue;
+        const declared = exportedComponentClasses(file, pathMaps).get(name);
+        if (declared) covered.add(`${declared.file}#${declared.className}`);
+      }
+      for (const key of openedThrough(imports, opened, pathMaps)) covered.add(key);
+    }
+    for (const { file, className } of components) {
+      if (covered.has(`${file}#${className}`)) continue;
+      fail(
+        `${file} declares the component \`${className}\`, and no spec imports it. The coverage ` +
+          'floor passes a component nothing tests once anything imports its module, so add a ' +
+          `\`*.spec.ts\` that imports \`${className}\` by value and renders it.`,
+      );
+    }
+  }
+}
+
+/**
+ * `PLATFORM_ENTRY_POINTS` lists exactly the entry points the package publishes (register item 23).
+ *
+ * The package root exports the list for customers and docs to read, and its comment promises it
+ * matches the `ng-package.json` files on disk. `checkLibraryEntryPoint` holds that for the two
+ * component entry points only; this holds it for every one, in both directions: each
+ * `libs/platform/<subpath>/ng-package.json` is listed, and each listed subpath has one.
+ */
+function checkPlatformEntryPointsListed() {
+  if (!fileExists(PLATFORM_INDEX)) return;
+  const listed = platformEntryPoints();
+  if (!listed) {
+    fail(
+      `${PLATFORM_INDEX} does not export \`PLATFORM_ENTRY_POINTS\` as a literal list of strings, ` +
+        'so whether it matches the published entry points was not checked.',
+    );
+    return;
+  }
+  const published = walk('libs/platform', (path) =>
+    /^libs\/platform\/[^/]+\/ng-package\.json$/.test(path),
+  )
+    .map((path) => path.split('/')[2])
+    .sort();
+  if (published.length === 0) {
+    fail(
+      `No libs/platform/<subpath>/ng-package.json was found, so ${PLATFORM_INDEX}'s ` +
+        '`PLATFORM_ENTRY_POINTS` was compared with nothing.',
+    );
+    return;
+  }
+  for (const subpath of published.filter((name) => !listed.includes(name))) {
+    fail(
+      `libs/platform/${subpath}/ng-package.json publishes \`@nuxeo-satori/platform/${subpath}\`, ` +
+        `and ${PLATFORM_INDEX} does not list '${subpath}' in \`PLATFORM_ENTRY_POINTS\`.`,
+    );
+  }
+  for (const subpath of listed.filter((name) => !published.includes(name))) {
+    fail(
+      `${PLATFORM_INDEX} lists '${subpath}' in \`PLATFORM_ENTRY_POINTS\`, and no ` +
+        `libs/platform/${subpath}/ng-package.json publishes it.`,
+    );
+  }
+}
+
+/** Prettier's parser for each `language` a Storybook `<Source>` sample is written in. */
+const MDX_SAMPLE_PARSERS = {
+  typescript: 'typescript',
+  ts: 'typescript',
+  javascript: 'babel',
+  js: 'babel',
+  html: 'angular',
+  scss: 'scss',
+  css: 'css',
+  json: 'json',
+};
+
+/** A template literal's text as the string it evaluates to, for the escapes MDX samples use. */
+const templateLiteralValue = (raw) => raw.replace(/\\([`$\\])/g, '$1');
+
+/**
+ * Prettier's output for a sample, or the reason it has none. A TypeScript sample may be a class's
+ * members under its imports, as Usage samples are; that is formatted inside a class and unwrapped,
+ * so it is held to the same layout as the component it is pasted into.
+ */
+async function formatMdxSample(prettier, code, parser, options) {
+  const format = async (text) => (await prettier.format(text, { ...options, parser })).trimEnd();
+  try {
+    return { formatted: await format(code) };
+  } catch (error) {
+    if (parser !== 'typescript') return { error };
+    const lines = code.split('\n');
+    let split = 0;
+    for (let at = 0; at < lines.length; at += 1) {
+      if (lines[at].trim() === '' && /^import\b/.test(lines[0])) {
+        split = at;
+        break;
+      }
+    }
+    const head = split ? lines.slice(0, split).join('\n') : '';
+    const members = lines.slice(split ? split + 1 : 0).join('\n');
+    const marker = 'class NxsMdxSample {';
+    try {
+      const wrapped = await format(`${head}${head ? '\n\n' : ''}${marker}\n${members}\n}`);
+      const start = wrapped.indexOf(marker);
+      const body = wrapped
+        .slice(start + marker.length, wrapped.lastIndexOf('}'))
+        .replace(/^\n/, '')
+        .trimEnd()
+        .split('\n')
+        .map((line) => line.replace(/^ {2}/, ''))
+        .join('\n');
+      const before = wrapped.slice(0, start).trimEnd();
+      return { formatted: before ? `${before}\n\n${body}` : body };
+    } catch {
+      return { error };
+    }
+  }
+}
+
+/**
+ * Each `<Source … />` block on an MDX page, read with a scanner rather than a pattern, because a
+ * sample's own markup — `<nxs-tag … />` — contains the `/>` that would end a pattern early and leave
+ * the sample unread. Braces, quotes and template literals are followed, so the block ends at the
+ * first `/>` outside them. `language` is the attribute's value; `inline` is the raw text of a
+ * template literal passed to `code`, and `named` the identifier passed instead. `unread` marks a block
+ * that never closes.
+ */
+function* mdxSourceBlocks(text) {
+  for (const start of [...text.matchAll(/<Source\b/g)].map((m) => m.index + m[0].length)) {
+    let depth = 0;
+    let quote = null;
+    let at = start;
+    let end = -1;
+    while (at < text.length) {
+      const char = text[at];
+      if (quote) {
+        if (char === '\\') at += 1;
+        else if (char === quote) quote = null;
+      } else if (char === '`' || ((char === '"' || char === "'") && depth === 0)) {
+        quote = char;
+      } else if (char === '{') depth += 1;
+      else if (char === '}') depth -= 1;
+      else if (depth === 0 && char === '/' && text[at + 1] === '>') {
+        end = at;
+        break;
+      }
+      at += 1;
+    }
+    if (end === -1) {
+      yield { unread: true };
+      continue;
+    }
+    const attributes = text.slice(start, end);
+    // The sample's own text is not an attribute: a `language="…"` inside it says nothing.
+    const outside = attributes.replace(/`(?:\\[\s\S]|[^`\\])*`/g, '``');
+    yield {
+      language: /\blanguage=["'](\w+)["']/.exec(outside)?.[1],
+      inline: /\bcode=\{\s*`((?:\\[\s\S]|[^`\\])*)`\s*\}/.exec(attributes)?.[1],
+      named: /\bcode=\{\s*(\w+)\s*\}/.exec(outside)?.[1],
+      unread: false,
+    };
+  }
+}
+
+/**
+ * The code samples on the library's Storybook pages are formatted as Prettier formats the code they
+ * show (register item 38).
+ *
+ * Prettier no longer formats `*.mdx`: it parses MDX 1, and Storybook compiles MDX 3, so it damaged
+ * samples with a blank line in them (`.prettierignore`). That left the samples — what a developer
+ * copies into their component — formatted by nobody. So each `<Source language="…" code={…} />`,
+ * whether the code is written inline or in an `export const` it names, is formatted here with the
+ * repository's Prettier options and the parser its language calls for, and fails when the result
+ * differs or the sample does not parse. A fenced code block is held to the same rule by its info
+ * string. `bash`, `text` and any other language are not checked. An inline sample with an indented
+ * continuation line fails whatever its language: MDX strips that indentation, so what renders is
+ * not what was written. An inline sample on several unindented lines renders as written and passes.
+ */
+async function checkMdxCodeSamplesFormatted() {
+  const pages = [
+    ...walk('libs', (path) => path.endsWith('.mdx')),
+    ...walk('apps', (path) => path.endsWith('.mdx')),
+  ];
+  if (pages.length === 0) return;
+  const prettier = await import('prettier');
+  for (const page of pages) {
+    const text = read(page);
+    const constants = new Map(
+      [...text.matchAll(/^export\s+const\s+(\w+)\s*=\s*`((?:\\[\s\S]|[^`\\])*)`;?/gm)].map(
+        ([, name, raw]) => [name, raw],
+      ),
+    );
+    const options = (await prettier.resolveConfig(join(repoRoot, page))) ?? {};
+    for (const [, language, code] of text.matchAll(/^```(\w+)[^\n]*\n([\s\S]*?)^```\s*$/gm)) {
+      const parser = MDX_SAMPLE_PARSERS[language];
+      if (!parser) continue;
+      const sample = code.replace(/\n$/, '');
+      const { formatted, error } = await formatMdxSample(prettier, sample, parser, options);
+      if (error) {
+        fail(
+          `${page}: a fenced ${language} block does not parse: ${String(error.message).split('\n')[0]}`,
+        );
+      } else if (formatted !== sample) {
+        fail(
+          `${page}: a fenced ${language} block is not formatted as Prettier formats it. Prettier gives:\n${formatted}`,
+        );
+      }
+    }
+    for (const { language, inline, named, unread } of mdxSourceBlocks(text)) {
+      const where = named ? `the sample \`${named}\`` : 'an inline sample';
+      if (unread) {
+        fail(`${page}: a <Source> block does not close, so its sample was not checked.`);
+        continue;
+      }
+      if (inline !== undefined && /\n[ \t]+\S/.test(inline)) {
+        fail(
+          `${page}: ${where} spans lines with indentation, which MDX strips from an attribute's ` +
+            'continuation lines. Move it into an `export const` and pass that to `code`.',
+        );
+        continue;
+      }
+      if (inline === undefined && !named) continue;
+      if (!language) {
+        fail(`${page}: ${where} has no \`language\`, so its formatting was not checked.`);
+        continue;
+      }
+      const parser = MDX_SAMPLE_PARSERS[language];
+      if (!parser) continue;
+      const raw = inline ?? constants.get(named);
+      if (raw === undefined) {
+        fail(
+          `${page}: ${where} is not an \`export const\` template literal on this page, so its ` +
+            'formatting was not checked.',
+        );
+        continue;
+      }
+      const code = templateLiteralValue(raw);
+      const { formatted, error } = await formatMdxSample(prettier, code, parser, options);
+      if (error) {
+        fail(
+          `${page}: ${where} (${language}) does not parse as ${language}: ` +
+            `${String(error.message).split('\n')[0]}`,
+        );
+      } else if (formatted !== code) {
+        const at = code.split('\n').findIndex((line, i) => line !== formatted.split('\n')[i]);
+        fail(
+          `${page}: ${where} (${language}) is not formatted as Prettier formats it; it first ` +
+            `differs on its line ${at + 1}. Prettier gives:\n${formatted}`,
+        );
+      }
+    }
+  }
+}
+
 const NUXEO_UI_APP_CONFIG = 'apps/nuxeo-ui/src/app/app.config.ts';
 
 /**
@@ -8372,6 +8684,9 @@ const GUARDRAILS = [
   checkSatoriComponentsFederationReadiness,
   checkSatoriComponentsHaveStories,
   checkSatoriComponentsHaveOverviews,
+  checkSatoriComponentsHaveSpecs,
+  checkMdxCodeSamplesFormatted,
+  checkPlatformEntryPointsListed,
   checkSatoriFallbackDependencies,
   checkSatoriFallbackEntryPoint,
   checkSatoriPrimitivesRegisteredInOrder,

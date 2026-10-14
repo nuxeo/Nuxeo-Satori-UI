@@ -3,6 +3,7 @@ import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
+import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
 import { NxsTagComponent } from './tag/tag.component';
@@ -13,7 +14,7 @@ import { NxsTagComponent } from './tag/tag.component';
  *
  * Registration goes through `provideSatoriExtensions`, so it layers like every other contribution:
  * in provider order, later wins per ID. List it **before** `provideNxsSatoriComponents()` from
- * `@nuxeo-satori/platform/components-satori`, which re-registers the four `NXS_PRIMITIVE_IDS` on
+ * `@nuxeo-satori/platform/components-satori`, which re-registers four of the `NXS_PRIMITIVE_IDS` on
  * Satori, and before your own `provideSatoriExtensions(...)` calls, so an override of yours wins:
  *
  * ```ts
@@ -31,6 +32,7 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.breadcrumbs]: NxsBreadcrumbsComponent,
       [NXS_PRIMITIVE_IDS.tag]: NxsTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsRichTooltipComponent,
+      [NXS_PRIMITIVE_IDS.errorState]: NxsErrorStateComponent,
       // satori:register:components — `satori-component` inserts above this line
     },
   });

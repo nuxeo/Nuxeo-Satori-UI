@@ -69,25 +69,11 @@
 
   @if (isBrowse) {
     <div class="folder-tree">
-      @if (rootLoading()) {
-        <div class="tree-loading">
-          <mat-spinner diameter="24" [attr.aria-label]="'nav.loading' | translate" />
-        </div>
-      } @else if (rootNodes().length === 0) {
-        <div class="tree-empty">{{ 'nav.folders.empty' | translate }}</div>
-      } @else {
-        @if (browseTreeShowRootBack()) {
-          <button class="tree-back" type="button" (click)="navigateToBrowseRoot()">
-            <mat-icon>chevron_left</mat-icon>
-            {{ 'nav.tree.root' | translate }}
-          </button>
-        }
-        <div class="tree-list">
-          @for (node of browseDisplayNodes(); track node.doc.uid) {
-            <ng-container *ngTemplateOutlet="folderTpl; context: { $implicit: node, depth: 0 }" />
-          }
-        </div>
-      }
+      <nxs-document-tree
+        [label]="'nav.tree.label' | translate"
+        [currentPath]="browseTreePath()"
+        (navigate)="onBrowseTreeNavigate($event)"
+      />
     </div>
   } @else if (isBrowseAdfHx) {
     <hxp-browse-nav-drawer

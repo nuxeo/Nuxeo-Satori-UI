@@ -75,14 +75,17 @@ describe('NxsActionMenuComponent', () => {
     expect(trigger()?.textContent?.trim()).toBe('more_vert');
   });
 
-  it('names a trigger whose label is only whitespace "More actions", rather than leaving it unnamed', async () => {
-    host.label.set(' \n\t ');
-    await render();
+  it.each([' \n\t ', '\u200b', '\u2060\ufeff'])(
+    'names a trigger whose label is only whitespace or zero-width characters (%j) "More actions"',
+    async (label) => {
+      host.label.set(label);
+      await render();
 
-    expect(trigger()).not.toBeNull();
-    expect(trigger()?.getAttribute('aria-label')).toBe('More actions');
-    expect(tooltip()).toBe('More actions');
-  });
+      expect(trigger()).not.toBeNull();
+      expect(trigger()?.getAttribute('aria-label')).toBe('More actions');
+      expect(tooltip()).toBe('More actions');
+    },
+  );
 
   it('uses the icon it is given', async () => {
     host.icon.set('settings');

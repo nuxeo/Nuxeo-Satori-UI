@@ -1,0 +1,79 @@
+@if (hasVersions()) {
+  <button
+    mat-button
+    type="button"
+    class="nxs-manage-versions__trigger"
+    [matMenuTriggerFor]="list"
+    (menuOpened)="opened()"
+  >
+    <span class="cdk-visually-hidden">{{
+      'satori-components.manage-versions.version' | translate
+    }}</span>
+    {{ label() }}
+    <mat-icon aria-hidden="true" iconPositionEnd>arrow_drop_down</mat-icon>
+  </button>
+
+  <mat-menu #list="matMenu" class="nxs-manage-versions__menu" xPosition="after">
+    @if (offersCreate()) {
+      <button mat-menu-item type="button" class="nxs-manage-versions__create" (click)="create()">
+        <mat-icon aria-hidden="true">add_circle_outline</mat-icon>
+        <span>{{ 'satori-components.manage-versions.create' | translate }}</span>
+      </button>
+      <mat-divider />
+    }
+    @if (document().isVersion) {
+      <button
+        mat-menu-item
+        type="button"
+        class="nxs-manage-versions__latest"
+        (click)="latestSelected.emit()"
+      >
+        <span>{{ 'satori-components.manage-versions.latest' | translate }}</span>
+      </button>
+    }
+    @if (failed()) {
+      <p class="nxs-manage-versions__note" role="alert">
+        {{ 'satori-components.manage-versions.failed' | translate }}
+      </p>
+      <button mat-menu-item type="button" (click)="retry($event)">
+        <mat-icon aria-hidden="true">refresh</mat-icon>
+        <span>{{ 'satori-components.manage-versions.retry' | translate }}</span>
+      </button>
+    } @else if (loading() && versions().length === 0) {
+      <div class="nxs-manage-versions__note">
+        <nxs-spinner
+          diameter="20"
+          [label]="'satori-components.manage-versions.loading' | translate"
+        />
+      </div>
+    } @else {
+      @for (version of versions(); track version.uid) {
+        <button
+          mat-menu-item
+          type="button"
+          role="menuitemradio"
+          class="nxs-manage-versions__version"
+          [attr.aria-checked]="isShown(version)"
+          [class.nxs-manage-versions__version--shown]="isShown(version)"
+          (click)="choose(version)"
+        >
+          <span class="nxs-manage-versions__number">{{ numberOf(version) }}</span
+          >&ngsp;
+          <span class="nxs-manage-versions__modified">{{ modified(version) }}</span>
+        </button>
+      } @empty {
+        <p class="nxs-manage-versions__note">
+          {{ 'satori-components.manage-versions.none' | translate }}
+        </p>
+      }
+    }
+  </mat-menu>
+} @else if (canCreate()) {
+  <button mat-stroked-button type="button" class="nxs-manage-versions__create" (click)="create()">
+    {{ 'satori-components.manage-versions.create' | translate }}
+  </button>
+} @else {
+  <span class="nxs-manage-versions__unversioned">{{
+    'satori-components.manage-versions.unversioned' | translate
+  }}</span>
+}

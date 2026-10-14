@@ -64,8 +64,11 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
 import {
   NxsDocTypeIconComponent,
+  NxsDropzoneComponent,
   NxsSpinnerComponent,
   NxsToastService,
+  NxsUploadQueue,
+  NxsUploadQueueComponent,
   provideNxsToast,
 } from '@nuxeo-satori/platform/components';
 
@@ -163,7 +166,9 @@ const DIALOG_SIZE = {
   standalone: true,
   imports: [
     NxsDocTypeIconComponent,
+    NxsDropzoneComponent,
     NxsSpinnerComponent,
+    NxsUploadQueueComponent,
     TranslatePipe,
     MatDialogModule,
     MatButtonModule,
@@ -186,7 +191,6 @@ const DIALOG_SIZE = {
 export class CreateImportDialogComponent implements OnInit {
   private readonly translate = inject(TranslateService);
   @ViewChild('mainFileInput') mainFileInput?: ElementRef<HTMLInputElement>;
-  @ViewChild('importFileInput') importFileInput?: ElementRef<HTMLInputElement>;
   @ViewChild('expiresInput') expiresNgModel?: NgModel;
 
   private readonly dialogRef = inject(
@@ -281,7 +285,11 @@ export class CreateImportDialogComponent implements OnInit {
   readonly mainFileUploadPercent = signal(0);
   readonly dragOverContent = signal(false);
 
-  readonly uploadFiles = signal<File[]>([]);
+  /**
+   * The import tab's files: chosen, then each one's progress and outcome while they upload. What is
+   * still pending in it is what Create uploads.
+   */
+  readonly uploads = new NxsUploadQueue();
   readonly csvFile = signal<File | null>(null);
   readonly csvSendReport = signal(false);
   readonly csvDocumentMode = signal(false);
@@ -293,7 +301,6 @@ export class CreateImportDialogComponent implements OnInit {
   readonly uploadProgress = signal<ImportProgress | null>(null);
   readonly successMessage = signal<string | null>(null);
 
-  readonly dragOverUpload = signal(false);
   readonly dragOverCsv = signal(false);
 
   readonly hasContentField = computed(() => {
@@ -615,11 +622,10 @@ export class CreateImportDialogComponent implements OnInit {
       this.csvFile.set(null);
       this.dragOverCsv.set(false);
     } else if (tab === 'csv') {
-      this.uploadFiles.set([]);
-      this.dragOverUpload.set(false);
+      this.uploads.clear();
     } else if (tab === 'create') {
       this.csvFile.set(null);
-      this.uploadFiles.set([]);
+      this.uploads.clear();
     }
   }
 
@@ -728,10 +734,6 @@ export class CreateImportDialogComponent implements OnInit {
     const mb = kb / 1024;
     if (mb < 1024) return `${mb.toFixed(2)} MB`;
     return `${(mb / 1024).toFixed(2)} GB`;
-  }
-
-  openImportFilePicker(): void {
-    this.importFileInput?.nativeElement.click();
   }
 
   subjectPillLabel(id: string): string {
@@ -890,7 +892,7 @@ export class CreateImportDialogComponent implements OnInit {
 
   startImportProperties(): void {
     if (this.importRestricted()) return;
-    const files = this.uploadFiles();
+    const files = this.uploads.pending();
     if (files.length === 0) return;
 
     const allowedTypes = this.importBlobTypeNames();
@@ -1297,42 +1299,16 @@ export class CreateImportDialogComponent implements OnInit {
       });
   }
 
-  onUploadInputChange(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const list = input.files;
-    if (!list?.length) return;
-    this.addFiles(Array.from(list));
+  /** Files dropped on the import tab's zone, or chosen with its button. */
+  stageImportFiles(files: readonly File[]): void {
+    if (files.length === 0) return;
+    this.uploads.stage(files);
     this.importError.set(null);
-    input.value = '';
-  }
-
-  onUploadDrop(ev: DragEvent): void {
-    ev.preventDefault();
-    this.dragOverUpload.set(false);
-    const list = ev.dataTransfer?.files;
-    if (list?.length) {
-      this.addFiles(Array.from(list));
-      this.importError.set(null);
-    }
-  }
-
-  onUploadDragOver(ev: DragEvent): void {
-    ev.preventDefault();
-    ev.stopPropagation();
-    this.dragOverUpload.set(true);
-  }
-
-  onUploadDragLeave(ev: DragEvent): void {
-    ev.preventDefault();
-    this.dragOverUpload.set(false);
-  }
-
-  private addFiles(files: File[]): void {
-    this.uploadFiles.update((cur) => [...cur, ...files]);
   }
 
   removeUploadAt(i: number): void {
-    this.uploadFiles.update((files) => files.filter((_, j) => j !== i));
+    const item = this.uploads.items()[i];
+    if (item) this.uploads.remove(item.id);
   }
 
   onCsvInputChange(event: Event): void {
@@ -1376,19 +1352,27 @@ export class CreateImportDialogComponent implements OnInit {
     this.csvFile.set(null);
   }
 
+  /**
+   * Uploads the pending files in one batch, each file followed in the queue. A failure keeps the
+   * files already created, says which one was refused, and leaves it and the rest for another try.
+   */
   runUpload(): void {
     this.commitLocationInput();
     if (this.importRestricted()) return;
     const path = this.parentPath();
-    const files = this.uploadFiles();
+    const files = this.uploads.pending();
     if (!path || files.length === 0) return;
     this.busy.set(true);
     this.error.set(null);
     this.importError.set(null);
     this.uploadProgress.set(null);
+    this.uploads.start();
     this.importService
       .importFiles(path, files, {
-        onProgress: (progress) => this.uploadProgress.set(progress),
+        onProgress: (progress) => {
+          this.uploadProgress.set(progress);
+          this.uploads.progress(progress);
+        },
       })
       .pipe(
         takeUntilDestroyed(this.destroyRef),
@@ -1399,21 +1383,24 @@ export class CreateImportDialogComponent implements OnInit {
       )
       .subscribe({
         next: (docs) => {
+          this.uploads.complete(docs);
+          const created = this.uploads.done();
           this.toast.show(
             this.translate.instant(
-              docs.length === 1
+              created.length === 1
                 ? 'common.count.created-file-one'
                 : 'common.count.created-file-many',
-              { count: docs.length },
+              { count: created.length },
             ),
           );
           this.dialogRef.close({
             refreshed: true,
             path,
-            navigateToUid: docs.length === 1 ? docs[0].uid : undefined,
+            navigateToUid: created.length === 1 ? created[0].document?.uid : undefined,
           });
         },
         error: (err: { error?: { message?: string }; message?: string }) => {
+          this.uploads.fail(err);
           this.importError.set(
             err?.error?.message ??
               err?.message ??
@@ -1468,7 +1455,12 @@ export class CreateImportDialogComponent implements OnInit {
       });
   }
 
+  /** Closes; after a partly failed upload the folder already holds the files created, so it refreshes. */
   close(): void {
+    if (this.uploads.done().length > 0) {
+      this.dialogRef.close({ refreshed: true, path: this.parentPath() });
+      return;
+    }
     this.dialogRef.close();
   }
 

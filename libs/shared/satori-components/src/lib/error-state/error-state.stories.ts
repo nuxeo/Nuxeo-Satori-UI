@@ -1,8 +1,11 @@
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
+import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { fn } from 'storybook/test';
 
+import { NXS_PRIMITIVE_IDS } from '../primitives';
+import { provideNxsComponents } from '../provide-nxs-components';
 import { NxsErrorStateComponent } from './error-state.component';
 import { nxsErrorStatus } from './error-status';
 
@@ -20,6 +23,7 @@ const meta: Meta<NxsErrorStateComponent> = {
     heading: 'Failed to load folder contents.',
     headingLevel: 2,
     retryable: false,
+    retryHandler: null,
     retry: fn(),
   },
   argTypes: {
@@ -35,6 +39,11 @@ const meta: Meta<NxsErrorStateComponent> = {
     },
     headingLevel: { control: 'select', options: [1, 2, 3, 4, 5, 6] },
     retryable: { control: 'boolean', description: 'Offer Retry. Shown for a 500 only.' },
+    retryHandler: {
+      control: false,
+      description:
+        'Called when Retry is pressed, for a host rendering the ID, which binds no outputs.',
+    },
     retry: { control: false, description: 'Retry was pressed.' },
   },
 };
@@ -85,4 +94,30 @@ export const NotFoundAsThePageHeading: Story = {
 /** With no heading of the screen's own, the variant's heading shows. */
 export const SessionEnded: Story = {
   args: { status: 401, heading: '' },
+};
+
+/**
+ * Rendered by ID, the way a host resolves `nxs.primitives.errorState`: whatever is registered under
+ * the ID renders here. The outlet binds no outputs, so Retry reaches the host through `retryHandler`.
+ */
+export const ByRegisteredId: Story = {
+  name: 'By Registered ID',
+  args: { retryable: true, retryHandler: fn() },
+  decorators: [
+    applicationConfig({ providers: [provideNxsComponents()] }),
+    moduleMetadata({ imports: [ExtensionOutletComponent] }),
+  ],
+  render: (args) => ({
+    props: {
+      errorStateId: NXS_PRIMITIVE_IDS.errorState,
+      inputs: {
+        status: args.status,
+        heading: args.heading,
+        headingLevel: args.headingLevel,
+        retryable: args.retryable,
+        retryHandler: args.retryHandler,
+      },
+    },
+    template: `<lib-extension-outlet [componentId]="errorStateId" [componentInputs]="inputs" />`,
+  }),
 };

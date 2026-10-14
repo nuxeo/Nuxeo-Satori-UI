@@ -32,7 +32,7 @@ ${COLOURS.map((colour) => `  <nxs-tag label="${colour}" color="${colour}" />`).j
   }),
 };
 
-/** A label longer than the space it has is cut short with an ellipsis. */
+/** A label longer than the space it has wraps inside the tag; none of it is cut off. */
 export const LongLabel: Story = {
   parameters: { controls: { disable: true } },
   render: () => ({

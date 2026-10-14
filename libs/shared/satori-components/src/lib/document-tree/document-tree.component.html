@@ -1,0 +1,117 @@
+@if (status() === 'loading') {
+  <div class="nxs-document-tree__state">
+    <nxs-spinner diameter="24" [label]="'satori-components.document-tree.loading' | translate" />
+  </div>
+} @else if (status() === 'error') {
+  <nxs-error-state
+    class="nxs-document-tree__error"
+    [status]="loadError()"
+    [heading]="
+      loadError() === 500 ? ('satori-components.document-tree.load-failed' | translate) : ''
+    "
+    [headingLevel]="3"
+    retryable
+    (retry)="reload()"
+  />
+} @else {
+  @if (showRootBack()) {
+    <button type="button" class="nxs-document-tree__back" (click)="openRoot()">
+      <mat-icon class="nxs-document-tree__back-icon" aria-hidden="true">chevron_left</mat-icon>
+      {{ 'satori-components.document-tree.root' | translate }}
+    </button>
+  }
+  @if (rows().length === 0) {
+    <p class="nxs-document-tree__empty">
+      {{ 'satori-components.document-tree.empty' | translate }}
+    </p>
+  } @else {
+    <ul class="nxs-document-tree__tree" role="tree" [attr.aria-label]="label()">
+      <ng-container *ngTemplateOutlet="level; context: { $implicit: topNodes(), depth: 1 }" />
+    </ul>
+  }
+}
+
+<ng-template #level let-nodes let-depth="depth">
+  @for (node of nodes; track node.key) {
+    @let row = rowFor(node.key);
+    @if (row) {
+      <li
+        class="nxs-document-tree__item"
+        role="treeitem"
+        [attr.data-row-key]="row.key"
+        [attr.aria-level]="row.level"
+        [attr.aria-setsize]="row.setSize"
+        [attr.aria-posinset]="row.position"
+        [attr.aria-expanded]="node.expandable || node.expanded ? node.expanded : null"
+        [attr.aria-selected]="row.key === currentKey()"
+        [attr.aria-current]="row.key === currentKey() ? 'page' : null"
+        [attr.aria-busy]="node.loading ? true : null"
+        [attr.tabindex]="row.key === tabStop() ? 0 : -1"
+        (keydown)="onKeydown($event, row)"
+        (click)="onItemClick($event, row)"
+        (focus)="focusKey.set(row.key)"
+      >
+        <div
+          class="nxs-document-tree__row"
+          [class.nxs-document-tree__row--current]="row.key === currentKey()"
+          [style.padding-inline-start.px]="8 + (depth - 1) * 16"
+        >
+          @if (node.loading) {
+            <nxs-spinner class="nxs-document-tree__toggle" diameter="14" />
+          } @else if (node.expandable || node.expanded) {
+            <mat-icon
+              class="nxs-document-tree__toggle nxs-document-tree__arrow"
+              [class.nxs-document-tree__arrow--open]="node.expanded"
+              aria-hidden="true"
+              >chevron_right</mat-icon
+            >
+          } @else {
+            <span class="nxs-document-tree__toggle" aria-hidden="true"></span>
+          }
+          <span class="nxs-document-tree__label">{{ nodeLabel(node) }}</span>
+        </div>
+        @if (node.expanded) {
+          <ul class="nxs-document-tree__group" role="group">
+            @if (node.error) {
+              @let errorRow = rowFor(node.key + '#error');
+              @if (errorRow) {
+                <li
+                  class="nxs-document-tree__item nxs-document-tree__item--error"
+                  role="treeitem"
+                  [attr.data-row-key]="errorRow.key"
+                  [attr.aria-level]="errorRow.level"
+                  aria-setsize="1"
+                  aria-posinset="1"
+                  aria-selected="false"
+                  [attr.tabindex]="errorRow.key === tabStop() ? 0 : -1"
+                  (keydown)="onKeydown($event, errorRow)"
+                  (click)="onItemClick($event, errorRow)"
+                  (focus)="focusKey.set(errorRow.key)"
+                >
+                  <div
+                    class="nxs-document-tree__row nxs-document-tree__row--error"
+                    [style.padding-inline-start.px]="8 + depth * 16"
+                  >
+                    <mat-icon class="nxs-document-tree__toggle" aria-hidden="true"
+                      >error_outline</mat-icon
+                    >
+                    <span class="nxs-document-tree__label">{{
+                      (node.error === 403
+                        ? 'satori-components.document-tree.children-forbidden-row'
+                        : 'satori-components.document-tree.children-failed-row'
+                      ) | translate
+                    }}</span>
+                  </div>
+                </li>
+              }
+            } @else {
+              <ng-container
+                *ngTemplateOutlet="level; context: { $implicit: node.children, depth: depth + 1 }"
+              />
+            }
+          </ul>
+        }
+      </li>
+    }
+  }
+</ng-template>

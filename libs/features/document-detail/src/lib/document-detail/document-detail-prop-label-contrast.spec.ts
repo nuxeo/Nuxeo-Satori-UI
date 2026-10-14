@@ -1,5 +1,5 @@
 /**
- * NXENG-858 / NXENG-891 / NXENG-895 — `.prop-label` on the fixed light properties panel must meet WCAG 2.1 SC 1.4.3
+ * NXENG-858 / NXENG-891 / NXENG-895 — the field labels of `nxs-properties-panel` on the fixed light properties panel must meet WCAG 2.1 SC 1.4.3
  * (IBM 1792790291, 2951482449, 2993932592). Per-theme computed contrast is covered in
  * `apps/nuxeo-ui/.../prop-label-contrast.spec.ts`.
  */
@@ -60,8 +60,15 @@ function contrastRatio(fg: readonly number[], bg: readonly number[]): number {
 describe('DocumentDetailComponent — prop-label text contrast (NXENG-858, NXENG-891, NXENG-895)', () => {
   const scssPath = join(import.meta.dirname, 'document-detail.scss');
   const scss = readFileSync(scssPath, 'utf8');
-  const labelBlock = stripScssComments(scssBlock(scss, 'prop-label'));
+  const labelBlock = stripScssComments(scssBlock(scss, 'detail-properties'));
   const panelBlock = stripScssComments(scssBlock(scss, 'properties-panel'));
+  const library = readFileSync(
+    join(
+      import.meta.dirname,
+      '../../../../../shared/satori-components/src/lib/properties-panel/properties-panel.component.scss',
+    ),
+    'utf8',
+  );
 
   it('selector rule assertions ignore commented-out declarations', () => {
     const brokenLabel = `.prop-label {
@@ -91,13 +98,23 @@ describe('DocumentDetailComponent — prop-label text contrast (NXENG-858, NXENG
   });
 
   it('themes property labels through the light-panel host token, not global surface-variant', () => {
-    expect(labelBlock).toMatch(/var\(--document-detail-properties-label-muted\)/);
+    expect(labelBlock).toMatch(
+      /--nxs-properties-panel-label:\s*var\(--document-detail-properties-label-muted\)/,
+    );
     expect(labelBlock).not.toMatch(/#888/i);
     expect(labelBlock).not.toMatch(/--mat-sys-on-surface-variant/);
     expect(hostCustomProperty(scss, 'document-detail-properties-label-muted')).toBe('#5c5f6b');
     expect(hostCustomProperty(scss, 'document-detail-properties-panel-surface')).toBe('#ffffff');
-    expect(panelBlock).toMatch(/var\(--document-detail-properties-panel-surface\)/);
+    expect(panelBlock).toMatch(
+      /--nxs-details-panel-surface:\s*var\(--document-detail-properties-panel-surface\)/,
+    );
     expect(panelBlock).not.toMatch(/var\(--mat-sys-surface/i);
+  });
+
+  it('the properties panel colours its field labels with that token', () => {
+    expect(stripScssComments(scssBlock(library, 'nxs-properties-panel__label'))).toMatch(
+      /color:\s*var\(--nxs-properties-panel-label\)/,
+    );
   });
 
   it(`host token pair meets ${WCAG_AA_NORMAL_TEXT}:1 on the properties panel`, () => {

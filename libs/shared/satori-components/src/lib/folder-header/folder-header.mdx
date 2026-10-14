@@ -34,12 +34,12 @@ the right. Use it at the top of a page that lists what a container holds.
   code={`import { NxsFolderHeaderComponent } from '@nuxeo-satori/platform/components';`}
 />
 
-export const usageHtml = `<nxs-folder-header
-  [heading]="title()"
-  [subheading]="typeName()"
-  [documentType]="type()"
->
-  <nxs-breadcrumbs nxsFolderHeaderDetail [items]="trail()" [label]="'acme.breadcrumbs' | translate" />
+export const usageHtml = `<nxs-folder-header [heading]="title()" [subheading]="typeName()" [documentType]="type()">
+  <nxs-breadcrumbs
+    nxsFolderHeaderDetail
+    [items]="trail()"
+    [label]="'acme.breadcrumbs' | translate"
+  />
   <button mat-stroked-button type="button" (click)="share()">{{ 'acme.share' | translate }}</button>
 </nxs-folder-header>`;
 

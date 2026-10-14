@@ -12,6 +12,7 @@ import {
   BrowseService,
   BrowseContextService,
   DocumentDetailService,
+  DocumentImportService,
   DirectoryService,
   NuxeoAce,
   NuxeoDocument,
@@ -132,6 +133,7 @@ describe('BrowseComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: mockBrowseService },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: mockDocumentDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: TagService, useValue: mockTagService },
@@ -310,7 +312,7 @@ describe('BrowseComponent', () => {
     });
 
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
+      { label: 'Root', routerLink: '/browse' },
       { label: 'Renamed Domain' },
     ]);
   });
@@ -327,7 +329,7 @@ describe('BrowseComponent', () => {
 
     expect(() => component.breadcrumbs()).not.toThrow();
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
+      { label: 'Root', routerLink: '/browse' },
       { label: 'Current Folder' },
     ]);
   });

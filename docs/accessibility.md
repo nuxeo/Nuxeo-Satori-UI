@@ -35,8 +35,10 @@ thing that turns a run red and the number anyone quotes.
 **Observation outside the four layers: the component library's Storybook.** Its accessibility
 panel (`@storybook/addon-a11y`) runs axe over every story of `libs/shared/satori-components`. It owns
 no verdict. `.storybook/preview.ts` sets `a11y.test` to `todo`, which reports a violation as a
-warning rather than failing the story, and no CI job runs it. Treat what it shows as a cross-check:
-triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
+warning rather than failing the story. CI's Storybook interaction runner
+(`scripts/storybook-interactions.mjs`) runs every story, play function included, and prints how many
+stories the panel's axe pass found violations in — a count, never a failure. Treat what it shows as a
+cross-check: triage a finding against the axe runtime layer, as for any disagreement below. The lock resolves
 its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
 difference between the two is not an engine difference.
 
@@ -128,6 +130,12 @@ The rule this implies, and the one to apply to the next such spec: a component s
 justified when the owning layer **structurally cannot** reach the state, and it must assert the
 invariant rather than restate the conformance verdict. If the owning layer can reach it, extend
 the owner.
+
+`libs/shared/satori-components/src/lib/named-colors.spec.ts` is the second case. It holds the
+built-in avatar's and tag's eight named colours at 4.5:1 in the Material themes this repository
+compiles, because no screen renders those components in every colour — screens use Satori's — so
+the axe layer has no node to judge. It computes from the palette and the compiled theme values; a
+host's own `--nxs-*` colours are outside it, and the published WCAG number still comes from axe.
 
 ## Baselines and suppression
 
