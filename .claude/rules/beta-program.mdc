@@ -1,6 +1,6 @@
 ---
 description: Nuxeo Satori Beta program — four-layer extensibility contract, phase gates and iteration protocol
-globs: libs/shared/adf-hx-bridge/**/*,libs/shared/extensions/**/*,libs/features/browse/src/lib/browse-adf-hx-poc/**/*,scripts/beta-harness/**/*,apps/nuxeo-ui/src/app/app.config.ts,apps/nuxeo-ui/src/app/platform-nav-items.ts,nuxeo-agentic-ui-package/**/*
+globs: libs/shared/extensions/**/*,scripts/beta-harness/**/*,apps/nuxeo-ui/src/app/app.config.ts,apps/nuxeo-ui/src/app/platform-nav-items.ts,nuxeo-agentic-ui-package/**/*
 alwaysApply: false
 ---
 
@@ -27,7 +27,7 @@ hardcoded; behaviour needing code must not be faked in configuration.
 
 ## Non-negotiables
 
-- **adf-hx types must never appear in our public API signatures.** Wrap them in `libs/shared/adf-hx-bridge`. adf-hx has had no stable release in twelve months; its instability must not reach customers.
+- **adf-hx types must never appear in our public API signatures.** Nothing imports adf-hx since its bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes; do not reintroduce it. adf-hx has had no stable release in twelve months; its instability must not reach customers.
 - **Pin exact adf-hx versions.** Never a range, never a dist-tag — `latest` is itself a prerelease.
 - **Its dependency contract is under-declared** (one peer declared against thirteen imported). Add new adf-hx peers to our own pin manifest, never assume npm will warn.
 - **No customer-facing configuration inside the packaged web directory** — `install.xml` copies it with `overwrite="true"` and will destroy it on upgrade.
