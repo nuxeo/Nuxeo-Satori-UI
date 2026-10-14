@@ -178,53 +178,10 @@ const SPECIFIER_CONTROLS = [
  * an `@import` list unquoted.
  */
 export function sassLoadedUrls(body, { indented = false } = {}) {
-  const urls = [];
-  const rules = indented
-    ? /@(use|forward|import)[ \t]+([^\n]*)/g
-    : /@(use|forward|import)\s+([^;{}]*)/g;
+  // Use styleSpecifiers which properly handles comments, strings, and edge cases
+  const urls = styleSpecifiers(body, indented ? 'dummy.sass' : 'dummy.scss');
 
-  for (const rule of body.matchAll(rules)) {
-    const directive = rule[1];
-    const content = rule[2];
-
-    if (directive === 'import') {
-      // For @import, split by comma and process each item independently
-      // This handles mixed imports like: @import local, "theme", url(style.css)
-      const items = content.split(',');
-      for (const item of items) {
-        const trimmed = item.trim();
-        // Try quoted string first
-        const quoted = trimmed.match(/^(['"])([^'"]*)\1/);
-        if (quoted) {
-          urls.push(quoted[2].replace(/^~/, ''));
-          continue;
-        }
-        // Try url() syntax
-        const urlMatch = trimmed.match(/^url\(\s*(['"]?)([^'")\s]+)\1\s*\)/);
-        if (urlMatch) {
-          urls.push(urlMatch[2].replace(/^~/, ''));
-          continue;
-        }
-        // Bare import (unquoted) - use trimmed value
-        if (trimmed) {
-          urls.push(trimmed.replace(/^~/, ''));
-        }
-      }
-    } else {
-      // @use/@forward: take only first URL
-      const quoted = content.match(/(['"])([^'"]*)\1/);
-      if (quoted) {
-        urls.push(quoted[2].replace(/^~/, ''));
-      } else {
-        const urlMatch = content.match(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/);
-        if (urlMatch) {
-          urls.push(urlMatch[2].replace(/^~/, ''));
-        }
-      }
-    }
-  }
-
-  // Handle load-css() directives
+  // Also collect load-css() directives (not handled by styleSpecifiers)
   for (const call of body.matchAll(/load-css\(\s*(['"])([^'"]*)\1/g)) {
     urls.push(call[2]);
   }
