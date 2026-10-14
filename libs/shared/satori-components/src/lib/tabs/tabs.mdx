@@ -29,7 +29,11 @@ one does.
 
 ## Usage
 
-export const usageTs = `import { NxsTabBodyDirective, NxsTabsComponent, type NxsTab } from '@nuxeo-satori/platform/components';
+export const usageTs = `import {
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  type NxsTab,
+} from '@nuxeo-satori/platform/components';
 
 readonly tabs = computed<readonly NxsTab[]>(() =>
   this.extensions
@@ -47,8 +51,12 @@ readonly selected = signal(0);`;
 export const usageHtml = `<nxs-tabs [tabs]="tabs()" [(selectedIndex)]="selected" (selectedTabChange)="load($event.id)">
   <ng-template nxsTabBody let-tab>
     @switch (tab.id) {
-      @case ('app.tabs.view') { <acme-viewer [document]="doc()" /> }
-      @default { <lib-extension-outlet [componentId]="tab.id" /> }
+      @case ('app.tabs.view') {
+        <acme-viewer [document]="doc()" />
+      }
+      @default {
+        <lib-extension-outlet [componentId]="tab.id" />
+      }
     }
   </ng-template>
 </nxs-tabs>`;

@@ -34,7 +34,10 @@ Press a button or open "More actions": the Actions panel records `selected`.
 
 ## Usage
 
-export const usageTs = `import { NxsDocumentToolbarComponent, type NxsToolbarAction } from '@nuxeo-satori/platform/components';
+export const usageTs = `import {
+  NxsDocumentToolbarComponent,
+  type NxsToolbarAction,
+} from '@nuxeo-satori/platform/components';
 import {
   EXTENSION_SLOTS,
   descriptorLabel,
@@ -42,7 +45,10 @@ import {
 } from '@nuxeo-satori/platform/extensions';
 
 readonly descriptors = computed(() =>
-  this.extensions.resolve<ExtensionActionDescriptor>(EXTENSION_SLOTS.toolbar, this.ruleContext.context()),
+  this.extensions.resolve<ExtensionActionDescriptor>(
+    EXTENSION_SLOTS.toolbar,
+    this.ruleContext.context(),
+  ),
 );
 
 readonly toolbar = computed<readonly NxsToolbarAction[]>(() =>

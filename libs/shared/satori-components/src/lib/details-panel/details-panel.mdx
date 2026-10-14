@@ -36,8 +36,12 @@ export const usageHtml = `<nxs-details-panel
   (closed)="closeDetails()"
 >
   @switch (view()) {
-    @case ('properties') { <nxs-properties-panel [document]="doc()" /> }
-    @case ('comments') { <nxs-comments [document]="doc()" /> }
+    @case ('properties') {
+      <nxs-properties-panel [document]="doc()" />
+    }
+    @case ('comments') {
+      <nxs-comments [document]="doc()" />
+    }
   }
 </nxs-details-panel>`;
 
