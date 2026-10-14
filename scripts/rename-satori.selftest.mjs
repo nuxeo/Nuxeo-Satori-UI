@@ -101,6 +101,52 @@ test('preserves CHANGELOG history at any depth, binaries and the codemod fixture
   for (const [path, body] of files) assert.deepEqual(plan.next.get(path), body);
 });
 
+test('renames BEM classes derived from local selectors and file stems only', () => {
+  const plan = planRename(
+    tree({
+      'component.ts': "selector: 'hxp-widget'",
+      'hxp-row.scss': '.hxp-row__cell {} .hxp-row--selected {}',
+      'template.html':
+        '<div class="hxp-widget__title hxp-widget--active hxp-widget__title--compact hxp-row__cell"></div>',
+      'styles.scss':
+        '.hxp-widget__title {} .hxp-widget--active {} .hxp-upstream__title {} .hxp-upstream--active {}\n' +
+        '.hxp-widget-extra {} .hxp-widget_extra {} :root { --hxp-widget: red; --hxp-widget__title: blue; --hxp-widget--active: green; }',
+    }),
+  );
+  assert.equal(content(plan, 'nxs-row.scss'), '.nxs-row__cell {} .nxs-row--selected {}');
+  assert.equal(
+    content(plan, 'template.html'),
+    '<div class="nxs-widget__title nxs-widget--active nxs-widget__title--compact nxs-row__cell"></div>',
+  );
+  assert.equal(
+    content(plan, 'styles.scss'),
+    '.nxs-widget__title {} .nxs-widget--active {} .hxp-upstream__title {} .hxp-upstream--active {}\n' +
+      '.hxp-widget-extra {} .hxp-widget_extra {} :root { --hxp-widget: red; --hxp-widget__title: blue; --hxp-widget--active: green; }',
+  );
+  assert.equal(planRename(plan.next).changes.length, 0);
+});
+
+test('working-tree mode skips unstaged tracked deletions and retains local edits', (t) => {
+  const { root, git } = fixture(t, {
+    'deleted.ts': OLD,
+    'deleted-directory/child.ts': OLD,
+    'edited.ts': OLD,
+    'kept.ts': OLD,
+  });
+  rmSync(join(root, 'deleted.ts'));
+  rmSync(join(root, 'deleted-directory'), { recursive: true });
+  writeFileSync(join(root, 'edited.ts'), NEW);
+  const files = readTree(root);
+  assert.deepEqual([...files.keys()].sort(), ['edited.ts', 'kept.ts']);
+  assert.equal(files.get('edited.ts').toString(), NEW);
+  assert.ok(readTree(root, 'HEAD').has('deleted.ts'));
+  const before = git('diff', '--binary');
+  const result = spawnSync(process.execPath, [SCRIPT, '--root', root], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /dry-run: 1 files, 0 moves, 1 changed lines/);
+  assert.equal(git('diff', '--binary'), before);
+});
+
 test('reports both path and selector collisions', () => {
   const plan = planRename(
     tree({
@@ -211,6 +257,24 @@ test('report cannot overwrite a tracked source', (t) => {
   assert.throws(() => main(['--root', root, '--report', join(root, 'a.ts')]), /tracked file/);
   assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), OLD);
 });
+
+test('report cannot recreate a locally deleted tracked source', (t) => {
+  const { root } = fixture(t, { 'deleted.ts': OLD });
+  const target = join(root, 'deleted.ts');
+  rmSync(target);
+  assert.throws(() => main(['--root', root, '--report', target]), /tracked file/);
+  assert.equal(existsSync(target), false);
+});
+
+test(
+  'Windows report paths cannot bypass source protection through letter casing',
+  { skip: process.platform !== 'win32' },
+  (t) => {
+    const { root } = fixture(t, { 'a.ts': OLD });
+    assert.throws(() => main(['--root', root, '--report', join(root, 'A.ts')]), /tracked file/);
+    assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), OLD);
+  },
+);
 
 test('Sass partial moves preserve underscore-free @use imports', () => {
   const plan = planRename(

@@ -27,11 +27,17 @@ const excluded = (path) => /(^|\/)changelog(?:[./_-]|$)/i.test(path) || SELF.tes
 export function readTree(root, ref) {
   if (!ref) {
     const paths = git(root, ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
-    return new Map(
-      paths
-        .filter((path) => lstatSync(resolve(root, path)).isFile())
-        .map((path) => [path, readFileSync(resolve(root, path))]),
-    );
+    const files = new Map();
+    for (const path of paths) {
+      try {
+        const target = resolve(root, path);
+        if (lstatSync(target).isFile()) files.set(path, readFileSync(target));
+      } catch (error) {
+        // Git still lists unstaged deletions; other filesystem failures must surface.
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
+    return files;
   }
   const tree = git(root, ['ls-tree', '-rz', '--full-tree', ref], { encoding: 'utf8' });
   const entries = tree
@@ -99,7 +105,10 @@ export function planRename(files) {
   tokens.set('search-adf-hx', 'search-satori');
   const ordered = [...tokens].sort(([a], [b]) => b.length - a.length || a.localeCompare(b));
   const tokenPattern = ordered.length
-    ? new RegExp(`(?<![\\w-])(?:${ordered.map(([from]) => escape(from)).join('|')})(?![\\w-])`, 'g')
+    ? new RegExp(
+        `(?<![\\w-])(?:${ordered.map(([from]) => escape(from)).join('|')})(?=__(?=[\\w-])|--(?=[\\w-])|[^\\w-]|$)`,
+        'g',
+      )
     : null;
   const transform = (content) =>
     content
@@ -217,7 +226,15 @@ export function main(argv) {
   };
   if (options.report) {
     const target = resolve(options.report);
-    if (files.has(target.slice(root.length + 1).replaceAll('\\', '/')))
+    const trackedPaths = git(root, ['ls-files', '-z'], { encoding: 'utf8' })
+      .split('\0')
+      .filter(Boolean);
+    const normalized = (path) => (process.platform === 'win32' ? path.toLowerCase() : path);
+    if (
+      [...files.keys(), ...trackedPaths].some(
+        (path) => normalized(resolve(root, path)) === normalized(target),
+      )
+    )
       throw new Error('Report must not overwrite a tracked file');
     mkdirSync(dirname(target), { recursive: true });
     writeFileSync(target, JSON.stringify(report, null, 2) + '\n');

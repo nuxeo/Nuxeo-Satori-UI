@@ -15,7 +15,8 @@ segments, extensionless imports and stems in text files. The legacy routes
 `browse-adf-hx` and `search-adf-hx` become `browse-satori` and `search-satori`.
 
 Only selectors declared locally in TypeScript are candidates for `hxp-` to `nxs-`
-replacement. Their declarations, markup and matching CSS selectors change together.
+replacement. Their declarations, markup and matching CSS selectors change together,
+including BEM element (`__`) and modifier (`--`) suffixes on owned selector and path tokens.
 This is repository tooling (extensibility Layer 3), with no new runtime API, dependency,
 extension ID, endpoint, or UI. A blanket text replacement was rejected because it
 would also rename upstream packages and selectors the repository does not own.
@@ -36,12 +37,13 @@ are needed by this script or its tests.
 
 ```sh
 node scripts/rename-satori.mjs --dry-run --ref origin/integration/nxsat-308 --report /tmp/integration-rename.json
-node scripts/rename-satori.mjs --dry-run --ref feature/nxsat-308-wave3 --report /tmp/wave3-rename.json
+node scripts/rename-satori.mjs --dry-run --ref 2f57bf708e791560a05f81e0db696d687b330659 --report /tmp/wave3-rename.json
 node --test scripts/rename-satori.selftest.mjs
 ```
 
 `--ref` reads an immutable Git tree without switching branches or writing its files.
-Omit it to inspect tracked files in the current working tree, including local edits.
+Omit it to inspect tracked files in the current working tree, including local edits
+and skipping files deleted locally without staging.
 `--root` selects another repository. Keep reports outside the checkout.
 A report contains the resolved commit, exclusions, every old/new file path, and every
 changed line with its original and replacement text. Without `--report`, those edits
@@ -52,8 +54,8 @@ The wave3 branch was merged by PR #414 and deleted. When that ref is unavailable
 use its exact merged head, `2f57bf708e791560a05f81e0db696d687b330659`, from the
 second parent of integration's merge `44882d3ed`.
 
-The first capture on integration commit `47c9a6196c976c79166599038e0973064c19707f`
-and that wave3 head each proposed **711 changed files, 146 moves and 2,203 changed
+The reviewed capture on integration commit `47c9a6196c976c79166599038e0973064c19707f`
+and that wave3 head each proposed **711 changed files, 146 moves and 2,252 changed
 lines**. Both planned second runs had zero changes. These are baseline measurements,
 not expected counts after subsequent merges. Re-run after NXSAT-638 merges and again
 immediately before NXSAT-640 applies the migration.
