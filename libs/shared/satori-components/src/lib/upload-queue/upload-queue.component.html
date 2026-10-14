@@ -10,7 +10,12 @@
       }
     </p>
   }
-  <ul class="nxs-upload-queue__list" [attr.aria-label]="label()">
+  <ul
+    #list
+    class="nxs-upload-queue__list"
+    [attr.aria-label]="label()"
+    [attr.tabindex]="scrolls() ? 0 : null"
+  >
     @for (item of items(); track item.id) {
       <li class="nxs-upload-queue__item" [attr.data-state]="item.state">
         <mat-icon class="nxs-upload-queue__icon" aria-hidden="true">

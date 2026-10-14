@@ -48,6 +48,28 @@ describe('NxsUploadQueueComponent', () => {
     await show();
   });
 
+  it('takes keyboard focus only while the list scrolls, so a run without buttons can be scrolled', async () => {
+    const list = () => el().querySelector('ul') as HTMLElement;
+    const measure = (scrollHeight: number) => {
+      Object.defineProperty(list(), 'scrollHeight', { configurable: true, value: scrollHeight });
+      Object.defineProperty(list(), 'clientHeight', { configurable: true, value: 280 });
+    };
+    expect(list().hasAttribute('tabindex')).toBe(false);
+
+    measure(600);
+    queue.start();
+    await show();
+    await fixture.whenStable();
+    expect(rows().some((row) => row.querySelector('button'))).toBe(false);
+    expect(list().getAttribute('tabindex')).toBe('0');
+
+    measure(280);
+    queue.progress({ percent: 50, fileIndex: 0, fileCount: 2 });
+    await show();
+    await fixture.whenStable();
+    expect(list().hasAttribute('tabindex')).toBe(false);
+  });
+
   it('renders nothing for an empty queue', async () => {
     queue.clear();
     await show();
