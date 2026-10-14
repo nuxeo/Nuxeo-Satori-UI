@@ -161,8 +161,8 @@ test.describe('search', () => {
  *
  * These two cases used to drive `/#/search-adf-hx`, which interpolated the term into a
  * `sys_fulltext = '<term>*'` literal through `escapeHxqlLiteral` — the path the original
- * adversarial review found the injection in. NXSAT-308 deletes that route with the rest of
- * adf-hx, so the coverage moves to the search page that stays, before the route goes.
+ * adversarial review found the injection in. That route is retired with the rest of adf-hx and
+ * now only redirects here, so the coverage lives on the search page that stays.
  *
  * `/#/search` writes no query text at all. `SearchService.search` sends the drawer's term to the
  * `default_search` page provider as the `ecm_fulltext` named parameter, and Nuxeo binds it into

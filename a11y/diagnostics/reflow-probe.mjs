@@ -77,7 +77,7 @@ const { username: user, password: pass } = credentialsOrExit('reflow-probe');
  * geometry. A route whose data failed to load would be measured as a clean layout and
  * reported as `fits`. Flagged in review on PR #225.
  *
- * Also checks the identity can reach `/#/administration`, one of the seven routes. Without
+ * Also checks the identity can reach `/#/administration`, one of the six routes. Without
  * that, adminGuard redirects to the dashboard and its geometry is reported under the
  * administration label.
  *
@@ -112,7 +112,7 @@ async function requireBackend() {
 
 await requireBackend();
 
-/** Same seven surfaces `surfaces.a11y.spec.ts` scans, so the comparison is like for like. */
+/** Same six surfaces `surfaces.a11y.spec.ts` scans, so the comparison is like for like. */
 const ROUTES = [
   ['browse', '/#/browse', 'lib-browse'],
   ['search', '/#/search', 'lib-search'],
@@ -120,7 +120,6 @@ const ROUTES = [
   ['tasks', '/#/tasks', 'lib-tasks-page'],
   ['administration', '/#/administration', 'lib-administration-shell'],
   ['knowledge-discovery', '/#/knowledge-discovery', 'lib-knowledge-discovery'],
-  ['browse-adf-hx', '/#/browse-adf-hx', 'lib-browse-adf-hx-poc'],
 ];
 
 let chromium;

@@ -285,7 +285,7 @@ export function createHelpers(page, outDir, recorder) {
     },
 
     /**
-     * Navigate to an app route, e.g. `/#/browse-adf-hx?path=%2Fdefault-domain`.
+     * Navigate to an app route, e.g. `/#/browse/default-domain`.
      * @param {string} route
      */
     async goTo(route) {
