@@ -327,6 +327,25 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
    * violation intermittently, and a landmark whose name changes per document cannot be
    * navigated to reliably.
    */
+  describe('the History tab', () => {
+    it('creates nxs-document-history on first show, so the page asks for no audit on load', async () => {
+      mockDirectoryService.getEventCategories.mockClear();
+      await render({});
+      const page = fixture.componentInstance;
+      expect(page.activeTabId()).toBe('app.tabs.view');
+      expect(fixture.nativeElement.querySelector('nxs-document-history')).toBeNull();
+      expect(mockDirectoryService.getEventCategories).not.toHaveBeenCalled();
+
+      page.onTabChange(page.detailTabs().findIndex((tab) => tab.id === 'app.tabs.history'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('nxs-document-history')).not.toBeNull();
+      expect(mockDirectoryService.getEventCategories).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('accessibility', () => {
     it('names the properties sidebar landmark', async () => {
       await render({});

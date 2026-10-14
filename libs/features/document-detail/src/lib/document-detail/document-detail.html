@@ -626,7 +626,9 @@
         </ng-template>
 
         <ng-template #historyTabContent>
-          <nxs-document-history class="history-container" [documentUid]="doc()!.uid" />
+          @if (historyShown()) {
+            <nxs-document-history class="history-container" [documentUid]="doc()!.uid" />
+          }
         </ng-template>
 
         <ng-template #publishingTabContent>

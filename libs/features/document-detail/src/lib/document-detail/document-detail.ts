@@ -706,6 +706,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly isInClipboard = computed(() => this.clipboardDocs().some((d) => d.uid === this.docUid));
 
   private permissionsTabLoaded = false;
+  /**
+   * `nxs-document-history` reads the audit trail and its vocabularies when it is created, and a tab
+   * body is created with the page, so it is rendered only once its tab has been shown.
+   */
+  readonly historyShown = signal(false);
   readonly activeTabIndex = signal(0);
   readonly permissionsLoading = signal(false);
 
@@ -1130,6 +1135,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.panelSubTab.set('properties');
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
+    this.historyShown.set(this.activeTabId() === 'app.tabs.history');
     // Not just the `publishTabLoaded` flag above: `loadPublishingData()` skips its own fetch
     // while this array is non-empty, so the previous document's entries would both show in the
     // side panel's count and keep Unpublish pointing at its proxies — indefinitely if the new
@@ -2730,8 +2736,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.loadDataForTab(this.detailTabs()[index]?.id ?? null);
   }
 
-  /** The lazy loads the Permissions and Publishing tabs need on first show. */
+  /** The lazy loads the Permissions, Publishing and History tabs need on first show. */
   private loadDataForTab(id: string | null): void {
+    if (id === 'app.tabs.history') this.historyShown.set(true);
     if (id === 'app.tabs.permissions' && !this.permissionsTabLoaded) {
       this.reloadDocumentPermissions();
     }
