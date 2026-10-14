@@ -5,6 +5,8 @@
 `node scripts/rename-satori.mjs` plans a repository-wide migration from
 `@nuxeo-satori/platform` to `@nuxeo/satori-platform`. It is dry-run by default.
 NXSAT-639 ships the tool; NXSAT-640 applies the reviewed plan in a separate change.
+Slash-escaped package patterns such as `@nuxeo-satori\/platform` also migrate to
+`@nuxeo\/satori-platform`, preserving the escape needed by regex-literal import scanners.
 
 The planner reads tracked files, including hidden agent instructions, package metadata,
 secondary-entry paths, the API snapshot, docs, generator templates, acme-extensions,
@@ -56,6 +58,8 @@ are compared case-insensitively on every platform as a conservative source-prote
 check, including Windows and macOS installations with case-insensitive filesystems.
 Canonical paths and filesystem identity also reject symbolic-link directory aliases
 and existing hard-link aliases to tracked sources.
+Report destinations themselves must not be symbolic links, including dangling links
+to locally deleted sources.
 Combining `--write` and `--dry-run` is rejected in either order.
 A report contains the resolved commit, exclusions, every old/new file path, and every
 changed line with its original and replacement text. Without `--report`, those edits
@@ -66,8 +70,8 @@ The wave3 branch was merged by PR #414 and deleted. When that ref is unavailable
 use its exact merged head, `2f57bf708e791560a05f81e0db696d687b330659`, from the
 second parent of integration's merge `44882d3ed`.
 
-The final capture on integration commit `735dbea26d56054604dbdb9571180f0610ec08ba`
-and that wave3 head each proposed **711 changed files, 146 moves and 2,254 changed
+The post-review capture on integration commit `735dbea26d56054604dbdb9571180f0610ec08ba`
+and that wave3 head each proposed **711 changed files, 146 moves and 2,268 changed
 lines**. Both planned second runs had zero changes. These are baseline measurements,
 not expected counts after subsequent merges. Re-run after NXSAT-638 merges and again
 immediately before NXSAT-640 applies the migration.

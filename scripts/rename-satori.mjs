@@ -176,7 +176,9 @@ export function planRename(files) {
       .split(/(@alfresco\/[\w./-]+|https?:\/\/[^\s'"<>`]+)/g)
       .map((part, index) => {
         if (index % 2) return part.startsWith('@alfresco/') ? part : renameLocalRoute(part);
-        const renamed = part.replace(/@nuxeo-satori\/platform(?![\w-])/g, NEW_PACKAGE);
+        const renamed = part.replace(/@nuxeo-satori(\\?\/)platform(?![\w-])/g, (_, slash) =>
+          NEW_PACKAGE.replace('/', slash),
+        );
         return tokenPattern ? renamed.replace(tokenPattern, (token) => tokens.get(token)) : renamed;
       })
       .join('');
@@ -334,6 +336,13 @@ export function main(argv) {
   };
   if (options.report) {
     const target = resolve(options.report);
+    try {
+      // lstat observes the link itself even when its target was deleted locally.
+      if (lstatSync(target).isSymbolicLink())
+        throw new Error('Report destination must not be a symlink');
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
     const trackedPaths = git(root, ['ls-files', '-z'], { encoding: 'utf8' })
       .split('\0')
       .filter(Boolean);

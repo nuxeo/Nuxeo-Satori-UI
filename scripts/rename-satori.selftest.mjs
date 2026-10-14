@@ -446,6 +446,41 @@ test('report cannot recreate a locally deleted tracked source', (t) => {
   assert.equal(existsSync(target), false);
 });
 
+test('a dangling report link cannot recreate its locally deleted tracked target', (t) => {
+  const { root } = fixture(t, { 'a.ts': OLD });
+  const source = join(root, 'a.ts');
+  const report = join(root, 'report.json');
+  rmSync(source);
+  // Junction creation needs no Windows symlink privilege; lstat sees both link types.
+  fs.symlinkSync(source, report, process.platform === 'win32' ? 'junction' : 'file');
+  assert.equal(fs.lstatSync(report).isSymbolicLink(), true);
+  assert.throws(() => main(['--root', root, '--report', report]), /must not be a symlink/);
+  assert.equal(existsSync(source), false);
+  assert.equal(fs.lstatSync(report).isSymbolicLink(), true);
+});
+
+test('renamed regex-literal scanners match the new package and deep imports', () => {
+  const scanner = String.raw`
+    const SPECIFIER = /(?:from\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s*)['"](@nuxeo-satori\/platform[^'"]*)['"]/g;
+    const isPlatform = (specifier) => /^@nuxeo-satori\/platform(?:\/|$)/.test(specifier);
+    return { SPECIFIER, isPlatform };
+  `;
+  const plan = planRename(tree({ 'scanner.mjs': scanner }));
+  const renamed = content(plan, 'scanner.mjs');
+  assert.match(renamed, /@nuxeo\\\/satori-platform/);
+  const { SPECIFIER, isPlatform } = new Function(renamed)();
+  const code = `import { x } from '${NEW}';\nimport('${NEW}/extensions/internal/secret');\nrequire('${NEW}/ui');\nimport '${NEW}/components';\nimport '${OLD}';`;
+  assert.deepEqual(
+    [...code.matchAll(SPECIFIER)].map((match) => match[1]),
+    [NEW, `${NEW}/extensions/internal/secret`, `${NEW}/ui`, `${NEW}/components`],
+  );
+  assert.equal(isPlatform(NEW), true);
+  assert.equal(isPlatform(`${NEW}/extensions/internal/secret`), true);
+  assert.equal(isPlatform(`${NEW}-extras`), false);
+  assert.equal(isPlatform(OLD), false);
+  assert.equal(planRename(plan.next).changes.length, 0);
+});
+
 test('report paths conservatively reject case-only aliases on every platform', (t) => {
   const { root } = fixture(t, { 'a.ts': OLD });
   assert.throws(() => main(['--root', root, '--report', join(root, 'A.ts')]), /tracked file/);
