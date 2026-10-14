@@ -116,6 +116,8 @@ describe('document-permissions', () => {
         false,
       );
       expect(canCreateDocumentVersion(record(versionable([WRITE_VERSION])))).toBe(false);
+      // A publication keeps the source's `Versionable` facet and permissions, but has no versions.
+      expect(canCreateDocumentVersion(versionable([WRITE_VERSION], { isProxy: true }))).toBe(false);
       expect(canCreateDocumentVersion(null)).toBe(false);
     });
 

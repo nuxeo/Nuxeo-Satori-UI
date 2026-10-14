@@ -89,13 +89,16 @@ export function isRecordDocument(doc: NuxeoDocument | null | undefined): boolean
 }
 
 /**
- * Web UI's Create Version gate (`nuxeo-document-create-version`): the live document, not a version
- * or a record, with the `Versionable` facet, and the user holds `WriteVersion`.
+ * Web UI's Create Version gate (`nuxeo-document-create-version`): the live document, not a version,
+ * a publication or a record, with the `Versionable` facet, and the user holds `WriteVersion`. A
+ * publication keeps its source's facet and permissions but has no versions of its own, which is
+ * why Web UI shows it no versions control at all.
  */
 export function canCreateDocumentVersion(doc: NuxeoDocument | null | undefined): boolean {
   return (
     !!doc &&
     !doc.isVersion &&
+    !doc.isProxy &&
     !isRecordDocument(doc) &&
     (doc.facets ?? []).includes('Versionable') &&
     hasDocumentPermission(doc, WRITE_VERSION)

@@ -60,7 +60,7 @@ function newestFirst(a: NuxeoDocument, b: NuxeoDocument): number {
  *   document's versions with the one on screen marked.
  * - Create Version is in the list while the document is checked out, and is the whole control
  *   while it has no version. It is offered only where `canCreateDocumentVersion` holds — the live
- *   document, not a record, `Versionable`, and `WriteVersion`; otherwise the control reads
+ *   document, not a publication or a record, `Versionable`, and `WriteVersion`; otherwise the control reads
  *   "Unversioned". It opens `nxs-create-version-dialog` and emits `versionCreated`.
  *
  * The list is read when it opens, through `Document.GetVersions`, which reads the repository
