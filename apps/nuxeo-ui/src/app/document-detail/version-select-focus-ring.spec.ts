@@ -31,8 +31,8 @@ function contrastRatio(a: [number, number, number], b: [number, number, number])
 
 function parseRgb(css: string): [number, number, number] | null {
   const match = css.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
-  if (!match) return null;
-  return [Number(match[1]) ?? 0, Number(match[2]) ?? 0, Number(match[3]) ?? 0];
+  if (!match || !match[1] || !match[2] || !match[3]) return null;
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
 }
 
 @Component({
