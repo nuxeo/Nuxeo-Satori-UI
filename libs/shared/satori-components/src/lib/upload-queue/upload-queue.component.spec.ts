@@ -20,6 +20,25 @@ class HostComponent {
   readonly retried: string[] = [];
 }
 
+/** jsdom has no `ResizeObserver`; this one lets a test say when the observed list was resized. */
+class FakeResizeObserver {
+  static last: FakeResizeObserver | undefined;
+  target: Element | undefined;
+  disconnected = false;
+
+  constructor(readonly resized: () => void) {
+    FakeResizeObserver.last = this;
+  }
+
+  observe(target: Element): void {
+    this.target = target;
+  }
+
+  disconnect(): void {
+    this.disconnected = true;
+  }
+}
+
 describe('NxsUploadQueueComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -48,6 +67,11 @@ describe('NxsUploadQueueComponent', () => {
     await show();
   });
 
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    FakeResizeObserver.last = undefined;
+  });
+
   it('takes keyboard focus only while the list scrolls, so a run without buttons can be scrolled', async () => {
     const list = () => el().querySelector('ul') as HTMLElement;
     const measure = (scrollHeight: number) => {
@@ -68,6 +92,27 @@ describe('NxsUploadQueueComponent', () => {
     await show();
     await fixture.whenStable();
     expect(list().hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('measures again when the list changes size with the same files, as on zoom', async () => {
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    fixture = TestBed.createComponent(HostComponent);
+    host = fixture.componentInstance;
+    queue.start();
+    await show();
+    const list = el().querySelector('ul') as HTMLElement;
+    const observer = FakeResizeObserver.last;
+    expect(observer?.target).toBe(list);
+    expect(list.hasAttribute('tabindex')).toBe(false);
+
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 280 });
+    observer?.resized();
+    await fixture.whenStable();
+    expect(list.getAttribute('tabindex')).toBe('0');
+
+    fixture.destroy();
+    expect(observer?.disconnected).toBe(true);
   });
 
   it('renders nothing for an empty queue', async () => {

@@ -55,6 +55,7 @@ export class NxsUploadQueueComponent {
   /**
    * Whether the list scrolls. A file waiting or uploading has no button, so a long run can leave
    * nothing in the list to focus; the list then takes focus itself, so the keyboard can scroll it.
+   * Measured when the files change and when the list changes size with the same files, as on zoom.
    */
   protected readonly scrolls = signal(false);
 
@@ -63,8 +64,14 @@ export class NxsUploadQueueComponent {
   constructor() {
     afterRenderEffect(() => {
       this.items();
+      this.measure();
+    });
+    afterRenderEffect((onCleanup) => {
       const list = this.list()?.nativeElement;
-      this.scrolls.set(!!list && list.scrollHeight > list.clientHeight);
+      if (!list || typeof ResizeObserver === 'undefined') return;
+      const observer = new ResizeObserver(() => this.measure());
+      observer.observe(list);
+      onCleanup(() => observer.disconnect());
     });
   }
 
@@ -83,5 +90,10 @@ export class NxsUploadQueueComponent {
 
   protected removable(item: NxsUploadItem): boolean {
     return item.state === 'staged' || item.state === 'failed' || item.state === 'done';
+  }
+
+  private measure(): void {
+    const list = this.list()?.nativeElement;
+    this.scrolls.set(!!list && list.scrollHeight > list.clientHeight);
   }
 }
