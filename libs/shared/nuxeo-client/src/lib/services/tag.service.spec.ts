@@ -179,5 +179,6 @@ describe('TagService is the only Tag.Suggestion sender', () => {
     expect(senders).toEqual([
       "libs/shared/nuxeo-client/src/lib/services/tag.service.ts: '/nuxeo/api/v1/automation/Tag.Suggestion'",
     ]);
-  });
+    // Reads every shipped source file: past the 5 s default on a loaded coverage run.
+  }, 30_000);
 });

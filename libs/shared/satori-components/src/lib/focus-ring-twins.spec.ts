@@ -100,5 +100,6 @@ describe('the library’s focus rings', () => {
       ),
     );
     expect(missing).toEqual([]);
-  });
+    // Compiles every component stylesheet: allow for a loaded coverage run.
+  }, 30_000);
 });
