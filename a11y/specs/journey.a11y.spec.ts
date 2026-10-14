@@ -262,6 +262,33 @@ const FILE_WITH_MAIN_BLOB_NXQL =
  * A File whose main blob is persisted — required when the scan must reach footer controls that
  * only render when `fileName()` is populated (`document-detail.html`).
  */
+/**
+ * NXSAT-545 — a File with a version label in the properties panel (`hasVersion()`).
+ * Creates a minor version when the chosen blob file is still at 0.0.
+ */
+async function fileWithVersionSelector(page: Page): Promise<RepoEntry> {
+  const file = await firstFileWithMainBlob(page);
+  const docResponse = await page.request.get(`/nuxeo/api/v1/id/${file.uid}`);
+  expect(docResponse.ok(), `document ${file.uid} must load for version-select journey`).toBeTruthy();
+  const doc = (await docResponse.json()) as {
+    properties?: Record<string, unknown>;
+  };
+  const major = Number(doc.properties?.['uid:major_version'] ?? 0);
+  const minor = Number(doc.properties?.['uid:minor_version'] ?? 0);
+  if (major > 0 || minor > 0) {
+    return file;
+  }
+
+  const created = await page.request.post(`/nuxeo/api/v1/id/${file.uid}/@op/Document.CreateVersion`, {
+    data: { params: { increment: 'Minor', saveDocument: true }, context: {} },
+  });
+  expect(
+    created.ok(),
+    `Document.CreateVersion must succeed so button.version-select renders (${created.status()})`,
+  ).toBeTruthy();
+  return file;
+}
+
 async function firstFileWithMainBlob(page: Page): Promise<RepoEntry> {
   let chosen: RepoEntry | undefined;
   let examined = 0;
@@ -725,6 +752,29 @@ async function enterDocumentDetailHeaderToolbarIconFocusState(page: Page): Promi
  * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
  * (`docs/accessibility.md`); this only proves the scan runs with that control focused.
  */
+/**
+ * NXSAT-545 — keyboard focus on the properties panel version selector before a journey scan.
+ *
+ * Focus visibility and 1.4.11 contrast verdicts belong to a11y-scout `focusChecks`
+ * (`docs/accessibility.md`); this only proves the scan runs with that control focused.
+ */
+async function enterDocumentDetailVersionSelectFocusState(page: Page): Promise<void> {
+  const versionSelect = page.locator('button.version-select').first();
+  await expect(
+    versionSelect,
+    'version selector must render on a versioned document in the properties panel',
+  ).toBeVisible();
+  await versionSelect.focus();
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const target = document.querySelector('button.version-select');
+        return target !== null && document.activeElement === target;
+      }),
+    )
+    .toBe(true);
+}
+
 async function enterDocumentDetailHeaderMoreActionsFocusState(page: Page): Promise<void> {
   const moreActions = page
     .locator('.detail-header .header-actions button.mat-mdc-icon-button')
@@ -841,6 +891,34 @@ journeyTest('document-detail-more-actions', async ({ signedIn: page, a11y }) => 
 
   await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
   await emitScreenReport(a11y, journeyReportName('document-detail-more-actions'));
+});
+
+/**
+ * Screen 6 — document detail with properties panel **version selector** focused (NXSAT-545).
+ *
+ * Separate journey project so the a11y-scout accumulator stays one scan per worker/report
+ * (`emitScreenReport` requires `pagesScanned.length === 1`).
+ */
+journeyTest('document-detail-version-select', async ({ signedIn: page, a11y }) => {
+  await page.goto('/#/browse', { waitUntil: 'networkidle' });
+  const { uid, title } = await fileWithVersionSelector(page);
+
+  await page.goto(`/#/doc/${uid}`, { waitUntil: 'networkidle' });
+
+  await expect(
+    page.locator('lib-document-detail'),
+    'lib-document-detail must render',
+  ).toBeVisible();
+  await expect(
+    page.locator('lib-document-detail'),
+    `the detail view must show "${title}" — an error panel is visible too, and would scan clean`,
+  ).toContainText(title);
+  await waitForScreenSettled(page, 'lib-document-detail', true);
+  await expectSurfaceUsable(page, 'lib-document-detail', 'document detail');
+  await enterDocumentDetailVersionSelectFocusState(page);
+
+  await a11y.scanPage({ ...SCREEN_SCAN, extraWaitMs: 600 });
+  await emitScreenReport(a11y, journeyReportName('document-detail-version-select'));
 });
 
 // ─────────────────────────── core flows ───────────────────────────

@@ -1,7 +1,8 @@
 /**
  * NXSAT-545 / IBM 2851011211 — document detail `.version-select` keyboard focus indicator.
  * Source-level IBM `style_focus_visible` contract (standalone `:focus` selector). Runtime
- * contrast and inset geometry: `apps/nuxeo-ui/.../version-select-focus-ring.spec.ts`.
+ * inset geometry and hover cascade: `apps/nuxeo-ui/.../version-select-focus-ring.spec.ts`.
+ * WCAG contrast / focus visibility verdict: a11y journey `document-detail-version-select`.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -34,7 +35,23 @@ function selectorBlock(scss: string, selector: string): string {
 
 describe('DocumentDetailComponent — version-select focus ring (NXSAT-545)', () => {
   const scssPath = join(import.meta.dirname, 'document-detail-version-select-focus.scss');
+  const templatePath = join(import.meta.dirname, 'document-detail.html');
   const componentPath = join(import.meta.dirname, 'document-detail.ts');
+
+  it('wires version-select on the production properties panel version control', () => {
+    const html = readFileSync(templatePath, 'utf8');
+    const clickIdx = html.indexOf('(click)="toggleVersionDropdown()"');
+    expect(clickIdx, 'version dropdown toggle handler').toBeGreaterThan(-1);
+    const tagStart = html.lastIndexOf('<button', clickIdx);
+    expect(tagStart, 'version control must be a button').toBeGreaterThan(-1);
+    const tagEnd = html.indexOf('>', clickIdx);
+    expect(tagEnd, 'version control opening tag must close').toBeGreaterThan(clickIdx);
+    const openingTag = html.slice(tagStart, tagEnd + 1);
+    expect(openingTag).toContain('class="version-select"');
+    const versionRow = html.slice(Math.max(0, clickIdx - 120), clickIdx + 280);
+    expect(versionRow).toContain('class="version-select-wrapper"');
+    expect(versionRow).toMatch(/<mat-icon[^>]*class="version-arrow"/);
+  });
 
   it('declares a standalone :focus ring on the version selector', () => {
     const raw = readFileSync(scssPath, 'utf8');

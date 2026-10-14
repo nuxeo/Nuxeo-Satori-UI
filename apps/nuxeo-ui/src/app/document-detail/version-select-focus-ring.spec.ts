@@ -1,73 +1,17 @@
 /**
- * NXSAT-545 / IBM 2851011211 — properties panel version selector keyboard focus (WCAG 2.1 SC 2.4.7).
- * Standalone `:focus` selector shape is owned by document-detail-version-select-focus-ring.spec.ts;
- * this suite owns computed inset geometry, contrast, and IBM `:focus`-only behaviour.
+ * NXSAT-545 / IBM 2851011211 — properties panel version selector keyboard focus styling contract.
+ * Host markup mirrors production `document-detail.html` (see
+ * `document-detail-version-select-focus-ring.spec.ts`).
+ *
+ * What these tests do NOT cover: focus visibility and 1.4.11 contrast verdicts on a live
+ * document-detail route. Those belong to a11y-scout on journey screen
+ * `document-detail-version-select` (`docs/accessibility.md`); this Karma suite only asserts SCSS
+ * wiring, computed outline geometry, and hover/focus cascade invariants on a synthetic host.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-
-import { COMPILED_THEME_BASES } from '../theme/app-theme';
-
-const WCAG_1411_MIN_RATIO = 3;
-const WCAG_AA_NORMAL_TEXT = 4.5;
-const WCAG_1411_UI_COMPONENT = 3;
-
-function luminance([r, g, b]: readonly number[]): number {
-  const channel = (c: number) => {
-    const s = c / 255;
-    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
-}
-
-function contrastRatio(a: readonly number[], b: readonly number[]): number {
-  const [la, lb] = [luminance(a), luminance(b)];
-  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
-}
-
-function parseColor(value: string): { rgb: number[]; alpha: number } {
-  const rgbMatch = /rgba?\(([^)]+)\)/.exec(value);
-  if (rgbMatch) {
-    const parts = rgbMatch[1]
-      .split(/[,\s/]+/)
-      .filter(Boolean)
-      .map(Number);
-    return { rgb: parts.slice(0, 3), alpha: parts.length > 3 ? parts[3] : 1 };
-  }
-
-  const srgbMatch = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\)/.exec(
-    value,
-  );
-  if (srgbMatch) {
-    return {
-      rgb: [srgbMatch[1], srgbMatch[2], srgbMatch[3]].map((channel) =>
-        Math.round(Number(channel) * 255),
-      ),
-      alpha: srgbMatch[4] ? Number(srgbMatch[4]) : 1,
-    };
-  }
-
-  throw new Error(`not a computed colour: "${value}"`);
-}
-
-function compositeOver(
-  fg: { rgb: number[]; alpha: number },
-  backdrop: readonly number[],
-): number[] {
-  return fg.rgb.map((c, i) => Math.round(c * fg.alpha + backdrop[i] * (1 - fg.alpha)));
-}
-
-function paintedBackground(element: HTMLElement): number[] {
-  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
-    const parsed = parseColor(getComputedStyle(node).backgroundColor);
-    if (parsed.alpha > 0) {
-      return parsed.rgb;
-    }
-  }
-  return [255, 255, 255];
-}
 
 @Component({
   standalone: true,
@@ -128,7 +72,7 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
     return { fixture, button };
   }
 
-  function applyTheme(theme: (typeof COMPILED_THEME_BASES)[number] | null): void {
+  function applyTheme(theme: 'dark' | null): void {
     if (theme === null) {
       document.documentElement.removeAttribute('data-app-theme');
     } else {
@@ -168,7 +112,7 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
     }
   });
 
-  it('keeps panel-surface fill and ring contrast when focused and hovered (dark theme)', async () => {
+  it('keeps panel-surface fill and focus ring when focused and hovered (dark theme)', async () => {
     applyTheme('dark');
     const { fixture, button } = await mount();
     const panel = fixture.nativeElement.querySelector('.properties-panel') as HTMLElement;
@@ -195,11 +139,8 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       expect(focusedHoveredBg).not.toBe(competingHoverFill);
 
       const style = getComputedStyle(button);
-      const backdrop = paintedBackground(button);
-      const ring = parseColor(style.outlineColor);
-      expect(contrastRatio(compositeOver(ring, backdrop), backdrop)).toBeGreaterThanOrEqual(
-        WCAG_1411_MIN_RATIO,
-      );
+      expect(style.outlineStyle).toBe('solid');
+      expect(Number.parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
     } finally {
       panel.classList.remove('nxsat545-karma-focus-hover');
       button.blur();
@@ -207,7 +148,7 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
     }
   });
 
-  it('keeps panel-surface hover fill and label contrast when unfocused and hovered (dark theme)', async () => {
+  it('keeps panel-surface hover fill when unfocused and hovered (dark theme)', async () => {
     applyTheme('dark');
     const { fixture, button } = await mount();
     const panel = fixture.nativeElement.querySelector('.properties-panel') as HTMLElement;
@@ -231,68 +172,22 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       surfaceHoverProbe.remove();
 
       expect(plainHoveredBg).not.toBe(competingHoverFill);
-
-      const style = getComputedStyle(button);
-      const fill = paintedBackground(button);
-      const label = parseColor(style.color);
-      const border = parseColor(style.borderColor);
-
-      expect(contrastRatio(compositeOver(label, fill), fill)).toBeGreaterThanOrEqual(
-        WCAG_AA_NORMAL_TEXT,
-      );
-      expect(contrastRatio(compositeOver(border, fill), fill)).toBeGreaterThanOrEqual(
-        WCAG_1411_UI_COMPONENT,
-      );
     } finally {
       panel.classList.remove('nxsat545-karma-plain-hover');
       fixture.nativeElement.remove();
     }
   });
 
-  it('keeps label and border contrast on the light panel in dark theme (NXSAT-545)', async () => {
-    applyTheme('dark');
+  it('routes label and border colour through --document-detail-properties-accent', async () => {
     const { fixture, button } = await mount();
+    const panel = fixture.nativeElement.querySelector('.properties-panel') as HTMLElement;
     try {
-      button.focus({ focusVisible: false } as FocusOptions);
-      const style = getComputedStyle(button);
-      const fill = paintedBackground(button);
-      const label = parseColor(style.color);
-      const border = parseColor(style.borderColor);
-
-      expect(contrastRatio(compositeOver(label, fill), fill)).toBeGreaterThanOrEqual(
-        WCAG_AA_NORMAL_TEXT,
-      );
-      expect(contrastRatio(compositeOver(border, fill), fill)).toBeGreaterThanOrEqual(
-        WCAG_1411_UI_COMPONENT,
-      );
+      const SENTINEL = 'rgb(9, 10, 11)';
+      panel.style.setProperty('--document-detail-properties-accent', SENTINEL);
+      expect(getComputedStyle(button).color).toBe(SENTINEL);
+      expect(getComputedStyle(button).borderColor).toBe(SENTINEL);
     } finally {
-      button.blur();
       fixture.nativeElement.remove();
     }
   });
-
-  for (const theme of [...COMPILED_THEME_BASES, null] as const) {
-    const label = theme ?? 'no data-app-theme (first paint)';
-
-    it(`meets ${WCAG_1411_MIN_RATIO}:1 against the version button fill — ${label}`, async () => {
-      applyTheme(theme);
-      const { fixture, button } = await mount();
-      try {
-        button.focus({ focusVisible: false } as FocusOptions);
-        const style = getComputedStyle(button);
-
-        expect(style.outlineStyle).not.toBe('none');
-        expect(parseFloat(style.outlineWidth)).toBeGreaterThan(0);
-
-        const backdrop = paintedBackground(button);
-        const ring = parseColor(style.outlineColor);
-        const ringOnBackdrop = compositeOver(ring, backdrop);
-
-        expect(contrastRatio(ringOnBackdrop, backdrop)).toBeGreaterThanOrEqual(WCAG_1411_MIN_RATIO);
-      } finally {
-        button.blur();
-        fixture.nativeElement.remove();
-      }
-    });
-  }
 });

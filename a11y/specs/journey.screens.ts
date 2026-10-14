@@ -60,6 +60,11 @@ export const JOURNEY_SCREENS = [
     label: 'document detail More actions focus',
     authenticated: true,
   },
+  {
+    id: 'document-detail-version-select',
+    label: 'document detail version selector focus',
+    authenticated: true,
+  },
   // Core flows: finding and returning to content.
   { id: 'search', label: 'search results screen', authenticated: true },
   { id: 'documents', label: 'documents (assets) screen', authenticated: true },
