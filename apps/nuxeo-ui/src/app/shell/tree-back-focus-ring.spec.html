@@ -1,9 +1,7 @@
 <!--
-  Fixture for tree-back-focus-ring.spec.ts. Mirrors app-nav-drawer browse tree Root back control.
+  Fixture for tree-back-focus-ring.spec.ts: the browse drawer's nxs-document-tree, opened inside a
+  domain, where it shows its Root back control.
 -->
 <div class="tree-back-focus-host">
-  <button class="tree-back" type="button" data-testid="tree-back-btn">
-    <mat-icon>chevron_left</mat-icon>
-    Root
-  </button>
+  <nxs-document-tree [label]="'nav.tree.label' | translate" currentPath="/default-domain" />
 </div>

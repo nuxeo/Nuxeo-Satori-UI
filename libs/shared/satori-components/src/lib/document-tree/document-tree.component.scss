@@ -30,6 +30,13 @@
   text-align: start;
   cursor: pointer;
 
+  // IBM Equal Access's style_focus_visible reads `:focus` only and does not resolve selector
+  // lists, so the ring is also declared on a standalone `:focus` (NXSAT-547).
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--mat-sys-primary);
     outline-offset: -2px;
