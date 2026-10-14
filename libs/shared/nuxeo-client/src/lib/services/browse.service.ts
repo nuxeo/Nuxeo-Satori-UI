@@ -89,6 +89,45 @@ export function withSort(params: HttpParams, sort?: readonly BrowseSortEntry[]):
     .set('sortOrder', sort.map((entry) => entry.sortOrder).join(','));
 }
 
+/** A property's value to sort by; `dc:title` and `dc:modified` also have a top-level field. */
+function sortValue(doc: NuxeoDocument, property: string): string {
+  const value = doc.properties?.[property];
+  if (value !== undefined && value !== null) return String(value);
+  if (property === 'dc:title') return doc.title ?? '';
+  if (property === 'dc:modified') return doc.lastModified ?? '';
+  return '';
+}
+
+/**
+ * One page of a list that was read whole, in the order asked for. The repository-root fallback
+ * reads every accessible top-level folder at once, so its page and sort are applied here; the
+ * server pages and sorts every other listing.
+ */
+function pageOfFullList(
+  entries: readonly NuxeoDocument[],
+  pageSize: number,
+  page?: BrowsePageRequest,
+): { entries: NuxeoDocument[]; totalSize: number; hasNextPage: boolean } {
+  const sorted = [...entries];
+  for (const { sortBy, sortOrder } of [...(page?.sort ?? [])].reverse()) {
+    const direction = sortOrder === 'DESC' ? -1 : 1;
+    sorted.sort(
+      (a, b) =>
+        direction *
+        sortValue(a, sortBy).localeCompare(sortValue(b, sortBy), undefined, {
+          numeric: true,
+          sensitivity: 'base',
+        }),
+    );
+  }
+  const start = Math.max(0, page?.currentPageIndex ?? 0) * pageSize;
+  return {
+    entries: sorted.slice(start, start + pageSize),
+    totalSize: entries.length,
+    hasNextPage: start + pageSize < entries.length,
+  };
+}
+
 @Injectable({ providedIn: 'root' })
 export class BrowseService {
   private readonly api = inject(NuxeoApiBase);
@@ -176,8 +215,7 @@ export class BrowseService {
         return this.getNavTreeBootstrap(pageSize).pipe(
           map(({ root, entries }) => ({
             folder: root,
-            entries,
-            totalSize: entries.length,
+            ...pageOfFullList(entries, pageSize, page),
             redirectTo: entries.length === 1 ? entries[0].path : undefined,
           })),
         );

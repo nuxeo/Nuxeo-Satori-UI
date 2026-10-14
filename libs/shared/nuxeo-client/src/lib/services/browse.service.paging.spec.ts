@@ -5,7 +5,7 @@ import {
   type TestRequest,
 } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { firstValueFrom } from 'rxjs';
+import { firstValueFrom, of, throwError } from 'rxjs';
 
 import { NUXEO_API_ORIGIN } from '../nuxeo-api.config';
 import type { NuxeoDocument } from '../models/document.model';
@@ -206,6 +206,53 @@ describe('BrowseService paging — Root, Domain, Favorites and Collection', () =
         .flush({ status: 400 }, { status: 400, statusText: 'Bad Request' });
 
       await expect(result$).rejects.toMatchObject({ status: 400 });
+    });
+  });
+
+  describe('the repository root a user may not read', () => {
+    const root = doc('root', 'Root', '/');
+    const folders = Array.from({ length: 60 }, (_, i) => {
+      const n = String(i + 1).padStart(2, '0');
+      return {
+        ...doc(`f${n}`, 'Workspace', `/default-domain/workspaces/f${n}`),
+        title: `Folder ${n}`,
+      };
+    });
+
+    function fallBackTo(entries: NuxeoDocument[]): void {
+      vi.spyOn(service, 'getByPath').mockReturnValue(throwError(() => ({ status: 403 })));
+      vi.spyOn(service, 'getNavTreeBootstrap').mockReturnValue(of({ root, entries }));
+    }
+
+    it('pages the folders it falls back to: page 2 holds the rest, not page 1 again', async () => {
+      fallBackTo(folders);
+      const result = await firstValueFrom(
+        service.getBrowseFolderContents('/', 50, { currentPageIndex: 1 }),
+      );
+      expect(result.entries.map((entry) => entry.uid)).toEqual(
+        folders.slice(50).map((entry) => entry.uid),
+      );
+      expect(result.totalSize).toBe(60);
+      expect(result.hasNextPage).toBe(false);
+    });
+
+    it('orders them as asked, and says there is a next page', async () => {
+      fallBackTo(folders);
+      const result = await firstValueFrom(
+        service.getBrowseFolderContents('/', 50, { currentPageIndex: 0, sort: SORT }),
+      );
+      expect(result.entries.slice(0, 2).map((entry) => entry.title)).toEqual([
+        'Folder 60',
+        'Folder 59',
+      ]);
+      expect(result.entries).toHaveLength(50);
+      expect(result.hasNextPage).toBe(true);
+    });
+
+    it('still sends a user with one folder straight to it', async () => {
+      fallBackTo(folders.slice(0, 1));
+      const result = await firstValueFrom(service.getBrowseFolderContents('/', 50));
+      expect(result.redirectTo).toBe('/default-domain/workspaces/f01');
     });
   });
 
