@@ -127,6 +127,7 @@ export function createHelpers(page, outDir, recorder) {
       const s = ensureStep();
       const slug = `${String(s.index).padStart(2, '0')}-${name}`;
       if (locator) {
+        // Best effort: a locator that cannot scroll still gets the viewport shot below.
         await locator.scrollIntoViewIfNeeded().catch(() => {});
       }
       const file = resolve(outDir, `${slug}.png`);

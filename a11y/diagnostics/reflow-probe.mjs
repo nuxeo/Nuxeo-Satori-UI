@@ -99,6 +99,7 @@ async function requireBackend() {
       );
       process.exit(2);
     }
+    // A body that is not JSON is no identity, which requireAdministrationAccess refuses with exit 2.
     requireAdministrationAccess(await res.json().catch(() => null), user, 'reflow-probe');
   } catch (error) {
     console.error(
@@ -300,6 +301,7 @@ async function revealContentBehindDrawer(p, host) {
       { h: host, sel: NAV_DRAWER_SIDENAV },
       { timeout: 5_000 },
     )
+    // A timeout is not lost: the drawerOpen() check below decides what it means.
     .catch(() => undefined);
   if (await drawerOpen()) {
     return {

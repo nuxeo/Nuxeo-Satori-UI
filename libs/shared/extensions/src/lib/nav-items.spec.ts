@@ -115,4 +115,17 @@ describe('APP_NAV_ITEMS — Administration gating', () => {
     );
     expect(navIds()).toContain('app.navbar.browse');
   });
+
+  it('adds a navbar slot entry naming the retired ID as an entry of its own', () => {
+    // With no packaged descriptor left to patch, a manifest's `{ id, order }` is an addition.
+    // The CHANGELOG tells a customer to delete such an entry for exactly this reason, rather
+    // than calling it inert as it does an `overrides` key.
+    manifest.set({
+      extensionLayers: [{ slots: { navbar: [{ id: 'app.navbar.browseAdfHx', order: 5 }] } }],
+    });
+    const added = TestBed.inject(APP_NAV_ITEMS)().find(
+      (item) => item.id === 'app.navbar.browseAdfHx',
+    );
+    expect(added).toEqual({ id: 'app.navbar.browseAdfHx', order: 5 });
+  });
 });

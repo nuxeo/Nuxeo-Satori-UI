@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter, type Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
+import { parseBrowseNuxeoPathFromRouterUrl } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { routes } from './app.routes';
 import { RETIRED_ROUTES } from './retired-routes';
@@ -58,6 +59,7 @@ describe('retired adf-hx routes', () => {
     await harness.navigateByUrl('/browse-adf-hx?path=%2Fdefault-domain%2FMy%20Folder%2F');
 
     expect(router.url.split('?')[0]).toBe('/browse/default-domain/My%20Folder');
+    expect(parseBrowseNuxeoPathFromRouterUrl(router.url)).toBe('/default-domain/My Folder');
     expect(landedOn().query).toEqual({ path: '/default-domain/My Folder/' });
   });
 

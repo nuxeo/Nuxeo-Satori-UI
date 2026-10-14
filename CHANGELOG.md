@@ -15,9 +15,11 @@ so the next publish has to be a minor. Nothing has been published yet.
 
 The adf-hx proof of concept is removed, with its two routes and its navigation entry.
 
-- **`app.navbar.browseAdfHx` is retired.** A manifest entry naming it — an `overrides` key or a
-  `navbar` slot entry — now addresses nothing. Its label key, `nav.item.browse-adf-hx`, is on no
-  entry any more: move a `labels` entry for it to `nav.item.browse`.
+- **`app.navbar.browseAdfHx` is retired.** An `overrides` key naming it now addresses nothing. A
+  `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
+  own — with no path or label unless it gives them, which renders a blank item: delete it. Its
+  label key, `nav.item.browse-adf-hx`, is on no entry any more: move a `labels` entry for it to
+  `nav.item.browse`.
 - **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
   "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
   it is now redundant, not harmful.

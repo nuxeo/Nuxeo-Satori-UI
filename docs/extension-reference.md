@@ -313,9 +313,10 @@ Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.
 
 `app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
 app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
-backticks because it is no longer an ID you can address. A manifest that still names it changes
-nothing, and a `labels` entry for its key, nav.item.browse-adf-hx, no longer reaches any entry: set
-`nav.item.browse` instead. Old `/#/browse-adf-hx` and `/#/search-adf-hx` links redirect to
+backticks because it is no longer an ID you can address. An `overrides` key naming it changes
+nothing. A `navbar` slot entry naming it no longer patches anything, so it is added as an entry of
+its own, blank unless it gives a path and a label: delete it. A `labels` entry for its key,
+nav.item.browse-adf-hx, no longer reaches any entry: set `nav.item.browse` instead. Old `/#/browse-adf-hx` and `/#/search-adf-hx` links redirect to
 `/browse` and `/search` with their query string intact, and a `?path=` folder opens in `/browse`.
 Until then `app.navbar.browse` shipped `disabled: true`; a manifest restating it with
 `"disabled": false` is now redundant but harmless.
