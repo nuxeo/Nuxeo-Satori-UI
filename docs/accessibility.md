@@ -414,7 +414,7 @@ reduce`.
 ## Per-screen journey — first scan 2026-09-16
 
 `a11y/specs/journey.a11y.spec.ts` (`npm run a11y:scan -- journey`) walks its screens in
-the order a user meets them — four when this section was written, fifteen since 2026-10-01
+the order a user meets them — four when this section was written, seventeen since 2026-10-14
 (below) — and emits **one self-contained report per screen** rather than a
 consolidated one. The other suites answer "which rules does the app fail"; this answers "how bad
 is the screen I am about to hand to its owner". **15.1 minutes, 50 findings, 32 blockers** as
@@ -431,11 +431,11 @@ here are a snapshot rather than a current count.
 
 Three of the four had never been scanned by anything. **Document detail is the worst screen in
 the application measured so far** — 15 blockers at the 21 September re-measurement, all
-`color-contrast`, and 14 in the fifteen-screen run below. Dashboard
+`color-contrast`, and 14 in the seventeen-screen run below. Dashboard
 matters for a different reason: `app.routes.ts` redirects `path: ''` to it, so it is the first
 screen every signed-in user sees, and it was absent from `SURFACES`.
 
-### Fifteen screens — extended and measured 2026-10-01 (current)
+### Seventeen screens — extended and measured 2026-10-01 (current)
 
 Eleven screens were added: the core flows a user moves through and the screens they work in.
 `captureDataRequest()` waits for the screen's own data request and fails if it was never made or

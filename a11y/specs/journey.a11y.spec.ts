@@ -264,29 +264,27 @@ const FILE_WITH_MAIN_BLOB_NXQL =
  */
 /**
  * NXSAT-545 — a File with a version label in the properties panel (`hasVersion()`).
- * Creates a minor version when the chosen blob file is still at 0.0.
+ * Selects an already-versioned document; fails if none exist rather than mutating shared data.
  */
 async function fileWithVersionSelector(page: Page): Promise<RepoEntry> {
-  const file = await firstFileWithMainBlob(page);
-  const docResponse = await page.request.get(`/nuxeo/api/v1/id/${file.uid}`);
-  expect(docResponse.ok(), `document ${file.uid} must load for version-select journey`).toBeTruthy();
-  const doc = (await docResponse.json()) as {
-    properties?: Record<string, unknown>;
-  };
-  const major = Number(doc.properties?.['uid:major_version'] ?? 0);
-  const minor = Number(doc.properties?.['uid:minor_version'] ?? 0);
-  if (major > 0 || minor > 0) {
-    return file;
-  }
+  const versionedNxql =
+    "SELECT * FROM File WHERE ecm:mixinType <> 'HiddenInNavigation' " +
+    'AND ecm:isVersion = 0 AND ecm:isTrashed = 0 AND file:content/name IS NOT NULL ' +
+    'AND (uid:major_version > 0 OR uid:minor_version > 0) ' +
+    'ORDER BY dc:created';
 
-  const created = await page.request.post(`/nuxeo/api/v1/id/${file.uid}/@op/Document.CreateVersion`, {
-    data: { params: { increment: 'Minor', saveDocument: true }, context: {} },
-  });
-  expect(
-    created.ok(),
-    `Document.CreateVersion must succeed so button.version-select renders (${created.status()})`,
-  ).toBeTruthy();
-  return file;
+  const entries = await nxqlEntries(
+    page,
+    versionedNxql,
+    1,
+    'document detail version selector',
+  );
+  return requireEntry(
+    entries,
+    'the repository holds no versioned File document with a main blob, so the version selector ' +
+      'cannot be scanned — seed a file with at least one version before running this screen rather ' +
+      'than mutating existing repository content',
+  );
 }
 
 async function firstFileWithMainBlob(page: Page): Promise<RepoEntry> {

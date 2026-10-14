@@ -66,7 +66,7 @@ const COMMANDS = {
     argv: ['playwright', 'test', '-c', CONFIG, '--project=display-modes'],
   },
   journey: {
-    describe: 'Fifteen screens, from sign-in to administration — one report per screen (~70 min)',
+    describe: 'Seventeen screens, from sign-in to administration — one report per screen (~70 min)',
     preflight: true,
     // Its last screen asserts the analytics tab /#/administration lands an administrator on,
     // which fullAdministratorGuard closes to powerusers — so a full administrator, not just

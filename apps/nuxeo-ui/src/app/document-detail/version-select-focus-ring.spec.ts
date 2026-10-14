@@ -6,12 +6,34 @@
  * What these tests do NOT cover: focus visibility and 1.4.11 contrast verdicts on a live
  * document-detail route. Those belong to a11y-scout on journey screen
  * `document-detail-version-select` (`docs/accessibility.md`); this Karma suite only asserts SCSS
- * wiring, computed outline geometry, and hover/focus cascade invariants on a synthetic host.
+ * wiring, computed outline geometry, hover/focus cascade invariants, and WCAG AA contrast ratios
+ * of the colors used in focus and hover states on a synthetic host.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+
+const WCAG_AA_NORMAL_TEXT = 4.5;
+
+function relativeLuminance([r, g, b]: [number, number, number]): number {
+  const channel = (v: number): number => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+  };
+  return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrastRatio(a: [number, number, number], b: [number, number, number]): number {
+  const [hi, lo] = [relativeLuminance(a), relativeLuminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function parseRgb(css: string): [number, number, number] | null {
+  const match = css.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/);
+  if (!match) return null;
+  return [Number(match[1]) ?? 0, Number(match[2]) ?? 0, Number(match[3]) ?? 0];
+}
 
 @Component({
   standalone: true,
@@ -126,6 +148,20 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       expect(button.matches(':focus')).toBe(true);
 
       const focusedHoveredBg = getComputedStyle(button).backgroundColor;
+      const focusedBgRgb = parseRgb(focusedHoveredBg);
+      const panelBgRgb = parseRgb('rgb(222, 223, 224)');
+
+      expect(focusedBgRgb).withContext('focused-hovered bg must be parseable').not.toBeNull();
+      expect(panelBgRgb).withContext('panel bg must be parseable').not.toBeNull();
+
+      if (focusedBgRgb && panelBgRgb) {
+        const ratio = contrastRatio(focusedBgRgb, panelBgRgb);
+        expect(ratio)
+          .withContext(
+            `button text/border on focused-hovered fill must meet WCAG AA (${focusedHoveredBg} vs rgb(222, 223, 224)): ${ratio.toFixed(2)}:1`,
+          )
+          .toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      }
 
       const surfaceHoverProbe = document.createElement('button');
       surfaceHoverProbe.type = 'button';
@@ -161,6 +197,20 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       expect(document.activeElement).not.toBe(button);
 
       const plainHoveredBg = getComputedStyle(button).backgroundColor;
+      const hoveredBgRgb = parseRgb(plainHoveredBg);
+      const panelBgRgb = parseRgb('rgb(222, 223, 224)');
+
+      expect(hoveredBgRgb).withContext('unfocused-hovered bg must be parseable').not.toBeNull();
+      expect(panelBgRgb).withContext('panel bg must be parseable').not.toBeNull();
+
+      if (hoveredBgRgb && panelBgRgb) {
+        const ratio = contrastRatio(hoveredBgRgb, panelBgRgb);
+        expect(ratio)
+          .withContext(
+            `button text/border on unfocused-hovered fill must meet WCAG AA (${plainHoveredBg} vs rgb(222, 223, 224)): ${ratio.toFixed(2)}:1`,
+          )
+          .toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
+      }
 
       const surfaceHoverProbe = document.createElement('button');
       surfaceHoverProbe.type = 'button';
