@@ -1,6 +1,9 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
+import { readdirSync, readFileSync } from 'node:fs';
+import { dirname, join, relative } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { TagService } from './tag.service';
 
@@ -122,5 +125,59 @@ describe('TagService.addTag and removeTag', () => {
       .expectOne((r) => r.url.endsWith('/Services.UntagDocument'))
       .flush('no', { status: 403, statusText: 'Forbidden' });
     expect(status).toBe(403);
+  });
+});
+
+/**
+ * The string literals in `source` that name the `Tag.Suggestion` operation — a request to it —
+ * after comments are removed, so a sentence about the operation is not a sender.
+ */
+function tagSuggestionSenders(source: string): string[] {
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '$1');
+  return code.match(/(['"`])[^'"`\n]*\bTag\.Suggestion\b[^'"`\n]*\1/g) ?? [];
+}
+
+const repositoryRoot = join(dirname(fileURLToPath(import.meta.url)), '../../../../../..');
+
+/** The shipped TypeScript under `dir`: no specs, stories, `node_modules` or build output. */
+function shippedSources(dir: string): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      return ['node_modules', 'dist', '.storybook'].includes(entry.name)
+        ? []
+        : shippedSources(path);
+    }
+    return /\.ts$/.test(entry.name) && !/\.(spec|stories)\.ts$/.test(entry.name) ? [path] : [];
+  });
+}
+
+describe('TagService is the only Tag.Suggestion sender', () => {
+  it.each([
+    ['a URL in single quotes', `post('/nuxeo/api/v1/automation/Tag.Suggestion', body)`, 1],
+    ['a URL in double quotes', `post("/nuxeo/api/v1/automation/Tag.Suggestion", body)`, 1],
+    ['a template literal', 'post(`${base}/automation/Tag.Suggestion`, body)', 1],
+    ['the operation id alone', `operation('Tag.Suggestion', params)`, 1],
+    ['an @op path', `post(\`/id/\${uid}/@op/Tag.Suggestion\`)`, 1],
+    ['a block comment', `/** Suggests through the \`Tag.Suggestion\` operation. */`, 0],
+    ['a line comment', `const a = 1; // calls 'Tag.Suggestion' via TagService`, 0],
+    ['another operation', `post('/nuxeo/api/v1/automation/Tag.Suggestions', body)`, 0],
+    ['a near name', `post('/nuxeo/api/v1/automation/TagSuggestion', body)`, 0],
+  ])('counts %s as %i sender(s)', (_case, source, senders) => {
+    expect(tagSuggestionSenders(source)).toHaveLength(senders);
+  });
+
+  it('finds exactly one sender in the shipped code: TagService.suggestTags', () => {
+    const roots = ['libs', 'apps/nuxeo-ui/src'].map((dir) => join(repositoryRoot, dir));
+    const senders = roots
+      .flatMap(shippedSources)
+      .flatMap((path) =>
+        tagSuggestionSenders(readFileSync(path, 'utf8')).map(
+          (literal) => `${relative(repositoryRoot, path)}: ${literal}`,
+        ),
+      );
+    expect(senders).toEqual([
+      "libs/shared/nuxeo-client/src/lib/services/tag.service.ts: '/nuxeo/api/v1/automation/Tag.Suggestion'",
+    ]);
   });
 });
