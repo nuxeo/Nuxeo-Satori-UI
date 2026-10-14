@@ -124,10 +124,9 @@ jobs:
           npm run beta:lockfile-selftest
           # NXSAT-308 criterion 3: no adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client in
           # the lock, the installed tree `npm ci` just produced, a manifest, .npmrc or an import.
-          # REPORT-ONLY until the ADF removal commit flips `BLOCKING` in the script, so today it
-          # prints the removal backlog and passes. It is red even in report-only mode if a location
-          # cannot be read, or if the tree is clean and the switch was not flipped. The controls
-          # are what keep a gate that passes whatever it finds from quietly finding nothing.
+          # BLOCKING since the ADF removal (NXSAT-638) set `BLOCKING` in the script: any finding
+          # fails it, and so does a location that cannot be read. The controls are what prove each
+          # location can still find something, so a scanner that finds nothing cannot stay green.
           npm run beta:dependency-tree
           npm run beta:dependency-tree-selftest
           # Fails if an evidence step asserts something it cannot observe. Phase 1 shipped

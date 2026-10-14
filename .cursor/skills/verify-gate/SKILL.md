@@ -35,11 +35,9 @@ the first failure and prints only its output tail. Reports land in
 `$AGENTIC_UI_EVIDENCE_DIR/beta/gates/`. The count is the verdict line's, not this
 paragraph's — an unknown `--gates` id prints the current list.
 
-`dependency-tree` is **report-only** until the ADF removal commit (NXSAT-308): it passes
-while listing every adf-hx, adf-core, adf-extensions, js-api and hxcs-js-client finding, so
-a long list under a `pass` is the removal backlog, not a defect in your change. It does go
-red in report-only mode if a location cannot be read, or if the tree is clean and
-`BLOCKING` in `scripts/beta-harness/dependency-tree.mjs` was not flipped to `true`.
+`dependency-tree` is **blocking** since the ADF removal (NXSAT-638): any adf-hx, adf-core,
+adf-extensions, js-api or hxcs-js-client finding fails it, so a red here means your change
+brought one of them back. It is also red if a location cannot be read.
 
 Only a run with **no** `--gates` filter can be cited for a phase. A filtered run
 reports `verdict: pass-partial` and prints `PASS (PARTIAL) — n of <total>`, because two
