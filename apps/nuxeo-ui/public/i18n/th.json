@@ -879,17 +879,6 @@
       "notify": "แจ้งเตือน",
       "share": "แชร์"
     },
-    "search-adf-hx": {
-      "enter-search-term": "ป้อนคำค้นหา...",
-      "loading": "กำลังโหลด",
-      "next-page": "หน้าต่อไป",
-      "no-results-found": "ไม่พบผลลัพธ์",
-      "previous-page": "หน้าก่อนหน้า",
-      "search": "ค้นหา",
-      "search-documents": "ค้นหาเอกสาร",
-      "searching": "กำลังค้นหา...",
-      "try-a-different-search-term": "ลองใช้คำค้นหาอื่น"
-    },
     "show-details": "แสดงรายละเอียด",
     "tab": {
       "history": "ประวัติ",

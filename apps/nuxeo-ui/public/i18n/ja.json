@@ -879,17 +879,6 @@
       "notify": "通知",
       "share": "共有"
     },
-    "search-adf-hx": {
-      "enter-search-term": "検索語を入力...",
-      "loading": "読み込んでいます",
-      "next-page": "次のページ",
-      "no-results-found": "一致するアイテムはありません",
-      "previous-page": "前のページ",
-      "search": "検索",
-      "search-documents": "文書を検索",
-      "searching": "検索中...",
-      "try-a-different-search-term": "別の検索語をお試しください"
-    },
     "show-details": "詳細を表示",
     "tab": {
       "history": "履歴",

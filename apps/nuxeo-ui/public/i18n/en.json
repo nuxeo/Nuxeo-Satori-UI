@@ -901,17 +901,6 @@
       "notify": "Notify",
       "share": "Share"
     },
-    "search-adf-hx": {
-      "enter-search-term": "Enter search term...",
-      "loading": "Loading",
-      "next-page": "Next page",
-      "no-results-found": "No results found",
-      "previous-page": "Previous page",
-      "search": "Search",
-      "search-documents": "Search documents",
-      "searching": "Searching...",
-      "try-a-different-search-term": "Try a different search term"
-    },
     "show-details": "Show details",
     "tab": {
       "history": "History",

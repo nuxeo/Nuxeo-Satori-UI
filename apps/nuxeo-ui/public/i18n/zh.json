@@ -879,17 +879,6 @@
       "notify": "通知",
       "share": "共享"
     },
-    "search-adf-hx": {
-      "enter-search-term": "输入搜索词...",
-      "loading": "加载",
-      "next-page": "下一页",
-      "no-results-found": "未找到结果",
-      "previous-page": "上一页",
-      "search": "搜索",
-      "search-documents": "搜索文档",
-      "searching": "正在搜索...",
-      "try-a-different-search-term": "尝试其他搜索词"
-    },
     "show-details": "显示详细信息",
     "tab": {
       "history": "历史记录",

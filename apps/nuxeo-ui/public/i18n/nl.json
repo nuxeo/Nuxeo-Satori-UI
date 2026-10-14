@@ -879,17 +879,6 @@
       "notify": "Informeren",
       "share": "Delen"
     },
-    "search-adf-hx": {
-      "enter-search-term": "Voer een zoekterm in...",
-      "loading": "Laden",
-      "next-page": "Volgende pagina",
-      "no-results-found": "Geen resultaten gevonden",
-      "previous-page": "Vorige pagina",
-      "search": "Zoeken",
-      "search-documents": "Documenten zoeken",
-      "searching": "Bezig met zoeken...",
-      "try-a-different-search-term": "Probeer een andere zoekterm"
-    },
     "show-details": "Gegevens weergeven",
     "tab": {
       "history": "Geschiedenis",

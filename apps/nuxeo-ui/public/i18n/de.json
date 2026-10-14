@@ -879,17 +879,6 @@
       "notify": "Benachrichtigen",
       "share": "Teilen"
     },
-    "search-adf-hx": {
-      "enter-search-term": "Suchbegriff eingeben...",
-      "loading": "Wird geladen",
-      "next-page": "Nächste Seite",
-      "no-results-found": "Keine Ergebnisse gefunden",
-      "previous-page": "Vorherige Seite",
-      "search": "Suche",
-      "search-documents": "Dokumente suchen",
-      "searching": "Suche läuft...",
-      "try-a-different-search-term": "Versuchen Sie es mit einem anderen Suchbegriff"
-    },
     "show-details": "Details anzeigen",
     "tab": {
       "history": "Verlauf",
