@@ -193,9 +193,11 @@ export function sassLoadedUrls(body, { indented = false } = {}) {
       if (s[1] !== 'import') break;
     }
   }
-  for (const call of mask.matchAll(/load-css\(\s*(['"]?)([^'")\s]+)\1\s*\)/g)) {
-    const span = call.indices[2] ?? call.indices[3];
-    urls.push(body.slice(span[0], span[1]));
+  for (const call of mask.matchAll(/load-css\(\s*(['"]?)([^'")\s]+)\1\s*\)/dg)) {
+    if (call.indices[2]) {
+      const [start, end] = call.indices[2];
+      urls.push(body.slice(start, end));
+    }
   }
   return urls;
 }
