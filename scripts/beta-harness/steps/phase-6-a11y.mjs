@@ -24,26 +24,23 @@
  * | `color-contrast`              |  7  |  0  | ours                                     |
  * | `scrollable-region-focusable` |  2  |  0  | ours                                     |
  * | `aria-progressbar-name`       |  2  |  0  | ours                                     |
- * | `aria-required-children`      |  3  |  3  | **`@alfresco/adf-core@9.0.0`** — see below |
+ * | `aria-required-children`      |  3  |  —  | **`@alfresco/adf-core@9.0.0`** — see below |
  *
- * ## The one exclusion, and why it is scoped to a single step
+ * ## No exclusions
  *
- * `aria-required-children` is excluded on the **adf-hx POC surface only**. It is upstream's defect:
- * `DataTableComponent` emits `role="row"` whose direct children are plain divs and a bare
- * `mat-checkbox`, which the `row` role does not permit. Reported in full, with the template quoted,
- * as finding **1.2** in `docs/adf-hx-upstream-findings.md`.
- *
- * The only host-side fix is to patch `role` attributes onto another library's DOM after render, so
- * it is excluded rather than papered over — and excluded on **one step**, not globally, so the same
- * rule failing on a surface we own still fails this capture. A repo-wide `ignore` list would have
- * hidden exactly that.
+ * Every step scans with `KNOWN_VIOLATIONS`, which is empty. Until 2026-10-14 one step did not: the
+ * adf-hx POC route excluded `aria-required-children`, upstream's defect in adf-core's
+ * `DataTableComponent` (`role="row"` with non-cell children, finding **1.2** in
+ * `docs/adf-hx-upstream-findings.md`). That step was removed with adf-core's wiring (NXSAT-636),
+ * which is why the rule has no "Now" count: the only surface that carried it is no longer scanned.
  *
  * ## What this capture does and does not cover
  *
- * Sixteen cases: eight routes, plus view-mode and column-panel states that a single visit per route
- * does not reach, and a Picture document whose `.picture-cards` metadata strip is not reached by
- * opening an arbitrary File blob. Three of the seven rule classes were only visible in those extra
- * states.
+ * The landing page, browse, search, trash, tasks, collections, administration, knowledge discovery
+ * and document detail, plus view-mode and column-panel states that a single visit per route does
+ * not reach, a Picture document whose `.picture-cards` metadata strip is not reached by opening an
+ * arbitrary File blob, and the replace-main-file tooltip. Three of the seven rule classes were only
+ * visible in those extra states.
  *
  * The **login surface is still not covered**, and that is a harness limitation rather than a choice:
  * the runner sets `httpCredentials`, so the app authenticates before the login page can render. The
@@ -73,16 +70,10 @@ import { resolve } from 'node:path';
  *
  * Do not add an entry here to make a run pass. A rule id in this list applies to **every** step, so
  * one addition silences that rule across the whole application. If a specific surface has an
- * unavoidable upstream violation, scope it to that step's own call — as the adf-hx step does — and
- * cite the finding that owns it.
+ * unavoidable upstream violation, scope it to that step's own call and cite the finding that owns
+ * it.
  */
 const KNOWN_VIOLATIONS = [];
-
-/**
- * Upstream-owned, scoped to the adf-hx POC step alone.
- * `docs/adf-hx-upstream-findings.md` §1.2.
- */
-const ADF_HX_UPSTREAM = ['aria-required-children'];
 
 /**
  * @param {import('@playwright/test').Page} page
@@ -187,21 +178,6 @@ export default async function run(page, h) {
     });
   }
   await h.screenshot('a11y-secondary-surfaces');
-
-  h.step('adf-hx POC browse — the one surface with an upstream exclusion');
-  await h.goTo('/#/browse-adf-hx');
-  await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
-  await h.expectVisible('hxp document list present', 'hxp-document-list');
-  await h.expectNoA11yViolations(
-    'adf-hx browse: no violations except upstream aria-required-children',
-    { ignore: ADF_HX_UPSTREAM },
-  );
-  h.note(
-    'aria-required-children (3 nodes) is excluded HERE ONLY: @alfresco/adf-core@9.0.0 emits ' +
-      'role="row" with non-cell children. docs/adf-hx-upstream-findings.md §1.2. No host-side fix ' +
-      'exists short of patching upstream DOM.',
-  );
-  await h.screenshot('a11y-browse-adf-hx');
 
   h.step(
     'Document detail — Picture metadata strip (NXENG-812 / NXSAT-493 / WCAG 1.4.3 on .info-label)',
