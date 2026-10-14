@@ -361,6 +361,21 @@ describe('search filters — comparing', () => {
     ).toBe(true);
   });
 
+  it('matches one set of values in any order, values a locale collates as equal included', () => {
+    const composed = '\u00e9';
+    const decomposed = 'e\u0301';
+    expect(composed.localeCompare(decomposed)).toBe(0);
+    expect(
+      nxsSameSearchFilters(
+        filters({ tags: [composed, decomposed, 'B', 'a'] }),
+        filters({ tags: ['a', decomposed, 'B', composed] }),
+      ),
+    ).toBe(true);
+    expect(
+      nxsSameSearchFilters(filters({ tags: [composed] }), filters({ tags: [decomposed] })),
+    ).toBe(false);
+  });
+
   it('tells apart any difference in any field', () => {
     for (const change of [
       { query: 'q' },
