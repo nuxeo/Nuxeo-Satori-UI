@@ -123,6 +123,8 @@ const mockDetailService = {
   getPublishedVersions: vi.fn((_uid: string): Observable<{ entries: unknown[] }> =>
     of({ entries: [] }),
   ),
+  unpublishDocument: vi.fn((_uid: string): Observable<unknown> => of(undefined)),
+  publishDocument: vi.fn((): Observable<unknown> => of({})),
   getSectionTree: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
   getAuditLog: vi.fn((): Observable<Record<string, unknown>> =>
@@ -620,6 +622,86 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(own.querySelector('.republish-btn')).not.toBeNull();
       expect(other.querySelector('.unpublish-btn')).toBeNull();
       expect(other.querySelector('.republish-btn')).toBeNull();
+    });
+
+    describe('asks first, in Web UI’s words', () => {
+      async function tabWithOwnPublication(): Promise<HTMLElement> {
+        mockDetailService.getPublishedVersions.mockReturnValue(
+          of({
+            entries: [
+              live({
+                uid: 'own',
+                path: '/sections/own/contract',
+                isProxy: true,
+                contextParameters: { permissions: ['Read', 'WriteVersion'] },
+                properties: { 'uid:major_version': 0, 'uid:minor_version': 1 },
+              }),
+            ],
+          }),
+        );
+        await render(live({ facets: ['Versionable', 'Publishable'] }));
+        return openPublishingTab();
+      }
+
+      async function press(tab: HTMLElement, selector: string): Promise<HTMLElement> {
+        const button = tab.querySelector<HTMLElement>(selector);
+        expect(button, `${selector} is offered`).not.toBeNull();
+        button!.focus();
+        button!.click();
+        await settle();
+        return button!;
+      }
+
+      const asked = () => mockDialog.open.mock.calls.at(-1)?.[1]?.data;
+
+      it('asks before Unpublish; Cancel unpublishes nothing', async () => {
+        const tab = await tabWithOwnPublication();
+        await press(tab, '.unpublish-btn');
+
+        expect(asked()).toEqual({
+          title: 'Unpublish',
+          message: 'Are you sure you want to unpublish this document?',
+          confirmLabel: 'Unpublish',
+        });
+        expect(mockDetailService.unpublishDocument).not.toHaveBeenCalled();
+        expect(tab.querySelectorAll('.publish-table tbody tr')).toHaveLength(1);
+      });
+
+      it('unpublishes once confirmed, and moves focus from the departed button to the heading', async () => {
+        const tab = await tabWithOwnPublication();
+        dialogResult = true;
+        await press(tab, '.unpublish-btn');
+
+        expect(mockDetailService.unpublishDocument).toHaveBeenCalledWith('own');
+        expect(tab.querySelector('.publish-table')).toBeNull();
+        expect(document.activeElement?.getAttribute('role')).toBe('heading');
+        expect(document.activeElement?.textContent?.trim()).toBe('Publication details');
+      });
+
+      it('asks before Republish; Cancel republishes nothing', async () => {
+        const tab = await tabWithOwnPublication();
+        await press(tab, '.republish-btn');
+
+        expect(asked()).toEqual({
+          title: 'Republish',
+          message:
+            'Are you sure you want to erase this publication with the most recent version of the document?',
+          confirmLabel: 'Republish',
+        });
+        expect(mockDetailService.publishDocument).not.toHaveBeenCalled();
+      });
+
+      it('asks before Unpublish All; Cancel removes nothing', async () => {
+        const tab = await tabWithOwnPublication();
+        await press(tab, '.unpublish-all-btn');
+
+        expect(asked()).toEqual({
+          title: 'Unpublish All',
+          message: 'Are you sure you want to unpublish these documents?',
+          confirmLabel: 'Unpublish All',
+        });
+        expect(mockDetailService.unpublishDocument).not.toHaveBeenCalled();
+      });
     });
   });
 

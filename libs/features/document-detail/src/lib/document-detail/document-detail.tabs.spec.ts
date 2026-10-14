@@ -558,6 +558,11 @@ describe('DocumentDetailComponent — tab surfaces', () => {
   });
 
   describe('publishing tab', () => {
+    // Unpublish, Republish and Unpublish All ask first; these specs answer Yes.
+    beforeEach(() => {
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+    });
+
     it('builds a nested section tree from the flat server list', async () => {
       mockDetailService.getSectionTree.mockReturnValue(
         of({

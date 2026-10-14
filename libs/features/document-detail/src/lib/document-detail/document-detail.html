@@ -634,7 +634,13 @@
             <!-- Publication details -->
             <section class="publish-section">
               <div class="publish-section-header">
-                <div class="publish-section-title" role="heading" aria-level="3">
+                <div
+                  #publicationsHeading
+                  class="publish-section-title"
+                  role="heading"
+                  aria-level="3"
+                  tabindex="-1"
+                >
                   {{ 'document-detail.document-detail.publication-details' | translate }}
                 </div>
                 @if (publishedDocs().length > 0) {

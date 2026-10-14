@@ -574,6 +574,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly propertiesPanelOpen = signal(true);
   readonly panelSubTab = signal<'properties' | 'comments' | 'activity'>('properties');
   private readonly panelToggle = viewChild('panelToggle', { read: ElementRef });
+  private readonly publicationsHeading = viewChild('publicationsHeading', { read: ElementRef });
   /** Web UI's side pane offers Comments only on a document with the `Commentable` facet. */
   readonly panelViews = computed<readonly NxsDetailsPanelTab[]>(() => {
     this.translationTick();
@@ -2936,24 +2937,44 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   unpublishDocument(proxyDoc: NuxeoDocument): void {
     if (this.actionInProgress()) return;
-    this.actionInProgress.set('unpublish');
-    this.detailService.unpublishDocument(proxyDoc.uid).subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.publishedDocs.update((docs) => docs.filter((d) => d.uid !== proxyDoc.uid));
-        this.toast.show(this.translate.instant('document-detail.message.publication-removed'));
+    this.confirmPublicationAction(
+      'document-detail.document-detail.unpublish',
+      'document-detail.document-detail.unpublish-confirm',
+      () => {
+        this.actionInProgress.set('unpublish');
+        this.detailService
+          .unpublishDocument(proxyDoc.uid)
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: () => {
+              this.actionInProgress.set(null);
+              this.publishedDocs.update((docs) => docs.filter((d) => d.uid !== proxyDoc.uid));
+              this.focusPublicationsHeading();
+              this.toast.show(
+                this.translate.instant('document-detail.message.publication-removed'),
+              );
+            },
+            error: () => {
+              this.actionInProgress.set(null);
+              this.toast.error(
+                this.translate.instant('document-detail.message.failed-to-unpublish'),
+              );
+            },
+          });
       },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-unpublish'));
-      },
-    });
+    );
   }
 
   republishDocument(proxyDoc: NuxeoDocument): void {
     if (this.actionInProgress()) return;
-    this.actionInProgress.set('republish');
-    this.republishToSectionByProxy(proxyDoc);
+    this.confirmPublicationAction(
+      'document-detail.document-detail.republish',
+      'document-detail.document-detail.republish-confirm',
+      () => {
+        this.actionInProgress.set('republish');
+        this.republishToSectionByProxy(proxyDoc);
+      },
+    );
   }
 
   private republishToSectionByProxy(proxyDoc: NuxeoDocument): void {
@@ -2995,6 +3016,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.actionInProgress.set(null);
+          this.focusPublicationsHeading();
           this.toast.show(this.translate.instant('document-detail.message.document-republished'));
           this.refreshPublishedDocs();
         },
@@ -3006,25 +3028,64 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   unpublishAll(): void {
-    const docs = this.publishedDocs();
-    if (docs.length === 0 || this.actionInProgress()) return;
-    this.actionInProgress.set('unpublish-all');
+    if (this.publishedDocs().length === 0 || this.actionInProgress()) return;
+    this.confirmPublicationAction(
+      'document-detail.document-detail.unpublish-all',
+      'document-detail.document-detail.unpublish-all-confirm',
+      () => {
+        const docs = this.publishedDocs();
+        if (docs.length === 0) return;
+        this.actionInProgress.set('unpublish-all');
+        const deletions = docs.map((d) => this.detailService.unpublishDocument(d.uid));
+        forkJoin(deletions)
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: () => {
+              this.actionInProgress.set(null);
+              this.publishedDocs.set([]);
+              this.focusPublicationsHeading();
+              this.toast.show(
+                this.translate.instant('document-detail.message.all-publications-removed'),
+              );
+            },
+            error: () => {
+              this.actionInProgress.set(null);
+              this.toast.error(
+                this.translate.instant(
+                  'document-detail.message.failed-to-remove-some-publications',
+                ),
+              );
+              this.refreshPublishedDocs();
+            },
+          });
+      },
+    );
+  }
 
-    const deletions = docs.map((d) => this.detailService.unpublishDocument(d.uid));
-    forkJoin(deletions).subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.publishedDocs.set([]);
-        this.toast.show(this.translate.instant('document-detail.message.all-publications-removed'));
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(
-          this.translate.instant('document-detail.message.failed-to-remove-some-publications'),
-        );
-        this.refreshPublishedDocs();
-      },
-    });
+  /**
+   * Web UI asks before each publication action (`nuxeo-document-publications`). On Cancel the
+   * dialog returns focus to the button that opened it.
+   */
+  private confirmPublicationAction(actionKey: string, questionKey: string, run: () => void): void {
+    const action = this.translate.instant(actionKey);
+    this.dialog
+      .open(ConfirmDialogComponent, {
+        data: {
+          title: action,
+          message: this.translate.instant(questionKey),
+          confirmLabel: action,
+        } as ConfirmDialogData,
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((confirmed) => {
+        if (confirmed && !this.actionInProgress()) run();
+      });
+  }
+
+  /** The button that ran a publication action may leave with its row, so focus goes to the heading. */
+  private focusPublicationsHeading(): void {
+    (this.publicationsHeading()?.nativeElement as HTMLElement | undefined)?.focus();
   }
 
   private refreshPublishedDocs(): void {
