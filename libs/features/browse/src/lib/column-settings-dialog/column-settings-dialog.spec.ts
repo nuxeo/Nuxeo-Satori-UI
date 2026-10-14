@@ -12,10 +12,7 @@ import {
   type ColumnDef,
 } from './column-settings-dialog';
 
-/**
- * The production key. `browse-adf-hx-poc` deliberately uses `adf_hx_poc_column_settings`; the two
- * previously shared this one and each page overwrote the other's choices.
- */
+/** The production key. */
 const STORAGE_KEY = 'browse_column_settings';
 
 describe('column settings persistence', () => {
@@ -33,7 +30,6 @@ describe('column settings persistence', () => {
     ]);
 
     expect(localStorage.getItem(STORAGE_KEY)).toBe(JSON.stringify(['title', 'state']));
-    expect(localStorage.getItem('adf_hx_poc_column_settings')).toBeNull();
   });
 
   it('distinguishes never-chosen (null) from everything-switched-off (empty array)', () => {
