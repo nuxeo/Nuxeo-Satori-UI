@@ -186,11 +186,22 @@ export function sassLoadedUrls(body, { indented = false } = {}) {
   const urls = [];
   for (const s of mask.matchAll(statement)) {
     const [from, to] = s.indices[2];
+    let found = false;
     for (const t of mask.slice(from, to).matchAll(target)) {
       const span = t.indices[2] ?? t.indices[4];
       const url = body.slice(from + span[0], from + span[1]).replace(/^~/, '');
       urls.push(url);
+      found = true;
       if (s[1] !== 'import') break;
+    }
+    // For indented Sass @import without quotes, split on commas
+    if (indented && s[1] === 'import' && !found) {
+      const [from, to] = s.indices[2];
+      const importList = body.slice(from, to);
+      for (const item of importList.split(',')) {
+        const url = item.trim();
+        if (url) urls.push(url);
+      }
     }
   }
   for (const call of mask.matchAll(/load-css\(\s*(['"])([^'"]*)\1/dg)) {
