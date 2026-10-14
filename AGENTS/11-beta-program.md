@@ -304,6 +304,9 @@ DocumentService`. The chain, read from the published bundle:
   and override `getTranslation`. Note the base declares a **private** `http`, so a
   subclass field of that name fails `TS2415`/`TS4114`. adf-core also fetches
   `assets/adf-core/i18n/<lang>.json`, which has to be added to the build's asset globs.
+  _Changed by NXSAT-636 (2026-10):_ with adf-core's wiring removed, `AppTranslateLoader` is a
+  plain `TranslateLoader` again and the adf-core asset glob is gone (W2 in
+  `docs/adf-hx-workarounds.md`).
 - **`nuxeo-ui` has no `typecheck` target, so the `typecheck` gate does not cover the
   app.** Two real `TS` errors in `app.config.ts`-adjacent app code passed
   `nx affected -t typecheck` and were caught only by `build`. This is the same trap as
@@ -416,6 +419,8 @@ DocumentService`. The chain, read from the published bundle:
   `MANAGE_VERSIONS.DIALOG.TITLE` as its heading. Both adf-hx catalogues are now **seeded**
   alongside adf-core's in `SEEDED_FOLDERS`, and the `bundle` gate asserts all three ship.
   **Adopting a new adf-hx component means checking its keys resolve, not just that it renders.**
+  _Changed by NXSAT-636 (2026-10):_ the seeding is removed (W6); the loader's `UPSTREAM_FOLDERS`
+  holds satori-ui's catalogue alone.
 - **`AsyncPipe` must be provided for any adf-hx component that renders a user.**
   `UserResolverPipe` calls `inject(AsyncPipe)` in its constructor and `AsyncPipe` carries no
   `providedIn`. Missing, it throws `NG0201` **while rendering** — the component's shell appears
