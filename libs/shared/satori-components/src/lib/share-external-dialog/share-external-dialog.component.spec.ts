@@ -127,6 +127,32 @@ describe('NxsShareExternalDialogComponent', () => {
     expect(another().disabled).toBe(false);
   });
 
+  it('accepts a dotted domain and refuses an address without one, or with an empty label', async () => {
+    await open();
+    for (const [email, valid] of [
+      ['ext@example.com', true],
+      ['jane.doe@mail.example.co.uk', true],
+      ['a@b.c', true],
+      ['a@b', false],
+      ['a b@c.d', false],
+      ['a@b@c.d', false],
+      ['a@.b', false],
+      ['a@b.', false],
+      ['a@b..c', false],
+    ] as const) {
+      await fillValid(email);
+      expect(create().disabled, email).toBe(!valid);
+    }
+  });
+
+  it('checks a pasted address of 50,000 characters without stalling the dialog', async () => {
+    await open();
+    const started = performance.now();
+    await type(emailBox(), `a@${'.'.repeat(50_000)} x`);
+    expect(performance.now() - started).toBeLessThan(250);
+    expect(create().disabled).toBe(true);
+  });
+
   it('flags an invalid email once the user leaves the box, and ties the message to it', async () => {
     await open();
     await type(emailBox(), 'not-an-email');

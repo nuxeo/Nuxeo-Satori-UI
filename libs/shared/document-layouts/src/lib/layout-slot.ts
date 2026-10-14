@@ -43,7 +43,7 @@ export function layoutSlotEntry(
  * created in. Rules such as `app.rules.isType` then answer for the new document, not for the folder.
  */
 export function documentToCreate(type: string, parentPath: string | null): NuxeoDocument {
-  const folder = parentPath ? parentPath.replace(/\/+$/, '') : '';
+  const folder = parentPath ? withoutTrailingSlashes(parentPath) : '';
   return {
     uid: '',
     title: '',
@@ -53,4 +53,14 @@ export function documentToCreate(type: string, parentPath: string | null): Nuxeo
     properties: {},
     facets: [],
   };
+}
+
+/**
+ * `path` less its trailing slashes, counted back from the end. `/\/+$/` retries from each slash of
+ * a run that does not end the path, so a long run takes quadratic time.
+ */
+function withoutTrailingSlashes(path: string): string {
+  let end = path.length;
+  while (end > 0 && path[end - 1] === '/') end -= 1;
+  return path.slice(0, end);
 }

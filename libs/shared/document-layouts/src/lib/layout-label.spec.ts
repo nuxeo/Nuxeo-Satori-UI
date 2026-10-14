@@ -86,4 +86,15 @@ describe('documentToCreate', () => {
     expect(documentToCreate('Claim', '/ws/claims').path).toBe('/ws/claims/');
     expect(documentToCreate('Claim', null).path).toBe('/');
   });
+
+  it('drops every trailing slash and keeps the inner ones', () => {
+    expect(documentToCreate('Claim', '/ws//claims///').path).toBe('/ws//claims/');
+    expect(documentToCreate('Claim', '///').path).toBe('/');
+  });
+
+  it('reads a folder path of 100,000 slashes without stalling', () => {
+    const started = performance.now();
+    expect(documentToCreate('Claim', `${'/'.repeat(100_000)}x`).path).toHaveLength(100_002);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
 });

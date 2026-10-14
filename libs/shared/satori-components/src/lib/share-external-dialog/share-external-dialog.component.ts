@@ -42,7 +42,11 @@ export interface NxsShareExternalDialogData {
   readonly permissions?: readonly string[] | null;
 }
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * A local part, then dot-separated domain labels that hold no dot. A domain splits into labels
+ * only one way, so a failed match ends in linear time.
+ */
+const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
 
 /**
  * Shares a document with someone outside the organisation, as a `MatDialog`:
