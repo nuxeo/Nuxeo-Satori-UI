@@ -257,6 +257,20 @@ describe('DocumentLayoutFormComponent', () => {
       expect(form.showServerErrors({ 'claim:number': 'Taken' })).toEqual(['Taken']);
     });
 
+    it('forgets what it reported when the host hands it another document of the same type', async () => {
+      slotEntries[EXTENSION_SLOTS.documentEdit] = [contributed()];
+      await render({ mode: 'edit', document: CLAIM });
+      claimForm()?.onChange()?.({ properties: { 'claim:number': 'CLM-3' }, valid: true });
+      expect(form.validate()).toBe(true);
+
+      fixture.componentRef.setInput('document', { ...CLAIM, uid: 'c2', title: 'Claim CLM-2' });
+      await settle();
+
+      expect(validity).toEqual([true, false]);
+      expect(form.changedProperties()).toEqual({});
+      expect(form.validate()).toBe(false);
+    });
+
     it("judges a create's rule by the type being created, in its folder", async () => {
       slotEntries[EXTENSION_SLOTS.documentCreate] = [contributed()];
       await render({ mode: 'create', type: 'Claim', parentPath: '/default-domain/workspaces/ws/' });

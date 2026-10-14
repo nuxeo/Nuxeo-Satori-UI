@@ -134,6 +134,9 @@ export class DocumentLayoutFormComponent {
     () => this.entry() !== null && !(this.outlet()?.unresolved() ?? false),
   );
 
+  /** The edited document by identity, so a reload of the same document is not a new target. */
+  private readonly documentUid = computed(() => this.document()?.uid ?? null);
+
   /** What the contributed form last reported. Not saveable until it has said so. */
   private readonly reported = signal<DocumentLayoutChange>(NOTHING_REPORTED);
   protected readonly showErrors = signal(false);
@@ -217,11 +220,19 @@ export class DocumentLayoutFormComponent {
     merge(this.translate.onLangChange, this.translate.onTranslationChange)
       .pipe(takeUntilDestroyed())
       .subscribe(() => this.translations.update((n) => n + 1));
+    // Another document or type can resolve to the same entry object, so what the last one
+    // reported is forgotten whenever the form's target changes, not only its entry.
     effect(() => {
       this.entry();
+      this.mode();
+      this.formType();
+      this.parentPath();
+      this.documentUid();
       untracked(() => {
+        const wasValid = this.reported().valid;
         this.reported.set(NOTHING_REPORTED);
         this.showErrors.set(false);
+        if (wasValid) this.validChange.emit(false);
       });
     });
   }
