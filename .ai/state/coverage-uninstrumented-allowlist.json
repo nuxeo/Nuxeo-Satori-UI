@@ -34,19 +34,7 @@
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
-    "libs/features/browse/src/lib/folder-picker/folder-picker-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
     "libs/features/browse/src/lib/search-adf-hx/search-adf-hx.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/features/search/src/lib/search-filters-drawer/search-filters-drawer.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/constants/doc-type-icons.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
@@ -90,10 +78,6 @@
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
-    "libs/shared/nuxeo-client/src/lib/services/search.service.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
     "libs/shared/nuxeo-client/src/lib/services/task.service.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
@@ -123,10 +107,6 @@
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
     "libs/shared/ui/src/lib/export-dialog/export-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/ui/src/lib/saved-search-dialog/saved-search-dialog.component.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
