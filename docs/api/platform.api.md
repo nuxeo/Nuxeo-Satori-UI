@@ -1433,6 +1433,8 @@ class NxsUploadQueueComponent {
     protected readonly doneCount: _angular_core.Signal<number>;
     protected readonly failedCount: _angular_core.Signal<number>;
     protected readonly started: _angular_core.Signal<boolean>;
+    protected readonly scrolls: _angular_core.WritableSignal<boolean>;
+    constructor();
     protected size(bytes: number): string;
     protected removable(item: NxsUploadItem): boolean;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUploadQueueComponent, never>;

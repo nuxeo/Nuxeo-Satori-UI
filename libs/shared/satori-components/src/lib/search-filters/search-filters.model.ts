@@ -256,9 +256,16 @@ export function nxsHasSearchFilters(filters: NxsSearchFilters): boolean {
   return Object.keys(nxsSearchFiltersToRecord(filters)).length > 0;
 }
 
+/**
+ * Code-unit order, for a key that compares two sets of values rather than an order anyone reads.
+ * A locale's collation ties different values (`é` as one character, or as `e` and a combining
+ * accent), and a tie keeps the input order, so one set given in two orders would not match.
+ */
+const byCodeUnit = (a: string, b: string): number => (a < b ? -1 : Number(a > b));
+
 /** Whether two sets of filters ask for the same results: the order within a field does not count. */
 export function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean {
-  const sorted = (values: readonly string[]) => uniqueValues(values).sort();
+  const sorted = (values: readonly string[]) => uniqueValues(values).sort(byCodeUnit);
   const canonical = (filters: NxsSearchFilters) =>
     JSON.stringify([
       filters.query.trim(),

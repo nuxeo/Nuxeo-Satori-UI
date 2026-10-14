@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
 import { NxsUploadQueue, type NxsUploadItem } from './upload-queue';
 import { NxsUploadQueueComponent } from './upload-queue.component';
@@ -24,6 +24,17 @@ function at(moment: 'staged' | 'uploading' | 'failed' | 'done'): readonly NxsUpl
     return queue.items();
   }
   queue.complete([]);
+  return queue.items();
+}
+
+/** Fifteen files, the first uploading and the rest waiting: none of them has a button yet. */
+function longRun(): readonly NxsUploadItem[] {
+  const queue = new NxsUploadQueue();
+  queue.stage(
+    Array.from({ length: 15 }, (_, i) => new File(['x'.repeat(4_096)], `Scan ${i + 1}.pdf`)),
+  );
+  queue.start();
+  queue.progress({ percent: 40, fileIndex: 0, fileCount: 15 });
   return queue.items();
 }
 
@@ -77,3 +88,14 @@ export const Refused: Story = {
 
 /** All uploaded. */
 export const Uploaded: Story = { args: { items: at('done') } };
+
+/** A long run under way: the list scrolls and holds no button, so the list itself takes focus. */
+export const LongRun: Story = {
+  args: { items: longRun() },
+  play: async ({ canvasElement }) => {
+    const list = within(canvasElement).getByRole('list', { name: 'Files to upload' });
+    await expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
+    await expect(within(list).queryAllByRole('button')).toHaveLength(0);
+    await waitFor(() => expect(list).toHaveAttribute('tabindex', '0'));
+  },
+};

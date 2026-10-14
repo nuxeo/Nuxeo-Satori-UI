@@ -20,6 +20,25 @@ class HostComponent {
   readonly retried: string[] = [];
 }
 
+/** jsdom has no `ResizeObserver`; this one lets a test say when the observed list was resized. */
+class FakeResizeObserver {
+  static last: FakeResizeObserver | undefined;
+  target: Element | undefined;
+  disconnected = false;
+
+  constructor(readonly resized: () => void) {
+    FakeResizeObserver.last = this;
+  }
+
+  observe(target: Element): void {
+    this.target = target;
+  }
+
+  disconnect(): void {
+    this.disconnected = true;
+  }
+}
+
 describe('NxsUploadQueueComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -46,6 +65,54 @@ describe('NxsUploadQueueComponent', () => {
     queue = new NxsUploadQueue();
     queue.stage([new File(['x'.repeat(2048)], 'scan.pdf'), new File(['y'], 'note.txt')]);
     await show();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    FakeResizeObserver.last = undefined;
+  });
+
+  it('takes keyboard focus only while the list scrolls, so a run without buttons can be scrolled', async () => {
+    const list = () => el().querySelector('ul') as HTMLElement;
+    const measure = (scrollHeight: number) => {
+      Object.defineProperty(list(), 'scrollHeight', { configurable: true, value: scrollHeight });
+      Object.defineProperty(list(), 'clientHeight', { configurable: true, value: 280 });
+    };
+    expect(list().hasAttribute('tabindex')).toBe(false);
+
+    measure(600);
+    queue.start();
+    await show();
+    await fixture.whenStable();
+    expect(rows().some((row) => row.querySelector('button'))).toBe(false);
+    expect(list().getAttribute('tabindex')).toBe('0');
+
+    measure(280);
+    queue.progress({ percent: 50, fileIndex: 0, fileCount: 2 });
+    await show();
+    await fixture.whenStable();
+    expect(list().hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('measures again when the list changes size with the same files, as on zoom', async () => {
+    vi.stubGlobal('ResizeObserver', FakeResizeObserver);
+    fixture = TestBed.createComponent(HostComponent);
+    host = fixture.componentInstance;
+    queue.start();
+    await show();
+    const list = el().querySelector('ul') as HTMLElement;
+    const observer = FakeResizeObserver.last;
+    expect(observer?.target).toBe(list);
+    expect(list.hasAttribute('tabindex')).toBe(false);
+
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 280 });
+    observer?.resized();
+    await fixture.whenStable();
+    expect(list.getAttribute('tabindex')).toBe('0');
+
+    fixture.destroy();
+    expect(observer?.disconnected).toBe(true);
   });
 
   it('renders nothing for an empty queue', async () => {
