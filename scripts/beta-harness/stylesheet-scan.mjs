@@ -181,9 +181,29 @@ export function sassLoadedUrls(body, { indented = false } = {}) {
   // Use styleSpecifiers which properly handles comments, strings, and edge cases
   const urls = styleSpecifiers(body, indented ? 'dummy.sass' : 'dummy.scss');
 
-  // Also collect load-css() directives (not handled by styleSpecifiers)
-  for (const call of body.matchAll(/load-css\(\s*(['"])([^'"]*)\1/g)) {
-    urls.push(call[2]);
+  // For indented Sass, add fallback for unquoted @import lists that styleSpecifiers doesn't catch
+  if (indented) {
+    const mask = maskStylesheet(body);
+    for (const match of mask.matchAll(/(?:^|\n)[ \t]*@import\b([^\n]*)/dg)) {
+      const [from, to] = match.indices[1];
+      const importList = body.slice(from, to).trim();
+      if (importList && !/^['"]|url\(/.test(importList)) {
+        // This is an unquoted import list; split and add each item
+        for (const item of importList.split(',')) {
+          const trimmed = item.trim();
+          if (trimmed && !urls.includes(trimmed)) {
+            urls.push(trimmed);
+          }
+        }
+      }
+    }
+  }
+
+  // Also collect load-css() directives (with masking to ignore commented ones)
+  const mask = maskStylesheet(body);
+  for (const call of mask.matchAll(/load-css\(\s*(['"])([^'"]*)\1/dg)) {
+    const [from, to] = call.indices[2];
+    urls.push(body.slice(from, to));
   }
 
   return urls;
