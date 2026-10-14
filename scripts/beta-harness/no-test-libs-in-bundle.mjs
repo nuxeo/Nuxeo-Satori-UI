@@ -208,14 +208,14 @@ if (hits.length === 0 && missingFiles.length === 0) {
       `${REQUIRED_FILES.filter((r) => r.contains).length} by markup).`,
   );
   // A green here means nothing unless adf-hx is actually in the bundle: the banned
-  // symbols arrive *through* it. Until an adoption lands, this passes trivially, and
+  // symbols arrived *through* it. With adf-hx removed this passes trivially, and
   // saying so is the difference between a gate and a decoration.
   if (!sawAdfHx) {
     console.log(
       '\n  VACUOUS: no adf-hx code was found in this bundle, so nothing could have\n' +
         '  carried a banned symbol into it. This run does not demonstrate that the\n' +
-        '  ng-mocks stub works — it demonstrates that adf-hx is not yet adopted.\n' +
-        '  It becomes load-bearing when a component imports @alfresco/adf-hx-content-services.',
+        '  ng-mocks stub works — it demonstrates that adf-hx is not in the bundle.\n' +
+        '  It becomes load-bearing again only if a component imports @alfresco/adf-hx-content-services.',
     );
   }
   process.exit(0);

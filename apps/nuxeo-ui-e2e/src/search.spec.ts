@@ -2,12 +2,10 @@ import { expect, expectSurfaceWithData, test } from './fixtures';
 import { type Page, type Request } from '@playwright/test';
 
 /**
- * Search — the path that carries the query translation Phase 3 built, and the one an
- * injection defect was found in.
+ * Search — and the guard for the injection defect once found in the retired POC's search.
  *
- * `escapeNxqlLiteral` and `escapeHxqlLiteral` have unit specs for the escaping itself; what those
- * cannot show is that a real query reaches a real OpenSearch index and comes back. That is this
- * file.
+ * `escapeNxqlLiteral` has unit specs for the escaping itself; what those cannot show is that a
+ * real query reaches a real OpenSearch index and comes back. That is this file.
  */
 
 /**
