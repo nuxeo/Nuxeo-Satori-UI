@@ -1569,7 +1569,9 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     it('builds breadcrumb links for every ancestor folder but not the document itself', async () => {
       await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
 
-      expect(component.breadcrumbItems().map((i) => [i.label, i.href])).toEqual([
+      expect(
+        component.breadcrumbItems().map((i) => [i.label, 'href' in i ? i.href : undefined]),
+      ).toEqual([
         ['default-domain', '/browse/default-domain'],
         ['workspaces', '/browse/default-domain/workspaces'],
         ['ws', '/browse/default-domain/workspaces/ws'],
