@@ -175,41 +175,60 @@ const SPECIFIER_CONTROLS = [
  * configuration), every entry of an `@import` list, quoted or as `url(…)`, and `meta.load-css()`.
  *
  * Indented Sass (`indented`) ends a rule at the end of its line rather than at `;`, and may write
- * an `@import` list unquoted. Uses proper masking to ignore commented directives and strings.
+ * an `@import` list unquoted.
  */
 export function sassLoadedUrls(body, { indented = false } = {}) {
-  const mask = maskStylesheet(body);
-  const statement = indented
-    ? /(?:^|\n)[ \t]*@(use|forward|import)\b([^\n]*)/dg
-    : /(?:^|[;{}])\s*@(use|forward|import)\b([^;{}]*)/dg;
-  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([^'"\n]*)\3/dg;
   const urls = [];
-  for (const s of mask.matchAll(statement)) {
-    const [from, to] = s.indices[2];
-    let found = false;
-    for (const t of mask.slice(from, to).matchAll(target)) {
-      const span = t.indices[2] ?? t.indices[4];
-      const url = body.slice(from + span[0], from + span[1]).replace(/^~/, '');
-      urls.push(url);
-      found = true;
-      if (s[1] !== 'import') break;
-    }
-    // For indented Sass @import without quotes, split on commas
-    if (indented && s[1] === 'import' && !found) {
-      const [from, to] = s.indices[2];
-      const importList = body.slice(from, to);
-      for (const item of importList.split(',')) {
-        const url = item.trim();
-        if (url) urls.push(url);
+  const rules = indented
+    ? /@(use|forward|import)[ \t]+([^\n]*)/g
+    : /@(use|forward|import)\s+([^;{}]*)/g;
+
+  for (const rule of body.matchAll(rules)) {
+    const directive = rule[1];
+    const content = rule[2];
+
+    if (directive === 'import') {
+      // For @import, split by comma and process each item independently
+      // This handles mixed imports like: @import local, "theme", url(style.css)
+      const items = content.split(',');
+      for (const item of items) {
+        const trimmed = item.trim();
+        // Try quoted string first
+        const quoted = trimmed.match(/^(['"])([^'"]*)\1/);
+        if (quoted) {
+          urls.push(quoted[2].replace(/^~/, ''));
+          continue;
+        }
+        // Try url() syntax
+        const urlMatch = trimmed.match(/^url\(\s*(['"]?)([^'")\s]+)\1\s*\)/);
+        if (urlMatch) {
+          urls.push(urlMatch[2].replace(/^~/, ''));
+          continue;
+        }
+        // Bare import (unquoted) - use trimmed value
+        if (trimmed) {
+          urls.push(trimmed.replace(/^~/, ''));
+        }
+      }
+    } else {
+      // @use/@forward: take only first URL
+      const quoted = content.match(/(['"])([^'"]*)\1/);
+      if (quoted) {
+        urls.push(quoted[2].replace(/^~/, ''));
+      } else {
+        const urlMatch = content.match(/url\(\s*(['"]?)([^'")\s]+)\1\s*\)/);
+        if (urlMatch) {
+          urls.push(urlMatch[2].replace(/^~/, ''));
+        }
       }
     }
   }
-  for (const call of mask.matchAll(/load-css\(\s*(['"])([^'"]*)\1/dg)) {
-    if (call.indices[2]) {
-      const [start, end] = call.indices[2];
-      urls.push(body.slice(start, end));
-    }
+
+  // Handle load-css() directives
+  for (const call of body.matchAll(/load-css\(\s*(['"])([^'"]*)\1/g)) {
+    urls.push(call[2]);
   }
+
   return urls;
 }
 
