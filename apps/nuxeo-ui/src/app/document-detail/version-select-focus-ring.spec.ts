@@ -147,18 +147,20 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
       button.focus({ focusVisible: false } as FocusOptions);
       expect(button.matches(':focus')).toBe(true);
 
-      const focusedHoveredBg = getComputedStyle(button).backgroundColor;
+      const buttonStyle = getComputedStyle(button);
+      const focusedHoveredBg = buttonStyle.backgroundColor;
+      const buttonTextColor = buttonStyle.color;
       const focusedBgRgb = parseRgb(focusedHoveredBg);
-      const panelBgRgb = parseRgb('rgb(222, 223, 224)');
+      const textRgb = parseRgb(buttonTextColor);
 
       expect(focusedBgRgb).withContext('focused-hovered bg must be parseable').not.toBeNull();
-      expect(panelBgRgb).withContext('panel bg must be parseable').not.toBeNull();
+      expect(textRgb).withContext('button text color must be parseable').not.toBeNull();
 
-      if (focusedBgRgb && panelBgRgb) {
-        const ratio = contrastRatio(focusedBgRgb, panelBgRgb);
+      if (focusedBgRgb && textRgb) {
+        const ratio = contrastRatio(textRgb, focusedBgRgb);
         expect(ratio)
           .withContext(
-            `button text/border on focused-hovered fill must meet WCAG AA (${focusedHoveredBg} vs rgb(222, 223, 224)): ${ratio.toFixed(2)}:1`,
+            `button text/border (${buttonTextColor}) on focused-hovered fill (${focusedHoveredBg}) must meet WCAG AA: ${ratio.toFixed(2)}:1`,
           )
           .toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
       }
@@ -196,18 +198,20 @@ describe('Document detail version selector — keyboard focus indicator (NXSAT-5
 
       expect(document.activeElement).not.toBe(button);
 
-      const plainHoveredBg = getComputedStyle(button).backgroundColor;
+      const buttonStyle = getComputedStyle(button);
+      const plainHoveredBg = buttonStyle.backgroundColor;
+      const buttonTextColor = buttonStyle.color;
       const hoveredBgRgb = parseRgb(plainHoveredBg);
-      const panelBgRgb = parseRgb('rgb(222, 223, 224)');
+      const textRgb = parseRgb(buttonTextColor);
 
       expect(hoveredBgRgb).withContext('unfocused-hovered bg must be parseable').not.toBeNull();
-      expect(panelBgRgb).withContext('panel bg must be parseable').not.toBeNull();
+      expect(textRgb).withContext('button text color must be parseable').not.toBeNull();
 
-      if (hoveredBgRgb && panelBgRgb) {
-        const ratio = contrastRatio(hoveredBgRgb, panelBgRgb);
+      if (hoveredBgRgb && textRgb) {
+        const ratio = contrastRatio(textRgb, hoveredBgRgb);
         expect(ratio)
           .withContext(
-            `button text/border on unfocused-hovered fill must meet WCAG AA (${plainHoveredBg} vs rgb(222, 223, 224)): ${ratio.toFixed(2)}:1`,
+            `button text/border (${buttonTextColor}) on unfocused-hovered fill (${plainHoveredBg}) must meet WCAG AA: ${ratio.toFixed(2)}:1`,
           )
           .toBeGreaterThanOrEqual(WCAG_AA_NORMAL_TEXT);
       }
