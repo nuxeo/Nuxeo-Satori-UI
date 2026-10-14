@@ -57,6 +57,12 @@
 .nxs-document-tree__item {
   outline: none;
 
+  // As the Root back control: a standalone `:focus` for IBM's style_focus_visible.
+  &:focus > .nxs-document-tree__row {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
   &:focus-visible > .nxs-document-tree__row {
     outline: 2px solid var(--mat-sys-primary);
     outline-offset: -2px;

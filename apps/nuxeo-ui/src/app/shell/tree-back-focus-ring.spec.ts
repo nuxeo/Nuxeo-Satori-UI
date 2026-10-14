@@ -150,4 +150,26 @@ describe('Browse drawer Root back — keyboard focus indicator (NXSAT-547)', () 
       fixture.nativeElement.remove();
     }
   });
+
+  it('rings a tree row on :focus when :focus-visible is false (IBM style_focus_visible)', async () => {
+    const { fixture } = await mount();
+    const item = fixture.nativeElement.querySelector(
+      'nxs-document-tree [role="treeitem"]',
+    ) as HTMLElement | null;
+    expect(item).withContext('the tree must render a treeitem inside a domain').toBeTruthy();
+    const row = item?.querySelector('.nxs-document-tree__row') as HTMLElement;
+    try {
+      expect(getComputedStyle(row).outlineStyle).toBe('none');
+      item?.focus({ focusVisible: false } as FocusOptions);
+      expect(item?.matches(':focus')).toBe(true);
+      expect(item?.matches(':focus-visible')).toBe(false);
+
+      const style = getComputedStyle(row);
+      expect(style.outlineStyle).toBe('solid');
+      expect(Number.parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
+    } finally {
+      item?.blur();
+      fixture.nativeElement.remove();
+    }
+  });
 });

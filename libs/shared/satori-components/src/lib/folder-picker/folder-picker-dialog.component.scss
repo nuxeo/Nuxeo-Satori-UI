@@ -71,6 +71,13 @@
     background: var(--mat-sys-surface-container);
   }
 
+  // IBM Equal Access's style_focus_visible reads `:focus` only, so the ring is also drawn on a
+  // standalone `:focus` (NXSAT-547).
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
   &:focus-visible {
     outline: 2px solid var(--mat-sys-primary);
     outline-offset: -2px;
