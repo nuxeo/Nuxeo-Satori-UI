@@ -20,7 +20,7 @@ const meta: Meta<NxsDetailsPanelComponent> = {
   render: (args) => ({
     props: args,
     template: `
-      <nxs-details-panel [heading]="heading" [label]="label" [tabs]="tabs" [selected]="selected" [closeLabel]="closeLabel" (closed)="closed()" style="width: 380px; height: 260px; border: 1px solid var(--mat-sys-outline-variant)">
+      <nxs-details-panel [heading]="heading" [label]="label" [tabs]="tabs" [(selected)]="selected" [closeLabel]="closeLabel" (closed)="closed()" style="width: 380px; height: 260px; border: 1px solid var(--mat-sys-outline-variant)">
         <p>The {{ selected }} view's content, projected by the page.</p>
       </nxs-details-panel>
     `,
@@ -75,5 +75,8 @@ export const SwitchedFromTheKeyboard: Story = {
       'aria-selected',
       'true',
     );
+    await expect(
+      await canvas.findByText("The comments view's content, projected by the page."),
+    ).toBeInTheDocument();
   },
 };

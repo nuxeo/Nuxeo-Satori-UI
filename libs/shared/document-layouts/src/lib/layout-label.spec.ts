@@ -86,4 +86,32 @@ describe('documentToCreate', () => {
     expect(documentToCreate('Claim', '/ws/claims').path).toBe('/ws/claims/');
     expect(documentToCreate('Claim', null).path).toBe('/');
   });
+
+  it('drops every trailing slash and keeps the inner ones', () => {
+    expect(documentToCreate('Claim', '/ws//claims///').path).toBe('/ws//claims/');
+    expect(documentToCreate('Claim', '///').path).toBe('/');
+  });
+
+  it('gives representative folder paths the result the old trailing-slash pattern gave', () => {
+    for (const [folder, path] of [
+      ['', '/'],
+      ['/', '/'],
+      ['ws', 'ws/'],
+      ['ws/', 'ws/'],
+      ['/ws/claims', '/ws/claims/'],
+      ['//ws', '//ws/'],
+      ['/ws/ ', '/ws/ /'],
+      ['/ws/\n', '/ws/\n/'],
+      ['/ws\\', '/ws\\/'],
+      ['/a/b//c//', '/a/b//c/'],
+    ] as const) {
+      expect(documentToCreate('Claim', folder).path, JSON.stringify(folder)).toBe(path);
+    }
+  });
+
+  it('reads a folder path of 100,000 slashes without stalling', () => {
+    const started = performance.now();
+    expect(documentToCreate('Claim', `${'/'.repeat(100_000)}x`).path).toHaveLength(100_002);
+    expect(performance.now() - started).toBeLessThan(100);
+  });
 });
