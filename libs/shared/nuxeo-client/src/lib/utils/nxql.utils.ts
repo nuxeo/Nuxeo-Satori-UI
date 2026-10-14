@@ -17,8 +17,16 @@
  * A doubled quote still contained an injected payload, because the payload ends up
  * inside a string token rather than becoming operators — but it turned every
  * legitimate apostrophe into a failed search. Backslash is the escape the parser
- * implements, and it matches `escapeHxqlLiteral` in the adf-hx bridge, which faces
- * the same query language.
+ * implements.
+ *
+ * ## What it does not cover: property names
+ *
+ * Only literals are escaped, and the server will not catch a wrong property name for you:
+ * **a property Nuxeo does not know answers HTTP 200 with zero entries** — `dc:nosuchfield = 'x'`
+ * is not an error, here or in a `sortBy` (see `BrowseService.getChildren`), so a misspelt name
+ * reads as an empty repository. Name properties from a list that has been run against the
+ * server. Two that are easy to get wrong: a blob's MIME type is `file:content/mime-type`, and a
+ * date literal is `TIMESTAMP '…'`, not `DATE '…'`.
  *
  * ## Order matters
  *
