@@ -4,7 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { NEVER, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
 
@@ -88,7 +88,9 @@ export const MajorChosen: Story = {
   decorators: [withDialog()],
   play: async ({ canvasElement }) => {
     const canvas = within(canvasElement);
-    await expect(await canvas.findByRole('radio', { name: /2\.0 Major version/ })).toBeChecked();
+    const major = await canvas.findByRole('radio', { name: /2\.0 Major version/ });
+    // `ngModel` writes its first value a microtask after the radio renders.
+    await waitFor(() => expect(major).toBeChecked());
     await userEvent.click(canvas.getByRole('radio', { name: /1\.3 Minor version/ }));
     await expect(canvas.getByRole('radio', { name: /1\.3 Minor version/ })).toBeChecked();
   },
