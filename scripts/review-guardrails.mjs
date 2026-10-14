@@ -6817,34 +6817,6 @@ function sassCandidates(base) {
   ];
 }
 
-/**
- * Every URL a stylesheet loads: `@use` and `@forward` (one URL each — a later string is
- * configuration), every entry of an `@import` list, quoted or as `url(…)`, and `meta.load-css()`.
- *
- * Indented Sass (`indented`) ends a rule at the end of its line rather than at `;`, and may write
- * an `@import` list unquoted.
- */
-function sassLoadedUrls(body, { indented = false } = {}) {
-  const urls = [];
-  const rules = indented
-    ? /@(use|forward|import)[ \t]+([^\n]*)/g
-    : /@(use|forward|import)\s+([^;{}]*)/g;
-  for (const rule of body.matchAll(rules)) {
-    let strings = [...rule[2].matchAll(/['"]([^'"]+)['"]|url\(\s*([^'"()\s]+)\s*\)/g)].map(
-      (match) => match[1] ?? match[2],
-    );
-    if (indented && rule[1] === 'import' && strings.length === 0) {
-      strings = rule[2]
-        .split(',')
-        .map((url) => url.trim())
-        .filter(Boolean);
-    }
-    urls.push(...(rule[1] === 'import' ? strings : strings.slice(0, 1)));
-  }
-  for (const call of body.matchAll(/load-css\(\s*['"]([^'"]+)['"]/g)) urls.push(call[1]);
-  return urls;
-}
-
 function satoriComponentsSources() {
   return walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) => /\.(ts|mts)$/.test(path));
 }
