@@ -86,6 +86,7 @@ export default async function run(page, h) {
       failOnStatusCode: false,
       headers: nuxeoApiRequestHeaders(),
     })
+    // A refused connection fails the precondition below, which reports it as "no response".
     .catch(() => null);
   h.requirePrecondition(
     'Nuxeo API answers through the dev proxy',
