@@ -108,7 +108,7 @@ The Layer 1 configuration is the `extensions` key of a manifest fragment:
   "version": 1,
   "extensions": {
     "$name": "acme-customisation",
-    "overrides": { "app.navbar.browseAdfHx": { "visible": false } },
+    "overrides": { "app.navbar.expiredQueue": { "visible": false } },
     "slots": {
       "navbar": [
         {
@@ -142,7 +142,7 @@ reinstalling anything. A bootstrap fragment declares them:
       "acme": {
         "label": "Acme Insurance",
         "bootstrap": { "branding": { "applicationTitle": "Acme Insurance" } },
-        "manifest": { "labels": { "nav.item.browse-adf-hx": "Claims" } }
+        "manifest": { "labels": { "nav.item.browse": "Claims" } }
       }
     }
   }
@@ -298,8 +298,7 @@ Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.
 | ------------------------------- | ------------------- | ---------------------- | ----- | ----------------------------------- |
 | `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                   |
 | `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                   |
-| `app.navbar.browse`             | Browse              | `/browse`              | 30    | — (`disabled`, see below)           |
-| `app.navbar.browseAdfHx`        | Browse              | `/browse-adf-hx`       | 40    | —                                   |
+| `app.navbar.browse`             | Browse              | `/browse`              | 30    | —                                   |
 | `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                   |
 | `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                   |
 | `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                   |
@@ -312,12 +311,14 @@ Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.
 | `app.navbar.trash`              | Trash               | `/trash`               | 140   | —                                   |
 | `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess` |
 
-`app.navbar.browse` ships `disabled: true` and is therefore not rendered: `/browse-adf-hx`
-is the browse entry the product offers. The descriptor stays registered because `/browse`
-is still a live route, so it still supplies that page's title. An `overrides` entry cannot
-bring it back — `visible` is the only visibility field there and `disabled` outranks it.
-Restating the ID as a `navbar` slot addition with `"disabled": false` does, which is the
-supported route for a customer who wants both browse surfaces.
+`app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
+app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
+backticks because it is no longer an ID you can address. A manifest that still names it changes
+nothing, and a `labels` entry for its key, nav.item.browse-adf-hx, no longer reaches any entry: set
+`nav.item.browse` instead. Old `/#/browse-adf-hx` and `/#/search-adf-hx` links redirect to
+`/browse` and `/search` with their query string intact, and a `?path=` folder opens in `/browse`.
+Until then `app.navbar.browse` shipped `disabled: true`; a manifest restating it with
+`"disabled": false` is now redundant but harmless.
 
 **Hiding an entry hides the navigation, not the route.** `{"visible": false}` and a
 denying `rule` both remove the entry from the sidebar; neither removes the route,
@@ -694,9 +695,8 @@ places them: a manifest entry in that slot does, with `componentId` set to the I
 
 ## 7. `documentList` — the packaged columns
 
-Twelve columns, registered by the application and resolved by both the production
-browse and the adf-hx browse route. So `overrides` and `slots` entries here take
-effect on the rendered list.
+Twelve columns, registered by the application and resolved by browse. So `overrides` and
+`slots` entries here take effect on the rendered list.
 
 **Nine of the twelve ship `hiddenByDefault`.** That is not the same as `disabled`:
 a hidden column is still offered in the column picker, so a user can switch it on,
@@ -1436,14 +1436,8 @@ that is Layer 2 — see section 14.
   package (section 1), so a change is a new version of that package, built and installed. On a
   demo server, a preset (section 1) switches between configurations per browser.
 
-- **The upstream permissions panel on `/browse-adf-hx` still handles three levels.** That route is
-  the adf-hx proof of concept, kept until the components are removed. It represents only `Read`,
-  `ReadWrite` and `Everything`, saves by clearing the local ACL and replaying it, and so **refuses**
-  to save a document whose local ACL holds anything else rather than delete it — including the
-  `sections` root, which Nuxeo grants `members: CanAskForPublishing` by default.
-
-  The product's Permissions tabs — document detail and `/browse` — use
-  `nxs.components.permissionsPanel` instead, which has neither limit. It offers the server's list
+- **The Permissions tabs refuse some edits rather than guess.** Both — document detail and
+  `/browse` — use `nxs.components.permissionsPanel`. It offers the server's list
   for the document type, then `Write`, `ReadVersion`, `WriteVersion`, `AddChildren`,
   `RemoveChildren`, `Remove`, `Version`, `WriteSecurity`, `Unlock`, `SetRetention` and
   `UnsetRetention`, then any other permission the server reports. Nuxeo reports only the

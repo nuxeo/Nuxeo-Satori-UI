@@ -11,6 +11,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
 so the next publish has to be a minor. Nothing has been published yet.
 
+### Changed — BREAKING (registered IDs) — one Browse entry again
+
+The adf-hx proof of concept is removed, with its two routes and its navigation entry.
+
+- **`app.navbar.browseAdfHx` is retired.** A manifest entry naming it — an `overrides` key or a
+  `navbar` slot entry — now addresses nothing. Its label key, `nav.item.browse-adf-hx`, is on no
+  entry any more: move a `labels` entry for it to `nav.item.browse`.
+- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
+  "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
+  it is now redundant, not harmful.
+- **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
+  with their query string intact, and a `?path=` folder opens in `/browse`.
+
 ### Changed (`@nuxeo-satori/platform`) — `@hylandsoftware/satori-ui` is an optional peer
 
 - **`@hylandsoftware/satori-ui` is now an optional peer** (`peerDependenciesMeta`). npm installs

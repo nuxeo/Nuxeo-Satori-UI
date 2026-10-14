@@ -85,7 +85,6 @@ export const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>> = {
   "nav.item.administration": "Administration",
   "nav.item.assets": "Assets",
   "nav.item.browse": "Browse",
-  "nav.item.browse-adf-hx": "Browse",
   "nav.item.clipboard": "Clipboard",
   "nav.item.collections": "Collections",
   "nav.item.dashboard": "Dashboard",
