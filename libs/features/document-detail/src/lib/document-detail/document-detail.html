@@ -1200,13 +1200,18 @@
               (publicationsSelected)="goToPublishingTab()"
             >
               @if (doc(); as versioned) {
-                <nxs-manage-versions
-                  nxsVersion
-                  [document]="versioned"
-                  (versionSelected)="openVersion($event)"
-                  (latestSelected)="showLatestVersion()"
-                  (versionCreated)="onVersionCreated()"
-                />
+                <!-- A publication has no versions of its own to pick from; Web UI shows a tag too. -->
+                @if (versioned.isProxy) {
+                  <nxs-tag nxsVersion [label]="versionLabel()" />
+                } @else {
+                  <nxs-manage-versions
+                    nxsVersion
+                    [document]="versioned"
+                    (versionSelected)="openVersion($event)"
+                    (latestSelected)="showLatestVersion()"
+                    (versionCreated)="onVersionCreated()"
+                  />
+                }
               }
               @if (doc(); as tagged) {
                 <nxs-tag-editor

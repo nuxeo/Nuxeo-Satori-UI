@@ -501,6 +501,35 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
     });
   });
 
+  describe('the version on a publication', () => {
+    const publication = (): NuxeoDocument =>
+      live({
+        uid: 'proxy-of-1-0',
+        path: '/default-domain/sections/news/contract',
+        isProxy: true,
+        isCheckedOut: false,
+        properties: { 'uid:major_version': 1, 'uid:minor_version': 0 },
+      });
+
+    it('reads as a plain tag, as Web UI shows a proxy, with no versions control', async () => {
+      await render(publication());
+
+      expect(el('nxs-manage-versions')).toBeNull();
+      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')?.textContent?.trim()).toBe('1.0');
+    });
+
+    it('keeps the versions control on the live document and on a version', async () => {
+      await render(live());
+      expect(el('nxs-manage-versions .nxs-manage-versions__trigger')).not.toBeNull();
+      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')).toBeNull();
+
+      fixture.destroy();
+      await render(version(1));
+      expect(el('nxs-manage-versions .nxs-manage-versions__trigger')).not.toBeNull();
+      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')).toBeNull();
+    });
+  });
+
   describe('publishing a version (register item 49)', () => {
     const publishableVersion = (): NuxeoDocument =>
       version(1, { facets: ['Immutable', 'Versionable', 'Publishable', 'Commentable'] });
