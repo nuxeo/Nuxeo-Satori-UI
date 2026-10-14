@@ -3,7 +3,7 @@
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, dirname, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, relative, resolve, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const OLD_PACKAGE = '@nuxeo-satori/platform';
@@ -12,8 +12,9 @@ const SELF = /^scripts\/rename-satori(?:\.selftest)?\.mjs$/;
 export const EXCLUSIONS = [
   'CHANGELOG files (at any depth, case insensitive)',
   'scripts/rename-satori.mjs and scripts/rename-satori.selftest.mjs (migration rules and fixtures)',
+  'docs/rename-sweep.md (historical migration mappings and baseline evidence)',
   'untracked files, symlinks, submodules and files containing a NUL byte',
-  'upstream @alfresco package names, external URLs, Hxp/AdfHx class names and --hxp-* theme tokens',
+  'upstream @alfresco package names, external URLs except owned loopback-app hash routes, Hxp/AdfHx class names and --hxp-* theme tokens',
 ];
 const git = (root, args, options = {}) =>
   execFileSync('git', args, {
@@ -22,7 +23,48 @@ const git = (root, args, options = {}) =>
     ...options,
   });
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const excluded = (path) => /(^|\/)changelog(?:[./_-]|$)/i.test(path) || SELF.test(path);
+const excluded = (path) =>
+  /(^|\/)changelog(?:[./_-]|$)/i.test(path) || SELF.test(path) || path === 'docs/rename-sweep.md';
+/** Pin the repository root and reject symlinks/junctions beneath it before filesystem access. */
+const pathGuard = (root, io = fs) => {
+  root = resolve(root);
+  const canonicalRoot = io.realpathSync(root);
+  return (target, allowFinalSymlink = false) => {
+    if (io.lstatSync(root).isSymbolicLink() || io.realpathSync(root) !== canonicalRoot)
+      throw new Error(`Repository root changed or is a symlink: ${root}`);
+    const path = relative(root, resolve(target));
+    if (isAbsolute(path) || path === '..' || path.startsWith(`..${sep}`))
+      throw new Error(`Path outside repository: ${target}`);
+    const segments = path.split(sep).filter(Boolean);
+    let current = root;
+    for (let index = 0; index < segments.length; index += 1) {
+      current = resolve(current, segments[index]);
+      try {
+        if (
+          io.lstatSync(current).isSymbolicLink() &&
+          !(allowFinalSymlink && index === segments.length - 1)
+        )
+          throw new Error(`Symlinked repository path: ${current}`);
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+    }
+  };
+};
+const renameLocalRoute = (url) => {
+  try {
+    const parsed = new URL(url);
+    if (!['localhost', '127.0.0.1', '[::1]'].includes(parsed.hostname)) return url;
+    const hash = url.indexOf('#');
+    if (hash === -1) return url;
+    return (
+      url.slice(0, hash) +
+      url.slice(hash).replace(/^#\/(browse|search)-adf-hx(?![\w-])/, '#/$1-satori')
+    );
+  } catch {
+    return url;
+  }
+};
 const canonicalPath = (path) => {
   try {
     return fs.realpathSync(path);
@@ -43,11 +85,13 @@ const fileIdentity = (path) => {
 /** Read tracked working files, or an immutable Git tree without checking out that ref. */
 export function readTree(root, ref) {
   if (!ref) {
+    const verifyPath = pathGuard(root);
     const paths = git(root, ['ls-files', '-z'], { encoding: 'utf8' }).split('\0').filter(Boolean);
     const files = new Map();
     for (const path of paths) {
       try {
         const target = resolve(root, path);
+        verifyPath(target, true);
         if (lstatSync(target).isFile()) files.set(path, readFileSync(target));
       } catch (error) {
         // Git still lists unstaged deletions; other filesystem failures must surface.
@@ -131,7 +175,7 @@ export function planRename(files) {
     content
       .split(/(@alfresco\/[\w./-]+|https?:\/\/[^\s'"<>`]+)/g)
       .map((part, index) => {
-        if (index % 2) return part;
+        if (index % 2) return part.startsWith('@alfresco/') ? part : renameLocalRoute(part);
         const renamed = part.replace(/@nuxeo-satori\/platform(?![\w-])/g, NEW_PACKAGE);
         return tokenPattern ? renamed.replace(tokenPattern, (token) => tokens.get(token)) : renamed;
       })
@@ -181,12 +225,15 @@ export function planRename(files) {
 /** Preflight the plan, then recheck each mutation. Application is not transactional. */
 export function applyPlan(root, files, plan, io = fs) {
   if (plan.blockers.length) throw new Error(`Rename blocked:\n${plan.blockers.join('\n')}`);
+  const verifyPath = pathGuard(root, io);
   const verifySource = (from, source = resolve(root, from)) => {
+    verifyPath(resolve(root, from));
     if (!io.readFileSync(source).equals(files.get(from)))
       throw new Error(`Source changed: ${from}`);
   };
   for (const { from, to } of plan.changes) {
     verifySource(from);
+    verifyPath(resolve(root, to));
     if (from !== to) {
       try {
         io.lstatSync(resolve(root, to));
@@ -200,8 +247,10 @@ export function applyPlan(root, files, plan, io = fs) {
   for (const { from, to } of plan.changes) {
     const source = resolve(root, from);
     const target = resolve(root, to);
+    verifyPath(target);
     io.mkdirSync(dirname(target), { recursive: true });
     verifySource(from);
+    verifyPath(target);
     if (from !== to) {
       let fd;
       const mode = io.lstatSync(source).mode;
@@ -214,6 +263,7 @@ export function applyPlan(root, files, plan, io = fs) {
       }
       try {
         verifySource(from);
+        verifyPath(target);
         // Restore the source mode explicitly; exclusive creation also applies umask.
         io.fchmodSync(fd, mode);
         io.writeFileSync(fd, plan.next.get(to));

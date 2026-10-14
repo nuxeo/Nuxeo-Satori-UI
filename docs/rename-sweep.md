@@ -13,6 +13,8 @@ tracked filenames: `adf-hx` becomes `satori`, and filenames beginning with `hxp-
 (or `_hxp-` Sass partials) become `nxs-` (or `_nxs-`). It updates references to those
 segments, extensionless imports and stems in text files. The legacy routes
 `browse-adf-hx` and `search-adf-hx` become `browse-satori` and `search-satori`.
+Owned hash routes in absolute loopback-app URLs (`localhost`, `127.0.0.1`, and `::1`)
+also change; unrelated URL paths, query parameters, and third-party hosts remain intact.
 
 Only selectors declared locally in TypeScript are candidates for `hxp-` to `nxs-`
 replacement. Their declarations, markup and matching CSS selectors change together,
@@ -25,8 +27,10 @@ would also rename upstream packages and selectors the repository does not own.
 
 - CHANGELOG files and directories at any depth, case insensitive: history stays intact.
 - The codemod and its self-test: their old-name rules and fixtures must remain runnable.
+- This migration guide (`docs/rename-sweep.md`): historical mappings and measurements stay intact.
 - Untracked files, symlinks, submodules and binary files containing a NUL byte.
-- Upstream `@alfresco` package names and external HTTP(S) URLs.
+- Upstream `@alfresco` package names and external HTTP(S) URLs, except the owned
+  loopback-app hash routes described above.
 - `Hxp` / `AdfHx` TypeScript class names and `--hxp-*` theme tokens. These are distinct
   contracts; this script does not replace them just because a selector changes.
 
@@ -44,6 +48,9 @@ node --test scripts/rename-satori.selftest.mjs
 `--ref` reads an immutable Git tree without switching branches or writing its files.
 Omit it to inspect tracked files in the current working tree, including local edits
 and skipping files deleted locally without staging.
+Working-tree reads reject a symlinked repository root or symlinked directory ancestors
+of tracked files, including Windows junctions. Immutable Git-tree reads do not follow
+working-tree paths.
 `--root` selects another repository. Keep reports outside the checkout. Report paths
 are compared case-insensitively on every platform as a conservative source-protection
 check, including Windows and macOS installations with case-insensitive filesystems.
@@ -59,8 +66,8 @@ The wave3 branch was merged by PR #414 and deleted. When that ref is unavailable
 use its exact merged head, `2f57bf708e791560a05f81e0db696d687b330659`, from the
 second parent of integration's merge `44882d3ed`.
 
-The reviewed capture on integration commit `47c9a6196c976c79166599038e0973064c19707f`
-and that wave3 head each proposed **711 changed files, 146 moves and 2,252 changed
+The final capture on integration commit `735dbea26d56054604dbdb9571180f0610ec08ba`
+and that wave3 head each proposed **711 changed files, 146 moves and 2,254 changed
 lines**. Both planned second runs had zero changes. These are baseline measurements,
 not expected counts after subsequent merges. Re-run after NXSAT-638 merges and again
 immediately before NXSAT-640 applies the migration.
@@ -81,6 +88,9 @@ would overwrite an existing destination, including an untracked file. It repeats
 source check for each mutation and creates move destinations exclusively so a newly
 occupied destination cannot be overwritten. It checks a moved source again before
 deleting it and checks an opened in-place source before writing.
+Source and destination paths are checked for symlinked ancestors before preflight
+accesses and repeated around each mutation. The resolved repository root is pinned,
+and applying through a symlinked root or a path outside the repository is rejected.
 
 Application is not transactional: a filesystem error or concurrent edit detected
 mid-apply may leave earlier changes and a generated move destination in place.

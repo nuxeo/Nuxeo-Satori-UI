@@ -95,12 +95,90 @@ test('preserves CHANGELOG history at any depth, binaries and the codemod fixture
     'changelog/history.md': OLD,
     'scripts/rename-satori.mjs': OLD,
     'scripts/rename-satori.selftest.mjs': OLD,
+    'docs/rename-sweep.md': `${OLD} -> ${NEW}; hxp-icon -> nxs-icon; browse-adf-hx`,
     'binary.png': '\0' + OLD,
   });
   const plan = planRename(files);
   assert.equal(plan.changes.length, 0);
   for (const [path, body] of files) assert.deepEqual(plan.next.get(path), body);
+  assert.equal(planRename(plan.next).changes.length, 0);
 });
+
+test('renames owned hash routes in loopback app URLs while preserving third-party URLs', () => {
+  const before = [
+    'http://localhost:4200/#/browse-adf-hx',
+    'http://127.0.0.1:4300/nuxeo/ui/#/search-adf-hx?query=adf-hx',
+    'https://[::1]:4200/#/browse-adf-hx/doc',
+    'https://third-party.example/#/browse-adf-hx',
+    'https://localhost.example/#/search-adf-hx',
+    'http://localhost:4200/#/browse-adf-hx-extra',
+    'http://localhost:4200/adf-hx-bridge?next=search-adf-hx',
+  ].join('\n');
+  const plan = planRename(tree({ 'runbook.md': before }));
+  assert.equal(
+    content(plan, 'runbook.md'),
+    before
+      .replace('4200/#/browse-adf-hx\n', '4200/#/browse-satori\n')
+      .replace('/#/search-adf-hx?query=', '/#/search-satori?query=')
+      .replace('/#/browse-adf-hx/doc', '/#/browse-satori/doc'),
+  );
+  assert.equal(planRename(plan.next).changes.length, 0);
+});
+
+function directoryAlias(target, path) {
+  fs.symlinkSync(target, path, process.platform === 'win32' ? 'junction' : 'dir');
+}
+
+test('working-tree reads reject tracked files redirected through directory aliases', (t) => {
+  const { root } = fixture(t, { 'tracked/a.ts': OLD });
+  const { root: outside } = fixture(t, { 'a.ts': OLD });
+  rmSync(join(root, 'tracked'), { recursive: true });
+  directoryAlias(outside, join(root, 'tracked'));
+  assert.throws(() => readTree(root), /Symlinked repository path/);
+  assert.equal(readTree(root, 'HEAD').get('tracked/a.ts').toString(), OLD);
+  assert.equal(readFileSync(join(outside, 'a.ts'), 'utf8'), OLD);
+});
+
+test('working-tree reads reject a repository root redirected through a directory alias', (t) => {
+  const { root } = fixture(t, { 'a.ts': OLD });
+  const alias = join(root, 'root-alias');
+  directoryAlias(root, alias);
+  assert.throws(() => readTree(alias), /Repository root changed or is a symlink/);
+});
+
+for (const redirected of ['source', 'destination'])
+  test(`apply rejects a symlinked ${redirected} ancestor before changing outside files`, (t) => {
+    const { root } = fixture(t, { 'adf-hx-dir/hxp-a.ts': OLD });
+    const { root: outside } = fixture(t, { 'hxp-a.ts': OLD, 'nxs-a.ts': 'outside destination' });
+    const files = readTree(root);
+    const plan = planRename(files);
+    const alias = join(root, redirected === 'source' ? 'adf-hx-dir' : 'satori-dir');
+    if (redirected === 'source') rmSync(alias, { recursive: true });
+    directoryAlias(outside, alias);
+    assert.throws(() => applyPlan(root, files, plan), /Symlinked repository path/);
+    assert.equal(readFileSync(join(outside, 'hxp-a.ts'), 'utf8'), OLD);
+    assert.equal(readFileSync(join(outside, 'nxs-a.ts'), 'utf8'), 'outside destination');
+  });
+
+for (const redirected of ['source', 'destination'])
+  test(`apply detects a ${redirected} ancestor redirected after preflight`, (t) => {
+    const { root } = fixture(t, { 'adf-hx-dir/hxp-a.ts': OLD });
+    const { root: outside } = fixture(t, { 'hxp-a.ts': OLD });
+    const files = readTree(root);
+    const plan = planRename(files);
+    const io = {
+      ...fs,
+      mkdirSync(path, options) {
+        fs.mkdirSync(path, options);
+        const alias = join(root, redirected === 'source' ? 'adf-hx-dir' : 'satori-dir');
+        rmSync(alias, { recursive: true });
+        directoryAlias(outside, alias);
+      },
+    };
+    assert.throws(() => applyPlan(root, files, plan, io), /Symlinked repository path/);
+    assert.equal(readFileSync(join(outside, 'hxp-a.ts'), 'utf8'), OLD);
+    assert.equal(existsSync(join(outside, 'nxs-a.ts')), false);
+  });
 
 test('renames BEM classes derived from local selectors and file stems only', () => {
   const plan = planRename(
