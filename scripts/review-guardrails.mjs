@@ -942,7 +942,7 @@ function checkNoAdfHxInPublicApi() {
   // Scoped to the two heavy packages, deliberately. `@alfresco/adf-extensions` is also an
   // `@alfresco` scope, but it is a small library that leaks no type and moves no bundle, and since
   // NXSAT-308 nothing in `libs/` imports it at all: `libs/shared/extensions` owns the three
-  // functions it used to import. It remains installed only because adf-core and adf-hx need it.
+  // functions it used to import. It left the dependency tree with adf-core and adf-hx in NXSAT-637.
   const ALFRESCO = /from\s+['"]@alfresco\/(adf-hx-content-services|adf-core)/;
 
   /**
