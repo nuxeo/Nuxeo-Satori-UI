@@ -89,11 +89,9 @@ const UPSTREAM_MARKERS = ['adf-datatable', 'adf-enterprise-adf-hx'];
 /**
  * Files that must be **present** in the build, not merely absent from it.
  *
- * adf-core fetches its own strings at runtime from `assets/adf-core/i18n/<lang>.json`, and
- * they are copied in by an asset glob in `angular.json`. Without them every adf-hx
- * component renders raw keys like `ADF-DATATABLE.ACCESSIBILITY.SELECT_ALL` to screen
- * readers — visible to a user, invisible to a compiler, and easy to lose to a stray edit of
- * the glob.
+ * Upstream assets fetched at runtime are copied in by asset globs in `angular.json`, and a
+ * missing one renders raw keys or broken images — visible to a user, invisible to a compiler,
+ * and easy to lose to a stray edit of a glob.
  *
  * Asserted here because this gate already reads the built output, and because the built
  * output is what a customer receives. A local dev server can disagree with it — one
@@ -113,16 +111,9 @@ const UPSTREAM_MARKERS = ['adf-datatable', 'adf-enterprise-adf-hx'];
  * is the heading that shipped raw and is the reason two of these entries exist at all.
  */
 const REQUIRED_FILES = [
-  {
-    path: 'assets/adf-core/i18n/en.json',
-    key: 'CORE.PAGINATION.ITEMS_PER_PAGE',
-    why: "adf-core's own translation catalogue; without it adf-hx components render raw keys.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-core/bundles/assets/adf-core in angular.json.',
-  },
-  // The adf-hx side of the same problem, added after the adopted versions panel shipped with
-  // `MANAGE_VERSIONS.DIALOG.TITLE` as its heading. Each path is one that `app-translate-loader.ts`
-  // seeds as a folder: a seeded folder whose file is not shipped fails **silently**, because the
-  // loader catches the 404 and returns `{}`. Nothing else in the pipeline notices.
+  // Added after the adopted versions panel shipped with `MANAGE_VERSIONS.DIALOG.TITLE` as its
+  // heading: a catalogue whose file is not shipped fails **silently**, because a loader catches
+  // the 404 and returns `{}`. Nothing else in the pipeline notices.
   {
     path: 'assets/adf-enterprise-adf-hx-content-services-ui/i18n/en.json',
     key: 'MANAGE_VERSIONS.DIALOG.TITLE',

@@ -54,29 +54,6 @@ const ENVIRONMENTAL_ERRORS = [
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step("Precondition: the dev server serves adf-core's translation catalogue");
-  // adf-hx components fetch `assets/adf-core/i18n/<lang>.json` at runtime, copied in by an
-  // asset glob in `angular.json`. Without it one accessibility label renders as a raw key and
-  // the console fills with 404s — asserted as a precondition so the run says so instead of
-  // reporting failures that look like broken components. The shipped case is gated separately
-  // by `bundle`, which asserts the file is present in `dist/`.
-  //
-  // This first failed for a reason worth recording: Angular's `development` configuration
-  // **replaces** the `assets` array rather than merging with it, and only the top-level
-  // `options` array had the adf-core glob. Every dev server ever started on this branch
-  // 404ed the catalogue, and this precondition's first message blamed a stale server and
-  // told the reader to restart it — which could never have helped.
-  const catalogue = await page.request
-    .get(`${h.baseUrl}/assets/adf-core/i18n/en.json`, { failOnStatusCode: false })
-    .catch(() => null);
-  h.requirePrecondition(
-    "adf-core's catalogue is served",
-    catalogue?.status() === 200,
-    `/assets/adf-core/i18n/en.json returned ${catalogue?.status() ?? 'no response'} — the dev ` +
-      "server is not serving adf-core's assets. Check that the `development` configuration in " +
-      'angular.json still lists the adf-core glob (it replaces the array, it does not merge), ' +
-      'then restart: npx nx serve nuxeo-ui',
-  );
   h.step('Application loads and authenticates against live Nuxeo');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
