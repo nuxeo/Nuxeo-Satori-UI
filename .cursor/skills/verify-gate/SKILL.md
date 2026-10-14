@@ -84,16 +84,17 @@ command as uninterpretable until you have reproduced it inside the gate.
 
 ## Reading failures
 
-| Symptom                                                         | Usual cause                                                                                                          |
-| --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `SecurityError: Cannot initialize local storage`                | Wrong Node major, not a code defect. Run the preflight above. Never "fix" the spec.                                  |
-| Nx reports a task **flaky**                                     | Often one task hash run under two Node majors, not genuine flakiness. Check the preflight first.                     |
-| `Cannot find module '@hylandsoftware/...'` or `'@alfresco/...'` | Registry token missing. Check `SATORI_GH_READONLY_TOKEN` before touching code.                                       |
-| `__decorate is not defined` in a spec                           | `tsconfig.spec.json` missing `importHelpers: false` — compare against `libs/shared/nuxeo-client/tsconfig.spec.json`. |
-| Test passes alone, fails in the suite                           | Shared state. Check for un-reset signals or a missing `takeUntilDestroyed()`.                                        |
-| Lint error about cross-feature import                           | Real architecture violation. Move the shared code to `libs/shared/`, do not suppress.                                |
-| Guardrails failure on hardcoded colour                          | Use a theme token, not a literal.                                                                                    |
-| Build passes locally, fails in CI                               | Stale local `node_modules`. Re-run `npm ci` and compare.                                                             |
+| Symptom                                          | Usual cause                                                                                                          |
+| ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| `SecurityError: Cannot initialize local storage` | Wrong Node major, not a code defect. Run the preflight above. Never "fix" the spec.                                  |
+| Nx reports a task **flaky**                      | Often one task hash run under two Node majors, not genuine flakiness. Check the preflight first.                     |
+| `Cannot find module '@hylandsoftware/...'`       | Registry token missing. Check `SATORI_GH_READONLY_TOKEN` before touching code.                                       |
+| `Cannot find module '@alfresco/...'`             | A leftover import. No `@alfresco` package is installed since NXSAT-637, so a token will not help: remove the import. |
+| `__decorate is not defined` in a spec            | `tsconfig.spec.json` missing `importHelpers: false` — compare against `libs/shared/nuxeo-client/tsconfig.spec.json`. |
+| Test passes alone, fails in the suite            | Shared state. Check for un-reset signals or a missing `takeUntilDestroyed()`.                                        |
+| Lint error about cross-feature import            | Real architecture violation. Move the shared code to `libs/shared/`, do not suppress.                                |
+| Guardrails failure on hardcoded colour           | Use a theme token, not a literal.                                                                                    |
+| Build passes locally, fails in CI                | Stale local `node_modules`. Re-run `npm ci` and compare.                                                             |
 
 ## Never do these
 

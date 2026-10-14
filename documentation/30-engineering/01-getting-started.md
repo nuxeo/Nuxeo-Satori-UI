@@ -10,7 +10,7 @@ audience: engineering
 # Developer Getting Started — zero to productive
 
 > **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
-> Only the registry guidance (the token, `.npmrc` and the `E404` row) was re-verified at that commit,
+> Only the registry guidance (the token row and install snippet, `.npmrc` and the `E404` row) was re-verified at that commit,
 > for NXSAT-637; the gate guidance (the lockfile trap) on 2026-10-08 at `fb97d44`; the rest of the
 > page was last reviewed on 2026-08-24 at `77265f9`.
 
@@ -58,7 +58,7 @@ and exists precisely because this cost someone a day.
 ```bash
 git clone <repo-url> agentic-ui-poc
 cd agentic-ui-poc
-export SATORI_GH_READONLY_TOKEN=<your-pat>   # needs read:packages on Hyland AND Alfresco
+export SATORI_GH_READONLY_TOKEN=<your-pat>   # needs read:packages on the Hyland org
 npm ci
 ```
 
