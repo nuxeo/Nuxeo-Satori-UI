@@ -92,7 +92,7 @@ describe('documentToCreate', () => {
     expect(documentToCreate('Claim', '///').path).toBe('/');
   });
 
-  it('gives each folder path the result the old trailing-slash pattern gave', () => {
+  it('gives representative folder paths the result the old trailing-slash pattern gave', () => {
     for (const [folder, path] of [
       ['', '/'],
       ['/', '/'],

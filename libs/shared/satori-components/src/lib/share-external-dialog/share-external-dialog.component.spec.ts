@@ -127,7 +127,7 @@ describe('NxsShareExternalDialogComponent', () => {
     expect(another().disabled).toBe(false);
   });
 
-  it('judges every address as the old check did, but for an empty domain label', async () => {
+  it("keeps the old check's verdict on representative addresses without an empty domain label", async () => {
     await open();
     for (const [email, valid] of [
       ['ext@example.com', true],
