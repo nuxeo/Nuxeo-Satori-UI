@@ -2,16 +2,17 @@
 title: Developer Getting Started
 parent: Engineering
 order: 1
-last_reviewed: 2026-10-08
-repo_commit: fb97d44
+last_reviewed: 2026-10-14
+repo_commit: d36176c
 audience: engineering
 ---
 
 # Developer Getting Started — zero to productive
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `fb97d44` (`feature/nxsat-308-dependency-tree-gate`)
-> Only the gate guidance (the lockfile trap) was re-verified at that commit; the rest of the page was
-> last reviewed on 2026-08-24 at `77265f9`.
+> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> Only the registry guidance (the token, `.npmrc` and the `E404` row) was re-verified at that commit,
+> for NXSAT-637; the gate guidance (the lockfile trap) on 2026-10-08 at `fb97d44`; the rest of the
+> page was last reviewed on 2026-08-24 at `77265f9`.
 
 The goal of this page is that you reach a running application, a green gate and your first
 commit **without asking anyone**. If you get stuck on something not covered here, that is
@@ -29,7 +30,7 @@ Budget about two hours, most of which is Docker pulling Nuxeo.
 | npm                        | 10.x (ships with Node 20)         | The lockfile is `lockfileVersion` 3                                                                                            |
 | Docker + Docker Compose    | any current                       | Runs Nuxeo, OpenSearch, and optionally ARender and Mailpit                                                                     |
 | Java + Maven               | 17+, Maven 3.9+                   | Only if you need to build the marketplace package ([`pom.xml`](../../pom.xml))                                                 |
-| `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install `@hylandsoftware` **and** `@alfresco` packages                                                             |
+| `SATORI_GH_READONLY_TOKEN` | a GitHub PAT with `read:packages` | Required to install the `@hylandsoftware` packages                                                                             |
 
 ### The Node version will bite you
 
@@ -84,12 +85,9 @@ looks at the pruned Linux subtree and passes.
 
 ### Why `.npmrc` matters and is not enough
 
-[`.npmrc`](../../.npmrc) maps both `@alfresco` and `@hylandsoftware` to GitHub Packages.
-All four Alfresco packages we need download from there, verified twice by fetching the
-tarballs with only that mapping present.
-
-**Do not repoint `@alfresco` at public npm.** `@alfresco/adf-hx-content-services` is
-GitHub-Packages-exclusive and the adf-hx work would break.
+[`.npmrc`](../../.npmrc) maps `@hylandsoftware` to GitHub Packages, where
+`@hylandsoftware/satori-ui` and the fonts, icons and tokens it depends on are published. The
+`@alfresco` mapping went in NXSAT-637 with the last `@alfresco` package.
 
 And note: `npm ci` installs from each lock entry's `resolved` URL and **ignores** the
 registry mapping. If you change a scope's registry you must regenerate the lock, or CI
@@ -290,7 +288,7 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `SecurityError` on `localStorage` in specs                            | Node 22+ shadows jsdom's `localStorage`                                                                | Use Node 20, or run via `npm run beta:gate`                                                                                                                                        |
 | `npm ci` fails on CI, green locally                                   | A bare `npm install` pruned Linux-only optional entries                                                | Restore a known-good lock, merge new entries only                                                                                                                                  |
-| `E404` installing `@alfresco/*`                                       | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Alfresco** org                    | Token needs both orgs, not just Hyland                                                                                                                                             |
+| `E404` installing `@hylandsoftware/*`                                 | `SATORI_GH_READONLY_TOKEN` missing or lacks `read:packages` on the **Hyland** org                      | Set the token; it needs `read:packages` on the Hyland org                                                                                                                          |
 | `NG0201: No provider for …` after adopting an adf-hx component        | Upstream services are `providedIn: 'root'` and resolve ports from the root injector                    | Provide the port in the **root** injector, not on the component. See the long comment in [`apps/nuxeo-ui/src/app/app.config.ts:37`](../../apps/nuxeo-ui/src/app/app.config.ts#L37) |
 | adf-hx components render raw keys like `MANAGE_VERSIONS.DIALOG.TITLE` | An i18n catalogue is missing from the bundle; the loader catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — it asserts the catalogues are present _and non-empty_                                                                                                      |
 | HTTP 500 from an `AI.*` operation                                     | The AI backend is a **separate marketplace package not in this repo**                                  | Expected, not a client defect. See [Runtime AI Features](10-runtime-ai-features.md)                                                                                                |

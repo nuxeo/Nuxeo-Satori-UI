@@ -2,16 +2,19 @@
 title: Developer Learning Path (No-Agent)
 parent: Engineering
 order: 14
-last_reviewed: 2026-10-08
-repo_commit: 89cfd7b
+last_reviewed: 2026-10-14
+repo_commit: d36176c
 audience: engineering
 ---
 
 # Developer Learning Path — Building This Application Without AI Agents
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `5abcd50` (`feature/nxsat-308-replace-adf-extensions`)
-> Only the `@alfresco/adf-extensions` lines in §15 and §16 and the platform version in §19 were
-> re-verified at that commit, and only §22.2, the local gate list, at `fb97d44`
+> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> Only the package table and the authentication paragraph in §16, the `import type` line in §2 and
+> the `@alfresco/js-api` row in Appendix A were re-verified at that commit, for NXSAT-637. On
+> 2026-10-08 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`) the
+> `@alfresco/adf-extensions` lines in §15 and §16 and the platform version in §19 were
+> re-verified, and only §22.2, the local gate list, at `fb97d44`
 > (`feature/nxsat-308-dependency-tree-gate`), and the `@hylandsoftware/satori-ui` row at
 > `d500aae` (`feature/nxsat-308-satori-ui-0-2-1`). The Angular and `dompurify` rows were re-verified on
 > 2026-10-05 at `b15d9cf` (`fix/nxsat-303-production-advisories`) — see Appendix A.
@@ -105,8 +108,8 @@ Topics you will actually hit:
   affects every `process.env['X']` and every Nuxeo `properties['dc:title']` access in the codebase.
 - Declaration files (`.d.ts`) and what "public API surface" means — the `beta:api` gate diffs the
   emitted `.d.ts` against `docs/api/platform.api.md`
-- `import type` and why it matters for bundle size (the `@alfresco/js-api` dependency is a
-  devDependency precisely because it is types-only, avoiding 7 MB at runtime)
+- `import type` and why it matters for bundle size (`@alfresco/js-api` was a devDependency
+  precisely because it was types-only, avoiding 7 MB at runtime, until NXSAT-637 removed it)
 - Path mapping (`tsconfig.base.json` holds 25 path aliases across two scopes)
 
 - [TypeScript handbook](https://www.typescriptlang.org/docs/handbook/intro.html)
@@ -768,18 +771,18 @@ Estimated effort: **20 hours**.
 
 ### 16. adf-hx, ADF and the Hyland Experience stack — **Area** (but Must for browse/search work)
 
-| Package                             | Version                 | Registry             | Note                                                               |
-| ----------------------------------- | ----------------------- | -------------------- | ------------------------------------------------------------------ |
-| `@alfresco/adf-hx-content-services` | **7.20.0-automate.292** | GitHub Packages only | Exact pin. **Never a range** — `latest` is itself a prerelease.    |
-| `@alfresco/adf-core`                | **9.0.0**               | GitHub Packages      | Arrives transitively; brings Material; **eager**, +1.15 MB initial |
-| `@alfresco/adf-extensions`          | **9.0.0**               | public npm           | Not imported since NXSAT-308; adf-core and adf-hx still need it    |
-| `@alfresco/js-api`                  | **10.0.0**              | devDependency        | Types-only peer; 7 MB avoided at runtime                           |
-| `@hylandsoftware/hxcs-js-client`    | **2.0.111**             | GitHub Packages      | The `Document` / HxPR model                                        |
-| `@hylandsoftware/satori-ui`         | **0.2.1** (`^0.2.1`)    | GitHub Packages      | Hyland design system; deliberately absent from the template        |
+| Package                             | Version              | Registry             | Note                                                        |
+| ----------------------------------- | -------------------- | -------------------- | ----------------------------------------------------------- |
+| `@alfresco/adf-hx-content-services` | 7.20.0-automate.292  | GitHub Packages only | **Removed in NXSAT-637**                                    |
+| `@alfresco/adf-core`                | 9.0.0                | GitHub Packages      | **Removed in NXSAT-637**                                    |
+| `@alfresco/adf-extensions`          | 9.0.0                | public npm           | **Removed in NXSAT-637**                                    |
+| `@alfresco/js-api`                  | 10.0.0               | devDependency        | **Removed in NXSAT-637**                                    |
+| `@hylandsoftware/hxcs-js-client`    | 2.0.111              | GitHub Packages      | **Removed in NXSAT-637**                                    |
+| `@hylandsoftware/satori-ui`         | **0.2.1** (`^0.2.1`) | GitHub Packages      | Hyland design system; deliberately absent from the template |
 
-Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on **both** the
-`@alfresco` and `@hylandsoftware` orgs. `.npmrc` maps both scopes to `https://npm.pkg.github.com`
-and **must not** be repointed at public npm.
+Authentication for installs is `SATORI_GH_READONLY_TOKEN` with `read:packages` on the Hyland org.
+`.npmrc` maps `@hylandsoftware` to `https://npm.pkg.github.com`; the `@alfresco` mapping went with
+the last `@alfresco` package in NXSAT-637.
 
 Context that explains a lot of the workarounds: there has been no stable adf-hx release in twelve
 months (last true stable `7.19.5`, on an Angular 15 baseline); the published packages are compiled
@@ -1322,7 +1325,6 @@ the Angular and `dompurify` rows at `b15d9cf`, the Satori row at `d500aae` and t
 | `husky`                                                     | 9.1.7                                     |
 | `lint-staged`                                               | 16.4.0                                    |
 | `@swc/core`                                                 | ~1.15.5                                   |
-| `@alfresco/js-api`                                          | 10.0.0 (devDependency, types only)        |
 | `@playwright/test`, `@axe-core/playwright`                  | **untracked**, installed with `--no-save` |
 | `knip`                                                      | invoked via `npx` in the weekly workflow  |
 

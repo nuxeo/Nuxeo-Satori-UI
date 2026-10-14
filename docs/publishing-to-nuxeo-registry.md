@@ -215,8 +215,7 @@ In `libs/platform/package.json`:
 + "version": "<agreed version>",
 ```
 
-Add to the repo `.npmrc`, alongside the existing `@alfresco` and `@hylandsoftware`
-lines:
+Add to the repo `.npmrc`, alongside the existing `@hylandsoftware` lines:
 
 ```
 @nuxeo:registry=https://packages.nuxeo.com/repository/npm-public/

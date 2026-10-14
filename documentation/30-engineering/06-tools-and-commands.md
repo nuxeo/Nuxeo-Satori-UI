@@ -2,15 +2,16 @@
 title: Tools & Commands
 parent: Engineering
 order: 6
-last_reviewed: 2026-10-09
-repo_commit: effd434
+last_reviewed: 2026-10-14
+repo_commit: d36176c
 audience: engineering
 ---
 
 # Tools & Commands — complete reference
 
-> **Last reviewed:** 2026-10-09 · **Repository:** `effd434` (`feature/nxsat-308-satori-components`)
-> Only the three `beta:coverage` rows were re-verified at that commit; §3 (the gate and the
+> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> Only the `SATORI_GH_READONLY_TOKEN` row was re-verified at that commit, for NXSAT-637; the three
+> `beta:coverage` rows on 2026-10-09 at `effd434`; §3 (the gate and the
 > dependency-tree commands) was re-verified on 2026-10-08 at `fb97d44`; the rest of the page was
 > last reviewed on 2026-08-24 at `77265f9`.
 > Source of truth: the `scripts` block in [`package.json`](../../package.json). If a command
@@ -20,12 +21,12 @@ audience: engineering
 
 ## 1. Setup
 
-| Command                                  | Purpose                                        | Notes                                                  |
-| ---------------------------------------- | ---------------------------------------------- | ------------------------------------------------------ |
-| `nvm use`                                | Select Node 20 from `.nvmrc`                   | **Not optional.** Node 22+ breaks `localStorage` specs |
-| `export SATORI_GH_READONLY_TOKEN=<pat>`  | Auth for `@hylandsoftware` **and** `@alfresco` | Needs `read:packages` on **both** orgs                 |
-| `npm ci`                                 | Install from the lockfile                      | **Never** a bare `npm install` — see below             |
-| `npm install --no-save @playwright/test` | Playwright, deliberately untracked             | Then `npx playwright install chromium`                 |
+| Command                                  | Purpose                            | Notes                                                  |
+| ---------------------------------------- | ---------------------------------- | ------------------------------------------------------ |
+| `nvm use`                                | Select Node 20 from `.nvmrc`       | **Not optional.** Node 22+ breaks `localStorage` specs |
+| `export SATORI_GH_READONLY_TOKEN=<pat>`  | Auth for `@hylandsoftware`         | Needs `read:packages` on the Hyland org                |
+| `npm ci`                                 | Install from the lockfile          | **Never** a bare `npm install` — see below             |
+| `npm install --no-save @playwright/test` | Playwright, deliberately untracked | Then `npx playwright install chromium`                 |
 
 ### `npm install` vs `npm ci`
 

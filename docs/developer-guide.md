@@ -21,7 +21,7 @@ This guide documents the coding conventions, project structure, and step-by-step
 git clone <repo-url> && cd agentic-ui-poc
 ```
 
-Set a GitHub Packages read token for Hyland/Alfresco scoped packages (required for `@hylandsoftware/satori-ui`, `@hylandsoftware/hxcs-js-client`, and future `@alfresco/*` packages):
+Set a GitHub Packages read token for the Hyland scoped packages (required for `@hylandsoftware/satori-ui` and the Satori fonts, icons and tokens it brings):
 
 ```powershell
 # PowerShell
@@ -29,7 +29,7 @@ $env:SATORI_GH_READONLY_TOKEN = "<github-packages-read-token>"
 npm install
 ```
 
-The root [`.npmrc`](../.npmrc) maps `@hylandsoftware` and `@alfresco` to `https://npm.pkg.github.com` using `SATORI_GH_READONLY_TOKEN`.
+The root [`.npmrc`](../.npmrc) maps `@hylandsoftware` to `https://npm.pkg.github.com` using `SATORI_GH_READONLY_TOKEN`.
 
 ### Start the dev server
 
