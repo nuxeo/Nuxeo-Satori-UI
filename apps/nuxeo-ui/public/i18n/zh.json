@@ -27,16 +27,6 @@
     "toolbar-unlock": "解锁",
     "toolbar-unsubscribe": "取消订阅"
   },
-  "adf-hx-bridge": {
-    "loading": "加载",
-    "notify-me": "通知我",
-    "pager": {
-      "no-documents": "没有文档",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "第 {{ first }}–{{ last }} 项，共 {{ total }} 项"
-    },
-    "unsubscribe": "取消订阅"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "AI 审计异常",
@@ -708,17 +698,6 @@
       "user": "用户",
       "user-group": "用户 / 组",
       "username": "用户名"
-    },
-    "browse-adf-hx-poc": {
-      "columns": "列",
-      "manage-columns": "管理列",
-      "preview": "预览",
-      "preview-document": "预览文档",
-      "retry": "重试",
-      "select-a-single-document-in-the": "在“查看”选项卡中选择单个文档以查看其属性。",
-      "select-a-single-document-in-the-2": "在“查看”选项卡中选择单个文档以查看其版本。",
-      "the-repository-root-carries-no-access": "存储库根目录没有访问控制列表。打开域或文件夹以查看和管理其权限。",
-      "this-folder-is-empty": "此文件夹为空"
     },
     "column": {
       "author": "作者",
@@ -1548,104 +1527,6 @@
       "loading": "正在加载…"
     }
   },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "活动",
-      "by": "由",
-      "close-panel": "关闭面板",
-      "contributors": "贡献者",
-      "created": "创建时间",
-      "document-details": "文档详细信息",
-      "info": "信息",
-      "last-modified": "上次修改时间",
-      "no-recent-activity": "无最近活动",
-      "no-tags-yet": "暂无标记",
-      "properties": "属性",
-      "search-or-create-a-tag": "搜索或创建标记",
-      "state": "状态",
-      "tags": "标记",
-      "title": "标题",
-      "type": "类型"
-    },
-    "hxp-browse-history": {
-      "action": "操作",
-      "all": "全部",
-      "category": "类别",
-      "comment": "注释",
-      "date": "日期",
-      "from": "从",
-      "next": "下一个",
-      "no-audit-entries-found": "未找到审计条目。",
-      "performed-action": "执行的操作",
-      "previous": "上一个",
-      "state": "状态",
-      "to": "到",
-      "username": "用户名"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "刷新"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "文档列表分页",
-      "next": "下一个",
-      "next-page": "下一页",
-      "previous": "上一个",
-      "previous-page": "上一页"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "浏览文件夹选项卡"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "全部类型",
-      "card-view": "卡片视图",
-      "clear-contributor-filter": "清除贡献者筛选",
-      "clear-title-filter": "清除标题筛选",
-      "contributor": "贡献者...",
-      "export-csv": "导出 CSV",
-      "filter-by-title": "根据标题筛选...",
-      "last-contributor": "最后贡献者",
-      "list-view": "列表视图",
-      "modified-from": "修改日期自",
-      "modified-to": "修改日期至",
-      "type": "类型"
-    },
-    "hxp-browse-trash": {
-      "actions": "操作",
-      "failed-to-load": "无法加载回收站。",
-      "last-modified": "上次修改时间",
-      "name": "名称",
-      "restore": "恢复",
-      "retry": "重试",
-      "trash-is-empty": "回收站为空",
-      "type": "类型"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "关闭列选择器",
-      "column-settings": "列设置",
-      "done": "完成",
-      "reset": "重置"
-    },
-    "hxp-folder-header": {
-      "close-menu": "关闭菜单",
-      "create-folder-upload-files-or-import": "创建文件夹、上传文件或导入 CSV",
-      "create-import": "创建/导入",
-      "delete": "删除",
-      "download-all": "全部下载",
-      "edit": "编辑",
-      "export": "导出",
-      "more-actions": "更多操作",
-      "share": "共享",
-      "upload-with-nuxeo-drive": "使用 Nuxeo Drive 上传"
-    },
-    "tab": {
-      "history": "历史记录",
-      "permissions": "权限",
-      "properties": "属性",
-      "trash": "回收站",
-      "versions": "版本",
-      "view": "查看"
-    }
-  },
   "kd": {
     "content-lake-upload": {
       "checking-for-existing-content-lake-copies": "正在检验是否存在 Content Lake 副本...",
@@ -1797,7 +1678,6 @@
       "administration": "管理",
       "assets": "资产",
       "browse": "浏览",
-      "browse-adf-hx": "浏览",
       "clipboard": "剪贴板",
       "collections": "集合",
       "dashboard": "仪表板",

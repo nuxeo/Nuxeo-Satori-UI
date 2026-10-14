@@ -75,7 +75,6 @@ libs/
     document-layouts/            ← Per-type layouts: package layout files or schema-generated (NXSAT-311); internal, not in the platform package
     satori-components/           ← nxs- component library, published as @nuxeo-satori/platform/components (NXSAT-308, below)
     satori-components-satori/    ← the same primitive IDs on Satori, published as @nuxeo-satori/platform/components-satori
-    adf-hx-bridge/               ← HxPR bridge + hxp-* UI for adf-hx browse POC (see ARCHITECTURE.md)
 ```
 
 ---
@@ -312,11 +311,12 @@ shipped in the package; customers use `extension-component`. By hand, the steps 
 
 ---
 
-## adf-hx Browse POC
+## adf-hx browse POC — removed
 
-Parallel browse at `/#/browse-adf-hx?path=…` using `@agentic-ui/shared/adf-hx-bridge`. Does **not** replace production `/#/browse`. Feature page: `libs/features/browse/src/lib/browse-adf-hx-poc/`.
-
-→ Full detail: `libs/shared/adf-hx-bridge/ARCHITECTURE.md` · Agent rule: `.cursor/rules/adf-hx-browse-poc.mdc`
+The parallel browse at `/#/browse-adf-hx`, its search at `/#/search-adf-hx` and the
+`libs/shared/adf-hx-bridge` library that backed them were removed on 2026-10-14 (NXSAT-635).
+Browse is one surface, at `/#/browse`. Both old paths redirect, query string intact — see
+`apps/nuxeo-ui/src/app/retired-routes.ts`.
 
 ---
 
@@ -329,7 +329,6 @@ All routes use `HashLocationStrategy` (`/#/path`). This ensures Nuxeo/Tomcat ser
 | `/#/login`          | LoginPageComponent           | Public     |
 | `/#/dashboard`      | DashboardPageComponent       | Required   |
 | `/#/browse`         | BrowseComponent              | Required   |
-| `/#/browse-adf-hx`  | BrowseAdfHxPocComponent      | Required   |
 | `/#/search`         | SearchComponent              | Required   |
 | `/#/doc/:uid`       | DocumentDetailComponent      | Required   |
 | `/#/documents`      | AssetSearchResultsComponent  | Required   |

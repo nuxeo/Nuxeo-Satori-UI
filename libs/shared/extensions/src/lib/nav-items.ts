@@ -46,7 +46,7 @@ export interface NavItemDescriptor extends ExtensionElement {
    * | Want | Use | Scope |
    * | --- | --- | --- |
    * | One label, every language | `overrides[id].label` | Wins outright; bypasses translation |
-   * | Replace the key's text | `labels['nav.item.browse-adf-hx']` in the manifest | Wherever the key resolves; same text in every language |
+   * | Replace the key's text | `labels['nav.item.browse']` in the manifest | Wherever the key resolves; same text in every language |
    *
    * Setting **both** means the override wins and the `labels` entry is silently inert. That is
    * the documented precedence, not an accident, and `docs/extension-reference.md` says so.
@@ -70,12 +70,11 @@ export interface NavItemDescriptor extends ExtensionElement {
  * it, hide entries, gate them behind a rule, or add its own. Reproducing the pre-Phase-2
  * navigation exactly was that phase's requirement, and it did.
  *
- * **Two entries have deliberately diverged from it since.** `app.navbar.browse` carries
- * `disabled: true` and `app.navbar.browseAdfHx` now reads "Browse", so the product offers
- * one browse surface: fifteen descriptors are registered here and fourteen render by
- * default. Both are commented where they are declared. Anything reading this list as
- * "what the user sees" must filter it — `resolve()` does, `pageTitle` deliberately does
- * not.
+ * One browse surface is offered, at `/browse`. The adf-hx proof of concept's
+ * `app.navbar.browseAdfHx` stood beside it, with this entry disabled, until both its route and
+ * its ID were retired. Anything reading this list as "what the user sees" must still filter it,
+ * because a manifest can disable or gate any entry — `resolve()` does, `pageTitle` deliberately
+ * does not.
  *
  * `order` is explicit and spaced by ten so a customer can insert between two
  * packaged entries without restating the list.
@@ -104,23 +103,6 @@ export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
     path: '/browse',
     icon: 'folder',
     order: 30,
-    hasDrawer: true,
-    // The adf-hx entry below is the browse experience we ship, so this one is
-    // dropped from the navigation. The descriptor stays registered: `/browse`
-    // is still a live route, still linked from the dashboard and still needs
-    // this entry for its page title.
-    disabled: true,
-  },
-  {
-    id: 'app.navbar.browseAdfHx',
-    // The key keeps its `-adf-hx` slug: it is the published label contract a
-    // customer's `labels` map already targets, and renaming it would silently
-    // drop their text. Only the text it resolves to changed.
-    labelKey: 'nav.item.browse-adf-hx',
-    label: 'Browse',
-    path: '/browse-adf-hx',
-    icon: 'folder_open',
-    order: 40,
     hasDrawer: true,
   },
   {

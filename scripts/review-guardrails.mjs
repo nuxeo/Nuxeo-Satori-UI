@@ -931,13 +931,8 @@ function checkAdfHxWorkaroundIds() {
  *    versioning, which is the opposite of what the four-layer contract promises.
  * 2. **Bundle boundary.** A barrel is one module. The moment anything it re-exports imports
  *    `@alfresco/*`, adf-core becomes reachable from the app shell and lands in the **initial**
- *    bundle — measured at 1.70 → 2.65 MB when that happened, which is why
- *    `libs/shared/adf-hx-bridge/src/providers.ts` exists as a separate entry point.
- *
- * The bridge's `providers.ts` is the secondary entry point for adf-hx-facing code. Most consumers
- * are lazy (the POC route); the shell nav drawer and `app.config.ts` also import it eagerly on
- * purpose — see the allowlist below — so the gate watches the main barrel, not "never import
- * providers at startup".
+ *    bundle — measured at 1.70 → 2.65 MB when that happened, which is why the adf-hx bridge kept
+ *    its upstream-facing code behind a secondary entry point until it was removed.
  */
 function checkNoAdfHxInPublicApi() {
   // Scoped to the two heavy packages, deliberately. `@alfresco/adf-extensions` is also an
@@ -948,17 +943,12 @@ function checkNoAdfHxInPublicApi() {
 
   /**
    * Known, deliberate exceptions — each with the reason, because an allowlist without one becomes
-   * a dumping ground.
+   * a dumping ground. Empty since the adf-hx bridge, whose shell nav drawer was the one entry, was
+   * removed.
+   *
+   * @type {Map<string, string>}
    */
-  const ALLOWED = new Map([
-    [
-      'libs/shared/adf-hx-bridge/src/lib/ui/hxp-browse-nav-drawer/hxp-browse-nav-drawer.component.ts',
-      "The app shell's nav drawer renders adf-hx's document tree, so the shell genuinely needs " +
-        'adf-hx eagerly. This is a product decision, not a barrel accident, and it means the eager ' +
-        'bundle has TWO causes — this and CONTEXT_MENU_ACTIONS_PROVIDERS in app.config.ts. Removing ' +
-        'it requires deferring the tree behind an outlet, which is Phase 4 work.',
-    ],
-  ]);
+  const ALLOWED = new Map();
   const barrels = git(['ls-files', '--cached', '--others', '--exclude-standard'])
     .split('\n')
     .filter((file) => /^libs\/.+\/src\/index\.ts$/.test(file));
@@ -1008,7 +998,7 @@ function checkNoAdfHxInPublicApi() {
           `${barrel} via ${offender.from.slice(1).join(' -> ') || 'a direct export'}. That both ` +
           'leaks an adf-hx type into our public API and makes adf-core reachable from anything ' +
           'importing the barrel, which puts it in the initial bundle. Move it behind a secondary ' +
-          'entry point, as `libs/shared/adf-hx-bridge/src/providers.ts` does.',
+          'entry point.',
       );
     }
   }

@@ -358,7 +358,7 @@ flowchart TD
   boundaries and only the second is a security control.
 - Credentials from environment only; never hardcoded, never in a URL query string.
 - Query literals are escaped before interpolation —
-  [`libs/shared/adf-hx-bridge/src/lib/api/hxql-literal.ts`](../../libs/shared/adf-hx-bridge/src/lib/api/hxql-literal.ts).
+  [`libs/shared/nuxeo-client/src/lib/utils/nxql.utils.ts`](../../libs/shared/nuxeo-client/src/lib/utils/nxql.utils.ts).
   The backslash is escaped **first**; the other order turns `\'` into `\\'`, a literal
   backslash followed by an unescaped quote, reopening the hole.
 - Blob URLs are tracked at creation and revoked on destroy and on reset. A `SafeUrl` from

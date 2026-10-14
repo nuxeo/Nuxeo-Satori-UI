@@ -87,7 +87,8 @@ audience: product
 | **Natural-language search** | "documents I edited last week" → NXQL              | No query language to learn | **Backend absent** — `AI.NlToNxql` |
 
 > **Search hardening.** The query path escapes literals before interpolation
-> ([`hxql-literal.ts`](../../libs/shared/adf-hx-bridge/src/lib/api/hxql-literal.ts)).
+> (`hxql-literal.ts`, removed with the adf-hx routes; NXQL literals go through
+> [`nxql.utils.ts`](../../libs/shared/nuxeo-client/src/lib/utils/nxql.utils.ts)).
 > An adversarial review found an injection that returned 155 documents against 0 for the
 > plain term, defeating the `isVersion`/`isTrashed` hygiene filters. Nuxeo's ACL filter
 > bounded the impact — no unauthorised documents were readable — but versions and trashed

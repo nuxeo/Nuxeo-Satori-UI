@@ -74,7 +74,6 @@ const ROUTES = [
   ['collections', '/#/collections', 'lib-collection-detail'],
   ['administration', '/#/administration', 'lib-administration-shell'],
   ['knowledge-discovery', '/#/knowledge-discovery', 'lib-knowledge-discovery'],
-  ['browse-adf-hx', '/#/browse-adf-hx', 'lib-browse-adf-hx-poc'],
 ];
 
 let chromium;

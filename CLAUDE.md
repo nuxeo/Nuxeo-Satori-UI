@@ -18,8 +18,7 @@ four-layer customisation contract.
 4. The `AGENTS/` file for your task — `01-services.md`, `02-nuxeo-apis.md`,
    `05-test-standards.md`, `07-security.md`, `08-bug-patterns.md`.
 
-For Beta work also read `docs/extension-reference.md` (the registered-ID contract) and
-`libs/shared/adf-hx-bridge/ARCHITECTURE.md`.
+For Beta work also read `docs/extension-reference.md` (the registered-ID contract).
 
 ## Where the programme stands
 
@@ -109,7 +108,8 @@ Two traps that have each cost a phase:
   `error` with Nx's permissive default and could not reject a single edge, and four
   violations had accumulated
 - Credentials from environment only; never hardcoded, never in a URL query string
-- **adf-hx types must never appear in our public API** — wrap them in `adf-hx-bridge`
+- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its
+  bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 - **Hiding an action in a manifest is not a security control** — server-side Nuxeo
   permissions still gate operations
