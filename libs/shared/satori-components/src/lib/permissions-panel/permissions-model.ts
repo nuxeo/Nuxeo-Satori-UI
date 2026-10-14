@@ -216,7 +216,9 @@ export function readSnapshot(doc: NuxeoDocument): NxsPermissionsSnapshot {
   return {
     uid: doc.uid,
     title: doc.title ?? '',
-    canManage: canManageDocumentPermissions(doc),
+    // A version's `permissions` enricher repeats the live document's while the server refuses to
+    // modify it, so the enricher alone would offer editing on every version.
+    canManage: doc.isVersion !== true && canManageDocumentPermissions(doc),
     local,
     inherited,
     otherAcls,
