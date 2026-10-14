@@ -1,3 +1,11 @@
+@if (entry(); as contributed) {
+  <lib-extension-outlet
+    class="document-layout__contributed"
+    [attr.data-layout-entry]="contributed.id"
+    [componentId]="contributed.componentId ?? contributed.id"
+    [componentInputs]="entryInputs()"
+  />
+}
 @if (view(); as layout) {
   @if (layout.sections.length > 0) {
     <div

@@ -13,8 +13,10 @@ not a filter chip: it does nothing when clicked.
 ## Key features
 
 - **Nine colours**: `gray`, the default, plus the eight avatar colours.
-- **One line.** A label longer than the space it has is cut short with an ellipsis.
-- **Follows your theme.** Each colour is one of your Angular Material theme's colours. Set
+- **Never cut short.** A label longer than the space it has wraps onto a further line inside the
+  tag, as Web UI's tags do, rather than being cut off or spilling out of its box.
+- **Each name is its colour, in any theme.** The eight hues are the avatar's, blended with your theme's
+  surface and text at 4.5:1 or more; `gray` is your theme's neutral container. Set
   `--nxs-tag-<colour>-background` and `--nxs-tag-<colour>-foreground` to give a colour your own hue.
 - **Replaceable by ID.** It is registered as `nxs.primitives.tag`, so Satori's tag or your own can
   take its place.
@@ -45,10 +47,15 @@ needs no providers.
 `provideNxsComponents()` registers the tag as `nxs.primitives.tag`, exported as
 `NXS_PRIMITIVE_IDS.tag`:
 
+export const byIdHtml = `<lib-extension-outlet
+  [componentId]="tagId"
+  [componentInputs]="{ label: 'Invoice', color: 'purple' }"
+/>`;
+
 <Source
   language="html"
   dark
-  code={`<lib-extension-outlet [componentId]="tagId" [componentInputs]="{ label: 'Invoice', color: 'purple' }" />`}
+  code={byIdHtml}
 />
 
 ## Examples
@@ -64,8 +71,8 @@ the label must say what the tag means on its own.
 
 <Canvas of={TagStories.LongLabel} />
 
-When a label is cut short, the full text is not shown anywhere else. Keep labels short, or show the
-full text beside the tag.
+The label wraps inside the tag, so the whole text stays on screen. Keep labels short all the same:
+a tag that wraps takes more room in a row than one that does not.
 
 ### By registered ID
 
@@ -76,8 +83,8 @@ full text beside the tag.
 - **Name.** The tag is plain text: assistive technology reads the label. It has no role of its own.
 - **Colour.** A colour is never announced. Do not rely on it to carry meaning.
 - **Keyboard.** The tag is not interactive and takes no focus.
-- **Contrast.** Each colour pairs a theme container colour with its matching text colour. If you
-  set your own colours, check the contrast of the pair.
+- **Contrast.** Each colour's text holds 4.5:1 on its background in Material's light and dark themes.
+  If you set your own colours, check the contrast of the pair.
 
 ## Satori and the built-in tag
 
@@ -86,9 +93,9 @@ The same ID, `nxs.primitives.tag`, renders **Satori's category tag** when
 after `provideNxsComponents()`. Otherwise it renders the **built-in tag** shown on this page. Both
 take the same inputs and the same nine colour names.
 
-What looks different: Satori's tag uses Satori's own colours and type, one distinct hue per name.
-The built-in tag uses your Material theme's colours, so the names are labels rather than exact hues
-— `orange`, for example, is a light shade of your theme's primary colour.
+What looks different: both give each name its own hue, Satori's in Satori's shades and type, the
+built-in one blended with your Material theme's surface and text. A label longer than the space
+wraps in the built-in tag; Satori's stays on one line and spills out of a narrow box.
 
 This Storybook is built without access to GitHub Packages, so every example here shows the built-in
 tag. Satori's tag is shown in Satori's documentation.

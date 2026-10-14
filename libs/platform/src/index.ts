@@ -24,9 +24,10 @@
 /**
  * The entry point subpaths this package publishes, without the package name.
  *
- * Exported because it is checked: `platform-entry-points.spec.ts` asserts this
- * list against the `ng-package.json` files actually on disk, so it cannot drift
- * into documenting an entry point that does not ship — or omitting one that does.
+ * Exported because it is checked: `checkPlatformEntryPointsListed` in
+ * `scripts/review-guardrails.mjs` holds this list against the
+ * `libs/platform/<subpath>/ng-package.json` files on disk, both ways, so it cannot
+ * drift into documenting an entry point that does not ship — or omitting one that does.
  */
 export const PLATFORM_ENTRY_POINTS = Object.freeze([
   'app-config',

@@ -1,0 +1,147 @@
+:host {
+  --nxs-metadata-editor-heading: var(--mat-sys-on-surface);
+  --nxs-metadata-editor-label: var(--mat-sys-on-surface-variant);
+  --nxs-metadata-editor-divider: var(--mat-sys-outline-variant);
+  --nxs-metadata-editor-error: var(--mat-sys-error);
+  --nxs-metadata-editor-error-surface: var(--mat-sys-error-container);
+  --nxs-metadata-editor-on-error-surface: var(--mat-sys-on-error-container);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.nxs-metadata-editor__summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 4px;
+  background: var(--nxs-metadata-editor-error-surface);
+  color: var(--nxs-metadata-editor-on-error-surface);
+  font-size: 0.875rem;
+}
+
+.nxs-metadata-editor__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nxs-metadata-editor__tabs .nxs-metadata-editor__fields {
+  padding-top: 16px;
+}
+
+.nxs-metadata-editor__section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid var(--nxs-metadata-editor-divider);
+}
+
+.nxs-metadata-editor__heading {
+  margin: 0;
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--nxs-metadata-editor-heading);
+}
+
+.nxs-metadata-editor__field {
+  width: 100%;
+}
+
+.nxs-metadata-editor__group,
+.nxs-metadata-editor__item {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--nxs-metadata-editor-divider);
+  border-radius: 4px;
+
+  > legend {
+    padding: 0 4px;
+    font-size: 0.8125rem;
+    color: var(--nxs-metadata-editor-label);
+  }
+}
+
+.nxs-metadata-editor__remove,
+.nxs-metadata-editor__add {
+  align-self: flex-start;
+}
+
+// Scoped to the host: the theme's `.mat-typography p` margin outranks a single class.
+:host .nxs-metadata-editor__error {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--nxs-metadata-editor-error);
+}
+
+.nxs-metadata-editor__read-only {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nxs-metadata-editor__read-only-label {
+  font-size: 0.75rem;
+  color: var(--nxs-metadata-editor-label);
+}
+
+.nxs-metadata-editor__trigger-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.nxs-metadata-editor__vocabulary ::ng-deep .mat-mdc-select-trigger {
+  height: auto;
+  min-height: 24px;
+}
+
+// The select panel renders in the overlay container, outside this component's view.
+::ng-deep .mat-mdc-select-panel.nxs-vocabulary-panel {
+  display: flex;
+  flex-direction: column;
+  max-height: 320px;
+  overflow: hidden;
+  padding-top: 0;
+
+  .nxs-vocabulary-panel__search {
+    flex: 0 0 auto;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--mat-sys-outline-variant);
+  }
+
+  .nxs-vocabulary-panel__search input {
+    box-sizing: border-box;
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--mat-sys-outline);
+    border-radius: 4px;
+    font: inherit;
+    font-size: 0.875rem;
+    color: var(--mat-sys-on-surface);
+    background: var(--mat-sys-surface);
+  }
+
+  .nxs-vocabulary-panel__search input:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 1px;
+  }
+
+  .nxs-vocabulary-panel__list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+  }
+}
+
+::ng-deep .nxs-vocabulary-panel--grouped .mat-mdc-optgroup-label {
+  padding: 10px 16px 6px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}

@@ -1,7 +1,7 @@
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { expect, spyOn, waitFor } from 'storybook/test';
+import { expect, spyOn, waitFor, within } from 'storybook/test';
 
 import { provideStoryRouter } from '../../../.storybook/story-router';
 import { NXS_PRIMITIVE_IDS } from '../primitives';
@@ -68,16 +68,55 @@ export const PlainLinks: Story = {
 
 export const SingleItem: Story = { args: { items: [{ label: 'Domain' }] } };
 
-/** A long trail wraps; Satori's implementation collapses the middle into a menu instead. */
+const LONG_TRAIL = [
+  'Domain',
+  'Workspaces',
+  'Legal',
+  'Contracts',
+  '2026',
+  'Q3',
+  'Suppliers',
+  'Acme',
+].map((label, index, all) =>
+  index === all.length - 1 ? { label } : { label, routerLink: ['/browse'], queryParams: { index } },
+);
+
+/** A long trail in a wide box: every item shows, on one line. */
 export const LongTrail: Story = {
-  args: {
-    items: ['Domain', 'Workspaces', 'Legal', 'Contracts', '2026', 'Q3', 'Suppliers', 'Acme'].map(
-      (label, index, all) =>
-        index === all.length - 1
-          ? { label }
-          : { label, routerLink: ['/browse'], queryParams: { index } },
-    ),
+  args: { items: LONG_TRAIL },
+};
+
+/**
+ * The same trail in a 360-pixel box: the items after the first fold into "…", furthest from the
+ * current page first, and the menu lists them in order.
+ */
+export const CollapsedTrail: Story = {
+  args: { items: LONG_TRAIL },
+  render: (args) => ({
+    props: args,
+    template: `<div style="width: 360px"><nxs-breadcrumbs [items]="items" [label]="label" /></div>`,
+  }),
+  play: async ({ canvas, userEvent }) => {
+    const more = await canvas.findByRole('button', { name: 'Show more breadcrumbs' });
+    await expect(canvas.getByRole('link', { name: 'Domain' })).toBeVisible();
+    await expect(within(canvas.getByRole('navigation')).getByText('Acme')).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await userEvent.click(more);
+    const menu = within(canvas.getByRole('link', { name: 'Domain' }).ownerDocument.body);
+    const workspaces = await menu.findByRole('menuitem', { name: 'Workspaces' });
+    await waitFor(() => expect(workspaces).toBeVisible());
   },
+};
+
+/** In a 120-pixel box only "…" and the current page remain, the page's name cut short. */
+export const VeryNarrow: Story = {
+  args: { items: LONG_TRAIL },
+  render: (args) => ({
+    props: args,
+    template: `<div style="width: 120px"><nxs-breadcrumbs [items]="items" [label]="label" /></div>`,
+  }),
 };
 
 /** Rendered by ID, the way a screen resolves `nxs.primitives.breadcrumbs`. */

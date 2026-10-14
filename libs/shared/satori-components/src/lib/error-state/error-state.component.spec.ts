@@ -15,6 +15,7 @@ import { type NxsErrorStatus, nxsErrorStatus } from './error-status';
       [heading]="heading()"
       [headingLevel]="level()"
       [retryable]="retryable()"
+      [retryHandler]="handler()"
       (retry)="retries = retries + 1"
     >
       @if (projected()) {
@@ -29,6 +30,7 @@ class HostComponent {
   readonly level = signal<NxsHeadingLevel>(2);
   readonly retryable = signal(false);
   readonly projected = signal(false);
+  readonly handler = signal<(() => void) | null>(null);
   retries = 0;
 }
 
@@ -103,13 +105,16 @@ describe('NxsErrorStateComponent', () => {
     expect(text('.nxs-error-state__message')).toContain('You do not have permission to see this.');
   });
 
-  it("falls back to the variant's heading when the host's is only whitespace", async () => {
-    host.status.set(404);
-    host.heading.set(' \n\t ');
-    await render();
+  it.each([' \n\t ', '\u200b', '\u200b\u200d'])(
+    "falls back to the variant's heading when the host's is only whitespace or zero-width characters (%j)",
+    async (blank) => {
+      host.status.set(404);
+      host.heading.set(blank);
+      await render();
 
-    expect(heading()?.textContent?.trim()).toBe('Not found');
-  });
+      expect(heading()?.textContent?.trim()).toBe('Not found');
+    },
+  );
 
   it('renders the heading as an h2 by default', () => {
     expect(heading()?.tagName).toBe('H2');
@@ -134,6 +139,17 @@ describe('NxsErrorStateComponent', () => {
     const button = retryButton();
     expect(button).toBeDefined();
     button?.click();
+    expect(host.retries).toBe(1);
+  });
+
+  it('calls the retry handler a host rendering it by ID passes, then emits retry', async () => {
+    const calls: string[] = [];
+    host.retryable.set(true);
+    host.handler.set(() => calls.push(`handler after ${host.retries} retries`));
+    await render();
+
+    retryButton()?.click();
+    expect(calls).toEqual(['handler after 0 retries']);
     expect(host.retries).toBe(1);
   });
 

@@ -918,6 +918,94 @@ for (const [variant, source] of [
   expectGreen(`[H] a @Component ${variant}`, library({ 'src/lib/claims/claims.ts': source }), ONE);
 }
 
+// `component()` writes the decorator and the class only. Each fixture states the import it relies
+// on — `ANGULAR`, or the deliberate alternative a control below is about — because the guardrail
+// accepts `Component` only as `@angular/core` binds it, by value; nothing is assumed for a fixture.
+const NOT_ANGULAR = /decorates with a `@Component` not imported from '@angular\/core'/;
+for (const [variant, source, reason] of [
+  [
+    'imported from another package',
+    "import { Component } from '@acme/not-angular';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+  ['that no import binds', component('AcmeClaimsComponent', 'acme-claims'), NOT_ANGULAR],
+  [
+    'imported from an @angular/core subpath',
+    "import { Component } from '@angular/core/testing';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+  [
+    'from a type-only import',
+    "import type { Component } from '@angular/core';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+  [
+    'from an inline type-only import',
+    "import { type Component } from '@angular/core';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+  [
+    'whose Angular import is commented out, beside another package’s',
+    "// import { Component } from '@angular/core';\n/* import { Component } from '@angular/core'; */\n" +
+      "import { Component } from '@acme/ui';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+  [
+    "that is Angular's Directive renamed to Component",
+    "import { Directive as Component } from '@angular/core';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+  [
+    "through another package's namespace",
+    "import * as ng from '@acme/ng';\n" +
+      component('AcmeClaimsComponent', 'acme-claims').replace('@Component', '@ng.Component'),
+    NOT_ANGULAR,
+  ],
+  [
+    'through a type-only namespace import of @angular/core',
+    "import type * as ng from '@angular/core';\n" +
+      component('AcmeClaimsComponent', 'acme-claims').replace('@Component', '@ng.Component'),
+    NOT_ANGULAR,
+  ],
+  [
+    'from a default import of @angular/core',
+    "import Component from '@angular/core';\n" + component('AcmeClaimsComponent', 'acme-claims'),
+    NOT_ANGULAR,
+  ],
+]) {
+  expectRed(
+    `[H2] a @Component ${variant}`,
+    library({ 'src/lib/claims/claims.ts': source }),
+    reason,
+  );
+}
+
+for (const [variant, source] of [
+  [
+    'imported with double quotes',
+    'import { Component } from "@angular/core";\n' +
+      component('AcmeClaimsComponent', 'acme-claims'),
+  ],
+  [
+    'imported across lines with other names',
+    "import {\n  ChangeDetectionStrategy,\n  Component,\n  input,\n} from '@angular/core';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+  ],
+  [
+    'imported beside an inline type-only name',
+    "import { Component, type OnInit } from '@angular/core';\n" +
+      component('AcmeClaimsComponent', 'acme-claims'),
+  ],
+]) {
+  expectGreen(`[H2] a @Component ${variant}`, library({ 'src/lib/claims/claims.ts': source }), ONE);
+}
+
 expectRed(
   '[H] a @Directive is not a component',
   library({
@@ -1080,6 +1168,34 @@ for (const [variant, claims] of [
 ]) {
   expectGreen(`[K] an override implementing the contract with ${variant}`, tagOverride(claims));
 }
+
+const errorStateOverride = (claims) =>
+  library({
+    'src/lib/extensions.ts': withComponents(
+      `components: { 'nxs.primitives.errorState': ${lazyTo('./claims/claims')} },`,
+    ),
+    'src/lib/claims/claims.ts': claims,
+    'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.errorState'),
+  });
+
+expectGreen(
+  '[K] an error-state override implementing NxsErrorStateInputs',
+  errorStateOverride(
+    "import type { NxsErrorStateInputs } from '@nuxeo-satori/platform/components';\n" +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements NxsErrorStateInputs'),
+  ),
+);
+
+expectRed(
+  '[K] an error-state override implementing another primitive’s contract',
+  errorStateOverride(
+    TAG_CONTRACT +
+      ANGULAR +
+      component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
+  ),
+  /does not implement `NxsErrorStateInputs` from '@nuxeo-satori\/platform\/components'/,
+);
 
 expectRed(
   '[K] an override implementing a same-named interface from another platform entry point',

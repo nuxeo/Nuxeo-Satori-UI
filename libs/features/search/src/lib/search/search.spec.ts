@@ -11,6 +11,7 @@ import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
 import { SearchComponent } from './search';
+import { SearchSession } from '../search-session/search-session';
 import {
   DocumentDetailService,
   type SearchResultItem,
@@ -36,7 +37,22 @@ const mockSearchService = {
     (_request?: Record<string, unknown>): Observable<Record<string, unknown>> => of({ id: 'ss-1' }),
   ),
   updateSavedSearch: vi.fn((): Observable<Record<string, unknown>> => of({ id: 'ss-1' })),
+  renameSavedSearch: vi.fn((): Observable<Record<string, unknown>> => of({ id: 'ss-1' })),
   deleteSavedSearch: vi.fn((): Observable<void> => of(undefined)),
+  getSavedSearchById: vi.fn((): Observable<Record<string, string>> => of({})),
+};
+
+/** A saved search's params with no filter set: every parameter written, empty. */
+const EMPTY_SAVED_PARAMS: Record<string, string> = {
+  ecm_fulltext: '',
+  dc_modified_agg: '[]',
+  dc_creator_agg: '[]',
+  ecm_collections: '[]',
+  ecm_tags: '[]',
+  dc_nature_agg: '[]',
+  dc_subjects_agg: '[]',
+  dc_coverage_agg: '[]',
+  common_size_agg: '[]',
 };
 
 const mockSearchAggregationService = {
@@ -410,14 +426,19 @@ describe('SearchComponent', () => {
   });
 
   describe('deleteSelected', () => {
-    it('should call SelectionService.deleteSelected and navigate on success', () => {
-      const navigateSpy = vi.spyOn(component['router'], 'navigate');
+    it('deletes through SelectionService and runs the same search again, so the rows leave', async () => {
+      await fixture.whenStable();
+      const before = mockSearchService.search.mock.calls.length;
       mockSelectionService.deleteSelected.mockReturnValue(of(undefined));
 
       component.deleteSelected();
+      await fixture.whenStable();
 
       expect(mockSelectionService.deleteSelected).toHaveBeenCalled();
-      expect(navigateSpy).toHaveBeenCalled();
+      expect(mockSearchService.search.mock.calls).toHaveLength(before + 1);
+      expect(mockSearchService.search.mock.calls.at(-1)?.[0]).toEqual(
+        mockSearchService.search.mock.calls[before - 1][0],
+      );
     });
   });
 
@@ -803,14 +824,18 @@ describe('SearchComponent', () => {
       /**
        * The other half, and the reason the two flags are separate.
        *
-       * `loading` belongs to the standard `results$` pipeline. When `runNxqlQuery` shared it,
+       * `loading` belongs to the standard search `SearchSession` runs. When `runNxqlQuery` shared it,
        * `supersedeAiRequest` had to clear it — and that clear could land while a *standard* search was
        * still in flight. Every view mode is gated on `!busy()`, so the spinner disappeared and the
        * PREVIOUS results rendered as if they were current.
        */
-      it('does not release loading owned by an in-flight standard search', () => {
-        // A standard search is running: the `results$` pipeline sets this on every route/filter change.
-        component.loading.set(true);
+      it('does not release loading owned by an in-flight standard search', async () => {
+        // A standard search is running: the session sets loading on every route/filter change.
+        const pending = new Subject<SearchResponseLike>();
+        mockSearchService.search.mockReturnValue(pending.asObservable());
+        mockSearchAggregationService.drawerFilters.set({ ecm_fulltext: 'contract' });
+        await fixture.whenStable();
+        expect(component.loading()).toBe(true);
 
         // The user exits AI mode, or starts another AI search, while that request is still going.
         component.aiSearchMode.set(true);
@@ -820,16 +845,20 @@ describe('SearchComponent', () => {
         expect(component.busy()).toBe(true);
       });
 
-      it('reports busy while either request is in flight', () => {
-        component.loading.set(false);
+      it('reports busy while either request is in flight', async () => {
+        await fixture.whenStable();
         component.aiNxqlLoading.set(false);
+        expect(component.loading()).toBe(false);
         expect(component.busy()).toBe(false);
 
         component.aiNxqlLoading.set(true);
         expect(component.busy()).toBe(true);
 
         component.aiNxqlLoading.set(false);
-        component.loading.set(true);
+        const pending = new Subject<SearchResponseLike>();
+        mockSearchService.search.mockReturnValue(pending.asObservable());
+        mockSearchAggregationService.drawerFilters.set({ ecm_fulltext: 'contract' });
+        await fixture.whenStable();
         expect(component.busy()).toBe(true);
       });
     });
@@ -959,10 +988,10 @@ describe('SearchComponent', () => {
   });
   describe('the results pipeline', () => {
     /**
-     * `results$` combines the route's query params with the drawer's filter signal, builds a
-     * request, and fans the response out into three places. Driven through the real pipeline
-     * rather than by setting `results` directly, because the request-building and the fan-out
-     * are the parts that carry risk.
+     * The page hands its URL's quick filters and sort to `SearchSession`, which combines them with
+     * the drawer's filters, sends the one request and fans the response out into three places.
+     * Driven through the real session rather than by setting `results` directly, because the
+     * request-building and the fan-out are the parts that carry risk.
      */
     it('publishes items, aggregations and favourites from one response', async () => {
       const items = [resultItem({ id: 'a', isFavorite: true }), resultItem({ id: 'b' })];
@@ -975,8 +1004,8 @@ describe('SearchComponent', () => {
       await fixture.whenStable();
 
       expect(component.results().map((i) => i.id)).toEqual(['a', 'b']);
-      // Aggregations and items are pushed to the shared service so the filters drawer can
-      // render facet counts without issuing its own query.
+      // Aggregations and items are published to the shared service, which the drawer's queue
+      // reads; the drawer's counts come from the same response, with no query of its own.
       expect(mockSearchAggregationService.aggregations()).toEqual({
         dc_creator: { buckets: [] },
       });
@@ -1110,8 +1139,8 @@ describe('SearchComponent', () => {
       // Trimmed, and empty/whitespace-only filters omitted entirely rather than sent as ''.
       // An empty string is a value the server would filter on.
       expect(request['q']).toBe('hello');
-      expect(request['author']).toBe('alice');
-      expect(request['size']).toBe('large');
+      expect(request['author']).toBe('["alice"]');
+      expect(request['size']).toBe('["large"]');
       expect('tag' in request).toBe(false);
       expect('nature' in request).toBe(false);
     });
@@ -1295,113 +1324,115 @@ describe('SearchComponent', () => {
     beforeEach(() => {
       mockSearchAggregationService.selectedSavedSearchId.set('');
       mockSearchAggregationService.selectedSavedSearchTitle.set('');
+      mockSearchService.saveSavedSearch.mockReturnValue(of({ id: 'ss-1' }));
+      mockSearchService.updateSavedSearch.mockReturnValue(of({ id: 'ss-1' }));
+      mockSearchService.renameSavedSearch.mockReturnValue(of({ id: 'ss-1' }));
+      mockSearchService.deleteSavedSearch.mockReturnValue(of(undefined));
     });
 
-    it('saves a new search under the entered title', () => {
+    it('saves a new search under the entered name, in the parameters default_search reads', () => {
       mockDialog.open.mockReturnValue({ afterClosed: () => of('  My Search  ') });
-      // `readSavedSearchId` reads `id`, not `uid`: a saved search is a directory entry rather
-      // than a document, so it carries no `uid`.
       mockSearchService.saveSavedSearch.mockReturnValue(of({ id: 'ss-9', title: 'My Search' }));
-
-      component.openSaveAsDialog();
-
-      // Trimmed before it reaches the server.
-      expect(mockSearchService.saveSavedSearch).toHaveBeenCalledWith(
-        expect.objectContaining({ title: 'My Search', pageProviderName: 'default_search' }),
-      );
-      expect(mockSearchAggregationService.selectedSavedSearchId()).toBe('ss-9');
-      expect(mockSearchAggregationService.markSavedSearchDirty).toHaveBeenCalled();
-    });
-
-    it('trims filter values and excludes empty ones when saving search', () => {
-      mockDialog.open.mockReturnValue({ afterClosed: () => of('Test Search') });
-      mockSearchService.saveSavedSearch.mockReturnValue(of({ id: 'ss-10', title: 'Test Search' }));
       mockSearchAggregationService.drawerFilters.set({
-        dc_creator: '  admin  ',
-        dc_title: '',
-        path: '   ',
-        dc_modified: 'today',
+        ecm_fulltext: 'contract',
+        subjects: 'art,art/cinema',
+        size: 'tiny',
       });
 
-      component.openSaveAsDialog();
+      component.onSaveAs();
 
-      // saveSavedSearch is called with params that have been trimmed
-      expect(mockSearchService.saveSavedSearch).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Test Search',
-          params: expect.objectContaining({
-            dc_creator: 'admin',
-            dc_modified: 'today',
-          }),
-        }),
-      );
-      // Verify empty/whitespace values were excluded
-      const savedCall = mockSearchService.saveSavedSearch.mock.calls[0][0] as unknown as Record<
-        string,
-        Record<string, unknown>
-      >;
-      expect(savedCall['params']['dc_title']).toBeUndefined();
-      expect(savedCall['params']['path']).toBeUndefined();
+      // Trimmed before it reaches the server, and under the page provider's own parameter names:
+      // `subjects` and `size` are refused by the server, which maps them onto document fields.
+      expect(mockSearchService.saveSavedSearch).toHaveBeenCalledWith({
+        title: 'My Search',
+        pageProviderName: 'default_search',
+        params: {
+          ...EMPTY_SAVED_PARAMS,
+          ecm_fulltext: 'contract',
+          dc_subjects_agg: '["art","art/cinema"]',
+          common_size_agg: '["tiny"]',
+        },
+      });
+      expect(mockSearchAggregationService.selectedSavedSearchId()).toBe('ss-9');
+      expect(mockSearchAggregationService.selectedSavedSearchTitle()).toBe('My Search');
+      expect(mockSearchAggregationService.markSavedSearchDirty).toHaveBeenCalled();
+      expect(toast.show).toHaveBeenCalledWith('Search "My Search" saved.');
     });
 
-    it('does not save when the dialog is dismissed or the title is blank', () => {
+    it('does not save when the dialog is dismissed or the name is blank', () => {
       mockDialog.open.mockReturnValue({ afterClosed: () => of('   ') });
-      component.openSaveAsDialog();
-      expect(mockSearchService.saveSavedSearch).not.toHaveBeenCalled();
-
+      component.onSaveAs();
       mockDialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
-      component.openSaveAsDialog();
+      component.onSaveAs();
       expect(mockSearchService.saveSavedSearch).not.toHaveBeenCalled();
     });
 
-    it('warns and keeps the selection when saving fails', () => {
+    it('reports a failed save and opens nothing', () => {
       mockDialog.open.mockReturnValue({ afterClosed: () => of('Name') });
-      mockSearchService.saveSavedSearch.mockReturnValue(throwError(() => new Error('409')));
+      mockSearchService.saveSavedSearch.mockReturnValue(throwError(() => ({ status: 500 })));
 
-      component.openSaveAsDialog();
+      component.onSaveAs();
 
       expect(mockSearchAggregationService.selectedSavedSearchId()).toBe('');
+      expect(toast.error).toHaveBeenCalledWith('Failed to save search.', { duration: 5000 });
     });
 
-    it('reports whether a saved search is selected', () => {
-      expect(component.hasSelectedSavedSearch()).toBe(false);
-      mockSearchAggregationService.selectedSavedSearchId.set('  ss-1  ');
-      expect(component.hasSelectedSavedSearch()).toBe(true);
+    it('saves the changed filters into the open saved search', () => {
+      mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
+      mockSearchAggregationService.selectedSavedSearchTitle.set('Mine');
+      mockSearchAggregationService.drawerFilters.set({ ecm_fulltext: 'invoice' });
+
+      component.onSave();
+
+      expect(mockSearchService.updateSavedSearch).toHaveBeenCalledWith('ss-1', {
+        title: 'Mine',
+        params: { ...EMPTY_SAVED_PARAMS, ecm_fulltext: 'invoice' },
+        pageProviderName: 'default_search',
+      });
+      expect(toast.show).toHaveBeenCalledWith('Search "Mine" updated.');
     });
 
-    it('renames the selected saved search', () => {
+    it('renames without sending filters, so the stored ones are kept', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
       mockSearchAggregationService.selectedSavedSearchTitle.set('Old');
-      mockDialog.open.mockReturnValue({ afterClosed: () => of('New') });
-      mockSearchService.updateSavedSearch.mockReturnValue(of({ id: 'ss-1' }));
+      mockSearchAggregationService.drawerFilters.set({ ecm_fulltext: 'unsaved change' });
+      let initial: unknown;
+      mockDialog.open.mockImplementation((...args: unknown[]) => {
+        initial = (args[1] as { data?: { initialValue?: string } })?.data?.initialValue;
+        return { afterClosed: () => of(' New ') };
+      });
 
-      component.onEditSelectedSavedSearch();
+      component.onRename();
 
-      expect(mockSearchService.updateSavedSearch).toHaveBeenCalledWith(
+      expect(initial).toBe('Old');
+      expect(mockSearchService.renameSavedSearch).toHaveBeenCalledWith(
         'ss-1',
-        expect.objectContaining({ title: 'New' }),
+        'New',
+        'default_search',
       );
+      expect(mockSearchService.updateSavedSearch).not.toHaveBeenCalled();
       expect(mockSearchAggregationService.selectedSavedSearchTitle()).toBe('New');
     });
 
-    it('does not rename when nothing is selected', () => {
-      mockSearchAggregationService.selectedSavedSearchId.set('');
-      component.onEditSelectedSavedSearch();
-      expect(mockDialog.open).not.toHaveBeenCalled();
+    it('does nothing to rename with no saved search open', () => {
+      mockDialog.open.mockReturnValue({ afterClosed: () => of('New') });
+      component.onRename();
+      expect(mockSearchService.renameSavedSearch).not.toHaveBeenCalled();
     });
 
-    it('keeps the old title when the rename request fails', () => {
+    it('keeps the old title and says so when the rename fails', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
       mockSearchAggregationService.selectedSavedSearchTitle.set('Old');
       mockDialog.open.mockReturnValue({ afterClosed: () => of('New') });
-      mockSearchService.updateSavedSearch.mockReturnValue(throwError(() => new Error('500')));
+      mockSearchService.renameSavedSearch.mockReturnValue(throwError(() => ({ status: 403 })));
 
-      component.onEditSelectedSavedSearch();
+      component.onRename();
 
       expect(mockSearchAggregationService.selectedSavedSearchTitle()).toBe('Old');
+      expect(toast.error).toHaveBeenCalledWith('Failed to update search.', { duration: 5000 });
     });
 
-    it('opens the share dialog for the selected saved search', () => {
+    it('opens the share dialog for the open saved search', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
       mockSearchAggregationService.selectedSavedSearchTitle.set('  ');
       let captured: { title?: string; id?: string } | undefined;
@@ -1410,50 +1441,65 @@ describe('SearchComponent', () => {
         return { afterClosed: () => of(undefined) };
       });
 
-      component.onShareSelectedSavedSearch();
+      component.onShare();
 
       // Falls back to a generic label rather than sharing a blank-titled search.
       expect(captured?.title).toBe('Saved Search');
       expect(captured?.id).toBe('ss-1');
     });
 
-    it('does not open the share dialog with nothing selected', () => {
+    it('does not open the share dialog with nothing open', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('   ');
-      component.onShareSelectedSavedSearch();
+      component.onShare();
       expect(mockDialog.open).not.toHaveBeenCalled();
     });
 
-    it('deletes the selected saved search after confirmation and clears the selection', () => {
+    it('deletes the open saved search after confirmation, and clears its filters', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
       mockSearchAggregationService.selectedSavedSearchTitle.set('Doomed');
+      mockSearchAggregationService.drawerFilters.set({ ecm_fulltext: 'doomed' });
       mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      mockSearchService.deleteSavedSearch.mockReturnValue(of(undefined));
 
-      component.onDeleteSelectedSavedSearch();
+      component.onDelete();
 
       expect(mockSearchService.deleteSavedSearch).toHaveBeenCalledWith('ss-1');
       expect(mockSearchAggregationService.selectedSavedSearchId()).toBe('');
       expect(mockSearchAggregationService.selectedSavedSearchTitle()).toBe('');
+      expect(mockSearchAggregationService.drawerFilters()).toEqual({});
+      expect(mockSearchAggregationService.markSavedSearchDirty).toHaveBeenCalled();
     });
 
     it('does not delete when the confirmation is dismissed', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
       mockDialog.open.mockReturnValue({ afterClosed: () => of(false) });
 
-      component.onDeleteSelectedSavedSearch();
+      component.onDelete();
 
       expect(mockSearchService.deleteSavedSearch).not.toHaveBeenCalled();
       expect(mockSearchAggregationService.selectedSavedSearchId()).toBe('ss-1');
     });
 
-    it('keeps the selection when the delete request fails', () => {
+    it('keeps the selection and says so when the delete fails', () => {
       mockSearchAggregationService.selectedSavedSearchId.set('ss-1');
       mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      mockSearchService.deleteSavedSearch.mockReturnValue(throwError(() => new Error('500')));
+      mockSearchService.deleteSavedSearch.mockReturnValue(throwError(() => ({ status: 500 })));
 
-      component.onDeleteSelectedSavedSearch();
+      component.onDelete();
 
       expect(mockSearchAggregationService.selectedSavedSearchId()).toBe('ss-1');
+      expect(toast.error).toHaveBeenCalledWith('Could not delete the saved search.', {
+        duration: 5000,
+      });
+    });
+
+    it('offers Save only once the open saved search has changed', async () => {
+      mockSearchService.getSavedSearchById.mockReturnValue(of({ ecm_fulltext: 'invoice' }));
+      const session = TestBed.inject(SearchSession);
+      session.openSavedSearch('ss-1', 'Mine').subscribe();
+      expect(component.savedSearchDirty()).toBe(false);
+
+      mockSearchAggregationService.drawerFilters.set({ ecm_fulltext: 'invoice', size: 'tiny' });
+      expect(component.savedSearchDirty()).toBe(true);
     });
   });
 

@@ -1,19 +1,27 @@
 /**
- * NXENG-773 / IBM 247628794 — the document-detail details-panel toggle must show a keyboard
- * focus indicator (WCAG 2.1 SC 2.4.7). Material `mat-icon-button` suppresses the default ring
- * and there is no global `:focus-visible` fallback in `styles.scss`.
+ * NXSAT-544 / IBM 2834597055 (NXENG-773 / IBM 247628794) — the document-detail details-panel
+ * toggle must show a keyboard focus indicator (WCAG 2.1 SC 2.4.7). Material `mat-icon-button`
+ * suppresses the default ring and there is no global `:focus-visible` fallback in `styles.scss`.
  *
  * Same IBM `style_focus_visible` constraints as NXENG-872 / NXENG-775: standalone `:focus`
  * selector on the focused control. Contrast is measured against the rendered
- * `.detail-tabs .mat-mdc-tab-header` background from production SCSS, not a duplicated colour.
+ * `.detail-tabs .mat-mdc-tab-header` background — `nxs-tabs` painted with the tokens document-detail.scss
+ * sets — not a duplicated colour.
+ *
+ * Source-level selector contract: `document-detail-panel-toggle-focus-ring.spec.ts`.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatTabsModule } from '@angular/material/tabs';
+import { MatTooltipModule } from '@angular/material/tooltip';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
+import {
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  type NxsTab,
+} from '@nuxeo-satori/platform/components';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -38,7 +46,7 @@ function rgb(css: string): [number, number, number] {
   return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
 }
 
-/** Background painted by `.detail-tabs ::ng-deep .mat-mdc-tab-header` in document-detail.scss. */
+/** Background `nxs-tabs` paints from the `--nxs-tabs-header-surface` document-detail.scss sets. */
 function productionTabHeaderBackground(host: HTMLElement): string {
   const header = host.querySelector('.detail-tabs .mat-mdc-tab-header');
   expect(header)
@@ -53,16 +61,34 @@ function productionTabHeaderBackground(host: HTMLElement): string {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatTabsModule, TranslateModule],
+  imports: [
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule,
+    NxsTabBodyDirective,
+    NxsTabsComponent,
+    TranslateModule,
+  ],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
+    '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-toggle-focus.scss',
     './panel-toggle-focus-ring.fixture.scss',
   ],
   templateUrl: './panel-toggle-focus-ring.spec.html',
 })
-class PanelToggleFocusHostComponent {}
+class PanelToggleFocusHostComponent {
+  readonly tabs: readonly NxsTab[] = [{ id: 'app.tabs.view', label: 'View' }];
+  /** Matches production default: properties panel visible on first paint. */
+  readonly propertiesPanelOpen = signal(true);
 
-describe('Document detail panel toggle — keyboard focus indicator (NXENG-773)', () => {
+  detailsPanelToggleLabelKey(): 'document-detail.hide-details' | 'document-detail.show-details' {
+    return this.propertiesPanelOpen()
+      ? 'document-detail.hide-details'
+      : 'document-detail.show-details';
+  }
+}
+
+describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)', () => {
   let originalTheme: string | null;
 
   beforeEach(async () => {
@@ -91,6 +117,8 @@ describe('Document detail panel toggle — keyboard focus indicator (NXENG-773)'
     fixture.detectChanges();
     await fixture.whenStable();
     const button = fixture.nativeElement.querySelector('.panel-toggle-btn') as HTMLButtonElement;
+    expect(button.getAttribute('aria-label')).toBe('Hide details');
+    expect(button.getAttribute('aria-label')).not.toBe('Toggle details panel');
     return { fixture, button };
   }
 
@@ -101,6 +129,20 @@ describe('Document detail panel toggle — keyboard focus indicator (NXENG-773)'
       document.documentElement.setAttribute('data-app-theme', theme);
     }
   }
+
+  it('exposes the production show/hide details accessible name (not the retired toggle key)', async () => {
+    const { fixture, button } = await mount();
+    try {
+      expect(button.getAttribute('aria-label')).toBe('Hide details');
+      fixture.componentInstance.propertiesPanelOpen.set(false);
+      fixture.detectChanges();
+      await fixture.whenStable();
+      expect(button.getAttribute('aria-label')).toBe('Show details');
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
 
   it('draws no outline while unfocused', async () => {
     const { fixture, button } = await mount();
@@ -122,6 +164,22 @@ describe('Document detail panel toggle — keyboard focus indicator (NXENG-773)'
       expect(style.outlineStyle).toBe('solid');
       expect(style.outlineWidth).toBe('2px');
       expect(style.outlineOffset).toBe('2px');
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible)', async () => {
+    const { fixture, button } = await mount();
+    try {
+      button.focus({ focusVisible: false } as FocusOptions);
+      expect(button.matches(':focus')).toBe(true);
+      expect(button.matches(':focus-visible')).toBe(false);
+
+      const style = getComputedStyle(button);
+      expect(style.outlineStyle).toBe('solid');
+      expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
     } finally {
       button.blur();
       fixture.nativeElement.remove();

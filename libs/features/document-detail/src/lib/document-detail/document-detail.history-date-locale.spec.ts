@@ -20,7 +20,11 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { beforeAll, describe, expect, it } from 'vitest';
 
-const templatePath = join(dirname(fileURLToPath(import.meta.url)), 'document-detail.html');
+/** The History tab is `nxs-document-history`; its table is the template that formats the date. */
+const templatePath = join(
+  dirname(fileURLToPath(import.meta.url)),
+  '../../../../../shared/satori-components/src/lib/document-history/document-history.component.html',
+);
 
 /** The `date:` argument on the History table's `eventDate` cell, exactly as the template has it. */
 function eventDateFormatExpression(): string {
@@ -50,15 +54,14 @@ describe('Document detail History date column locale (NXSAT-628)', () => {
     expect(expression, 'the format must be a quoted literal').toMatch(/^'[a-zA-Z]+'$/);
   });
 
-  it('renders the French long date in French and the en-US long date in English', () => {
+  it('renders day and time in French order in French and in English order in English', () => {
     const format = eventDateFormatExpression().replace(/^'|'$/g, '');
     const when = new Date(Date.UTC(2026, 9, 12, 12, 0, 0));
 
-    // French puts the day first and uses no comma. The defect rendered `octobre 12, 2026`.
-    expect(formatDate(when, format, 'fr', 'UTC')).toBe('12 octobre 2026');
+    // French puts the day first. The defect rendered the English order with a French month.
+    expect(formatDate(when, format, 'fr', 'UTC')).toBe('12 oct. 2026, 12:00:00');
 
-    // The English rendering is unchanged by the fix — `longDate` is en-US's `MMMM d, y`,
-    // which is what the deleted catalogue value spelled out by hand.
-    expect(formatDate(when, format, 'en-US', 'UTC')).toBe('October 12, 2026');
+    // An audit entry needs its time as well as its day, as Web UI's audit table shows it.
+    expect(formatDate(when, format, 'en-US', 'UTC')).toBe('Oct 12, 2026, 12:00:00 PM');
   });
 });

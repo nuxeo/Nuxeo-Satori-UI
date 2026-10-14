@@ -1,0 +1,432 @@
+@if (submitted() && invalidCount() > 0) {
+  <div class="nxs-metadata-editor__summary" role="alert" [id]="id + '-summary'">
+    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <span class="nxs-metadata-editor__summary-text">
+      @if (invalidCount() === 1) {
+        {{ 'satori-components.metadata-editor.summary-one' | translate }}
+      } @else {
+        {{
+          'satori-components.metadata-editor.summary-other' | translate: { count: invalidCount() }
+        }}
+      }
+    </span>
+  </div>
+}
+
+@if (standardFields().length) {
+  <div class="nxs-metadata-editor__fields">
+    @for (field of standardFields(); track field.xpath) {
+      @if (controlFor(field); as control) {
+        <ng-container
+          [ngTemplateOutlet]="fieldTemplate"
+          [ngTemplateOutletContext]="{
+            $implicit: field,
+            control: control,
+            depth: 0,
+            path: field.xpath,
+          }"
+        />
+      }
+    }
+  </div>
+}
+
+@if (display() === 'tabs' && typeSections().length) {
+  <nxs-tabs
+    class="nxs-metadata-editor__tabs"
+    [tabs]="tabs()"
+    [label]="tabsLabel() || ('satori-components.metadata-editor.sections' | translate)"
+    [selectedIndex]="selectedTab()"
+    (selectedIndexChange)="selectTab($event)"
+  >
+    <ng-template nxsTabBody let-tab>
+      @for (section of typeSections(); track section.id) {
+        @if (section.id === tab.id) {
+          <div class="nxs-metadata-editor__fields">
+            @for (field of section.fields; track field.xpath) {
+              @if (controlFor(field); as control) {
+                <ng-container
+                  [ngTemplateOutlet]="fieldTemplate"
+                  [ngTemplateOutletContext]="{
+                    $implicit: field,
+                    control: control,
+                    depth: 0,
+                    path: field.xpath,
+                  }"
+                />
+              }
+            }
+          </div>
+        }
+      }
+    </ng-template>
+  </nxs-tabs>
+} @else {
+  @for (section of typeSections(); track section.id) {
+    <section
+      class="nxs-metadata-editor__section"
+      [attr.aria-labelledby]="section.heading ? id + '-' + section.id : null"
+    >
+      @if (section.heading) {
+        <div
+          class="nxs-metadata-editor__heading"
+          role="heading"
+          [attr.aria-level]="headingLevel()"
+          [id]="id + '-' + section.id"
+        >
+          {{ section.heading }}
+        </div>
+      }
+      <div class="nxs-metadata-editor__fields">
+        @for (field of section.fields; track field.xpath) {
+          @if (controlFor(field); as control) {
+            <ng-container
+              [ngTemplateOutlet]="fieldTemplate"
+              [ngTemplateOutletContext]="{
+                $implicit: field,
+                control: control,
+                depth: 0,
+                path: field.xpath,
+              }"
+            />
+          }
+        }
+      </div>
+    </section>
+  }
+}
+
+<ng-template #fieldTemplate let-field let-control="control" let-depth="depth" let-path="path">
+  @let label = field.labelKey ? (field.labelKey | translate) : field.label;
+  @let definition = field.definition;
+  @let error = errorOf(control);
+  @switch (kindOf(definition, depth)) {
+    @case ('text') {
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="nxs-metadata-editor__field"
+      >
+        <mat-label>{{ label }}</mat-label>
+        @if (field.multiline) {
+          <textarea
+            matInput
+            rows="2"
+            [formControl]="asControl(control)"
+            [required]="isRequired(definition)"
+            [errorStateMatcher]="errorMatcher"
+            [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
+            [attr.data-xpath]="path"
+          ></textarea>
+        } @else {
+          <input
+            matInput
+            type="text"
+            [formControl]="asControl(control)"
+            [required]="isRequired(definition)"
+            [errorStateMatcher]="errorMatcher"
+            [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
+            [attr.data-xpath]="path"
+          />
+        }
+        @if (error) {
+          <mat-error>{{ errorText(error, label) }}</mat-error>
+        }
+      </mat-form-field>
+    }
+    @case ('number') {
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="nxs-metadata-editor__field"
+      >
+        <mat-label>{{ label }}</mat-label>
+        <input
+          matInput
+          type="number"
+          [attr.step]="step(definition)"
+          [formControl]="asControl(control)"
+          [required]="isRequired(definition)"
+          [errorStateMatcher]="errorMatcher"
+          [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
+          [attr.data-xpath]="path"
+        />
+        @if (error) {
+          <mat-error>{{ errorText(error, label) }}</mat-error>
+        }
+      </mat-form-field>
+    }
+    @case ('date') {
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="nxs-metadata-editor__field"
+      >
+        <mat-label>{{ label }}</mat-label>
+        <input
+          matInput
+          [matDatepicker]="picker"
+          [placeholder]="'common.date-mask' | translate"
+          [formControl]="asControl(control)"
+          [required]="isRequired(definition)"
+          [errorStateMatcher]="errorMatcher"
+          [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
+          [attr.data-xpath]="path"
+        />
+        <mat-datepicker-toggle matIconSuffix [for]="picker" />
+        <mat-datepicker #picker />
+        @if (error) {
+          <mat-error>{{ errorText(error, label) }}</mat-error>
+        }
+      </mat-form-field>
+    }
+    @case ('boolean') {
+      <mat-checkbox
+        class="nxs-metadata-editor__checkbox"
+        [formControl]="asControl(control)"
+        [attr.data-xpath]="path"
+        >{{ label }}</mat-checkbox
+      >
+    }
+    @case ('vocabulary') {
+      <ng-container
+        [ngTemplateOutlet]="vocabularyTemplate"
+        [ngTemplateOutletContext]="{ definition, control, label, error, path, multiple: false }"
+      />
+    }
+    @case ('vocabulary-list') {
+      <ng-container
+        [ngTemplateOutlet]="vocabularyTemplate"
+        [ngTemplateOutletContext]="{ definition, control, label, error, path, multiple: true }"
+      />
+    }
+    @case ('list') {
+      <mat-form-field
+        appearance="outline"
+        subscriptSizing="dynamic"
+        class="nxs-metadata-editor__field"
+      >
+        <mat-label>{{ label }}</mat-label>
+        <mat-chip-grid
+          #grid
+          [formControl]="asControl(control)"
+          [required]="isRequired(definition)"
+          [errorStateMatcher]="errorMatcher"
+        >
+          @for (item of listValue(control); track $index) {
+            <mat-chip-row [value]="item" (removed)="removeItem(control, $index)">
+              {{ item }}
+              <button
+                type="button"
+                matChipRemove
+                [attr.aria-label]="
+                  'satori-components.metadata-editor.remove-value' | translate: { name: item }
+                "
+              >
+                <mat-icon aria-hidden="true">cancel</mat-icon>
+              </button>
+            </mat-chip-row>
+          }
+          <input
+            [type]="inputType(definition)"
+            [matChipInputFor]="grid"
+            [matChipInputAddOnBlur]="true"
+            (matChipInputTokenEnd)="addItem(control, definition, $event)"
+            [attr.data-xpath]="path"
+            [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
+          />
+        </mat-chip-grid>
+        @if (error) {
+          <mat-error>{{ errorText(error, label) }}</mat-error>
+        }
+      </mat-form-field>
+    }
+    @case ('complex') {
+      @let groupInvalid = showError(control) && !!error;
+      <fieldset
+        class="nxs-metadata-editor__group"
+        [attr.data-xpath]="path"
+        [attr.aria-describedby]="groupInvalid ? id + '-' + path + '-error' : null"
+      >
+        <legend>{{ label }}</legend>
+        @if (groupInvalid) {
+          <p
+            class="nxs-metadata-editor__error"
+            tabindex="-1"
+            data-nxs-invalid="true"
+            [id]="id + '-' + path + '-error'"
+          >
+            {{ errorText(error, label) }}
+          </p>
+        }
+        @for (sub of subFields(definition); track sub.xpath) {
+          @if (subControl(control, sub.xpath); as child) {
+            <ng-container
+              [ngTemplateOutlet]="fieldTemplate"
+              [ngTemplateOutletContext]="{
+                $implicit: sub,
+                control: child,
+                depth: depth + 1,
+                path: path + '/' + sub.xpath,
+              }"
+            />
+          }
+        }
+      </fieldset>
+    }
+    @case ('complex-list') {
+      <fieldset class="nxs-metadata-editor__group" [attr.data-xpath]="path">
+        <legend>{{ label }}</legend>
+        @for (item of asArray(control).controls; track item; let index = $index) {
+          <fieldset class="nxs-metadata-editor__item">
+            <legend>
+              {{
+                'satori-components.metadata-editor.item' | translate: { label, index: index + 1 }
+              }}
+            </legend>
+            @for (sub of subFields(definition); track sub.xpath) {
+              @if (subControl(item, sub.xpath); as child) {
+                <ng-container
+                  [ngTemplateOutlet]="fieldTemplate"
+                  [ngTemplateOutletContext]="{
+                    $implicit: sub,
+                    control: child,
+                    depth: depth + 1,
+                    path: path + '/' + index + '/' + sub.xpath,
+                  }"
+                />
+              }
+            }
+            <button
+              mat-button
+              type="button"
+              class="nxs-metadata-editor__remove"
+              [disabled]="control.disabled"
+              [attr.aria-label]="
+                'satori-components.metadata-editor.remove-item'
+                  | translate: { label, index: index + 1 }
+              "
+              (click)="removeComplexItem(control, index)"
+            >
+              <mat-icon aria-hidden="true">delete_outline</mat-icon>
+              {{ 'satori-components.metadata-editor.remove' | translate }}
+            </button>
+          </fieldset>
+        }
+        @let listInvalid = showError(control);
+        <button
+          mat-stroked-button
+          type="button"
+          class="nxs-metadata-editor__add"
+          [disabled]="control.disabled"
+          [attr.data-nxs-invalid]="listInvalid ? 'true' : null"
+          [attr.aria-describedby]="listInvalid ? id + '-' + path + '-error' : null"
+          (click)="addComplexItem(control, definition, depth)"
+        >
+          <mat-icon aria-hidden="true">add</mat-icon>
+          {{ 'satori-components.metadata-editor.add-item' | translate: { label } }}
+        </button>
+        @if (listInvalid && error) {
+          <p class="nxs-metadata-editor__error" [id]="id + '-' + path + '-error'">
+            {{ errorText(error, label) }}
+          </p>
+        }
+      </fieldset>
+    }
+    @default {
+      <div class="nxs-metadata-editor__read-only" [attr.data-xpath]="path">
+        <span class="nxs-metadata-editor__read-only-label">{{ label }}</span>
+        <span class="nxs-metadata-editor__read-only-value">
+          {{ readOnlyText(control) || ('satori-components.metadata-editor.no-value' | translate) }}
+        </span>
+      </div>
+    }
+  }
+</ng-template>
+
+<ng-template
+  #vocabularyTemplate
+  let-definition="definition"
+  let-control="control"
+  let-label="label"
+  let-error="error"
+  let-path="path"
+  let-multiple="multiple"
+>
+  <mat-form-field
+    appearance="outline"
+    subscriptSizing="dynamic"
+    class="nxs-metadata-editor__field nxs-metadata-editor__vocabulary"
+  >
+    <mat-label>{{ label }}</mat-label>
+    <mat-select
+      [formControl]="asControl(control)"
+      [multiple]="multiple"
+      [required]="isRequired(definition)"
+      [errorStateMatcher]="errorMatcher"
+      [attr.data-nxs-invalid]="showError(control) ? 'true' : null"
+      [panelClass]="
+        usesL10n(definition.directory)
+          ? 'nxs-vocabulary-panel nxs-vocabulary-panel--grouped'
+          : 'nxs-vocabulary-panel'
+      "
+      [attr.data-xpath]="path"
+      (openedChange)="panelToggled()"
+    >
+      <mat-select-trigger>
+        <mat-chip-set class="nxs-metadata-editor__trigger-chips">
+          @for (id of multiple ? listValue(control) : [control.value]; track $index) {
+            @if (id) {
+              <mat-chip
+                (removed)="multiple ? removeItem(control, $index) : clearValue(control, false)"
+              >
+                {{ vocabularyLabel(definition.directory, id) }}
+                <button
+                  type="button"
+                  matChipRemove
+                  [disabled]="control.disabled"
+                  [attr.aria-label]="
+                    'satori-components.metadata-editor.remove-value'
+                      | translate: { name: vocabularyLabel(definition.directory, id) }
+                  "
+                  (click)="$event.stopPropagation()"
+                >
+                  <mat-icon aria-hidden="true">cancel</mat-icon>
+                </button>
+              </mat-chip>
+            }
+          }
+        </mat-chip-set>
+      </mat-select-trigger>
+      <div class="nxs-vocabulary-panel__search">
+        <input
+          type="text"
+          [value]="panelSearch()"
+          [placeholder]="'satori-components.metadata-editor.search' | translate"
+          [attr.aria-label]="'satori-components.metadata-editor.search-in' | translate: { label }"
+          (input)="search($event)"
+          (click)="$event.stopPropagation()"
+          (keydown)="$event.stopPropagation()"
+        />
+      </div>
+      <div class="nxs-vocabulary-panel__list">
+        @if (usesL10n(definition.directory)) {
+          @for (group of groupedOptions(definition.directory); track group.parentLabel) {
+            <mat-optgroup [label]="group.parentLabel">
+              @for (entry of group.entries; track entry.id) {
+                <mat-option [value]="entry.id">{{ l10nEntryLabel(entry) }}</mat-option>
+              }
+            </mat-optgroup>
+          }
+        } @else {
+          @for (entry of flatOptions(definition.directory); track entry.id) {
+            <mat-option [value]="entry.id">{{ directoryPickerLabel(entry) }}</mat-option>
+          }
+        }
+      </div>
+    </mat-select>
+    @if (error) {
+      <mat-error>{{ errorText(error, label) }}</mat-error>
+    }
+  </mat-form-field>
+</ng-template>

@@ -142,7 +142,10 @@ Treat them as settled; if you contradict one, prove it first.
   `provide-app-extensions.ts` and resolved by **both** browse routes. As of NXSAT-316,
   nine slots and none reserved: `navbar`, `bulk-actions`, `documentList`, `toolbar`,
   `contextMenu` and `tabs` have packaged descriptors and a host; `sidebar`, `routes` and
-  `documentView` are resolved but have no packaged descriptor. The earlier "`routes`,
+  `documentView` are resolved but have no packaged descriptor. NXSAT-630 added three more,
+  one per layout mode, each resolved with no packaged descriptor: `documentMetadata`,
+  `documentEdit` and `documentCreate` — the last read only by the create form, which no
+  screen opens yet. The earlier "`routes`,
   `toolbar`, `contextMenu` and `tabs` are reserved" was stale long before that — each had
   gained a host. Do not describe a reserved id as an extension point — and do not
   trust this list either: `npm run beta:reference` checks every slot-state claim in

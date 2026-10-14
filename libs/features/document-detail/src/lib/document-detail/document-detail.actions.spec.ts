@@ -145,6 +145,7 @@ const mockDetailService = {
   exportZip: vi.fn((): Observable<Blob> => of(new Blob(['zip'], { type: 'application/zip' }))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -215,9 +216,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
    * here is the correct outcome.
    */
   function offered(id: string): ExtensionActionDescriptor {
-    const found = [...component.toolbarActions(), ...component.overflowActions()].find(
-      (a) => a.id === id,
-    );
+    const found = component.toolbarActions().find((a) => a.id === id);
     if (!found) {
       throw new Error(`toolbar action "${id}" is not offered for this document`);
     }
@@ -242,6 +241,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     mockDetailService.exportZip.mockReturnValue(of(new Blob(['zip'], { type: 'application/zip' })));
     mockDetailService.getAllComments.mockReturnValue(of({ entries: [] }));
     mockDetailService.getVersions.mockReturnValue(of({ entries: [] }));
+    mockDetailService.getVersionsDirect.mockReturnValue(of([]));
     mockDetailService.getPublishedVersions.mockReturnValue(of({ entries: [] }));
     mockDetailService.getSectionTree.mockReturnValue(of({ entries: [] }));
     mockDetailService.getRunnableWorkflows.mockReturnValue(of([]));
@@ -306,8 +306,8 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
           provide: TagService,
           useValue: {
             searchTags: vi.fn(() => of([])),
-            addTag: vi.fn(() => of({})),
-            removeTag: vi.fn(() => of(undefined)),
+            addTag: vi.fn(() => of([])),
+            removeTag: vi.fn(() => of([])),
           },
         },
         {
@@ -589,6 +589,15 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.toolbarTooltip(relabelled)).toBe('Release the lock');
     });
 
+    /** nxs-document-toolbar names the button "Unlock. Locked by …" from these two (NXSAT-528). */
+    it('hands the toolbar the Unlock label and who holds the lock as its tooltip', async () => {
+      await build(lockedByAlice());
+
+      const unlock = component.toolbarEntries().find((entry) => entry.id === 'app.toolbar.unlock');
+      expect(unlock?.label).toBe('Unlock');
+      expect(unlock?.tooltip).toBe('Locked by alice on August 24, 2026');
+    });
+
     it('shows the closed padlock, marked active, while locked and the open one while unlocked', async () => {
       await build(lockedByAlice());
       const unlock = offered('app.toolbar.unlock');
@@ -637,7 +646,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     it('offers neither half to a read-only user on an unlocked document', async () => {
       await build(doc({ contextParameters: { permissions: ['Read'] } }));
 
-      const ids = [...component.toolbarActions(), ...component.overflowActions()].map((a) => a.id);
+      const ids = component.toolbarActions().map((a) => a.id);
 
       expect(ids).not.toContain('app.toolbar.lock');
       expect(ids).not.toContain('app.toolbar.unlock');
@@ -1131,52 +1140,22 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
   });
 
   describe('versions', () => {
+    const WITH_WRITE_VERSION = ['Read', 'Write', 'WriteVersion', 'ReadWrite', 'Remove'];
     const version = (major: number, minor: number): NuxeoDocument =>
       doc({
         uid: `v-${major}-${minor}`,
+        isVersion: true,
         properties: { 'uid:major_version': major, 'uid:minor_version': minor },
+        contextParameters: { permissions: WITH_WRITE_VERSION },
       });
 
-    it('loads the version list the first time the dropdown opens and not again', async () => {
-      mockDetailService.getVersions.mockReturnValue(of({ entries: [version(1, 0)] }));
+    it('restores a version and reloads the document', async () => {
       await build();
-
-      component.toggleVersionDropdown();
-
-      expect(component.versionDropdownOpen()).toBe(true);
-      expect(component.versions().map((v) => component.versionString(v))).toEqual(['1.0']);
-
-      component.toggleVersionDropdown();
-      component.toggleVersionDropdown();
-
-      expect(mockDetailService.getVersions).toHaveBeenCalledTimes(1);
-    });
-
-    it('clears the loading flag when the version list fails so the user can retry', async () => {
-      mockDetailService.getVersions.mockReturnValue(throwError(() => new Error('500')));
-      await build();
-
-      component.toggleVersionDropdown();
-
-      expect(component.versionsLoading()).toBe(false);
-      expect(component.versions()).toEqual([]);
-
-      mockDetailService.getVersions.mockReturnValue(of({ entries: [version(2, 0)] }));
-      component.toggleVersionDropdown();
-      component.toggleVersionDropdown();
-
-      expect(component.versions()).toHaveLength(1);
-    });
-
-    it('restores a version, closes the dropdown and reloads the document', async () => {
-      await build();
-      component.versionDropdownOpen.set(true);
       mockDetailService.getFullDocument.mockClear();
 
       component.restoreVersion(version(3, 1));
 
       expect(mockDetailService.restoreVersion).toHaveBeenCalledWith('v-3-1');
-      expect(component.versionDropdownOpen()).toBe(false);
       expect(component.actionInProgress()).toBeNull();
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
       expect(toast.show).toHaveBeenCalledWith('Restored to version 3.1');
@@ -1192,41 +1171,79 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(toast.error).toHaveBeenCalledWith('Failed to restore version');
     });
 
-    it('refuses to restore a version without the write permission', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+    it('refuses to restore a version without WriteVersion, which is what Nuxeo checks', async () => {
+      await build();
 
-      component.restoreVersion(version(1, 0));
+      component.restoreVersion({
+        ...version(1, 0),
+        contextParameters: { permissions: ['Read', 'Write'] },
+      });
 
       expect(mockDetailService.restoreVersion).not.toHaveBeenCalled();
     });
 
-    it('reloads the document after a version is created', async () => {
+    it('returns to the live document after restoring the version it shows', async () => {
       await build();
-      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
+
+      component.restoreVersion({ ...version(1, 0), versionableId: 'doc-live' });
+
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+    });
+
+    it('reloads the document after nxs-manage-versions created a version', async () => {
+      await build();
       mockDetailService.getFullDocument.mockClear();
 
-      component.openCreateVersionDialog();
+      component.onVersionCreated();
 
       expect(mockDetailService.getFullDocument).toHaveBeenCalledWith('doc-1');
-      expect(mockDetailService.getVersions).toHaveBeenCalled();
     });
   });
 
   describe('publish dialog', () => {
-    it('fetches the versions the dialog needs before opening it', async () => {
+    /** Web UI's `isPublishable`: the `Publishable` facet and `WriteVersion`. */
+    const publishable = (over: Partial<NuxeoDocument> = {}): NuxeoDocument =>
+      doc({
+        facets: ['Publishable', 'Versionable'],
+        properties: { 'uid:major_version': 1 },
+        contextParameters: { permissions: ['Read', 'Write', 'ReadWrite', 'WriteVersion'] },
+        ...over,
+      });
+
+    it('publishes the document on screen, with its versions read from the repository', async () => {
       const v = doc({ uid: 'v1', properties: { 'uid:major_version': 1 } });
-      mockDetailService.getVersions.mockReturnValue(of({ entries: [v] }));
-      await build(doc({ properties: { 'uid:major_version': 1 } }));
+      mockDetailService.getVersionsDirect.mockReturnValue(of([v]));
+      await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
 
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-1');
       expect(lastDialogData()).toMatchObject({ documentUid: 'doc-1', versions: [v] });
     });
 
+    it('publishes a version as it is, as Web UI does, listing its live document’s versions', async () => {
+      await build(
+        publishable({
+          uid: 'v-1-0',
+          isVersion: true,
+          versionableId: 'doc-live',
+          facets: ['Publishable', 'Immutable'],
+        }),
+      );
+      mockDialog.open.mockClear();
+
+      component.openPublishDialog();
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
+      expect(lastDialogData()).toMatchObject({ documentUid: 'v-1-0', versionLabel: '1.0' });
+    });
+
     it('still opens the dialog with no versions when the fetch fails', async () => {
-      mockDetailService.getVersions.mockReturnValue(throwError(() => new Error('500')));
-      await build();
+      mockDetailService.getVersionsDirect.mockReturnValue(throwError(() => new Error('500')));
+      await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
@@ -1236,9 +1253,9 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
     it('offers the renditions the document actually has', async () => {
       await build(
-        doc({
+        publishable({
           contextParameters: {
-            permissions: ['Read', 'Write', 'ReadWrite', 'Everything', 'Remove'],
+            permissions: ['Read', 'Write', 'WriteVersion'],
             renditions: [{ name: 'pdf' }, { name: 'custom' }],
           },
         }),
@@ -1256,7 +1273,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     });
 
     it('falls back to the four standard renditions when the enricher is absent', async () => {
-      await build();
+      await build(publishable());
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
@@ -1271,12 +1288,37 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       });
     });
 
-    it('refuses to open for a document the user cannot write', async () => {
-      await build(doc({ contextParameters: { permissions: ['Read'] } }));
+    it('re-reads the publications once something was published', async () => {
+      await build(publishable());
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(true) }));
+      mockDetailService.getPublishedVersions.mockClear();
+
+      component.openPublishDialog();
+
+      expect(mockDetailService.getPublishedVersions).toHaveBeenCalledWith('doc-1');
+    });
+
+    it('refuses to open without WriteVersion, even with Write', async () => {
+      await build(
+        publishable({ contextParameters: { permissions: ['Read', 'Write', 'ReadWrite'] } }),
+      );
       mockDialog.open.mockClear();
 
       component.openPublishDialog();
 
+      expect(mockDialog.open).not.toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('You do not have permission to perform this action');
+    });
+
+    it('refuses to open on a proxy or a document that is not Publishable', async () => {
+      await build(publishable({ isProxy: true }));
+      mockDialog.open.mockClear();
+      component.openPublishDialog();
+      expect(mockDialog.open).not.toHaveBeenCalled();
+
+      await build(publishable({ facets: ['Versionable'] }));
+      mockDialog.open.mockClear();
+      component.openPublishDialog();
       expect(mockDialog.open).not.toHaveBeenCalled();
     });
   });
@@ -1424,6 +1466,15 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       );
       expect(component.aceTimeFrame(ace({ end: '2026-12-31' }))).toMatch(
         /^Until \w{3} \d{2}, 2026$/,
+      );
+    });
+
+    it('shows the day a share ends as the panel does, not its UTC date', async () => {
+      await build();
+
+      // Midnight in Paris on 15 July, which Nuxeo holds as 22:00 UTC on the 14th.
+      expect(component.aceTimeFrame(ace({ end: '2030-07-14T22:00:00.000Z' }))).toBe(
+        'Until Jul 15, 2030',
       );
     });
 

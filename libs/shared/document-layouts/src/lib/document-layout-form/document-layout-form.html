@@ -1,0 +1,27 @@
+@if (entry(); as contributed) {
+  <lib-extension-outlet
+    class="document-layout-form__contributed"
+    [attr.data-layout-entry]="contributed.id"
+    [componentId]="contributed.componentId ?? contributed.id"
+    [componentInputs]="entryInputs()"
+  />
+}
+@if (!usesEntry()) {
+  @if (ready()) {
+    <nxs-metadata-editor
+      class="document-layout-form__editor"
+      [attr.data-layout-type]="formType()"
+      [attr.data-layout-source]="layoutSource()"
+      [sections]="sections()"
+      [display]="display()"
+      [values]="values()"
+      [disabled]="disabled()"
+      [headingLevel]="headingLevel()"
+      (validChange)="editorValidChange($event)"
+    />
+  } @else {
+    <div class="document-layout-form__loading">
+      <nxs-spinner [diameter]="28" [label]="'document-layouts.loading-form' | translate" />
+    </div>
+  }
+}

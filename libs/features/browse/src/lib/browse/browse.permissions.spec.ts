@@ -13,6 +13,7 @@ import {
   CURRENT_USERNAME,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   SelectionService,
   TagService,
   type NuxeoAce,
@@ -126,6 +127,7 @@ describe('BrowseComponent — permissions tab', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: detail },
         {
           provide: DirectoryService,

@@ -26,7 +26,8 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
-getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number): Observable<AuditLogList>
+getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>
+  // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>
 getSectionTree(): Observable<NuxeoDocumentList>
 unpublishDocument(proxyUid: string): Observable<unknown>
@@ -72,13 +73,13 @@ getByPath(nuxeoPath: string): Observable<NuxeoDocument>
 getUserWorkspace(): Observable<NuxeoDocument>  // POST automation/User.GetUserWorkspace (Web UI)
 getRepositoryRoot(): Observable<NuxeoDocument>  // falls back to NXQL when GET /path/ is denied
 getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>  // root + top-level folders for all permission profiles
-getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: { currentPageIndex?: number; sort?: { sortBy: string; sortOrder: 'ASC' | 'DESC' }[] }): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks; `page` is the bridge's server paging and sort; below the root a failure is Nuxeo's own HttpErrorResponse, so map it with nxsErrorStatus()
-getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // Favorites / Collection member listing
+getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: BrowsePageRequest): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks; `page` ({ currentPageIndex?, sort?: { sortBy, sortOrder }[] }) is server paging and sort, honoured by every source — folders, Root, Domain, Favorites and Collection; below the root a failure is Nuxeo's own HttpErrorResponse, so map it with nxsErrorStatus()
+getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // Favorites / Collection member listing, one page in the requested order; a sort key the provider cannot use is HTTP 400
 getFolderContext(nuxeoPath: string): Observable<NuxeoDocument>  // includes @subtypes enricher
 getCreatableSubtypes(nuxeoPath: string): Observable<string[]>  // parsed allowed child types
 getChildren(nuxeoPath: string, pageSize?: number, currentPageIndex?: number): Observable<NuxeoDocumentList>
 getTreeChildren(parentUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // tree_children page provider, all pages
-getNavTreeChildren(parent: NuxeoDocument, pageSize?: number): Observable<NuxeoDocumentList>  // Root/workspaces: tree_children; Domain: @children, folders only, total = folders kept
+getNavTreeChildren(parent: NuxeoDocument, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // Root/workspaces: tree_children; Domain: @children, folders only, first page, total = folders kept; with `page`, Root answers that one page in that order (a listing), without it Root lists every page (a tree level). A domain listing goes through getBrowseFolderContents, which pages @children with files
 getFolderIdsWithSubfolders(parentUids: readonly string[]): Observable<ReadonlySet<string> | null>  // one NXQL probe per tree level; null = incomplete, keep arrows
 updateDocument(uid: string, properties: Record<string, unknown>, options?: { enrichPermissions?: boolean }): Observable<NuxeoDocument>
 copyDocuments(uids: string[], targetUid: string): Observable<NuxeoDocument[]>  // Document.Copy automation
@@ -144,11 +145,29 @@ readonly selectedSavedSearchTitle: Signal<string>
 readonly savedSearchVersion: Signal<number>
 
 markSavedSearchDirty(): void
+```
+
+`SearchSession` in `libs/features/search` keeps the filters and the open saved search here, runs
+the one search the page and the drawer show, and publishes its `items` and `aggregations` here; the
+drawer's queue reads `items`. Search for results through the session, not by calling
+`SearchService.search` beside it.
+
+## SearchService (`search.service.ts`)
+
+`default_search`, saved searches and the lookups the search filters use. See
+`docs/api-integrations.md` §31 for the parameters and the server's behaviour.
+
+```typescript
+search(params: SearchQueryParams): Observable<SearchResponse>
 suggest(searchTerm: string, pageSize?: number): Observable<GlobalSearchSuggestion[]>
 getUserCollections(): Observable<SearchCollectionOption[]>
+getTagSuggestions(term: string): Observable<string[]>          // TagService.suggestTags; [] when blank or on failure
 getSavedSearches(pageProvider?: string): Observable<SavedSearchOption[]>
-getSavedSearchById(id: string): Observable<Record<string, string>>
+getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON
 saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>
+updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown>
+renameSavedSearch(id: string, title: string, pageProviderName?: string): Observable<unknown>  // keeps params
+deleteSavedSearch(id: string): Observable<unknown>
 ```
 
 ---
@@ -226,7 +245,7 @@ markIngested(documentUids: string[]): Observable<NuxeoDocument[]>
 getById(uid: string): Observable<NuxeoDocument>
 getAll(pageSize?: number): Observable<NuxeoDocumentList>
 getFavorites(userId: string, pageSize?: number): Observable<NuxeoDocumentList>
-getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>
+getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // one page, in the requested order; totalSize is the collection's size on every page
 updateProperties(uid: string, properties: Record<string, unknown>): Observable<NuxeoDocument>
 bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 ```
@@ -270,9 +289,10 @@ deleteGroup(groupname: string): Observable<void>
 ## TagService (`tag.service.ts`)
 
 ```typescript
-addTag(uid: string, label: string): Observable<unknown>
-removeTag(uid: string, label: string): Observable<unknown>
+addTag(uid: string, label: string): Observable<string[]> // the document's tags afterwards, as Nuxeo stored them
+removeTag(uid: string, label: string): Observable<string[]> // the tags left
 searchTags(term: string): Observable<string[]>
+suggestTags(term: string): Observable<string[]> // Tag.Suggestion, as Web UI; searchTags' directory 404s on Nuxeo 2025
 ```
 
 ---

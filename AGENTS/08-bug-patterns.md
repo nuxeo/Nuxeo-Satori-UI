@@ -664,6 +664,34 @@ the packaged base, `new URL(src, 'http://host/nuxeo/agentic-ui/').pathname` — 
 
 ---
 
+## 21. Selecting a version restores it, and a version looks writable
+
+```html
+<!-- BAD ❌ — choosing an entry in a list performs the destructive operation. One misclick
+     replaced the live document's content and discarded its unversioned changes. -->
+<button (click)="restoreVersion(v)">{{ versionString(v) }}</button>
+
+<!-- GOOD ✅ — choosing opens the version read-only; restore is a separate, confirmed action -->
+<button (click)="openVersion(v)">{{ versionString(v) }}</button>
+```
+
+Three facts about a Nuxeo version, each measured on the local server (NXSAT-332):
+
+- **Its `permissions` enricher repeats the live document's** — `Write`, `Remove`, `WriteSecurity`
+  — while the server refuses a `PUT` (500) and a trash (403, even for Administrator). Gate edit
+  affordances on `doc.isVersion`, or on the `Immutable` facet it carries, not on the enricher.
+- **`Document.RestoreVersion` checks `WriteVersion`**, not `Write`, and another user's lock
+  removes it (403). Administrator bypasses the lock.
+- **`checkout: true` leaves the restored document checked out** — it reads `0.2+` after
+  restoring `0.1`, as if the user had unversioned changes. Web UI sends `checkout: false`; the
+  document stays editable, because Nuxeo checks it out on the next save.
+
+Regression test pattern: click the rendered list entry and assert no restore request — a test
+that calls `restoreVersion()` directly asserts the defect. See
+`libs/features/document-detail/src/lib/document-detail/document-detail.versions.spec.ts`.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.

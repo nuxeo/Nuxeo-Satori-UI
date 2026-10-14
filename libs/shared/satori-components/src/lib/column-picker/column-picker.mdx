@@ -56,7 +56,12 @@ protected applyColumns(keys: readonly string[]): void {
 />
 
 export const usageHtml = `<div class="acme-table" style="position: relative">
-  <button mat-icon-button type="button" (click)="pickerOpen.set(true)" [attr.aria-label]="'acme.table.manage-columns' | translate">
+  <button
+    mat-icon-button
+    type="button"
+    (click)="pickerOpen.set(true)"
+    [attr.aria-label]="'acme.table.manage-columns' | translate"
+  >
     <mat-icon>view_column</mat-icon>
   </button>
   @if (pickerOpen()) {

@@ -7,9 +7,10 @@ import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
 
 /**
- * The four `nxs.primitives.*` IDs resolved through `lib-extension-outlet`, as a host renders them,
- * with only `provideNxsComponents()` — what an application without Satori gets. The Satori
- * library's Storybook renders the same template with `provideNxsSatoriComponents()` added.
+ * The four `nxs.primitives.*` IDs Satori also implements, resolved through `lib-extension-outlet` as
+ * a host renders them, with only `provideNxsComponents()` — what an application without Satori
+ * gets. The Satori library's Storybook renders the same template with `provideNxsSatoriComponents()`
+ * added.
  *
  * It names no component, so it has no API page; `primitives.mdx` is its Overview.
  */

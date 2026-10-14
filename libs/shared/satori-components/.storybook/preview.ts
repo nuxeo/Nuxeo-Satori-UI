@@ -8,11 +8,26 @@ import {
 } from '@ngx-translate/core';
 import { setCompodocJson } from '@storybook/addon-docs/angular';
 import { applicationConfig, type Preview } from '@storybook/angular';
-import type { Observable } from 'rxjs';
+import { of, type Observable } from 'rxjs';
 
 import documentation from '../documentation.json';
 import { ApiPage } from './api-page';
 import { compodoc } from './compodoc';
+
+/** The English catalogue, fetched once by `loadCatalogue` before the first story renders. */
+let english: TranslationObject | null = null;
+
+/**
+ * A Storybook loader: runs before every story renders, and fetches the catalogue the first time.
+ * With it in memory, `ApplicationCatalogueLoader` answers synchronously, so a story's first render
+ * is already translated — a play function asserting a translated label, and the interaction runner
+ * checking for untranslated keys, never race the request.
+ */
+async function loadCatalogue(): Promise<void> {
+  if (english) return;
+  const response = await fetch('i18n/en.json');
+  if (response.ok) english = (await response.json()) as TranslationObject;
+}
 
 /**
  * The application's catalogue, served at `i18n/` by `main.ts`. Composite components translate their
@@ -23,7 +38,9 @@ class ApplicationCatalogueLoader implements TranslateLoader {
   private readonly http = inject(HttpClient);
 
   getTranslation(lang: string): Observable<TranslationObject> {
-    return this.http.get<TranslationObject>(`i18n/${lang}.json`);
+    return lang === 'en' && english
+      ? of(english)
+      : this.http.get<TranslationObject>(`i18n/${lang}.json`);
   }
 }
 
@@ -73,6 +90,7 @@ const preview: Preview = {
       ],
     }),
   ],
+  loaders: [loadCatalogue],
   argTypesEnhancers: [markRequiredInputs],
   parameters: {
     layout: 'centered',
@@ -101,6 +119,8 @@ const preview: Preview = {
           'Panels',
           ['*', ['Overview', 'API', '*']],
           'Dialogs',
+          ['*', ['Overview', 'API', '*']],
+          'Pickers',
           ['*', ['Overview', 'API', '*']],
           '*',
           ['*', ['Overview', 'API', '*']],

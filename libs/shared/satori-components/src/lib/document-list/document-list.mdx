@@ -1,0 +1,178 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DocumentListStories from './document-list.stories';
+
+<Meta of={DocumentListStories} name="Overview" />
+
+# Document list
+
+The document list is one page of documents as a table: a folder's children, a collection's members,
+a set of search results. It has sortable headers, selection, keyboard navigation and a pager, and it
+shows a loader, an empty state or an error in place of the rows. Use it wherever a screen lists
+documents the server pages.
+
+## Key features
+
+- **The server pages and sorts.** The list shows the page it is given in the order it is given, and
+  asks for another order with `sortChange` and another page with `pageChange`. It never sorts a page
+  itself: sorting fifty rows in the browser once hid a sort the server had dropped.
+- **Only real sort controls.** A column marked `sortable` gets a sort control with `aria-sort`; any
+  other column has a plain header. Mark a column sortable only when its source sorts by it.
+- **Selection across pages.** `selectedIds` holds ids from every page. Checkboxes, Shift for a range,
+  Ctrl or Cmd for one more, and a header checkbox for the page.
+- **One Tab stop.** Fifty rows are one stop in the Tab sequence, not fifty: arrow keys move between
+  rows, and a row's controls are reached with Right and Left.
+- **States that say what happened.** A 403 says the user has no access and a 404 says the folder is
+  gone; only a server error shows your heading and Retry.
+- **Rendered through the registered IDs.** The type tag and the contributor's avatar render whatever
+  is registered under `nxs.primitives.tag` and `nxs.primitives.avatar`, so they take Satori's look
+  where it is registered and the built-in one where it is not.
+- **Drop files on it.** With `dropEnabled`, files dragged from the computer are reported with
+  `filesDropped`; a drag of text or a link is left alone.
+
+## Demo showcase
+
+<Canvas of={DocumentListStories.FolderContents} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsDocumentListComponent,
+  nxsErrorStatus,
+  type NxsDocumentListColumn,
+  type NxsDocumentListSort,
+} from '@nuxeo-satori/platform/components';
+
+readonly columns: readonly NxsDocumentListColumn[] = [
+  { key: 'title', label: this.translate.instant('acme.title'), sortable: true },
+  { key: 'modified', label: this.translate.instant('acme.modified'), sortable: true },
+  { key: 'dc:source', label: this.translate.instant('acme.source') },
+];
+
+load(pageIndex: number, sort: NxsDocumentListSort | null): void {
+  this.browse
+    .getBrowseFolderContents(this.path, 50, {
+      currentPageIndex: pageIndex,
+      sort: sort
+        ? [
+            {
+              sortBy: SORT_FIELDS[sort.key],
+              sortOrder: sort.direction === 'asc' ? 'ASC' : 'DESC',
+            },
+          ]
+        : [],
+    })
+    .subscribe({
+      next: (page) => this.page.set(page),
+      error: (err) => this.error.set(nxsErrorStatus(err)),
+    });
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-document-list
+  [documents]="page().entries"
+  [columns]="columns"
+  [label]="'acme.contents-of' | translate: { name: folder().title }"
+  [sort]="sort()"
+  [(selectedIds)]="selected"
+  [pageIndex]="pageIndex()"
+  [totalSize]="page().totalSize"
+  [hasNextPage]="page().hasNextPage"
+  [loading]="loading()"
+  [error]="error()"
+  [errorHeading]="'acme.folder-failed' | translate"
+  (sortChange)="load(0, $event)"
+  (pageChange)="load($event, sort())"
+  (open)="openDocument($event)"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`documents`, `columns` and `label` are required. Every text input takes text you have already
+translated. The list's own words — its loader, the default empty heading, the checkbox names, the
+sort announcements and the keyboard help — are translated with ngx-translate under
+`satori-components.document-list.*`, and `providePlatformEnglishFallback()` supplies the English when
+your catalogue does not. A page listing documents lists `provideNxsThumbnailCache()` in its
+providers, as for any `nxs-thumbnail`.
+
+A column's `key` is one of the packaged columns — `title`, `type`, `modified`, `lastContributor`,
+`created`, `author`, `state`, `version`, `nature`, `coverage`, `subjects` — or the name of a Nuxeo
+property such as `dc:source`, whose value the cell shows as text.
+
+## Where its data comes from
+
+The rows are yours: pass one page from `BrowseService.getBrowseFolderContents` or a page provider,
+with Nuxeo's `isNextPageAvailable` as `hasNextPage` and its count as `totalSize`, negative when it
+did not count. Every browse source — a folder, the repository root, a domain, Favorites and a
+collection — pages and sorts on the server. A sort key Nuxeo cannot use returns an empty page from
+`@children` and a 400 from a page provider, so map each sortable column to a property you know it
+accepts before asking.
+
+Each row's thumbnail is fetched with the platform's credentials by `nxs-thumbnail`. Whatever the
+list shows, Nuxeo still checks every request the host makes: showing a document grants nothing.
+
+**In these stories** the rows are a fixed set, the thumbnails answer "none", and every event is only
+recorded in the Actions panel.
+
+## Examples
+
+### Sorted on the server
+
+<Canvas of={DocumentListStories.SortedByModified} />
+
+### With a selection
+
+<Canvas of={DocumentListStories.WithASelection} />
+
+### The keyboard
+
+The **Keyboard selection** story in the sidebar selects with Space, extends with Shift+Down and opens
+with Enter. It runs only on its own page, because it moves this page's focus.
+
+### A later page
+
+<Canvas of={DocumentListStories.SecondPage} />
+
+### Row menus
+
+<Canvas of={DocumentListStories.WithRowActions} />
+
+### Loading, empty and refused
+
+<Canvas of={DocumentListStories.Loading} />
+
+<Canvas of={DocumentListStories.Empty} />
+
+<Canvas of={DocumentListStories.PermissionDenied} />
+
+<Canvas of={DocumentListStories.ServerError} />
+
+### Accepting dropped files
+
+<Canvas of={DocumentListStories.AcceptsDroppedFiles} />
+
+## Accessibility
+
+- **A named table.** It is a native table named by `label`, with `aria-rowcount` for every document
+  across pages (`-1`, "unknown", when Nuxeo did not count) and `aria-rowindex` on each row, so a
+  screen reader says where a row sits in the whole list, not only on the page.
+- **Unique names.** Each row is named by its own document's title, and each checkbox says "Select"
+  followed by that name. A row's menu is named "Actions for" it. Where documents on the page share a
+  title, each name says which of them it is — "Report.pdf (2 of 3)" — so no two rows read the same;
+  the title shown stays as it is.
+- **Selection on the row.** While the list is `selectable`, each row carries `aria-selected`, so the
+  row itself says whether it is selected, not only its checkbox.
+- **Sorting.** Sortable headers are buttons with `aria-sort` and a description, "Sort by Modified";
+  every other header is plain text. A sort change is announced — "Sorted by Modified, descending" —
+  and so is clearing it, because most screen readers do not announce a change to `aria-sort`.
+- **Keyboard.** **Tab** reaches the header controls and then one row. **Up** and **Down** move
+  between rows, **Home** and **End** go to the first and last. **Space** selects the row and
+  **Shift+Space** or **Shift+Up/Down** selects a range from the last row selected; **Ctrl+A** or
+  **Cmd+A** selects the page. **Enter** opens the row. **Right** and **Left** move between the row's
+  checkbox, title and menu, and **Escape** returns to the row. Each row carries this help as its
+  description.
+- **States.** The loader is named, the empty state is a status and the error is an alert, each with a
+  real heading at `stateHeadingLevel`.
+- **Dropping files** has a keyboard equivalent only if the host gives one — an Upload button beside
+  the list.

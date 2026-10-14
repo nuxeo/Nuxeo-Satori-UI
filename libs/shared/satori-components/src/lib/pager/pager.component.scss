@@ -1,0 +1,22 @@
+:host {
+  display: block;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-pager__nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+  padding: 4px 8px;
+}
+
+.nxs-pager__range {
+  margin-inline-end: 8px;
+}
+
+// The chevrons point the way the page turns, which reverses with the reading direction.
+:host-context([dir='rtl']) .nxs-pager__chevron {
+  transform: scaleX(-1);
+}

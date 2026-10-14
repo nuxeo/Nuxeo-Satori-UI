@@ -65,7 +65,16 @@
 
   <!-- Breadcrumbs -->
   @if (showBreadcrumbs()) {
-    <sat-breadcrumbs [items]="breadcrumbs()" (click)="onBreadcrumbClick($event)"></sat-breadcrumbs>
+    @let trailLabel = 'browse.breadcrumb.label' | translate;
+    <lib-extension-outlet
+      #breadcrumbsOutlet
+      class="browse-breadcrumbs"
+      [componentId]="breadcrumbsId"
+      [componentInputs]="{ items: breadcrumbs(), label: trailLabel }"
+    />
+    @if (breadcrumbsOutlet.unresolved()) {
+      <nxs-breadcrumbs class="browse-breadcrumbs" [items]="breadcrumbs()" [label]="trailLabel" />
+    }
   }
 
   <nxs-domain-hint [documentType]="currentDoc()?.type" [path]="browsePath()" />
@@ -84,12 +93,13 @@
           <mat-tab [label]="'browse.tab.view' | translate">
             <!-- Toolbar: result count + filters + view toggle + column settings + export CSV -->
             <div class="view-toolbar">
-              <span class="result-count">{{
-                (filteredEntries().length === 1
-                  ? 'common.count.result-one'
-                  : 'common.count.result-many'
-                ) | translate: { count: filteredEntries().length }
-              }}</span>
+              @let count = resultCount();
+              @if (count !== null) {
+                <span class="result-count">{{
+                  (count === 1 ? 'common.count.result-one' : 'common.count.result-many')
+                    | translate: { count }
+                }}</span>
+              }
               <div class="toolbar-spacer"></div>
 
               <mat-form-field
@@ -172,6 +182,17 @@
               </mat-form-field>
 
               <div class="toolbar-actions">
+                @if (viewMode() === 'list') {
+                  <button
+                    mat-icon-button
+                    class="gear-btn"
+                    [matTooltip]="'browse.browse.manage-columns' | translate"
+                    [attr.aria-label]="'browse.browse.manage-columns' | translate"
+                    (click)="openColumnPanel()"
+                  >
+                    <mat-icon>tune</mat-icon>
+                  </button>
+                }
                 <button
                   mat-icon-button
                   [matTooltip]="'browse.browse.export-csv' | translate"
@@ -209,24 +230,7 @@
               </div>
             </div>
 
-            @if (loading()) {
-              <div class="browse-loading">
-                <nxs-spinner diameter="36" [label]="'browse.browse.loading' | translate" />
-              </div>
-            } @else if (error(); as message) {
-              <nxs-error-state
-                [status]="errorStatus()"
-                [heading]="message"
-                retryable
-                (retry)="loadContent()"
-              />
-            } @else if (filteredEntries().length === 0) {
-              <div class="browse-empty">
-                <mat-icon class="empty-icon">folder_open</mat-icon>
-                <p>{{ 'browse.browse.this-folder-is-empty' | translate }}</p>
-              </div>
-            } @else if (viewMode() === 'list') {
-              <!-- List view -->
+            @if (viewMode() === 'list') {
               <div class="browse-list-container">
                 @if (columnPanelOpen()) {
                   <nxs-column-picker
@@ -237,133 +241,55 @@
                     (dismiss)="closeColumnPanel()"
                   />
                 }
-                <div class="browse-table-wrapper">
-                  <table class="browse-table">
-                    <thead>
-                      <tr>
-                        <th class="col-checkbox">
-                          <span class="cdk-visually-hidden">{{
-                            'browse.browse.selection' | translate
-                          }}</span>
-                        </th>
-                        @for (col of visibleColumns(); track col.key) {
-                          <th class="sortable-th" (click)="toggleBrowseSort(col.key)">
-                            <span class="th-label">{{ col | descriptorLabel }}</span>
-                            @if (browseSortKey() === col.key) {
-                              <mat-icon class="sort-arrow">
-                                {{ browseSortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}
-                              </mat-icon>
-                            }
-                          </th>
-                        }
-                        @if (hasCollectionEntries()) {
-                          <th class="col-actions">
-                            <span class="cdk-visually-hidden">{{
-                              'browse.browse.actions' | translate
-                            }}</span>
-                          </th>
-                        }
-                        <th class="col-gear">
-                          <button
-                            mat-icon-button
-                            class="gear-btn"
-                            [matTooltip]="'browse.browse.manage-columns' | translate"
-                            [attr.aria-label]="'browse.browse.manage-columns' | translate"
-                            (click)="openColumnPanel()"
-                          >
-                            <mat-icon>tune</mat-icon>
-                          </button>
-                        </th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (doc of filteredEntries(); track doc.uid) {
-                        <tr
-                          class="browse-row"
-                          [class.browse-row--selected]="isSelected(doc.uid)"
-                          [class.browse-row--folder]="isFolderish(doc)"
-                          (click)="onRowClick(doc)"
-                        >
-                          <td class="cell-checkbox">
-                            <mat-checkbox
-                              [checked]="isSelected(doc.uid)"
-                              [aria-label]="selectionAriaLabel(doc)"
-                              (change)="toggleSelection(doc.uid)"
-                              (click)="$event.stopPropagation()"
-                            ></mat-checkbox>
-                          </td>
-                          @for (col of visibleColumns(); track col.key) {
-                            <td [ngClass]="'cell-' + col.key">
-                              @if (col.key === 'title') {
-                                <div class="cell-name-inner">
-                                  <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
-                                    <mat-icon
-                                      class="doc-icon"
-                                      [class.folder-icon]="isFolderish(doc)"
-                                    >
-                                      {{ docIcon(doc) }}
-                                    </mat-icon>
-                                  </nxs-thumbnail>
-                                  <span class="doc-title" [title]="doc.path">{{ doc.title }}</span>
-                                </div>
-                              } @else if (col.key === 'type') {
-                                <sat-category-tag category="blue">{{
-                                  doc.type | docTypeLabel
-                                }}</sat-category-tag>
-                              } @else if (col.key === 'modified') {
-                                {{ doc.lastModified | date: 'mediumDate' }}
-                              } @else if (col.key === 'lastContributor') {
-                                <span class="contributor-cell">
-                                  <sat-avatar
-                                    [initials]="avatarInitials(lastContributor(doc))"
-                                    [category]="avatarColor(lastContributor(doc))"
-                                    size="24"
-                                    [borderless]="true"
-                                    aria-hidden="true"
-                                  />
-                                  {{ lastContributor(doc) }}
-                                </span>
-                              } @else {
-                                {{ getCellValue(doc, col.key) }}
-                              }
-                            </td>
-                          }
-                          @if (hasCollectionEntries()) {
-                            <td class="cell-actions">
-                              @if (isCollectionEntry(doc) && hasCollectionEntryActions(doc)) {
-                                <button
-                                  mat-icon-button
-                                  type="button"
-                                  [matMenuTriggerFor]="collectionRowMenu"
-                                  [attr.aria-label]="'browse.browse.collection-actions' | translate"
-                                  (click)="$event.stopPropagation()"
-                                >
-                                  <mat-icon>more_vert</mat-icon>
-                                </button>
-                                <mat-menu #collectionRowMenu="matMenu">
-                                  @if (canEditCollectionEntry(doc)) {
-                                    <button mat-menu-item (click)="openEditCollectionDialog(doc)">
-                                      <mat-icon>edit</mat-icon>
-                                      <span>{{ 'browse.browse.edit' | translate }}</span>
-                                    </button>
-                                  }
-                                  @if (canDeleteCollectionEntry(doc)) {
-                                    <button mat-menu-item (click)="deleteCollectionEntry(doc)">
-                                      <mat-icon>delete</mat-icon>
-                                      <span>{{ 'browse.browse.delete' | translate }}</span>
-                                    </button>
-                                  }
-                                </mat-menu>
-                              }
-                            </td>
-                          }
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
+                <nxs-document-list
+                  class="browse-document-list"
+                  [documents]="filteredEntries()"
+                  [columns]="listColumns()"
+                  [label]="
+                    'browse.browse.contents-of' | translate: { name: currentDoc()?.title ?? '' }
+                  "
+                  [sort]="listSort()"
+                  [selectedIds]="listSelectedIds()"
+                  [pageIndex]="pageIndex()"
+                  [pageSize]="pageSize"
+                  [totalSize]="totalSize()"
+                  [hasNextPage]="hasNextPage()"
+                  [loading]="loading()"
+                  [error]="error() ? errorStatus() : null"
+                  [errorHeading]="error() ?? ''"
+                  [emptyHeading]="'browse.browse.this-folder-is-empty' | translate"
+                  [rowActions]="rowMenus()"
+                  (selectedIdsChange)="onListSelectionChange($event)"
+                  (sortChange)="onListSortChange($event)"
+                  (pageChange)="goToPage($event)"
+                  (open)="onRowClick($event)"
+                  (rowAction)="onRowAction($event)"
+                  (retry)="loadContent()"
+                  [dropEnabled]="canCreateContentHere()"
+                  [dropLabel]="
+                    'browse.browse.drop-to-upload' | translate: { name: currentDoc()?.title ?? '' }
+                  "
+                  (filesDropped)="uploadDropped($event)"
+                />
               </div>
+            } @else if (loading()) {
+              <div class="browse-loading">
+                <nxs-spinner diameter="36" [label]="'browse.browse.loading' | translate" />
+              </div>
+            } @else if (error(); as message) {
+              <nxs-error-state
+                [status]="errorStatus()"
+                [heading]="errorStatus() === 500 ? message : ''"
+                retryable
+                (retry)="loadContent()"
+              />
             } @else {
+              @if (filteredEntries().length === 0 && pageIndex() === 0) {
+                <div class="browse-empty">
+                  <mat-icon class="empty-icon">folder_open</mat-icon>
+                  <p>{{ 'browse.browse.this-folder-is-empty' | translate }}</p>
+                </div>
+              }
               <!-- Card view -->
               <div class="card-grid">
                 @for (doc of filteredEntries(); track doc.uid) {
@@ -419,6 +345,40 @@
                   </div>
                 }
               </div>
+              <nxs-pager
+                [pageIndex]="pageIndex()"
+                [pageSize]="pageSize"
+                [itemCount]="filteredEntries().length"
+                [totalSize]="totalSize()"
+                [hasNextPage]="hasNextPage()"
+                (pageChange)="goToPage($event)"
+              />
+            }
+            @if (droppedUploads.items().length > 0) {
+              <section
+                class="browse-uploads"
+                [attr.aria-label]="'browse.browse.uploads' | translate"
+              >
+                <div class="browse-uploads__header">
+                  <span class="browse-uploads__title">{{
+                    'browse.browse.uploads' | translate
+                  }}</span>
+                  <button
+                    mat-button
+                    type="button"
+                    [disabled]="droppedUploads.busy()"
+                    (click)="droppedUploads.clear()"
+                  >
+                    {{ 'browse.browse.clear-uploads' | translate }}
+                  </button>
+                </div>
+                <nxs-upload-queue
+                  [items]="droppedUploads.items()"
+                  [label]="'browse.browse.uploads' | translate"
+                  (remove)="droppedUploads.remove($event)"
+                  (retry)="runDroppedUploads()"
+                />
+              </section>
             }
           </mat-tab>
 

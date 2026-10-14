@@ -7,10 +7,28 @@
  * facets add. A contributed layout replaces the generated one whole — nothing is merged.
  */
 
-/** The modes this build renders. `view` is not one: the View tab body is the `documentView` slot. */
-export type LayoutMode = 'metadata';
+/**
+ * The modes this build renders: `metadata` read-only in the Properties panel, `edit` and `create`
+ * as forms. `view` is not one: the View tab body is the `documentView` slot.
+ */
+export type LayoutMode = 'metadata' | 'edit' | 'create';
 
 export type LayoutDisplay = 'sections' | 'tabs';
+
+/**
+ * What a schema allows a value to be, from the constraints Nuxeo reports on the field:
+ * `PatternConstraint`, `LengthConstraint` and `NumericIntervalConstraint`. A bound is inclusive
+ * unless its `…Inclusive` flag says otherwise.
+ */
+export interface LayoutFieldConstraints {
+  readonly pattern?: string;
+  readonly minLength?: number;
+  readonly maxLength?: number;
+  readonly minimum?: number;
+  readonly maximum?: number;
+  readonly minimumInclusive?: boolean;
+  readonly maximumInclusive?: boolean;
+}
 
 /**
  * A field's type as `/config/types/<type>` and `/config/schemas/<name>` describe it when asked
@@ -23,6 +41,9 @@ export interface LayoutFieldType {
   readonly directory?: string;
   /** A complex field's sub-fields, by their bare names. */
   readonly fields?: Readonly<Record<string, LayoutFieldType>>;
+  /** The schema declares it not nullable (`NotNullConstraint`), or a layout file marks it required. */
+  readonly required?: boolean;
+  readonly constraints?: LayoutFieldConstraints;
 }
 
 export interface DocumentTypeSchema {

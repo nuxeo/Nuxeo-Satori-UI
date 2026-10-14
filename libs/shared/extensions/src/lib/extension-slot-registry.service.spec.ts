@@ -233,8 +233,8 @@ describe('ExtensionSlotRegistry', () => {
   });
 
   /**
-   * The hard design constraint from the phase brief: adding a tenth slot must
-   * not require changing the nine.
+   * The hard design constraint from the phase brief: adding a slot must not
+   * require changing the existing ones.
    *
    * `'acme.reportPanel'` appears nowhere in this library — not in
    * `EXTENSION_SLOTS`, not in a union, not in a `switch`. If registration or
@@ -242,7 +242,7 @@ describe('ExtensionSlotRegistry', () => {
    * it. That it passes is the proof that the addressable ceiling is backlog
    * rather than an irreversible decision.
    */
-  it('supports a slot the library has never heard of, with no change to the nine', () => {
+  it('supports a slot the library has never heard of, with no change to the existing ones', () => {
     const before = registry.registeredSlotIds();
     registry.register<TestAction>(EXTENSION_SLOTS.toolbar, [{ id: 'app.toolbar.delete' }]);
     const toolbarBefore = registry.resolve<TestAction>(EXTENSION_SLOTS.toolbar).map((a) => a.id);
@@ -264,7 +264,7 @@ describe('ExtensionSlotRegistry', () => {
       ),
     ).toEqual([]);
 
-    // And nothing about the nine changed.
+    // And nothing about the existing slots changed.
     expect(registry.resolve<TestAction>(EXTENSION_SLOTS.toolbar).map((a) => a.id)).toEqual(
       toolbarBefore,
     );

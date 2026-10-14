@@ -1,0 +1,104 @@
+@if (items().length > 0) {
+  @if (started()) {
+    <p class="nxs-upload-queue__summary" aria-live="polite" aria-atomic="true">
+      {{
+        'satori-components.upload-queue.summary'
+          | translate: { done: doneCount(), total: items().length }
+      }}
+      @if (failedCount() > 0) {
+        {{ 'satori-components.upload-queue.summary-failed' | translate: { count: failedCount() } }}
+      }
+    </p>
+  }
+  <ul class="nxs-upload-queue__list" [attr.aria-label]="label()">
+    @for (item of items(); track item.id) {
+      <li class="nxs-upload-queue__item" [attr.data-state]="item.state">
+        <mat-icon class="nxs-upload-queue__icon" aria-hidden="true">
+          @switch (item.state) {
+            @case ('done') {
+              check_circle
+            }
+            @case ('failed') {
+              error_outline
+            }
+            @default {
+              description
+            }
+          }
+        </mat-icon>
+        <div class="nxs-upload-queue__body">
+          <span class="nxs-upload-queue__name">{{ item.file.name }}</span>
+          <span class="nxs-upload-queue__status">
+            @switch (item.state) {
+              @case ('staged') {
+                {{ size(item.file.size) }}
+              }
+              @case ('waiting') {
+                {{ 'satori-components.upload-queue.waiting' | translate }}
+              }
+              @case ('uploading') {
+                {{
+                  'satori-components.upload-queue.uploading' | translate: { percent: item.percent }
+                }}
+              }
+              @case ('done') {
+                {{ 'satori-components.upload-queue.done' | translate }}
+              }
+              @case ('failed') {
+                @switch (item.error) {
+                  @case (403) {
+                    {{ 'satori-components.upload-queue.forbidden' | translate }}
+                  }
+                  @case (404) {
+                    {{ 'satori-components.upload-queue.not-found' | translate }}
+                  }
+                  @default {
+                    {{ 'satori-components.upload-queue.failed' | translate }}
+                  }
+                }
+              }
+            }
+          </span>
+          @if (item.state === 'uploading') {
+            <mat-progress-bar
+              class="nxs-upload-queue__bar"
+              mode="determinate"
+              [value]="item.percent"
+              [attr.aria-label]="
+                'satori-components.upload-queue.progress' | translate: { name: item.file.name }
+              "
+            />
+          }
+        </div>
+        @if (item.state === 'failed') {
+          @let retryLabel =
+            'satori-components.upload-queue.retry' | translate: { name: item.file.name };
+          <button
+            mat-icon-button
+            type="button"
+            class="nxs-upload-queue__retry"
+            [matTooltip]="retryLabel"
+            [attr.aria-label]="retryLabel"
+            (click)="retry.emit(item.id)"
+          >
+            <mat-icon aria-hidden="true">refresh</mat-icon>
+          </button>
+        }
+        @if (removable(item)) {
+          @let removeLabel =
+            'satori-components.upload-queue.remove' | translate: { name: item.file.name };
+          <button
+            mat-icon-button
+            type="button"
+            class="nxs-upload-queue__remove"
+            [matTooltip]="removeLabel"
+            [attr.aria-label]="removeLabel"
+            (click)="remove.emit(item.id)"
+          >
+            <mat-icon aria-hidden="true">close</mat-icon>
+          </button>
+        }
+      </li>
+    }
+  </ul>
+}
