@@ -183,6 +183,12 @@ describe('BrowseComponent — row actions', () => {
     expect(menu('pub')).toContain('app.rowActions.copyTo');
   });
 
+  it('refuses to rename an Immutable row even when a manifest clears the rule', () => {
+    component.renameEntry(publication);
+    expect(dialogOpen).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledTimes(1);
+  });
+
   it('renders the menu on the row, named for it, and runs the chosen entry', async () => {
     const trigger = fixture.nativeElement.querySelector(
       'tr[data-uid="report"] nxs-action-menu button',

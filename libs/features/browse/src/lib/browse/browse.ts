@@ -1103,6 +1103,12 @@ export class BrowseComponent {
 
   /** Changes the row's title; its path name stays, so links to it keep working. */
   renameEntry(doc: NuxeoDocument): void {
+    // The packaged rule's Immutable restriction, held here too because a manifest may clear the
+    // rule, and a version's or publication's permissions still list Write.
+    if (doc.facets?.includes('Immutable')) {
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
+      return;
+    }
     this.dialog
       .open<NxsRenameDialogComponent, NxsRenameDialogData, NuxeoDocument>(
         NxsRenameDialogComponent,
