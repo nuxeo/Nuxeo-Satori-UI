@@ -1834,7 +1834,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo-satori/platform/nuxeo-client
 
-322 exported symbol(s).
+315 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -1978,7 +1978,6 @@ const BLOB_CLIENT_REASON_HEADER = "X-Client-Reason";
 const BLOB_CLIENT_REASON_PARAM = "clientReason";
 const BLOB_HOLDING_DOC_TYPES: ReadonlySet<string>;
 const BLOB_NOT_ATTACHED_ERROR = "File was not attached to the document";
-const BROWSE_RETURN_MODE_PARAM = "browseReturn";
 type BlobClientReason = 'download' | 'view';
 class BrowseContextService {
     readonly contextPath: i0.WritableSignal<string>;
@@ -2002,7 +2001,6 @@ interface BrowsePageRequest {
     sort?: BrowseSortEntry[];
     }
 }
-type BrowseReturnMode = 'adf-hx' | 'default';
 class BrowseService {
     getByPath(nuxeoPath: string): Observable<NuxeoDocument>;
     getUserWorkspace(): Observable<NuxeoDocument>;
@@ -3257,7 +3255,6 @@ function hasDocumentPermissionsEnricher(doc: NuxeoDocument | null | undefined): 
 function hasInsertablePictureBlob(doc: NuxeoDocument): boolean;
 function inferBlobDocTypeFromFile(file: File): string;
 function insecureAllowedForHost(isDevMode: boolean, hostProtocol?: string): boolean;
-function isAdfHxBrowseRouterUrl(routerUrl: string): boolean;
 function isBlobHoldingDocType(docType: string): boolean;
 function isBrowsableNavNode(doc: NuxeoDocument | null): boolean;
 function isBrowseRouterUrl(routerUrl: string): boolean;
@@ -3301,9 +3298,7 @@ function nuxeoPathsEqual(a: string, b: string): boolean;
 function nuxeoPathsEqualFlexible(a: string, b: string): boolean;
 function originOf(value: string | null | undefined): string | null;
 function parentNuxeoFolderPath(docPath: string): string;
-function parseAdfHxBrowsePathFromRouterUrl(routerUrl: string): string;
 function parseBrowseNuxeoPathFromRouterUrl(routerUrl: string): string;
-function parseBrowseReturnMode(value: string | null | undefined): BrowseReturnMode;
 function parseDocumentSubtypes(doc: NuxeoDocument): string[];
 function permissionCreateMailFailureMessage(translate: PermissionMessageTranslate): string;
 function permissionNotificationAceNotFoundKey(context: 'add' | 'update'): string;
@@ -3337,9 +3332,7 @@ function summarizeCsvImportReport(report: string): string;
 function supportsContentLakeIngest(doc: NuxeoDocument | null | undefined): boolean;
 function taskDueDistance(dueDate: string, now?: number): TaskDueDistance;
 function titleFromFileName(fileName: string): string;
-function toAdfHxBrowseRouterUrl(nuxeoPath: string): string;
 function toBrowseRouterUrl(nuxeoPath: string): string;
-function toBrowseRouterUrlForReturnMode(mode: BrowseReturnMode, nuxeoPath: string): string;
 function topLevelNuxeoFolderPath(nuxeoPath: string): string | null;
 function trustObjectUrl(sanitizer: DomSanitizer, url: string | null | undefined): SafeResourceUrl | null;
 function userWorkspaceBrowseRouterUrl(nuxeoPath: string): string | null;

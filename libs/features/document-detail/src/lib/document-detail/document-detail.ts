@@ -95,21 +95,18 @@ import {
   isFolderishDocument,
   isCollectionDocument,
   BrowseContextService,
-  BROWSE_RETURN_MODE_PARAM,
   decodeNuxeoPathSegment,
   noteFormatLabel,
   normalizeNuxeoPath,
   parentNuxeoFolderPath,
-  parseBrowseReturnMode,
   renderNoteMarkdown,
   isMailSendError,
   mailSendFailureMessage,
   readClipboardDocs,
   writeClipboardDocs,
   renderTrustedHtml,
-  toBrowseRouterUrlForReturnMode,
+  toBrowseRouterUrl,
   trustObjectUrl,
-  type BrowseReturnMode,
   type ClipboardDoc,
   formatRelativeTime,
   permissionRightLabel,
@@ -774,8 +771,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!d) return [];
 
     const path = d.path ?? '';
-    const returnMode = this.browseReturnMode();
-    const cacheKey = `${path}\0${d.title}\0${returnMode}`;
+    const cacheKey = `${path}\0${d.title}`;
     if (cacheKey === this.breadcrumbPathCache) {
       return this.breadcrumbItemsCache;
     }
@@ -788,18 +784,14 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       accumulated = normalizeNuxeoPath(`${accumulated}/${s}`);
       return {
         label: decodeNuxeoPathSegment(s),
-        href: toBrowseRouterUrlForReturnMode(returnMode, accumulated),
+        href: toBrowseRouterUrl(accumulated),
       };
     });
     return this.breadcrumbItemsCache;
   });
 
-  private browseReturnMode(): BrowseReturnMode {
-    return parseBrowseReturnMode(this.route.snapshot.queryParamMap.get(BROWSE_RETURN_MODE_PARAM));
-  }
-
   private browseUrlForPath(nuxeoPath: string): string {
-    return toBrowseRouterUrlForReturnMode(this.browseReturnMode(), nuxeoPath);
+    return toBrowseRouterUrl(nuxeoPath);
   }
 
   onBreadcrumbClick(event: MouseEvent): void {
@@ -3729,17 +3721,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return `${major}.${minor}`;
   }
 
-  /**
-   * Move between a document and its versions. The browse return mode is carried along, or the
-   * breadcrumb and back target of a document opened from adf-hx browse would reset after one
-   * version was opened.
-   */
+  /** Move between a document and its versions. */
   private navigateWithinVersions(uid: string): void {
-    const returnMode = this.route.snapshot.queryParamMap.get(BROWSE_RETURN_MODE_PARAM);
-    void this.router.navigate(
-      ['/doc', uid],
-      returnMode ? { queryParams: { [BROWSE_RETURN_MODE_PARAM]: returnMode } } : {},
-    );
+    void this.router.navigate(['/doc', uid]);
   }
 
   /** Open a version read-only. Choosing one from the list never restores it. */

@@ -24,6 +24,16 @@ The adf-hx proof of concept is removed, with its two routes and its navigation e
 - **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
   with their query string intact, and a `?path=` folder opens in `/browse`.
 
+### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the adf-hx browse URL helpers
+
+They built, recognised and parsed `/browse-adf-hx` URLs, and chose between that route and
+`/browse` for document detail's way back. With the route retired, all seven go:
+`toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
+`toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
+`BROWSE_RETURN_MODE_PARAM`. Use `toBrowseRouterUrl`, `isBrowseRouterUrl` and
+`parseBrowseNuxeoPathFromRouterUrl`. Document detail no longer reads `?browseReturn=`; an old link
+carrying it opens normally, with breadcrumbs into `/browse`.
+
 ### Changed (`@nuxeo-satori/platform`) — `@hylandsoftware/satori-ui` is an optional peer
 
 - **`@hylandsoftware/satori-ui` is now an optional peer** (`peerDependenciesMeta`). npm installs
