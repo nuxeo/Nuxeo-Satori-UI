@@ -37,7 +37,7 @@ collision; the question is which registry and scope the Beta should ship under.
 ```
 
 **Why this first:** the repo already does exactly this in both directions.
-`.npmrc` maps `@alfresco` and `@hylandsoftware` to `npm.pkg.github.com`, and CI already
+`.npmrc` maps `@hylandsoftware` to `npm.pkg.github.com`, and CI already
 holds `SATORI_GH_READONLY_TOKEN`. A Beta with named customers wants an access-controlled
 registry anyway, and GitHub Packages requires the scope to match the owning
 org — so an existing org is a scope we demonstrably own.

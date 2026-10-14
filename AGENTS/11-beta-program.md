@@ -109,16 +109,17 @@ Treat them as settled; if you contradict one, prove it first.
   upstream's would put ACS types in the signature every customer rule is written
   against. Its domain-neutral parts — `mergeObjects`, `mergeArrays`,
   `filterEnabled`, `sortByOrder`, `getValue` — are used directly.
-- **One registry serves every `@alfresco` package we need.** `@alfresco:registry`
-  points at GitHub Packages, and all four — `adf-extensions`, `js-api`,
-  `adf-core` and `adf-hx-content-services` — download from it. Verified twice by
-  fetching the tarballs with only that mapping present. adf-extensions, adf-core
-  and js-api are _also_ on public npm, which makes a two-registry split look
-  necessary; it is not. **Do not repoint this scope at public npm** — adf-hx is
-  GitHub-Packages-exclusive and Phase 3 would break.
-- Because `@alfresco/adf-extensions` is now a production dependency, CI requires
-  `SATORI_GH_READONLY_TOKEN` to carry `read:packages` for the **Alfresco** org,
-  not only `@hylandsoftware`.
+- **~~One registry serves every `@alfresco` package we need~~ — superseded by
+  NXSAT-637**, which removed the last `@alfresco` package and the `@alfresco:registry`
+  line from `.npmrc`. True when written: `@alfresco:registry` pointed at GitHub
+  Packages, and all four — `adf-extensions`, `js-api`, `adf-core` and
+  `adf-hx-content-services` — downloaded from it, verified twice by fetching the
+  tarballs with only that mapping present. adf-extensions, adf-core and js-api were
+  _also_ on public npm, which made a two-registry split look necessary; it was not.
+- **~~CI requires the token to carry `read:packages` for the Alfresco org~~ —
+  superseded by NXSAT-637.** It did while `@alfresco/adf-extensions` was a production
+  dependency. With no `@alfresco` package left, `SATORI_GH_READONLY_TOKEN` needs
+  `read:packages` on the Hyland org only.
 - **`.npmrc` alone does not decide where CI fetches from — `package-lock.json`
   does.** `npm ci` installs from each entry's `resolved` URL and ignores the
   registry mapping. After changing a scope's registry you must regenerate the

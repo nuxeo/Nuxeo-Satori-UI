@@ -23,7 +23,7 @@ concurrency:
 # workflow of the nine that lacked it.
 permissions:
   contents: read
-  # `npm ci` resolves @hylandsoftware and @alfresco from GitHub Packages.
+  # `npm ci` resolves @hylandsoftware from GitHub Packages.
   packages: read
   # `nrwl/nx-set-shas` calls the workflow-runs API to find the last successful run to diff
   # against. Without this it fails with `Resource not accessible by integration`, which is
