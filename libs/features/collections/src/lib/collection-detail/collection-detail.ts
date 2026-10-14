@@ -47,8 +47,8 @@ import {
   shouldShowUserWorkspaceBreadcrumbs,
   postTrashBrowseRouterUrl,
   BrowseContextService,
+  canManageDocumentPermissions,
   decodeNuxeoPathSegment,
-  formatAceDateRange,
   permissionRightLabel,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
@@ -65,32 +65,32 @@ import {
   EditCollectionDialogData,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo-satori/platform/ui';
-import {
-  AddPermissionDialogComponent,
-  AddPermissionDialogData,
-  DeletePermissionDialogComponent,
-  DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
-} from '@agentic-ui/shared-permission-dialogs';
-import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
   NxsBreadcrumbsComponent,
+  NxsDeletePermissionDialogComponent,
   NxsDocumentListComponent,
   NxsFolderHeaderComponent,
+  NxsPermissionsPanelComponent,
+  NxsShareExternalDialogComponent,
   NxsSpinnerComponent,
+  NxsUpdatePermissionDialogComponent,
+  nxsAceTimeFrame,
   nxsErrorStatus,
   provideNxsThumbnailCache,
   NxsToastService,
   provideNxsToast,
   type NxsBreadcrumbItem,
+  type NxsDeletePermissionDialogData,
   type NxsDocumentListColumn,
   type NxsDocumentListSort,
   type NxsErrorStatus,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
 } from '@nuxeo-satori/platform/components';
 
 /**
@@ -115,6 +115,7 @@ const MEMBER_PAGE_SIZE = 50;
     NxsBreadcrumbsComponent,
     NxsDocumentListComponent,
     NxsFolderHeaderComponent,
+    NxsPermissionsPanelComponent,
     NxsSpinnerComponent,
     TranslatePipe,
     DatePipe,
@@ -152,6 +153,7 @@ export class CollectionDetailComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly adminAccess = inject(ADMIN_ACCESS_CHECKS);
+  private readonly appConfig = inject(AppConfigService);
 
   readonly collection = signal<NuxeoDocument | null>(null);
   /**
@@ -294,31 +296,35 @@ export class CollectionDetailComponent {
     );
   });
 
-  readonly localAces = computed<NuxeoAce[]>(() => {
+  /** The collection's local and inherited entries: the `nxs-` panel, resolved by its ID. */
+  readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
+  /** The panel's writes can change the external shares this tab lists itself. */
+  readonly onPermissionsChanged = () => this.loadCollection();
+
+  /**
+   * Web UI's external-user card: the collection's own pending and effective shares. An inherited
+   * share is the parent's to edit, and an archived one has expired.
+   */
+  readonly externalAces = computed<(NuxeoAce & { aclName: string })[]>(() => {
     const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    const local = acls.find((a) => a.name === 'local');
-    return local?.aces.filter((ace) => ace.granted && !ace.externalUser) ?? [];
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces.map((ace) => ({ ...ace, aclName: acl.name })))
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
 
-  readonly inheritedAces = computed<NuxeoAce[]>(() => {
-    const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
-    if (!acls) return [];
-    const inherited = acls.find((a) => a.name === 'inherited');
-    return inherited?.aces.filter((ace) => ace.granted) ?? [];
-  });
+  /** Web UI's `org.nuxeo.web.ui.permissions.externalUsers`, on unless a package turns it off. */
+  readonly showExternalShares = computed(() =>
+    this.appConfig.featureToggle('permissions.externalUsers', true),
+  );
 
-  readonly externalAces = computed<NuxeoAce[]>(() => {
-    const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
-    if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
-  });
-
-  readonly isInheritanceBlocked = computed<boolean>(() => {
-    const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
-    if (!acls) return false;
-    return !acls.some((a) => a.name === 'inherited');
-  });
+  readonly canManagePermissions = computed(() => canManageDocumentPermissions(this.collection()));
 
   constructor() {
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
@@ -705,60 +711,32 @@ export class CollectionDetailComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
+  /** The day each date's writer picked, as the panel and the dialogs show it. */
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
-  addPermission(): void {
-    const dialogRef = this.dialog.open(AddPermissionDialogComponent, {
-      data: { documentUid: this.collectionUid } satisfies AddPermissionDialogData,
+  deletePermission(ace: NuxeoAce & { aclName?: string }): void {
+    const dialogRef = this.dialog.open(NxsDeletePermissionDialogComponent, {
       width: '560px',
-    });
-
-    dialogRef.afterClosed().subscribe((created: boolean | undefined) => {
-      if (created) {
-        this.loadCollection();
-        this.toast.show(this.translate.instant('browse.message.permission-added'));
-      }
-    });
-  }
-
-  editPermission(ace: NuxeoAce): void {
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: { documentUid: this.collectionUid, ace } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-
-    dialogRef.afterClosed().subscribe((updated: boolean | undefined) => {
-      if (updated) {
-        this.loadCollection();
-        this.toast.show(this.translate.instant('browse.message.permission-updated'));
-      }
-    });
-  }
-
-  deletePermission(ace: NuxeoAce): void {
-    const dialogRef = this.dialog.open(DeletePermissionDialogComponent, {
+      maxWidth: '95vw',
+      role: 'alertdialog',
       data: {
         documentUid: this.collectionUid,
         ace,
-        permissionLabel: this.permissionLabel(ace.permission),
-        timeFrameLabel: this.aceTimeFrame(ace),
-      } satisfies DeletePermissionDialogData,
-      width: '560px',
+        acl: ace.aclName,
+      } satisfies NxsDeletePermissionDialogData,
     });
 
-    dialogRef.afterClosed().subscribe((deleted: boolean | undefined) => {
-      if (deleted) {
-        this.loadCollection();
-        this.toast.show(this.translate.instant('browse.message.permission-deleted'));
-      }
-    });
+    dialogRef
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((deleted: boolean | undefined) => {
+        if (deleted) {
+          this.loadCollection();
+          this.toast.show(this.translate.instant('browse.message.permission-deleted'));
+        }
+      });
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -766,21 +744,22 @@ export class CollectionDetailComponent {
   }
 
   editExternalPermission(ace: NuxeoAce): void {
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: {
-        documentUid: this.collectionUid,
-        ace,
-        isExternal: true,
-      } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-
-    dialogRef.afterClosed().subscribe((updated: boolean | undefined) => {
-      if (updated) {
-        this.loadCollection();
-        this.toast.show(this.translate.instant('browse.message.permission-updated'));
-      }
-    });
+    this.withVisiblePermissions((permissions) =>
+      this.dialog
+        .open(NxsUpdatePermissionDialogComponent, {
+          maxWidth: '95vw',
+          data: {
+            documentUid: this.collectionUid,
+            ace,
+            permissions,
+          } satisfies NxsUpdatePermissionDialogData,
+        })
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((updated: boolean | undefined) => {
+          if (updated) this.loadCollection();
+        }),
+    );
   }
 
   sendNotificationEmail(ace: NuxeoAce): void {
@@ -804,45 +783,43 @@ export class CollectionDetailComponent {
   }
 
   shareWithExternal(): void {
-    const dialogRef = this.dialog.open(ShareExternalDialogComponent, {
-      data: { documentUid: this.collectionUid } satisfies ShareExternalDialogData,
-      width: '520px',
-    });
-
-    dialogRef.afterClosed().subscribe((created: boolean | undefined) => {
-      if (created) {
-        this.loadCollection();
-        this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
-      }
-    });
+    this.withVisiblePermissions((permissions) =>
+      this.dialog
+        .open(NxsShareExternalDialogComponent, {
+          maxWidth: '95vw',
+          data: {
+            documentUid: this.collectionUid,
+            permissions,
+          } satisfies NxsShareExternalDialogData,
+        })
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((shared: boolean | undefined) => {
+          if (shared) this.loadCollection();
+        }),
+    );
   }
 
-  toggleInheritance(): void {
-    if (this.actionInProgress()) return;
-    this.actionInProgress.set('inheritance');
-
-    const blocked = this.isInheritanceBlocked();
-    const op = blocked
-      ? this.detailService.unblockPermissionInheritance(this.collectionUid)
-      : this.detailService.blockPermissionInheritance(this.collectionUid);
-
-    op.subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.loadCollection();
-        this.toast.show(
-          this.translate.instant(
-            blocked
-              ? 'collections.message.inheritance-unblocked'
-              : 'collections.message.inheritance-blocked',
-          ),
-        );
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(this.translate.instant('browse.message.action-failed'));
-      },
-    });
+  /**
+   * The rights a Collection offers, from the `userVisiblePermissions` enricher — Read,
+   * ReadCanCollect, ReadWrite and Everything on a stock server — rather than a fixed list. A
+   * failed read leaves the dialogs to their own default.
+   */
+  private withVisiblePermissions(open: (permissions: readonly string[] | null) => void): void {
+    const requestedFor = this.collectionUid;
+    this.detailService
+      .getDocumentPermissions(requestedFor)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (doc) => {
+          if (requestedFor !== this.collectionUid) return;
+          const visible = doc.contextParameters?.['userVisiblePermissions'];
+          open(Array.isArray(visible) ? (visible as string[]) : null);
+        },
+        error: () => {
+          if (requestedFor === this.collectionUid) open(null);
+        },
+      });
   }
 
   // --- History tab ---

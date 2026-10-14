@@ -1,6 +1,6 @@
 :host {
   /* NXENG-774 — properties sidebar stays a fixed light panel in every theme (IBM 280073873). */
-  /* NXENG-858 / NXENG-891 / NXENG-895 — .prop-label reuses label-muted on that panel (IBM 1792790291, 2951482449, 2993932592). */
+  /* NXENG-858 / NXENG-891 / NXENG-895 — the properties panel labels (.detail-properties) reuse label-muted on that panel (IBM 1792790291, 2951482449, 2993932592). */
   /* NXENG-925 — .section-empty uses the same muted token (IBM 3935479306). */
   --document-detail-properties-panel-surface: #ffffff;
   --document-detail-properties-label-muted: #5c5f6b;
@@ -212,49 +212,13 @@ sat-breadcrumbs {
   }
 }
 
-// Tabs — compact, left-aligned (matching Figma)
+// The tab header stays #fff in every packaged theme; the panel toggle's focus ring
+// (`document-detail-panel-toggle-focus.scss`) assumes that surface.
 .detail-tabs {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  overflow: hidden;
-
-  ::ng-deep .mat-mdc-tab-header {
-    background: #fff;
-    border-bottom: 1px solid #e0e0e0;
-    flex-shrink: 0;
-  }
-
-  ::ng-deep .mat-mdc-tab-labels {
-    gap: 0;
-    justify-content: flex-start;
-  }
-
-  ::ng-deep .mat-mdc-tab {
-    flex-grow: 0 !important;
-    min-width: 0;
-    padding: 0 20px;
-    font-size: 13px;
-    letter-spacing: 0;
-  }
-
-  ::ng-deep .mat-mdc-tab-body-wrapper {
-    flex: 1;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  ::ng-deep .mat-mdc-tab-body {
-    height: 100%;
-  }
-
-  ::ng-deep .mat-mdc-tab-body-content {
-    height: 100%;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-  }
+  --nxs-tabs-header-surface: #fff;
+  --nxs-tabs-header-border: #e0e0e0;
+  --nxs-tabs-focus-outline: var(--agentic-document-detail-panel-toggle-focus-outline);
+  --nxs-tabs-icon-color: #6366f1;
 }
 
 // A contributed View tab body brings no layout of its own; the tab body clips, so it scrolls here.
@@ -270,181 +234,29 @@ sat-breadcrumbs {
   }
 }
 
-// Properties panel (right sidebar, outside tabs)
+// The details panel (right sidebar, outside tabs) is a fixed light panel in every theme, so its
+// colours are pinned here rather than read from the theme.
 .properties-panel {
+  --document-detail-properties-panel-border: #e0e0e0;
   width: 380px;
   flex: 0 0 380px;
-  display: flex;
-  flex-direction: column;
-  background: var(--document-detail-properties-panel-surface);
-  border-left: 1px solid #e0e0e0;
-  overflow: hidden;
+  border-left: 1px solid var(--document-detail-properties-panel-border);
+  --nxs-details-panel-surface: var(--document-detail-properties-panel-surface);
+  --nxs-details-panel-text: #333;
+  --nxs-details-panel-divider: #e0e0e0;
+  --nxs-details-panel-muted: var(--document-detail-properties-label-muted);
 }
 
-.panel-header {
-  display: flex;
-  align-items: center;
-  padding: 12px 8px 12px 16px;
-  border-bottom: 1px solid #f0f0f0;
-  flex-shrink: 0;
-
-  .panel-title {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--mat-sys-on-surface);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-}
-
-.panel-sub-tabs {
-  display: flex;
-  border-bottom: 1px solid #e0e0e0;
-  flex-shrink: 0;
-}
-
-.sub-tab {
-  flex: 1;
-  padding: 10px 16px;
-  border: none;
-  background: none;
-  font-size: 13px;
-  font-weight: 500;
-  color: #888;
-  cursor: pointer;
-  text-align: center;
-  position: relative;
-  transition: color 0.15s;
-
-  &:hover {
-    color: #333;
-  }
-
-  &--active {
-    color: var(--mat-sys-primary);
-
-    &::after {
-      content: '';
-      position: absolute;
-      bottom: 0;
-      left: 0;
-      right: 0;
-      height: 2px;
-      background: var(--mat-sys-primary);
-    }
-  }
-}
-
-.sub-tab:focus {
-  outline: 2px solid var(--document-detail-properties-label-muted);
-  outline-offset: -2px;
-}
-
-.panel-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-// Document info section (State, Version, Publications, etc.)
-.doc-info-section {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  margin-bottom: 20px;
-  padding: 12px 0;
-  border-bottom: 1px solid #eee;
-}
-
-.doc-info-row {
-  display: flex;
-  align-items: flex-start;
-  padding: 6px 0;
-  gap: 12px;
-}
-
-.doc-info-label {
-  font-size: 12px;
-  /* NXENG-774 / NXENG-782 / NXENG-804 / NXENG-813 / NXENG-829 / NXENG-852 / NXENG-911 / NXENG-924 — #888 was 3.54:1 on the panel; mat-sys-on-surface-variant fails on this light strip in dark theme (IBM 1741130194, IBM 787384272, IBM 3376112021, IBM 3883422420). */
-  color: var(--document-detail-properties-label-muted);
-  min-width: 100px;
-  flex-shrink: 0;
-  padding-top: 2px;
-}
-
-.doc-info-value {
-  font-size: 13px;
-  color: #333;
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.state-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 12px;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  line-height: 1;
-  text-align: center;
-  background: var(--mat-sys-primary-container);
-  color: var(--mat-sys-on-primary-container);
-  text-transform: capitalize;
-}
-
-.publications-link {
-  color: #3f51b5;
-  font-weight: 600;
-  cursor: pointer;
-  text-decoration: none;
-  border: none;
-  background: none;
-  padding: 0;
-  font: inherit;
-  text-align: inherit;
-
-  &:hover {
-    text-decoration: underline;
-  }
+.detail-properties {
+  --nxs-properties-panel-label: var(--document-detail-properties-label-muted);
+  --nxs-properties-panel-value: #333;
+  --nxs-properties-panel-divider: #eee;
+  --nxs-properties-panel-link: #3f51b5;
 }
 
 .no-publications {
   /* NXENG-917 — #aaa was 2.32:1 on the panel (IBM 3603735683); reuse light-panel muted token. */
   color: var(--document-detail-properties-label-muted);
-}
-
-.creator-value {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.creator-name,
-.contributor-name {
-  font-size: 13px;
-  line-height: 1.3;
-  color: var(--mat-sys-on-surface, #333);
-}
-
-.contributors-value {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 16px;
-}
-
-.contributor-entry {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
 }
 
 .avatar-sm {
@@ -454,262 +266,13 @@ sat-breadcrumbs {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: #e57373;
-  color: #fff;
+  --document-detail-avatar-surface: #e57373;
+  --document-detail-avatar-text: #fff;
+  background: var(--document-detail-avatar-surface);
+  color: var(--document-detail-avatar-text);
   font-size: 11px;
   font-weight: 600;
   flex-shrink: 0;
-}
-
-// Version section (kept for the dropdown in doc-info)
-.version-section {
-  margin-bottom: 16px;
-}
-
-.version-label {
-  display: block;
-  font-size: 11px;
-  font-weight: 500;
-  color: #888;
-  margin-bottom: 4px;
-}
-
-.version-select-wrapper {
-  position: relative;
-  display: inline-block;
-}
-
-.version-select {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 6px 12px;
-  border: 1px solid var(--mat-sys-primary);
-  border-radius: 4px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mat-sys-primary);
-  background: var(--mat-sys-surface);
-  cursor: pointer;
-
-  .version-arrow {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-    color: var(--mat-sys-primary);
-  }
-
-  &:hover {
-    background: color-mix(in srgb, var(--mat-sys-primary) 8%, var(--mat-sys-surface));
-  }
-}
-
-.create-version-btn {
-  font-size: 13px !important;
-  height: 32px;
-}
-
-.version-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 100;
-  min-width: 240px;
-  max-height: 280px;
-  overflow-y: auto;
-  background: #fff;
-  border: 1px solid #e0e0e0;
-  border-radius: 6px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
-  margin-top: 4px;
-}
-
-.version-dropdown-loading {
-  display: flex;
-  justify-content: center;
-  padding: 16px;
-}
-
-.version-dropdown-item {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  padding: 10px 16px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  text-align: left;
-  border-bottom: 1px solid #f0f0f0;
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  &:hover {
-    background: var(--mat-sys-surface-container-lowest);
-  }
-
-  &--current {
-    font-weight: 600;
-  }
-}
-
-.version-dropdown-label {
-  font-size: 14px;
-  color: #333;
-  font-weight: 500;
-}
-
-.version-dropdown-meta {
-  font-size: 11px;
-  color: #999;
-  margin-top: 2px;
-}
-
-.version-dropdown-empty {
-  padding: 12px 16px;
-  font-size: 13px;
-  color: #999;
-  text-align: center;
-}
-
-.version-dropdown-create {
-  flex-direction: row;
-  align-items: center;
-  gap: 8px;
-  color: #3f51b5;
-  border-bottom: 1px solid #e0e0e0;
-
-  .version-dropdown-label {
-    color: #3f51b5;
-    font-weight: 600;
-  }
-}
-
-.create-version-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
-  color: #3f51b5;
-}
-
-// Indexing Properties header
-.indexing-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.indexing-title {
-  flex: 1;
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-  margin: 0;
-}
-
-// Property fields (stacked label/value)
-.prop-field {
-  margin-bottom: 14px;
-}
-
-.prop-label {
-  display: block;
-  font-size: 11px;
-  font-weight: 500;
-  /* NXENG-858 / NXENG-861 / NXENG-769 / NXENG-895 — same fixed light panel as .doc-info-label; mat-sys-on-surface-variant fails in dark theme. */
-  color: var(--document-detail-properties-label-muted);
-  margin-bottom: 2px;
-  text-transform: capitalize;
-}
-
-.prop-value {
-  font-size: 13px;
-  color: var(--mat-sys-on-surface);
-  line-height: 1.4;
-  word-break: break-word;
-
-  &.process-running {
-    color: #1a73e8;
-    font-weight: 600;
-    font-size: 12px;
-    background: #e8f0fe;
-    padding: 2px 10px;
-    border-radius: 12px;
-    display: inline-block;
-  }
-}
-
-.prop-description {
-  font-size: 13px;
-  color: #555;
-  margin: 0;
-  line-height: 1.5;
-}
-
-// Tags — nuxeo-tag-suggestion style (chips inside fill field + dropdown suffix)
-.prop-field--tags {
-  .tags-suggestion-field {
-    width: 100%;
-    margin-top: 2px;
-
-    .mat-mdc-form-field-flex {
-      align-items: center;
-    }
-
-    .mat-mdc-form-field-icon-suffix {
-      color: var(--mat-sys-on-surface-variant, #666);
-    }
-
-    .mat-mdc-chip {
-      --mdc-chip-elevated-container-color: var(--mat-sys-surface-container-high, #e8e8e8);
-      --mdc-chip-label-text-color: var(--mat-sys-on-surface, #333);
-      --mdc-chip-with-icon-icon-size: 14px;
-      height: 24px;
-      font-size: 13px;
-      font-weight: 400;
-      max-width: none;
-    }
-
-    .mat-mdc-chip-action-label {
-      overflow: visible;
-      text-overflow: clip;
-      white-space: nowrap;
-    }
-
-    input {
-      min-width: 80px;
-      font-size: 13px;
-    }
-  }
-
-  .create-tag-option {
-    font-weight: 500;
-    color: var(--mat-sys-primary);
-  }
-
-  .tags-readonly {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-    margin-top: 4px;
-  }
-
-  .tags-readonly-chip {
-    display: inline-flex;
-    align-items: center;
-    padding: 2px 10px;
-    border-radius: 16px;
-    background: var(--mat-sys-surface-container-high, #e8e8e8);
-    color: var(--mat-sys-on-surface, #333);
-    font-size: 13px;
-    line-height: 20px;
-  }
-
-  .tags-empty {
-    font-size: 13px;
-    color: var(--mat-sys-on-surface-variant, #999);
-  }
 }
 
 // Section dividers and titles
@@ -834,160 +397,13 @@ sat-breadcrumbs {
   height: 14px !important;
 }
 
-// History tab
+// History tab: nxs-document-history fills the tab and scrolls inside it.
 .history-container {
-  display: flex;
-  flex-direction: column;
+  display: block;
   flex: 1;
   min-height: 0;
-  overflow: hidden;
-}
-
-.history-filters {
-  padding: 16px 20px 8px;
-  background: #fff;
-  border-bottom: 1px solid #e0e0e0;
-  flex-shrink: 0;
-}
-
-.filter-row {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 8px;
-}
-
-.filter-field {
-  flex: 1;
-
-  &--wide {
-    flex: 1;
-  }
-
-  ::ng-deep .mat-mdc-form-field-subscript-wrapper {
-    display: none;
-  }
-
-  ::ng-deep .mat-mdc-text-field-wrapper {
-    padding: 0 12px;
-  }
-
-  ::ng-deep .mat-mdc-form-field-infix {
-    min-height: 40px;
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-  }
-
-  ::ng-deep .mat-mdc-floating-label {
-    font-size: 13px;
-  }
-
-  ::ng-deep .mdc-text-field--outlined .mdc-notched-outline .mdc-notched-outline__leading,
-  ::ng-deep .mdc-text-field--outlined .mdc-notched-outline .mdc-notched-outline__notch,
-  ::ng-deep .mdc-text-field--outlined .mdc-notched-outline .mdc-notched-outline__trailing {
-    border-color: #d0d0d0;
-  }
-
-  ::ng-deep input.mat-mdc-input-element {
-    font-size: 13px;
-  }
-
-  ::ng-deep .mat-mdc-select-trigger {
-    font-size: 13px;
-  }
-}
-
-.history-loading {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40px;
-  flex: 1;
-}
-
-.history-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px;
-  color: #999;
-  gap: 8px;
-  flex: 1;
-
-  mat-icon {
-    font-size: 40px;
-    width: 40px;
-    height: 40px;
-  }
-
-  p {
-    font-size: 14px;
-    margin: 0;
-  }
-}
-
-.history-table-wrapper {
-  flex: 1;
-  overflow: auto;
-  min-height: 0;
-}
-
-.history-table {
-  width: 100%;
-
-  .mat-mdc-header-cell {
-    font-weight: 600;
-    font-size: 12px;
-    color: #555;
-    background: #fafafa;
-    border-bottom: 2px solid #e0e0e0;
-    padding: 12px 16px;
-  }
-
-  .mat-mdc-cell {
-    font-size: 13px;
-    color: #333;
-    padding: 10px 16px;
-    border-bottom: 1px solid #f0f0f0;
-  }
-
-  .mat-mdc-row:hover {
-    background: #f8f9fe;
-  }
-}
-
-.user-cell {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.comment-cell {
-  max-width: 240px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.state-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 500;
-  line-height: 1;
-  text-align: center;
-  color: var(--mat-sys-on-primary-container);
-  background: var(--mat-sys-primary-container);
-  text-transform: capitalize;
-}
-
-::ng-deep .history-container .mat-mdc-paginator {
-  flex-shrink: 0;
-  border-top: 1px solid #e0e0e0;
-  font-size: 12px;
+  overflow-y: auto;
+  padding: 16px 20px;
 }
 
 // Permissions tab
@@ -1274,20 +690,6 @@ sat-breadcrumbs {
   height: 18px;
   color: var(--mat-sys-primary);
   flex-shrink: 0;
-}
-
-.version-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px 10px;
-  border-radius: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1;
-  text-align: center;
-  color: var(--mat-sys-on-primary-container);
-  background: var(--mat-sys-primary-container);
 }
 
 .pub-path {
@@ -1590,161 +992,12 @@ sat-breadcrumbs {
   margin-top: 1px;
 }
 
-.comment-card {
-  padding: 12px 0;
-  border-bottom: 1px solid #f0f0f0;
+.comment-sentiment {
+  margin-block: 4px 0;
+  margin-inline: 36px 0;
 
-  &:last-of-type {
-    border-bottom: none;
-  }
-}
-
-.comment-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
-}
-
-.comment-author {
-  font-size: 13px;
-  font-weight: 600;
-  color: #333;
-}
-
-.comment-time {
-  font-size: 11px;
-  color: #999;
-}
-
-.comment-edited {
-  font-size: 11px;
-  color: #999;
-  font-style: italic;
-}
-
-.comment-menu-btn {
-  margin-left: auto;
-  width: 28px !important;
-  height: 28px !important;
-  line-height: 28px !important;
-
-  mat-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-  }
-}
-
-.comment-text {
-  margin: 0;
-  font-size: 13px;
-  color: #555;
-  padding-left: 36px;
-  line-height: 1.5;
-}
-
-.comment-footer {
-  display: flex;
-  gap: 12px;
-  padding-left: 36px;
-  margin-top: 4px;
-}
-
-.reply-toggle-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--mat-sys-primary);
-  font-size: 12px;
-  padding: 2px 0;
-
-  &:hover {
-    text-decoration: underline;
-  }
-}
-
-.reply-icon {
-  font-size: 16px !important;
-  width: 16px !important;
-  height: 16px !important;
-}
-
-.reply-summary {
-  padding-left: 36px;
-  margin-top: 4px;
-  font-size: 12px;
-  color: var(--mat-sys-primary);
-  font-weight: 500;
-}
-
-.replies-section {
-  padding-left: 36px;
-  margin-top: 8px;
-  border-left: 2px solid #e0e0e0;
-  margin-left: 16px;
-}
-
-.reply-card {
-  padding: 6px 0 6px 12px;
-}
-
-.reply-input-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 36px;
-  margin-top: 6px;
-}
-
-.reply-input {
-  font-size: 12px !important;
-}
-
-.comment-edit-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 36px;
-  margin-top: 4px;
-}
-
-.comment-edit-input {
-  flex: 1;
-  border: none;
-  border-bottom: 2px solid var(--mat-sys-primary);
-  outline: none;
-  font-size: 13px;
-  padding: 6px 0;
-  color: #333;
-  background: transparent;
-}
-
-.new-comment-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-top: 8px;
-  border-top: 1px solid #e0e0e0;
-  padding-top: 12px;
-}
-
-.new-comment-input {
-  flex: 1;
-  border: none;
-  border-bottom: 2px solid var(--mat-sys-primary);
-  outline: none;
-  font-size: 13px;
-  padding: 6px 0;
-  color: #333;
-  background: transparent;
-
-  &::placeholder {
-    color: #aaa;
-    font-style: italic;
+  .sentiment-badge {
+    margin-left: 0;
   }
 }
 
@@ -1797,24 +1050,6 @@ sat-breadcrumbs {
 
 ::ng-deep .publish-dialog-panel .mat-mdc-dialog-container .mdc-dialog__content {
   padding: 0;
-}
-
-::ng-deep .create-version-dialog-panel .mat-mdc-dialog-content {
-  max-height: none;
-  overflow: visible;
-  padding: 16px 24px;
-}
-
-::ng-deep .create-version-dialog-panel .mat-mdc-dialog-title {
-  padding: 24px 24px 0;
-}
-
-::ng-deep .create-version-dialog-panel .mat-mdc-dialog-actions {
-  padding: 8px 24px 24px;
-}
-
-::ng-deep .create-version-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
-  overflow: visible;
 }
 
 ::ng-deep .preview-dialog-panel .mat-mdc-dialog-container .mdc-dialog__surface {
@@ -2040,13 +1275,6 @@ sat-breadcrumbs {
 }
 
 // AI Insights Tab
-.detail-tab-icon {
-  font-size: 18px;
-  width: 18px;
-  height: 18px;
-  margin-right: 6px;
-  color: #6366f1;
-}
 
 .ai-tab-content {
   padding: 20px;

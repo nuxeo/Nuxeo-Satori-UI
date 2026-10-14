@@ -318,10 +318,24 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Query Parameters:**
 
-| Parameter          | Value          |
-| ------------------ | -------------- |
-| `pageSize`         | `50` (default) |
-| `currentPageIndex` | `0` (default)  |
+| Parameter          | Value                                                                     |
+| ------------------ | ------------------------------------------------------------------------- |
+| `pageSize`         | `50` (default)                                                            |
+| `currentPageIndex` | `0` (default)                                                             |
+| `principalName`    | `query.principalName` — the exact username, as Web UI's user picker sends |
+| `eventId`          | `query.eventIds` — repeated, any of them matches                          |
+| `eventCategory`    | `query.eventCategory`                                                     |
+| `startEventDate`   | `query.startDate` as an ISO instant — inclusive                           |
+| `endEventDate`     | `query.endDate` as an ISO instant — **exclusive**                         |
+| `sortBy`           | `query.sortBy`: `eventId`, `eventDate`, `principalName` or `category`     |
+| `sortOrder`        | `query.sortOrder`, `desc` unless given                                    |
+
+Every `query` field is optional and sent only when set; `sortOrder` goes with `sortBy`, `desc`
+unless given. Measured on the shared Nuxeo
+(2026-10-13): each one filters or sorts the whole audit trail on the server, a bare day
+(`2026-10-13`) is read as midnight in the server's zone, and an end of `2026-10-13` excludes
+that day — so `nxs-document-history` sends instants, with the end at the start of the day after
+the user's "To".
 
 **Request Headers:**
 
@@ -537,6 +551,38 @@ With `page` (`{ currentPageIndex?, sort? }`), `Root` returns that one page in th
 
 ---
 
+## 8b. Document Detail — Tags (NXSAT-308)
+
+| Field           | Value                                                                                                                   |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| **Service**     | `TagService` (`libs/shared/nuxeo-client/src/lib/services/tag.service.ts`)                                               |
+| **Methods**     | `addTag(uid, label)` / `removeTag(uid, label)` / `suggestTags(term)`                                                    |
+| **HTTP Method** | `POST`                                                                                                                  |
+| **Endpoints**   | `/nuxeo/api/v1/id/{uid}/@op/Services.TagDocument` / `Services.UntagDocument`; `/nuxeo/api/v1/automation/Tag.Suggestion` |
+
+**Request Payload:** `{ "params": { "tags": "<label>" }, "context": {} }` to tag and untag;
+`{ "params": { "searchTerm": "<term>" }, "context": {} }` to suggest.
+
+**Headers:** `properties: facetedTag` on tag and untag, so the answer — the document — carries
+`nxtag:tags`. Without it the operations' answer leaves the schema out.
+
+**Response (200 OK):** `addTag` and `removeTag` answer with the labels of the document's tags
+afterwards; `Tag.Suggestion` with `[{ "id", "displayLabel" }]`.
+
+**Behaviour measured on Nuxeo LTS 2025 (2026-10-13):**
+
+- Nuxeo normalises a label: "B2 Hello World" is stored as `b2helloworld`, "Writer Tag!" as
+  `writertag!`. Show the label from the answer, not the one typed.
+- A user with Read alone may tag (200) but not untag (500, "Failed to invoke operation"). A user with
+  Write may untag a tag someone else added (200).
+- Web UI's `isTaggable` — `canTagDocument(doc)` here — offers neither without Write, nor on a version
+  or a proxy.
+
+**Used by:** `nxs-tag-editor` in the document page's Properties panel, and the AI "Suggested tags"
+card, which refreshes the document's tags from `addTag`'s answer.
+
+---
+
 ## 9. Document Detail — Blob Download
 
 | Field           | Value                                                                                            |
@@ -592,7 +638,7 @@ Classic Web UI sends `clientReason=view` when loading blob content for preview a
 | Field           | Value                                                                                            |
 | --------------- | ------------------------------------------------------------------------------------------------ |
 | **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
-| **Method**      | `getAuditLog(uid, pageSize, currentPageIndex)`                                                   |
+| **Method**      | `getAuditLog(uid, pageSize, currentPageIndex, query?)`                                           |
 | **HTTP Method** | `GET`                                                                                            |
 | **Endpoint**    | `/nuxeo/api/v1/id/{uid}/@audit`                                                                  |
 
@@ -793,36 +839,49 @@ L10n directories (`l10nsubjects`, `l10ncoverage`) use `label_en` instead of `lab
 | **Service**     | `DocumentDetailService` (`libs/shared/nuxeo-client/src/lib/services/document-detail.service.ts`) |
 | **Method**      | `getPublishedVersions(uid)`                                                                      |
 | **HTTP Method** | `GET`                                                                                            |
-| **Endpoint**    | `/nuxeo/api/v1/search/lang/NXQL/execute`                                                         |
+| **Endpoint**    | `/nuxeo/api/v1/search/pp/nxql_search/execute`                                                    |
 
 **Query Parameters:**
 
-| Parameter  | Value                                                                                                |
-| ---------- | ---------------------------------------------------------------------------------------------------- |
-| `query`    | `SELECT * FROM Document WHERE ecm:isProxy = 1 AND ecm:proxyTargetId = '{uid}' AND ecm:isTrashed = 0` |
-| `pageSize` | `50`                                                                                                 |
+| Parameter     | Value                                                                                                                                             |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `queryParams` | `SELECT * FROM Document WHERE ecm:isProxy = 1 AND ecm:isTrashed = 0 AND (rend:sourceVersionableId = "{uid}" OR ecm:proxyVersionableId = "{uid}")` |
+| `pageSize`    | `40`                                                                                                                                              |
+| `sortBy`      | `dc:modified,uid:major_version,uid:minor_version`                                                                                                 |
+| `sortOrder`   | `desc,desc,desc`                                                                                                                                  |
+
+`{uid}` is the **live** document's uid, also on a version page: a proxy's `ecm:proxyVersionableId`
+is the live document's uid (see section 30c).
 
 **Request Headers:**
 
-| Header          | Value                                        |
-| --------------- | -------------------------------------------- |
-| `Authorization` | `Basic <credentials>` (added by interceptor) |
-| `properties`    | `dublincore,uid`                             |
+| Header               | Value                                        |
+| -------------------- | -------------------------------------------- |
+| `Authorization`      | `Basic <credentials>` (added by interceptor) |
+| `properties`         | `dublincore,common,uid,rendition`            |
+| `enrichers.document` | `permissions`                                |
 
 **Response (200 OK):** Standard `NuxeoDocumentList` — each entry is a proxy (published copy) of the source document.
 
 **Key response fields used:**
 
-| Field                                                             | Usage                                                  |
-| ----------------------------------------------------------------- | ------------------------------------------------------ |
-| `entries[].title`                                                 | Published document title                               |
-| `entries[].path`                                                  | Location in the section tree (displayed as breadcrumb) |
-| `entries[].lastModified`                                          | When the publication was last updated                  |
-| `entries[].properties['uid:major_version']` / `uid:minor_version` | Published version number                               |
+| Field                                                             | Usage                                                         |
+| ----------------------------------------------------------------- | ------------------------------------------------------------- |
+| `entries[].path`                                                  | Location in the section tree                                  |
+| `entries[].properties['uid:major_version']` / `uid:minor_version` | Published version number; Republish compares it with the page |
+| `entries[].properties['dc:modified']`                             | Publish date                                                  |
+| `entries[].contextParameters.permissions`                         | Unpublish and Republish need `WriteVersion` on the proxy      |
+
+The permissions are the user's on each **proxy**, which follow the section's ACL, not the
+document's: measured on the shared Nuxeo, a workspace reader gets no `WriteVersion` on a
+publication in a section under that workspace, and a ReadWrite user does. This is Web UI's
+`nuxeo-document-publications` gate (`_canUnpublish`, `_canRepublish`). The tab's own
+**Publish to a section** is offered only when `canPublishDocument` holds — the same rule as the
+toolbar's Publish (`app.rules.canPublish`).
 
 **Used by:**
 
-- **Document detail page — Publishing tab** — displays list of existing publications
+- **Document detail page — Publishing tab** — the list of publications, and the publication count in the properties panel
 
 ---
 
@@ -1590,14 +1649,80 @@ same way.
 `/api/v1/directory/label_tag_entry`, which Nuxeo 2025 answers with
 `404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never suggests anything.
 `suggestTags` uses the operation Web UI uses, which answered the same server, and is the one place
-that sends it: the search filters' tags reach it through `SearchService.getTagSuggestions`. The tag
-fields of browse and document detail still call `searchTags`, so they suggest nothing on Nuxeo 2025
-until they move onto `suggestTags`.
+that sends it: the search filters' tags reach it through `SearchService.getTagSuggestions`, and
+document detail's `nxs-tag-editor` calls it directly. Browse's tag field still calls `searchTags`,
+so it suggests nothing on Nuxeo 2025 until it moves onto `suggestTags`.
 
 `nxs-date-input` makes no request.
 
 **Usage:** none yet. The pickers are in `@nuxeo-satori/platform/components`, documented in its
 Storybook; screens move onto them in a later change.
+
+---
+
+## 30b. Permission Dialogs — External Shares, Edit and Delete (NXSAT-308)
+
+| Field       | Value                                                                                                                                                                         |
+| ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service** | `DocumentDetailService`, called by `nxs-share-external-dialog`, `nxs-update-permission-dialog` and `nxs-delete-permission-dialog` (`libs/shared/satori-components/src/lib/`)  |
+| **Share**   | `POST /nuxeo/api/v1/automation/Document.AddPermission` — `email`, `permission`, `begin`, `end`, `comment`, `notify: false` (`addExternalPermissionWithNotification`)          |
+| **Notify**  | then `POST /nuxeo/api/v1/automation/Document.SendNotificationEmailForPermission` — `id` of the new entry, so a mail failure reaches the dialog                                |
+| **Edit**    | `POST /nuxeo/api/v1/automation/Document.ReplacePermission` — `id`, `username`, `permission`, `begin`, `end`, `comment`, `notify: false`, then the notification when asked for |
+| **Delete**  | `POST /nuxeo/api/v1/id/:uid/@op/Document.RemovePermission` — `id`, `acl` (`removePermissionById`)                                                                             |
+
+**Behaviour measured on 2025.26.16:**
+
+- `AddPermission` with `email` creates the principal `transient/<email>` and marks the entry
+  `externalUser`. Dates in the past are accepted, and the entry reads back with status `archived`.
+- `ReplacePermission` edits an external entry in place: it keeps `externalUser` and its status, so
+  the dialog no longer removes and re-adds it. An unchanged date is written back as the instant the
+  read returned, as in the panel, so an end written as `2030-07-15T00:00:00+02:00` (which reads back
+  as `2030-07-14T22:00:00.000Z`) survives an edit made from another zone.
+- `RemovePermission` with `id` and the entry's own `acl` removes that one entry, including a deny.
+- `Document.AddACE` with `grant: false` replaces the **whole** local ACL with the one deny it
+  writes. The app does not call it; test seeding that does must add the other entries afterwards.
+
+A new date is sent as the day (`2030-01-31`), which Nuxeo anchors at the server's midnight, as the
+panel's are. Web UI sends the end as the end of that day in the browser's zone, so a share Web UI
+writes lasts through its last day and one written here ends as that day starts.
+
+Every date is shown as the calendar day its writer picked (`nxsAceTimeFrame`), not the UTC date
+Nuxeo returns, so the Permissions tab's card, the panel and all three dialogs show the same day.
+
+**Usage:** the external-shares card on document detail's Permissions tab. The manifest's
+`featureToggles["permissions.externalUsers"]` hides the card and its share action when `false`.
+
+---
+
+## 30c. Versions — List, Create, Restore and Publish a Version (NXSAT-308)
+
+| Field       | Value                                                                                                                                                      |
+| ----------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Service** | `DocumentDetailService`, called by `nxs-manage-versions`, `nxs-create-version-dialog` (`libs/shared/satori-components/src/lib/`) and document detail       |
+| **List**    | `POST /nuxeo/api/v1/id/:liveUid/@op/Document.GetVersions`, header `properties: *` (`getVersionsDirect`) — the live document's, also when a version is open |
+| **Create**  | `POST /nuxeo/api/v1/id/:uid/@op/Document.CreateVersion` — `increment: Minor \| Major`, `saveDocument: true` (`createVersion`)                              |
+| **Restore** | `POST /nuxeo/api/v1/id/:versionUid/@op/Document.RestoreVersion` — `checkout: false` (`restoreVersion`)                                                     |
+| **Publish** | `POST /nuxeo/api/v1/automation/Document.PublishToSection` — input the document on screen, a version included (`publishDocument`)                           |
+
+**Behaviour measured on the shared Nuxeo (2026-10-13):**
+
+- `Document.GetVersions` reads the repository, so a version created a moment before is listed;
+  the NXQL list (`getVersions`) is OpenSearch-backed and may lag. It returns them oldest first;
+  `nxs-manage-versions` sorts them by number, newest first, as Web UI does.
+- A ReadWrite user's `permissions` enricher includes `WriteVersion`; Read plus WriteProperties
+  does not. Create, restore and publish are gated on `WriteVersion`, as Web UI gates them.
+- `Document.RestoreVersion` with `checkout: false` leaves the live document checked in at the
+  restored number (0.1, not 0.1+).
+- `Document.PublishToSection` on a version, as a ReadWrite user, returns 200 and creates a
+  publication of that version (1.0) in the section. Web UI 2025.21.0's `isPublishable` offers it.
+- A comment on a version (`POST /id/:versionUid/@comment`) is accepted (201), as Web UI's thread
+  allows.
+- A version's publications are found through its live document: a proxy's
+  `ecm:proxyVersionableId` is the live document's uid, so the count on a version asks with that
+  (`getPublishedVersions`), as Web UI's `nuxeo-document-publications` resolves the source first.
+
+**Usage:** the version control in document detail's properties panel, the version banner's
+Restore, and the Publish action on the live document and on a version.
 
 ---
 

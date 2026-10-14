@@ -1,0 +1,150 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as MetadataEditorStories from './metadata-editor.stories';
+
+<Meta of={MetadataEditorStories} name="Overview" />
+
+# Metadata editor
+
+The metadata editor is the form that edits a document's properties, or fills them in for a new one.
+It owns the Dublin Core fields every document has — title, description, nature, subjects, coverage
+and expiry — then renders the type's own sections, with a control chosen from each field's schema
+type and the schema's constraints checked as the user types. It is the counterpart of Web UI's
+`nuxeo-document-edit` and `nuxeo-document-create` layouts, and replaces two near-identical edit
+dialogs.
+
+## Key features
+
+- **A control per field type.** Text, multi-line text, whole and decimal numbers, dates, checkboxes,
+  vocabulary pickers with search, lists of values as chips, groups of sub-fields, and repeatable
+  groups with Add and Remove. A file is shown read-only by its name; files are changed in
+  Attachments.
+- **The schema's rules, before the server's.** Required fields, patterns, minimum and maximum
+  lengths, and numeric bounds — inclusive or exclusive — as Nuxeo reports them, each with a message
+  that names the field.
+- **Validation on Save, as in Web UI.** Save stays enabled. `validate()` shows every error, announces
+  how many fields need a correction, opens the tab that holds the first and focuses it.
+- **Only what changed.** `dirtyProperties()` returns the fields the user edited, so an edit sends
+  nothing it did not touch. `properties()` returns everything, for a create.
+- **Server errors on their fields.** `showServerErrors()` places Nuxeo's validation messages on the
+  fields they name and hands back any it cannot place.
+- **Sections or tabs.** The type's sections follow one another under headings, or become tabs.
+
+## Demo showcase
+
+<Canvas of={MetadataEditorStories.CustomerType} />
+
+## Usage
+
+export const usageHtml = `<nxs-metadata-editor
+  #editor
+  [values]="document().properties"
+  [sections]="sections()"
+  [disabled]="saving()"
+/>
+
+<button mat-flat-button (click)="save(editor)">Save</button>`;
+
+<Source language="html" dark code={usageHtml} />
+
+export const usageTs = `save(editor: NxsMetadataEditorComponent): void {
+  if (!editor.validate()) return;
+  const changes = editor.dirtyProperties();
+  if (Object.keys(changes).length === 0) return this.close();
+  this.saving.set(true);
+  this.documents.update(this.uid, changes).subscribe({
+    next: (document) => this.close(document),
+    error: (failure) => {
+      this.saving.set(false);
+      const unplaced = editor.showServerErrors(validationMessages(failure));
+      if (unplaced.length) this.toast(unplaced.join(' '));
+    },
+  });
+}`;
+
+<Source language="ts" dark code={usageTs} />
+
+The host owns the buttons and the request. The editor needs `DirectoryService` for vocabulary
+entries, and provides its own date adapter; give the datepicker translated labels with the app's
+datepicker intl. It has no registered ID. Its labels and messages are translated under
+`satori-components.metadata-editor.*`, with English from `providePlatformEnglishFallback()`.
+
+Each section field is `{ xpath, label, definition }`. `definition` is the field's schema type as
+Nuxeo's `/config/types` describes it with `fetch-schema: fields`: `type`, and optionally
+`directory`, `fields` for a complex field, `required` and `constraints`. A layout from
+`@agentic-ui/shared/document-layouts` maps onto it directly.
+
+A field Dublin Core already has is not repeated in a section. Turn `dublinCore` off for a type with
+no `dublincore` schema.
+
+## Examples
+
+### Editing a File
+
+The Dublin Core fields only, vocabulary values shown by label.
+
+<Canvas of={MetadataEditorStories.EditFile} />
+
+### Sections as tabs
+
+<Canvas of={MetadataEditorStories.AsTabs} />
+
+### Creating a document
+
+Nothing filled in. Press "Validate as Save would" to see the summary and the errors.
+
+<Canvas of={MetadataEditorStories.Create} />
+
+### While saving
+
+<Canvas of={MetadataEditorStories.Saving} />
+
+## Where its data comes from
+
+<table>
+  <thead>
+    <tr>
+      <th>What</th>
+      <th>Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Values</td>
+      <td>
+        <code>values</code> — the document's <code>properties</code>, by xpath
+      </td>
+    </tr>
+    <tr>
+      <td>Fields and rules</td>
+      <td>
+        <code>sections</code> — the type's layout, with each field's type and constraints from{' '}
+        <code>/config/types</code>
+      </td>
+    </tr>
+    <tr>
+      <td>Vocabulary entries</td>
+      <td>
+        <code>DirectoryService.getAllL10nEntries</code> for an <code>l10n…</code> vocabulary,{' '}
+        <code>getEntries</code> for any other; each loaded once
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+**In these stories** the vocabularies are small fixtures and the policy type is invented.
+
+## Accessibility
+
+- **Labels.** Every control has a visible label, and a required one is marked and announced as
+  required.
+- **Errors.** Each message names its field ("Policy number is not in the expected format.") and is
+  linked to the control, so a screen reader reads it with the field.
+- **Summary.** On Save, an alert announces how many fields need a correction, and focus moves to the
+  first — onto its tab first, in tabs display.
+- **Groups.** A group of sub-fields is a fieldset with its name as the legend; each entry of a
+  repeatable group is named by its position, as are its Remove buttons ("Remove Contacts 2").
+- **Headings.** Section headings sit at `headingLevel` (3 by default), one below a dialog title.
+- **Vocabulary search.** The search box in a picker is named after its field ("Search Subjects").
+- **Colours.** The summary uses the theme's error container; override
+  `--nxs-metadata-editor-error-surface` and `--nxs-metadata-editor-on-error-surface` together.

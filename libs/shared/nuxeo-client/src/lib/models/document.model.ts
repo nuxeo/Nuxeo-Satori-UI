@@ -16,6 +16,8 @@ export interface NuxeoDocument {
   isCheckedOut?: boolean;
   /** True on a version snapshot, false on the live document. */
   isVersion?: boolean;
+  /** True on a proxy — a published copy or a live proxy — rather than the document itself. */
+  isProxy?: boolean;
   /**
    * The **live** document this version was cut from.
    *

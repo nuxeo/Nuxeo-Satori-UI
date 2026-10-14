@@ -1,6 +1,7 @@
 /**
  * NXSAT-535 / IBM 2589851771 — document detail header "More actions" keyboard focus indicator.
  * Source-level IBM `style_focus_visible` contract (production template + global toolbar ring).
+ * The trigger is `nxs-document-toolbar`'s, which the page renders as `.header-actions`.
  * Computed outline geometry: `apps/nuxeo-ui/.../more-actions-focus-ring.spec.ts`.
  * Live-route focus visibility: `a11y/specs/journey.a11y.spec.ts` journey screen
  * `document-detail-more-actions` (NXSAT-535; Add to collection remains on `document-detail` for NXENG-808).
@@ -11,6 +12,10 @@ import { describe, expect, it } from 'vitest';
 
 describe('DocumentDetailComponent — header More actions focus ring (NXSAT-535)', () => {
   const templatePath = join(import.meta.dirname, 'document-detail.html');
+  const toolbarTemplatePath = join(
+    import.meta.dirname,
+    '../../../../../shared/satori-components/src/lib/document-toolbar/document-toolbar.component.html',
+  );
   const globalFocusPath = join(
     import.meta.dirname,
     '../../../../../../apps/nuxeo-ui/src/app/document-detail/document-detail-header-toolbar-focus.scss',
@@ -24,34 +29,35 @@ describe('DocumentDetailComponent — header More actions focus ring (NXSAT-535)
     const html = readFileSync(templatePath, 'utf8');
     const headerBlock = html.match(/class="detail-header"[\s\S]*?<div class="detail-body">/)?.[0];
     expect(headerBlock, 'detail header markup').toBeTruthy();
-    const menuIdx = headerBlock!.indexOf('[matMenuTriggerFor]="moreMenu"');
+    const toolbarIdx = headerBlock!.indexOf('<nxs-document-toolbar');
+    expect(toolbarIdx, 'header toolbar').toBeGreaterThan(-1);
+    const toolbarTag = headerBlock!.slice(toolbarIdx, headerBlock!.indexOf('>', toolbarIdx) + 1);
+    expect(toolbarTag, 'the toolbar is the header-actions region').toContain(
+      'class="header-actions"',
+    );
+
+    const toolbar = readFileSync(toolbarTemplatePath, 'utf8');
+    const menuIdx = toolbar.indexOf('[matMenuTriggerFor]="moreMenu"');
     expect(menuIdx, 'header overflow menu trigger').toBeGreaterThan(-1);
-    const tagStart = headerBlock!.lastIndexOf('<button', menuIdx);
+    const tagStart = toolbar.lastIndexOf('<button', menuIdx);
     expect(tagStart, 'More actions must live on a button opening tag').toBeGreaterThan(-1);
-    const tagEnd = headerBlock!.indexOf('>', menuIdx);
+    const tagEnd = toolbar.indexOf('>', menuIdx);
     expect(tagEnd, 'More actions button opening tag must close').toBeGreaterThan(menuIdx);
-    const openingTag = headerBlock!.slice(tagStart, tagEnd + 1);
+    const openingTag = toolbar.slice(tagStart, tagEnd + 1);
     expect(openingTag).toContain('mat-icon-button');
     expect(openingTag).not.toMatch(/\[attr\.aria-label\]/);
-    expect(headerBlock!.slice(tagStart, headerBlock!.indexOf('</button>', tagEnd) + 9)).toMatch(
-      /cdk-visually-hidden[\s\S]*document-detail\.document-detail\.more-actions/,
+    const button = toolbar.slice(tagStart, toolbar.indexOf('</button>', tagEnd) + 9);
+    expect(button).toMatch(
+      /cdk-visually-hidden[\s\S]*satori-components\.document-toolbar\.more-actions/,
     );
-    expect(headerBlock!.slice(tagStart, headerBlock!.indexOf('</button>', tagEnd) + 9)).toContain(
-      '<mat-icon aria-hidden="true">more_vert</mat-icon>',
-    );
-    const actionsStart = headerBlock!.indexOf('class="header-actions"');
-    expect(actionsStart, 'header-actions region').toBeGreaterThan(-1);
-    expect(actionsStart).toBeLessThan(tagStart);
+    expect(button).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
   });
 
   it('keeps the Karma host More actions trigger aligned with production markup', () => {
     const host = readFileSync(karmaHostPath, 'utf8');
-    expect(host).toContain('class="header-actions"');
-    expect(host).toContain('mat-icon-button');
-    expect(host).toContain('[matMenuTriggerFor]="moreMenu"');
-    expect(host).toContain('cdk-visually-hidden');
+    expect(host).toContain('class="detail-header');
+    expect(host).toMatch(/<nxs-document-toolbar[^>]*class="header-actions"/);
     expect(host).not.toContain('aria-label="More actions"');
-    expect(host).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
   });
 
   it('traces NXSAT-535 / IBM 2589851771 on the global header toolbar mat-icon-button :focus ring', () => {

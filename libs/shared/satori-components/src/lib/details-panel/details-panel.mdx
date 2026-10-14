@@ -1,0 +1,83 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DetailsPanelStories from './details-panel.stories';
+
+<Meta of={DetailsPanelStories} name="Overview" />
+
+# Details panel
+
+The details panel is the side panel of a document page: a header naming the document with a close
+button, a strip of views — Properties, Comments, Activity — and the selected view's content. It is
+the counterpart of the side pane of Web UI's document page. It owns the frame and the switching;
+your page decides which views exist and projects what each one shows.
+
+## Key features
+
+- **Views you choose.** Pass the views as `NxsDetailsPanelTab`s. Web UI offers Comments only on a
+  document with the `Commentable` facet; leave the view out and the strip shows the rest.
+- **Two-way selection.** `[(selected)]` holds the selected view's ID. An ID that is not offered
+  selects the first view rather than an empty panel.
+- **Your content.** Whatever you project renders in the tab panel, so a view can be the
+  Properties panel, the comments thread or your own component.
+- **Close is yours.** The close button emits `closed`; your page hides the panel and puts focus
+  somewhere sensible, such as the button that reopens it.
+
+## Demo showcase
+
+<Canvas of={DetailsPanelStories.DocumentDetails} />
+
+## Usage
+
+export const usageHtml = `<nxs-details-panel
+  [heading]="doc().title"
+  [label]="'acme.details.label' | translate"
+  [tabs]="views()"
+  [(selected)]="view"
+  (closed)="closeDetails()"
+>
+  @switch (view()) {
+    @case ('properties') { <nxs-properties-panel [document]="doc()" /> }
+    @case ('comments') { <nxs-comments [document]="doc()" /> }
+  }
+</nxs-details-panel>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`tabs` is required. `heading`, `label` and `closeLabel` are optional; the close button falls back to
+"Close details", translated under `satori-components.details-panel.close`, with English from
+`providePlatformEnglishFallback()`. The panel needs no providers and has no registered ID. Size it
+from your page: it fills the box it is given and scrolls its content.
+
+## Where its data comes from
+
+The panel reads nothing. Your page supplies the heading, the views and the content of each.
+
+**In these stories** the content is a sentence naming the selected view.
+
+## Examples
+
+### A document that cannot be commented on
+
+No Comments view: the strip shows Properties and Activity.
+
+<Canvas of={DetailsPanelStories.NotCommentable} />
+
+### Switched from the keyboard
+
+The **Switched from the keyboard** story in the sidebar moves to Comments with the right arrow. It
+runs only on its own story page, because it moves focus.
+
+## Accessibility
+
+- **A named region.** The panel is a `complementary` landmark named by `label`, or by `heading`
+  when `label` is blank.
+- **ARIA tabs.** The views are `tab`s in a `tablist`, each controlling the one `tabpanel`, which is
+  labelled by the selected tab. Only the selected tab is in the Tab order. **Left** and **Right**
+  move to the next view and select it, wrapping at the ends and reversed right to left; **Home**
+  and **End** go to the first and last.
+- **Focusable panel.** The tab panel takes focus, so a view whose content has no control of its own
+  can still be scrolled from the keyboard.
+- **Focus rings.** The close button, the tabs and the panel draw an inset 2 px ring in
+  `--nxs-details-panel-muted`.
+- **Close button.** Named "Close details" (or `closeLabel`); its icon is hidden from assistive
+  technology.

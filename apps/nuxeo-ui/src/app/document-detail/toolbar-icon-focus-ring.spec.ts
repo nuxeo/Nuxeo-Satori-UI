@@ -15,25 +15,33 @@
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import {
+  NxsDocumentToolbarComponent,
+  type NxsToolbarAction,
+} from '@nuxeo-satori/platform/components';
+
+import { testTranslateModule } from '../i18n/translate-testing';
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule],
+  imports: [NxsDocumentToolbarComponent],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './toolbar-icon-focus-ring.fixture.scss',
   ],
   templateUrl: './toolbar-icon-focus-ring.spec.html',
 })
-class ToolbarIconFocusHostComponent {}
+class ToolbarIconFocusHostComponent {
+  readonly actions: readonly NxsToolbarAction[] = [
+    { id: 'app.toolbar.edit', label: 'Edit', icon: 'edit' },
+  ];
+}
 
 describe('Document detail toolbar icon button — keyboard focus indicator (NXENG-808 / NXSAT-489 / NXSAT-542)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ToolbarIconFocusHostComponent],
+      imports: [ToolbarIconFocusHostComponent, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });
@@ -48,7 +56,7 @@ describe('Document detail toolbar icon button — keyboard focus indicator (NXEN
     fixture.detectChanges();
     await fixture.whenStable();
     const button = fixture.nativeElement.querySelector(
-      '[data-testid="toolbar-icon-btn"]',
+      '[data-action-id="app.toolbar.edit"]',
     ) as HTMLButtonElement;
     const header = fixture.nativeElement.querySelector('.detail-header') as HTMLElement;
     return { fixture, button, header };

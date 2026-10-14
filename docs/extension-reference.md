@@ -161,25 +161,41 @@ name breaks that rule is skipped, and an unknown name is reported and forgotten.
 Presets are package content, served anonymously like every fragment. Switching chooses among them
 for one browser; it grants nothing and changes nothing on the server.
 
+### Feature toggles
+
+A manifest fragment's top-level `featureToggles` turns a packaged feature on or off by name. A value
+that is not `true` or `false` is ignored, and a later fragment's value wins.
+
+```json
+{ "version": 1, "featureToggles": { "permissions.externalUsers": false } }
+```
+
+| Toggle                      | Default | What it controls                                                                                                                                                                                                                                 |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server. |
+
 ---
 
 ## 2. Slots
 
-A slot is a named, ordered list of descriptors. Ten exist for Beta, of which seven
+A slot is a named, ordered list of descriptors. Thirteen exist for Beta, of which seven
 carry packaged entries.
 
-| Slot           | What it addresses                         | Status in Beta                                     |
-| -------------- | ----------------------------------------- | -------------------------------------------------- |
-| `navbar`       | Primary platform navigation entries       | **Populated** — packaged entries in section 3      |
-| `bulk-actions` | Actions over a multi-document selection   | **Populated** — packaged entries in section 5      |
-| `sidebar`      | Drawer content behind a navbar entry      | Resolves; **no packaged entries** — see section 6  |
-| `routes`       | Application routes                        | Resolves; **no packaged entries** — see section 11 |
-| `toolbar`      | Document-detail toolbar and overflow menu | **Populated** — 16 packaged actions, section 8     |
-| `contextMenu`  | The browse "More actions" menu            | **Populated** — 4 packaged actions, section 10     |
-| `rowActions`   | The menu on each row of browse's list     | **Populated** — 5 packaged actions, section 10a    |
-| `tabs`         | Document-detail tab children              | **Populated** — 6 packaged tabs, section 9         |
-| `documentList` | Document list columns                     | **Populated** — 12 packaged columns, section 7     |
-| `documentView` | The View tab body on document detail      | Resolves; **no packaged entries** — see section 9a |
+| Slot               | What it addresses                                  | Status in Beta                                                                       |
+| ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `navbar`           | Primary platform navigation entries                | **Populated** — packaged entries in section 3                                        |
+| `bulk-actions`     | Actions over a multi-document selection            | **Populated** — packaged entries in section 5                                        |
+| `sidebar`          | Drawer content behind a navbar entry               | Resolves; **no packaged entries** — see section 6                                    |
+| `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11                                   |
+| `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 16 packaged actions, section 8                                       |
+| `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10                                       |
+| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a                                      |
+| `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9                                           |
+| `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7                                       |
+| `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a                                   |
+| `documentMetadata` | A type's layout in the document-detail Properties  | Resolves; **no packaged entries** — see section 9c                                   |
+| `documentEdit`     | The form of the document-detail Edit dialog        | Resolves; **no packaged entries** — see section 9c                                   |
+| `documentCreate`   | The form filling in a new document of a given type | Resolves in the create form, which **no screen opens yet**; no packaged entries — 9c |
 
 Read the three states precisely, because they are different promises:
 
@@ -202,9 +218,9 @@ Deferred to GA and deliberately absent: `content-metadata-presets`, `badges`,
 ### Slots are additive
 
 Slot IDs are plain strings. There is no enum, union or `switch` on slot identity in the registry, so
-a tenth slot needs no change to the nine and no new release of the registry —
+a new slot needs no change to the existing ones and no new release of the registry —
 `libs/shared/extensions/src/lib/extension-slot-registry.service.spec.ts` proves it by registering a
-slot the library has never heard of and showing the nine unchanged.
+slot the library has never heard of and showing the existing ones unchanged.
 
 ### Fields every descriptor honours
 
@@ -356,12 +372,18 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.canRemove`            | The user has `Remove`                                             |
 | `app.rules.canAddChildren`       | The user has `AddChildren`                                        |
 | `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                      |
+| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                               |
 | `app.rules.hasDocument`          | A document is in focus                                            |
 | `app.rules.isType`               | The focused document's type is one of the `parameters`            |
 | `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`   |
 | `app.rules.hasFile`              | The focused document holds a main file (`file:content`)           |
 | `app.rules.isTrashed`            | The focused document is in the trash                              |
 | `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                    |
+
+`app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
+record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
+true on a version — Web UI publishes a version as it is — and needs no version to exist, because
+publishing a live document creates one.
 
 `app.rules.isType` and `app.rules.hasFacet` take the type or facet names as `parameters`, matched
 exactly — Nuxeo names are case-sensitive. With no string parameters — or `parameters` that is not
@@ -757,24 +779,24 @@ sees at once: the toggles are mutually exclusive pairs, and every entry is gated
 icon buttons in the header row. `overflow` is a descriptor field like any other,
 so `slots.toolbar` can move a packaged action between the two.
 
-| ID                                | Label                 | Icon                   | Order | Overflow | Shown when                              |
-| --------------------------------- | --------------------- | ---------------------- | ----- | -------- | --------------------------------------- |
-| `app.toolbar.edit`                | Edit                  | `edit`                 | 10    | no       | not trashed, writable¹ and not a Note   |
-| `app.toolbar.editProperties`      | Edit properties       | `edit`                 | 10    | no       | not trashed, writable¹ and a Note       |
-| `app.toolbar.addToCollection`     | Add to collection     | `library_add`          | 20    | no       | not trashed                             |
-| `app.toolbar.delete`              | Delete                | `delete`               | 30    | no       | not trashed and `app.rules.canRemove`   |
-| `app.toolbar.lock`                | Lock                  | `lock_open`            | 40    | no       | not trashed, writable and not locked ¹  |
-| `app.toolbar.unlock`              | Unlock                | `lock`                 | 40    | no       | not trashed and locked ¹ ²              |
-| `app.toolbar.addToFavorites`      | Add to Favorites      | `star_border`          | 50    | yes      | not trashed and not a favourite         |
-| `app.toolbar.removeFromFavorites` | Remove from Favorites | `star`                 | 50    | yes      | not trashed and a favourite             |
-| `app.toolbar.share`               | Share                 | `share`                | 60    | yes      | not trashed                             |
-| `app.toolbar.publish`             | Publish document      | `publish`              | 70    | yes      | not trashed, has a version and writable |
-| `app.toolbar.subscribe`           | Notify Me             | `notifications`        | 80    | yes      | not trashed and not subscribed          |
-| `app.toolbar.unsubscribe`         | Unsubscribe           | `notifications_active` | 80    | yes      | not trashed and subscribed              |
-| `app.toolbar.addToClipboard`      | Add to Clipboard      | `content_paste`        | 90    | yes      | not trashed and not in the clipboard    |
-| `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard        |
-| `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                  |
-| `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                             |
+| ID                                | Label                 | Icon                   | Order | Overflow | Shown when                             |
+| --------------------------------- | --------------------- | ---------------------- | ----- | -------- | -------------------------------------- |
+| `app.toolbar.edit`                | Edit                  | `edit`                 | 10    | no       | not trashed, writable¹ and not a Note  |
+| `app.toolbar.editProperties`      | Edit properties       | `edit`                 | 10    | no       | not trashed, writable¹ and a Note      |
+| `app.toolbar.addToCollection`     | Add to collection     | `library_add`          | 20    | no       | not trashed                            |
+| `app.toolbar.delete`              | Delete                | `delete`               | 30    | no       | not trashed and `app.rules.canRemove`  |
+| `app.toolbar.lock`                | Lock                  | `lock_open`            | 40    | no       | not trashed, writable and not locked ¹ |
+| `app.toolbar.unlock`              | Unlock                | `lock`                 | 40    | no       | not trashed and locked ¹ ²             |
+| `app.toolbar.addToFavorites`      | Add to Favorites      | `star_border`          | 50    | yes      | not trashed and not a favourite        |
+| `app.toolbar.removeFromFavorites` | Remove from Favorites | `star`                 | 50    | yes      | not trashed and a favourite            |
+| `app.toolbar.share`               | Share                 | `share`                | 60    | yes      | not trashed                            |
+| `app.toolbar.publish`             | Publish document      | `publish`              | 70    | yes      | not trashed and `app.rules.canPublish` |
+| `app.toolbar.subscribe`           | Notify Me             | `notifications`        | 80    | yes      | not trashed and not subscribed         |
+| `app.toolbar.unsubscribe`         | Unsubscribe           | `notifications_active` | 80    | yes      | not trashed and subscribed             |
+| `app.toolbar.addToClipboard`      | Add to Clipboard      | `content_paste`        | 90    | yes      | not trashed and not in the clipboard   |
+| `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard       |
+| `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                 |
+| `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                            |
 
 ¹ For Edit and Edit properties, writable also means **not `Immutable`** — the rule is
 `app.rules.canWrite` and `core.not` over `app.rules.hasFacet` with `["Immutable"]`. Nuxeo
@@ -955,7 +977,7 @@ What this slot does **not** do:
 
 - **Only the View tab.** The other tabs, the toolbar and the properties panel are
   unchanged by any `documentView` entry. Which properties the panel shows per type is a
-  layout file, section 9b, not this slot.
+  layout file, section 9b, or a `documentMetadata` entry, section 9c — not this slot.
 - **The packaged views are not entries.** Which one renders is decided per document type
   by a single table inside document detail: a Note gets the note editor, and every other
   type — File, Picture, Video, Audio, your own — gets the document viewer, which picks its
@@ -972,19 +994,32 @@ What this slot does **not** do:
 ## 9b. Per-type layouts — which properties a document type shows
 
 Not a slot and not an ID: a **layout file** per document type and mode, shipped in your
-configuration package, as Nuxeo Web UI keeps a layout per type and mode. This build renders one
-mode, `metadata`: the Properties panel on document detail, beneath the packaged rows (title, tags,
-description and the Dublin Core vocabularies) and above Attachments. Read-only.
+configuration package, as Nuxeo Web UI keeps a layout per type and mode. This build renders three
+modes:
 
-**With no file, the layout is generated from the type's own schemas,** and from those a dynamic
-facet adds to the document (next paragraph). One section per schema,
+- **`metadata`** — the Properties panel on document detail, beneath the packaged rows (title, tags,
+  description and the Dublin Core vocabularies) and above Attachments. Read-only.
+- **`edit`** — the form of the Edit dialog on document detail, beneath the Dublin Core fields the
+  form always has (title, description, nature, subjects, coverage, expires). Saving sends only the
+  properties the user changed.
+- **`create`** — the same form for a new document of the type. It is built and tested, but **no
+  screen opens it yet**: Browse's create dialog keeps its own fields until it moves onto this form
+  in a later change.
+
+To replace the whole Properties section or form with a component of your own rather than a list
+of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
+
+**With no file, the layout is generated from the type's own schemas,** and, for `metadata` and
+`edit`, from those a dynamic facet adds to the document (next paragraph); a document being created
+has no facets yet, so `create` reads the type's alone. One section per schema,
 fields by name, each value shown by its schema type. Schemas the panel and viewers already
 present are left out — `common`, `dublincore`, `uid`, `file`, `files`, `note`, `facetedTag`,
 `relatedtext`, `picture`, `image_metadata`, `iptc`, `video`, `audio`, and the `collectionMember`,
 `notification` and `thumbnail` schemas Nuxeo's own facets add to a document as it is collected,
 subscribed to and given content — so a stock File or Note shows nothing new, a Claim shows its
 `claim` schema, and a schema you add to File appears on File. A type never falls back to its
-parent type's file.
+parent type's file, in any mode. Generated `edit` and `create` layouts leave out `blob` fields:
+files are added through the attachment and main-file actions, not typed into a form.
 
 **A schema a dynamic facet adds to one document gets a section on that document.** A facet added
 after creation (`Document.AddFacet`, or an integration such as HxAI's `Hxai`) brings schemas the
@@ -1020,15 +1055,16 @@ nothing generated is merged in. The type must match exactly.
 }
 ```
 
-| Key                   | Meaning                                                                                                                       |
-| --------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `version`             | Required, `1`. Any other value and the file is refused.                                                                       |
-| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                  |
-| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                  |
-| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                  |
-| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                |
-| `sections[].labelKey` | Heading, as a translation key.                                                                                                |
-| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"? }`. Top-level fields only, each once per section. |
+| Key                   | Meaning                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `version`             | Required, `1`. Any other value and the file is refused.                                                                                    |
+| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                               |
+| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                               |
+| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                               |
+| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                             |
+| `sections[].labelKey` | Heading, as a translation key.                                                                                                             |
+| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"?, "required"? }`. Top-level fields only, each once per section. |
+| `fields[].required`   | `true` makes the field required in an `edit` or `create` form, on top of the schema's own constraints. Ignored in `metadata`.              |
 
 A field neither the type nor the document's facets have, an entry that is not `<prefix>:<field>`, or a field listed twice in
 one section is skipped and the rest of the file applies; a file that is refused shows the generated layout instead. Both are logged in
@@ -1054,6 +1090,32 @@ How each value is shown is decided by its schema type — there is no widget nam
 | `blob`                         | the file name                                                                                                                                                                                             |
 | `complex`, `complex[]`         | its sub-fields, one group per item                                                                                                                                                                        |
 
+In an `edit` or `create` form, the schema type picks the control:
+
+| Field type                         | Control                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| `string`                           | a text field                                                                                |
+| `string` bound to a vocabulary     | a searchable select; an `l10n…` vocabulary is grouped under its parent entries              |
+| `string[]` bound to a vocabulary   | the same select, choosing several, each choice a removable chip                             |
+| `string[]` and other scalar lists  | a chip input: type a value, press Enter                                                     |
+| `date`                             | a date field with a picker. Typed dates are read month first, as the `mm/dd/yyyy` hint says |
+| `long`, `integer`                  | a number field accepting whole numbers                                                      |
+| `double`                           | a number field                                                                              |
+| `boolean`                          | a checkbox                                                                                  |
+| `complex`                          | a labelled group of its sub-fields, each with its own control                               |
+| `complex[]`                        | one group per item, with Add and Remove                                                     |
+| `blob`, or `complex` nested deeper | shown, not editable                                                                         |
+
+**Validation before saving.** Save checks the schema's constraints in the browser first: a
+required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
+(the whole value must match), a `LengthConstraint` and a `NumericIntervalConstraint`, inclusive or
+not. Each error is written under its field and tied to it for screen readers; a summary at the top
+counts the fields to correct, and focus moves to the first, opening its tab when the layout uses
+tabs. Nothing is sent until every field passes. Constraints the form does not check in the browser
+— `EnumConstraint`, `DateIntervalConstraint`, membership of a vocabulary — are still enforced by
+Nuxeo: when the server refuses a value, its message is shown under the field it names, and the
+dialog stays open with the user's input.
+
 **Labels.** A field's `label` is shown verbatim; else its `labelKey` if it translates; else the
 key `layout.field.<prefix>:<field>`; else a readable form of the field name (`billedAmount` →
 "Billed amount"). Generated section headings look up `layout.schema.<schema>` first. So a manifest
@@ -1069,23 +1131,113 @@ component that `<require>`s `org.nuxeo.agentic.ui.config.defaults`:
 ```xml
 <extension target="org.nuxeo.agentic.ui.config" point="configuration">
   <layout type="Claim" mode="metadata" src="agentic-ui-config/layouts/Claim/metadata.layout.json" />
+  <layout type="Claim" mode="edit" src="agentic-ui-config/layouts/Claim/edit.layout.json" />
 </extension>
 ```
 
 A later package's file for the same type and mode replaces yours whole; `enabled="false"` removes
-the one in force. While developing, `npm run config:dev -- --layout Claim/metadata=claim.layout.json`
-serves it to `nx serve` the same way.
+the one in force. While developing, `npm run config:dev -- --layout Claim/edit=claim-edit.layout.json`
+serves it to `nx serve` the same way. Each mode reads its own file: an `edit` file does not change
+the Properties panel, and a type with only a `metadata` file gets a generated `edit` form.
 
 What a layout file does **not** do:
 
-- **Only the `metadata` mode, read-only.** Edit and create layouts are not in this build; a file
-  for another mode is served but not rendered.
+- **Not `view`, and not `create` on screen yet.** The View tab body is the `documentView` slot,
+  section 9a; a `create` file is read by the create form, which no screen opens yet. A file for
+  any other mode is served but not rendered.
 - **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
-  still the panel's own; a `dc:` field you list appears in your layout as well.
+  still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
+  `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
+  in their place.
+- **Not new controls.** The schema type picks the control; a file cannot name a widget, and a
+  `blob` field it lists is shown, not edited.
 - **Folderish types.** Document detail redirects them to Browse, so their Properties panel is never
   shown.
 - **Like every configuration, it is not a security control.** A field left out of a layout is still
   returned by the REST API to anyone who may read the document.
+
+---
+
+## 9c. `documentMetadata`, `documentEdit`, `documentCreate` — a component in place of a layout
+
+Each resolves, with no packaged entries. A layout file (section 9b) chooses fields; an entry in
+one of these slots puts a component of your own where the layout would render, for the documents
+or types its rule admits — when a list of fields cannot say what the type needs, such as a claim
+form whose fields depend on each other.
+
+| Slot               | Replaces                                                                                            | The component receives                         |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `documentMetadata` | the type's layout in the Properties panel. The packaged rows above it stay                          | `document`                                     |
+| `documentEdit`     | the whole form in the Edit dialog, Dublin Core fields included. The dialog's title and buttons stay | `document`, `showErrors`, `onChange`           |
+| `documentCreate`   | the whole form for a new document of the type. **No screen opens the create form yet** (section 9b) | `type`, `parentPath`, `showErrors`, `onChange` |
+
+The descriptor fields are those of `documentView` (section 9a): `componentId` (defaulting to the
+`id`), `rule` and static `inputs`. **Which entry wins** is decided the same way: entries whose rule
+passes, in ascending `order`; the first whose component is registered renders; nothing matching,
+or nothing registered, renders the layout. A component that is registered but fails to load also
+gives way to the layout, so a broken chunk costs the customer their custom form, not the ability
+to edit.
+
+**A create's rule reads the type being created.** For `documentCreate` the rule context's
+`document` is the new document as far as it is known — its `type`, a `path` inside the target
+folder, no `uid`, no properties and no facets — so `app.rules.isType` answers for what is being
+created rather than for the folder it goes in.
+
+**The host's values win.** `document`, `type` and `parentPath` are set by the host after your
+manifest `inputs`, so configuration cannot point the form at another document or type.
+
+**A form component reports, the host saves.** An `edit` or `create` component does not call Nuxeo.
+It calls its `onChange` input with a `DocumentLayoutChange` — `{ properties, valid }` — whenever
+its values change, and the host's Save sends `properties` once the last report said `valid: true`;
+until a report arrives, the form counts as not valid. For an edit, report only the properties the
+user changed; Save closes without a request when there are none. `showErrors` turns `true` when the
+user presses Save, which is the moment to show every field's error, and messages the server
+returns are shown by the host, above the form. Both types are exported from
+`@nuxeo-satori/platform/extensions`:
+
+```ts
+import { Component, input } from '@angular/core';
+import type { DocumentLayoutChange } from '@nuxeo-satori/platform/extensions';
+import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+
+@Component({ selector: 'acme-claim-form', templateUrl: './claim-form.html' })
+export class ClaimFormComponent {
+  readonly document = input<NuxeoDocument | null>(null);
+  readonly showErrors = input(false);
+  readonly onChange = input<((change: DocumentLayoutChange) => void) | null>(null);
+}
+```
+
+```json
+{
+  "slots": {
+    "documentEdit": [
+      {
+        "id": "acme.documentEdit.claim",
+        "componentId": "acme.components.claimForm",
+        "rule": { "type": "app.rules.isType", "parameters": ["Claim"] }
+      }
+    ]
+  }
+}
+```
+
+**Why one slot per mode, not one `documentLayout` slot.** Nuxeo Web UI resolves a layout per type
+_and_ mode, and a single slot whose entries carry a `mode` field was considered. It was rejected
+because the modes do not share a contract: the metadata component is read-only and receives a
+document, the edit form receives a document and must report changes, and the create form receives
+a type and a folder because there is no document yet — its rule must be judged against the type
+being created, which a slot shared with document-scoped modes would get wrong. One slot per mode
+also keeps each entry's effect to a single surface, as every other slot does, and leaves
+`documentView` (section 9a) as it shipped.
+
+What these slots do **not** do:
+
+- **Not the dialog around the form.** The Edit dialog's title, Save and Cancel are the host's; the
+  dialog still opens only where `app.toolbar.edit`'s rule allows it: not in the trash, not
+  `Immutable`, not a Note, and Write or WriteProperties on the document (`app.rules.canWrite`).
+- **Not a security control.** A field your component does not show is still writable through the
+  REST API by anyone with Write, and Nuxeo's own constraints still apply to what you send.
 
 ---
 

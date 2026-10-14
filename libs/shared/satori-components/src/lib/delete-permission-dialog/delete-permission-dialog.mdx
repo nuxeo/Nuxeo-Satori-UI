@@ -1,0 +1,100 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DeletePermissionStories from './delete-permission-dialog.stories';
+
+<Meta of={DeletePermissionStories} name="Overview" />
+
+# Delete permission dialog
+
+The delete permission dialog asks the user to confirm that one permission entry on a document should
+go, then deletes it. It is the counterpart of Web UI's `documentAclTable` delete confirmation.
+
+## Key features
+
+- **Shows what goes.** The entry's user or group, right, time frame and who granted it, in the
+  columns the Permissions tab uses. An external user's share shows their email address.
+- **Deletes one entry.** It deletes the entry by its id, as Web UI does, so the same user's other
+  entries on the document stay.
+- **A refusal reads as one.** When Nuxeo answers 401 or 403, the toast says the user may not change
+  permissions here, not that something broke. The dialog stays open on any failure.
+- **Reports through closing.** It closes with `true` once Nuxeo has deleted the entry.
+
+## Demo showcase
+
+The preview shows the dialog inline, as it looks once open. The code shows how a page opens it.
+
+<Canvas of={DeletePermissionStories.ExternalShare} />
+
+## Usage
+
+Open it with Angular Material's `MatDialog`, as an alert dialog, passing the entry and the ACL it is
+on:
+
+export const usageTs = `import { inject } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import {
+  NxsDeletePermissionDialogComponent,
+  type NxsDeletePermissionDialogData,
+} from '@nuxeo-satori/platform/components';
+
+private readonly dialog = inject(MatDialog);
+
+protected deletePermission(ace: NuxeoAce, acl: string): void {
+  this.dialog
+    .open<NxsDeletePermissionDialogComponent, NxsDeletePermissionDialogData, boolean>(
+      NxsDeletePermissionDialogComponent,
+      { data: { documentUid: this.doc().uid, ace, acl }, role: 'alertdialog' },
+    )
+    .afterClosed()
+    .subscribe((deleted) => deleted && this.reloadPermissions());
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+It has no inputs or outputs. `acl` defaults to `local`, the ACL the Permissions tab writes. The
+dialog lists its own toast provider; it needs `DocumentDetailService`, which an application using
+`@nuxeo-satori/platform/nuxeo-client` already has. Its labels are translated under
+`satori-components.permission-dialogs.*`, with English from `providePlatformEnglishFallback()`.
+
+Offer it only to a user with `WriteSecurity` on the document, as Web UI does. Nuxeo refuses anyone
+else, and the dialog says so, but a button that can only fail is not worth showing.
+
+## Where its data comes from
+
+Delete calls `removePermissionById(documentUid, ace.id, acl)`: the `Document.RemovePermission`
+automation operation with the entry's `id`, where Web UI's call has the same parameters. Nothing is
+read: the entry shown is the one the page passed. Nuxeo answers 200 even when no entry has that id,
+so the page re-reads the permissions after the dialog closes with `true`.
+
+**In these stories** `DocumentDetailService` and the dialog reference are in-memory fakes. They
+never contact Nuxeo and close nothing, and every call they receive is logged in the **Actions** tab.
+
+## Examples
+
+### A user's entry
+
+The user's display name shows when Nuxeo returned one.
+
+<Canvas of={DeletePermissionStories.UserEntry} />
+
+### Deleting
+
+<Canvas of={DeletePermissionStories.Deleting} />
+
+### Refused
+
+Press **Delete**: Nuxeo answers 403, and the toast says the change was refused.
+
+<Canvas of={DeletePermissionStories.Refused} />
+
+## Accessibility
+
+- **An alert dialog.** Open it with `role: 'alertdialog'`, so a screen reader announces it as a
+  confirmation. Its title is a heading that Material's dialog uses as its accessible name.
+- **A real table.** The entry is a one-row table whose column headers are `th scope="col"`, so each
+  value is read with its column's name.
+- **Progress has a name.** While Nuxeo deletes the entry, the Delete button reads "Deleting the
+  permission" beside a turning icon hidden from assistive technology — text, not a progress
+  indicator nested in the button — and both buttons are disabled so it cannot be pressed twice.
+- **Keyboard.** Material's dialog keeps focus inside, closes on **Escape** and returns focus to the
+  button that opened it.

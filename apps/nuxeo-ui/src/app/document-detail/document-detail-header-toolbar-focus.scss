@@ -11,9 +11,3 @@
   outline: 2px solid var(--agentic-document-detail-header-focus-outline);
   outline-offset: 2px;
 }
-
-// The highlighted padlock on a locked document (global for the same budget reason). Never on a
-// disabled one, so the highlight does not read as "you can press this".
-.detail-header .header-actions button.toolbar-action--active:not(.mat-mdc-button-disabled) {
-  color: var(--mat-sys-primary);
-}

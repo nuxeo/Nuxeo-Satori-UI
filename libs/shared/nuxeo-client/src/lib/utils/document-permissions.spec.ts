@@ -1,15 +1,19 @@
 import {
   ADD_CHILDREN,
   canAddChildren,
+  canCreateDocumentVersion,
   canManageDocumentPermissions,
+  canPublishDocument,
   canRemoveDocument,
   canShowRemoveDocumentAction,
   canShowWriteDocumentAction,
+  canTagDocument,
   canViewDocumentAuditLog,
   canWriteDocument,
   hasDocumentPermission,
   hasDocumentPermissionsEnricher,
   isPermissionDeniedError,
+  isRecordDocument,
   MANAGE_DOCUMENT_PERMISSIONS,
   READ_WRITE_DOCUMENT,
   WRITE_SECURITY,
@@ -17,6 +21,7 @@ import {
   REMOVE_DOCUMENT,
   WRITE_DOCUMENT,
   WRITE_PROPERTIES,
+  WRITE_VERSION,
 } from './document-permissions';
 import type { NuxeoDocument } from '../models/document.model';
 
@@ -69,6 +74,76 @@ describe('document-permissions', () => {
 
   it('canWriteDocument is true when user has WriteProperties (Web UI note parity)', () => {
     expect(canWriteDocument(docWithPermissions(['Read', WRITE_PROPERTIES]))).toBe(true);
+  });
+
+  it('canTagDocument follows Web UI: Write on the document itself', () => {
+    expect(canTagDocument(docWithPermissions(['Read', WRITE_DOCUMENT]))).toBe(true);
+    expect(canTagDocument(docWithPermissions(['Read']))).toBe(false);
+    expect(canTagDocument(docWithPermissions(['Read', WRITE_PROPERTIES]))).toBe(false);
+    expect(canTagDocument(null)).toBe(false);
+  });
+
+  it('canTagDocument is false on a version and on a proxy, whatever the permissions', () => {
+    const writable = docWithPermissions(['Read', WRITE_DOCUMENT]);
+    expect(canTagDocument({ ...writable, isVersion: true })).toBe(false);
+    expect(canTagDocument({ ...writable, isProxy: true })).toBe(false);
+  });
+
+  describe('versioning and publishing, as Web UI gates them', () => {
+    const versionable = (
+      permissions: string[],
+      extra: Partial<NuxeoDocument> = {},
+    ): NuxeoDocument => ({
+      ...docWithPermissions(permissions),
+      facets: ['Versionable', 'Publishable'],
+      ...extra,
+    });
+    const record = (doc: NuxeoDocument): NuxeoDocument =>
+      ({ ...doc, isRecord: true }) as NuxeoDocument;
+
+    it('isRecordDocument reads the isRecord field, and nothing else', () => {
+      expect(isRecordDocument(record(versionable([])))).toBe(true);
+      expect(isRecordDocument(versionable([]))).toBe(false);
+      expect(isRecordDocument({ ...versionable([]), facets: ['Record'] })).toBe(false);
+      expect(isRecordDocument(null)).toBe(false);
+    });
+
+    it('canCreateDocumentVersion needs WriteVersion and Versionable on the live document', () => {
+      expect(canCreateDocumentVersion(versionable([WRITE_VERSION]))).toBe(true);
+      expect(canCreateDocumentVersion(versionable([WRITE_DOCUMENT, WRITE_PROPERTIES]))).toBe(false);
+      expect(canCreateDocumentVersion(versionable([WRITE_VERSION], { facets: [] }))).toBe(false);
+      expect(canCreateDocumentVersion(versionable([WRITE_VERSION], { isVersion: true }))).toBe(
+        false,
+      );
+      expect(canCreateDocumentVersion(record(versionable([WRITE_VERSION])))).toBe(false);
+      expect(canCreateDocumentVersion(null)).toBe(false);
+    });
+
+    it('canPublishDocument offers a version, as Web UI does', () => {
+      expect(canPublishDocument(versionable([WRITE_VERSION], { isVersion: true }))).toBe(true);
+      expect(canPublishDocument(versionable([WRITE_VERSION]))).toBe(true);
+    });
+
+    it('canPublishDocument refuses a proxy, a record, a trashed document, and no Publishable', () => {
+      expect(canPublishDocument(versionable([WRITE_VERSION], { isProxy: true }))).toBe(false);
+      expect(canPublishDocument(record(versionable([WRITE_VERSION])))).toBe(false);
+      expect(canPublishDocument(versionable([WRITE_VERSION], { isTrashed: true }))).toBe(false);
+      expect(canPublishDocument(versionable([WRITE_VERSION], { facets: ['Versionable'] }))).toBe(
+        false,
+      );
+      expect(canPublishDocument(null)).toBe(false);
+    });
+
+    it('canPublishDocument reads the deleted state as the trash only when isTrashed is absent', () => {
+      expect(canPublishDocument(versionable([WRITE_VERSION], { state: 'deleted' }))).toBe(false);
+      expect(
+        canPublishDocument(versionable([WRITE_VERSION], { state: 'deleted', isTrashed: false })),
+      ).toBe(true);
+    });
+
+    it('canPublishDocument needs WriteVersion, not Write', () => {
+      expect(canPublishDocument(versionable([WRITE_DOCUMENT, READ_WRITE_DOCUMENT]))).toBe(false);
+    });
   });
 
   it('canAddChildren is false for read-only users', () => {

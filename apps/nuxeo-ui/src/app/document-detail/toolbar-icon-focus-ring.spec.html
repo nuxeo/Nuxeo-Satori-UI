@@ -1,17 +1,7 @@
 <!--
-  Fixture for toolbar-icon-focus-ring.spec.ts. Mirrors document-detail.html toolbar slot:
-  `.detail-header` > `.header-actions` > `mat-icon-button` with data-action-id.
+  Fixture for toolbar-icon-focus-ring.spec.ts. Mirrors document-detail.html's toolbar slot:
+  `.detail-header` > `nxs-document-toolbar.header-actions`, whose icon buttons carry data-action-id.
 -->
 <div class="detail-header toolbar-icon-focus-ring-host">
-  <div class="header-actions">
-    <button
-      type="button"
-      mat-icon-button
-      data-testid="toolbar-icon-btn"
-      data-action-id="app.toolbar.edit"
-    >
-      <span class="cdk-visually-hidden">Edit</span>
-      <mat-icon aria-hidden="true">edit</mat-icon>
-    </button>
-  </div>
+  <nxs-document-toolbar class="header-actions" [actions]="actions" />
 </div>

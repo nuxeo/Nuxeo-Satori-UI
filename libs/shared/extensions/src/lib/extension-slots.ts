@@ -16,7 +16,7 @@
  *
  * The practical consequence — and the thing that turns the "addressable
  * ceiling" from an irreversible decision into ordinary backlog — is that adding
- * a tenth slot after Beta ships requires **no change to the nine**, and no
+ * a slot after Beta ships requires **no change to the existing ones**, and no
  * change to this library at all. `extension-slot-registry.service.spec.ts`
  * proves it by registering a slot this file has never heard of.
  *
@@ -25,7 +25,7 @@
  */
 
 /**
- * The nine slots Beta implements. Not a closed set — see the file comment.
+ * The slots Beta implements. Not a closed set — see the file comment.
  *
  * `rules` used to be listed here and was removed: rules are not descriptors and
  * do not live in a slot. They are registered in `ExtensionRuleRegistry`, so a
@@ -55,10 +55,17 @@ export const EXTENSION_SLOTS = {
    * The body of the document-detail View tab, chosen per document by rule.
    *
    * Named for the view alone. Nuxeo Web UI resolves four layouts per type — view, edit,
-   * create and metadata — and the other three are not this slot: a per-type metadata layout
-   * is a separate design, and a generic `documentLayout` name here would have decided it.
+   * create and metadata. The other three each have a slot of their own below, rather than one
+   * `documentLayout` slot whose entries carry a mode, because each mode hands its component a
+   * different contract and the create form's rule reads a type, not a document.
    */
   documentView: 'documentView',
+  /** A document type's section of the document-detail Properties panel, chosen per document by rule. */
+  documentMetadata: 'documentMetadata',
+  /** The form editing a document's properties, chosen per document by rule. */
+  documentEdit: 'documentEdit',
+  /** The form filling in a new document's properties, chosen by rule for the type being created. */
+  documentCreate: 'documentCreate',
 } as const;
 
 /** A slot id. Deliberately `string`, not a union over {@link EXTENSION_SLOTS}. */

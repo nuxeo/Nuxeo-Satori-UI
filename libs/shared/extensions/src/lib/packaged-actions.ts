@@ -222,7 +222,9 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     icon: 'publish',
     order: 70,
     overflow: true,
-    rule: every('app.rules.isNotTrashed', 'app.rules.hasVersion', 'app.rules.canWrite'),
+    // Web UI's `isPublishable`, which offers a version too: `canWrite` would read the live
+    // document's `Write` off a version's enricher, and `hasVersion` is not Web UI's condition.
+    rule: every('app.rules.isNotTrashed', 'app.rules.canPublish'),
   },
   {
     id: 'app.toolbar.subscribe',

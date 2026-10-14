@@ -1,16 +1,20 @@
 /**
- * NXSAT-488 / IBM 1235130066 — document detail Material tab keyboard focus indicator
- * (WCAG 2.1 SC 2.4.7). Karma loads theme tokens; the host pulls in document-detail.scss.
+ * NXSAT-488 / IBM 1235130066 — document detail tab keyboard focus indicator (WCAG 2.1 SC 2.4.7).
+ * Karma loads theme tokens; the host renders the real `nxs-tabs` under document-detail.scss, whose
+ * `.detail-tabs` rule sets the ring colour the library draws.
  *
- * Standalone `.mat-mdc-tab:focus` selector shape is owned by
- * `document-detail-tab-focus-ring.spec.ts` (feature Vitest); this suite owns computed outline
- * geometry, contrast against the tab header, and IBM `:focus`-only behaviour.
+ * The token wiring is owned by `document-detail-tab-focus-ring.spec.ts` (feature Vitest); this
+ * suite owns computed outline geometry, contrast against the tab header, and IBM `:focus`-only
+ * behaviour.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatTabsModule } from '@angular/material/tabs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+import {
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  type NxsTab,
+} from '@nuxeo-satori/platform/components';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -49,15 +53,20 @@ function productionTabHeaderBackground(host: HTMLElement): string {
 
 @Component({
   standalone: true,
-  imports: [MatTabsModule, TranslateModule],
+  imports: [NxsTabsComponent, NxsTabBodyDirective],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
-    '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-tab-focus.scss',
     './detail-tab-focus-ring.fixture.scss',
   ],
   templateUrl: './detail-tab-focus-ring.spec.html',
 })
-class DetailTabFocusHostComponent {}
+class DetailTabFocusHostComponent {
+  readonly tabs: readonly NxsTab[] = [
+    { id: 'view', label: 'View' },
+    { id: 'metadata', label: 'Metadata' },
+    { id: 'activity', label: 'Activity' },
+  ];
+}
 
 describe('Document detail Material tabs — keyboard focus indicator (NXSAT-488)', () => {
   let originalTheme: string | null;

@@ -503,6 +503,201 @@ The box listing the user's saved searches, with one open: the same labelled box 
 
 Save as, Save and the menu button for a saved search the user owns, with its filters changed. The same buttons in both; the theme sets their shape and colours. On a search shared read-only only Save as is offered, in both.
 
+### Document toolbar
+
+| Field           | Value                                                     |
+| --------------- | --------------------------------------------------------- |
+| Component       | `NxsDocumentToolbarComponent`                             |
+| Registered ID   | —                                                         |
+| With Satori     | Same component; theme only                                |
+| Storybook story | `documents-document-toolbar--file-locked-by-another-user` |
+
+![Document toolbar: without Satori on the left, with Satori on the right](document-toolbar-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The action row of a File locked by another user: Edit, Add to collection, the padlock drawn as on, Add to Favorites, Share and Delete as icon buttons, and a "More actions" button for the rest. The same buttons in both; the theme sets the icon colour, the "on" colour of the padlock and the focus ring.
+
+The page gives the toolbar its entries and runs the one chosen. A disabled entry stays focusable so its tooltip, such as who holds the lock, can be read; with nothing to overflow, no "More actions" button renders.
+
+### Tabs
+
+| Field           | Value                       |
+| --------------- | --------------------------- |
+| Component       | `NxsTabsComponent`          |
+| Registered ID   | —                           |
+| With Satori     | Same component; theme only  |
+| Storybook story | `documents-tabs--file-tabs` |
+
+![Tabs: without Satori on the left, with Satori on the right](tabs-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A File's View, Permissions, History and Publishing tabs and a "Claims" tab a manifest adds, with View selected. The same strip in both; the theme sets the type, the icon colour and the selection underline.
+
+The page gives the tabs their list and one template every body renders from, so a tab a manifest adds renders like a packaged one.
+
+### Details panel
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsDetailsPanelComponent`                  |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `documents-details-panel--document-details` |
+
+![Details panel: without Satori on the left, with Satori on the right](details-panel-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document page's side panel for "Quarterly report.pdf": the header with its close button, the Properties, Comments and Activity views with Properties selected, and the view's content. The same panel in both; the theme sets the type, the divider and the selection underline.
+
+The page decides which views exist — no Comments view on a document that cannot be commented on — and projects what each one shows.
+
+### Properties panel
+
+| Field           | Value                                         |
+| --------------- | --------------------------------------------- |
+| Component       | `NxsPropertiesPanelComponent`                 |
+| Registered ID   | —                                             |
+| With Satori     | Same component; theme only                    |
+| Storybook story | `documents-properties-panel--file-properties` |
+
+![Properties panel: without Satori on the left, with Satori on the right](properties-panel-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A File's properties: its state, version, publications, dates, creator and contributors, then title, file name, tags, description, nature, coverage and subjects, and the collection it is in. The same rows in both; the theme sets the type, the label colour and the chips.
+
+Every value is a label or a name: a directory entry or a user that arrives as an object never shows as `[object Object]`. Tags show only on a document that can be tagged.
+
+### Metadata editor
+
+| Field           | Value                                      |
+| --------------- | ------------------------------------------ |
+| Component       | `NxsMetadataEditorComponent`               |
+| Registered ID   | —                                          |
+| With Satori     | Same component; theme only                 |
+| Storybook story | `documents-metadata-editor--customer-type` |
+
+![Metadata editor: without Satori on the left, with Satori on the right](metadata-editor-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Editing a customer "Policy" type: the Dublin Core fields, then its section with a policy number, a premium, a checkbox, product codes, a holder, contacts and a signed copy shown read-only. The same controls in both; the theme sets the type, the outlines and the chips.
+
+It checks the schema's rules as the user types and on Save, names the field in every message, and sends only what changed.
+
+### Comments
+
+| Field           | Value                        |
+| --------------- | ---------------------------- |
+| Component       | `NxsCommentsComponent`       |
+| Registered ID   | —                            |
+| With Satori     | Same component; theme only   |
+| Storybook story | `documents-comments--thread` |
+
+![Comments: without Satori on the left, with Satori on the right](comments-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document's comment thread signed in as one of its authors: three comments, the first with its two replies folded behind "2 replies", the last cut short behind "Show all", Edit and Delete on the user's own comment only, and the comment box. The same thread in both; the theme sets the type, the avatars, the outline of the box and the link colour.
+
+It follows Web UI's thread: the newest page first, replies only on top-level comments, Edit and Delete for the author and administrators, a confirmation before deleting, Ctrl+Enter to submit.
+
+### Tag editor
+
+| Field           | Value                            |
+| --------------- | -------------------------------- |
+| Component       | `NxsTagEditorComponent`          |
+| Registered ID   | —                                |
+| With Satori     | Same component; theme only       |
+| Storybook story | `documents-tag-editor--editable` |
+
+![Tag editor: without Satori on the left, with Satori on the right](tag-editor-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document's two tags as chips, each with a remove button, and the box that adds one. The same field in both; the theme sets the chip colour, the outline of the box and the type.
+
+It follows Web UI's tag field on the document page: existing tags suggested as you type, the typed text offered as a new tag, each change saved at once, and read-only without Write or on a version or proxy.
+
+### Delete permission dialog
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsDeletePermissionDialogComponent`        |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `dialogs-delete-permission--external-share` |
+
+![Delete permission dialog: without Satori on the left, with Satori on the right](delete-permission-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The confirmation before an external user's share is deleted: the person's email, the right, the date it ends and who granted it, with Cancel and Delete. The same dialog in both; the theme sets the type, the table's lines and the button styles.
+
+It deletes that one entry, as Web UI does, so the same person's other entries on the document stay.
+
+### Share with external user dialog
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsShareExternalDialogComponent`           |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `dialogs-share-with-external-user--default` |
+
+![Share with external user dialog: without Satori on the left, with Satori on the right](share-external-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+The empty form for sharing a document by email: the email, the right, the start and end dates, the message, and Cancel, Create and add another, and Create. The same form in both; the theme sets the type, the outlines and the button styles.
+
+It follows Web UI's external-user popup: the end date is required, the person is always emailed, and the rights offered are the ones the document type makes visible.
+
+### Update permission dialog
+
+| Field           | Value                                       |
+| --------------- | ------------------------------------------- |
+| Component       | `NxsUpdatePermissionDialogComponent`        |
+| Registered ID   | —                                           |
+| With Satori     | Same component; theme only                  |
+| Storybook story | `dialogs-update-permission--external-share` |
+
+![Update permission dialog: without Satori on the left, with Satori on the right](update-permission-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Changing an external user's share: whose it is, the right, the dates with the end required, and the message the person is sent. The same form in both; the theme sets the type, the outlines and the button styles.
+
+It replaces the entry in one call, as Web UI does, and writes back a date the user did not change exactly as Nuxeo holds it.
+
+### Manage versions
+
+| Field           | Value                                    |
+| --------------- | ---------------------------------------- |
+| Component       | `NxsManageVersionsComponent`             |
+| Registered ID   | —                                        |
+| With Satori     | Same component; theme only               |
+| Storybook story | `documents-manage-versions--checked-out` |
+
+![Manage versions: without Satori on the left, with Satori on the right](manage-versions-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document checked out at 1.2+ with its list open: Create Version above the versions, newest first, each with when and by whom it was last changed. The same list in both; the theme sets the type, the menu's surface and the highlight on the focused entry.
+
+It follows Web UI's version control: choosing a version opens it rather than restoring it, Create Version only while there are changes to version and only with `WriteVersion`, and "Unversioned" where the user may not version.
+
+### Create version dialog
+
+| Field           | Value                                  |
+| --------------- | -------------------------------------- |
+| Component       | `NxsCreateVersionDialogComponent`      |
+| Registered ID   | —                                      |
+| With Satori     | Same component; theme only             |
+| Storybook story | `dialogs-create-version--major-chosen` |
+
+![Create version dialog: without Satori on the left, with Satori on the right](create-version-dialog-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+Creating a version of a contract at 1.2: Minor (1.3) and Major (2.0), with Major chosen. The same dialog in both; the theme sets the type, the radio buttons and the button styles.
+
+It follows Web UI's dialog: the number each choice gives, Major first, and a toast naming the version created.
+
+### Document history
+
+| Field           | Value                                 |
+| --------------- | ------------------------------------- |
+| Component       | `NxsDocumentHistoryComponent`         |
+| Registered ID   | —                                     |
+| With Satori     | Same component; theme only            |
+| Storybook story | `documents-document-history--history` |
+
+![Document history: without Satori on the left, with Satori on the right](document-history-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+
+A document's history filtered to one user: the filters, then the table of actions with their dates and times, users, categories, comments and states, a page at a time. The same table in both; the theme sets the type, the outlines of the fields and the avatars.
+
+It follows Web UI's audit search: every filter and the sort go to the server, so they reach every entry and not only the page on screen.
+
 <!-- satori:comparison:components -->
 
 ## Full screenshots
@@ -553,41 +748,54 @@ The components in the library today:
 
 <!-- satori:comparison:summary -->
 
-| Component                | Registered ID (if any)                                                                                                  | Differs with Satori?         |
-| ------------------------ | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| Avatar                   | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
-| Tag                      | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
-| Breadcrumbs              | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
-| Rich tooltip             | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
-| Icon                     | —                                                                                                                       | Same component; theme only   |
-| Document type icon       | —                                                                                                                       | Same component; theme only   |
-| Thumbnail                | —                                                                                                                       | Same component; theme only   |
-| Folder header            | —                                                                                                                       | Same component; theme only   |
-| Domain hint              | —                                                                                                                       | Same component; theme only   |
-| Empty state              | —                                                                                                                       | Same component; theme only   |
-| Error state              | `nxs.primitives.errorState`                                                                                             | Same component; theme only   |
-| Spinner                  | —                                                                                                                       | Same component; theme only   |
-| Toast                    | —                                                                                                                       | Same component; theme only   |
-| Column picker            | —                                                                                                                       | Same component; theme only   |
-| Permissions panel        | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
-| Nuxeo Drive dialog       | —                                                                                                                       | Same component; theme only   |
-| Favorite toggle          | —                                                                                                                       | Same component; theme only   |
-| Action menu              | —                                                                                                                       | Same component; theme only   |
-| User and group picker    | —                                                                                                                       | Same component; theme only   |
-| Vocabulary select        | —                                                                                                                       | Same component; theme only   |
-| Tag input                | —                                                                                                                       | Same component; theme only   |
-| Document reference input | —                                                                                                                       | Same component; theme only   |
-| Date input               | —                                                                                                                       | Same component; theme only   |
-| Pager                    | —                                                                                                                       | Same component; theme only   |
-| Document list            | —                                                                                                                       | Same component; theme only   |
-| Document tree            | —                                                                                                                       | Same component; theme only   |
-| Rename dialog            | —                                                                                                                       | Same component; theme only   |
-| Folder picker            | —                                                                                                                       | Same component; theme only   |
-| Dropzone                 | —                                                                                                                       | Same component; theme only   |
-| Upload queue             | —                                                                                                                       | Same component; theme only   |
-| Search filters           | —                                                                                                                       | Same component; theme only   |
-| Saved search select      | —                                                                                                                       | Same component; theme only   |
-| Saved search actions     | —                                                                                                                       | Same component; theme only   |
+| Component                       | Registered ID (if any)                                                                                                  | Differs with Satori?         |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| Avatar                          | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
+| Tag                             | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
+| Breadcrumbs                     | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
+| Rich tooltip                    | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
+| Icon                            | —                                                                                                                       | Same component; theme only   |
+| Document type icon              | —                                                                                                                       | Same component; theme only   |
+| Thumbnail                       | —                                                                                                                       | Same component; theme only   |
+| Folder header                   | —                                                                                                                       | Same component; theme only   |
+| Domain hint                     | —                                                                                                                       | Same component; theme only   |
+| Empty state                     | —                                                                                                                       | Same component; theme only   |
+| Error state                     | `nxs.primitives.errorState`                                                                                             | Same component; theme only   |
+| Spinner                         | —                                                                                                                       | Same component; theme only   |
+| Toast                           | —                                                                                                                       | Same component; theme only   |
+| Column picker                   | —                                                                                                                       | Same component; theme only   |
+| Permissions panel               | `nxs.components.permissionsPanel` (the library defines the ID; our app registers it, `provideNxsComponents()` does not) | Same component; theme only   |
+| Nuxeo Drive dialog              | —                                                                                                                       | Same component; theme only   |
+| Favorite toggle                 | —                                                                                                                       | Same component; theme only   |
+| Action menu                     | —                                                                                                                       | Same component; theme only   |
+| User and group picker           | —                                                                                                                       | Same component; theme only   |
+| Vocabulary select               | —                                                                                                                       | Same component; theme only   |
+| Tag input                       | —                                                                                                                       | Same component; theme only   |
+| Document reference input        | —                                                                                                                       | Same component; theme only   |
+| Date input                      | —                                                                                                                       | Same component; theme only   |
+| Pager                           | —                                                                                                                       | Same component; theme only   |
+| Document list                   | —                                                                                                                       | Same component; theme only   |
+| Document tree                   | —                                                                                                                       | Same component; theme only   |
+| Rename dialog                   | —                                                                                                                       | Same component; theme only   |
+| Folder picker                   | —                                                                                                                       | Same component; theme only   |
+| Dropzone                        | —                                                                                                                       | Same component; theme only   |
+| Upload queue                    | —                                                                                                                       | Same component; theme only   |
+| Search filters                  | —                                                                                                                       | Same component; theme only   |
+| Saved search select             | —                                                                                                                       | Same component; theme only   |
+| Saved search actions            | —                                                                                                                       | Same component; theme only   |
+| Document toolbar                | —                                                                                                                       | Same component; theme only   |
+| Tabs                            | —                                                                                                                       | Same component; theme only   |
+| Details panel                   | —                                                                                                                       | Same component; theme only   |
+| Properties panel                | —                                                                                                                       | Same component; theme only   |
+| Metadata editor                 | —                                                                                                                       | Same component; theme only   |
+| Comments                        | —                                                                                                                       | Same component; theme only   |
+| Tag editor                      | —                                                                                                                       | Same component; theme only   |
+| Delete permission dialog        | —                                                                                                                       | Same component; theme only   |
+| Share with external user dialog | —                                                                                                                       | Same component; theme only   |
+| Update permission dialog        | —                                                                                                                       | Same component; theme only   |
+| Manage versions                 | —                                                                                                                       | Same component; theme only   |
+| Create version dialog           | —                                                                                                                       | Same component; theme only   |
+| Document history                | —                                                                                                                       | Same component; theme only   |
 
 This table and the screenshots are kept current as components are added.
 

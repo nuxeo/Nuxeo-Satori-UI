@@ -39,6 +39,15 @@ describe('l10n-directory.utils', () => {
     expect(formatHierarchicalL10nLabel('unknown', coverageEntries)).toBe('unknown');
   });
 
+  it('formatHierarchicalL10nLabel reads the parent/child value Web UI stores', () => {
+    expect(formatHierarchicalL10nLabel('africa/tanzania', coverageEntries)).toBe('Africa/Tanzania');
+  });
+
+  it('formatHierarchicalL10nLabel leaves a parent/child value whose parent does not match as it is', () => {
+    expect(formatHierarchicalL10nLabel('europe/tanzania', coverageEntries)).toBe('europe/tanzania');
+    expect(formatHierarchicalL10nLabel('/tanzania', coverageEntries)).toBe('/tanzania');
+  });
+
   it('resolveNatureLabel maps vocabulary id to display label', () => {
     const nature: DirectoryEntry[] = [
       {

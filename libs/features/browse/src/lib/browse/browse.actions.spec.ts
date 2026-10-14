@@ -706,7 +706,7 @@ describe('BrowseComponent — actions', () => {
     component.tagInput = 'legal';
     component.tagSearchResults.set(['legal']);
     component.showCreateOption.set(true);
-    tag.addTag.mockReturnValue(of(undefined));
+    tag.addTag.mockReturnValue(of([]));
     browse.getByPath.mockReturnValue(
       of(doc({ ...folder, properties: { 'nxtag:tags': [{ label: 'legal' }] } })),
     );
@@ -735,7 +735,7 @@ describe('BrowseComponent — actions', () => {
 
   it('createTag applies the trimmed input and ignores a blank one', () => {
     component.currentDoc.set(folder);
-    tag.addTag.mockReturnValue(of(undefined));
+    tag.addTag.mockReturnValue(of([]));
     browse.getByPath.mockReturnValue(of(folder));
 
     component.tagInput = '   ';
@@ -752,7 +752,7 @@ describe('BrowseComponent — actions', () => {
       doc({ ...folder, properties: { 'nxtag:tags': [{ label: 'legal' }, 'urgent'] } }),
     );
     expect(component.tags()).toEqual(['legal', 'urgent']);
-    tag.removeTag.mockReturnValue(of(undefined));
+    tag.removeTag.mockReturnValue(of([]));
     browse.getByPath.mockReturnValue(
       of(doc({ ...folder, properties: { 'nxtag:tags': ['urgent'] } })),
     );
