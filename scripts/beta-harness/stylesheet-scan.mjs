@@ -186,8 +186,11 @@ export function sassLoadedUrls(body, { indented = false } = {}) {
     const mask = maskStylesheet(body);
     for (const match of mask.matchAll(/(?:^|\n)[ \t]*@import\b([^\n]*)/dg)) {
       const [from, to] = match.indices[1];
+      const maskedContent = mask.slice(from, to).trim();
       const importList = body.slice(from, to).trim();
-      if (importList && !/^['"]|url\(/.test(importList)) {
+      // Only process if the masked version has non-space chars (not all masked/commented)
+      // and doesn't start with a quote or url() (those are handled by styleSpecifiers)
+      if (maskedContent && !/^['"]|url\(/.test(maskedContent) && !/^['"]|url\(/.test(importList)) {
         // This is an unquoted import list; split and add each item
         for (const item of importList.split(',')) {
           const trimmed = item.trim();
