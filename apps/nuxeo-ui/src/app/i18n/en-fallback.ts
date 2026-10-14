@@ -27,7 +27,7 @@
  * translation key for both purposes, because it leaves the host no way to separate them.
  *
  * These values match upstream's own `i18n/en.json`, which is now also loaded as a translation
- * folder (see `SEEDED_FOLDERS` in `app-translate-loader.ts`). They are duplicated here because
+ * folder (see `UPSTREAM_FOLDERS` in `app-translate-loader.ts`). They are duplicated here because
  * this map is the fallback for a **failed fetch**, and a failed fetch must not silently restore
  * the empty name.
  *

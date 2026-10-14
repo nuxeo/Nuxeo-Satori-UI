@@ -30,11 +30,6 @@
               },
               {
                 "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-core/bundles/assets/adf-core",
-                "output": "assets/adf-core"
-              },
-              {
-                "glob": "**/*",
                 "input": "node_modules/@alfresco/adf-hx-content-services/icons/assets",
                 "output": "assets"
               },
@@ -94,11 +89,6 @@
                   "glob": "**/*",
                   "input": "apps/nuxeo-ui/public",
                   "ignore": ["i18n/*.context.json"]
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-core/bundles/assets/adf-core",
-                  "output": "assets/adf-core"
                 },
                 {
                   "glob": "**/*",

@@ -118,14 +118,13 @@ console.log(`apps/nuxeo-ui/public/i18n/zz.json — ${count(en)} keys`);
  * The upstream catalogues get a `zz` too, written into `node_modules` where the build reads
  * assets from.
  *
- * Without this the audit reports every adf-core, adf-hx and satori-ui string as a miss, because
- * upstream ships only en, fr and de and `AppTranslateLoader` correctly falls back to English for
- * anything else. That was 22 of a 42-string report — more than half of what was left, none of it
- * ours and none of it actionable, which is how a number stops being read. `node_modules` is
- * disposable and this writes only the extra locale, so a reinstall undoes it.
+ * Without this the audit reports every upstream string as a miss, because upstream ships only en,
+ * fr and de and falls back to English for anything else. That was 22 of a 42-string report — more
+ * than half of what was left, none of it ours and none of it actionable, which is how a number
+ * stops being read. `node_modules` is disposable and this writes only the extra locale, so a
+ * reinstall undoes it.
  */
 const UPSTREAM = [
-  'node_modules/@alfresco/adf-core/bundles/assets/adf-core/i18n',
   'node_modules/@alfresco/adf-hx-content-services/ui/assets/adf-enterprise-adf-hx-content-services-ui/i18n',
   'node_modules/@alfresco/adf-hx-content-services/services/assets/adf-enterprise-adf-hx-content-services-services/i18n',
   'node_modules/@hylandsoftware/satori-ui/i18n',

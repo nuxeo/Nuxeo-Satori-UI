@@ -483,6 +483,9 @@ package already does, recovered only 40 kB. The fix is the bridge's: a secondary
 an app shell that does not import the barrel. 4.25 MB leaves 180 kB of headroom, so the next
 increase still fails the build. The ADF removal takes adf-core, adf-hx, the bridge and the hxcs
 client — about 540 kB of the initial bundle — out, and the budget returns to 4.0 MB with it.
+NXSAT-636 removes adf-core's wiring and its asset glob; the glob copies files and is not part of
+the initial bundle, so the budget is unchanged there and NXSAT-638 sets it once the merged removal
+is measured.
 
 Unavoidable rather than chosen — see the root-injector decision above. Practically:
 unnoticeable on an office network, a second or two on a first load over a slow link. The
