@@ -157,6 +157,16 @@ describe('NxsDateInputComponent', () => {
     expect(host.expires.valid).toBe(true);
   });
 
+  it('reports a date once, not again when the field commits it', async () => {
+    await setup('fr');
+    const values: (Date | null)[] = [];
+    host.expires.valueChanges.subscribe((value) => values.push(value));
+    await type('03/04/2026');
+    input().dispatchEvent(new Event('change'));
+    await render();
+    expect(values.map(day)).toEqual(['2026-04-03']);
+  });
+
   it('reads the same text as 4 March in American English', async () => {
     await setup('en-US');
     await type('03/04/2026');
