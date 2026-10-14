@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /** NXSAT-639: plan first; NXSAT-640 applies the reviewed rename. See docs/rename-sweep.md. */
 import { execFileSync } from 'node:child_process';
-import { lstatSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import * as fs from 'node:fs';
+import { lstatSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { basename, dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const OLD_PACKAGE = '@nuxeo-satori/platform';
@@ -22,6 +23,22 @@ const git = (root, args, options = {}) =>
   });
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const excluded = (path) => /(^|\/)changelog(?:[./_-]|$)/i.test(path) || SELF.test(path);
+const canonicalPath = (path) => {
+  try {
+    return fs.realpathSync(path);
+  } catch (error) {
+    if (error.code !== 'ENOENT' || dirname(path) === path) throw error;
+    return resolve(canonicalPath(dirname(path)), basename(path));
+  }
+};
+const fileIdentity = (path) => {
+  try {
+    return fs.statSync(path, { bigint: true });
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return null;
+  }
+};
 
 /** Read tracked working files, or an immutable Git tree without checking out that ref. */
 export function readTree(root, ref) {
@@ -161,15 +178,18 @@ export function planRename(files) {
   return { changes, blockers: [...new Set(blockers)].sort(), next };
 }
 
-/** Refuse a stale plan before any move or write. Never overwrite an existing destination. */
-export function applyPlan(root, files, plan) {
+/** Preflight the plan, then recheck each mutation. Application is not transactional. */
+export function applyPlan(root, files, plan, io = fs) {
   if (plan.blockers.length) throw new Error(`Rename blocked:\n${plan.blockers.join('\n')}`);
-  for (const { from, to } of plan.changes) {
-    if (!readFileSync(resolve(root, from)).equals(files.get(from)))
+  const verifySource = (from, source = resolve(root, from)) => {
+    if (!io.readFileSync(source).equals(files.get(from)))
       throw new Error(`Source changed: ${from}`);
+  };
+  for (const { from, to } of plan.changes) {
+    verifySource(from);
     if (from !== to) {
       try {
-        lstatSync(resolve(root, to));
+        io.lstatSync(resolve(root, to));
       } catch (error) {
         if (error.code === 'ENOENT') continue;
         throw error;
@@ -178,10 +198,47 @@ export function applyPlan(root, files, plan) {
     }
   }
   for (const { from, to } of plan.changes) {
+    const source = resolve(root, from);
     const target = resolve(root, to);
-    mkdirSync(dirname(target), { recursive: true });
-    if (from !== to) renameSync(resolve(root, from), target);
-    writeFileSync(target, plan.next.get(to));
+    io.mkdirSync(dirname(target), { recursive: true });
+    verifySource(from);
+    if (from !== to) {
+      let fd;
+      const mode = io.lstatSync(source).mode;
+      try {
+        // Exclusive creation also rejects destinations appearing after preflight.
+        fd = io.openSync(target, 'wx', mode);
+      } catch (error) {
+        if (error.code === 'EEXIST') throw new Error(`Destination already exists: ${to}`);
+        throw error;
+      }
+      try {
+        verifySource(from);
+        // Restore the source mode explicitly; exclusive creation also applies umask.
+        io.fchmodSync(fd, mode);
+        io.writeFileSync(fd, plan.next.get(to));
+      } finally {
+        io.closeSync(fd);
+      }
+      // Retain the source if an editor changed it while the destination was written.
+      verifySource(from);
+      io.unlinkSync(source);
+    } else {
+      const fd = io.openSync(source, 'r+');
+      try {
+        verifySource(from, fd);
+        const data = plan.next.get(to);
+        let offset = 0;
+        while (offset < data.length) {
+          const written = io.writeSync(fd, data, offset, data.length - offset, offset);
+          if (!written) throw new Error(`Write made no progress: ${from}`);
+          offset += written;
+        }
+        io.ftruncateSync(fd, data.length);
+      } finally {
+        io.closeSync(fd);
+      }
+    }
   }
 }
 
@@ -190,7 +247,7 @@ export function main(argv) {
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
     if (arg === '--write') options.write = true;
-    else if (arg === '--dry-run') continue;
+    else if (arg === '--dry-run') options.dryRun = true;
     else if (arg === '--help') {
       console.log(
         'node scripts/rename-satori.mjs [--dry-run|--write] [--root dir] [--ref git-ref] [--report file.json]',
@@ -202,6 +259,7 @@ export function main(argv) {
       options[arg.slice(2)] = value;
     } else throw new Error(`Unknown option: ${arg}`);
   }
+  if (options.write && options.dryRun) throw new Error('--write cannot be combined with --dry-run');
   if (options.write && options.ref) throw new Error('--write cannot be combined with --ref');
   const root = resolve(options.root);
   const files = readTree(root, options.ref);
@@ -229,11 +287,18 @@ export function main(argv) {
     const trackedPaths = git(root, ['ls-files', '-z'], { encoding: 'utf8' })
       .split('\0')
       .filter(Boolean);
-    const normalized = (path) => (process.platform === 'win32' ? path.toLowerCase() : path);
+    // Conservatively reject case-only aliases even on case-sensitive filesystems.
+    const normalized = (path) => canonicalPath(path).toLowerCase();
+    const targetPath = normalized(target);
+    const targetIdentity = fileIdentity(target);
     if (
-      [...files.keys(), ...trackedPaths].some(
-        (path) => normalized(resolve(root, path)) === normalized(target),
-      )
+      [...files.keys(), ...trackedPaths].some((path) => {
+        const source = resolve(root, path);
+        if (normalized(source) === targetPath) return true;
+        if (!targetIdentity) return false;
+        const identity = fileIdentity(source);
+        return identity?.dev === targetIdentity.dev && identity?.ino === targetIdentity.ino;
+      })
     )
       throw new Error('Report must not overwrite a tracked file');
     mkdirSync(dirname(target), { recursive: true });

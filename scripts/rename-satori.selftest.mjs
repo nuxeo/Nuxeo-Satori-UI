@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
+import * as fs from 'node:fs';
 import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
@@ -252,6 +253,107 @@ test('rejects invalid CLI arguments and writing a ref', () => {
   assert.throws(() => main(['--write', '--ref', 'HEAD']), /cannot be combined/);
 });
 
+test('rejects --write with --dry-run in either order before any changes', (t) => {
+  const { root, git } = fixture(t, { 'a.ts': OLD });
+  for (const flags of [
+    ['--write', '--dry-run'],
+    ['--dry-run', '--write'],
+  ]) {
+    const result = spawnSync(process.execPath, [SCRIPT, '--root', root, ...flags], {
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /--write cannot be combined with --dry-run/);
+    assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), OLD);
+    assert.equal(git('diff', '--stat'), '');
+  }
+});
+
+test('a destination created after preflight is preserved by exclusive creation', (t) => {
+  const { root } = fixture(t, { 'hxp-a.ts': OLD });
+  const files = readTree(root);
+  const plan = planRename(files);
+  const target = join(root, 'nxs-a.ts');
+  const io = {
+    ...fs,
+    openSync(path, ...args) {
+      if (path === target) writeFileSync(target, 'concurrent destination');
+      return fs.openSync(path, ...args);
+    },
+  };
+  assert.throws(() => applyPlan(root, files, plan, io), /Destination already exists/);
+  assert.equal(readFileSync(target, 'utf8'), 'concurrent destination');
+  assert.equal(readFileSync(join(root, 'hxp-a.ts'), 'utf8'), OLD);
+});
+
+test('exclusive moves preserve source permission bits', (t) => {
+  const { root } = fixture(t, { 'hxp-script.sh': OLD });
+  const source = join(root, 'hxp-script.sh');
+  fs.chmodSync(source, 0o755);
+  const mode = fs.statSync(source).mode & 0o777;
+  const files = readTree(root);
+  const originalMask = process.umask(0o077);
+  try {
+    applyPlan(root, files, planRename(files));
+  } finally {
+    process.umask(originalMask);
+  }
+  const target = join(root, 'nxs-script.sh');
+  assert.equal(fs.statSync(target).mode & 0o777, mode);
+  assert.equal(readFileSync(target, 'utf8'), NEW);
+  assert.equal(existsSync(source), false);
+});
+
+test('per-mutation checks retain source edits made after preflight', (t) => {
+  const { root } = fixture(t, { 'a.ts': OLD, 'z.ts': OLD });
+  const files = readTree(root);
+  const plan = planRename(files);
+  const io = {
+    ...fs,
+    writeSync(...args) {
+      const result = fs.writeSync(...args);
+      writeFileSync(join(root, 'z.ts'), 'concurrent source edit');
+      return result;
+    },
+  };
+  assert.throws(() => applyPlan(root, files, plan, io), /Source changed: z.ts/);
+  assert.equal(readFileSync(join(root, 'z.ts'), 'utf8'), 'concurrent source edit');
+  assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), NEW);
+});
+
+test('in-place writes check their opened source before truncating it', (t) => {
+  const { root } = fixture(t, { 'a.ts': OLD });
+  const files = readTree(root);
+  const plan = planRename(files);
+  const target = join(root, 'a.ts');
+  const io = {
+    ...fs,
+    openSync(path, ...args) {
+      writeFileSync(target, 'edit before open');
+      return fs.openSync(path, ...args);
+    },
+  };
+  assert.throws(() => applyPlan(root, files, plan, io), /Source changed/);
+  assert.equal(readFileSync(target, 'utf8'), 'edit before open');
+});
+
+test('a source edited while its move destination is written is retained', (t) => {
+  const { root } = fixture(t, { 'hxp-a.ts': OLD });
+  const files = readTree(root);
+  const plan = planRename(files);
+  const source = join(root, 'hxp-a.ts');
+  const io = {
+    ...fs,
+    writeFileSync(...args) {
+      fs.writeFileSync(...args);
+      writeFileSync(source, 'edit during move');
+    },
+  };
+  assert.throws(() => applyPlan(root, files, plan, io), /Source changed/);
+  assert.equal(readFileSync(source, 'utf8'), 'edit during move');
+  assert.equal(readFileSync(join(root, 'nxs-a.ts'), 'utf8'), NEW);
+});
+
 test('report cannot overwrite a tracked source', (t) => {
   const { root } = fixture(t, { 'a.ts': OLD });
   assert.throws(() => main(['--root', root, '--report', join(root, 'a.ts')]), /tracked file/);
@@ -266,15 +368,29 @@ test('report cannot recreate a locally deleted tracked source', (t) => {
   assert.equal(existsSync(target), false);
 });
 
-test(
-  'Windows report paths cannot bypass source protection through letter casing',
-  { skip: process.platform !== 'win32' },
-  (t) => {
-    const { root } = fixture(t, { 'a.ts': OLD });
-    assert.throws(() => main(['--root', root, '--report', join(root, 'A.ts')]), /tracked file/);
-    assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), OLD);
-  },
-);
+test('report paths conservatively reject case-only aliases on every platform', (t) => {
+  const { root } = fixture(t, { 'a.ts': OLD });
+  assert.throws(() => main(['--root', root, '--report', join(root, 'A.ts')]), /tracked file/);
+  assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), OLD);
+});
+
+test('report cannot overwrite a tracked source through an untracked hard-link alias', (t) => {
+  const { root } = fixture(t, { 'a.ts': OLD });
+  const target = join(root, 'alias.json');
+  fs.linkSync(join(root, 'a.ts'), target);
+  assert.throws(() => main(['--root', root, '--report', target]), /tracked file/);
+  assert.equal(readFileSync(join(root, 'a.ts'), 'utf8'), OLD);
+  assert.equal(readFileSync(target, 'utf8'), OLD);
+});
+
+test('report cannot recreate a deleted source through a directory alias', (t) => {
+  const { root } = fixture(t, { 'tracked/a.ts': OLD });
+  const alias = join(root, 'alias');
+  fs.symlinkSync(join(root, 'tracked'), alias, process.platform === 'win32' ? 'junction' : 'dir');
+  rmSync(join(root, 'tracked/a.ts'));
+  assert.throws(() => main(['--root', root, '--report', join(alias, 'a.ts')]), /tracked file/);
+  assert.equal(existsSync(join(root, 'tracked/a.ts')), false);
+});
 
 test('Sass partial moves preserve underscore-free @use imports', () => {
   const plan = planRename(

@@ -44,7 +44,12 @@ node --test scripts/rename-satori.selftest.mjs
 `--ref` reads an immutable Git tree without switching branches or writing its files.
 Omit it to inspect tracked files in the current working tree, including local edits
 and skipping files deleted locally without staging.
-`--root` selects another repository. Keep reports outside the checkout.
+`--root` selects another repository. Keep reports outside the checkout. Report paths
+are compared case-insensitively on every platform as a conservative source-protection
+check, including Windows and macOS installations with case-insensitive filesystems.
+Canonical paths and filesystem identity also reject symbolic-link directory aliases
+and existing hard-link aliases to tracked sources.
+Combining `--write` and `--dry-run` is rejected in either order.
 A report contains the resolved commit, exclusions, every old/new file path, and every
 changed line with its original and replacement text. Without `--report`, those edits
 are printed to stdout. `secondRunChanges` checks the planned transformed tree again;
@@ -69,10 +74,19 @@ reviewed naming decision; this script does not invent new public selector names.
 
 ## 4. Apply and prove idempotence (NXSAT-640)
 
-Use a clean disposable worktree. Review the complete dry-run report and resolve every
+Use a clean disposable worktree with no concurrent editors or other writers. Review the complete dry-run report and resolve every
 blocker first. Write mode reads the working tree and cannot be combined with `--ref`.
 Before writing, it verifies that every source still matches the plan and that no move
-would overwrite an existing destination, including an untracked file.
+would overwrite an existing destination, including an untracked file. It repeats the
+source check for each mutation and creates move destinations exclusively so a newly
+occupied destination cannot be overwritten. It checks a moved source again before
+deleting it and checks an opened in-place source before writing.
+
+Application is not transactional: a filesystem error or concurrent edit detected
+mid-apply may leave earlier changes and a generated move destination in place.
+The byte checks do not lock other writers across the remaining check/write or
+check/delete intervals. Stop other writers before applying and inspect any partial
+result before retrying in a disposable worktree.
 
 ```sh
 node scripts/rename-satori.mjs --report /tmp/reviewed-rename.json
