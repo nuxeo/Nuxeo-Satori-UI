@@ -95,49 +95,16 @@
   }
 
   <div class="results-top-actions">
-    @if (hasSavableFilters()) {
-      <button
-        mat-flat-button
-        color="primary"
-        class="top-action-btn save-as-btn"
-        type="button"
-        (click)="openSaveAsDialog()"
-      >
-        <mat-icon>bookmark_add</mat-icon>
-        {{ 'search.search.save-as' | translate }}
-      </button>
-    }
-    @if (hasSelectedSavedSearch()) {
-      <button
-        mat-flat-button
-        class="top-action-btn save-btn"
-        type="button"
-        (click)="onSaveSelectedSavedSearch()"
-      >
-        {{ 'search.search.save' | translate }}
-      </button>
-    }
-    @if (hasSelectedSavedSearch()) {
-      <button
-        mat-icon-button
-        type="button"
-        [matMenuTriggerFor]="resultsActionsMenu"
-        [attr.aria-label]="'search.search.results-actions' | translate"
-      >
-        <mat-icon>more_vert</mat-icon>
-      </button>
-      <mat-menu #resultsActionsMenu="matMenu">
-        <button mat-menu-item type="button" (click)="onEditSelectedSavedSearch()">
-          {{ 'search.search.edit' | translate }}
-        </button>
-        <button mat-menu-item type="button" (click)="onShareSelectedSavedSearch()">
-          {{ 'search.search.share' | translate }}
-        </button>
-        <button mat-menu-item type="button" (click)="onDeleteSelectedSavedSearch()">
-          {{ 'search.search.delete' | translate }}
-        </button>
-      </mat-menu>
-    }
+    <nxs-saved-search-actions
+      [savedSearchId]="selectedSavedSearchId()"
+      [dirty]="savedSearchDirty()"
+      [hasFilters]="hasFilters()"
+      (saveAs)="onSaveAs()"
+      (save)="onSave()"
+      (rename)="onRename()"
+      (share)="onShare()"
+      (remove)="onDelete()"
+    />
   </div>
 
   <div class="results-toolbar">

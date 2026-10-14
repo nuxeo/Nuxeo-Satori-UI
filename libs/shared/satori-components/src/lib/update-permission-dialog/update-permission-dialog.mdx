@@ -1,0 +1,110 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as UpdatePermissionStories from './update-permission-dialog.stories';
+
+<Meta of={UpdatePermissionStories} name="Overview" />
+
+# Update permission dialog
+
+The update permission dialog changes one permission entry on a document: its right, its time frame,
+or both. It is the counterpart of Web UI's `nuxeo-popup-permission` in its update mode.
+
+## Key features
+
+- **One call.** It replaces the entry in place with `Document.ReplacePermission`, as Web UI does,
+  so a failure leaves the entry as it was. An external user's share is replaced the same way.
+- **Unchanged dates stay put.** A date the user did not touch is written back as the instant Nuxeo
+  holds, so changing only the right never moves an entry written from another time zone.
+- **External shares keep their rules.** An external user's share keeps a required end date and
+  always emails the person again. A user's or group's entry can be permanent or dated, and the email
+  is optional.
+- **The type's rights, and the entry's own.** It offers the type's `userVisiblePermissions` —
+  Nuxeo's default three when the type names none — plus the entry's current right if the type does
+  not list it, so opening the dialog never changes it.
+- **A refusal reads as one.** When Nuxeo answers 401 or 403, the toast says the user may not change
+  permissions here. The dialog stays open on any failure.
+- **Reports through closing.** It closes with `true` once Nuxeo has saved the change.
+
+## Demo showcase
+
+The preview shows the dialog inline, as it looks once open. The code shows how a page opens it.
+
+<Canvas of={UpdatePermissionStories.ExternalShare} />
+
+## Usage
+
+export const usageTs = `import { inject } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import {
+  NxsUpdatePermissionDialogComponent,
+  type NxsUpdatePermissionDialogData,
+} from '@nuxeo-satori/platform/components';
+
+private readonly dialog = inject(MatDialog);
+
+protected editPermission(ace: NuxeoAce): void {
+  const doc = this.doc();
+  this.dialog
+    .open<NxsUpdatePermissionDialogComponent, NxsUpdatePermissionDialogData, boolean>(
+      NxsUpdatePermissionDialogComponent,
+      {
+        data: {
+          documentUid: doc.uid,
+          ace,
+          permissions: doc.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
+        },
+      },
+    )
+    .afterClosed()
+    .subscribe((updated) => updated && this.reloadPermissions());
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+It has no inputs or outputs. The dialog lists its own toast and date adapter providers; it needs
+`DocumentDetailService`, which an application using `@nuxeo-satori/platform/nuxeo-client` already
+has. Its labels are translated under `satori-components.permission-dialogs.*`, with English from
+`providePlatformEnglishFallback()`.
+
+Offer it only to a user with `WriteSecurity` on the document, as Web UI does.
+
+## Where its data comes from
+
+**Update** calls `replacePermissionWithNotification`: `Document.ReplacePermission` with the entry's
+id, then, when the person is to be told, `Document.SendNotificationEmailForPermission`. When Nuxeo
+saves the change but cannot send the email, the toast says why. A changed date is sent as a
+calendar day.
+
+**In these stories** `DocumentDetailService` and the dialog reference are in-memory fakes. They
+never contact Nuxeo and close nothing, and every call they receive is logged in the **Actions** tab.
+
+## Examples
+
+### A user's entry
+
+Permanent, with the time frame and the email to choose.
+
+<Canvas of={UpdatePermissionStories.UserEntry} />
+
+### A dated entry
+
+<Canvas of={UpdatePermissionStories.DatedEntry} />
+
+### Refused
+
+Press **Update**: Nuxeo answers 403, and the toast says the change was refused.
+
+<Canvas of={UpdatePermissionStories.Refused} />
+
+## Accessibility
+
+- **Title.** The dialog's title is a heading that Material's dialog uses as its accessible name; the
+  line under it names whose entry is being changed.
+- **A named choice.** The Permanent and Date-based options are a radio group labelled by the visible
+  "Time frame" text. The dates are disabled, not hidden, while the entry is permanent.
+- **Errors are announced.** An end date before the start date is a `role="alert"` message, and
+  Update stays disabled until it is fixed.
+- **Progress has a name.** The Update button shows a spinner named "Updating the permission", and
+  both buttons are disabled until Nuxeo answers.
+- **Keyboard.** Material's dialog keeps focus inside, closes on **Escape** and returns focus to the
+  button that opened it.

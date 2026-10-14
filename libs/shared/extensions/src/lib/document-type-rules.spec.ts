@@ -154,3 +154,36 @@ describe('document type rules', () => {
     expect(registry.evaluate({ type: 'core.not', parameters: [isType('Case')] }, claim)).toBe(true);
   });
 });
+
+describe('app.rules.hasFile', () => {
+  let registry: ExtensionRuleRegistry;
+  const withContent = (content: unknown): NuxeoDocument => ({
+    ...doc('File'),
+    properties: { 'file:content': content },
+  });
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({});
+    registry = TestBed.inject(ExtensionRuleRegistry);
+    registry.registerRules(DOCUMENT_RULE_EVALUATORS);
+  });
+
+  it('is true for a document holding a main file, whatever its facets', () => {
+    // A Picture holds a file and has no `Downloadable` facet, which is why the facet is not the test.
+    const picture = { ...withContent({ name: 'photo.jpg' }), type: 'Picture', facets: ['Picture'] };
+    expect(registry.evaluate('app.rules.hasFile', on(picture))).toBe(true);
+  });
+
+  it.each([
+    ['no file', withContent(null)],
+    ['no file property at all', doc('Note')],
+    ['a string where the blob should be', withContent('photo.jpg')],
+    ['a list where the blob should be', withContent([{ name: 'photo.jpg' }])],
+  ])('is false with %s', (_case, document) => {
+    expect(registry.evaluate('app.rules.hasFile', on(document))).toBe(false);
+  });
+
+  it('is false with no document in focus', () => {
+    expect(registry.evaluate('app.rules.hasFile', on(null))).toBe(false);
+  });
+});

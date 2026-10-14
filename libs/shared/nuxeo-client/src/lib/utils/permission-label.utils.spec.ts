@@ -28,8 +28,23 @@ describe('permissionRightLabel', () => {
     expect(permissionRightLabel('CanAskForPublishing', echoKey)).toBe(
       'permissions.right.CanAskForPublishing',
     );
-    // An atomic sub-permission keeps its Nuxeo name: it is offered, but not relabelled.
-    expect(permissionRightLabel('Browse', echoKey)).toBe('Browse');
+  });
+
+  it('labels the atomic permissions Web UI labels, rather than showing their Nuxeo names', () => {
+    // NXSAT-300 carry-over: the nine Web UI's label.security.permission.* has and we lacked.
+    for (const permission of [
+      'Browse',
+      'ReadChildren',
+      'ReadLifeCycle',
+      'ReadProperties',
+      'ReadSecurity',
+      'WriteLifeCycle',
+      'WriteProperties',
+      'ManageLegalHold',
+      'ManageRecord',
+    ]) {
+      expect(permissionRightLabel(permission, echoKey)).toBe(`permissions.right.${permission}`);
+    }
   });
 
   it('asks the catalogue for each permission it ships a label for', () => {

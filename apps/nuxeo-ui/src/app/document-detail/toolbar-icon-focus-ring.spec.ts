@@ -1,6 +1,7 @@
 /**
- * NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504 — document-detail header toolbar
- * `mat-icon-button` keyboard focus indicator (WCAG 2.1 SC 2.4.7 / 1.4.11). Material icon
+ * NXENG-808 / IBM 673904446, NXSAT-489 / IBM 1240696504, NXSAT-542 / IBM 2714359167 —
+ * document-detail header toolbar `mat-icon-button` keyboard focus indicator (WCAG 2.1 SC
+ * 2.4.7 / 1.4.11). Material icon
  * buttons suppress the default ring and Karma loads `apps/nuxeo-ui/src/styles.scss` (see
  * `angular.json`), which `@use`s `document-detail-header-toolbar-focus.scss` — the same path
  * production uses.
@@ -14,25 +15,33 @@
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import {
+  NxsDocumentToolbarComponent,
+  type NxsToolbarAction,
+} from '@nuxeo-satori/platform/components';
+
+import { testTranslateModule } from '../i18n/translate-testing';
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule],
+  imports: [NxsDocumentToolbarComponent],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './toolbar-icon-focus-ring.fixture.scss',
   ],
   templateUrl: './toolbar-icon-focus-ring.spec.html',
 })
-class ToolbarIconFocusHostComponent {}
+class ToolbarIconFocusHostComponent {
+  readonly actions: readonly NxsToolbarAction[] = [
+    { id: 'app.toolbar.edit', label: 'Edit', icon: 'edit' },
+  ];
+}
 
-describe('Document detail toolbar icon button — keyboard focus indicator (NXENG-808 / NXSAT-489)', () => {
+describe('Document detail toolbar icon button — keyboard focus indicator (NXENG-808 / NXSAT-489 / NXSAT-542)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ToolbarIconFocusHostComponent],
+      imports: [ToolbarIconFocusHostComponent, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });
@@ -47,7 +56,7 @@ describe('Document detail toolbar icon button — keyboard focus indicator (NXEN
     fixture.detectChanges();
     await fixture.whenStable();
     const button = fixture.nativeElement.querySelector(
-      '[data-testid="toolbar-icon-btn"]',
+      '[data-action-id="app.toolbar.edit"]',
     ) as HTMLButtonElement;
     const header = fixture.nativeElement.querySelector('.detail-header') as HTMLElement;
     return { fixture, button, header };
@@ -57,6 +66,25 @@ describe('Document detail toolbar icon button — keyboard focus indicator (NXEN
     const { fixture, button } = await mount();
     try {
       expect(getComputedStyle(button).outlineStyle).toBe('none');
+    } finally {
+      button.blur();
+      fixture.nativeElement.remove();
+    }
+  });
+
+  it('focuses the Edit toolbar control with IBM-readable outline (NXSAT-542 / IBM 2714359167)', async () => {
+    const { fixture, button } = await mount();
+    try {
+      expect(button.getAttribute('data-action-id')).toBe('app.toolbar.edit');
+      expect(button.getAttribute('aria-label')).toBeNull();
+      expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Edit');
+      button.focus();
+      expect(document.activeElement).toBe(button);
+
+      const style = getComputedStyle(button);
+      expect(style.outlineStyle).toBe('solid');
+      expect(style.outlineWidth).toBe('2px');
+      expect(style.outlineOffset).toBe('2px');
     } finally {
       button.blur();
       fixture.nativeElement.remove();

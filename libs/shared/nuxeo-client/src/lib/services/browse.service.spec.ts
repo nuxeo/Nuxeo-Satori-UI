@@ -458,7 +458,7 @@ describe('BrowseService', () => {
     });
   });
 
-  describe('a domain listing, which keeps only folders', () => {
+  describe('a domain listing, which lists every child, as Nuxeo Web UI’s domain view does', () => {
     const domain = {
       uid: 'dom-uid',
       title: 'Domain',
@@ -499,42 +499,40 @@ describe('BrowseService', () => {
         });
     }
 
-    it('counts the folders it shows, not every child Nuxeo counted', async () => {
-      // Nuxeo counted five children; three are folders. Passing its 5 through beside three rows
-      // is what showed "1–3 of 5" in the adf-hx pager.
+    it('lists the files beside the folders, with Nuxeo’s own count', async () => {
+      // Keeping only the folders after Nuxeo had paged the children left a page short, or empty
+      // where files came first; Web UI's domain view (advanced_document_content) lists them all.
       const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
       flushDomain({ isNextPageAvailable: false });
 
       const result = await result$;
-      expect(result.entries.map((e) => e.uid)).toEqual(['sections', 'templates', 'workspaces']);
-      expect(result.totalSize).toBe(3);
+      expect(result.entries.map((e) => e.uid)).toEqual([
+        'sections',
+        'templates',
+        'workspaces',
+        'tour.pdf',
+        'csx.pdf',
+      ]);
+      expect(result.totalSize).toBe(5);
+      expect(result.hasNextPage).toBe(false);
     });
 
-    it('reports the total as unknown when Nuxeo has more pages to filter', async () => {
+    it('reports more to come, with no total, when Nuxeo has another page and did not count', async () => {
       const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
-      flushDomain({ isNextPageAvailable: true });
+      flushDomain({ isNextPageAvailable: true, totalSize: -2, resultsCount: -2 });
 
       const result = await result$;
-      expect(result.entries).toHaveLength(3);
+      expect(result.entries).toHaveLength(5);
       expect(result.totalSize).toBeLessThan(0);
       expect(result.hasNextPage).toBe(true);
     });
 
-    it('keeps a count Nuxeo declined to compute unknown, even without a next page', async () => {
-      const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
-      flushDomain({ isNextPageAvailable: false, resultsCount: -2 });
-
-      const result = await result$;
-      expect(result.entries).toHaveLength(3);
-      expect(result.totalSize).toBeLessThan(0);
-    });
-
-    it('keeps the total unknown when Nuxeo reports neither the next-page flag nor a count', async () => {
+    it('keeps the total unknown when Nuxeo reports no count at all', async () => {
       const result$ = firstValueFrom(service.getBrowseFolderContents('/default-domain'));
       flushDomain({ totalSize: undefined, resultsCount: undefined });
 
       const result = await result$;
-      expect(result.entries).toHaveLength(3);
+      expect(result.entries).toHaveLength(5);
       expect(result.totalSize).toBeLessThan(0);
     });
   });

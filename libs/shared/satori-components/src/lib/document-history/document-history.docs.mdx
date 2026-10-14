@@ -1,0 +1,95 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as DocumentHistoryStories from './document-history.stories';
+
+<Meta of={DocumentHistoryStories} name="Overview" />
+
+# Document history
+
+Document history is a document's audit trail: who did what, and when. It is the counterpart of Web
+UI's `nuxeo-document-history`, which is Web UI's audit search for one document.
+
+## Key features
+
+- **Filters reach every entry.** The user who acted, a From and To day, the performed action and
+  the event category all go to the server, so a filter finds entries on every page, not only the
+  page on screen. The To day is included.
+- **Sorted on the server.** By action, date, user or category; newest first by default.
+- **Web UI's columns.** Performed action, Date (with the time), Username, Category, Comment and
+  State. Actions and categories read through the `eventTypes` and `eventCategories` vocabularies.
+- **A page at a time.** 10, 20 or 50 entries; the count is the server's.
+- **States that say what happened.** Empty, nothing matching the filters, a refusal (403) and a
+  failure with Retry (500) each read differently.
+
+## Demo showcase
+
+<Canvas of={DocumentHistoryStories.History} />
+
+## Usage
+
+export const usageHtml = `<nxs-document-history [documentUid]="doc().uid" [headingLevel]="3" />`;
+
+<Source language="html" dark code={usageHtml} />
+
+`documentUid` is required. The component needs a Material `DateAdapter`, as any datepicker does —
+`provideNativeDateAdapter()` in the host's providers. Its labels are translated under
+`satori-components.document-history.*`, with English from `providePlatformEnglishFallback()`.
+
+Username matches a whole username, as Web UI's user picker does; the hint under the field says so.
+
+## Where its data comes from
+
+<table>
+  <thead>
+    <tr>
+      <th>What</th>
+      <th>Call</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>The entries</td>
+      <td>
+        <code>getAuditLog</code> — <code>GET /api/v1/id/&#123;uid&#125;/@audit</code>, with{' '}
+        <code>principalName</code>, <code>eventId</code>, <code>eventCategory</code>,{' '}
+        <code>startEventDate</code>, <code>endEventDate</code>, <code>sortBy</code> and{' '}
+        <code>sortOrder</code>
+      </td>
+    </tr>
+    <tr>
+      <td>Action and category labels</td>
+      <td>
+        <code>getEventTypes</code>, <code>getEventCategories</code> — the{' '}
+        <code>eventTypes</code> and <code>eventCategories</code> vocabularies
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+Dates go as instants: the adapter would read a bare day as midnight in the server's zone, not the
+user's. **In these stories** the service is an in-memory fake that filters and pages as the adapter
+does; each call is logged in the Actions panel.
+
+## Examples
+
+### Nothing matches
+
+<Canvas of={DocumentHistoryStories.NoMatch} />
+
+### Refused
+
+<Canvas of={DocumentHistoryStories.Refused} />
+
+### Failed
+
+<Canvas of={DocumentHistoryStories.Failed} />
+
+## Accessibility
+
+- **A search region.** The filters are a form named "Filter the history"; each field has a visible
+  label, and Username its hint.
+- **A captioned table.** The table's caption and its scroll region are named "Document history";
+  the region takes keyboard focus so a narrow screen can scroll it sideways.
+- **Sortable headers say their order.** The sorted column carries `aria-sort`.
+- **States are headings.** Empty and error states are headings at `headingLevel`, one below the
+  section's own; an error is an alert.

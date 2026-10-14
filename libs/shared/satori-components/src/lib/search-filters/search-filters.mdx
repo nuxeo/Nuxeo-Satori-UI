@@ -1,0 +1,124 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as SearchFiltersStories from './search-filters.stories';
+
+<Meta of={SearchFiltersStories} name="Overview" />
+
+# Search filters
+
+The search filters are Web UI's default search form: full text, modification date, authors,
+collections, tags, nature, subjects, coverage and size, with Reset and Save as. Use them beside a list
+of search results, in a drawer or a side panel, wherever the user narrows a search over
+`default_search`.
+
+## Key features
+
+- **Edits filters, runs nothing.** The component edits its `filters` and emits each change; your
+  component turns them into the query, runs it once, and passes the server's `aggregations` back.
+  Nothing here sends a search, so the page and the filters never ask twice for the same results.
+- **Counts from the server.** Each choice shows the count the server's aggregate gives it, for the
+  whole result set rather than the page shown, as Web UI's checkbox aggregations do. A range filter
+  lists every range; a terms filter lists the buckets with results, and keeps a selected value the
+  server no longer returns so it can still be cleared.
+- **When each change applies.** Full text applies on Enter, or when it is cleared; a checkbox, or an
+  author, collection or tag added or removed, applies at once.
+- **Several authors, collections and tags.** Each choice is added as a chip below its box, with a
+  button to remove it, as Web UI's multiple-choice fields do; a choice already made is not offered
+  again.
+- **Lookups of its own.** Collections lists the user's collections, read when the box is first
+  focused; Tags suggests the tags that start with what is typed.
+- **Opens what is chosen.** A group with a selection opens, so a loaded saved search shows what it
+  filters on.
+- **Reset and Save as.** Both are disabled until a filter is set. Reset empties the filters and emits
+  `filtersReset`; Save as emits `saveAs` for your component to ask for a name.
+
+## Demo showcase
+
+Choose a date range, or open Nature and tick a value: `filtersChange` reports the new filters.
+
+<Canvas of={SearchFiltersStories.NothingChosen} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsSearchFiltersComponent,
+  nxsSearchFiltersToQuery,
+  type NxsSearchFilters,
+} from '@nuxeo-satori/platform/components';`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-search-filters
+  [(filters)]="filters"
+  [aggregations]="results().aggregations"
+  (filtersReset)="closeSavedSearch()"
+  (saveAs)="askForANameAndSave()"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`filters` is an `NxsSearchFilters`: each field is one of `default_search`'s parameters, and
+`NXS_EMPTY_SEARCH_FILTERS` sets none. Bind it two-way, or read `filtersChange`. `aggregations` is the
+`aggregations` of `SearchService.search`'s answer for the query those filters make. Four functions
+convert the filters:
+
+- `nxsSearchFiltersToQuery(filters, { quickFilters, sortBy, sortOrder })` — `SearchService.search`'s
+  parameters.
+- `nxsSearchFiltersToSavedParams(filters)` — a saved search's `params`, under the page provider's own
+  names, which Web UI reads too.
+- `nxsSearchFiltersFromParams(params)` — filters read back from a saved search, whichever application
+  saved it, or from `nxsSearchFiltersToRecord`'s record.
+- `nxsSearchFiltersToRecord(filters)` — the record `SearchAggregationService.drawerFilters` keeps.
+
+Its headings, placeholders and messages are translated with ngx-translate under
+`satori-components.search-filters.*`; `providePlatformEnglishFallback()` supplies the English when your
+catalogue does not. It needs `HttpClient` and the platform's `SearchService`. It has no registered ID:
+place it in a template by its selector.
+
+## Where its data comes from
+
+The choices and their counts are the `aggregations` you pass, from Nuxeo's `default_search` page
+provider. Collections are `SearchService.getUserCollections` (`User.GetCollections`), read on the
+first focus of the box; tags are `SearchService.getTagSuggestions` (`Tag.Suggestion`) for what is
+typed. Nuxeo checks every search whatever the filters show.
+
+**In these stories** the aggregates are fixed values and `SearchService` is an in-memory fake; nothing
+is sent to a server.
+
+## Examples
+
+### With choices made
+
+The groups with a selection are open. Asia/Japan is selected, but the server returned no bucket for
+it, so it is listed without a count and can be cleared.
+
+<Canvas of={SearchFiltersStories.WithChoices} />
+
+### No aggregates
+
+<Canvas of={SearchFiltersStories.NoAggregates} />
+
+### Collections that cannot be read
+
+Focus Collections: the list says the collections could not be loaded.
+
+<Canvas of={SearchFiltersStories.CollectionsFailed} />
+
+## Accessibility
+
+- **Labelled fields.** Full text, Authors, Collections and Tags each have a visible label tied to the
+  box; the placeholder is a hint, not the name.
+- **Comboboxes.** Authors, Collections and Tags are Material autocompletes: **Down** opens the list,
+  **Up** and **Down** move through it, **Enter** adds the choice, **Escape** closes.
+- **Chips.** Each choice is a chip in a set named for its field ("Chosen authors"); its remove button is named
+  "Remove" and the choice, and **Backspace** or **Delete** on a focused chip removes it.
+- **Groups.** Each collapsible group's heading is a button that says whether it is expanded
+  (`aria-expanded`) and controls its list; the open list is a named group of checkboxes, each with
+  its count in its name.
+- **Clear.** The full-text box's clear button is named "Clear full text".
+- **Disabled actions.** With no filter set, Reset and Save as are disabled buttons, which **Tab**
+  skips.

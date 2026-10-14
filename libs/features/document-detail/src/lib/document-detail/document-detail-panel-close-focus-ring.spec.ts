@@ -1,47 +1,43 @@
 /**
- * NXENG-830 — document detail properties panel close button keyboard focus indicator.
- * Source-level IBM `style_focus_visible` contract (standalone `:focus` selector) and production
- * template wiring. Runtime contrast and inset geometry:
+ * NXENG-830 — document detail side panel close button keyboard focus indicator. The close button
+ * is `nxs-details-panel`'s; the library draws its ring in `--nxs-details-panel-muted` and the page
+ * pins that token to its light-panel muted colour. Runtime contrast and inset geometry:
  * `apps/nuxeo-ui/.../panel-close-focus-ring.spec.ts`.
  */
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+const LIBRARY_SCSS = join(
+  import.meta.dirname,
+  '../../../../../shared/satori-components/src/lib/details-panel/details-panel.component.scss',
+);
+
 describe('DocumentDetailComponent — panel close focus ring (NXENG-830)', () => {
-  const scssPath = join(import.meta.dirname, 'document-detail-panel-close-focus.scss');
-  const templatePath = join(import.meta.dirname, 'document-detail.html');
-  const componentPath = join(import.meta.dirname, 'document-detail.ts');
-
-  it('wires panel-close-btn on the production properties panel close control', () => {
-    const html = readFileSync(templatePath, 'utf8');
-    const clickIdx = html.indexOf('(click)="closePropertiesPanel()"');
-    expect(clickIdx, 'properties panel close button click handler').toBeGreaterThan(-1);
-    const tagStart = html.lastIndexOf('<button', clickIdx);
-    expect(tagStart, 'closePropertiesPanel must live on a button opening tag').toBeGreaterThan(-1);
-    const tagEnd = html.indexOf('>', clickIdx);
-    expect(tagEnd, 'close button opening tag must close').toBeGreaterThan(clickIdx);
-    const openingTag = html.slice(tagStart, tagEnd + 1);
-    expect(openingTag).toContain('class="panel-close-btn"');
-    expect(openingTag).toContain('mat-icon-button');
-    expect(openingTag).toContain(
-      '[attr.aria-label]="\'document-detail.document-detail.close-panel\' | translate"',
+  it('wires the details panel close control to closePropertiesPanel, with its name', () => {
+    const html = readFileSync(join(import.meta.dirname, 'document-detail.html'), 'utf8');
+    const tag = html.match(/<nxs-details-panel\b[^>]*>/)?.[0] ?? '';
+    expect(tag).toContain('class="properties-panel"');
+    expect(tag).toContain('(closed)="closePropertiesPanel()"');
+    expect(tag).toContain(
+      '[closeLabel]="\'document-detail.document-detail.close-panel\' | translate"',
     );
   });
 
-  it('declares a standalone :focus ring on the properties panel close control', () => {
-    const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(/\.panel-close-btn\.mat-mdc-icon-button:focus\s*\{/);
-    expect(scss).not.toMatch(/\.panel-close-btn\.mat-mdc-icon-button:focus,\s/);
-    expect(scss).toMatch(
-      /\.panel-close-btn\.mat-mdc-icon-button:focus[\s\S]*outline:\s*2px\s+solid\s+var\(--document-detail-properties-label-muted\)/,
+  it('pins the details panel ring token to the light-panel muted colour', () => {
+    const host = readFileSync(join(import.meta.dirname, 'document-detail.scss'), 'utf8');
+    const panel = host.match(/\.properties-panel\s*\{[^}]+\}/s)?.[0] ?? '';
+    expect(panel).toMatch(
+      /--nxs-details-panel-muted:\s*var\(--document-detail-properties-label-muted\)/,
     );
   });
 
-  it('loads panel-close focus styles through DocumentDetailComponent styleUrls', () => {
-    const source = readFileSync(componentPath, 'utf8');
-    expect(source).toMatch(/styleUrls:\s*\[/);
-    expect(source).toMatch(/['"]\.\/document-detail\.scss['"]/);
-    expect(source).toMatch(/['"]\.\/document-detail-panel-close-focus\.scss['"]/);
+  it('the details panel declares a standalone :focus ring on its close control', () => {
+    const library = readFileSync(LIBRARY_SCSS, 'utf8');
+    expect(library).toMatch(/\.nxs-details-panel__close:focus\s*\{/);
+    expect(library).not.toMatch(/\.nxs-details-panel__close:focus,\s/);
+    expect(library).toMatch(
+      /\.nxs-details-panel__close:focus\s*\{[^}]*outline:\s*2px\s+solid\s+var\(--nxs-details-panel-muted\)/,
+    );
   });
 });

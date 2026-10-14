@@ -1,0 +1,111 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ShareExternalStories from './share-external-dialog.stories';
+
+<Meta of={ShareExternalStories} name="Overview" />
+
+# Share with external user dialog
+
+The share with external user dialog gives someone outside the organisation access to a document by
+email. Nuxeo creates no account for them: they are sent a link. It is the counterpart of Web UI's
+`nuxeo-document-permissions` external-user popup, and it follows its rules.
+
+## Key features
+
+- **An end date is required.** As in Web UI, an external share always ends; the start date is
+  optional. An end date before the start date is refused.
+- **Always notifies.** Nuxeo emails the person a link with the optional message. When Nuxeo shares
+  the document but cannot send the email, the toast says why.
+- **The type's rights.** It offers the rights the document type makes visible — Nuxeo's
+  `userVisiblePermissions` — and Nuxeo's default three (Read, Edit, Manage everything) when the type
+  names none.
+- **Create and add another.** Shares, then empties the form for the next person.
+- **A refusal reads as one.** When Nuxeo answers 401 or 403, the toast says the user may not change
+  permissions here. What was typed stays.
+- **Reports through closing.** It closes with `true` when it shared the document with anyone —
+  including through **Create and add another** followed by **Cancel**, **Escape** or a click outside —
+  and `false` otherwise.
+
+## Demo showcase
+
+The preview shows the dialog inline, as it looks once open. The code shows how a page opens it.
+
+<Canvas of={ShareExternalStories.Default} />
+
+## Usage
+
+export const usageTs = `import { inject } from '@angular/core';
+import { MatDialog } from '@angular/material/dialog';
+import {
+  NxsShareExternalDialogComponent,
+  type NxsShareExternalDialogData,
+} from '@nuxeo-satori/platform/components';
+
+private readonly dialog = inject(MatDialog);
+
+protected shareExternally(): void {
+  const doc = this.doc();
+  this.dialog
+    .open<NxsShareExternalDialogComponent, NxsShareExternalDialogData, boolean>(
+      NxsShareExternalDialogComponent,
+      {
+        data: {
+          documentUid: doc.uid,
+          permissions: doc.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
+        },
+      },
+    )
+    .afterClosed()
+    .subscribe((shared) => shared && this.reloadPermissions());
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+It has no inputs or outputs. Read the document with the `userVisiblePermissions` enricher to pass
+the type's rights. The dialog lists its own toast and date adapter providers; it needs
+`DocumentDetailService`, which an application using `@nuxeo-satori/platform/nuxeo-client` already
+has. Its labels are translated under `satori-components.permission-dialogs.*`, with English from
+`providePlatformEnglishFallback()`.
+
+Offer it only to a user with `WriteSecurity` on the document, and only where external sharing is on:
+Web UI hides it when `org.nuxeo.web.ui.permissions.externalUsers` is `false`, and the Satori
+document page reads the same switch from the manifest's `featureToggles` as
+`permissions.externalUsers`.
+
+## Where its data comes from
+
+**Create** calls `addExternalPermissionWithNotification`: `Document.AddPermission` with the email,
+then `Document.SendNotificationEmailForPermission` for the new entry, so a mail failure is reported
+rather than lost inside the first call. Nuxeo stores the person as `transient/<email>`. Dates are
+sent as calendar days.
+
+**In these stories** `DocumentDetailService` and the dialog reference are in-memory fakes. They
+never contact Nuxeo and close nothing, and every call they receive is logged in the **Actions** tab.
+
+## Examples
+
+### The type's rights
+
+A type that makes Read and Edit visible offers only those.
+
+<Canvas of={ShareExternalStories.TypeRights} />
+
+### Refused
+
+Fill in an email and an end date, then press **Create**: Nuxeo answers 403, and the toast says the
+change was refused.
+
+<Canvas of={ShareExternalStories.Refused} />
+
+## Accessibility
+
+- **Title.** The dialog's title is a heading that Material's dialog uses as its accessible name.
+- **Labelled fields.** Every field has a visible label; the email and end date are marked required.
+- **Errors are announced and tied to the field.** An invalid email is flagged once the user leaves
+  the box, not while they type. The message is a `role="alert"`, and the box points at it through
+  `aria-describedby` and is `aria-invalid`. An end date before the start date is announced the same
+  way.
+- **Progress has a name.** The button pressed shows a spinner named "Sharing the document", and
+  every button is disabled until Nuxeo answers.
+- **Keyboard.** Material's dialog keeps focus inside. **Escape** closes it, reporting any share
+  already made, except while a share is being saved.

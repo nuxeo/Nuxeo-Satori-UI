@@ -7,6 +7,8 @@ import {
 } from '@angular/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
+import { nxsVisibleText } from '../visible-text';
+
 /**
  * The indeterminate loader for a region waiting on data — a list, a tab, a panel, a dialog body.
  *
@@ -33,6 +35,6 @@ export class NxsSpinnerComponent {
   /** What is loading, already translated. Blank makes the spinner decorative. */
   readonly label = input('');
 
-  /** The accessible name as assistive technology computes it: whitespace alone is no name. */
-  protected readonly name = computed(() => this.label().trim());
+  /** The accessible name as a reader gets it: whitespace or zero-width characters alone are no name. */
+  protected readonly name = computed(() => nxsVisibleText(this.label()));
 }

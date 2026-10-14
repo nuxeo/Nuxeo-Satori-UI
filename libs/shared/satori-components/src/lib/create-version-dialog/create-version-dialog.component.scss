@@ -1,0 +1,50 @@
+:host {
+  display: block;
+}
+
+h2[mat-dialog-title] {
+  overflow-wrap: anywhere;
+}
+
+.nxs-create-version-dialog__options {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.nxs-create-version-dialog__option {
+  min-height: 48px;
+}
+
+.nxs-create-version-dialog__number {
+  display: inline-flex;
+  justify-content: center;
+  min-width: 40px;
+  margin-inline-end: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--mat-sys-primary);
+  color: var(--mat-sys-on-primary);
+  font-weight: 600;
+}
+
+mat-dialog-actions {
+  gap: 12px;
+}
+
+.nxs-create-version-dialog__spacer {
+  flex: 1;
+}
+
+// A spinning icon, not a progress indicator, inside the button: a progressbar there is an
+// interactive element nested in another (axe nested-interactive), and a spinner breaks the
+// button's layout (AGENTS/08-bug-patterns.md 15).
+.nxs-spinning {
+  animation: nxs-spin 1s linear infinite;
+}
+
+@keyframes nxs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

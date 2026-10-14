@@ -21,7 +21,8 @@ export function resolveNatureLabel(
 
 /**
  * Formats an l10n directory value as `Parent/Child`, matching Nuxeo Web UI
- * (e.g. `Africa/Tanzania` for coverage).
+ * (e.g. `Africa/Tanzania` for coverage). Reads the value Web UI stores, `africa/tanzania`, as well
+ * as a bare child id.
  */
 export function formatHierarchicalL10nLabel(
   id: string | null | undefined,
@@ -29,7 +30,7 @@ export function formatHierarchicalL10nLabel(
 ): string {
   if (!id) return '';
   const byId = new Map(entries.map((e) => [e.id, e]));
-  const entry = byId.get(id);
+  const entry = byId.get(id) ?? childOfPath(id, byId);
   if (!entry) return id;
 
   const childLabel = l10nEntryLabel(entry);
@@ -84,4 +85,15 @@ export function groupL10nChildrenByParent(
       ),
     }))
     .sort((a, b) => a.parentLabel.localeCompare(b.parentLabel));
+}
+
+/** The entry `parent/child` names: the child, when its parent is the one the path says. */
+function childOfPath(
+  id: string,
+  byId: ReadonlyMap<string, L10nDirectoryEntry>,
+): L10nDirectoryEntry | undefined {
+  const slash = id.lastIndexOf('/');
+  if (slash <= 0) return undefined;
+  const child = byId.get(id.slice(slash + 1));
+  return child && child.properties.parent === id.slice(0, slash) ? child : undefined;
 }

@@ -1,0 +1,124 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TagEditorStories from './tag-editor.stories';
+
+<Meta of={TagEditorStories} name="Overview" />
+
+# Tag editor
+
+The tag editor is a document's tags, added and removed in place. It is the counterpart of Web UI's
+`nuxeo-tag-suggestion` as the document page uses it, with new tags allowed.
+
+## Key features
+
+- **Saves as you go.** Each tag is added or removed the moment you choose it; there is no Save
+  button. A toast says what changed.
+- **Suggests existing tags.** Typing asks Nuxeo's `Tag.Suggestion` for matching tags, and offers
+  what you typed as a new tag ("+ q3 report") when no tag matches it exactly. Enter adds what is
+  highlighted.
+- **Shows what Nuxeo stored.** Nuxeo normalises a label — "Q3 Report" is stored as `q3report` — so
+  the chip shows the stored label, not the typed one.
+- **Read-only when Web UI is.** `readOnly` shows the tags with no box and no remove buttons. Decide
+  it with `canTagDocument(doc)`: Write on the document itself, not a version or a proxy.
+- **Never out of order.** Changes are sent one at a time, so a slow answer cannot undo a later
+  change. A failed change puts the chip back and says why; a 403 reads as a refusal.
+
+## Demo showcase
+
+<Canvas of={TagEditorStories.Editable} />
+
+## Usage
+
+export const usageHtml = `<nxs-properties-panel [document]="doc()">
+  <nxs-tag-editor
+    nxsTags
+    [documentUid]="doc().uid"
+    [tags]="tags()"
+    [readOnly]="!canTag()"
+    (tagsChange)="onTagsChange($event)"
+  />
+</nxs-properties-panel>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`documentUid` is required. Pass the labels of the document's `nxtag:tags` as `tags`, and keep the
+document in step from `tagsChange`. `canTag` above is the host's
+`computed(() => canTagDocument(this.doc()))`. The component lists its own toast provider and needs
+`TagService`. Its labels are translated under `satori-components.tag-editor.*`, with English from
+`providePlatformEnglishFallback()`.
+
+Show it only on a document with the `NXTag` facet, as Web UI does. Inside `nxs-properties-panel`'s
+`[nxsTags]` slot the panel checks the facet and supplies the visible "Tags" heading.
+
+## Where its data comes from
+
+<table>
+  <thead>
+    <tr>
+      <th>What</th>
+      <th>Call</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>Suggestions</td>
+      <td>
+        <code>suggestTags</code> — the <code>Tag.Suggestion</code> operation, as Web UI
+      </td>
+    </tr>
+    <tr>
+      <td>Add, remove</td>
+      <td>
+        <code>addTag</code>, <code>removeTag</code> — <code>Services.TagDocument</code> and{' '}
+        <code>Services.UntagDocument</code>, answering with the document's tags afterwards
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+Nuxeo accepts a tag from a user with only Read, but takes a tag off only for a user with Write.
+Web UI offers neither without Write, and neither does this component when `readOnly` follows
+`canTagDocument`.
+
+**In these stories** the service is an in-memory fake that normalises labels as Nuxeo does; each
+call is logged in the Actions panel.
+
+## Examples
+
+### Read-only
+
+<Canvas of={TagEditorStories.ReadOnly} />
+
+### Saving
+
+Each change takes three seconds here, so the pending chip and its progress indicator stay visible.
+
+<Canvas of={TagEditorStories.Saving} />
+
+### Changes refused
+
+Every change fails with 403. The chip goes back, and the toast says the user may not change the
+tags.
+
+<Canvas of={TagEditorStories.ChangesRefused} />
+
+### Empty
+
+<Canvas of={TagEditorStories.Empty} />
+
+<Canvas of={TagEditorStories.EmptyReadOnly} />
+
+## Accessibility
+
+- **A chip grid.** The editable tags are a grid named "Tags": arrow keys move between chips, and
+  Delete or Backspace on a chip removes it. Backspace in the empty box moves to the last chip.
+- **Named remove buttons.** Each is "Remove tag contract", not just "Remove".
+- **A named box.** The box is a combobox named "Add tags to this document"; the "+" entry is read
+  as "New tag q3 report". It sits below the grid rather than inside it, since a grid may hold only
+  rows (axe `aria-required-children`); Shift+Tab from the box returns to the chips.
+- **Focus stays put.** Removing a chip moves focus to the next chip, and adding keeps it in the box
+  so several tags can be typed in a row.
+- **Progress is announced.** A tag being saved carries a progress indicator named "Adding tag
+  q3 report", and the toast reports the outcome.
+- **Read-only is a list.** The read-only tags are a list named "Tags"; an empty one is read as "No
+  tags" rather than as a dash.

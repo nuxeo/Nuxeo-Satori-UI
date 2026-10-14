@@ -1,0 +1,107 @@
+:host {
+  display: block;
+  width: min(95vw, 520px);
+}
+
+.nxs-folder-picker-dialog__location {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.nxs-folder-picker-dialog__trail {
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+  overflow-wrap: anywhere;
+}
+
+.nxs-folder-picker-dialog__state {
+  display: flex;
+  justify-content: center;
+  padding: 24px 0;
+}
+
+.nxs-folder-picker-dialog__failure,
+.nxs-folder-picker-dialog__refusal {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin: 8px 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-error);
+}
+
+.nxs-folder-picker-dialog__refusal {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-folder-picker-dialog__empty {
+  margin: 8px 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-folder-picker-dialog__list {
+  max-height: 280px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.nxs-folder-picker-dialog__folder {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  background: none;
+  font: inherit;
+  color: var(--mat-sys-on-surface);
+  text-align: start;
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
+
+  // IBM Equal Access's style_focus_visible reads `:focus` only, so the ring is also drawn on a
+  // standalone `:focus` (NXSAT-547).
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}
+
+li:last-child .nxs-folder-picker-dialog__folder {
+  border-bottom: 0;
+}
+
+.nxs-folder-picker-dialog__folder-icon {
+  flex-shrink: 0;
+  color: var(--mat-sys-primary);
+}
+
+.nxs-folder-picker-dialog__folder-title {
+  flex: 1;
+}
+
+.nxs-folder-picker-dialog__chevron {
+  flex-shrink: 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+:host-context([dir='rtl']) .nxs-folder-picker-dialog__chevron {
+  transform: scaleX(-1);
+}

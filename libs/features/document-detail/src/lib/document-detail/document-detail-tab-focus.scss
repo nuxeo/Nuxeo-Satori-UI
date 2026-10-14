@@ -1,6 +1,0 @@
-// NXSAT-488 / IBM 1235130066 — standalone stylesheet so document-detail.scss stays under the 36 kB cap.
-// Tab labels sit on the fixed `#fff` tab header; `--mat-sys-primary` is too pale there (see NXENG-773).
-.detail-tabs ::ng-deep .mat-mdc-tab:focus {
-  outline: 2px solid var(--agentic-document-detail-panel-toggle-focus-outline);
-  outline-offset: -2px;
-}

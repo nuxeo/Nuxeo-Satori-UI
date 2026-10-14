@@ -1,16 +1,19 @@
 /**
- * NXENG-830 / IBM 1230336254 — properties panel close control keyboard focus (WCAG 2.1 SC 2.4.7).
- * Karma loads theme tokens and the same feature SCSS bundles as production. Standalone `:focus`
- * selector shape, template wiring, and component styleUrls are owned by
- * `document-detail-panel-close-focus-ring.spec.ts`; this suite owns computed inset geometry,
- * contrast against the button fill, and the `:focus` ring when `:focus-visible` is false.
+ * NXENG-830 / IBM 1230336254 — side panel close control keyboard focus (WCAG 2.1 SC 2.4.7).
+ * Karma loads theme tokens; the host renders the real `nxs-details-panel` under the feature SCSS,
+ * whose `.properties-panel` rule sets the ring colour the library draws. Template wiring and the
+ * token are owned by `document-detail-panel-close-focus-ring.spec.ts`; this suite owns computed
+ * inset geometry, contrast against the button fill, and the `:focus` ring when `:focus-visible`
+ * is false.
  */
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MatButtonModule } from '@angular/material/button';
-import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
+import {
+  NxsDetailsPanelComponent,
+  type NxsDetailsPanelTab,
+} from '@nuxeo-satori/platform/components';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -63,14 +66,16 @@ function paintedBackground(element: HTMLElement): number[] {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, TranslateModule],
+  imports: [NxsDetailsPanelComponent, TranslateModule],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
-    '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-close-focus.scss',
   ],
   templateUrl: './panel-close-focus-ring.spec.html',
 })
-class PanelCloseFocusHostComponent {}
+class PanelCloseFocusHostComponent {
+  readonly heading = 'Sample document.pdf';
+  readonly views: readonly NxsDetailsPanelTab[] = [{ id: 'properties', label: 'Properties' }];
+}
 
 describe('Document detail panel close — keyboard focus indicator (NXENG-830)', () => {
   let originalTheme: string | null;
@@ -105,7 +110,7 @@ describe('Document detail panel close — keyboard focus indicator (NXENG-830)',
     ) as HTMLButtonElement;
     expect(button)
       .withContext(
-        'fixture must expose the properties panel close control by accessible name (production template wiring and panel-close-btn class are asserted in document-detail-panel-close-focus-ring.spec.ts)',
+        'fixture must expose the properties panel close control by accessible name (production wiring is asserted in document-detail-panel-close-focus-ring.spec.ts)',
       )
       .toBeTruthy();
     return { fixture, button };

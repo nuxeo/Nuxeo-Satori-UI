@@ -1,6 +1,8 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 
+import { nxsVisibleText } from '../visible-text';
+
 /**
  * One icon, by its Material Icons ligature (`folder`, `description`, `collections_bookmark`).
  *
@@ -25,6 +27,6 @@ export class NxsIconComponent {
   /** What the icon means, already translated. Blank makes it decorative. */
   readonly label = input('');
 
-  /** The accessible name as assistive technology computes it: whitespace alone is no name. */
-  protected readonly accessibleName = computed(() => this.label().trim());
+  /** The accessible name as a reader gets it: whitespace or zero-width characters alone are no name. */
+  protected readonly accessibleName = computed(() => nxsVisibleText(this.label()));
 }

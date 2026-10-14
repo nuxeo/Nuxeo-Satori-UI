@@ -15,8 +15,12 @@ import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-toolti
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 /**
- * Re-register the four `NXS_PRIMITIVE_IDS` on Satori, over the Material implementations
- * `provideNxsComponents()` registered.
+ * Re-register the avatar, breadcrumbs, tag and rich tooltip `NXS_PRIMITIVE_IDS` on Satori, over the
+ * Material implementations `provideNxsComponents()` registered.
+ *
+ * `NXS_PRIMITIVE_IDS.errorState` is left on Material: Satori's `sat-401-` to `sat-500-error-state`
+ * ship only in Satori 1.0, which needs Angular 22, and the Satori this package can install has no
+ * error state. Registering one here is the whole change once it can.
  *
  * Satori-if-available, Material otherwise, decided by which providers an application lists — not
  * at build time and not by a runtime probe. This entry point is the only one in the package that

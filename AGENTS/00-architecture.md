@@ -106,10 +106,14 @@ gate, also in CI):
 | `libs/shared/satori-components-satori` may import `@hylandsoftware/satori-ui` and nothing else from GitHub Packages, no ADF and no HxCS client, followed transitively                                                                                                                                                                                                                                                                                                             | `checkSatoriFallbackDependencies`          |
 | It is reached only through `@nuxeo-satori/platform/components-satori`, by the same rules as the base library                                                                                                                                                                                                                                                                                                                                                                      | `checkSatoriFallbackEntryPoint`            |
 | `apps/nuxeo-ui` lists `provideNxsComponents()` before `provideNxsSatoriComponents()` in its providers                                                                                                                                                                                                                                                                                                                                                                             | `checkSatoriPrimitivesRegisteredInOrder`   |
+| Every `@Component` in either library has a spec that imports it by value, or imports what opens it — the coverage floor passes a component nothing tests once its module is imported                                                                                                                                                                                                                                                                                              | `checkSatoriComponentsHaveSpecs`           |
+| `PLATFORM_ENTRY_POINTS` in `libs/platform/src/index.ts` lists exactly the subpaths a `libs/platform/<subpath>/ng-package.json` publishes                                                                                                                                                                                                                                                                                                                                          | `checkPlatformEntryPointsListed`           |
+| Every Storybook `<Source>` code sample under `libs/` and `apps/` parses and is formatted as Prettier formats its language, and no inline sample has an indented continuation line, which MDX strips                                                                                                                                                                                                                                                                               | `checkMdxCodeSamplesFormatted`             |
 
 **Satori if available, Material otherwise — by ID** (plan section 3). Four primitives overlap with
 Satori: avatar, breadcrumbs, tag and rich tooltip. `/components` implements each on Material and
-`provideNxsComponents()` registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`).
+`provideNxsComponents()` registers them as `nxs.primitives.*` (`NXS_PRIMITIVE_IDS`), with a fifth,
+`errorState`, which Satori implements only from 1.0 and so stays on Material for now.
 `@nuxeo-satori/platform/components-satori` — its own project, `libs/shared/satori-components-satori`,
 same tags — re-registers the same IDs on Satori with `provideNxsSatoriComponents()`. Both go through
 `provideSatoriExtensions`, so later wins: the app lists both in that order, and an application
@@ -117,7 +121,9 @@ without GitHub Packages access lists only the first. Each pair implements one `N
 interface and a spec compares their declared inputs, so `componentInputs` mean the same thing
 whichever is registered. `@hylandsoftware/satori-ui` is an **optional** peer of the package, and
 `beta:installable` proves the built tarball installs without it. The IDs are in
-`docs/extension-reference.md` §6a; no packaged screen renders them yet. The base library's value
+`docs/extension-reference.md` §6a. Browse and the collection page render their breadcrumbs by ID,
+and `nxs-document-list` each row's type tag and contributor avatar; other packaged screens do not
+yet. The base library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 

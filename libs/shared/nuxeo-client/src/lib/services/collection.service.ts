@@ -5,6 +5,7 @@ import { Observable, of, switchMap } from 'rxjs';
 import { NuxeoDocument, NuxeoDocumentList } from '../models/document.model';
 import { FAVORITES_COLLECTION_QUERY } from '../queries/nxql-queries';
 import { NuxeoApiBase } from './nuxeo-api-base';
+import { type BrowsePageRequest, withSort } from './browse.service';
 
 @Injectable({ providedIn: 'root' })
 export class CollectionService {
@@ -46,8 +47,22 @@ export class CollectionService {
     );
   }
 
-  getCollectionMembers(collectionUid: string, pageSize = 50): Observable<NuxeoDocumentList> {
-    const params = new HttpParams().set('queryParams', collectionUid).set('pageSize', pageSize);
+  /**
+   * One page of a collection's members, in the order asked for. The page provider counts every
+   * member, so `totalSize` is the collection's size on every page.
+   */
+  getCollectionMembers(
+    collectionUid: string,
+    pageSize = 50,
+    page?: BrowsePageRequest,
+  ): Observable<NuxeoDocumentList> {
+    const params = withSort(
+      new HttpParams()
+        .set('queryParams', collectionUid)
+        .set('pageSize', pageSize)
+        .set('currentPageIndex', page?.currentPageIndex ?? 0),
+      page?.sort,
+    );
 
     return this.api.get<NuxeoDocumentList>(
       '/nuxeo/api/v1/search/pp/default_content_collection/execute',

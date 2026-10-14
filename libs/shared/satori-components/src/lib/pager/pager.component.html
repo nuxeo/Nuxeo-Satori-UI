@@ -1,0 +1,41 @@
+@if (visible()) {
+  @let name = ownLabel() || ('satori-components.pager.label' | translate);
+  @let previousLabel = 'satori-components.pager.previous' | translate;
+  @let nextLabel = 'satori-components.pager.next' | translate;
+  <nav class="nxs-pager__nav" [attr.aria-label]="name">
+    <span class="nxs-pager__range" aria-live="polite" aria-atomic="true">
+      @if (itemCount() === 0) {
+        {{ 'satori-components.pager.past-end' | translate }}
+      } @else if (knownTotal() !== null) {
+        {{
+          'satori-components.pager.range-of'
+            | translate: { first: first(), last: last(), total: knownTotal() }
+        }}
+      } @else {
+        {{ 'satori-components.pager.range' | translate: { first: first(), last: last() } }}
+      }
+    </span>
+    <button
+      mat-icon-button
+      type="button"
+      class="nxs-pager__previous"
+      [disabled]="!canPrevious()"
+      [matTooltip]="previousLabel"
+      [attr.aria-label]="previousLabel"
+      (click)="previous()"
+    >
+      <mat-icon class="nxs-pager__chevron" aria-hidden="true">chevron_left</mat-icon>
+    </button>
+    <button
+      mat-icon-button
+      type="button"
+      class="nxs-pager__next"
+      [disabled]="!canNext()"
+      [matTooltip]="nextLabel"
+      [attr.aria-label]="nextLabel"
+      (click)="next()"
+    >
+      <mat-icon class="nxs-pager__chevron" aria-hidden="true">chevron_right</mat-icon>
+    </button>
+  </nav>
+}

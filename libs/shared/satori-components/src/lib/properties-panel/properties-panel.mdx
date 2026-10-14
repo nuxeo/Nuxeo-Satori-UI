@@ -1,0 +1,148 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as PropertiesPanelStories from './properties-panel.stories';
+
+<Meta of={PropertiesPanelStories} name="Overview" />
+
+# Properties panel
+
+The properties panel is the Properties view of a document page's side panel. It shows the
+document's lifecycle state, version, dates, creator and contributors, then its Dublin Core
+properties — title, file name, expiry, tags, description, nature, coverage and subjects — then the
+collections it is in. It is the counterpart of Web UI's `nuxeo-document-info` and
+`nuxeo-document-metadata`, with the collections and tags sections beside them.
+
+## Key features
+
+- **Reads the document.** Give it a `NuxeoDocument`; every row comes from its properties, facets and
+  context parameters. Rows with nothing to show are left out.
+- **Labels, never `[object Object]`.** A directory entry, a user or a blob that arrives as an object
+  shows its label or name. ADF's properties sidebar printed `[object Object]`; this panel cannot.
+- **Vocabulary labels.** Pass `vocabularyLabel` to show "Europe / France" instead of
+  `europe/France` for nature, coverage and subjects.
+- **Tags as Web UI shows them.** The tags row appears only on a document with the `NXTag` facet.
+- **Collections without Favorites.** The Favorites collection is the star on the page, so it is not
+  listed.
+- **Slots for what needs the page.** Project a version control with `nxsVersion`, a tag editor with
+  `nxsTags`, and anything else — the type's own layout, attachments — as plain content.
+
+## Demo showcase
+
+<Canvas of={PropertiesPanelStories.FileProperties} />
+
+## Usage
+
+export const usageHtml = `<nxs-properties-panel
+  [document]="doc()"
+  [vocabularyLabel]="vocabularyLabel"
+  [versionLabel]="versionText()"
+  [publications]="publicationCount()"
+  (publicationsSelected)="openPublishing()"
+>
+  <acme-version-menu nxsVersion [document]="doc()" />
+  <acme-tag-editor nxsTags [document]="doc()" />
+  <acme-type-layout [document]="doc()" />
+</nxs-properties-panel>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`document` is required. The panel needs no providers and has no registered ID. Its labels are
+translated under `satori-components.properties-panel.*`, with English from
+`providePlatformEnglishFallback()`.
+
+Project a slot unconditionally. Angular matches projected content when the template compiles, so a
+slot wrapped in `@if` replaces the built-in version text or tag chips even while the condition is
+false. Put the condition inside your own component instead.
+
+## Where its data comes from
+
+The panel calls no API. It reads the document you pass:
+
+<table>
+  <thead>
+    <tr>
+      <th>Row</th>
+      <th>Source</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>State</td>
+      <td>
+        <code>state</code>
+      </td>
+    </tr>
+    <tr>
+      <td>Last modified, Created, Expires</td>
+      <td>
+        <code>dc:modified</code> (else <code>lastModified</code>), <code>dc:created</code>,{' '}
+        <code>dc:expired</code>
+      </td>
+    </tr>
+    <tr>
+      <td>By, Contributors</td>
+      <td>
+        <code>dc:creator</code>, <code>dc:contributors</code> — IDs or user entities
+      </td>
+    </tr>
+    <tr>
+      <td>Title, File name</td>
+      <td>
+        <code>title</code>; the <code>file:content</code> name, only when the main blob is persisted
+      </td>
+    </tr>
+    <tr>
+      <td>Tags</td>
+      <td>
+        <code>nxtag:tags</code>, only with the <code>NXTag</code> facet
+      </td>
+    </tr>
+    <tr>
+      <td>Description, Nature, Coverage, Subjects</td>
+      <td>
+        <code>dc:description</code>, <code>dc:nature</code>, <code>dc:coverage</code>,{' '}
+        <code>dc:subjects</code>
+      </td>
+    </tr>
+    <tr>
+      <td>Collections</td>
+      <td>
+        The <code>collections</code> context parameter, from the <code>collections</code> enricher
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+**In these stories** the documents are fixtures and `vocabularyLabel` is a small lookup table.
+
+## Examples
+
+### Entries that arrive as objects
+
+Coverage, subjects and contributors resolved by the server. The panel shows "Italy", "Astronomy" and
+"Ann Smith".
+
+<Canvas of={PropertiesPanelStories.ResolvedEntries} />
+
+### A folder
+
+No tags facet, no file and no description, so those rows are not shown.
+
+<Canvas of={PropertiesPanelStories.FolderWithoutTags} />
+
+### A note in review
+
+<Canvas of={PropertiesPanelStories.NoteInReview} />
+
+## Accessibility
+
+- **Names and values.** Each row is a term and its description in a description list, so a screen
+  reader reads "State: project" and can say how many properties there are.
+- **Headings.** "Indexing properties" and "Collections" are headings at `headingLevel` (4 by
+  default), so they sit under the page's own headings.
+- **Avatars are decoration.** The creator's and contributors' initials are hidden from assistive
+  technology; their names are read as text.
+- **Publications.** A non-zero count is a button that names its number; 0 is plain text.
+- **Focus ring.** The publications button draws a 2 px ring in `--nxs-properties-panel-link`.
+- **Colours.** Override `--nxs-properties-panel-label` and `--nxs-properties-panel-value` together
+  when the panel sits on a fixed surface, and keep them at 4.5:1 against it.

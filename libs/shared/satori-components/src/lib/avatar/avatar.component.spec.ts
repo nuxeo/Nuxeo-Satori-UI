@@ -46,8 +46,8 @@ describe('NxsAvatarComponent', () => {
   });
 
   // A translation that resolves to whitespace must not leave an image with no usable name.
-  it.each(['   ', '\t\n', '\u00a0', '\u3000'])(
-    'is decorative, and hidden, when the label is only whitespace (%j)',
+  it.each(['   ', '\t\n', '\u00a0', '\u3000', '\u200b', '\u200b \u2060', '\ufeff\u200d'])(
+    'is decorative, and hidden, when the label is only whitespace or zero-width characters (%j)',
     async (label) => {
       const host = await render({ initials: 'NK', label });
       expect(host.hasAttribute('role')).toBe(false);
@@ -77,6 +77,22 @@ describe('NxsAvatarComponent', () => {
     expect(host.classList).toContain('nxs-avatar--purple');
     expect(host.classList).toContain('nxs-avatar--size-64');
     expect(host.classList).not.toContain('nxs-avatar--blue');
+  });
+
+  // Satori's avatar shows one initial at 24 px, where two do not fit.
+  it('shows one initial at size 24, as Satori does', async () => {
+    const host = await render({ initials: 'nk', size: '24' });
+    expect(host.querySelector('.nxs-avatar__initials')?.textContent?.trim()).toBe('N');
+  });
+
+  it.each(['28', '36'] as const)('shows two initials at size %s', async (size) => {
+    const host = await render({ initials: 'nk', size });
+    expect(host.querySelector('.nxs-avatar__initials')?.textContent?.trim()).toBe('NK');
+  });
+
+  it('skips zero-width characters before the initials', async () => {
+    const host = await render({ initials: '\u200bnk' });
+    expect(host.querySelector('.nxs-avatar__initials')?.textContent?.trim()).toBe('NK');
   });
 
   it('renders nothing visible for blank initials rather than throwing', async () => {

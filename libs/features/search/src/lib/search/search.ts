@@ -1,14 +1,13 @@
-import { Component, computed, inject, signal, DestroyRef } from '@angular/core';
+import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
 import { DescriptorLabelPipe, descriptorLabel } from '@nuxeo-satori/platform/extensions';
-import { toSignal, toObservable, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
+  type Observable,
   switchMap,
   catchError,
   of,
-  tap,
   map,
-  combineLatest,
   Subject,
   debounceTime,
   distinctUntilChanged,
@@ -25,21 +24,16 @@ import { MatMenuModule } from '@angular/material/menu';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import {
   ConfirmDialogComponent,
-  SavedSearchDialogComponent,
   ShareSavedSearchDialogComponent,
   type ConfirmDialogData,
 } from '@nuxeo-satori/platform/ui';
 import {
-  SearchService,
-  SearchAggregationService,
   SelectionService,
   DocumentDetailService,
   FOLDERISH_TYPES,
   NuxeoApiBase,
   NON_CONTENT_DOCUMENT_TYPES,
   type SearchResultItem,
-  type SearchResponse,
-  type SearchQueryParams,
   DocTypeLabelPipe,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import {
@@ -52,6 +46,7 @@ import {
   NxsColumnPickerComponent,
   NxsErrorStateComponent,
   NxsFavoriteToggleComponent,
+  NxsSavedSearchActionsComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
   nxsErrorStatus,
@@ -61,6 +56,9 @@ import {
   NxsToastService,
   provideNxsToast,
 } from '@nuxeo-satori/platform/components';
+
+import { askSavedSearchName } from '../search-session/saved-search-dialogs';
+import { SearchSession, type SearchResultsState } from '../search-session/search-session';
 
 export type SortDirection = 'asc' | 'desc' | null;
 export type ViewMode = 'grid' | 'table' | 'list';
@@ -184,6 +182,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsColumnPickerComponent,
     NxsErrorStateComponent,
     NxsFavoriteToggleComponent,
+    NxsSavedSearchActionsComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
@@ -210,8 +209,7 @@ export class SearchComponent {
   private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
-  private readonly searchService = inject(SearchService);
-  private readonly searchAggregationService = inject(SearchAggregationService);
+  private readonly session = inject(SearchSession);
   private readonly documentDetailService = inject(DocumentDetailService);
   private readonly nuxeoApi = inject(NuxeoApiBase);
   private readonly aiGateway = inject(AiGatewayService);
@@ -242,20 +240,33 @@ export class SearchComponent {
   readonly aiSearchExecuted = signal(false);
   private readonly aiSuggestSubject = new Subject<string>();
 
-  readonly loading = signal(true);
+  /** The shared search's state: `SearchSession` runs the one request this page and the drawer show. */
+  private readonly resultsState = toSignal(this.session.results$, {
+    initialValue: {
+      status: 'loading',
+      items: [],
+      aggregations: {},
+      error: null,
+    } as SearchResultsState,
+  });
+  readonly loading = computed(() => this.resultsState().status === 'loading');
   /**
    * Loading owned by the AI NXQL request specifically, kept separate from {@link loading}.
    *
-   * `loading` belongs to the standard `results$` pipeline, which sets it on every route/filter change.
-   * When `runNxqlQuery` also wrote to it, `supersedeAiRequest` had to clear it — and that clear could
-   * land while a *standard* search was still in flight, hiding the spinner and rendering the previous
-   * results, because every view mode below is gated on `!loading()`. Superseding AI work must only
-   * release AI-owned loading, so the two are no longer the same flag.
+   * `loading` belongs to the standard search, which `SearchSession` runs on every route/filter
+   * change. When `runNxqlQuery` also wrote to it, `supersedeAiRequest` had to clear it — and that
+   * clear could land while a *standard* search was still in flight, hiding the spinner and rendering
+   * the previous results, because every view mode below is gated on `!loading()`. Superseding AI work
+   * must only release AI-owned loading, so the two are no longer the same flag.
    */
   readonly aiNxqlLoading = signal(false);
   /** Either request is in flight. What the template gates on, so neither can hide the other's spinner. */
   readonly busy = computed(() => this.loading() || this.aiNxqlLoading());
-  readonly error = signal<string | null>(null);
+  readonly error = computed(() =>
+    this.resultsState().status === 'failed'
+      ? this.translate.instant('search.message.failed-to-load-search-results')
+      : null,
+  );
   readonly quickFilterOptions = QUICK_FILTER_OPTIONS;
   readonly selectedQuickFilters = signal<Set<string>>(new Set());
   readonly gridGroupBy = signal<string>('created');
@@ -287,128 +298,51 @@ export class SearchComponent {
   readonly sortColumn = signal<string | null>(null);
   readonly sortDirection = signal<SortDirection>(null);
   readonly favoriteIds = signal<Set<string>>(new Set());
-  readonly selectedSavedSearchId = this.searchAggregationService.selectedSavedSearchId;
-  readonly selectedSavedSearchTitle = this.searchAggregationService.selectedSavedSearchTitle;
+  readonly selectedSavedSearchId = this.session.savedSearchId;
+  readonly selectedSavedSearchTitle = this.session.savedSearchTitle;
+  /** Whether the filters differ from the open saved search's: Save is offered only then. */
+  readonly savedSearchDirty = this.session.dirty;
+  readonly hasFilters = this.session.hasFilters;
 
   /** Which error state `error` shows: the status of the search request that failed. */
-  readonly errorStatus = signal<NxsErrorStatus>(500);
+  readonly errorStatus = computed<NxsErrorStatus>(() => nxsErrorStatus(this.resultsState().error));
   /**
    * The standard search's failure, while its results are the ones on screen. `error` belongs to the
-   * standard pipeline and outlives an AI search, whose results must not be hidden behind it.
+   * standard search and outlives an AI search, whose results must not be hidden behind it.
    */
   readonly resultsError = computed(() =>
     this.aiSearchMode() && this.aiSearchExecuted() ? null : this.error(),
   );
-  /** Bumped by Retry, so the same query and filters run again. */
-  private readonly searchAttempt = signal(0);
 
-  private readonly results$ = combineLatest([
-    this.route.queryParamMap,
-    toObservable(this.searchAggregationService.drawerFilters),
-    toObservable(this.searchAttempt),
-  ]).pipe(
-    tap(() => {
-      this.loading.set(true);
-      this.error.set(null);
-    }),
-    switchMap(([params, drawerFilters]) => {
-      const quickFilters = params.get('quickFilters') ?? '';
-      this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
-
-      // Update sort from query params only if they exist
-      const querySortBy = params.get('sortBy');
-      const querySortOrderRaw = params.get('sortOrder');
-      const querySortOrder: 'asc' | 'desc' | null =
-        querySortOrderRaw === 'asc' || querySortOrderRaw === 'desc' ? querySortOrderRaw : null;
-
-      // Map API field name back to UI column key for in-memory sorting/indicators
-      const uiSortColumn = querySortBy ? (API_FIELD_TO_COLUMN[querySortBy] ?? querySortBy) : null;
-      this.sortColumn.set(uiSortColumn);
-      this.sortDirection.set(querySortOrder);
-
-      // Sync grid sort UI from query params so grid view stays in sync with table view
-      if (uiSortColumn) {
-        this.gridGroupBy.set(uiSortColumn);
-      }
-      if (querySortOrder) {
-        this.gridSortOrder.set(querySortOrder);
-      }
-
-      const request: {
-        q?: string;
-        ecmFulltext?: string;
-        quickFilters?: string;
-        sortBy?: string | null;
-        sortOrder?: ('asc' | 'desc') | null;
-        modifiedDate?: string;
-        author?: string;
-        collection?: string;
-        tag?: string;
-        nature?: string;
-        subjects?: string;
-        coverage?: string;
-        size?: string;
-      } = {};
-
-      // Sort and quick filters still come from URL params
-      if (quickFilters.trim()) request.quickFilters = quickFilters;
-      if (querySortBy) request.sortBy = querySortBy;
-      if (querySortOrder) request.sortOrder = querySortOrder;
-
-      // All drawer filters come from the shared service signal (not URL)
-      const q = (drawerFilters['q'] ?? '').trim();
-      const ecmFulltext = (drawerFilters['ecm_fulltext'] ?? '').trim();
-      const modifiedDate = (drawerFilters['modifiedDate'] ?? '').trim();
-      const author = (drawerFilters['author'] ?? '').trim();
-      const collection = (drawerFilters['collection'] ?? '').trim();
-      const tag = (drawerFilters['tag'] ?? '').trim();
-      const nature = (drawerFilters['nature'] ?? '').trim();
-      const subjects = (drawerFilters['subjects'] ?? '').trim();
-      const coverage = (drawerFilters['coverage'] ?? '').trim();
-      const size = (drawerFilters['size'] ?? '').trim();
-
-      if (q) request.q = q;
-      if (ecmFulltext) request.ecmFulltext = ecmFulltext;
-      if (modifiedDate) request.modifiedDate = modifiedDate;
-      if (author) request.author = author;
-      if (collection) request.collection = collection;
-      if (tag) request.tag = tag;
-      if (nature) request.nature = nature;
-      if (subjects) request.subjects = subjects;
-      if (coverage) request.coverage = coverage;
-      if (size) request.size = size;
-
-      return this.searchService.search(request as SearchQueryParams).pipe(
-        tap((response: SearchResponse) => {
-          if (this.searchAggregationService?.aggregations?.set) {
-            this.searchAggregationService.aggregations.set(response.aggregations);
-          }
-          if (this.searchAggregationService?.items?.set) {
-            this.searchAggregationService.items.set(response.items);
-          }
-          this.favoriteIds.set(
-            new Set(response.items.filter((item) => item.isFavorite).map((item) => item.id)),
-          );
-        }),
-        map((response) => response.items),
-        tap(() => this.loading.set(false)),
-        catchError((err: unknown) => {
-          this.searchAggregationService.aggregations.set({});
-          this.searchAggregationService.items.set([]);
-          this.errorStatus.set(nxsErrorStatus(err));
-          this.error.set(this.translate.instant('search.message.failed-to-load-search-results'));
-          this.loading.set(false);
-          return of<SearchResultItem[]>([]);
-        }),
-      );
-    }),
-  );
-
-  readonly results = toSignal(this.results$, { initialValue: [] as SearchResultItem[] });
+  readonly results = computed(() => this.resultsState().items as SearchResultItem[]);
 
   /** Run the failed search again, with the same query and filters. */
   retrySearch(): void {
-    this.searchAttempt.update((attempt) => attempt + 1);
+    this.session.retry();
+  }
+
+  /**
+   * The URL's quick filters and sort: shown here, and handed to the session as part of the query.
+   */
+  private applyPageQuery(params: { get(name: string): string | null }): void {
+    const quickFilters = params.get('quickFilters') ?? '';
+    this.selectedQuickFilters.set(this.parseQuickFilters(quickFilters));
+
+    const sortBy = params.get('sortBy');
+    const sortOrderRaw = params.get('sortOrder');
+    const sortOrder: 'asc' | 'desc' | null =
+      sortOrderRaw === 'asc' || sortOrderRaw === 'desc' ? sortOrderRaw : null;
+
+    // Map API field name back to UI column key for in-memory sorting/indicators
+    const uiSortColumn = sortBy ? (API_FIELD_TO_COLUMN[sortBy] ?? sortBy) : null;
+    this.sortColumn.set(uiSortColumn);
+    this.sortDirection.set(sortOrder);
+
+    // Sync grid sort UI from query params so grid view stays in sync with table view
+    if (uiSortColumn) this.gridGroupBy.set(uiSortColumn);
+    if (sortOrder) this.gridSortOrder.set(sortOrder);
+
+    this.session.setPageQuery({ quickFilters: quickFilters.trim(), sortBy, sortOrder });
   }
 
   readonly visibleColumns = computed(() =>
@@ -522,10 +456,8 @@ export class SearchComponent {
     this.selectionService
       .deleteSelected()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () =>
-          this.router.navigate([], { relativeTo: this.route, queryParamsHandling: 'merge' }),
-      });
+      // The same query again, so the deleted documents leave the results.
+      .subscribe({ next: () => this.session.retry() });
   }
 
   clearSelection(): void {
@@ -810,122 +742,43 @@ export class SearchComponent {
     );
   }
 
-  openSaveAsDialog(): void {
-    this.dialog
-      .open(SavedSearchDialogComponent, {
-        data: {
-          title: this.translate.instant('ui.saved-search'),
-          placeholder: this.translate.instant('saved-search.dialog.name-placeholder'),
-        },
-      })
-      .afterClosed()
-      .subscribe((title) => {
-        const trimmedTitle = title?.trim();
-        if (!trimmedTitle) return;
-
-        this.searchService
-          .saveSavedSearch({
-            title: trimmedTitle,
-            params: this.buildSavedSearchParamsFromFilters(),
-            pageProviderName: 'default_search',
-          })
-          .subscribe({
-            next: (saved) => {
-              this.searchAggregationService.selectedSavedSearchId.set(
-                this.readSavedSearchId(saved),
-              );
-              this.searchAggregationService.selectedSavedSearchTitle.set(
-                this.readSavedSearchTitle(saved) || trimmedTitle,
-              );
-              this.searchAggregationService.markSavedSearchDirty();
-              this.toast.show(
-                this.translate.instant('common.search-saved', { name: trimmedTitle }),
-              );
-            },
-            error: () => {
-              this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
-                duration: 5000,
-              });
-            },
-          });
-      });
+  /** Save the filters as a new saved search, under a name the user gives. */
+  onSaveAs(): void {
+    this.withSavedSearchName({ heading: this.translate.instant('ui.saved-search') }, (name) =>
+      this.session.saveAs(name).pipe(map(() => name)),
+    ).subscribe({
+      next: (name) => this.toast.show(this.translate.instant('common.search-saved', { name })),
+      error: () => this.savedSearchFailed('assets.message.failed-to-save-search'),
+    });
   }
 
-  hasSelectedSavedSearch(): boolean {
-    return this.selectedSavedSearchId().trim().length > 0;
-  }
-
-  hasSavableFilters(): boolean {
-    return Object.keys(this.buildSavedSearchParamsFromFilters()).length > 0;
-  }
-
-  onSaveSelectedSavedSearch(): void {
-    const id = this.selectedSavedSearchId().trim();
-    if (!id) return;
-
-    const currentTitle =
-      this.selectedSavedSearchTitle().trim() || this.translate.instant('ui.saved-search');
-    this.searchService
-      .updateSavedSearch(id, {
-        title: currentTitle,
-        params: this.buildSavedSearchParamsFromFilters(),
-        pageProviderName: 'default_search',
-      })
+  /** Save the filters into the open saved search. */
+  onSave(): void {
+    const name = this.selectedSavedSearchTitle().trim();
+    this.session
+      .save()
+      .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
-        next: () => {
-          this.searchAggregationService.selectedSavedSearchTitle.set(currentTitle);
-          this.searchAggregationService.markSavedSearchDirty();
-          this.toast.show(this.translate.instant('common.search-updated', { name: currentTitle }));
-        },
-        error: () => {
-          this.toast.error(this.translate.instant('assets.message.failed-to-save-search'), {
-            duration: 5000,
-          });
-        },
+        next: () => this.toast.show(this.translate.instant('common.search-updated', { name })),
+        error: () => this.savedSearchFailed('assets.message.failed-to-save-search'),
       });
   }
 
-  onEditSelectedSavedSearch(): void {
-    const id = this.selectedSavedSearchId().trim();
-    if (!id) return;
-
-    this.dialog
-      .open(SavedSearchDialogComponent, {
-        data: {
-          title: this.translate.instant('ui.edit-saved-search'),
-          placeholder: this.translate.instant('saved-search.dialog.name-placeholder'),
-          initialValue: this.selectedSavedSearchTitle(),
-        },
-      })
-      .afterClosed()
-      .subscribe((title) => {
-        const trimmedTitle = title?.trim();
-        if (!trimmedTitle) return;
-
-        this.searchService
-          .updateSavedSearch(id, {
-            title: trimmedTitle,
-            params: this.buildSavedSearchParamsFromFilters(),
-            pageProviderName: 'default_search',
-          })
-          .subscribe({
-            next: () => {
-              this.searchAggregationService.selectedSavedSearchTitle.set(trimmedTitle);
-              this.searchAggregationService.markSavedSearchDirty();
-              this.toast.show(
-                this.translate.instant('common.search-updated', { name: trimmedTitle }),
-              );
-            },
-            error: () => {
-              this.toast.error(this.translate.instant('assets.message.failed-to-update-search'), {
-                duration: 5000,
-              });
-            },
-          });
-      });
+  /** Rename the open saved search. Its stored filters stay as they are, as in Web UI. */
+  onRename(): void {
+    this.withSavedSearchName(
+      {
+        heading: this.translate.instant('ui.edit-saved-search'),
+        initial: this.selectedSavedSearchTitle(),
+      },
+      (name) => this.session.rename(name).pipe(map(() => name)),
+    ).subscribe({
+      next: (name) => this.toast.show(this.translate.instant('common.search-updated', { name })),
+      error: () => this.savedSearchFailed('assets.message.failed-to-update-search'),
+    });
   }
 
-  onShareSelectedSavedSearch(): void {
+  onShare(): void {
     const id = this.selectedSavedSearchId().trim();
     if (!id) return;
 
@@ -939,67 +792,63 @@ export class SearchComponent {
     });
   }
 
-  onDeleteSelectedSavedSearch(): void {
+  /** Delete the open saved search, once the user confirms. */
+  onDelete(): void {
     const id = this.selectedSavedSearchId().trim();
     if (!id) return;
 
-    const title = this.selectedSavedSearchTitle().trim() || 'this saved search';
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: this.translate.instant('confirm.delete-saved-search'),
-        message: this.translate.instant('confirm.delete-saved-search-named', { name: title }),
-        confirmLabel: this.translate.instant('confirm.delete'),
-      } as ConfirmDialogData,
-    });
-
-    dialogRef
+    const title =
+      this.selectedSavedSearchTitle().trim() || this.translate.instant('ui.saved-search');
+    this.dialog
+      .open(ConfirmDialogComponent, {
+        data: {
+          title: this.translate.instant('confirm.delete-saved-search'),
+          message: this.translate.instant('confirm.delete-saved-search-named', { name: title }),
+          confirmLabel: this.translate.instant('confirm.delete'),
+        } as ConfirmDialogData,
+      })
       .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((confirmed) => {
-        if (!confirmed) return;
-
-        this.searchService
-          .deleteSavedSearch(id)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: () => {
-              this.searchAggregationService.selectedSavedSearchId.set('');
-              this.searchAggregationService.selectedSavedSearchTitle.set('');
-              this.searchAggregationService.drawerFilters.set({});
-              this.searchAggregationService.markSavedSearchDirty();
-            },
-            error: (error) => {
-              console.error('Failed to delete saved search.', error);
-            },
-          });
+      .pipe(
+        switchMap((confirmed) => (confirmed ? this.session.deleteSavedSearch() : of(null))),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe({
+        error: () => this.savedSearchFailed('search.message.failed-to-delete-saved-search'),
       });
   }
 
-  private buildSavedSearchParamsFromFilters(): Record<string, string> {
-    const drawerFilters = this.searchAggregationService.drawerFilters();
-    const saved: Record<string, string> = {};
-
-    for (const [key, value] of Object.entries(drawerFilters)) {
-      const trimmed = value.trim();
-      if (trimmed) saved[key] = trimmed;
-    }
-
-    return saved;
+  /** Asks for a name, then runs `run` with it; nothing happens when the dialog is dismissed. */
+  private withSavedSearchName<T>(
+    options: { heading: string; initial?: string },
+    run: (name: string) => Observable<T>,
+  ): Observable<T> {
+    return askSavedSearchName(this.dialog, this.translate, options).pipe(
+      switchMap(run),
+      takeUntilDestroyed(this.destroyRef),
+    );
   }
 
-  private readSavedSearchId(saved: unknown): string {
-    if (!saved || typeof saved !== 'object') return '';
-    const obj = saved as Record<string, unknown>;
-    return typeof obj['id'] === 'string' ? obj['id'] : '';
-  }
-
-  private readSavedSearchTitle(saved: unknown): string {
-    if (!saved || typeof saved !== 'object') return '';
-    const obj = saved as Record<string, unknown>;
-    return typeof obj['title'] === 'string' ? obj['title'] : '';
+  private savedSearchFailed(key: string): void {
+    this.toast.error(this.translate.instant(key), { duration: 5000 });
   }
 
   constructor() {
+    this.route.queryParamMap
+      .pipe(takeUntilDestroyed())
+      .subscribe((params) => this.applyPageQuery(params));
+
+    // The favourites enricher says which results are favourites; a star's own change is then kept
+    // in `favoriteIds` until the next answer.
+    effect(() => {
+      const state = this.resultsState();
+      if (state.status === 'loading') return;
+      untracked(() =>
+        this.favoriteIds.set(
+          new Set(state.items.filter((item) => item.isFavorite).map((item) => item.id)),
+        ),
+      );
+    });
+
     this.aiSuggestSubject
       .pipe(
         debounceTime(400),

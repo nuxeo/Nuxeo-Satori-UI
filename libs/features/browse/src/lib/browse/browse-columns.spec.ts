@@ -16,6 +16,7 @@ import {
   BrowseService,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   SelectionService,
   TagService,
 } from '@nuxeo-satori/platform/nuxeo-client';
@@ -84,6 +85,7 @@ describe('BrowseComponent — documentList slot', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: stub.browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: stub.detail },
         { provide: DirectoryService, useValue: stub.directory },
         { provide: TagService, useValue: stub.tag },
@@ -209,6 +211,7 @@ describe('BrowseComponent — documentList slot', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: stub.browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: stub.detail },
         { provide: DirectoryService, useValue: stub.directory },
         { provide: TagService, useValue: stub.tag },

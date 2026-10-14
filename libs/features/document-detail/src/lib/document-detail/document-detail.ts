@@ -9,17 +9,18 @@ import {
   signal,
   computed,
   effect,
+  ElementRef,
   viewChild,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
   AppExtensionsService,
-  DescriptorLabelPipe,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionComponentRegistry,
   ExtensionOutletComponent,
   ExtensionRuleContextService,
+  descriptorLabel,
   type ExtensionActionDescriptor,
   type ExtensionDocumentViewDescriptor,
   type ExtensionTabDescriptor,
@@ -33,7 +34,6 @@ import { CdkAriaLive } from '@angular/cdk/a11y';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatTabsModule, MatTabGroup } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatDialogModule, MatDialog } from '@angular/material/dialog';
@@ -41,16 +41,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { provideNativeDateAdapter } from '@angular/material/core';
-import { MatSortModule, Sort } from '@angular/material/sort';
-import { MatTableModule } from '@angular/material/table';
-import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
-import { MatChipsModule, MatChipInputEvent } from '@angular/material/chips';
-import {
-  MatAutocompleteModule,
-  MatAutocompleteSelectedEvent,
-} from '@angular/material/autocomplete';
 
 import {
   NuxeoDocument,
@@ -88,9 +79,13 @@ import {
   shouldProbeContentLakeIngestStatus,
   supportsContentLakeIngest,
   canManageDocumentPermissions,
+  canPublishDocument,
+  canTagDocument,
   canWriteDocument,
   canRemoveDocument,
   canViewDocumentAuditLog,
+  hasDocumentPermission,
+  WRITE_VERSION,
   mergeDocumentPermissionsContext,
   auditActivityLabel,
   resolveAcePrincipal,
@@ -102,7 +97,6 @@ import {
   BrowseContextService,
   BROWSE_RETURN_MODE_PARAM,
   decodeNuxeoPathSegment,
-  documentHasPersistedMainBlob,
   noteFormatLabel,
   normalizeNuxeoPath,
   parentNuxeoFolderPath,
@@ -118,7 +112,6 @@ import {
   type BrowseReturnMode,
   type ClipboardDoc,
   formatRelativeTime,
-  formatAceDateRange,
   permissionRightLabel,
 } from '@nuxeo-satori/platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
@@ -146,14 +139,12 @@ import { DocumentLayoutComponent } from '@agentic-ui/shared/document-layouts';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   catchError,
-  debounceTime,
-  distinctUntilChanged,
   finalize,
   forkJoin,
   map,
+  merge,
   Observable,
   of,
-  Subject,
   switchMap,
   throwError,
   timer,
@@ -175,13 +166,8 @@ import {
   type VideoInfo,
   type VideoSource,
   provideTranslatedDatepickerIntl,
-  MatTabListKeydownDirective,
 } from '@nuxeo-satori/platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
-import {
-  CreateVersionDialogComponent,
-  CreateVersionDialogData,
-} from '../create-version-dialog/create-version-dialog';
 import { PublishDialogComponent, PublishDialogData } from '../publish-dialog/publish-dialog';
 import { AttachmentPreviewDialogComponent } from '../attachment-preview-dialog/attachment-preview-dialog';
 import { ReplaceAttachmentDialogComponent } from '../replace-attachment-dialog/replace-attachment-dialog';
@@ -189,27 +175,42 @@ import { RemoveAttachmentDialogComponent } from '../remove-attachment-dialog/rem
 import { EditDocumentDialogComponent } from '../edit-document-dialog/edit-document-dialog';
 import { NoteEditorComponent } from '../note-editor/note-editor';
 import { documentTypeTraits, type PackagedDocumentView } from './document-type-traits';
-import {
-  DeletePermissionDialogComponent,
-  DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
-} from '@agentic-ui/shared-permission-dialogs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { AppConfigService } from '@nuxeo-satori/platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
+  NxsCommentExtraDirective,
+  NxsCommentsComponent,
+  NxsTagEditorComponent,
+  NxsDeletePermissionDialogComponent,
+  NxsShareExternalDialogComponent,
+  NxsUpdatePermissionDialogComponent,
+  NxsDetailsPanelComponent,
+  NxsDocumentHistoryComponent,
+  NxsDocumentToolbarComponent,
   NxsDriveDialogComponent,
+  NxsManageVersionsComponent,
   NxsErrorStateComponent,
   NxsPermissionsPanelComponent,
+  NxsPropertiesPanelComponent,
   NxsSpinnerComponent,
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  NxsTagComponent,
   NxsToastService,
+  nxsAceTimeFrame,
   nxsErrorStatus,
   nxsToggleFavorite,
   provideNxsToast,
+  type NxsDeletePermissionDialogData,
+  type NxsDetailsPanelTab,
   type NxsDriveDialogData,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
   type NxsErrorStatus,
+  type NxsTab,
+  type NxsToolbarAction,
+  type NxsVocabularyLabel,
 } from '@nuxeo-satori/platform/components';
 
 export interface SectionNode {
@@ -268,6 +269,18 @@ const KE_MESSAGE_KEYS: Record<KeUiAction, { start: string; success: string; fail
   },
 };
 
+/**
+ * The message for a refused restore. 403 is also what Nuxeo answers when another user holds
+ * the lock, which removes `WriteVersion` from everyone but its owner and administrators.
+ */
+function restoreVersionErrorKey(err: unknown): string {
+  if (isPermissionDeniedError(err)) return 'document-detail.message.restore-version-forbidden';
+  if ((err as { status?: number })?.status === 409) {
+    return 'document-detail.message.restore-version-conflict';
+  }
+  return 'document-detail.message.failed-to-restore-version';
+}
+
 const MIME_BY_EXTENSION: Record<string, string> = {
   jpg: 'image/jpeg',
   jpeg: 'image/jpeg',
@@ -297,10 +310,20 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   selector: 'lib-document-detail',
   standalone: true,
   imports: [
+    NxsCommentExtraDirective,
+    NxsCommentsComponent,
+    NxsTagEditorComponent,
+    NxsDetailsPanelComponent,
+    NxsDocumentHistoryComponent,
+    NxsDocumentToolbarComponent,
     NxsErrorStateComponent,
+    NxsManageVersionsComponent,
+    NxsPropertiesPanelComponent,
     NxsSpinnerComponent,
+    NxsTabBodyDirective,
+    NxsTabsComponent,
+    NxsTagComponent,
     CdkAriaLive,
-    DescriptorLabelPipe,
     TranslatePipe,
     DatePipe,
     NgTemplateOutlet,
@@ -308,8 +331,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatIconModule,
     MatButtonModule,
     MatProgressSpinnerModule,
-    MatTabsModule,
-    MatTabListKeydownDirective,
     MatTooltipModule,
     MatMenuModule,
     MatDialogModule,
@@ -317,12 +338,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatDatepickerModule,
-    MatSortModule,
-    MatTableModule,
-    MatPaginatorModule,
-    MatChipsModule,
-    MatAutocompleteModule,
     DocumentLayoutComponent,
     DocumentViewerComponent,
     ExtensionOutletComponent,
@@ -337,10 +352,9 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   styleUrls: [
     './document-detail.scss',
     './document-detail-go-back-icon.scss',
-    './document-detail-tag-chip-remove-icon.scss',
     './document-detail-go-back-focus.scss',
-    './document-detail-panel-close-focus.scss',
-    './document-detail-tab-focus.scss',
+    './document-detail-panel-toggle-focus.scss',
+    './document-detail-version-banner.scss',
   ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {
@@ -360,6 +374,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly http = inject(HttpClient);
   private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
+  private readonly appConfig = inject(AppConfigService);
   private readonly nuxeoApi = inject(NuxeoApiBase);
   private readonly taskService = inject(TaskService);
   private readonly workflowService = inject(WorkflowService);
@@ -375,9 +390,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   private readonly kdClient = inject(KdClientService);
   private readonly aiChatService = inject(AiChatService);
   readonly featureFlags = inject(AiFeatureFlagService);
-
-  /** Programmatic tab switches (e.g. Publishing link). */
-  private readonly detailTabGroup = viewChild<MatTabGroup>('detailTabGroup');
 
   readonly doc = signal<NuxeoDocument | null>(null);
 
@@ -420,22 +432,41 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   });
 
-  private readonly toolbarDescriptors = computed<readonly ExtensionActionDescriptor[]>(() =>
+  /** The toolbar actions this document is offered, overflow included, with every rule applied. */
+  readonly toolbarActions = computed<readonly ExtensionActionDescriptor[]>(() =>
     this.extensions.resolve<ExtensionActionDescriptor>(
       EXTENSION_SLOTS.toolbar,
       this.extensionRuleContext.context(),
     ),
   );
 
-  /** Inline toolbar controls — everything the descriptor list does not send to overflow. */
-  readonly toolbarActions = computed(() =>
-    this.toolbarDescriptors().filter((action) => !action.overflow),
+  /** Ticks when the language or its catalogue changes, so `instant` lookups in computeds re-run. */
+  private readonly translationTick = toSignal(
+    merge(
+      this.translate.onLangChange,
+      this.translate.onTranslationChange,
+      this.translate.onDefaultLangChange,
+    ).pipe(map((_, index) => index)),
+    { initialValue: -1 },
   );
 
-  /** The "More actions" menu. `overflow: false` in a manifest promotes an entry out of it. */
-  readonly overflowActions = computed(() =>
-    this.toolbarDescriptors().filter((action) => action.overflow),
-  );
+  /**
+   * The toolbar slot, resolved for `nxs-document-toolbar`: labels translated, enabled rules
+   * evaluated, and the Unlock tooltip naming who holds the lock. `overflow` sends an entry to the
+   * "More actions" menu; `overflow: false` in a manifest promotes it out.
+   */
+  readonly toolbarEntries = computed<readonly NxsToolbarAction[]>(() => {
+    this.translationTick();
+    return this.toolbarActions().map((action) => ({
+      id: action.id,
+      label: descriptorLabel(action, (key) => this.translate.instant(key)),
+      icon: action.icon,
+      tooltip: this.toolbarTooltip(action),
+      disabled: !this.isToolbarActionEnabled(action),
+      active: this.isToolbarActionActive(action),
+      overflow: !!action.overflow,
+    }));
+  });
 
   /**
    * The tab strip, resolved through Layer 1.
@@ -451,6 +482,22 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       this.extensionRuleContext.context(),
     ),
   );
+
+  /** The tab strip for `nxs-tabs`: labels translated, so a language change relabels it. */
+  readonly detailTabEntries = computed<readonly NxsTab[]>(() => {
+    this.translationTick();
+    return this.detailTabs().map((tab) => ({
+      id: tab.id,
+      label: descriptorLabel(tab, (key) => this.translate.instant(key)),
+      icon: tab.icon,
+    }));
+  });
+
+  /** The component a contributed tab renders: its `componentId`, else its own ID. */
+  tabComponentId(id: string): string {
+    const tab = this.detailTabs().find((candidate) => candidate.id === id);
+    return tab?.componentId ?? id;
+  }
 
   /**
    * The View tab body contributed for this document, or `null` for the packaged view.
@@ -526,6 +573,31 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly arenderReloadId = signal(0);
   readonly propertiesPanelOpen = signal(true);
   readonly panelSubTab = signal<'properties' | 'comments' | 'activity'>('properties');
+  private readonly panelToggle = viewChild('panelToggle', { read: ElementRef });
+  private readonly publicationsHeading = viewChild('publicationsHeading', { read: ElementRef });
+  /** Web UI's side pane offers Comments only on a document with the `Commentable` facet. */
+  readonly panelViews = computed<readonly NxsDetailsPanelTab[]>(() => {
+    this.translationTick();
+    const view = (id: string) => ({
+      id,
+      label: this.translate.instant(`document-detail.document-detail.${id}`),
+    });
+    const commentable = this.doc()?.facets?.includes('Commentable') ?? false;
+    return [view('properties'), ...(commentable ? [view('comments')] : []), view('activity')];
+  });
+  readonly activePanelView = computed(() => {
+    const selected = this.panelSubTab();
+    return this.panelViews().some((view) => view.id === selected) ? selected : 'properties';
+  });
+  readonly vocabularyLabel = computed<NxsVocabularyLabel>(() => {
+    const nature = this.natureVocabulary();
+    const coverage = this.coverageVocabulary();
+    const subjects = this.subjectVocabulary();
+    return (directory, id) =>
+      directory === 'nature'
+        ? resolveNatureLabel(id, nature)
+        : formatHierarchicalL10nLabel(id, directory === 'l10ncoverage' ? coverage : subjects);
+  });
   /**
    * The unwrapped object URL behind `blobUrl`. Public and a signal because the template forwards
    * it to `lib-document-viewer[rawBlobUrl]` for the three `SecurityContext.NONE` bindings
@@ -588,37 +660,13 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly coverageVocabulary = signal<L10nDirectoryEntry[]>([]);
   readonly subjectVocabulary = signal<L10nDirectoryEntry[]>([]);
 
-  // Tag management state (nuxeo-tag-suggestion style)
-  tagInput = '';
-  readonly tagSearchResults = signal<string[]>([]);
-  readonly showCreateTagOption = signal(false);
-  readonly tagAdding = signal(false);
-  private readonly tagSearch$ = new Subject<string>();
-  /** Autocomplete selection also fires matChipInputTokenEnd — skip the duplicate add. */
-  private skipNextChipInput = false;
-
-  // Comments state
-  readonly comments = signal<NuxeoComment[]>([]);
-  readonly commentsLoading = signal(false);
-  readonly newCommentText = signal('');
-  readonly editingCommentId = signal<string | null>(null);
-  readonly editingCommentText = signal('');
-  readonly commentSaving = signal(false);
-  readonly repliesMap = signal<Record<string, NuxeoComment[]>>({});
-  readonly replyingToId = signal<string | null>(null);
-  readonly replyText = signal('');
-  private commentsLoaded = false;
+  /** The thread `nxs-comments` loaded, comments and replies, for the sentiment analysis. */
+  readonly comments = signal<readonly NuxeoComment[]>([]);
 
   // Panel activity state (recent activity for the side panel)
   readonly panelActivity = signal<AuditEntry[]>([]);
   readonly panelActivityLoading = signal(false);
   private panelActivityLoaded = false;
-
-  // Version state
-  readonly versions = signal<NuxeoDocument[]>([]);
-  readonly versionsLoading = signal(false);
-  readonly versionDropdownOpen = signal(false);
-  private versionsLoaded = false;
 
   readonly currentMajor = computed(() => {
     const d = this.doc();
@@ -657,40 +705,18 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly clipboardDocs = signal<ClipboardDoc[]>(readClipboardDocs());
   readonly isInClipboard = computed(() => this.clipboardDocs().some((d) => d.uid === this.docUid));
 
-  // History tab state
-  readonly auditEntries = signal<AuditEntry[]>([]);
-  readonly auditLoading = signal(false);
-  readonly auditTotalSize = signal(0);
-  readonly auditPageSize = signal(20);
-  readonly auditPageIndex = signal(0);
-  readonly historyDisplayedColumns = [
-    'eventId',
-    'eventDate',
-    'principalName',
-    'category',
-    'comment',
-    'docLifeCycle',
-  ];
-  private historyLoaded = false;
   private permissionsTabLoaded = false;
-  private activeTabIndex = signal(0);
+  /**
+   * `nxs-document-history` reads the audit trail and its vocabularies when it is created, and a tab
+   * body is created with the page, so it is rendered only once its tab has been shown.
+   */
+  readonly historyShown = signal(false);
+  readonly activeTabIndex = signal(0);
   readonly permissionsLoading = signal(false);
 
-  // History filters (signals so computed() reacts)
-  readonly filterUsername = signal('');
-  readonly filterDateFrom = signal<Date | null>(null);
-  readonly filterDateTo = signal<Date | null>(null);
-  readonly filterAction = signal('');
-  readonly filterCategory = signal('');
-
-  readonly availableActions = signal<DirectoryEntry[]>([]);
-  readonly availableCategories = signal<DirectoryEntry[]>([]);
-  private eventTypeLabelMap = new Map<string, string>();
-  private eventCategoryLabelMap = new Map<string, string>();
-
-  // Sort state
-  private sortActive = signal('');
-  private sortDirection = signal<'asc' | 'desc' | ''>('');
+  /** The `eventTypes` vocabulary's labels, for the side panel's activity; read once. */
+  private readonly eventTypeLabels = signal(new Map<string, string>());
+  private eventTypesRequested = false;
 
   // Publishing tab state
   readonly publishedDocs = signal<NuxeoDocument[]>([]);
@@ -712,10 +738,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /** A document whose body is note text, edited in the note editor, with no main file. */
   readonly isNoteDocument = computed(() => this.packagedDocumentView() === 'noteEditor');
-  readonly hasPersistedMainBlob = computed(() => {
-    const d = this.doc();
-    return d ? documentHasPersistedMainBlob(d) : false;
-  });
   readonly noteFormatDisplay = computed(() => noteFormatLabel(this.mimeType()));
   readonly noteEditorBody = computed(() => this.noteContent() ?? '');
   /** Parent folder for note RTE image uploads (Web UI stores uploaded pictures in the repository). */
@@ -796,19 +818,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return d.isCheckedOut ? `${label}+` : label;
   });
 
-  readonly docState = computed(() => {
-    const d = this.doc();
-    if (!d) return '';
-    return d.state ?? '';
-  });
-
   readonly publicationCount = computed(() => this.publishedDocs().length);
-
-  readonly contributors = computed(() => {
-    const d = this.doc();
-    if (!d) return [];
-    return (d.properties['dc:contributors'] as string[]) ?? [];
-  });
 
   readonly tags = computed(() => {
     const d = this.doc();
@@ -817,39 +827,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!raw) return [];
     return raw.map((t) => (typeof t === 'string' ? t : t.label));
   });
-
-  readonly description = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:description'] as string) ?? '';
-  });
-
-  readonly documentCategory = computed(() => {
-    const d = this.doc();
-    const id = (d?.properties['dc:nature'] as string) ?? '';
-    if (!id) return '';
-    return resolveNatureLabel(id, this.natureVocabulary());
-  });
-
-  readonly documentCoverage = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:coverage'] as string) ?? '';
-  });
-
-  readonly documentCoverageDisplay = computed(() =>
-    formatHierarchicalL10nLabel(this.documentCoverage(), this.coverageVocabulary()),
-  );
-
-  readonly documentSubjects = computed(() => {
-    const d = this.doc();
-    const subjects = d?.properties['dc:subjects'] as string[] | undefined;
-    return subjects ?? [];
-  });
-
-  readonly documentSubjectsDisplay = computed(() =>
-    this.documentSubjects()
-      .map((id) => formatHierarchicalL10nLabel(id, this.subjectVocabulary()))
-      .join(', '),
-  );
 
   readonly fileMimeType = computed(() => {
     const d = this.doc();
@@ -893,66 +870,80 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       }));
   });
 
-  /** Mirrors nuxeo-web-ui `nuxeo-document-collections`: shows each entry's `title`. */
-  readonly collections = computed(() => {
-    const d = this.doc();
-    if (!d) return [];
-    const cols = d.contextParameters?.['collections'] as
-      Array<{ uid: string; title: string; path: string; type?: string }> | undefined;
-    // Web UI uses contextParameters.favorites for the star; collections enricher
-    // also lists the Favorites folder (type Favorites) — exclude it here.
-    return (cols ?? []).filter((col) => col.type !== 'Favorites');
-  });
-
-  /** Mirrors nuxeo-ui-elements FiltersBehavior.hasCollections (section hidden when false). */
-  readonly hasCollections = computed(() => this.collections().length > 0);
-
-  readonly creator = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:creator'] as string) ?? '';
-  });
-
-  readonly created = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:created'] as string) ?? '';
-  });
-
-  readonly modified = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:modified'] as string) ?? d?.lastModified ?? '';
-  });
-
-  readonly expires = computed(() => {
-    const d = this.doc();
-    return (d?.properties['dc:expired'] as string) ?? '';
-  });
-
   // Permissions tab computed
-  readonly externalAces = computed<NuxeoAce[]>(() => {
+  /**
+   * Web UI's external-user card: granted, pending or effective shares on the document's own ACLs.
+   * An inherited share is the parent's to edit, and an archived one has expired.
+   */
+  readonly externalAces = computed<(NuxeoAce & { aclName: string })[]>(() => {
     const d = this.doc();
     const acls = d?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces.map((ace) => ({ ...ace, aclName: acl.name })))
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
+  /** Web UI's `org.nuxeo.web.ui.permissions.externalUsers`, on unless a package turns it off. */
+  readonly showExternalShares = computed(() =>
+    this.appConfig.featureToggle('permissions.externalUsers', true),
+  );
+  private readonly visiblePermissions = computed(
+    () => this.doc()?.contextParameters?.['userVisiblePermissions'] as string[] | undefined,
+  );
 
-  readonly canManagePermissions = computed(() => canManageDocumentPermissions(this.doc()));
+  /**
+   * The page is showing a version rather than the live document.
+   *
+   * A version's `permissions` enricher repeats the live document's — `Write`, `WriteSecurity`
+   * and the rest — while the server refuses to modify it, so the enricher alone would render
+   * every edit control. The write gates below therefore also ask this.
+   */
+  readonly isVersionView = computed(() => this.doc()?.isVersion === true);
+
+  readonly canManagePermissions = computed(
+    () => !this.isVersionView() && canManageDocumentPermissions(this.doc()),
+  );
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
-  readonly canWriteDoc = computed(() => canWriteDocument(this.doc()));
+  readonly canWriteDoc = computed(() => !this.isVersionView() && canWriteDocument(this.doc()));
+  /** Web UI's `isTaggable`: Write on the document itself, not a version or a proxy. */
+  readonly canTag = computed(() => canTagDocument(this.doc()));
   readonly canRemoveDoc = computed(() => canRemoveDocument(this.doc()));
+
+  /** `Document.RestoreVersion` is checked against `WriteVersion`, not `Write`. */
+  readonly canRestoreVersion = computed(
+    () => this.isVersionView() && hasDocumentPermission(this.doc(), WRITE_VERSION),
+  );
+  /** The Publishing tab's own Publish, gated as the toolbar's is (`app.rules.canPublish`). */
+  readonly canPublish = computed(() => canPublishDocument(this.doc()));
+
+  /** Web UI's `_canUnpublish`: `WriteVersion` on the publication itself, not on this document. */
+  canUnpublish(pub: NuxeoDocument): boolean {
+    return hasDocumentPermission(pub, WRITE_VERSION);
+  }
+
+  /** Web UI's `_canRepublish`: an older version is published, or this one with changes since. */
+  canRepublish(pub: NuxeoDocument): boolean {
+    if (!this.canUnpublish(pub)) return false;
+    const sameVersion =
+      Number(pub.properties?.['uid:major_version'] ?? 0) === this.currentMajor() &&
+      Number(pub.properties?.['uid:minor_version'] ?? 0) === this.currentMinor();
+    return this.isOlderVersion(pub) || (sameVersion && this.doc()?.isCheckedOut === true);
+  }
 
   permissionLabel(permission: string): string {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -963,49 +954,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const creator = ace.creator ? resolveAcePrincipal(ace.creator) : '';
     return creator || '—';
   }
-
-  readonly filteredAuditEntries = computed(() => {
-    let entries = this.auditEntries();
-    const username = this.filterUsername();
-    const dateFrom = this.filterDateFrom();
-    const dateTo = this.filterDateTo();
-    const action = this.filterAction();
-    const category = this.filterCategory();
-    const active = this.sortActive();
-    const direction = this.sortDirection();
-
-    if (username) {
-      const lower = username.toLowerCase();
-      entries = entries.filter((e) => e.principalName.toLowerCase().includes(lower));
-    }
-    if (dateFrom) {
-      const from = dateFrom.getTime();
-      entries = entries.filter((e) => new Date(e.eventDate).getTime() >= from);
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      to.setHours(23, 59, 59, 999);
-      entries = entries.filter((e) => new Date(e.eventDate).getTime() <= to.getTime());
-    }
-    if (action) {
-      entries = entries.filter((e) => e.eventId === action);
-    }
-    if (category) {
-      entries = entries.filter((e) => e.category === category);
-    }
-
-    if (active && direction) {
-      const dir = direction === 'asc' ? 1 : -1;
-      const key = active as keyof AuditEntry;
-      entries = [...entries].sort((a, b) => {
-        const va = a[key] ?? '';
-        const vb = b[key] ?? '';
-        return va < vb ? -dir : va > vb ? dir : 0;
-      });
-    }
-
-    return entries;
-  });
 
   /** `enabledRule` renders a control disabled rather than hiding it. */
   isToolbarActionEnabled(action: ExtensionActionDescriptor): boolean {
@@ -1019,6 +967,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   runToolbarAction(action: ExtensionActionDescriptor): void {
     if (!this.isToolbarActionEnabled(action)) return;
     this.actionRegistry.execute(action, this.extensionRuleContext.context());
+  }
+
+  runToolbarEntry(entry: NxsToolbarAction): void {
+    const action = this.toolbarActions().find((candidate) => candidate.id === entry.id);
+    if (action) this.runToolbarAction(action);
   }
 
   /** A manifest's `tooltip` wins; otherwise Unlock names who holds the lock. Null falls back to the label. */
@@ -1086,25 +1039,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.registerToolbarHandlers();
-    this.tagSearch$
-      .pipe(
-        debounceTime(250),
-        distinctUntilChanged(),
-        switchMap((term) =>
-          term.length > 0
-            ? this.tagService.searchTags(term).pipe(catchError(() => of([])))
-            : of([]),
-        ),
-        takeUntilDestroyed(this.destroyRef),
-      )
-      .subscribe((results) => {
-        const existing = this.tags();
-        const filtered = results.filter((r) => !existing.includes(r));
-        this.tagSearchResults.set(filtered);
-        const exactMatch = results.some((r) => r.toLowerCase() === this.tagInput.toLowerCase());
-        this.showCreateTagOption.set(this.tagInput.trim().length > 0 && !exactMatch);
-      });
-
     this.route.paramMap.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((params) => {
       const uid = params.get('uid');
       if (!uid) {
@@ -1184,13 +1118,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.arenderUrl.set(null);
     this.error.set(null);
     this.comments.set([]);
-    this.repliesMap.set({});
-    this.commentsLoaded = false;
     this.panelActivity.set([]);
     this.panelActivityLoaded = false;
-    this.versions.set([]);
-    this.versionsLoaded = false;
-    this.versionDropdownOpen.set(false);
+    this.actionInProgress.set(null);
+    this.showStartProcessPanel.set(false);
     this.documentTasks.set([]);
     this.documentWorkflows.set([]);
     this.keActionInFlight.set(null);
@@ -1202,9 +1133,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.contentLakePresenceVerified.set(false);
     this.contentLakePresenceChecking.set(false);
     this.panelSubTab.set('properties');
-    this.historyLoaded = false;
     this.permissionsTabLoaded = false;
     this.publishTabLoaded = false;
+    this.historyShown.set(this.activeTabId() === 'app.tabs.history');
+    // Not just the `publishTabLoaded` flag above: `loadPublishingData()` skips its own fetch
+    // while this array is non-empty, so the previous document's entries would both show in the
+    // side panel's count and keep Unpublish pointing at its proxies — indefinitely if the new
+    // document's count request then failed.
+    this.publishedDocs.set([]);
+    this.publishLoading.set(false);
   }
 
   generateSummary(): void {
@@ -1252,7 +1189,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   applyAiTag(tagLabel: string): void {
     if (!this.docUid) return;
     this.tagService.addTag(this.docUid, tagLabel).subscribe({
-      next: () => {
+      next: (labels) => {
+        this.setTags(labels);
         this.aiSuggestedTags.update((tags) => tags.filter((t) => t.label !== tagLabel));
         this.toast.show(this.translate.instant('common.tag-applied', { name: tagLabel }));
       },
@@ -1261,97 +1199,15 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     });
   }
 
-  onTagSearch(term: string): void {
-    this.tagSearch$.next(term);
-  }
-
-  selectTag(event: MatAutocompleteSelectedEvent): void {
-    const label = String(event.option.value ?? '').trim();
-    if (!label) return;
-    this.skipNextChipInput = true;
-    this.clearTagInput();
-    event.option.deselect();
-    this.applyInlineTag(label);
-  }
-
-  addInlineTagFromChip(event: MatChipInputEvent): void {
-    if (this.skipNextChipInput) {
-      this.skipNextChipInput = false;
-      event.chipInput.clear();
-      this.clearTagInput();
-      return;
-    }
-    const label = (event.value ?? '').trim();
-    event.chipInput.clear();
-    this.clearTagInput();
-    if (label) this.applyInlineTag(label);
-  }
-
-  private clearTagInput(): void {
-    this.tagInput = '';
-    this.tagSearchResults.set([]);
-    this.showCreateTagOption.set(false);
-    this.tagSearch$.next('');
-  }
-
-  private applyInlineTag(label: string): void {
-    if (!label || !this.docUid || this.tagAdding()) return;
-    this.tagAdding.set(true);
-    this.tagService
-      .addTag(this.docUid, label)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.doc.update((d) => {
-            if (!d) return d;
-            const raw = (d.properties['nxtag:tags'] as Array<{ label: string } | string>) ?? [];
-            const normalized: Array<{ label: string }> = raw.map((t) =>
-              typeof t === 'string' ? { label: t } : t,
-            );
-            const alreadyExists = normalized.some((t) => t.label === label);
-            return {
-              ...d,
-              properties: {
-                ...d.properties,
-                'nxtag:tags': alreadyExists ? normalized : [...normalized, { label }],
-              },
-            };
-          });
-          this.clearTagInput();
-          this.tagAdding.set(false);
+  /** Keeps the document's `nxtag:tags` in step with what Nuxeo answered to a tag change. */
+  setTags(labels: readonly string[]): void {
+    this.doc.update(
+      (d) =>
+        d && {
+          ...d,
+          properties: { ...d.properties, 'nxtag:tags': labels.map((label) => ({ label })) },
         },
-        error: () => {
-          this.toast.error(this.translate.instant('browse.message.failed-to-add-tag'));
-          this.tagAdding.set(false);
-        },
-      });
-  }
-
-  removeInlineTag(tagLabel: string): void {
-    if (!this.docUid) return;
-    this.tagService
-      .removeTag(this.docUid, tagLabel)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: () => {
-          this.doc.update((d) => {
-            if (!d) return d;
-            const raw = (d.properties['nxtag:tags'] as Array<{ label: string } | string>) ?? [];
-            const normalized: Array<{ label: string }> = raw.map((t) =>
-              typeof t === 'string' ? { label: t } : t,
-            );
-            return {
-              ...d,
-              properties: {
-                ...d.properties,
-                'nxtag:tags': normalized.filter((t) => t.label !== tagLabel),
-              },
-            };
-          });
-        },
-        error: () =>
-          this.toast.error(this.translate.instant('browse.message.failed-to-remove-tag')),
-      });
+    );
   }
 
   classifyDocument(): void {
@@ -1736,6 +1592,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private maybeBackfillContentLakeMarker(doc: NuxeoDocument): void {
+    // The backfill writes the marker to the document, and a version is read-only.
+    if (doc.isVersion) return;
     if (!shouldProbeContentLakeIngestStatus(doc)) {
       if (isContentLakeIngestCurrent(doc)) {
         this.contentLakePresenceVerified.set(true);
@@ -1811,10 +1669,6 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           if (this.activeTabId() === 'app.tabs.permissions') {
             this.reloadDocumentPermissions();
           }
-          if (this.activeTabId() === 'app.tabs.history' && !this.historyLoaded) {
-            this.loadDirectoryEntries();
-            this.loadAuditLog();
-          }
           if (this.panelSubTab() === 'activity' && !this.panelActivityLoaded) {
             this.loadPanelActivity();
           }
@@ -1843,20 +1697,37 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   private loadDocumentTasks(uid: string): void {
     this.documentTasksLoading.set(true);
+    const generation = this.documentLoadGeneration;
     const userId = this.currentUsername() ?? 'Administrator';
     this.taskService.getDocumentTasks(uid, userId).subscribe({
       next: (tasks) => {
+        if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.documentTasks.set(tasks);
         this.documentTasksLoading.set(false);
       },
-      error: () => this.documentTasksLoading.set(false),
+      error: () => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentTasksLoading.set(false);
+        }
+      },
     });
   }
 
   private loadDocumentWorkflows(uid: string): void {
+    // A late answer for the document the route left would put its workflow banner, and
+    // its Abandon button, on the page now showing another — a version, say.
+    const generation = this.documentLoadGeneration;
     this.workflowService.getDocumentWorkflows(uid).subscribe({
-      next: (wfs) => this.documentWorkflows.set(wfs),
-      error: () => this.documentWorkflows.set([]),
+      next: (wfs) => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentWorkflows.set(wfs);
+        }
+      },
+      error: () => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.documentWorkflows.set([]);
+        }
+      },
     });
   }
 
@@ -1885,16 +1756,21 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   openStartProcess(): void {
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.showStartProcessPanel.set(true);
     this.workflowsLoading.set(true);
-    this.detailService.getRunnableWorkflows(this.docUid).subscribe({
+    this.detailService.getRunnableWorkflows(requestedFor).subscribe({
       next: (models) => {
+        if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.availableWorkflows.set(models);
         this.workflowsLoading.set(false);
       },
       error: () => {
-        this.availableWorkflows.set([]);
-        this.workflowsLoading.set(false);
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.availableWorkflows.set([]);
+          this.workflowsLoading.set(false);
+        }
       },
     });
   }
@@ -2860,14 +2736,11 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.loadDataForTab(this.detailTabs()[index]?.id ?? null);
   }
 
-  /** The lazy loads the Permissions, History and Publishing tabs need on first show. */
+  /** The lazy loads the Permissions, Publishing and History tabs need on first show. */
   private loadDataForTab(id: string | null): void {
+    if (id === 'app.tabs.history') this.historyShown.set(true);
     if (id === 'app.tabs.permissions' && !this.permissionsTabLoaded) {
       this.reloadDocumentPermissions();
-    }
-    if (id === 'app.tabs.history' && !this.historyLoaded) {
-      this.loadDirectoryEntries();
-      this.loadAuditLog();
     }
     if (id === 'app.tabs.publishing' && !this.publishTabLoaded) {
       this.loadPublishingData();
@@ -2875,13 +2748,17 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private reloadDocumentPermissions(): void {
-    if (!this.docUid) return;
+    const requestedFor = this.docUid;
+    if (!requestedFor) return;
+    const generation = this.documentLoadGeneration;
     this.permissionsLoading.set(true);
     this.detailService
-      .getDocumentPermissions(this.docUid)
+      .getDocumentPermissions(requestedFor)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (updated) => {
+          // Late, this would put the previous document — or its permissions — on the page.
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           const existing = this.doc();
           if (!existing) {
             this.doc.set(updated);
@@ -2892,6 +2769,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
           this.permissionsLoading.set(false);
         },
         error: () => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.permissionsLoading.set(false);
           this.toast.error(
             this.translate.instant('document-detail.message.failed-to-refresh-permissions'),
@@ -2900,97 +2778,29 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       });
   }
 
-  private loadDirectoryEntries(): void {
-    forkJoin({
-      types: this.directoryService.getEventTypes(),
-      categories: this.directoryService.getEventCategories(),
-    }).subscribe({
-      next: ({ types, categories }) => {
-        this.availableActions.set(types);
-        this.availableCategories.set(categories);
-        this.eventTypeLabelMap = new Map(types.map((t) => [t.id, t.displayLabel]));
-        this.eventCategoryLabelMap = new Map(categories.map((c) => [c.id, c.displayLabel]));
-      },
-    });
-  }
-
-  loadAuditLog(): void {
-    if (!this.docUid) return;
-
-    const doc = this.doc();
-    if (!doc) {
-      this.auditLoading.set(false);
-      return;
-    }
-
-    if (!canViewDocumentAuditLog(doc)) {
-      this.auditEntries.set([]);
-      this.auditTotalSize.set(0);
-      this.auditLoading.set(false);
-      this.historyLoaded = true;
-      return;
-    }
-
-    this.auditLoading.set(true);
-
-    this.detailService
-      .getAuditLog(this.docUid, this.auditPageSize(), this.auditPageIndex())
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (res) => {
-          this.auditEntries.set(res.entries);
-          this.auditTotalSize.set(res.resultsCount ?? res.totalSize ?? res.entries.length);
-          this.auditLoading.set(false);
-          this.historyLoaded = true;
-        },
-        error: () => {
-          this.auditLoading.set(false);
-        },
-      });
-  }
-
-  onAuditPageChange(event: PageEvent): void {
-    this.auditPageSize.set(event.pageSize);
-    this.auditPageIndex.set(event.pageIndex);
-    this.loadAuditLog();
-  }
-
-  onAuditSort(sort: Sort): void {
-    this.sortActive.set(sort.active);
-    this.sortDirection.set(sort.direction);
-  }
-
-  eventLabel(eventId: string): string {
-    return (
-      this.eventTypeLabelMap.get(eventId) ??
-      eventId.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase())
-    );
-  }
-
-  categoryLabel(category: string): string {
-    return (
-      this.eventCategoryLabelMap.get(category) ??
-      category
-        .replace(/([A-Z])/g, ' $1')
-        .replace(/^./, (c) => c.toUpperCase())
-        .replace('event ', '')
-        .replace(' Category', '')
-    );
-  }
-
   avatarColor = avatarColor;
 
   tagCategory(index: number): SatTagCategory {
     return TAG_CATEGORIES[index % TAG_CATEGORIES.length];
   }
 
+  /**
+   * A version's publications are its live document's, as Web UI lists them: a proxy names the live
+   * document as its `proxyVersionableId`, so asking with the version's own uid finds none.
+   */
   private loadPublicationCount(uid: string): void {
-    this.detailService.getPublishedVersions(uid).subscribe({
+    const generation = this.documentLoadGeneration;
+    this.detailService.getPublishedVersions(this.liveDocumentUid()).subscribe({
       next: (res) => {
+        if (uid !== this.docUid || generation !== this.documentLoadGeneration) return;
         this.publishedDocs.set(res.entries);
         this.publishLoading.set(false);
       },
-      error: () => this.publishLoading.set(false),
+      error: () => {
+        if (uid === this.docUid && generation === this.documentLoadGeneration) {
+          this.publishLoading.set(false);
+        }
+      },
     });
   }
 
@@ -2999,12 +2809,19 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.sectionsLoading.set(true);
 
     if (this.publishedDocs().length === 0) {
-      this.detailService.getPublishedVersions(this.docUid).subscribe({
+      const requestedFor = this.docUid;
+      const generation = this.documentLoadGeneration;
+      this.detailService.getPublishedVersions(this.liveDocumentUid()).subscribe({
         next: (res) => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.publishedDocs.set(res.entries);
           this.publishLoading.set(false);
         },
-        error: () => this.publishLoading.set(false),
+        error: () => {
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.publishLoading.set(false);
+          }
+        },
       });
     } else {
       this.publishLoading.set(false);
@@ -3056,7 +2873,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   publishToSection(): void {
     const target = this.selectedSectionId();
-    if (!target || !this.docUid) return;
+    if (!target || !this.docUid || !this.canPublish()) return;
     this.publishing.set(true);
 
     this.detailService.publishDocument(this.docUid, target, { override: true }).subscribe({
@@ -3122,33 +2939,49 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     // By id, not by literal 4: a manifest that hides or reorders a tab moves it.
     const index = this.detailTabs().findIndex((tab) => tab.id === 'app.tabs.publishing');
     if (index < 0) return;
-    const g = this.detailTabGroup();
-    if (g) {
-      g.selectedIndex = index;
-    }
     this.onTabChange(index);
   }
 
   unpublishDocument(proxyDoc: NuxeoDocument): void {
     if (this.actionInProgress()) return;
-    this.actionInProgress.set('unpublish');
-    this.detailService.unpublishDocument(proxyDoc.uid).subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.publishedDocs.update((docs) => docs.filter((d) => d.uid !== proxyDoc.uid));
-        this.toast.show(this.translate.instant('document-detail.message.publication-removed'));
+    this.confirmPublicationAction(
+      'document-detail.document-detail.unpublish',
+      'document-detail.document-detail.unpublish-confirm',
+      () => {
+        this.actionInProgress.set('unpublish');
+        this.detailService
+          .unpublishDocument(proxyDoc.uid)
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: () => {
+              this.actionInProgress.set(null);
+              this.publishedDocs.update((docs) => docs.filter((d) => d.uid !== proxyDoc.uid));
+              this.focusPublicationsHeading();
+              this.toast.show(
+                this.translate.instant('document-detail.message.publication-removed'),
+              );
+            },
+            error: () => {
+              this.actionInProgress.set(null);
+              this.toast.error(
+                this.translate.instant('document-detail.message.failed-to-unpublish'),
+              );
+            },
+          });
       },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-unpublish'));
-      },
-    });
+    );
   }
 
   republishDocument(proxyDoc: NuxeoDocument): void {
     if (this.actionInProgress()) return;
-    this.actionInProgress.set('republish');
-    this.republishToSectionByProxy(proxyDoc);
+    this.confirmPublicationAction(
+      'document-detail.document-detail.republish',
+      'document-detail.document-detail.republish-confirm',
+      () => {
+        this.actionInProgress.set('republish');
+        this.republishToSectionByProxy(proxyDoc);
+      },
+    );
   }
 
   private republishToSectionByProxy(proxyDoc: NuxeoDocument): void {
@@ -3190,6 +3023,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       .subscribe({
         next: () => {
           this.actionInProgress.set(null);
+          this.focusPublicationsHeading();
           this.toast.show(this.translate.instant('document-detail.message.document-republished'));
           this.refreshPublishedDocs();
         },
@@ -3201,30 +3035,75 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   unpublishAll(): void {
-    const docs = this.publishedDocs();
-    if (docs.length === 0 || this.actionInProgress()) return;
-    this.actionInProgress.set('unpublish-all');
+    if (this.publishedDocs().length === 0 || this.actionInProgress()) return;
+    this.confirmPublicationAction(
+      'document-detail.document-detail.unpublish-all',
+      'document-detail.document-detail.unpublish-all-confirm',
+      () => {
+        const docs = this.publishedDocs();
+        if (docs.length === 0) return;
+        this.actionInProgress.set('unpublish-all');
+        const deletions = docs.map((d) => this.detailService.unpublishDocument(d.uid));
+        forkJoin(deletions)
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe({
+            next: () => {
+              this.actionInProgress.set(null);
+              this.publishedDocs.set([]);
+              this.focusPublicationsHeading();
+              this.toast.show(
+                this.translate.instant('document-detail.message.all-publications-removed'),
+              );
+            },
+            error: () => {
+              this.actionInProgress.set(null);
+              this.toast.error(
+                this.translate.instant(
+                  'document-detail.message.failed-to-remove-some-publications',
+                ),
+              );
+              this.refreshPublishedDocs();
+            },
+          });
+      },
+    );
+  }
 
-    const deletions = docs.map((d) => this.detailService.unpublishDocument(d.uid));
-    forkJoin(deletions).subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.publishedDocs.set([]);
-        this.toast.show(this.translate.instant('document-detail.message.all-publications-removed'));
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(
-          this.translate.instant('document-detail.message.failed-to-remove-some-publications'),
-        );
-        this.refreshPublishedDocs();
-      },
-    });
+  /**
+   * Web UI asks before each publication action (`nuxeo-document-publications`). On Cancel the
+   * dialog returns focus to the button that opened it.
+   */
+  private confirmPublicationAction(actionKey: string, questionKey: string, run: () => void): void {
+    const action = this.translate.instant(actionKey);
+    this.dialog
+      .open(ConfirmDialogComponent, {
+        data: {
+          title: action,
+          message: this.translate.instant(questionKey),
+          confirmLabel: action,
+        } as ConfirmDialogData,
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((confirmed) => {
+        if (confirmed && !this.actionInProgress()) run();
+      });
+  }
+
+  /** The button that ran a publication action may leave with its row, so focus goes to the heading. */
+  private focusPublicationsHeading(): void {
+    (this.publicationsHeading()?.nativeElement as HTMLElement | undefined)?.focus();
   }
 
   private refreshPublishedDocs(): void {
-    this.detailService.getPublishedVersions(this.docUid).subscribe({
-      next: (res) => this.publishedDocs.set(res.entries),
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
+    this.detailService.getPublishedVersions(this.liveDocumentUid()).subscribe({
+      next: (res) => {
+        if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+          this.publishedDocs.set(res.entries);
+        }
+      },
     });
   }
 
@@ -3518,7 +3397,8 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     if (!currentDoc || !this.requireWritePermission()) return;
 
     const ref = this.dialog.open(EditDocumentDialogComponent, {
-      width: '560px',
+      width: '720px',
+      maxWidth: '95vw',
       data: { document: currentDoc },
     });
 
@@ -3617,8 +3497,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return !d?.facets?.includes('Immutable') && d?.type !== 'Root';
   }
 
+  /**
+   * Through `canWriteDoc`, so a version is refused here too: a manifest may re-enable a write
+   * action's rule, and the handler must not then open an editor on a version.
+   */
   private requireWritePermission(): boolean {
-    if (canWriteDocument(this.doc())) return true;
+    if (this.canWriteDoc()) return true;
     this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
     return false;
   }
@@ -3752,221 +3636,12 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   // ── Panel Sub-Tab Switching ──
 
-  switchPanelSubTab(tab: 'properties' | 'comments' | 'activity'): void {
+  switchPanelSubTab(tab: string): void {
+    if (tab !== 'properties' && tab !== 'comments' && tab !== 'activity') return;
     this.panelSubTab.set(tab);
-    if (tab === 'comments' && !this.commentsLoaded) {
-      this.loadComments();
-    }
     if (tab === 'activity' && !this.panelActivityLoaded) {
       this.loadPanelActivity();
     }
-  }
-
-  // ── Comments ──
-
-  loadComments(): void {
-    if (!this.docUid) return;
-    this.commentsLoading.set(true);
-    this.detailService.getAllComments(this.docUid).subscribe({
-      next: (res) => {
-        const all = (res.entries ?? []).map((e) => ({
-          id: e.uid,
-          parentId: (e.properties['comment:parentId'] as string) ?? this.docUid,
-          text: (e.properties['comment:text'] as string) ?? '',
-          author: (e.properties['comment:author'] as string) ?? '',
-          creationDate:
-            (e.properties['comment:creationDate'] as string) ??
-            (e.properties['dc:created'] as string) ??
-            '',
-          modificationDate:
-            (e.properties['comment:modificationDate'] as string) ??
-            (e.properties['dc:modified'] as string) ??
-            '',
-        }));
-        const topLevel = all.filter((c) => c.parentId === this.docUid);
-        const replies: Record<string, NuxeoComment[]> = {};
-        for (const c of all) {
-          if (c.parentId !== this.docUid) {
-            if (!replies[c.parentId]) replies[c.parentId] = [];
-            replies[c.parentId].push(c);
-          }
-        }
-        this.comments.set(topLevel);
-        this.repliesMap.set(replies);
-        this.commentsLoading.set(false);
-        this.commentsLoaded = true;
-      },
-      error: () => this.commentsLoading.set(false),
-    });
-  }
-
-  submitComment(): void {
-    const text = this.newCommentText().trim();
-    if (!text || this.commentSaving() || !this.requireWritePermission()) return;
-    this.commentSaving.set(true);
-    this.detailService.createComment(this.docUid, text).subscribe({
-      next: (comment) => {
-        this.comments.update((list) => [comment, ...list]);
-        this.newCommentText.set('');
-        this.commentSaving.set(false);
-      },
-      error: () => {
-        this.commentSaving.set(false);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-add-comment'));
-      },
-    });
-  }
-
-  cancelNewComment(): void {
-    this.newCommentText.set('');
-  }
-
-  startEditComment(comment: NuxeoComment): void {
-    if (!this.requireWritePermission()) return;
-    this.editingCommentId.set(comment.id);
-    this.editingCommentText.set(comment.text);
-  }
-
-  cancelEditComment(): void {
-    this.editingCommentId.set(null);
-    this.editingCommentText.set('');
-  }
-
-  saveEditComment(): void {
-    const id = this.editingCommentId();
-    const text = this.editingCommentText().trim();
-    if (!id || !text || this.commentSaving() || !this.requireWritePermission()) return;
-    this.commentSaving.set(true);
-    this.detailService
-      .updateComment(this.docUid, id, text)
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (updated) => {
-          if (this.comments().some((c) => c.id === id)) {
-            this.comments.update((list) => list.map((c) => (c.id === id ? updated : c)));
-          } else {
-            this.repliesMap.update((map) => {
-              const next = { ...map };
-              for (const parentId of Object.keys(next)) {
-                const replies = next[parentId];
-                if (replies.some((r) => r.id === id)) {
-                  next[parentId] = replies.map((r) => (r.id === id ? updated : r));
-                  break;
-                }
-              }
-              return next;
-            });
-          }
-          this.editingCommentId.set(null);
-          this.editingCommentText.set('');
-          this.commentSaving.set(false);
-        },
-        error: () => {
-          this.commentSaving.set(false);
-          this.toast.error(
-            this.translate.instant('document-detail.message.failed-to-update-comment'),
-          );
-        },
-      });
-  }
-
-  deleteComment(comment: NuxeoComment, parentCommentId?: string): void {
-    if (!this.requireWritePermission()) return;
-    const isReply = !!parentCommentId;
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      data: {
-        title: this.translate.instant(isReply ? 'confirm.delete-reply' : 'confirm.delete-comment'),
-        message: this.translate.instant(
-          isReply ? 'confirm.delete-reply-question' : 'confirm.delete-comment-question',
-        ),
-        confirmLabel: this.translate.instant('confirm.delete'),
-      } as ConfirmDialogData,
-    });
-
-    dialogRef
-      .afterClosed()
-      .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((confirmed) => {
-        if (!confirmed) return;
-        this.detailService
-          .deleteComment(this.docUid, comment.id)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: () => {
-              if (parentCommentId) {
-                this.repliesMap.update((map) => ({
-                  ...map,
-                  [parentCommentId]: (map[parentCommentId] ?? []).filter(
-                    (r) => r.id !== comment.id,
-                  ),
-                }));
-                this.toast.show(this.translate.instant('document-detail.message.reply-deleted'));
-              } else {
-                this.comments.update((list) => list.filter((c) => c.id !== comment.id));
-                this.repliesMap.update((map) => {
-                  const { [comment.id]: _removed, ...rest } = map;
-                  return rest;
-                });
-                this.toast.show(this.translate.instant('document-detail.message.comment-deleted'));
-              }
-            },
-            error: () =>
-              this.toast.error(
-                this.translate.instant(
-                  isReply
-                    ? 'document-detail.message.failed-to-delete-reply'
-                    : 'document-detail.message.failed-to-delete-comment',
-                ),
-              ),
-          });
-      });
-  }
-
-  startReply(commentId: string): void {
-    if (!this.requireWritePermission()) return;
-    this.replyingToId.set(commentId);
-    this.replyText.set('');
-  }
-
-  cancelReply(): void {
-    this.replyingToId.set(null);
-    this.replyText.set('');
-  }
-
-  submitReply(commentId: string): void {
-    const text = this.replyText().trim();
-    if (!text || this.commentSaving() || !this.requireWritePermission()) return;
-    this.commentSaving.set(true);
-    this.detailService.createReply(this.docUid, commentId, text).subscribe({
-      next: (reply) => {
-        const correctedReply = { ...reply, parentId: commentId };
-        this.repliesMap.update((m) => ({
-          ...m,
-          [commentId]: [...(m[commentId] ?? []), correctedReply],
-        }));
-        this.replyingToId.set(null);
-        this.replyText.set('');
-        this.commentSaving.set(false);
-      },
-      error: () => {
-        this.commentSaving.set(false);
-        this.toast.error(this.translate.instant('document-detail.message.failed-to-add-reply'));
-      },
-    });
-  }
-
-  replyCount(commentId: string): number {
-    return (this.repliesMap()[commentId] ?? []).length;
-  }
-
-  lastReplyTime(commentId: string): string {
-    const replies = this.repliesMap()[commentId];
-    if (!replies?.length) return '';
-    return this.relativeTime(replies[replies.length - 1].creationDate);
-  }
-
-  isCommentEdited(comment: NuxeoComment): boolean {
-    return !!comment.modificationDate && comment.modificationDate !== comment.creationDate;
   }
 
   /**
@@ -3981,6 +3656,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   loadPanelActivity(): void {
     if (!this.docUid) return;
+    this.loadEventTypeLabels();
 
     const doc = this.doc();
     if (!doc) {
@@ -3996,66 +3672,55 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     }
 
     this.panelActivityLoading.set(true);
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     this.detailService
-      .getAuditLog(this.docUid, 20, 0)
+      .getAuditLog(requestedFor, 20, 0)
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
+          if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
           this.panelActivity.set(res.entries);
           this.panelActivityLoading.set(false);
           this.panelActivityLoaded = true;
         },
-        error: () => this.panelActivityLoading.set(false),
+        error: () => {
+          if (requestedFor === this.docUid && generation === this.documentLoadGeneration) {
+            this.panelActivityLoading.set(false);
+          }
+        },
       });
   }
 
   activityLabel(entry: AuditEntry): string {
-    return auditActivityLabel(entry, this.eventTypeLabelMap);
+    return auditActivityLabel(entry, this.eventTypeLabels());
+  }
+
+  /** The activity list names an event by its vocabulary label once the vocabulary is read. */
+  private loadEventTypeLabels(): void {
+    if (this.eventTypesRequested) return;
+    this.eventTypesRequested = true;
+    this.directoryService
+      .getEventTypes()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (types) =>
+          this.eventTypeLabels.set(new Map(types.map((t) => [t.id, t.displayLabel]))),
+        error: () => (this.eventTypesRequested = false),
+      });
   }
 
   // ── Versioning ──
 
-  openCreateVersionDialog(): void {
-    if (!this.requireWritePermission()) return;
-    const ref = this.dialog.open(CreateVersionDialogComponent, {
-      width: '600px',
-      maxWidth: '95vw',
-      panelClass: 'create-version-dialog-panel',
-      data: {
-        documentUid: this.docUid,
-        documentTitle: this.doc()?.title ?? '',
-        currentMajor: this.currentMajor(),
-        currentMinor: this.currentMinor(),
-      } satisfies CreateVersionDialogData,
-    });
-
-    ref.afterClosed().subscribe((result) => {
-      if (result) {
-        this.loadDocument(this.docUid);
-        this.versionsLoaded = false;
-        this.loadVersions();
-      }
-    });
+  /** `nxs-manage-versions` created one: the document is checked in at it now. */
+  onVersionCreated(): void {
+    this.loadDocument(this.docUid);
   }
 
-  toggleVersionDropdown(): void {
-    if (!this.versionsLoaded) {
-      this.loadVersions();
-    }
-    this.versionDropdownOpen.update((v) => !v);
-  }
-
-  loadVersions(): void {
-    if (!this.docUid) return;
-    this.versionsLoading.set(true);
-    this.detailService.getVersions(this.docUid).subscribe({
-      next: (res) => {
-        this.versions.set(res.entries ?? []);
-        this.versionsLoading.set(false);
-        this.versionsLoaded = true;
-      },
-      error: () => this.versionsLoading.set(false),
-    });
+  /** The live document — this one, or the one a version on screen belongs to. */
+  private liveDocumentUid(): string {
+    const d = this.doc();
+    return (d?.isVersion && d.versionableId) || this.docUid;
   }
 
   versionString(doc: NuxeoDocument): string {
@@ -4064,68 +3729,132 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return `${major}.${minor}`;
   }
 
-  restoreVersion(version: NuxeoDocument): void {
-    if (!this.requireWritePermission()) return;
-    this.versionDropdownOpen.set(false);
-    this.actionInProgress.set('restore');
-    this.detailService.restoreVersion(version.uid).subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.toast.show(
-          this.translate.instant('document-detail.restored-to-version', {
-            version: this.versionString(version),
+  /**
+   * Move between a document and its versions. The browse return mode is carried along, or the
+   * breadcrumb and back target of a document opened from adf-hx browse would reset after one
+   * version was opened.
+   */
+  private navigateWithinVersions(uid: string): void {
+    const returnMode = this.route.snapshot.queryParamMap.get(BROWSE_RETURN_MODE_PARAM);
+    void this.router.navigate(
+      ['/doc', uid],
+      returnMode ? { queryParams: { [BROWSE_RETURN_MODE_PARAM]: returnMode } } : {},
+    );
+  }
+
+  /** Open a version read-only. Choosing one from the list never restores it. */
+  openVersion(version: NuxeoDocument): void {
+    if (version.uid !== this.docUid) this.navigateWithinVersions(version.uid);
+  }
+
+  /** Leave a version for the live document it belongs to. */
+  showLatestVersion(): void {
+    const liveUid = this.liveDocumentUid();
+    if (liveUid !== this.docUid) this.navigateWithinVersions(liveUid);
+  }
+
+  /** Restoring replaces the live document's content, so it is confirmed first. */
+  confirmRestoreVersion(): void {
+    const version = this.doc();
+    if (!version || !this.canRestoreVersion() || this.actionInProgress()) return;
+    const label = this.versionString(version);
+    this.dialog
+      .open(ConfirmDialogComponent, {
+        data: {
+          title: this.translate.instant('document-detail.version-restore-confirm-title'),
+          message: this.translate.instant('document-detail.version-restore-replaces-content', {
+            version: label,
           }),
-        );
-        this.loadDocument(this.docUid);
-        this.versionsLoaded = false;
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast.error(
-          this.translate.instant('document-detail.message.failed-to-restore-version'),
-        );
-      },
-    });
+          confirmLabel: this.translate.instant('document-detail.version-restore', {
+            version: label,
+          }),
+        } as ConfirmDialogData,
+      })
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((confirmed) => {
+        if (confirmed) this.restoreVersion(version);
+      });
+  }
+
+  restoreVersion(version: NuxeoDocument): void {
+    if (!hasDocumentPermission(version, WRITE_VERSION)) {
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
+      return;
+    }
+    const generation = this.documentLoadGeneration;
+    const versionUid = version.uid;
+    this.actionInProgress.set('restore');
+    this.detailService
+      .restoreVersion(versionUid)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: () => {
+          if (generation !== this.documentLoadGeneration) return;
+          this.actionInProgress.set(null);
+          this.toast.show(
+            this.translate.instant('document-detail.restored-to-version', {
+              version: this.versionString(version),
+            }),
+          );
+          const liveUid = version.versionableId;
+          if (liveUid && liveUid !== this.docUid) {
+            this.navigateWithinVersions(liveUid);
+          } else {
+            this.loadDocument(this.docUid);
+          }
+        },
+        error: (err: unknown) => {
+          if (generation !== this.documentLoadGeneration) return;
+          this.actionInProgress.set(null);
+          this.toast.error(this.translate.instant(restoreVersionErrorKey(err)));
+        },
+      });
   }
 
   // ── Publish ──
 
+  /**
+   * Web UI's `isPublishable`, so a version is published as it is: `Document.PublishToSection`
+   * runs on the document on screen, and the dialog lists the live document's versions.
+   */
   openPublishDialog(): void {
-    if (!this.requireWritePermission()) return;
+    const doc = this.doc();
+    if (!doc || !canPublishDocument(doc)) {
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
+      return;
+    }
+    const requestedFor = this.docUid;
+    const generation = this.documentLoadGeneration;
     const openDialog = (versions: NuxeoDocument[]) => {
-      const renditions = this.buildRenditionOptions();
-      const ref = this.dialog.open(PublishDialogComponent, {
-        width: '620px',
-        panelClass: 'publish-dialog-panel',
-        data: {
-          documentUid: this.docUid,
-          documentTitle: this.doc()?.title ?? '',
-          versionLabel: this.versionLabel(),
-          renditions,
-          versions,
-        } satisfies PublishDialogData,
-      });
-
-      ref.afterClosed().subscribe((published) => {
-        if (published) {
+      if (requestedFor !== this.docUid || generation !== this.documentLoadGeneration) return;
+      this.dialog
+        .open(PublishDialogComponent, {
+          width: '620px',
+          panelClass: 'publish-dialog-panel',
+          data: {
+            documentUid: doc.uid,
+            documentTitle: doc.title,
+            versionLabel: this.versionLabel(),
+            renditions: this.buildRenditionOptions(),
+            versions,
+          } satisfies PublishDialogData,
+        })
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((published) => {
+          if (!published) return;
           this.publishTabLoaded = false;
-        }
-      });
+          this.refreshPublishedDocs();
+        });
     };
-
-    if (this.versionsLoaded) {
-      openDialog(this.versions());
-    } else {
-      this.detailService.getVersions(this.docUid).subscribe({
-        next: (res) => {
-          const entries = res.entries ?? [];
-          this.versions.set(entries);
-          this.versionsLoaded = true;
-          openDialog(entries);
-        },
+    this.detailService
+      .getVersionsDirect(this.liveDocumentUid())
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (versions) => openDialog(versions),
         error: () => openDialog([]),
       });
-    }
   }
 
   private buildRenditionOptions(): { name: string; label: string }[] {
@@ -4184,16 +3913,16 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     this.dialog.open(NxsDriveDialogComponent, { data });
   }
 
-  deletePermission(ace: NuxeoAce): void {
-    const ref = this.dialog.open(DeletePermissionDialogComponent, {
+  deletePermission(ace: NuxeoAce & { aclName?: string }): void {
+    const ref = this.dialog.open(NxsDeletePermissionDialogComponent, {
       width: '560px',
+      maxWidth: '95vw',
+      role: 'alertdialog',
       data: {
         documentUid: this.docUid,
         ace,
-        permissionLabel: this.permissionLabel(ace.permission),
-        timeFrameLabel: this.aceTimeFrame(ace),
-      } satisfies DeletePermissionDialogData,
-      autoFocus: false,
+        acl: ace.aclName,
+      } satisfies NxsDeletePermissionDialogData,
     });
     ref
       .afterClosed()
@@ -4207,23 +3936,19 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   editExternalPermission(ace: NuxeoAce): void {
-    const ref = this.dialog.open(UpdatePermissionDialogComponent, {
-      width: '520px',
+    const ref = this.dialog.open(NxsUpdatePermissionDialogComponent, {
+      maxWidth: '95vw',
       data: {
         documentUid: this.docUid,
         ace,
-        isExternal: true,
-      } satisfies UpdatePermissionDialogData,
-      autoFocus: false,
+        permissions: this.visiblePermissions(),
+      } satisfies NxsUpdatePermissionDialogData,
     });
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe((updated: boolean | undefined) => {
-        if (updated) {
-          this.toast.show(this.translate.instant('browse.message.permission-updated'));
-          this.reloadDocumentPermissions();
-        }
+        if (updated) this.reloadDocumentPermissions();
       });
   }
 
@@ -4251,20 +3976,16 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   openExternalPermissionDialog(): void {
     if (!this.docUid) return;
-    const data: ShareExternalDialogData = { documentUid: this.docUid };
-    const ref = this.dialog.open(ShareExternalDialogComponent, {
-      width: '540px',
-      data,
-      autoFocus: false,
-    });
+    const data: NxsShareExternalDialogData = {
+      documentUid: this.docUid,
+      permissions: this.visiblePermissions(),
+    };
+    const ref = this.dialog.open(NxsShareExternalDialogComponent, { maxWidth: '95vw', data });
     ref
       .afterClosed()
       .pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe((saved: boolean | undefined) => {
-        if (saved) {
-          this.reloadDocumentPermissions();
-          this.toast.show(this.translate.instant('browse.message.shared-with-external-user'));
-        }
+      .subscribe((shared: boolean | undefined) => {
+        if (shared) this.reloadDocumentPermissions();
       });
   }
 
@@ -4434,8 +4155,10 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       : 'document-detail.show-details';
   }
 
+  /** The close button leaves with the panel, so focus goes to the button that reopens it. */
   closePropertiesPanel(): void {
     this.propertiesPanelOpen.set(false);
+    (this.panelToggle()?.nativeElement as HTMLElement | undefined)?.focus();
   }
 
   openPropertiesPanel(): void {

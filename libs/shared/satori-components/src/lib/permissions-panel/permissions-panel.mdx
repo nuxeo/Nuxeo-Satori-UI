@@ -84,7 +84,8 @@ application's sign-in. The panel reads the document with three enrichers:
 - **`acls`** fills the tables: the document's own entries, the inherited ones, and any other named
   list, which is shown read-only.
 - **`permissions`** decides whether the panel can be edited. Holding `WriteSecurity` or `Everything`
-  makes it editable; with anything less the same tables are read-only.
+  makes it editable; with anything less the same tables are read-only. A version is always
+  read-only, because its `permissions` repeat the live document's.
 - **`userVisiblePermissions`** fills the "suggested" group of the permission list. Nuxeo's standard
   permissions, and any others `permissions` reports, follow it.
 
