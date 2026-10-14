@@ -30,10 +30,10 @@ function focusRingsWithoutTwin(css: string): string[] {
       (node) => node.type === 'decl' && (node.prop === 'outline' || node.prop === 'outline-style'),
     );
     if (!outline || outline.type !== 'decl' || /^(none|0)\b/.test(outline.value.trim())) return;
-    const parent = rule.parent as Container;
+    const siblings = (rule.parent as Container | undefined)?.nodes ?? [];
     for (const selector of rule.selectors.filter((s) => s.includes(':focus-visible'))) {
       const twin = selector.replace(/:focus-visible/g, ':focus');
-      const found = parent.nodes.some(
+      const found = siblings.some(
         (node) =>
           node.type === 'rule' &&
           node.selectors.length === 1 &&
