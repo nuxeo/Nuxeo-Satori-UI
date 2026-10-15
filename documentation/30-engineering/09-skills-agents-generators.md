@@ -2,14 +2,16 @@
 title: Skills, Agents & Generators
 parent: Engineering
 order: 9
-last_reviewed: 2026-10-12
-repo_commit: 82c78bd
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Skills, Agents and Generators — what the AI tooling actually is
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `82c78bd` (`feature/nxsat-308-agent-surface`)
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only §5's generator list and the summary's generator count were verified at that commit, against
 > `tools/satori-generators/generators.json` and the package `beta:publishable` builds. The link to
 > Dev Harness & Gates §2 was re-verified on 2026-10-08 at `fb97d44`; the rest of the page was last
@@ -113,8 +115,8 @@ which to read.
 | `verify-gate/SKILL.md`            | Getting to green without churning                                                                    |
 | `capture-phase-evidence/SKILL.md` | Producing evidence that proves something                                                             |
 | `audit-evidence/SKILL.md`         | Auditing evidence adversarially                                                                      |
-| `implement-api-port/SKILL.md`     | One of the twelve adf-hx API ports                                                                   |
-| `adopt-adf-hx-component/SKILL.md` | Swapping a hand-written `hxp-*` for the real component                                               |
+| `implement-api-port/SKILL.md`     | **Retired, kept as a record** — the adf-hx API ports were removed (NXSAT-635, NXSAT-637)             |
+| `adopt-adf-hx-component/SKILL.md` | **Retired, kept as a record** — adf-hx was removed (NXSAT-635, NXSAT-637)                            |
 | `add-extension-point/SKILL.md`    | Making something manifest-addressable                                                                |
 | `fix-bug/SKILL.md`                | Bug workflow                                                                                         |
 | `kd-local-setup/SKILL.md`         | Knowledge Discovery local setup                                                                      |

@@ -2,14 +2,16 @@
 title: Architecture
 parent: Engineering
 order: 2
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Architecture
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> The rest of the page as of 2026-08-24 · `77265f9`.
 > Supersedes [`docs/architecture.md`](../../docs/architecture.md) (54 lines) and the
 > architecture sections of [`docs/technical-walkthrough.md`](../../docs/technical-walkthrough.md).
 
@@ -23,17 +25,13 @@ flowchart TD
     shell["apps/nuxeo-ui<br/>App shell · routing · auth · theme · i18n"]
     feat["libs/features/*<br/>9 feature libraries"]
     shared["libs/shared/*<br/>10 libraries"]
-    bridge["libs/shared/adf-hx-bridge<br/>the only place adf-hx types live"]
     shell --> feat --> shared
-    shared --> bridge
   end
 
   subgraph vendor["Vendored UI"]
-    adfhx["@alfresco/adf-hx-content-services<br/>12 overridable API ports"]
     satori["@hylandsoftware/satori-ui"]
     mat["@angular/material"]
   end
-  bridge --> adfhx
   shell --> satori
   shell --> mat
 
@@ -60,6 +58,9 @@ flowchart TD
   shared --> plat
   plat --> tmpl
 ```
+
+_Changed by NXSAT-635 and NXSAT-638 (2026-10):_ the diagram showed the adf-hx bridge library
+wrapping `@alfresco/adf-hx-content-services`. Both were removed, so neither is drawn.
 
 **The load-bearing fact:** the AI operations are invoked by this application but
 **implemented elsewhere**. An absent backend produces HTTP 500, which is expected and not a
@@ -125,10 +126,9 @@ sequenceDiagram
   Cfg->>N: GET bootstrap.json + manifest.json, anonymously
   C->>Ext: 2. register slot / rule / component IDs
   Note over Ext: must follow provideAppConfig —<br/>it merges with the loaded manifest
-  C->>C: 3. provideAdfHxNuxeoBridge() — 12 ports, ROOT injector
-  C->>C: 4. APP_INITIALIZER → AppThemeService.applyStoredOrDefault()
-  C->>C: 5. HttpClient + nuxeoAuthInterceptor
-  C->>C: 6. Router (hash location, component input binding)
+  C->>C: 3. APP_INITIALIZER → AppThemeService.applyStoredOrDefault()
+  C->>C: 4. HttpClient + nuxeoAuthInterceptor
+  C->>C: 5. Router (hash location, component input binding)
   B->>N: guarded navigation → AuthService.ensureHydrated()
 ```
 
@@ -143,6 +143,8 @@ Three consequences worth knowing before you touch startup:
    The cost is that adf-core becomes eager: initial bundle 1.71 MB → 2.86 MB, accepted
    deliberately with the reasoning recorded at
    [`app.config.ts:37`](../../apps/nuxeo-ui/src/app/app.config.ts#L37).
+   _Changed by NXSAT-635 and NXSAT-638 (2026-10):_ the bridge and its ports were removed, and
+   adf-hx with them, so nothing registers a port and this no longer applies.
 2. **`provideAppInitializer` callbacks run concurrently.** A one-shot config read races the
    loader. Do not assume ordering between initializers.
 3. **`withHashLocation()` changes what a "reload" means.** `goto('/#/x')` is

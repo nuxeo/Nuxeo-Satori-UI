@@ -2,14 +2,16 @@
 title: Testing & Evidence
 parent: Engineering
 order: 12
-last_reviewed: 2026-10-08
-repo_commit: 2898046
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Testing & Evidence
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`):
 > Only the repository links were re-verified at that commit: made relative rather than pinned to
 > `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 > Standards: [`AGENTS/05-test-standards.md`](../../AGENTS/05-test-standards.md)
@@ -91,6 +93,9 @@ visible.
 | `tasks`               |    _100%_ | **0** |
 | `assets`              |    _100%_ | **0** |
 | `core`                |    _100%_ | **0** |
+
+_Changed by NXSAT-635 (2026-10):_ `adf-hx-bridge` was removed on 2026-10-14; its row is the
+measurement above, kept as it was.
 
 > **Three of those numbers are artefacts.** `tasks`, `assets` and `core` have **zero spec files**.
 > Their coverage reports contain 0 total statements, so the summariser computes 0/0 as 100%. So

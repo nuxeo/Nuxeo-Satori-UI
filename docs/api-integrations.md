@@ -1894,7 +1894,11 @@ Returns users and groups sorted by creation date descending (newest first), usin
 
 ---
 
-## Adf-hx Nuxeo bridge (NXENG-619 Scope A)
+## Adf-hx Nuxeo bridge (NXENG-619 Scope A) — removed
+
+_Changed by NXSAT-635 (2026-10):_ the library and its POC route were removed on 2026-10-14. The old
+path redirects to `/#/browse` with its query string intact (`apps/nuxeo-ui/src/app/retired-routes.ts`).
+The table is kept as the record of what the integration was.
 
 | Field                      | Value                                                                    |
 | -------------------------- | ------------------------------------------------------------------------ |

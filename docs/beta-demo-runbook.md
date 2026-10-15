@@ -77,12 +77,13 @@ localStorage.removeItem('agentic_ui_color_theme'); // a stored theme beats defau
 
 ### 0.5 Warm the slow routes
 
-First load of the adf-hx route fetches a lazy ~1.3 MB chunk and takes about **4 seconds**. Visit
-each of these once, then return to the dashboard:
+Visit this once, then return to the dashboard:
 
 - `http://localhost:4200/#/browse`
-- `http://localhost:4200/#/browse-adf-hx?path=%2Fdefault-domain`
-- `http://localhost:4200/#/search-adf-hx`
+
+_Changed by NXSAT-635 (2026-10):_ the slow route was the adf-hx one, whose lazy ~1.3 MB chunk took
+about 4 seconds on first load. It and the adf-hx search route were removed on 2026-10-14 and now
+redirect to `/#/browse` and `/#/search`.
 
 ### 0.6 Write the dev configuration
 
@@ -140,6 +141,12 @@ is for demos.
 ---
 
 ## Part 1 — What is adf-hx, and what is ours
+
+> _Changed by NXSAT-635 and NXSAT-638 (2026-10):_ **Do not demo this Part.** adf-hx is no longer in
+> the product: the POC routes, the adopted upstream components and the bridge library were removed
+> on 2026-10-14 (NXSAT-635), and the `@alfresco` packages by NXSAT-637. Both old paths redirect to
+> `/#/browse` and `/#/search`. The rest of this Part is kept as the record of what the 2026-08-25
+> demo showed.
 
 This is the question you will be asked first, and the answer is easy to get backwards. An
 `hxp-*` tag says **nothing** about who wrote the component: **seven** are upstream's and
@@ -258,14 +265,14 @@ The interesting engineering detail, and it is worth reading aloud from
 
 ### The support boundary
 
-|                           |                                                                                                                                                                                                              |
-| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Customer depends on       | `@nuxeo-satori/platform` + peers: Angular 20.3, Material/CDK 20.2, `@hylandsoftware/satori-ui ^0.2`, `@ngx-translate/core ^17`, `rxjs ^7.8`                                                                  |
-| Customer **cannot** reach | `libs/shared/adf-hx-bridge` is **internal** — not published, no build target, absent from the package. All twelve API ports, the Nuxeo↔Hx mappers and all thirteen of our `hxp-`* components are unreachable |
+|                           |                                                                                                                                                                                                                        |
+| ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Customer depends on       | `@nuxeo-satori/platform` + peers: Angular 20.3, Material/CDK 20.2, `@hylandsoftware/satori-ui ^0.2`, `@ngx-translate/core ^17`, `rxjs ^7.8`                                                                            |
+| Customer **cannot** reach | adf-hx, at all. `libs/shared/adf-hx-bridge`, which held the twelve API ports, the Nuxeo↔Hx mappers and thirteen of our `hxp-`* components, was internal and never published, and was removed on 2026-10-14 (NXSAT-635) |
 
 **The line for leadership:** adf-hx is an implementation detail of the product, not part of the
 customer contract. Customers get the Layer 0/1/2 extensibility surface and are insulated from
-adf-hx entirely.
+adf-hx entirely. _Changed by NXSAT-638 (2026-10):_ adf-hx is no longer in the product at all.
 
 ---
 
@@ -299,6 +306,10 @@ Timings are measured on a warm dev server.
 it is customisation without forking.
 
 ### Beat 2 — adf-hx vs ours (4 min)
+
+> _Changed by NXSAT-635 (2026-10):_ **Skip this beat.** The adf-hx browse route was removed on
+> 2026-10-14 and redirects to `/#/browse`, so there is no second stack to switch to. Kept as the
+> record of the beat.
 
 Follow the table in Part 1. Open `/#/browse` and `/#/browse-adf-hx?path=%2Fdefault-domain` in two
 tabs and switch between them. The folder tabs are the same on both: View, Permissions, History and
@@ -392,7 +403,7 @@ This corrects F5, which was withdrawn on 2026-09-26.
   "version": 1,
   "extensions": {
     "$name": "acme-demo",
-    "overrides": { "app.navbar.browseAdfHx": { "visible": false } },
+    "overrides": { "app.navbar.browse": { "visible": false } },
     "slots": {
       "navbar": [
         {
@@ -418,12 +429,15 @@ exactly between 30 and 40.
 > renders 14, and
 > `acme.navbar.contracts` lands at index 2 — between `app.navbar.dashboard` and
 > `app.navbar.recentlyViewed`. Read the numbers off the screen before you quote them.
+> _Changed by NXSAT-635 (2026-10):_ the entry this manifest used to hide, the adf-hx Browse, is
+> retired and `app.navbar.browse` is rendered again, so the manifest now hides that. The figures
+> above predate both changes.
 
 > **Expand the nav rail before this beat.** It is collapsed by default, so labels are hidden by CSS
 > and a new entry shows only as an icon — measured: every item's `innerText` is empty while
 > `textContent` reads correctly. Expand or hover so the audience can read "Contracts".
 
-**Then type** `/#/browse-adf-hx` **in the address bar. The page still loads.** Do this deliberately.
+**Then type** `/#/browse` **in the address bar. The page still loads.** Do this deliberately.
 It is your honest answer to _"so I can hide admin actions from users?"_ — **no.** Hiding is
 presentation; Nuxeo's server-side ACLs are authorisation. Volunteering this earns more trust than
 being caught by it.
@@ -500,7 +514,7 @@ import { ContractsPageComponent } from './features/contracts/contracts-page.comp
   "version": 1,
   "extensions": {
     "$name": "acme-demo",
-    "overrides": { "app.navbar.browseAdfHx": { "visible": false } },
+    "overrides": { "app.navbar.browse": { "visible": false } },
     "slots": {
       "navbar": [
         {
@@ -544,9 +558,9 @@ git checkout -- apps/nuxeo-ui/src/app/app.routes.ts
 }
 ```
 
-`/#/browse` headers go from `Title, Modified, Last Contributor` to `Updated by, Title`. The same
-relabel also lands inside upstream's `hxp-document-list` on `/#/browse-adf-hx` — one manifest,
-both stacks.
+`/#/browse` headers go from `Title, Modified, Last Contributor` to `Updated by, Title`.
+_Changed by NXSAT-635 (2026-10):_ until 2026-10-14 the same relabel also landed in upstream's
+`hxp-document-list` on the adf-hx POC route, which is removed.
 
 For the picker contrast, use `slots` (**not** `overrides` — see F4):
 
@@ -883,7 +897,7 @@ renders upstream's read-only properties panel either; metadata is on the documen
 | **F6**  | ~~`toolbar`**,** `contextMenu`**,** `tabs`**,** `routes` **slots**~~ — **withdrawn 2026-09-26, all four are live** | This entry was wrong, and `docs/demo-deck-claims.md` recorded it as withdrawn while this row still told presenters the opposite. All four are registered (`provide-app-extensions.ts:104-106`) and consumed: `toolbar` at `document-detail.html:156`, `tabs` at `document-detail.ts:397`, `contextMenu` at `browse.ts:469-471`, and `routes` through `provideExtensionRoutes()` (`provide-app-extensions.ts:218`), which calls `router.resetConfig` at `extension-routes.ts:112`. Re-checked against those lines on 2026-09-26.                              |
 | **F7**  | `app.rules.canWriteSelection` **/** `canRemoveSelection`                                                           | Still inert, always `false`, so they hide whatever you gate on them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **F8**  | `npm run beta:evidence -- showcase-adf-hx` **live**                                                                | It **fails** (21/22). Three of ten screenshots are byte-identical duplicates, and steps 8-10 photograph the repository root, so panels captioned "reads real Nuxeo ACLs" show "no local permissions" and "No audit entries found." Use only `02-agentic-ui-production-browse.png` + `03-adf-hx-browse-list.png`.                                                                                                                                                                                                                                             |
-| **F9**  | `/#/search-adf-hx` **with an empty box**                                                                           | Shows repository plumbing: personal workspaces, `My Favorites`, rows titled `1783067622304`. Type a term first. Use `test 01` (5 results), **not** `Domain` (104 of 137 — looks broken). It also has **no nav entry**; bookmark the URL.                                                                                                                                                                                                                                                                                                                     |
+| **F9**  | ~~`/#/search-adf-hx` **with an empty box**~~ — **withdrawn 2026-10-14, the route is removed**                      | NXSAT-635 removed it; the old path redirects to `/#/search`. It showed repository plumbing: personal workspaces, `My Favorites`, rows titled `1783067622304`, and had **no nav entry**.                                                                                                                                                                                                                                                                                                                                                                      |
 | **F10** | `acme.panel.policySummary`**,** `acme.actions.exportClaim`**,** `acme.rules.isLegalTeam`                           | Registered but never placed. Nothing renders them.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 | **F11** | **A statically served production build past sign-in**                                                              | Stock Docker Nuxeo sends no CORS headers, so a static bundle cannot authenticate. Use `nx serve`. The rebrand _is_ demoable statically, because brand and tab title render pre-sign-in.                                                                                                                                                                                                                                                                                                                                                                      |
 | **F12** | **Layer 1 on the template app**                                                                                    | The template serves a manifest with **no fragments** — deliberately, so the "before" state is honest. `manifest.example.json` is visible only once it is added as a fragment to `apps/nuxeo-satori-template/public/agentic-ui-config/manifest.json`.                                                                                                                                                                                                                                                                                                         |

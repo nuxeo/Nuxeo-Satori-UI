@@ -2,14 +2,16 @@
 title: Developer Learning Path (No-Agent)
 parent: Engineering
 order: 14
-last_reviewed: 2026-10-14
-repo_commit: d36176c
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Developer Learning Path — Building This Application Without AI Agents
 
-> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
 > Only the package table and the authentication paragraph in §16, the `import type` line in §2, the
 > version-pin rows in §18 and the ADF rows in Appendix A were re-verified at that commit, for
 > NXSAT-637. On
@@ -291,7 +293,7 @@ Resolved: **7.8.2** (`~7.8.0`).
 Signals own UI state; RxJS owns everything async and HTTP. Both, always. The operator set in
 active use, counted across `libs/`:
 
-- **Promise bridging: `firstValueFrom`** — 324 uses in `nuxeo-client`, 114 in `adf-hx-bridge`,
+- **Promise bridging: `firstValueFrom`** — 324 uses in `nuxeo-client`, 114 in `adf-hx-bridge` (removed since, NXSAT-635),
   59 in `kd-client`. This is the dominant idiom in the data layer, so learn it first.
 - `switchMap` (59 in `nuxeo-client`, 16 in `knowledge-discovery` for answer polling), `concatMap`,
   `mergeMap`
@@ -772,6 +774,12 @@ Estimated effort: **20 hours**.
 
 ### 16. adf-hx, ADF and the Hyland Experience stack — **Area** (but Must for browse/search work)
 
+_Changed by NXSAT-635 and NXSAT-638 (2026-10):_ none of this module is in the product any more. The
+bridge library, its ports and the POC routes were removed on 2026-10-14 (NXSAT-635), and the
+packages below by NXSAT-637. §16.1 to §16.4 are kept as the record; skip them unless
+you are reading history. Browse and search now use the `nxs-` components in
+`libs/shared/satori-components`.
+
 | Package                             | Version              | Registry             | Note                                                        |
 | ----------------------------------- | -------------------- | -------------------- | ----------------------------------------------------------- |
 | `@alfresco/adf-hx-content-services` | 7.20.0-automate.292  | GitHub Packages only | **Removed in NXSAT-637**                                    |
@@ -846,7 +854,8 @@ most of that surface; `app.config.ts` and the shell nav drawer also import it on
 
 - [ADF documentation](https://alfresco-ng2-components.netlify.app/)
 - [ADF source](https://github.com/Alfresco/alfresco-ng2-components)
-- **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`,
+- **In-repo, and the only accurate source for the bridge:** `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
+  (removed with the bridge; in git history),
   `docs/adf-hx-upstream-findings.md`, `docs/adf-hx-workarounds.md`, `docs/adf-hx-beta-plan.md`
 
 Estimated effort: **30 hours**.
@@ -1190,8 +1199,8 @@ is the "do not miss a single feature" checklist.
 | **Trash**                     | `/#/trash`                     | Grid/table/list views, filter drawer, restore and permanent delete (single and bulk), saved searches over trash                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `ecm:isTrashed`, trash operations                                                                      |
 | **Administration**            | `/#/administration`            | Eight pages — Analytics (repository, distribution, workflow, search dashboards), Users & Groups, User Details, Group Details, Vocabularies, Audit log with AI search and summary, Cloud Services (OAuth2 providers/consumers/tokens), raw NXQL console. Three pages behind `fullAdministratorGuard`                                                                                                                                                                                                                                                                                                                       | §13 user/group/directory/audit/OAuth2 APIs, §17.1 three AI ops                                         |
 | **Knowledge Discovery**       | `/#/knowledge-discovery`       | Agent selection, guardrail display, model info, answers rendered as segments with inline numbered citations openable in a dialog, question history, thumbs feedback, direct Content Lake upload, `?debug=1` diagnostic surface                                                                                                                                                                                                                                                                                                                                                                                            | §17.2 in full; 16 `switchMap` for answer polling                                                       |
-| **adf-hx Browse POC**         | `/#/browse-adf-hx`             | Upstream `hxp-document-list`, `hxp-document-tree`, `hxp-breadcrumb`, `hxp-properties-sidebar`, viewer and versions sidebar, backed by Nuxeo                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | §16 in full                                                                                            |
-| **adf-hx Search POC**         | `/#/search-adf-hx`             | Upstream search surface over the Nuxeo query port                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | §16 in full                                                                                            |
+| ~~**adf-hx Browse POC**~~     | ~~`/#/browse-adf-hx`~~         | Removed on 2026-10-14 (NXSAT-635); the path redirects to `/#/browse`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ~~**adf-hx Search POC**~~     | ~~`/#/search-adf-hx`~~         | Removed on 2026-10-14 (NXSAT-635); the path redirects to `/#/search`                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
 
 ### Shared libraries
 
@@ -1201,7 +1210,7 @@ is the "do not miss a single feature" checklist.
 | `shared/ui`                  | Document viewer (image zoom/rotate/fit, video storyboard, picture formats, EXIF/IPTC, ARender tab), compare dialog, confirm, export, saved-search and share dialogs, selection topbar, widget grid | Blob lifecycle, §21 ARender                               |
 | `shared/extensions`          | Slot, rule, action and component registries; the manifest engine                                                                                                                                   | §15 in full                                               |
 | `shared/app-config`          | Bootstrap config and runtime manifest loading                                                                                                                                                      | `APP_INITIALIZER`, §15                                    |
-| `shared/adf-hx-bridge`       | Twelve API ports, mappers, thirteen `hxp-*` components                                                                                                                                             | §16 in full                                               |
+| ~~`shared/adf-hx-bridge`~~   | Removed on 2026-10-14 (NXSAT-635)                                                                                                                                                                  | —                                                         |
 | `shared/ai-client`           | `AiGatewayService`, `AiChatService`, feature flag                                                                                                                                                  | §17.1                                                     |
 | `shared/kd-client`           | KD operations, citation parsing (~22 utilities)                                                                                                                                                    | §17.2                                                     |
 | `shared/ke-client`           | KE enrichment operations                                                                                                                                                                           | §17.2, multipart                                          |

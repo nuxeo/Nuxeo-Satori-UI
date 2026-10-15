@@ -2,14 +2,16 @@
 title: Developer Getting Started
 parent: Engineering
 order: 1
-last_reviewed: 2026-10-14
-repo_commit: d36176c
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Developer Getting Started — zero to productive
 
-> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-14 at `d36176c` (`feature/nxsat-308-remove-adf-packages`):
 > Only the registry guidance (the token row and install snippet, `.npmrc` and the `E404` row) was re-verified at that commit,
 > for NXSAT-637; the gate guidance (the lockfile trap) on 2026-10-08 at `fb97d44`; the rest of the
 > page was last reviewed on 2026-08-24 at `77265f9`.
@@ -253,7 +255,8 @@ From [`CLAUDE.md`](../../CLAUDE.md), each one enforced or hard-won:
 - Never cross-feature imports — shared logic goes in `libs/shared/`. Enforced by real
   `depConstraints` in [`eslint.config.mjs`](../../eslint.config.mjs); **an untagged project
   cannot depend on anything**, so a new library needs `scope:` and `type:` tags
-- adf-hx types must never appear in our public API — wrap them in `adf-hx-bridge`
+- adf-hx types must never appear in our public API — nothing imports adf-hx since its bridge was
+  removed with the POC routes (NXSAT-635); do not reintroduce it
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 
 ---
