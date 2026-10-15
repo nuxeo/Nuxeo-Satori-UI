@@ -1747,6 +1747,14 @@ on `ecm_fulltext` (dashes turned into spaces, as Web UI's `formatFulltext` does,
 `-word` as an exclusion), and JSON arrays on `dc_modified_agg`, `dc_creator_agg`, `ecm_collections`,
 `ecm_tags`, `dc_nature_agg`, `dc_subjects_agg`, `dc_coverage_agg` and `common_size_agg`. The answer's
 `aggregations` give each filter its choices and counts, so the filters need no request of their own.
+
+**Paging.** The search page sends `currentPageIndex`, `offset` (`pageIndex × pageSize`) and `pageSize`
+(40 on the search page). The answer's `resultsCount` is the total across every page, and
+`isNextPageAvailable` says whether a page follows; `SearchService.search` returns them as `totalSize`
+and `hasNextPage`. Measured on the local 2025 instance with 25 matches, `resultsCount` was 25 at page
+sizes 10, 20 and 40, and with 50 matches at page size 40 it was 50, so the count is the server's
+total and not the rows on screen. This is unlike `@children`, whose count is only exact within one page.
+
 Measured on the local 2025 instance:
 
 - `ecm_collections` is the collection filter. `collection_agg` is not a parameter (the server ignores
