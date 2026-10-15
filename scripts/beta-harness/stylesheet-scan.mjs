@@ -82,9 +82,10 @@ export function maskStylesheet(text) {
  * be lines away; the indented `.sass` syntax has none, so there it runs to the end of the line.
  * @param {string} text
  * @param {string} [file]  the stylesheet's path, read only for a `.sass` extension
+ * @param {{ stripWebpackPrefix?: boolean }} [opts]
  * @returns {string[]}
  */
-export function styleSpecifiers(text, file = '') {
+export function styleSpecifiers(text, file = '', { stripWebpackPrefix = true } = {}) {
   const mask = maskStylesheet(text);
   const statement = file.endsWith('.sass')
     ? /(?:^|\n)[ \t]*@(use|forward|import)\b([^\n]*)/dg
@@ -95,7 +96,10 @@ export function styleSpecifiers(text, file = '') {
     const [from, to] = s.indices[2];
     for (const t of mask.slice(from, to).matchAll(target)) {
       const span = t.indices[2] ?? t.indices[4];
-      let value = text.slice(from + span[0], from + span[1]).replace(/^~/, '');
+      let value = text.slice(from + span[0], from + span[1]);
+      if (stripWebpackPrefix) {
+        value = value.replace(/^~/, '');
+      }
       // Trim trailing whitespace from unquoted url() targets (group 2, when group 1 is empty)
       if (t[1] === '') {
         value = value.trimEnd();
@@ -176,6 +180,22 @@ const SPECIFIER_CONTROLS = [
 ];
 
 /**
+ * `[name, text, opts, targets]` — `sassLoadedUrls` contract for dependency closure.
+ * @type {[string, string, { indented?: boolean }, string[]][]}
+ */
+const SASS_LOADED_URL_CONTROLS = [
+  ['webpack ~ prefix preserved', `@use '~theme';\n`, {}, ['~theme']],
+  ['commented load-css ignored', `// load-css('${PKG}');\n`, {}, []],
+  [
+    'load-css collected when live',
+    `@include meta.load-css('${PKG}/theme');\n`,
+    {},
+    [`${PKG}/theme`],
+  ],
+  ['unquoted indented import list', `@import foo, bar\n`, { indented: true }, ['foo', 'bar']],
+];
+
+/**
  * Every URL a stylesheet loads: `@use` and `@forward` (one URL each — a later string is
  * configuration), every entry of an `@import` list, quoted or as `url(…)`, and `meta.load-css()`.
  *
@@ -183,8 +203,10 @@ const SPECIFIER_CONTROLS = [
  * an `@import` list unquoted.
  */
 export function sassLoadedUrls(body, { indented = false } = {}) {
-  // Use styleSpecifiers which properly handles comments, strings, and edge cases
-  const urls = styleSpecifiers(body, indented ? 'dummy.sass' : 'dummy.scss');
+  // Preserve webpack's `~` prefix — dependency closure uses it to skip package URLs.
+  const urls = styleSpecifiers(body, indented ? 'dummy.sass' : 'dummy.scss', {
+    stripWebpackPrefix: false,
+  });
 
   // For indented Sass, add fallback for unquoted @import lists that styleSpecifiers doesn't catch
   if (indented) {
@@ -243,6 +265,14 @@ export function selfCheck() {
       );
     }
   }
+  for (const [name, text, opts, expected] of SASS_LOADED_URL_CONTROLS) {
+    const got = sassLoadedUrls(text, opts);
+    if (JSON.stringify(got) !== JSON.stringify(expected)) {
+      failures.push(
+        `sassLoadedUrls, ${name}: got ${JSON.stringify(got)}, expected ${JSON.stringify(expected)}`,
+      );
+    }
+  }
   return failures;
 }
 
@@ -250,4 +280,5 @@ export const CONTROL_COUNT = {
   mask: MASK_CONTROLS.length,
   negative: SPECIFIER_CONTROLS.filter((c) => c[3].length === 0).length,
   positive: SPECIFIER_CONTROLS.filter((c) => c[3].length > 0).length,
+  sassLoadedUrls: SASS_LOADED_URL_CONTROLS.length,
 };
