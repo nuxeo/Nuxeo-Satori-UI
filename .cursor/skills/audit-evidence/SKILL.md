@@ -60,6 +60,6 @@ and §4 for the two report formats.
 ## Never
 
 - Change application code to make evidence pass. Classify first — §5 has the taxonomy.
-- Paraphrase a verdict. `pass-partial` is not `pass`; `16 screenshots` is not
+- Paraphrase a verdict. `pass-partial` and `pass-incomplete` are not `pass`; `16 screenshots` is not
   `16 observations` when 7 are byte-identical.
 - Report an empty "not covered". Silence reads as coverage.
