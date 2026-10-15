@@ -96,8 +96,8 @@ what it explains, not for the icon.
 - **State.** The button reports whether the panel is open (`aria-expanded`) and which element it
   controls (`aria-controls`).
 - **Keyboard.** **Tab** reaches the button and opens the panel after 200 ms. **Enter** or **Space**
-  then closes it, and pressed again opens it again. **Escape** closes it and keeps focus on the
-  button. Moving focus out of the component closes it.
+  then closes it, and pressed again opens it again. **Escape** closes it wherever focus is, and
+  leaves focus where it is. Moving focus out of the component closes it.
 - **Pointer and touch.** Resting the pointer on the button opens the panel after 200 ms. It stays
   open while the pointer is on the button or the panel, and closes 1.5 s after the pointer leaves,
   so the pointer can cross to the panel. A click keeps it open after the pointer leaves, until a
@@ -118,7 +118,8 @@ What behaves differently:
 - **How it opens.** Both open when the pointer rests on the button or keyboard focus reaches it,
   after 200 ms, and close 1.5 s after the pointer leaves. The built-in one also opens on a click, a
   tap, **Enter** or **Space**, which Satori's ignores. It closes as soon as focus leaves; Satori's
-  waits 1.5 s.
+  waits 1.5 s. Escape closes the built-in one wherever focus is; Satori's only while focus is on its
+  button.
 - **Styling.** Satori's panel uses Satori's surface, type and close hint. The built-in panel uses your
   Material theme.
 

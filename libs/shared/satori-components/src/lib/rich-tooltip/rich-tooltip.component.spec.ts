@@ -89,7 +89,8 @@ describe('NxsRichTooltipComponent', () => {
     expect(panel()).toBeNull();
   });
 
-  it('closes on Escape and returns focus to the trigger', async () => {
+  it('closes on Escape and keeps focus on the trigger', async () => {
+    trigger().focus();
     trigger().click();
     await settle();
     required('.nxs-rich-tooltip__panel').dispatchEvent(
@@ -245,6 +246,43 @@ describe('NxsRichTooltipComponent', () => {
       component().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       wait(1000);
       expect(panel()).toBeNull();
+    });
+
+    // WCAG 1.4.13: content the pointer opened must be dismissible without moving the pointer or
+    // focus, so Escape has to reach the component from wherever focus is.
+    describe('with focus on another control', () => {
+      const outside = () => required<HTMLButtonElement>('.outside');
+      const escape = () =>
+        outside().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      beforeEach(() => outside().focus());
+
+      it('closes a panel the pointer opened on Escape, and leaves focus there', () => {
+        pointer('pointerenter');
+        wait(200);
+        expect(panel()).not.toBeNull();
+        escape();
+        wait(0);
+        expect(panel()).toBeNull();
+        expect(document.activeElement).toBe(outside());
+      });
+
+      it('stops the pointer opening it on Escape, and leaves focus there', () => {
+        pointer('pointerenter');
+        wait(100);
+        escape();
+        wait(1000);
+        expect(panel()).toBeNull();
+        expect(document.activeElement).toBe(outside());
+      });
+
+      it('ignores other keys', () => {
+        pointer('pointerenter');
+        wait(200);
+        outside().dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true }));
+        wait(0);
+        expect(panel()).not.toBeNull();
+      });
     });
 
     it('cancels an opening when focus leaves', () => {

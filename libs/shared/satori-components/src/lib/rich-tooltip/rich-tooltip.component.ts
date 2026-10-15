@@ -34,9 +34,9 @@ type Opener = 'hover' | 'focus' | 'click';
  *
  * It opens as Satori's does: when the pointer rests on the button or keyboard focus reaches it.
  * Unlike Satori's, a click also opens it, because a touch screen has neither: a tap toggles the
- * panel, and a click keeps open a panel the pointer opened. Escape, or focus moving out of the
- * component, closes it at once; the pointer leaving closes a panel the pointer opened, after a
- * delay long enough to reach the panel.
+ * panel, and a click keeps open a panel the pointer opened. Escape, wherever focus is, or focus
+ * moving out of the component, closes it at once; the pointer leaving closes a panel the pointer
+ * opened, after a delay long enough to reach the panel.
  *
  * Focus stays on the button, as it does on Satori's, and the panel opens inside a live region so a
  * screen reader announces it. It is not a dialog: a dialog takes focus when it opens.
@@ -53,7 +53,7 @@ type Opener = 'hover' | 'focus' | 'click';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'nxs-rich-tooltip',
-    '(keydown.escape)': 'closeAndRefocus()',
+    '(document:keydown.escape)': 'onEscape()',
     '(focusout)': 'onFocusOut($event)',
     '(pointerenter)': 'onPointerEnter($event)',
     '(pointerleave)': 'onPointerLeave($event)',
@@ -145,11 +145,18 @@ export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     else this.show('click');
   }
 
-  protected closeAndRefocus(): void {
+  /**
+   * Escape closes the panel, or stops it opening, wherever focus is: a panel the pointer opened
+   * must close while focus is on another control (WCAG 1.4.13). Focus inside the component goes
+   * back to the button; focus anywhere else stays where it is.
+   */
+  protected onEscape(): void {
     this.cancelOpening();
     if (!this.open()) return;
+    const host = this.host.nativeElement;
+    const focusInside = host.contains(host.ownerDocument.activeElement);
     this.close();
-    this.trigger().nativeElement.focus();
+    if (focusInside) this.trigger().nativeElement.focus();
   }
 
   protected onFocusOut(event: FocusEvent): void {

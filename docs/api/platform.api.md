@@ -1082,7 +1082,7 @@ class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     protected onPointerDown(): void;
     protected onFocus(): void;
     protected onClick(): void;
-    protected closeAndRefocus(): void;
+    protected onEscape(): void;
     protected onFocusOut(event: FocusEvent): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRichTooltipComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRichTooltipComponent, "nxs-rich-tooltip", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "content": { "alias": "content"; "required": true; "isSignal": true; }; "triggerLabel": { "alias": "triggerLabel"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
