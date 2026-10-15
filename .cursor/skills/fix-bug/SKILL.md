@@ -456,7 +456,8 @@ rarely "minimal" just because the diff is small.
   `as unknown as` / `as never`, and any new `@nx/vitest:test` project has a config + specs.
 - **Never cross-feature imports** — shared logic goes in `libs/shared/`, and a new library needs
   `scope:`/`type:` tags before it can import anything.
-- **adf-hx types must never appear in our public API** — wrap them in `adf-hx-bridge`.
+- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its bridge
+  was removed with the POC routes (NXSAT-635); do not reintroduce it.
 - Keep the diff focused — do not bundle unrelated files.
 
 ### 4a — Verify against the evidence, and loop if it is not fixed

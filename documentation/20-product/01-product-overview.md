@@ -2,14 +2,16 @@
 title: Product Overview
 parent: Product
 order: 1
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: product
 ---
 
 # Product Overview
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> The rest of the page as of 2026-08-24 · `77265f9`.
 > Grounded in the repository and in
 > [RFC: Nuxeo Satori Beta](https://hyland.atlassian.net/wiki/spaces/~71202090f2a61ef96d4f57a5104efe296c1f5b/pages/4256993484)
 > (revision 6, 20 Aug 2026), tickets **NXENG-619** under epic **NXENG-615**.
@@ -171,10 +173,10 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 Worth knowing if you are reading the RFC alongside the code.
 
-| RFC planned                                                                                                                   | What shipped                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo-satori/platform`, with 4 secondary entry points. Simpler to version and to support; the bridge is deliberately _not_ published, keeping adf-hx types out of the public API |
-| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                    |
+| RFC planned                                                                                                                   | What shipped                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo-satori/platform`, with 4 secondary entry points. Simpler to version and to support; the bridge was deliberately never published, keeping adf-hx types out of the public API, and was removed on 2026-10-14 (NXSAT-635) |
+| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                                                                |
 
 Neither is a defect — both are simplifications — but the RFC has not been revised, so the
 two documents disagree. Flagged in

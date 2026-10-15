@@ -2,14 +2,16 @@
 title: Codebase Reference
 parent: Engineering
 order: 4
-last_reviewed: 2026-10-11
-repo_commit: ad60a57
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Codebase Reference — file and folder responsibilities
 
-> **Last reviewed:** 2026-10-11 · **Repository:** `ad60a57`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-11 at `ad60a57`:
 > Only the entry-point count, the peer count and the secondary-entry-point row of §6 were verified
 > at that commit. The rest of §6 and the `constants/avatar-colors.ts` row were re-verified at
 > `effd434` (`feature/nxsat-308-satori-components`). The repository
@@ -45,23 +47,23 @@ If you read six files, read these.
 
 ## 2. `apps/nuxeo-ui` — the shell
 
-| Path                                               | Responsibility                        | Notes                                                                                                                                                                                               |
-| -------------------------------------------------- | ------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main.ts`                                      | Bootstrap                             | 6 lines: `bootstrapApplication(App, appConfig)`                                                                                                                                                     |
-| `src/app/app.config.ts`                            | **Composition root**                  | Layer 0 loader → Layer 1 registrations → adf-hx ports (root injector) → theme initializer → HTTP + interceptor → router (hash location) → Satori → i18n → `CURRENT_USERNAME`, `ADMIN_ACCESS_CHECKS` |
-| `src/app/app.routes.ts`                            | Routing                               | `login` (with `loginGuard`), then a shell route with `authGuard` and 22 children. `administration` adds `adminGuard`                                                                                |
-| `src/app/auth/auth.service.ts`                     | Session lifecycle                     | Basic + cookie sessions, `ensureHydrated()`, SSO detection via `/me`, explicit sign-out flag, share tokens                                                                                          |
-| `src/app/auth/auth.guards.ts`                      | `authGuard`, `loginGuard`             | Both await `ensureHydrated()`                                                                                                                                                                       |
-| `src/app/auth/admin.guard.ts`                      | `adminGuard`                          | Admits `hasAdministrationAccess()`; others → `/dashboard`                                                                                                                                           |
-| `src/app/auth/nuxeo-auth.interceptor.ts`           | Adds `Authorization` to every request | **The reason `<img [src]>` is forbidden** — the browser bypasses this                                                                                                                               |
-| `src/app/auth/session-timeout.service.ts` + dialog | Expiry warning                        |                                                                                                                                                                                                     |
-| `src/app/auth/share-token.util.ts`                 | External share links                  | Read once during hydration, then stripped from the URL                                                                                                                                              |
-| `src/app/config/provide-app-config.ts`             | Layer 0 wiring                        | Loads `bootstrap.json` and **repoints every configuration token** at the result                                                                                                                     |
-| `src/app/extensions/provide-app-extensions.ts`     | Layer 1 registrations                 | The app's slots, rules, components, actions — incl. the **12 packaged `documentList` columns**                                                                                                      |
-| `src/app/theme/app-theme.service.ts`               | Runtime theming                       | Invoked by `APP_INITIALIZER`                                                                                                                                                                        |
-| `src/app/i18n/app-translate-loader.ts`             | Layered catalogues                    | Seeds adf-core and adf-hx folders. **A seeded folder whose file is not shipped fails silently** — the loader catches the 404 and returns `{}`                                                       |
-| `src/app/shell/`                                   | App shell, nav drawer                 |                                                                                                                                                                                                     |
-| `src/app/dashboard/`, `settings/`, `login/`        | Shell-level pages                     |                                                                                                                                                                                                     |
+| Path                                               | Responsibility                        | Notes                                                                                                                                                                |
+| -------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`                                      | Bootstrap                             | 6 lines: `bootstrapApplication(App, appConfig)`                                                                                                                      |
+| `src/app/app.config.ts`                            | **Composition root**                  | Layer 0 loader → Layer 1 registrations → theme initializer → HTTP + interceptor → router (hash location) → Satori → i18n → `CURRENT_USERNAME`, `ADMIN_ACCESS_CHECKS` |
+| `src/app/app.routes.ts`                            | Routing                               | `login` (with `loginGuard`), then a shell route with `authGuard` and 22 children. `administration` adds `adminGuard`                                                 |
+| `src/app/auth/auth.service.ts`                     | Session lifecycle                     | Basic + cookie sessions, `ensureHydrated()`, SSO detection via `/me`, explicit sign-out flag, share tokens                                                           |
+| `src/app/auth/auth.guards.ts`                      | `authGuard`, `loginGuard`             | Both await `ensureHydrated()`                                                                                                                                        |
+| `src/app/auth/admin.guard.ts`                      | `adminGuard`                          | Admits `hasAdministrationAccess()`; others → `/dashboard`                                                                                                            |
+| `src/app/auth/nuxeo-auth.interceptor.ts`           | Adds `Authorization` to every request | **The reason `<img [src]>` is forbidden** — the browser bypasses this                                                                                                |
+| `src/app/auth/session-timeout.service.ts` + dialog | Expiry warning                        |                                                                                                                                                                      |
+| `src/app/auth/share-token.util.ts`                 | External share links                  | Read once during hydration, then stripped from the URL                                                                                                               |
+| `src/app/config/provide-app-config.ts`             | Layer 0 wiring                        | Loads `bootstrap.json` and **repoints every configuration token** at the result                                                                                      |
+| `src/app/extensions/provide-app-extensions.ts`     | Layer 1 registrations                 | The app's slots, rules, components, actions — incl. the **12 packaged `documentList` columns**                                                                       |
+| `src/app/theme/app-theme.service.ts`               | Runtime theming                       | Invoked by `APP_INITIALIZER`                                                                                                                                         |
+| `src/app/i18n/app-translate-loader.ts` | Layered catalogues | Precedence: satori-ui's catalogue, the app's catalogue, then manifest `labels`. Failed satori-ui fetches return `{}`; failed app fetches fall back to compiled-in English. |
+| `src/app/shell/`                                   | App shell, nav drawer                 |                                                                                                                                                                      |
+| `src/app/dashboard/`, `settings/`, `login/`        | Shell-level pages                     |                                                                                                                                                                      |
 
 ---
 
@@ -96,6 +98,11 @@ If you read six files, read these.
 ---
 
 ## 4. `libs/shared/adf-hx-bridge` — the containment boundary
+
+_Changed by NXSAT-635 (2026-10):_ removed on 2026-10-14 with the POC routes, and adf-hx with it by
+NXSAT-637; none of the paths below exists. The section is kept as the record of what the library
+held. The Nuxeo-owned components that replaced the adf-hx ones are in
+`libs/shared/satori-components`.
 
 8,380 lines, 12 spec files. **The only place adf-hx types may appear.** Enforced by
 `checkNoAdfHxInPublicApi`, which walks each barrel's re-export graph to depth — the leak that cost
@@ -227,7 +234,7 @@ Full table in [Dev Harness & Gates](08-dev-harness-and-gates.md). Structure:
 | Rules                                     | `ExtensionRuleRegistry`, `provideSatoriExtensions`                                               | Both               |
 | Actions                                   | `ExtensionActionRegistry`                                                                        | Both               |
 | Components by ID                          | `ExtensionComponentRegistry` + `ExtensionOutletComponent`                                        | Both               |
-| 12 adf-hx API ports                       | Injection tokens, **root injector**                                                              | Us                 |
+| ~~12 adf-hx API ports~~                   | Removed with the bridge on 2026-10-14 (NXSAT-635)                                                | —                  |
 | `CURRENT_USERNAME`, `ADMIN_ACCESS_CHECKS` | Tokens the app implements                                                                        | Us                 |
 | `AI_BACKEND_URL`                          | Token                                                                                            | Deployment         |
 | Generators                                | Nx plugin in the package                                                                         | Customer           |

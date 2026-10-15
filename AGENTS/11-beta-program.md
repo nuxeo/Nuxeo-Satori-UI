@@ -16,6 +16,10 @@ permissions, versions, upload and CRUD — built on real `adf-hx` components and
 made customisable through a four-layer extensibility contract. Workflow, users
 and groups, administration and publishing are **out of scope for Beta**.
 
+_Changed by NXSAT-308 (2026-10):_ the slice is now built on our own `nxs-` components in
+`libs/shared/satori-components`. adf-hx, ADF and the adf-hx POC routes were removed
+(NXSAT-635, NXSAT-636, NXSAT-637); the four-layer contract is unchanged.
+
 The governing principle: **the extension contract is the product; AI agents are
 the accelerator.** Customers customise through a documented, versioned API. They
 do not edit our source, and neither do their agents.
@@ -41,6 +45,13 @@ be faked in configuration.
 
 These were established by first-hand inspection of the published artifact.
 Treat them as settled; if you contradict one, prove it first.
+
+_Changed by NXSAT-635 to NXSAT-638 (2026-10):_ adf-hx and ADF are no longer in the
+product. NXSAT-635 removed the `/#/browse-adf-hx` and `/#/search-adf-hx` POC routes and
+`libs/shared/adf-hx-bridge` (the API ports, `ADF_HX_NUXEO_BRIDGE_PROVIDERS` and its `providers`
+entry point); NXSAT-637 removed the packages, and NXSAT-638 made the `dependency-tree` gate
+blocking, which keeps them out. The adf-hx facts below are kept as the record of what was established. Where one names the
+bridge, its providers or a POC route as present, that code no longer exists.
 
 - **CI runs on this branch and passes.** `ci.yml` triggers on `push` as well as on
   `pull_request`, so a long-lived feature branch is validated without a PR. Run
@@ -346,6 +357,10 @@ DocumentService`. The chain, read from the published bundle:
     first page load over a slow link. The alternatives, if the figure is ever refused,
     are trimming existing weight out of the startup bundle (real work, uncertain payoff)
     or not adopting adf-hx at all, which abandons the premise of the Beta.
+
+    _Changed by NXSAT-638 (2026-10):_ with adf-hx removed, the uncached production initial
+    bundle measured 2.96 MB, down from 4.07 MB on integration (PR #418). `maximumError` is back
+    at 4 MB; `maximumWarning` stays at 2.5 MB, which the build still exceeds.
 - **~~THE CURRENT PHASE 3 BLOCKER~~ RESOLVED — kept because the measurements are the fact.**
   A bundle-boundary problem, not a port problem, closed by the secondary entry point
   `@agentic-ui/shared/adf-hx-bridge/providers`.
@@ -365,6 +380,8 @@ DocumentService`. The chain, read from the published bundle:
   pull adf-hx into the initial bundle on purpose — `provideAdfHxNuxeoBridge()` in
   `app.config.ts` and `HxpBrowseNavDrawerComponent` in the shell nav drawer (see the guardrail
   allowlist in `scripts/review-guardrails.mjs`).
+  _Changed by NXSAT-635 (2026-10):_ the bridge, its `providers` entry point and the POC routes
+  are removed, so nothing in the shell imports adf-hx and none of this applies.
 - **Configuration is contributed by Marketplace packages and served by a servlet; the package
   installs no configuration file (NXSAT-312).** The `nuxeo-agentic-core` bundle declares
   `org.nuxeo.agentic.ui.config` with the extension point `configuration`
@@ -422,6 +439,10 @@ DocumentService`. The chain, read from the published bundle:
   **Adopting a new adf-hx component means checking its keys resolve, not just that it renders.**
   _Changed by NXSAT-636 (2026-10):_ the seeding is removed (W6); the loader's `UPSTREAM_FOLDERS`
   holds satori-ui's catalogue alone.
+  _Changed by NXSAT-638 and NXSAT-697 (2026-10):_ the `bundle` gate asserts none of the three
+  catalogues; with adf-hx removed, none ships. Its `REQUIRED_FILES` are the two catalogues
+  `AppTranslateLoader` fetches at runtime, the app's `i18n/en.json` and satori-ui's
+  `assets/satori-ui/i18n/en.json`, each checked by a key the app renders (PR #419).
 - **`AsyncPipe` must be provided for any adf-hx component that renders a user.**
   `UserResolverPipe` calls `inject(AsyncPipe)` in its constructor and `AsyncPipe` carries no
   `providedIn`. Missing, it throws `NG0201` **while rendering** — the component's shell appears
@@ -651,15 +672,17 @@ and the evidence manifest are the only acceptable proof.
 
 Beyond the standing rules in `AGENTS.md`:
 
-- **adf-hx types never appear in our public API signatures.** Wrap them in
-  `libs/shared/adf-hx-bridge`. Their instability must not become the customer's.
-- **Pin exact adf-hx versions**, never a range or dist-tag.
+- **adf-hx types never appear in our public API signatures.** Their instability must not
+  become the customer's. Nothing imports adf-hx since the ADF removal (PR #418); the blocking
+  `dependency-tree` gate fails on any of the five ADF packages in the lockfile, the installed
+  tree, a manifest, `.npmrc` or an import. `libs/shared/adf-hx-bridge`, which wrapped them, was
+  removed by NXSAT-635.
+- ~~**Pin exact adf-hx versions**, never a range or dist-tag.~~ adf-hx is removed (NXSAT-637).
 - **Anything a customer might want to change goes through Layer 0 or 1.** No new
   hardcoded action lists, nav entries, or theme values.
 - **No configuration inside the packaged web directory.** It will be destroyed on
   upgrade.
-- **Every new service method gets a unit test including its error path.** The
-  bridge currently has 11 tests for 2,949 lines; do not add to that debt.
+- **Every new service method gets a unit test including its error path.**
 - **Credentials from the environment only**, per `AGENTS/07-security.md`.
 
 ---
@@ -683,7 +706,8 @@ Beyond the standing rules in `AGENTS.md`:
 | Phase steps files       | `scripts/beta-harness/steps/<phase-id>.mjs`                 |
 | Evidence output         | `$AGENTIC_UI_EVIDENCE_DIR/beta/<phase-id>/<timestamp>/`     |
 | Gate reports            | `$AGENTIC_UI_EVIDENCE_DIR/beta/gates/`                      |
-| Bridge (adf-hx wrapper) | `libs/shared/adf-hx-bridge/`                                |
+| `nxs-` components       | `libs/shared/satori-components/`                            |
+| Retired-route redirects | `apps/nuxeo-ui/src/app/retired-routes.ts`                   |
 | Action plan             | `docs/adf-hx-poc-action-plan.md`                            |
 | Extension reference     | `docs/extension-reference.md`                               |
 | Extension registry      | `libs/shared/extensions/`                                   |

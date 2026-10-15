@@ -180,6 +180,8 @@ Settled by first-hand inspection. Do not re-litigate; if you contradict one, pro
 - **Nothing in this repo uses a real adf-hx component.** No `@alfresco/*` dependency is declared,
   locked or installed; zero `@alfresco` imports in source; all 22 `hxcs-js-client` imports are
   `import type`; all 15 `hxp-*` components are declared locally in `libs/shared/adf-hx-bridge`.
+  _Changed by NXSAT-635 (2026-10):_ the bridge library was removed on 2026-10-14 with the POC
+  routes, and NXSAT-637 removed the `@alfresco` packages.
 - **The branch is sound.** `npm ci` succeeds; Material 20.2.14, TypeScript 5.8.3, Satori 0.2.0 and
   hxcs-js-client 2.0.111 match HFA `develop`; guardrails, lint and build all pass; 280 of 281 tests
   pass. **Angular deliberately no longer matches**: this repo runs 20.3.31 where HFA `develop` runs
@@ -405,6 +407,10 @@ Not attempted, and carried into the phase that adopts the components:
 
 ## Phase 3 — adf-hx adoption (**complete**)
 
+_Changed by NXSAT-635 (2026-10):_ the adopted components, the bridge and the POC route they were
+swapped in behind were removed on 2026-10-14, and the packages by NXSAT-637; the old path redirects
+to `/#/browse`. This section is the plan as it was carried out.
+
 **Real components, not imitations.** Swap in one at a time behind `/#/browse-adf-hx`, deleting each
 hand-written `hxp-*` equivalent in the same change. Order: `document-list`, `breadcrumb`,
 `document-tree`, `metadata-sidebar`, `permission`, `manage-versions` (a capability the POC lacks
@@ -586,6 +592,8 @@ customer-authored code.
   parity is reached?~~ **Answered by NXSAT-308 (2026-10-08).** The parallel route stays while the
   `nxs-` components are built, and the ADF removal commit deletes it and re-enables
   `app.navbar.browse` on `/#/browse`. See `docs/satori-components/decision-sequencing.md`.
+  _Changed by NXSAT-635 (2026-10):_ done — the route was deleted on 2026-10-14 and redirects to
+  `/#/browse`, where `app.navbar.browse` is the one browse entry.
 - ~~How much of the app becomes addressable by ID in Layer 1?~~ **Answered in Phase 2, and the
   question turned out to be less consequential than it looked.** **Eight** slots are implemented and
   **all eight are live** — `navbar`, `sidebar`, `routes`, `toolbar`, `contextMenu`, `bulk-actions`,

@@ -197,7 +197,7 @@ Each step is its own PR, each green before the next starts.
 |   5 | `libs/features/browse`                                                                   |     184 |                                                                                                     |
 |   6 | `libs/shared/ui`                                                                         |     116 | Shared — run the blast-radius check.                                                                |
 |   7 | `libs/features/search`, `tasks`, `collections`, `trash`, `assets`, `knowledge-discovery` |     339 | Batchable.                                                                                          |
-|   8 | `libs/shared/adf-hx-bridge`                                                              |      67 |                                                                                                     |
+|   8 | `libs/shared/adf-hx-bridge`                                                              |      67 | Moot: the library was removed on 2026-10-14 (NXSAT-635), nothing left to extract.                   |
 |   9 | Descriptors: actions, columns, tabs                                                      |     242 | Extends the `labelKey` contract from nav. Columns need a decision on adf-core's `DataColumn.title`. |
 |  10 | Imperative `.ts` strings                                                                 |     192 | **Done 29 Sep 2026.** No ICU compiler: two keys per plural, chosen by `count === 1`.                |
 |  11 | `apps/nuxeo-satori-template`                                                             |     105 | Separate app, separate catalogue.                                                                   |

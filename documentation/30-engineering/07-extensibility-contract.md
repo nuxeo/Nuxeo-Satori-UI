@@ -2,14 +2,16 @@
 title: Extensibility Contract
 parent: Engineering
 order: 7
-last_reviewed: 2026-10-12
-repo_commit: 82c78bd
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # The Extensibility Contract — four layers
 
-> **Last reviewed:** 2026-10-12 · **Repository:** `82c78bd` (`feature/nxsat-308-agent-surface`)
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only "The six guardrail checks" was verified at that commit, against
 > `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
 > `@nuxeo-satori/platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
@@ -195,17 +197,17 @@ only that check goes red.
 
 Declared in [`libs/shared/extensions/src/lib/extension-slots.ts`](../../libs/shared/extensions/src/lib/extension-slots.ts).
 
-| Slot           | State                                                            | Evidence                                                                    |
-| -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `navbar`       | **Live** — packaged descriptors + a host that renders them       | 17 documented IDs                                                           |
-| `bulk-actions` | **Live** — packaged descriptors + host                           |                                                                             |
-| `documentList` | **Live** — 12 packaged columns, resolved by _both_ browse routes | `provide-app-extensions.ts:93`, `browse.ts:373`, `browse-adf-hx-poc.ts:133` |
-| `sidebar`      | Resolved, **no packaged descriptor**                             | 3 documented IDs                                                            |
-| `routes`       | Resolved, **no packaged descriptor**                             | `extension-reference.md` section 11                                         |
-| `toolbar`      | **Live** — 16 packaged actions on document detail                | `extension-reference.md` section 8                                          |
-| `contextMenu`  | **Live** — 4 packaged actions in the browse "More actions" menu  | `extension-reference.md` section 10                                         |
-| `tabs`         | **Live** — 6 packaged document-detail tabs                       | `extension-reference.md` section 9                                          |
-| `documentView` | Resolved, **no packaged descriptor** — the View tab body         | `extension-reference.md` section 9a                                         |
+| Slot           | State                                                           | Evidence                                         |
+| -------------- | --------------------------------------------------------------- | ------------------------------------------------ |
+| `navbar`       | **Live** — packaged descriptors + a host that renders them      | 17 documented IDs                                |
+| `bulk-actions` | **Live** — packaged descriptors + host                          |                                                  |
+| `documentList` | **Live** — 12 packaged columns, resolved by the browse route    | `provide-app-extensions.ts:108`, `browse.ts:481` |
+| `sidebar`      | Resolved, **no packaged descriptor**                            | 3 documented IDs                                 |
+| `routes`       | Resolved, **no packaged descriptor**                            | `extension-reference.md` section 11              |
+| `toolbar`      | **Live** — 16 packaged actions on document detail               | `extension-reference.md` section 8               |
+| `contextMenu`  | **Live** — 4 packaged actions in the browse "More actions" menu | `extension-reference.md` section 10              |
+| `tabs`         | **Live** — 6 packaged document-detail tabs                      | `extension-reference.md` section 9               |
+| `documentView` | Resolved, **no packaged descriptor** — the View tab body        | `extension-reference.md` section 9a              |
 
 This table read "Reserved — nothing reads it" for `routes`, `toolbar`, `contextMenu` and
 `tabs` well after each gained a host. `npm run beta:reference` checks the states in
