@@ -203,6 +203,19 @@ describe('SearchSession', () => {
       expect(session.dirty()).toBe(true);
     });
 
+    it('starts an open saved search from the first page, even when its filters already match', async () => {
+      const params = { ecm_fulltext: 'invoice', dc_nature_agg: '["contract"]' };
+      searchService.getSavedSearchById.mockReturnValue(of(params));
+      await firstValueFrom(session.openSavedSearch('ss-1', 'Mine'), { defaultValue: undefined });
+      session.setPageIndex(2);
+
+      // The filters on screen already match the saved search: `setFilters` alone would keep page 3.
+      shared.drawerFilters.set(params);
+      await firstValueFrom(session.openSavedSearch('ss-1', 'Mine'), { defaultValue: undefined });
+
+      expect(session.pageIndex()).toBe(0);
+    });
+
     it('is not dirty while the saved search is still being read', () => {
       searchService.getSavedSearchById.mockReturnValue(new Subject<Record<string, string>>());
       session.openSavedSearch('ss-1', 'Mine').subscribe();

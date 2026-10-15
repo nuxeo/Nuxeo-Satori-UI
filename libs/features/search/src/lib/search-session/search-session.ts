@@ -216,6 +216,9 @@ export class SearchSession {
         const filters = nxsSearchFiltersFromParams(params);
         this.loadedParams = params;
         this.savedFilters.set(filters);
+        // Opening a search starts it from the first page, even when its filters match the ones on
+        // screen, which `setFilters` alone would not reset.
+        this.setPageIndex(0);
         this.setFilters(filters);
       }),
       catchError((error: unknown) => {
