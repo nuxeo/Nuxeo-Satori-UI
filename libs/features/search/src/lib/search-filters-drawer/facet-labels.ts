@@ -39,13 +39,29 @@ export function loadFacetLabels(
   });
 }
 
-/** An l10n vocabulary's label in `lang`, falling back to the other language, then to the id. */
+/**
+ * An l10n vocabulary's labels, keyed the way the search stores them. A child is stored as
+ * `<parent>/<id>` and labelled `<Parent>/<Child>`, as the vocabulary picker does: the ids are bare,
+ * so the parent is what keeps two children of one name apart. A top-level entry keeps its id.
+ * Labels follow `lang` (`fr-FR` counts as French), falling back to the other language, then the id.
+ */
 function l10nLabels(entries: readonly L10nDirectoryEntry[], lang: string): Record<string, string> {
+  const byId = new Map(entries.map((entry) => [entry.id, entry]));
+  const french = lang.split('-')[0] === 'fr';
+  const textOf = (entry: L10nDirectoryEntry): string => {
+    const { label_en: en, label_fr: fr } = entry.properties;
+    return (french ? fr || en : en || fr) || entry.id;
+  };
   const labels: Record<string, string> = {};
   for (const entry of entries) {
-    const { label_en: en, label_fr: fr } = entry.properties;
-    const label = lang === 'fr' ? fr || en : en || fr;
-    labels[entry.id] = label || entry.id;
+    const parent = entry.properties.parent;
+    if (!parent) {
+      labels[entry.id] = textOf(entry);
+      continue;
+    }
+    const parentEntry = byId.get(parent);
+    labels[`${parent}/${entry.id}`] =
+      `${parentEntry ? textOf(parentEntry) : parent}/${textOf(entry)}`;
   }
   return labels;
 }

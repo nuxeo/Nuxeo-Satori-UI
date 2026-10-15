@@ -18,10 +18,15 @@ const nature = (id: string, displayLabel: string): DirectoryEntry => ({
   directoryName: 'nature',
 });
 
-const l10n = (id: string, label_en?: string, label_fr?: string): L10nDirectoryEntry => ({
+const l10n = (
+  id: string,
+  label_en?: string,
+  label_fr?: string,
+  parent = '',
+): L10nDirectoryEntry => ({
   id,
   directoryName: 'l10nsubjects',
-  properties: { id, parent: '', ordering: 1, obsolete: 0, label_en, label_fr },
+  properties: { id, parent, ordering: 1, obsolete: 0, label_en, label_fr },
 });
 
 function directories(overrides: Partial<Record<'getEntries' | 'getAllL10nEntries', unknown>> = {}) {
@@ -89,5 +94,55 @@ describe('loadFacetLabels', () => {
     expect(labels.coverage).toEqual({});
     expect(labels.subjects).toEqual({ finance: 'Finance' });
     expect(labels.nature).toEqual({ contract: 'Contract' });
+  });
+
+  it('keys a child as parent/id and labels it Parent/Child, as the picker stores it', async () => {
+    const service = directories({
+      getAllL10nEntries: vi.fn(() =>
+        of([l10n('europe', 'Europe', 'Europe'), l10n('france', 'France', 'France', 'europe')]),
+      ),
+    });
+    const labels = await firstValueFrom(
+      loadFacetLabels(service as unknown as DirectoryService, 'fr'),
+    );
+
+    expect(labels.coverage).toEqual({
+      europe: 'Europe',
+      'europe/france': 'Europe/France',
+    });
+  });
+
+  it('keeps two children with one bare id apart when their parents differ', async () => {
+    const service = directories({
+      getAllL10nEntries: vi.fn(() =>
+        of([
+          l10n('europe', 'Europe', 'Europe'),
+          l10n('asia', 'Asia', 'Asie'),
+          l10n('other', 'Other', 'Autre', 'europe'),
+          l10n('other', 'Other', 'Autre', 'asia'),
+        ]),
+      ),
+    });
+    const labels = await firstValueFrom(
+      loadFacetLabels(service as unknown as DirectoryService, 'fr'),
+    );
+
+    expect(labels.coverage).toEqual({
+      europe: 'Europe',
+      asia: 'Asie',
+      'europe/other': 'Europe/Autre',
+      'asia/other': 'Asie/Autre',
+    });
+  });
+
+  it('counts fr-FR as French', async () => {
+    const service = directories({
+      getAllL10nEntries: vi.fn(() => of([l10n('finance', 'Finance', 'Finances')])),
+    });
+    const labels = await firstValueFrom(
+      loadFacetLabels(service as unknown as DirectoryService, 'fr-FR'),
+    );
+
+    expect(labels.subjects).toEqual({ finance: 'Finances' });
   });
 });
