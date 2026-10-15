@@ -10,6 +10,8 @@ import {
   type PermissionWithNotificationResult,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import {
   NxsShareExternalDialogComponent,
   type NxsShareExternalDialogData,
@@ -69,6 +71,7 @@ const meta: Meta<NxsShareExternalDialogComponent> = {
         language: 'typescript',
         code: `this.dialog
   .open(NxsShareExternalDialogComponent, {
+    maxWidth: '95vw',
     data: { documentUid: doc.uid, permissions: doc.contextParameters?.userVisiblePermissions },
   })
   .afterClosed()
@@ -76,15 +79,7 @@ const meta: Meta<NxsShareExternalDialogComponent> = {
       },
     },
   },
-  render: () => ({
-    template: `
-      <div
-        style="width: fit-content; max-width: 95vw; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
-      >
-        <nxs-share-external-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-share-external-dialog', { maxWidth: '95vw' }),
 };
 
 export default meta;

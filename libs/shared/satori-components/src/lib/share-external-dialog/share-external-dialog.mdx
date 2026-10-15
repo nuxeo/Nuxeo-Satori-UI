@@ -49,6 +49,7 @@ protected shareExternally(): void {
     .open<NxsShareExternalDialogComponent, NxsShareExternalDialogData, boolean>(
       NxsShareExternalDialogComponent,
       {
+        maxWidth: '95vw',
         data: {
           documentUid: doc.uid,
           permissions: doc.contextParameters?.['userVisiblePermissions'] as string[] | undefined,

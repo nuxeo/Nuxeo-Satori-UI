@@ -11,6 +11,8 @@ import {
   type PermissionWithNotificationResult,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import {
   NxsUpdatePermissionDialogComponent,
   type NxsUpdatePermissionDialogData,
@@ -91,6 +93,7 @@ const meta: Meta<NxsUpdatePermissionDialogComponent> = {
         language: 'typescript',
         code: `this.dialog
   .open(NxsUpdatePermissionDialogComponent, {
+    maxWidth: '95vw',
     data: { documentUid: doc.uid, ace, permissions: doc.contextParameters?.userVisiblePermissions },
   })
   .afterClosed()
@@ -98,15 +101,7 @@ const meta: Meta<NxsUpdatePermissionDialogComponent> = {
       },
     },
   },
-  render: () => ({
-    template: `
-      <div
-        style="width: fit-content; max-width: 95vw; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
-      >
-        <nxs-update-permission-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-update-permission-dialog', { maxWidth: '95vw' }),
 };
 
 export default meta;

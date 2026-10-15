@@ -43,7 +43,12 @@ protected deletePermission(ace: NuxeoAce, acl: string): void {
   this.dialog
     .open<NxsDeletePermissionDialogComponent, NxsDeletePermissionDialogData, boolean>(
       NxsDeletePermissionDialogComponent,
-      { data: { documentUid: this.doc().uid, ace, acl }, role: 'alertdialog' },
+      {
+        width: '560px',
+        maxWidth: '95vw',
+        data: { documentUid: this.doc().uid, ace, acl },
+        role: 'alertdialog',
+      },
     )
     .afterClosed()
     .subscribe((deleted) => deleted && this.reloadPermissions());

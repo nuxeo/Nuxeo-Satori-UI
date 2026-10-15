@@ -11,6 +11,8 @@ import {
   type NuxeoDocument,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import {
   NxsDeletePermissionDialogComponent,
   type NxsDeletePermissionDialogData,
@@ -74,21 +76,15 @@ const meta: Meta<NxsDeletePermissionDialogComponent> = {
       source: {
         language: 'typescript',
         code: `this.dialog.open(NxsDeletePermissionDialogComponent, {
+  width: '560px',
+  maxWidth: '95vw',
   data: { documentUid: doc.uid, ace, acl: 'local' },
   role: 'alertdialog',
 });`,
       },
     },
   },
-  render: () => ({
-    template: `
-      <div
-        style="width: fit-content; max-width: 95vw; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
-      >
-        <nxs-delete-permission-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-delete-permission-dialog', { width: '560px', maxWidth: '95vw' }),
 };
 
 export default meta;
