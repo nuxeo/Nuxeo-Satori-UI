@@ -182,6 +182,28 @@ describe('one change of the search, one request', () => {
       searches(paged);
     });
 
+    it('keeps the same pager control on screen while the next page loads', async () => {
+      searches(paged);
+      await settle();
+
+      const next = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        'nxs-pager .nxs-pager__next',
+      );
+      next?.click();
+      await settle();
+
+      // The request is still in flight: the control a keyboard user just pressed is still there.
+      const during = (fixture.nativeElement as HTMLElement).querySelector(
+        'nxs-pager .nxs-pager__next',
+      );
+      expect(during).toBe(next);
+      expect(next?.isConnected).toBe(true);
+
+      expect(searches(paged)).toHaveLength(1);
+      queryParamMap.next(convertToParamMap({}));
+      searches(paged);
+    });
+
     it('reopens the page a deep link names, with one request', async () => {
       searches();
       await settle();

@@ -480,13 +480,13 @@
       }
     </div>
   }
-  @if (!busy() && !resultsError() && !(aiSearchMode() && aiSearchExecuted())) {
+  @if (!resultsError() && !(aiSearchMode() && aiSearchExecuted())) {
     <nxs-pager
-      [pageIndex]="pageIndex()"
+      [pageIndex]="pager().pageIndex"
       [pageSize]="pageSize"
-      [itemCount]="resultCount()"
-      [totalSize]="serverTotal()"
-      [hasNextPage]="serverHasNextPage()"
+      [itemCount]="pager().itemCount"
+      [totalSize]="pager().totalSize"
+      [hasNextPage]="pager().hasNextPage"
       (pageChange)="goToPage($event)"
     />
   }

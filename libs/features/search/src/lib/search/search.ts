@@ -400,11 +400,12 @@ export class SearchComponent {
     const total = this.resultsState().totalSize;
     return total >= 0 ? total : this.resultCount();
   });
-  /** The page on screen, from zero, and the server's total and next-page fact for the pager. */
-  readonly pageIndex = this.session.pageIndex;
   readonly pageSize = SEARCH_PAGE_SIZE;
-  readonly serverTotal = computed(() => this.resultsState().totalSize);
-  readonly serverHasNextPage = computed(() => this.resultsState().hasNextPage);
+  /**
+   * The paging of the last answer, which the pager reads. It stays on screen while the next page
+   * loads: a control removed while focused loses the keyboard user's place.
+   */
+  readonly pager = signal({ pageIndex: 0, itemCount: 0, totalSize: -1, hasNextPage: false });
   /** The page the URL asked for, as the last applied URL; the URL follows the pager through it. */
   private urlPageIndex = 0;
   readonly selectedCount = computed(() => this.selectionService.selectedCount());
@@ -875,6 +876,20 @@ export class SearchComponent {
     this.route.queryParamMap
       .pipe(takeUntilDestroyed())
       .subscribe((params) => this.applyPageQuery(params));
+
+    // Each answer's paging, for the pager. Only an answer moves it: a page being loaded does not.
+    effect(() => {
+      const state = this.resultsState();
+      if (state.status !== 'loaded') return;
+      untracked(() =>
+        this.pager.set({
+          pageIndex: this.session.pageIndex(),
+          itemCount: state.items.length,
+          totalSize: state.totalSize,
+          hasNextPage: state.hasNextPage,
+        }),
+      );
+    });
 
     // The page on screen is kept in the URL, so a deep link reopens it. A page the pager or a
     // filter change moved to is written back, replacing the history entry rather than adding one.
