@@ -1,13 +1,19 @@
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
+import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
-import { NXS_EMPTY_SEARCH_FILTERS, NxsToastService } from '@nuxeo-satori/platform/components';
 import {
+  NXS_EMPTY_SEARCH_FILTERS,
+  NxsSearchFiltersComponent,
+  NxsToastService,
+} from '@nuxeo-satori/platform/components';
+import {
+  DirectoryService,
   DocumentDetailService,
   SearchAggregationService,
   SearchService,
@@ -52,6 +58,10 @@ describe('SearchFiltersDrawerComponent', () => {
   const queryParamMap = new BehaviorSubject(convertToParamMap({}));
   const toast = { show: vi.fn(), error: vi.fn() };
   const dialog = { open: vi.fn() };
+  const directoryService = {
+    getEntries: vi.fn(() => of([{ id: 'contract', displayLabel: 'Contract' }])),
+    getAllL10nEntries: vi.fn(() => of([])),
+  };
   const searchService = {
     search: vi.fn((): Observable<SearchResponse> =>
       of({ items: [], aggregations: {}, totalSize: -1, hasNextPage: false }),
@@ -84,6 +94,7 @@ describe('SearchFiltersDrawerComponent', () => {
         { provide: SearchService, useValue: searchService },
         { provide: DocumentDetailService, useValue: { fetchThumbnail: () => of(null) } },
         { provide: MatDialog, useValue: dialog },
+        { provide: DirectoryService, useValue: directoryService },
       ],
     }).compileComponents();
     router = TestBed.inject(Router);
@@ -163,6 +174,16 @@ describe('SearchFiltersDrawerComponent', () => {
     dialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
     component.openSaveAsDialog();
     expect(searchService.saveSavedSearch).not.toHaveBeenCalled();
+  });
+
+  it('hands the filters the vocabulary labels of the nature, subject and coverage facets', () => {
+    const filters = fixture.debugElement.query(By.directive(NxsSearchFiltersComponent));
+    expect(directoryService.getEntries).toHaveBeenCalledWith('nature', 'en');
+    expect(filters.componentInstance.optionLabels()).toEqual({
+      nature: { contract: 'Contract' },
+      subjects: {},
+      coverage: {},
+    });
   });
 
   describe('the queue', () => {

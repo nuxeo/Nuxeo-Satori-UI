@@ -213,6 +213,14 @@ describe('DirectoryService', () => {
     expect(entries[1].displayLabel).toBe('My Custom');
   });
 
+  it('getEntries asks for the labels in the language it is given', async () => {
+    const entries$ = firstValueFrom(service.getEntries('nature', 'fr'));
+    const req = httpMock.expectOne('/nuxeo/api/v1/automation/Directory.SuggestEntries');
+    expect((req.request.body as { params: { lang: string } }).params.lang).toBe('fr');
+    req.flush([]);
+    await entries$;
+  });
+
   it('getEntries resolves i18n display labels for custom vocabulary entries', async () => {
     const entries$ = firstValueFrom(service.getEntries('nature'));
     const req = httpMock.expectOne('/nuxeo/api/v1/automation/Directory.SuggestEntries');

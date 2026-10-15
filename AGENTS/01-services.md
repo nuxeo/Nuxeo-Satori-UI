@@ -405,7 +405,7 @@ search. That is a design change to a shared service and has not been made.
 Nuxeo vocabulary / directory lookups and admin CRUD. Picker methods (`getEntries`, `getL10nEntries`, `getAllL10nEntries`) query the server on every call (Nuxeo Web UI parity).
 
 ```typescript
-getEntries(directoryName: string): Observable<DirectoryEntry[]>
+getEntries(directoryName: string, lang?: string): Observable<DirectoryEntry[]>   // lang defaults to 'en'
 getAdminEntries(directoryName: string): Observable<ManagedDirectoryEntry[]>
 getDirectoryCatalog(): Observable<Map<string, DirectoryMetadata>>
 createEntry(directoryName: string, values: VocabularyEntryFormValues): Observable<ManagedDirectoryEntry>

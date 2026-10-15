@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo-satori/platform/components
 
-125 exported symbol(s).
+126 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -758,6 +758,7 @@ interface NxsErrorStateInputs {
     }
 }
 type NxsErrorStatus = 401 | 403 | 404 | 500;
+type NxsFacetLabels = Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>;
 interface NxsFacetOption {
     readonly value: string;
     readonly count: number | null;
@@ -1156,6 +1157,7 @@ interface NxsSearchFilters {
 class NxsSearchFiltersComponent {
     readonly filters: _angular_core.ModelSignal<NxsSearchFilters>;
     readonly aggregations: _angular_core.InputSignal<SearchAggregations>;
+    readonly optionLabels: _angular_core.InputSignal<Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>>;
     readonly filtersReset: _angular_core.OutputEmitterRef<void>;
     readonly saveAs: _angular_core.OutputEmitterRef<void>;
     protected readonly ids: {
@@ -1186,6 +1188,7 @@ class NxsSearchFiltersComponent {
     protected isChecked(field: CheckboxField, value: string): boolean;
     protected toggleOption(field: CheckboxField, value: string): void;
     protected optionLabelKey(group: CheckboxGroup, value: string): string | null;
+    protected optionText(group: CheckboxGroup, value: string): string;
     protected applyFulltext(): void;
     protected clearFulltext(): void;
     protected addChoice(field: ChoiceField, value: string): void;
@@ -1195,7 +1198,7 @@ class NxsSearchFiltersComponent {
     protected resetFilters(): void;
     protected collectionTitle(id: string): string;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSearchFiltersComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, { "filters": { "alias": "filters"; "required": false; "isSignal": true; }; "aggregations": { "alias": "aggregations"; "required": false; "isSignal": true; }; }, { "filters": "filtersChange"; "filtersReset": "filtersReset"; "saveAs": "saveAs"; }, never, never, true, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, { "filters": { "alias": "filters"; "required": false; "isSignal": true; }; "aggregations": { "alias": "aggregations"; "required": false; "isSignal": true; }; "optionLabels": { "alias": "optionLabels"; "required": false; "isSignal": true; }; }, { "filters": "filtersChange"; "filtersReset": "filtersReset"; "saveAs": "saveAs"; }, never, never, true, never>;
     }
 }
 class NxsShareExternalDialogComponent {
@@ -2201,7 +2204,7 @@ class DirectoryService {
     getDirectoryCatalog(): Observable<Map<string, DirectoryMetadata>>;
     listDirectoryNames(): Observable<string[]>;
     invalidateDirectoryCatalog(): void;
-    getEntries(directoryName: string): Observable<DirectoryEntry[]>;
+    getEntries(directoryName: string, lang?: string): Observable<DirectoryEntry[]>;
     getAdminEntries(directoryName: string): Observable<ManagedDirectoryEntry[]>;
     createEntry(directoryName: string, values: VocabularyEntryFormValues, metadata?: DirectoryMetadata): Observable<ManagedDirectoryEntry>;
     updateEntry(directoryName: string, entryId: string, values: VocabularyEntryFormValues, metadata?: DirectoryMetadata): Observable<ManagedDirectoryEntry>;

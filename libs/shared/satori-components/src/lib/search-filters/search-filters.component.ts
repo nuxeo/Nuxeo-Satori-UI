@@ -34,6 +34,7 @@ import {
   nxsHasSearchFilters,
   nxsRangeOptions,
   nxsTermOptions,
+  type NxsFacetLabels,
   type NxsFacetOption,
   type NxsSearchFilters,
 } from './search-filters.model';
@@ -101,6 +102,12 @@ export class NxsSearchFiltersComponent {
   readonly filters = model<NxsSearchFilters>(NXS_EMPTY_SEARCH_FILTERS);
   /** The server's aggregates for the query the filters produce: each choice's count. */
   readonly aggregations = input<SearchAggregations>({});
+  /**
+   * The text shown for a choice, by field and bucket key: the vocabulary label of a nature, subject
+   * or coverage id. A choice with no label shows its key. `filters` always keeps the key, so a
+   * label never reaches a query or a saved search.
+   */
+  readonly optionLabels = input<NxsFacetLabels>({});
   /** Reset was pressed: the filters are now empty. A host clears what it keeps beside them. */
   readonly filtersReset = output<void>();
   /** Save as was pressed: the host asks for a name and saves the current filters. */
@@ -250,6 +257,12 @@ export class NxsSearchFiltersComponent {
 
   protected optionLabelKey(group: CheckboxGroup, value: string): string | null {
     return group.labelKeys?.[value] ?? null;
+  }
+
+  protected optionText(group: CheckboxGroup, value: string): string {
+    // An own key only: `constructor` or `__proto__` is a bucket key too, not an inherited property.
+    const labels = this.optionLabels()[group.field];
+    return labels && Object.prototype.hasOwnProperty.call(labels, value) ? labels[value] : value;
   }
 
   protected applyFulltext(): void {

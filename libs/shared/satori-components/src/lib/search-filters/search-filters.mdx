@@ -20,6 +20,8 @@ of search results, in a drawer or a side panel, wherever the user narrows a sear
   whole result set rather than the page shown, as Web UI's checkbox aggregations do. A range filter
   lists every range; a terms filter lists the buckets with results, and keeps a selected value the
   server no longer returns so it can still be cleared.
+- **Labels.** A choice shows the text `optionLabels` gives its key, by field, and its key when it has
+  none. The filter keeps the key, so a label never reaches a query or a saved search.
 - **When each change applies.** Full text applies on Enter, or when it is cleared; a checkbox, or an
   author, collection or tag added or removed, applies at once.
 - **Several authors, collections and tags.** Each choice is added as a chip below its box, with a
