@@ -96,8 +96,8 @@ what it explains, not for the icon.
 - **State.** The button reports whether the panel is open (`aria-expanded`) and which element it
   controls (`aria-controls`).
 - **Keyboard.** **Tab** reaches the button and opens the panel after 200 ms. **Enter** or **Space**
-  closes and reopens it. **Escape** closes it and keeps focus on the button. Moving focus out of the
-  component closes it.
+  then closes it, and pressed again opens it again. **Escape** closes it and keeps focus on the
+  button. Moving focus out of the component closes it.
 - **Pointer and touch.** Resting the pointer on the button opens the panel after 200 ms. It stays
   open while the pointer is on the button or the panel, and closes 1.5 s after the pointer leaves,
   so the pointer can cross to the panel. A click keeps it open after the pointer leaves, until a
