@@ -136,6 +136,9 @@ test.describe('search', () => {
   test('pages past the first page, and the count is the server total', async ({
     signedIn: page,
   }) => {
+    // Seeding, indexing (up to 120 s), the UI checks and cleanup run longer than the suite's 45 s
+    // default, so this test gets a deadline that covers all of them.
+    test.setTimeout(240_000);
     // An isolated dataset: 41 notes that share one unique term, in a workspace this test makes
     // and deletes. The search is for that term, so the result is exactly these notes, past one
     // page of 40, whatever else the instance holds.
