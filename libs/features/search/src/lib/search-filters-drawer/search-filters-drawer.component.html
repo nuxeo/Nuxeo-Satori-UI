@@ -35,6 +35,7 @@
     class="drawer-filters"
     [filters]="filters()"
     [aggregations]="aggregations()"
+    [optionLabels]="facetLabels()"
     (filtersChange)="onFiltersChange($event)"
     (filtersReset)="onReset()"
     (saveAs)="openSaveAsDialog()"

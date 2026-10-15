@@ -1,7 +1,7 @@
 import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
-import { filter, map, switchMap } from 'rxjs';
+import { filter, map, startWith, switchMap } from 'rxjs';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatDividerModule } from '@angular/material/divider';
@@ -18,12 +18,14 @@ import {
   type NxsSearchFilters,
 } from '@nuxeo-satori/platform/components';
 import {
+  DirectoryService,
   FOLDERISH_TYPES,
   SearchAggregationService,
   type SearchResultItem,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { SearchQueueComponent } from '../search-queue/search-queue.component';
+import { loadFacetLabels } from './facet-labels';
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
 import { SEARCH_PAGE_PROVIDER, SearchSession } from '../search-session/search-session';
 
@@ -62,6 +64,7 @@ const QUEUE_QUICK_FILTER_OPTIONS = [
 export class SearchFiltersDrawerComponent {
   private readonly session = inject(SearchSession);
   private readonly searchAggregationService = inject(SearchAggregationService);
+  private readonly directoryService = inject(DirectoryService);
   private readonly router = inject(Router);
   private readonly activatedRoute = inject(ActivatedRoute);
   private readonly dialog = inject(MatDialog);
@@ -81,6 +84,15 @@ export class SearchFiltersDrawerComponent {
   /** The shared search's state. Subscribing keeps it running while the drawer is open. */
   private readonly results = toSignal(this.session.results$);
   readonly aggregations = computed(() => this.results()?.aggregations ?? {});
+  /** The nature, subject and coverage labels, in the language the app is shown in. */
+  readonly facetLabels = toSignal(
+    this.translate.onLangChange.pipe(
+      map((event) => event.lang),
+      startWith(this.translate.currentLang || this.translate.defaultLang || 'en'),
+      switchMap((lang) => loadFacetLabels(this.directoryService, lang)),
+    ),
+    { initialValue: {} },
+  );
 
   readonly activeFiltersForQueue = computed(() => {
     const selected = this.selectedQueueQuickFilters();
