@@ -89,6 +89,14 @@
   }
 }
 
+/* The search drawer fills the panel below its header, so its own list can scroll. */
+.search-filters-outlet {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
 .drawer-list {
   flex: 1;
   overflow-y: auto;
