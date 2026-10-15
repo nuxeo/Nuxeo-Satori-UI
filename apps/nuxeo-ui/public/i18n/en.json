@@ -32,16 +32,6 @@
     "toolbar-unlock": "Unlock",
     "toolbar-unsubscribe": "Unsubscribe"
   },
-  "adf-hx-bridge": {
-    "loading": "Loading",
-    "notify-me": "Notify Me",
-    "pager": {
-      "no-documents": "No documents",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} of {{ total }}"
-    },
-    "unsubscribe": "Unsubscribe"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "AI Audit Anomalies",
@@ -719,17 +709,6 @@
       "user-group": "User / Group",
       "username": "Username"
     },
-    "browse-adf-hx-poc": {
-      "columns": "Columns",
-      "manage-columns": "Manage columns",
-      "preview": "Preview",
-      "preview-document": "Preview document",
-      "retry": "Retry",
-      "select-a-single-document-in-the": "Select a single document in the View tab to see its properties.",
-      "select-a-single-document-in-the-2": "Select a single document in the View tab to see its versions.",
-      "the-repository-root-carries-no-access": "The repository root carries no access control list. Open a domain or folder to see and manage its permissions.",
-      "this-folder-is-empty": "This folder is empty"
-    },
     "column": {
       "author": "Author",
       "coverage": "Coverage",
@@ -921,17 +900,6 @@
       "export": "Export",
       "notify": "Notify",
       "share": "Share"
-    },
-    "search-adf-hx": {
-      "enter-search-term": "Enter search term...",
-      "loading": "Loading",
-      "next-page": "Next page",
-      "no-results-found": "No results found",
-      "previous-page": "Previous page",
-      "search": "Search",
-      "search-documents": "Search documents",
-      "searching": "Searching...",
-      "try-a-different-search-term": "Try a different search term"
     },
     "show-details": "Show details",
     "tab": {
@@ -1582,104 +1550,6 @@
       "loading": "Loading…"
     }
   },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "Activity",
-      "by": "By",
-      "close-panel": "Close panel",
-      "contributors": "Contributors",
-      "created": "Created",
-      "document-details": "Document details",
-      "info": "Info",
-      "last-modified": "Last Modified",
-      "no-recent-activity": "No recent activity",
-      "no-tags-yet": "No tags yet",
-      "properties": "Properties",
-      "search-or-create-a-tag": "Search or create a tag",
-      "state": "State",
-      "tags": "Tags",
-      "title": "Title",
-      "type": "Type"
-    },
-    "hxp-browse-history": {
-      "action": "Action",
-      "all": "All",
-      "category": "Category",
-      "comment": "Comment",
-      "date": "Date",
-      "from": "From",
-      "next": "Next",
-      "no-audit-entries-found": "No audit entries found.",
-      "performed-action": "Performed Action",
-      "previous": "Previous",
-      "state": "State",
-      "to": "To",
-      "username": "Username"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "Refresh"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "Document list pages",
-      "next": "Next",
-      "next-page": "Next page",
-      "previous": "Previous",
-      "previous-page": "Previous page"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "Browse folder tabs"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "All types",
-      "card-view": "Card view",
-      "clear-contributor-filter": "Clear contributor filter",
-      "clear-title-filter": "Clear title filter",
-      "contributor": "Contributor...",
-      "export-csv": "Export CSV",
-      "filter-by-title": "Filter by title...",
-      "last-contributor": "Last Contributor",
-      "list-view": "List view",
-      "modified-from": "Modified from",
-      "modified-to": "Modified to",
-      "type": "Type"
-    },
-    "hxp-browse-trash": {
-      "actions": "Actions",
-      "failed-to-load": "Could not load the trash.",
-      "last-modified": "Last Modified",
-      "name": "Name",
-      "restore": "Restore",
-      "retry": "Retry",
-      "trash-is-empty": "Trash is empty",
-      "type": "Type"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "Close column picker",
-      "column-settings": "Column Settings",
-      "done": "Done",
-      "reset": "Reset"
-    },
-    "hxp-folder-header": {
-      "close-menu": "Close menu",
-      "create-folder-upload-files-or-import": "Create folder, upload files, or import CSV",
-      "create-import": "Create / Import",
-      "delete": "Delete",
-      "download-all": "Download All",
-      "edit": "Edit",
-      "export": "Export",
-      "more-actions": "More actions",
-      "share": "Share",
-      "upload-with-nuxeo-drive": "Upload with Nuxeo Drive"
-    },
-    "tab": {
-      "history": "History",
-      "permissions": "Permissions",
-      "properties": "Properties",
-      "trash": "Trash",
-      "versions": "Versions",
-      "view": "View"
-    }
-  },
   "kd": {
     "content-lake-upload": {
       "checking-for-existing-content-lake-copies": "Checking for existing Content Lake copies...",
@@ -1831,7 +1701,6 @@
       "administration": "Administration",
       "assets": "Assets",
       "browse": "Browse",
-      "browse-adf-hx": "Browse",
       "clipboard": "Clipboard",
       "collections": "Collections",
       "dashboard": "Dashboard",

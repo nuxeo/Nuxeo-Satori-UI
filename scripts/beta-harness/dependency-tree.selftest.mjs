@@ -3,9 +3,9 @@
  * Controls for `dependency-tree.mjs` — proof that each of its five locations can actually fail.
  *
  * `CLAUDE.md`: *a gate is not evidence until you have seen it fail on purpose.* This one is
- * report-only on main, so its own run in CI is green whatever it finds; without these controls it
- * could regress into a scanner that finds nothing and nobody would see the difference until the
- * removal commit made it blocking and it waved the packages through. Every control builds a
+ * blocking since the ADF removal, so its own run in CI is green exactly when it finds nothing;
+ * without these controls it could regress into a scanner that finds nothing, and it would wave a
+ * returning package through with nobody seeing the difference. Every control builds a
  * throwaway repository under the OS temp directory and runs the real gate against it with
  * `--root`, so nothing tracked is touched.
  *

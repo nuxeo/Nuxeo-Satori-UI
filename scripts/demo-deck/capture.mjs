@@ -158,10 +158,7 @@ const CUSTOM_PAGES_MANIFEST = {
   extensions: {
     $name: 'acme-insurance',
     overrides: {
-      // `app.navbar.browseAdfHx` is the browse entry the product renders — the
-      // legacy `app.navbar.browse` ships `disabled`, so relabelling it would
-      // photograph a nav with no Claim Files in it.
-      'app.navbar.browseAdfHx': { label: 'Claim Files', order: 10 },
+      'app.navbar.browse': { label: 'Claim Files', order: 10 },
       'app.navbar.knowledgeDiscovery': { visible: false },
     },
     slots: {
@@ -233,10 +230,8 @@ const SHOTS = [
       extensions: {
         $name: 'acme-insurance',
         overrides: {
-          // Every nav id the product renders is relabellable this way. The
-          // fifteenth, `app.navbar.browse`, ships `disabled`, so an override on
-          // it is applied to a descriptor the registry drops — see nav-items.ts.
-          'app.navbar.browseAdfHx': { label: 'Claim Files', order: 10 },
+          // Every nav id the product renders is relabellable this way.
+          'app.navbar.browse': { label: 'Claim Files', order: 10 },
           'app.navbar.collections': { label: 'Policies', order: 20 },
           'app.navbar.tasks': { label: 'Underwriting Queue', order: 30 },
           'app.navbar.favorites': { label: 'Flagged Claims', order: 40 },

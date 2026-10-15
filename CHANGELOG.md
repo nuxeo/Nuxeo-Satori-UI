@@ -11,6 +11,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 `0.1.0`). This section holds breaking changes made since `0.1.0`, and `^0.1.0` admits only `0.1.x`,
 so the next publish has to be a minor. Nothing has been published yet.
 
+### Changed — BREAKING (registered IDs) — one Browse entry again
+
+The adf-hx proof of concept is removed, with its two routes and its navigation entry.
+
+- **`app.navbar.browseAdfHx` is retired.** An `overrides` key naming it now addresses nothing. A
+  `navbar` slot entry naming it no longer patches a packaged entry, so it becomes an entry of its
+  own — with no path or label unless it gives them, which renders a blank item: delete it. Its
+  label key, `nav.item.browse-adf-hx`, is on no entry any more: move a `labels` entry for it to
+  `nav.item.browse`.
+- **`app.navbar.browse` is enabled again.** It shipped `disabled: true` while the adf-hx entry read
+  "Browse". A manifest that restated it with `"disabled": false` to get both entries can drop that;
+  it is now redundant, not harmful.
+- **Old links redirect.** `/#/browse-adf-hx` and `/#/search-adf-hx` go to `/browse` and `/search`
+  with their query string intact, and a `?path=` folder opens in `/browse`.
+
+### Removed — BREAKING (`@nuxeo-satori/platform/nuxeo-client`) — the adf-hx browse URL helpers
+
+They built, recognised and parsed `/browse-adf-hx` URLs, and chose between that route and
+`/browse` for document detail's way back. With the route retired, all seven go:
+`toAdfHxBrowseRouterUrl`, `isAdfHxBrowseRouterUrl`, `parseAdfHxBrowsePathFromRouterUrl`,
+`toBrowseRouterUrlForReturnMode`, `parseBrowseReturnMode`, `BrowseReturnMode` and
+`BROWSE_RETURN_MODE_PARAM`. Use `toBrowseRouterUrl`, `isBrowseRouterUrl` and
+`parseBrowseNuxeoPathFromRouterUrl`. Document detail no longer reads `?browseReturn=`; an old link
+carrying it opens normally, with breadcrumbs into `/browse`.
+
 ### Changed (`@nuxeo-satori/platform`) — `@hylandsoftware/satori-ui` is an optional peer
 
 - **`@hylandsoftware/satori-ui` is now an optional peer** (`peerDependenciesMeta`). npm installs

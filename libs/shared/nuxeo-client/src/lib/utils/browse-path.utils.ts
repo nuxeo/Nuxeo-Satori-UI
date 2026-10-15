@@ -77,49 +77,6 @@ export function toBrowseRouterUrl(nuxeoPath: string): string {
   return `/browse/${encodedPath}`;
 }
 
-/** Query param preserved when opening document detail from adf-hx browse. */
-export const BROWSE_RETURN_MODE_PARAM = 'browseReturn';
-
-export type BrowseReturnMode = 'default' | 'adf-hx';
-
-export function parseBrowseReturnMode(value: string | null | undefined): BrowseReturnMode {
-  return value === 'adf-hx' ? 'adf-hx' : 'default';
-}
-
-/** Build an adf-hx browse route from a repository path (`?path=` query model). */
-export function toAdfHxBrowseRouterUrl(nuxeoPath: string): string {
-  const normalized = normalizeNuxeoPath(nuxeoPath);
-  if (normalized === '/') {
-    return '/browse-adf-hx';
-  }
-  return `/browse-adf-hx?path=${encodeURIComponent(normalized)}`;
-}
-
-/** True when the router URL targets the adf-hx browse POC route. */
-export function isAdfHxBrowseRouterUrl(routerUrl: string): boolean {
-  const hashIndex = routerUrl.indexOf('#');
-  const pathAndQuery = hashIndex >= 0 ? routerUrl.slice(hashIndex + 1) : routerUrl;
-  const path = pathAndQuery.split('?')[0] ?? '';
-  return path === '/browse-adf-hx' || path.startsWith('/browse-adf-hx/');
-}
-
-/** Parse the Nuxeo repository path from an adf-hx browse router URL. */
-export function parseAdfHxBrowsePathFromRouterUrl(routerUrl: string): string {
-  const hashIndex = routerUrl.indexOf('#');
-  const pathAndQuery = hashIndex >= 0 ? routerUrl.slice(hashIndex + 1) : routerUrl;
-  const queryIndex = pathAndQuery.indexOf('?');
-  if (queryIndex < 0) {
-    return '/';
-  }
-  const params = new URLSearchParams(pathAndQuery.slice(queryIndex + 1));
-  return normalizeNuxeoPath(params.get('path') ?? '/');
-}
-
-/** Browse route for returning from document detail (production vs adf-hx POC). */
-export function toBrowseRouterUrlForReturnMode(mode: BrowseReturnMode, nuxeoPath: string): string {
-  return mode === 'adf-hx' ? toAdfHxBrowseRouterUrl(nuxeoPath) : toBrowseRouterUrl(nuxeoPath);
-}
-
 /** Parent folder path for a document path (e.g. `/a/b/file.pdf` → `/a/b`). */
 export function parentNuxeoFolderPath(docPath: string): string {
   const normalized = normalizeNuxeoPath(docPath);

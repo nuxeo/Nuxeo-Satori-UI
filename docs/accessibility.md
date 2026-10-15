@@ -222,9 +222,12 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   `srcdoc` note frames are reachable in principle, but neither phase-6 visit targets them: one
   opens a Picture, the other any File with a main blob, so whether a `pdf` frame is ever scanned
   depends on what the test repository happens to hold rather than on anything the journey asserts.
-- **Seven routes no runtime layer visits:** `/#/contracts`, `/#/search-adf-hx` and the five
-  `/#/settings/*` pages (Nuxeo Drive, profile, authorized applications, cloud services, themes).
-  Contracts was dropped from the journey on purpose — see "Fifteen screens" below.
+- **Six routes no runtime layer visits:** `/#/contracts` and the five `/#/settings/*` pages
+  (Nuxeo Drive, profile, authorized applications, cloud services, themes). Contracts was dropped
+  from the journey on purpose — see "Fifteen screens" below. `/#/search-adf-hx` was the seventh
+  until the adf-hx routes were retired on 2026-10-14; it and `/#/browse-adf-hx` now redirect to
+  `/#/search` and `/#/browse`, which the surfaces and display-modes suites scan, so both suites
+  dropped their `/#/browse-adf-hx` row rather than moved it.
 - **Populated tasks and expired-queue screens.** The journey scans their empty states on a server
   with neither, and says so in its output; a task form or an expired card has never been scanned.
 - **Horizontal scrolling inside a region at 320px.** Reflow checks the document's `scrollWidth`
@@ -655,9 +658,8 @@ It began in
 `journey` alone, and the diagnostics kept a fixed 1.2-second pause for longer still — which on
 hash routes was the only wait they had, because a `goto` to another `/#/…` is a same-document
 navigation and `networkidle` resolves at once. What it cannot see is a loading state carrying
-none of those markers — on `/#/browse-adf-hx`, whatever upstream `hxp-document-tree` shows while
-it loads, if it is not one of them — and that is only missed if it outlasts the quiet window
-without the DOM changing.
+none of those markers, and that is only missed if it outlasts the quiet window without the DOM
+changing.
 
 **Verified reproducible afterwards:** two further runs against the same uid produced 24 findings
 each, identical on rule _and_ selector, with all seven tree toggles reported. Two runs is not a

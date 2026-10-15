@@ -17,8 +17,7 @@
  * packages, is deliberate: the distribution model in `docs/adf-hx-beta-plan.md`
  * promises that an upgrade is "an npm version bump for the platform", and four
  * independently versioned packages would make that four bumps and a
- * cross-compatibility matrix. It is also the shape `@alfresco/adf-hx-content-services`
- * itself ships in, which this codebase already consumes.
+ * cross-compatibility matrix.
  */
 
 /**

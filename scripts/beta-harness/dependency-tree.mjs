@@ -29,12 +29,13 @@
  *              the same holds there: an `@import` counts every target, quoted or `url(...)`, and a
  *              `@use` or `@forward` its first, the rest configuration.
  *
- * ## Report-only until the removal commit
+ * ## Blocking since the ADF removal
  *
- * All five are on main by construction, so a blocking gate would be red from the day it landed,
- * and a permanently red gate gets bypassed. Until the ADF removal commit (NXSAT-308 ticket 21) it
- * runs REPORT-ONLY: it lists every finding — that list is the removal backlog — and exits 0.
- * `BLOCKING` below is the one switch, and the removal commit sets it to `true`.
+ * All five were on main by construction while ADF was in use, so a blocking gate would have been
+ * red from the day it landed, and a permanently red gate gets bypassed. Until the ADF removal
+ * (NXSAT-638) it ran REPORT-ONLY: it listed every finding — the removal backlog — and exited 0.
+ * `BLOCKING` below is the one switch, and the removal set it to `true`, so any finding now fails.
+ * `--report-only` still forces the old mode, for the selftest.
  *
  * Report-only is not "cannot fail":
  *
@@ -78,11 +79,11 @@ import { styleSpecifiers } from './stylesheet-scan.mjs';
 /**
  * THE SWITCH. `false` = report-only, `true` = blocking.
  *
- * The ADF removal commit (NXSAT-308 ticket 21) sets this to `true`. Nothing else should: CI, the
- * `beta:gate` entry and the npm script all run this file with no mode flag, so this one line
- * decides the mode everywhere, and a removal that forgets it is caught by the clean-tree rule above.
+ * `true` since the ADF removal (NXSAT-638). CI, the `beta:gate` entry and the npm script all run
+ * this file with no mode flag, so this one line decides the mode everywhere, and setting it back to
+ * `false` on a clean tree is caught by the clean-tree rule above.
  */
-const BLOCKING = false;
+const BLOCKING = true;
 
 const FORBIDDEN = Object.freeze([
   '@alfresco/adf-hx-content-services',
@@ -435,7 +436,7 @@ if (gaps.length > 0) {
   verdict = `pass — none of the ${FORBIDDEN.length} packages is in the lock, the installed tree, a manifest, .npmrc or an import under apps/ or libs/ (blocking).`;
   exitCode = 0;
 } else if (total > 0) {
-  verdict = `REPORT-ONLY — ${total} finding(s) across ${packagesPresent.length} of the ${FORBIDDEN.length} packages; exit 0 until the removal commit sets BLOCKING = true.`;
+  verdict = `REPORT-ONLY — ${total} finding(s) across ${packagesPresent.length} of the ${FORBIDDEN.length} packages; exit 0 because report-only mode was forced.`;
   exitCode = 0;
 } else {
   verdict =

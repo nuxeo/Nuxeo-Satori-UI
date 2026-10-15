@@ -545,21 +545,3 @@ post<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
 put<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
 delete<T>(path: string, options?: HttpOptions): Observable<T>
 ```
-
----
-
-## AdfHxBridge (`libs/shared/adf-hx-bridge`)
-
-Nuxeo → HxPR bridge for NXENG-619 Scope A. Implements HxPR `DocumentApi` / `QueryApi` over `BrowseService` and `DocumentDetailService`.
-
-→ Architecture (layers, routes, hxp-* components, Scope A/B): `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
-
-```typescript
-provideAdfHxNuxeoBridge(): EnvironmentProviders
-mapNuxeoDocumentToHx(doc: NuxeoDocument, repositoryId?: string): Document
-NuxeoDocumentApi.getDocumentById(docId, repositoryId?): Promise<{ data: Document }>
-NuxeoQueryApi.getDocumentsByNamedQuery(namedQuery?): Promise<{ data: QueryResult }>
-AdfHxDocumentService.getFolderChildren(parentId, repositoryId?, options?): Observable<DocumentFetchResults>
-AdfHxDocumentService.getAllChildren(parentId, options?, repositoryId?): Observable<DocumentFetchResults>
-NuxeoDocumentRouterService.navigateTo(document: Document): void
-```

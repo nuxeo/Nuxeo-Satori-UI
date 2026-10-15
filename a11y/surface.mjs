@@ -54,8 +54,6 @@ export const ERROR_STATE_CLASSES = [
   'gd-error',
   'ud-error',
   'ug-error',
-  'hxp-poc-error',
-  'hxp-search-page__error',
   'nxql-error',
   'picker-error',
   'compare-error',
@@ -149,15 +147,13 @@ export async function surfaceUnusableReason(page, host, label, timeoutMs = 20_00
  * Everything that means "still loading", in the nav drawer or inside a feature host.
  *
  * Spinners are matched by element, not by the wrapper class they sit in (`.results-loading`,
- * `.tab-loading`, `.browse-loading`, …): the Material ones everywhere, and the hand-written
- * `hxp-spinner` that `/#/browse-adf-hx` and its panels use instead. Loaders that show text or
- * a skeleton rather than a spinner can only be identified by class, so those are listed.
+ * `.tab-loading`, `.browse-loading`, …). Loaders that show text or a skeleton rather than a
+ * spinner can only be identified by class, so those are listed.
  */
 const LOADING_SELECTOR = [
   'mat-spinner',
   'mat-progress-spinner',
   'mat-progress-bar',
-  'hxp-spinner',
   '.tree-loading',
   // Text only: "Loading…" in the trash filters drawer, no spinner inside it.
   '.drawer-results-loading',
@@ -252,10 +248,9 @@ async function visibleDrawerError(page) {
  * `DRAWER_ERROR_SELECTOR`. A screen can settle perfectly on a failed drawer request, and the
  * scan measures the drawer, so stillness alone would have certified an error panel.
  *
- * Not covered: a loading state with none of the markers in `LOADING_SELECTOR` — on
- * `/#/browse-adf-hx`, whatever upstream `hxp-document-tree` shows while it loads, if it is not
- * one of them. The element counts still have to hold still, so such a state is only missed if
- * it outlasts `quietMs` without the DOM changing.
+ * Not covered: a loading state with none of the markers in `LOADING_SELECTOR`. The element
+ * counts still have to hold still, so such a state is only missed if it outlasts `quietMs`
+ * without the DOM changing.
  *
  * @param {import('@playwright/test').Page} page
  * @param {object}  options

@@ -127,8 +127,7 @@ Automated: `npm run beta:gate` includes it after `build`.
 **One versioned package** with sub-entry points, not four independent packages. The
 distribution model in [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md) promises
 "an npm version bump for the platform" — singular. Four packages make that four bumps and
-a cross-compatibility matrix. This shape also matches `@alfresco/adf-hx-content-services`,
-which this codebase already consumes.
+a cross-compatibility matrix.
 
 ## Publish readiness
 

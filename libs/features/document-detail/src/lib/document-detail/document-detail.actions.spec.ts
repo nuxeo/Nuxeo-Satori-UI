@@ -1188,7 +1188,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
 
       component.restoreVersion({ ...version(1, 0), versionableId: 'doc-live' });
 
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
 
     it('reloads the document after nxs-manage-versions created a version', async () => {
@@ -1569,10 +1569,12 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     it('builds breadcrumb links for every ancestor folder but not the document itself', async () => {
       await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
 
-      expect(component.breadcrumbItems().map((i) => i.label)).toEqual([
-        'default-domain',
-        'workspaces',
-        'ws',
+      expect(
+        component.breadcrumbItems().map((i) => [i.label, 'href' in i ? i.href : undefined]),
+      ).toEqual([
+        ['default-domain', '/browse/default-domain'],
+        ['workspaces', '/browse/default-domain/workspaces'],
+        ['ws', '/browse/default-domain/workspaces/ws'],
       ]);
     });
 

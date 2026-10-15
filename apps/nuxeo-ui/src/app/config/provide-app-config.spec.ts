@@ -1,5 +1,4 @@
-import { UserPreferenceValues } from '@alfresco/adf-core';
-import { LangChangeEvent } from '@ngx-translate/core';
+import { LangChangeEvent, TranslateService } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 
 import {
@@ -7,22 +6,33 @@ import {
   provideAppConfig,
   syncDocumentLanguage,
 } from './provide-app-config';
-import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo-satori/platform/app-config';
-import { DestroyRef, FactoryProvider, LOCALE_ID, signal } from '@angular/core';
+import {
+  APP_BOOTSTRAP_CONFIG_URL,
+  APP_CONFIG_FORMAT,
+  AppConfigService,
+  DEFAULT_APP_BOOTSTRAP_CONFIG,
+  type AppConfigLayer,
+} from '@nuxeo-satori/platform/app-config';
+import {
+  ApplicationInitStatus,
+  DestroyRef,
+  FactoryProvider,
+  LOCALE_ID,
+  signal,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
+
+import { appConfig } from '../app.config';
 
 /**
- * Two behaviours here are invisible from outside and each was a shipped defect.
- *
- * W14: adf-core's `TranslationService` calls `translate.use()` off its own preference the
- * moment any adf-hx surface constructs, so setting the language is not enough — the
- * preference has to be written too, and written on every boot, because `set()` persists and
- * stored locale beats configuration in `initUserLanguage()`.
+ * The language comes from the configuration that has just loaded, on every boot.
  *
  * And the formatting guard: `translate.use('xx')` is harmless because strings fall through to
  * English, but Angular's date pipes throw `NG0701` for a locale with no registered data. A
  * customer's typo produced eleven `InvalidPipeArgument` errors in one capture with the strings
- * looking fine, which is what makes it easy to miss.
+ * looking fine, which is what makes it easy to miss. `LOCALE_ID` below is where that guard
+ * applies.
  */
 describe('initialiseAppConfigAndLanguage', () => {
   function harness(defaultLanguage: string) {
@@ -44,19 +54,14 @@ describe('initialiseAppConfigAndLanguage', () => {
         return of({});
       }),
     };
-    const userPreferences = {
-      set: jasmine.createSpy('set').and.callFake((key: string, value: string) => {
-        order.push(`set:${key}=${value}`);
-      }),
-    };
-    return { config, translate, userPreferences, order };
+    return { config, translate, order };
   }
 
   // No casts: the function takes only the members it uses, so these doubles satisfy it
   // structurally and a signature change becomes a compile error here.
   const run = async (language: string) => {
     const h = harness(language);
-    await initialiseAppConfigAndLanguage(h.config, h.translate, h.userPreferences)();
+    await initialiseAppConfigAndLanguage(h.config, h.translate)();
     return h;
   };
 
@@ -73,54 +78,98 @@ describe('initialiseAppConfigAndLanguage', () => {
     expect(h.translate.setFallbackLang).toHaveBeenCalledWith('en');
   });
 
-  it("writes the language into adf-core's preference, which is the W14 fix", async () => {
-    const h = await run('fr');
-    // Without this, adf-core reverts the whole application to English the moment an adf-hx
-    // surface renders — no reload involved.
-    expect(h.userPreferences.set).toHaveBeenCalledWith(UserPreferenceValues.Locale, 'fr');
-  });
-
-  it('writes that preference on every boot, not only the first', async () => {
-    // `set()` persists, and stored locale wins over configuration in `initUserLanguage()`. A
-    // write-once would strand a customer who later changes `defaultLanguage` on the old
-    // language forever, on any browser that had already run the app.
+  it('applies the language each boot is configured with, not only the first', async () => {
     const first = await run('fr');
     const second = await run('de');
-    expect(first.userPreferences.set).toHaveBeenCalledWith(UserPreferenceValues.Locale, 'fr');
-    expect(second.userPreferences.set).toHaveBeenCalledWith(UserPreferenceValues.Locale, 'de');
+    expect(first.translate.use).toHaveBeenCalledOnceWith('fr');
+    expect(second.translate.use).toHaveBeenCalledOnceWith('de');
   });
 
   it('still uses an unshipped locale for strings, because the fallback handles them', async () => {
     const h = await run('xx');
     expect(h.translate.use).toHaveBeenCalledWith('xx');
   });
+});
 
-  it('does NOT hand an unshipped locale to the formatting pipes', async () => {
-    const h = await run('xx');
-    // The string language and the formatting locale are allowed to diverge, deliberately.
-    expect(h.userPreferences.set).toHaveBeenCalledWith(UserPreferenceValues.Locale, 'en');
-    expect(h.userPreferences.set).not.toHaveBeenCalledWith(UserPreferenceValues.Locale, 'xx');
+/**
+ * The same guarantee through the real startup — `appConfig.providers`, every initializer, the
+ * real `TranslateService` and `AppTranslateLoader` — rather than the initializer by its function.
+ *
+ * What only this can show: that the provider wires the initializer with the dependencies it
+ * needs, and that no other initializer, or anything constructed during startup, moves the
+ * language off the configured one. A stored locale is seeded first because browsers that ran an
+ * earlier build still hold `GUEST__locale`, and a stored language that won over configuration
+ * would strand them on it.
+ */
+describe('the configured language at startup', () => {
+  const STALE_LOCALE_KEY = 'GUEST__locale';
+  let htmlLang: string;
+
+  function envelope(layer: AppConfigLayer, content: Record<string, unknown>) {
+    return {
+      format: APP_CONFIG_FORMAT,
+      layer,
+      fragments: [{ name: 'acme', component: 'com.acme', bundle: 'acme-ui', source: 'x', content }],
+      diagnostics: [],
+    };
+  }
+
+  /** One application start, configured with `defaultLanguage`; resolves to the language in force. */
+  async function boot(defaultLanguage: string): Promise<string> {
+    TestBed.resetTestingModule();
+    TestBed.configureTestingModule({
+      providers: [
+        ...appConfig.providers,
+        provideHttpClientTesting(),
+        { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: '/nuxeo/agentic-ui-config/bootstrap.json' },
+      ],
+    });
+    const http = TestBed.inject(HttpTestingController);
+    const status = TestBed.inject(ApplicationInitStatus);
+    for (const layer of ['bootstrap', 'manifest'] as const) {
+      for (const request of http.match((r) => r.url.endsWith(`/agentic-ui-config/${layer}.json`))) {
+        request.flush(envelope(layer, layer === 'bootstrap' ? { defaultLanguage } : {}));
+      }
+    }
+    for (let turn = 0; turn < 50 && !status.done; turn++) {
+      await new Promise((resolve) => setTimeout(resolve));
+      http.match(() => true).forEach((request) => request.flush({}));
+    }
+    expect(status.done).withContext(`initializers settled for ${defaultLanguage}`).toBeTrue();
+    return TestBed.inject(TranslateService).getCurrentLang();
+  }
+
+  beforeEach(() => {
+    htmlLang = document.documentElement.lang;
+    localStorage.setItem(STALE_LOCALE_KEY, 'de');
   });
 
-  it('passes English straight through', async () => {
-    const h = await run('en');
-    expect(h.userPreferences.set).toHaveBeenCalledWith(UserPreferenceValues.Locale, 'en');
+  afterEach(() => {
+    localStorage.removeItem(STALE_LOCALE_KEY);
+    document.documentElement.lang = htmlLang;
+    TestBed.resetTestingModule();
   });
 
-  it('honours German, so the guard is a real list and not a French special case', async () => {
-    const h = await run('de');
-    expect(h.userPreferences.set).toHaveBeenCalledWith(UserPreferenceValues.Locale, 'de');
+  it('applies the configured language on every boot, over a stored one', async () => {
+    expect(await boot('fr')).toBe('fr');
+    expect(await boot('de')).toBe('de');
+    expect(await boot('en')).toBe('en');
+  });
+
+  it('announces that language on <html lang> once startup has settled', async () => {
+    await boot('fr');
+    expect(document.documentElement.lang).toBe('fr');
   });
 });
 
 /**
- * Angular's `LOCALE_ID`, which is a THIRD mechanism alongside the two above.
+ * Angular's `LOCALE_ID`, which is a second mechanism alongside the string language.
  *
- * `translate.use()` sets the string language; `UserPreferencesService` sets adf-core's
- * formatting locale. Neither touches `LOCALE_ID`, and without a provider Angular keeps its
- * built-in `en-US` — so every `DatePipe` and `inject(LOCALE_ID)` call site formats in English
- * whatever Layer 0 says. `docs/i18n-status.md` carried this as gap 10 while a change threading
- * `locale` through a dozen date helpers was merged against that constant default.
+ * `translate.use()` sets the string language and does not touch `LOCALE_ID`, and without a
+ * provider Angular keeps its built-in `en-US` — so every `DatePipe` and `inject(LOCALE_ID)` call
+ * site formats in English whatever Layer 0 says. `docs/i18n-status.md` carried this as gap 10
+ * while a change threading `locale` through a dozen date helpers was merged against that
+ * constant default.
  *
  * These assert the provider is actually registered and actually reads configuration. Asserting
  * `resolveFormattingLocale` alone would not: it was already correct as an inline expression, and
@@ -161,8 +210,8 @@ describe('LOCALE_ID provider', () => {
   });
 
   it('falls back to en for a locale with no registered Angular data', () => {
-    // Same guard as adf-core's preference: the date pipes throw NG0701 rather than degrading,
-    // so a customer typo in `defaultLanguage` must not reach them.
+    // The date pipes throw NG0701 rather than degrading, so a customer typo in
+    // `defaultLanguage` must not reach them.
     expect(injectLocaleFor('xx')).toBe('en');
   });
 
@@ -200,7 +249,7 @@ describe('syncDocumentLanguage', () => {
     expect(doc.documentElement.lang).toBe('fr');
   });
 
-  it('follows every later language change, including one adf-core makes after boot', () => {
+  it('follows every later language change', () => {
     const { onLangChange, doc } = harness('en');
     onLangChange.next(change('de'));
     expect(doc.documentElement.lang).toBe('de');

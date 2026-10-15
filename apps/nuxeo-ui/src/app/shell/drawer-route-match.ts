@@ -9,9 +9,9 @@ import type { AppNavItem } from '../platform-nav-items';
  * be asserted directly instead of through a shell fixture.
  *
  * A nav item owns its own path and everything beneath it, so `/browse/some/folder` still
- * resolves to the browse drawer. The separator is required: without it `/browse-adf-hx`
- * would match the `/browse` item by prefix and open the wrong tree — the two routes are
- * siblings that differ only by suffix, so this is a live case, not a hypothetical.
+ * resolves to the browse drawer. The separator is required: without it a sibling route that
+ * differs only by suffix would match the `/browse` item by prefix and open the wrong tree, as
+ * the retired `/browse-adf-hx` did while it had a drawer of its own.
  */
 export function drawerItemForPath(
   navItems: readonly AppNavItem[],

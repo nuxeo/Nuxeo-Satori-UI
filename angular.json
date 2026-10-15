@@ -30,26 +30,6 @@
               },
               {
                 "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-core/bundles/assets/adf-core",
-                "output": "assets/adf-core"
-              },
-              {
-                "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-hx-content-services/icons/assets",
-                "output": "assets"
-              },
-              {
-                "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-hx-content-services/ui/assets",
-                "output": "assets"
-              },
-              {
-                "glob": "**/*",
-                "input": "node_modules/@alfresco/adf-hx-content-services/services/assets",
-                "output": "assets"
-              },
-              {
-                "glob": "**/*",
                 "input": "node_modules/@hylandsoftware/satori-ui/i18n",
                 "output": "assets/satori-ui/i18n"
               }
@@ -65,7 +45,7 @@
                 {
                   "type": "initial",
                   "maximumWarning": "2.5mb",
-                  "maximumError": "4.25mb"
+                  "maximumError": "4mb"
                 },
                 {
                   "type": "anyComponentStyle",
@@ -94,26 +74,6 @@
                   "glob": "**/*",
                   "input": "apps/nuxeo-ui/public",
                   "ignore": ["i18n/*.context.json"]
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-core/bundles/assets/adf-core",
-                  "output": "assets/adf-core"
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-hx-content-services/icons/assets",
-                  "output": "assets"
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-hx-content-services/ui/assets",
-                  "output": "assets"
-                },
-                {
-                  "glob": "**/*",
-                  "input": "node_modules/@alfresco/adf-hx-content-services/services/assets",
-                  "output": "assets"
                 },
                 {
                   "glob": "**/*",

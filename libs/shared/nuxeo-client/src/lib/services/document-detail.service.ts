@@ -783,13 +783,14 @@ export class DocumentDetailService {
    * the two versions, and both only after the index caught up. A versions panel that reloads
    * on check-in would show the user a list missing the version they just created.
    *
-   * `Document.GetVersions` reads the repository directly and returned both immediately, so
-   * that is what the adf-hx `QUERY` port uses. The operation answers with a bare
-   * `{"entity-type":"documents","entries":[...]}` — no `totalSize`, no page index — so this
+   * `Document.GetVersions` reads the repository directly and returned both immediately. It answers
+   * **oldest first** — `0.1`, `0.2`, … `0.12`, checked against the local instance — so a caller
+   * showing the newest first sorts, as `nxs-manage-versions` does. The operation answers with a
+   * bare `{"entity-type":"documents","entries":[...]}` — no `totalSize`, no page index — so this
    * returns the entries rather than pretending to be a `NuxeoPaginatedList`.
    *
    * `getVersions` is deliberately left alone: `document-detail` and the bulk-action services
-   * already depend on its paginated shape, and changing them is not this port's business.
+   * already depend on its paginated shape.
    */
   getVersionsDirect(uid: string): Observable<NuxeoDocument[]> {
     return this.api
@@ -802,11 +803,8 @@ export class DocumentDetailService {
   }
 
   /**
-   * Create a version of a live document — Nuxeo's `Document.CheckIn`.
-   *
-   * Added for the adf-hx `CHECKIN` API port, which upstream's
-   * `CreateDocumentVersionService` requires. Nuxeo takes the increment as
-   * `'minor' | 'major'`; adf-hx expresses it as a `minor` boolean.
+   * Create a version of a live document — Nuxeo's `Document.CheckIn`. Nuxeo takes the increment
+   * as `'minor' | 'major'`, which `minor` chooses between.
    */
   checkInDocument(uid: string, minor = true): Observable<NuxeoDocument> {
     return this.api.post<NuxeoDocument>(

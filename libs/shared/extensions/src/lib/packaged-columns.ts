@@ -32,8 +32,8 @@ import type { ExtensionColumnDescriptor } from './extension-actions';
  *
  * These are the keys the browse row template already reads off its view model,
  * not raw Nuxeo property paths. `title` is not `dc:title` because the row binds
- * a computed display title. Migrating to Nuxeo paths is Phase 3's concern, when
- * the adf-hx `document-list` brings its own column contract.
+ * a computed display title. Phase 3 expected to migrate them to Nuxeo paths for
+ * the adf-hx `document-list`, which was removed instead.
  */
 export const PACKAGED_BROWSE_COLUMNS: readonly ExtensionColumnDescriptor[] = [
   // `title` is the row's identity. `togglePendingColumn` refuses to switch it off,

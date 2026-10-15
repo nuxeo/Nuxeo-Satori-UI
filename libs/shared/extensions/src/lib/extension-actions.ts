@@ -9,8 +9,9 @@ import type { ExtensionElement } from './extension-slots';
  * The shape follows adf-hx's action services (`content-delete`,
  * `content-share`, `single-item-download`, `permissions-management` in the
  * published package's `/ui` entry point): a declarative descriptor naming a
- * service that performs the work. Phase 3 adopts those components, so matching
- * the pattern now is what avoids migrating the action surface twice.
+ * service that performs the work. It was matched so that adopting those
+ * components would not mean migrating the action surface twice; adf-hx was
+ * removed instead, and the shape stays because handlers are written against it.
  *
  * **A descriptor is not a permission.** `rule` decides what the interface
  * offers; Nuxeo evaluates the real permission server-side on every operation.

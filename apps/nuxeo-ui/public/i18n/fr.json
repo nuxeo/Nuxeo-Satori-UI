@@ -27,16 +27,6 @@
     "toolbar-unlock": "Déverrouiller",
     "toolbar-unsubscribe": "Se désabonner"
   },
-  "adf-hx-bridge": {
-    "loading": "Chargement",
-    "notify-me": "M'avertir",
-    "pager": {
-      "no-documents": "Aucun document",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} sur {{ total }}"
-    },
-    "unsubscribe": "Se désabonner"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "Anomalies d'audit IA",
@@ -709,17 +699,6 @@
       "user-group": "Utilisateur / Groupe",
       "username": "Nom d'utilisateur"
     },
-    "browse-adf-hx-poc": {
-      "columns": "Colonnes",
-      "manage-columns": "Gérer les colonnes",
-      "preview": "Aperçu",
-      "preview-document": "Aperçu du document",
-      "retry": "Réessayer",
-      "select-a-single-document-in-the": "Sélectionnez un seul document dans l'onglet Afficher pour voir ses propriétés.",
-      "select-a-single-document-in-the-2": "Sélectionnez un seul document dans l'onglet Afficher pour voir ses versions.",
-      "the-repository-root-carries-no-access": "La racine de l'entrepôt ne comporte aucune liste de contrôle d'accès. Ouvrez un domaine ou un dossier pour afficher et gérer ses autorisations.",
-      "this-folder-is-empty": "Ce dossier est vide"
-    },
     "column": {
       "author": "Auteur",
       "coverage": "Couverture",
@@ -899,17 +878,6 @@
       "export": "Exporter",
       "notify": "Notifier",
       "share": "Partager"
-    },
-    "search-adf-hx": {
-      "enter-search-term": "Saisissez un terme de recherche...",
-      "loading": "Chargement",
-      "next-page": "Page suivante",
-      "no-results-found": "Aucun résultat trouvé",
-      "previous-page": "Page précédente",
-      "search": "Rechercher",
-      "search-documents": "Rechercher des documents",
-      "searching": "Recherche en cours...",
-      "try-a-different-search-term": "Essayez un autre terme de recherche"
     },
     "show-details": "Afficher les détails",
     "tab": {
@@ -1548,104 +1516,6 @@
       "loading": "Chargement…"
     }
   },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "Activité",
-      "by": "Par",
-      "close-panel": "Fermer le panneau",
-      "contributors": "Contributeurs",
-      "created": "Créé",
-      "document-details": "Détails du document",
-      "info": "Informations",
-      "last-modified": "Dernière modification",
-      "no-recent-activity": "Aucune activité récente",
-      "no-tags-yet": "Aucune balise pour l'instant",
-      "properties": "Propriétés",
-      "search-or-create-a-tag": "Rechercher ou créer une balise",
-      "state": "État",
-      "tags": "Balises",
-      "title": "Titre",
-      "type": "Type"
-    },
-    "hxp-browse-history": {
-      "action": "Action",
-      "all": "Tout",
-      "category": "Catégorie",
-      "comment": "Commentaire",
-      "date": "Date",
-      "from": "De",
-      "next": "Suivant",
-      "no-audit-entries-found": "Aucune entrée d'audit trouvée.",
-      "performed-action": "Action effectuée",
-      "previous": "Précédent",
-      "state": "État",
-      "to": "A",
-      "username": "Nom d'utilisateur"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "Actualiser"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "Pages de la liste de documents",
-      "next": "Suivant",
-      "next-page": "Page suivante",
-      "previous": "Précédent",
-      "previous-page": "Page précédente"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "Onglets pour parcourir les dossiers"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "Tous les types",
-      "card-view": "Affichage carte",
-      "clear-contributor-filter": "Effacer le filtre de contributeur",
-      "clear-title-filter": "Effacer le filtre de titre",
-      "contributor": "Contributeur...",
-      "export-csv": "Exporter CSV",
-      "filter-by-title": "Filtrer par titre...",
-      "last-contributor": "Dernier contributeur",
-      "list-view": "Affichage liste",
-      "modified-from": "Modifié du",
-      "modified-to": "Modifié au",
-      "type": "Type"
-    },
-    "hxp-browse-trash": {
-      "actions": "Actions",
-      "failed-to-load": "Impossible de charger la corbeille.",
-      "last-modified": "Dernière modification",
-      "name": "Nom",
-      "restore": "Restaurer",
-      "retry": "Réessayer",
-      "trash-is-empty": "La corbeille est vide",
-      "type": "Type"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "Fermer le sélecteur de colonnes",
-      "column-settings": "Paramètres des colonnes",
-      "done": "Terminé",
-      "reset": "Réinitialiser"
-    },
-    "hxp-folder-header": {
-      "close-menu": "Fermer le menu",
-      "create-folder-upload-files-or-import": "Créer un dossier, importer des fichiers ou importer un CSV",
-      "create-import": "Créer / Importer",
-      "delete": "Supprimer",
-      "download-all": "Tout télécharger",
-      "edit": "Modifier",
-      "export": "Exporter",
-      "more-actions": "Plus d'actions",
-      "share": "Partager",
-      "upload-with-nuxeo-drive": "Importer avec Nuxeo Drive"
-    },
-    "tab": {
-      "history": "Historique",
-      "permissions": "Autorisations",
-      "properties": "Propriétés",
-      "trash": "Corbeille",
-      "versions": "Versions",
-      "view": "Afficher"
-    }
-  },
   "kd": {
     "content-lake-upload": {
       "checking-for-existing-content-lake-copies": "Vérification des copies existantes dans Content Lake...",
@@ -1797,7 +1667,6 @@
       "administration": "Administration",
       "assets": "Ressources",
       "browse": "Parcourir",
-      "browse-adf-hx": "Parcourir",
       "clipboard": "Presse-papiers",
       "collections": "Collections",
       "dashboard": "Tableau de bord",

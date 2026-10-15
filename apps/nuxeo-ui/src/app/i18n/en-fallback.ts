@@ -27,7 +27,7 @@
  * translation key for both purposes, because it leaves the host no way to separate them.
  *
  * These values match upstream's own `i18n/en.json`, which is now also loaded as a translation
- * folder (see `SEEDED_FOLDERS` in `app-translate-loader.ts`). They are duplicated here because
+ * folder (see `UPSTREAM_FOLDERS` in `app-translate-loader.ts`). They are duplicated here because
  * this map is the fallback for a **failed fetch**, and a failed fetch must not silently restore
  * the empty name.
  *
@@ -126,8 +126,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'assets.asset-search-results.table-view': 'Table view',
   'assets.assets-drawer.search': 'Search...',
   'assets.assets-drawer.search-for-something': 'Search for something...',
-  'browse.browse-adf-hx-poc.manage-columns': 'Manage columns',
-  'browse.browse-adf-hx-poc.preview-document': 'Preview document',
   'browse.browse.actions': 'Actions',
   'browse.browse.card-view': 'Card view',
   'browse.browse.clear': 'Clear',
@@ -168,10 +166,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'browse.folder-picker-dialog.loading': 'Loading',
   'browse.folder-picker-dialog.parent-folder': 'Parent folder',
   'browse.folder-picker-dialog.subfolders': 'Subfolders',
-  'browse.search-adf-hx.enter-search-term': 'Enter search term...',
-  'browse.search-adf-hx.loading': 'Loading',
-  'browse.search-adf-hx.next-page': 'Next page',
-  'browse.search-adf-hx.previous-page': 'Previous page',
   'collections.collection-detail.delete': 'Delete',
   'collections.collection-detail.delete-permission': 'Delete permission',
   'collections.collection-detail.edit': 'Edit',
@@ -267,31 +261,6 @@ export const EN_FALLBACK_TRANSLATIONS: Record<string, string> = {
   'document-detail.note-image-picker-dialog.select-all': 'Select all',
   'document-layouts.loading-form': 'Loading the form',
   'document-layouts.sections': 'Property sections',
-  'hxp.hxp-browse-details-panel.close-panel': 'Close panel',
-  'hxp.hxp-browse-details-panel.document-details': 'Document details',
-  'hxp.hxp-browse-details-panel.search-or-create-a-tag': 'Search or create a tag',
-  'hxp.hxp-browse-nav-drawer.refresh': 'Refresh',
-  'hxp.hxp-browse-pager.document-list-pages': 'Document list pages',
-  'hxp.hxp-browse-pager.next-page': 'Next page',
-  'hxp.hxp-browse-pager.previous-page': 'Previous page',
-  'hxp.hxp-browse-tabs.browse-folder-tabs': 'Browse folder tabs',
-  'hxp.hxp-browse-toolbar.card-view': 'Card view',
-  'hxp.hxp-browse-toolbar.clear-contributor-filter': 'Clear contributor filter',
-  'hxp.hxp-browse-toolbar.clear-title-filter': 'Clear title filter',
-  'hxp.hxp-browse-toolbar.contributor': 'Contributor...',
-  'hxp.hxp-browse-toolbar.export-csv': 'Export CSV',
-  'hxp.hxp-browse-toolbar.filter-by-title': 'Filter by title...',
-  'hxp.hxp-browse-toolbar.list-view': 'List view',
-  'hxp.hxp-column-picker.close-column-picker': 'Close column picker',
-  'hxp.hxp-column-picker.column-settings': 'Column Settings',
-  'hxp.hxp-folder-header.close-menu': 'Close menu',
-  'hxp.hxp-folder-header.create-folder-upload-files-or-import':
-    'Create folder, upload files, or import CSV',
-  'hxp.hxp-folder-header.delete': 'Delete',
-  'hxp.hxp-folder-header.download-all': 'Download All',
-  'hxp.hxp-folder-header.edit': 'Edit',
-  'hxp.hxp-folder-header.more-actions': 'More actions',
-  'hxp.hxp-folder-header.upload-with-nuxeo-drive': 'Upload with Nuxeo Drive',
   'kd.content-lake-upload.loading': 'Loading',
   'kd.content-lake-upload.up-one-folder-level': 'Up one folder level',
   'kd.kd-citation-dialog.citation-references': 'Citation references',
