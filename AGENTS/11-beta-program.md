@@ -583,7 +583,7 @@ completion is not completion; see section 6.
 ### The gates
 
 1. **Quality gate** — `npm run beta:gate -- --phase <id>` is green with
-   `verdict: "pass"`, **not** `pass-partial` (node, lockfile, guardrails,
+   `verdict: "pass"`, **not** `pass-partial` or `pass-incomplete` (node, lockfile, guardrails,
    assertions, affected lint, test, build, typecheck).
 2. **Evidence gate** — `npm run beta:evidence -- <id>` exits 0, meaning every
    step recorded at least one check and every check passed. Exit 2 is

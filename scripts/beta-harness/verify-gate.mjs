@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { classify, summarize } from './gate-summary.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -128,12 +129,15 @@ const ALL_GATES = [
   //
   // Sits next to `supply-chain` because they answer the two halves of the same question — is what
   // we depend on safe, and is what we wrote safe. Needs `gh` and network access, so it is the only
-  // gate with an explicit skip (`BETA_SKIP_CODE_SCANNING=1`), which prints NOT RUN rather than pass.
+  // gate with an explicit skip (`BETA_SKIP_CODE_SCANNING=1`). Skipped, it exits with
+  // NOT_RUN_EXIT_CODE, which the runner records as NOT RUN: never green, and the run is then
+  // `pass-incomplete` rather than `pass`.
   {
     id: 'code-scanning',
     label: 'Code scanning (CodeQL)',
     cmd: 'node',
     argv: ['scripts/beta-harness/code-scanning.mjs'],
+    mayNotRun: true,
     // The ref, the analysis count and the alert count are the evidence.
     echoOnPass: true,
   },
@@ -425,7 +429,6 @@ if (notRequested.length) {
 console.log('');
 
 const results = [];
-let firstFailure = null;
 
 for (const gate of selected) {
   process.stdout.write(`[run ] ${gate.label} ... `);
@@ -442,11 +445,14 @@ for (const gate of selected) {
   });
   const ms = Date.now() - started;
   const output = `${proc.stdout ?? ''}${proc.stderr ?? ''}`;
-  const passed = proc.status === 0;
+  const status = classify(gate, proc.status);
+  const passed = status === 'pass';
 
-  console.log(`${passed ? 'pass' : 'FAIL'} (${(ms / 1000).toFixed(1)}s)`);
+  console.log(
+    `${passed ? 'pass' : status === 'not-run' ? 'NOT RUN' : 'FAIL'} (${(ms / 1000).toFixed(1)}s)`,
+  );
 
-  if (passed && gate.echoOnPass && output.trim()) {
+  if (status !== 'fail' && gate.echoOnPass && output.trim()) {
     for (const line of output.trimEnd().split('\n')) console.log(`       ${line}`);
     console.log('');
   }
@@ -454,6 +460,7 @@ for (const gate of selected) {
   results.push({
     id: gate.id,
     label: gate.label,
+    status,
     passed,
     exitCode: proc.status,
     durationMs: ms,
@@ -461,13 +468,10 @@ for (const gate of selected) {
     outputTail: lastLines(output, tail),
   });
 
-  if (!passed) {
-    firstFailure = results.at(-1);
-    break;
-  }
+  if (status === 'fail') break;
 }
 
-const allPassed = results.every((r) => r.passed);
+const anyFailed = results.some((r) => r.status === 'fail');
 const skipped = selected.slice(results.length).map((g) => g.id);
 const full = notRequested.length === 0;
 
@@ -480,8 +484,22 @@ const full = notRequested.length === 0;
  * `results` by hand. The skills tell an agent to quote the verdict line verbatim;
  * making the verdict itself carry the coverage means a partial run cannot be
  * quoted as if it were complete.
+ *
+ * `pass-incomplete` exists for the same reason one level down: a full run in which a gate
+ * reported NOT RUN used to print "all 29 gates green" with code scanning skipped.
  */
-const verdict = !allPassed ? 'fail' : full ? 'pass' : 'pass-partial';
+const {
+  verdict,
+  counts,
+  notRun,
+  lines: summaryLines,
+} = summarize({
+  total: ALL_GATES.length,
+  notRequested,
+  skipped,
+  results,
+  tail,
+});
 
 /**
  * The commit the gate actually ran against, and whether the tree was dirty.
@@ -504,10 +522,15 @@ const report = {
   commit: gitFact(['rev-parse', 'HEAD'], null),
   // A green gate on a dirty tree describes something no commit contains.
   dirty: gitFact(['status', '--porcelain'], '') !== '',
+  // Green, not run and failed, of all gates. A not-run gate is never in `green`.
+  counts,
   gates: {
     available: ALL_GATES.map((g) => g.id),
     requested: selected.map((g) => g.id),
-    ran: results.map((r) => r.id),
+    // Gates that reached a verdict, pass or fail.
+    ran: results.filter((r) => r.status !== 'not-run').map((r) => r.id),
+    // Started, but reported that they checked nothing (NOT_RUN_EXIT_CODE).
+    notRun,
     // Selected but never reached, because an earlier gate failed.
     skipped,
     // Never asked for. This run says nothing at all about these.
@@ -525,27 +548,10 @@ const reportPath = resolve(outDir, `${stamp}-${phase}.json`);
 await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
 console.log('');
-if (allPassed && full) {
-  console.log(`verdict  PASS — all ${ALL_GATES.length} gates green`);
-} else if (allPassed) {
-  console.log(`verdict  PASS (PARTIAL) — ${results.length} of ${ALL_GATES.length} gates green`);
-  console.log(`         NOT RUN: ${notRequested.join(', ')}`);
-  console.log(
-    '         A partial run is a fast inner loop, not a phase gate. Do not sign off on this.',
-  );
-} else {
-  console.log(`verdict  FAIL — first failing gate: ${firstFailure.id}`);
-  if (skipped.length) {
-    console.log(`skipped  ${skipped.join(', ')} (not run because an earlier gate failed)`);
-  }
-  console.log(`\ncommand  ${firstFailure.command}`);
-  console.log(`--- last ${tail} lines ---`);
-  console.log(firstFailure.outputTail);
-  console.log('--- end ---');
-}
+for (const line of summaryLines) console.log(line);
 console.log(`\nreport   ${reportPath}`);
 
-process.exit(allPassed ? 0 : 1);
+process.exit(anyFailed ? 1 : 0);
 
 /**
  * Node 22 added a built-in `localStorage` that requires `--localstorage-file` and

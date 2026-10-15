@@ -542,7 +542,8 @@ that is the cost of the two traps it catches that `review:preflight` does not:
   needs and `npm ci` then refuses the tree.
 
 Only a run with **no** `--gates` filter can be cited. A filtered run reports `pass-partial`; read
-`gates.notRequested` before quoting anything. Use [`verify-gate`](../verify-gate/SKILL.md) to
+`gates.notRequested` before quoting anything. A run in which a gate did not run reports
+`pass-incomplete`; read `gates.notRun`. Use [`verify-gate`](../verify-gate/SKILL.md) to
 iterate: fix only the first reported failure, no speculative batching, three attempts then stop.
 
 ### 5a — Coverage

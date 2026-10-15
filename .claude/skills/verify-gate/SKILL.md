@@ -45,6 +45,12 @@ reports in the evidence corpus read `"verdict": "pass"` having run one gate. The
 also prints `NOT REQUESTED` for every gate it skipped — read that line before quoting
 a count.
 
+A gate that ran but checked nothing is **NOT RUN**, never green. Today that is
+`code-scanning` with `BETA_SKIP_CODE_SCANNING=1`, which it needs before a PR exists. A full
+run containing one reports `verdict: pass-incomplete` and prints
+`PASS (INCOMPLETE) — 28 green, 1 NOT RUN (code-scanning)`; the report lists it under
+`gates.notRun`. Quote that as "28 green, code scanning NOT RUN", never as 29/29.
+
 For non-Beta work the equivalent is `npm run review:preflight` followed by
 `npx nx affected -t build`.
 
@@ -104,6 +110,7 @@ command as uninterpretable until you have reproduced it inside the gate.
   earlier one failed. The report lists `skipped` for exactly this reason — read it.
 - Cite a `pass-partial` report as a phase gate, or quote its check count as if the
   filtered-out gates had run. Read `gates.notRequested` before quoting anything.
+- Quote a `pass-incomplete` run as all gates green. Read `gates.notRun` first.
 - Change application code to satisfy a failing test before you have classified the
   failure. Product defect, test defect, environment, configuration, dependency —
   decide which, in writing, first.
@@ -121,7 +128,9 @@ command as uninterpretable until you have reproduced it inside the gate.
 A step is complete when, and only when:
 
 1. The full gate exits 0 with `verdict: "pass"` — not `pass-partial` — and nothing
-   in `gates.skipped` or `gates.notRequested`, **and**
+   in `gates.skipped` or `gates.notRequested`. Locally, before a PR exists, code scanning
+   cannot run, so `pass-incomplete` with only `code-scanning` in `gates.notRun` is the most a
+   run can show: report it as such, and CodeQL on the PR settles the rest, **and**
 2. the phase evidence run exits 0 — see [`capture-phase-evidence`](../capture-phase-evidence/SKILL.md).
 
 Reasoning about correctness is not a substitute for either. Quote the gate

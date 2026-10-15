@@ -267,15 +267,27 @@ were never asked for and the verdict carries the coverage:
 
 ```text
 verdict  PASS (PARTIAL) — 2 of 8 gates green
-         NOT RUN: lockfile, assertions, lint, test, build, typecheck
+         NOT REQUESTED: lockfile, assertions, lint, test, build, typecheck
 ```
 
 The JSON records `verdict: "pass-partial"` plus a `gates` object with
-`available`, `requested`, `ran`, `skipped` (selected but never reached, because an
-earlier gate failed) and `notRequested`. Two reports in the evidence corpus read
+`available`, `requested`, `ran` (reached a verdict), `notRun`, `skipped` (selected but
+never reached, because an earlier gate failed) and `notRequested`, and a `counts` object. Two reports in the evidence corpus read
 `"verdict": "pass"` having run a single gate — `skipped` was empty because the
 other five were never _selected_ — so nothing distinguished them from a full green
 except counting `results` by hand. Only `verdict: "pass"` may be cited for a phase.
+
+### A gate that did not run is not green
+
+A gate can say it checked nothing by exiting `NOT_RUN_EXIT_CODE` (78, in `gate-summary.mjs`),
+if its entry declares `mayNotRun`. Only `code-scanning` does, when `BETA_SKIP_CODE_SCANNING=1`.
+The runner records it as NOT RUN, carries on, and a full run is then `pass-incomplete`:
+
+```text
+verdict  PASS (INCOMPLETE) — 28 green, 1 NOT RUN (code-scanning)
+```
+
+`npm run beta:gate-selftest` holds the runner to this, against the real runner and gate.
 
 ## Environment
 
