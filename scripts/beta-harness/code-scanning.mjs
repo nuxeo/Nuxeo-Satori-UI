@@ -45,7 +45,8 @@
  * This gate reads GitHub state, not the working tree, so it needs `gh` and network access and is
  * not reproducible offline. `BETA_SKIP_CODE_SCANNING=1` exists for that: it prints a loud NOT RUN
  * and exits NOT_RUN_EXIT_CODE, which `verify-gate` counts as NOT RUN, never green, so the run is
- * `pass-incomplete`. CI never sets it.
+ * `pass-incomplete`. CI never sets it for a real run; only `verify-gate.selftest.mjs` does, for
+ * its own child processes.
  *
  * Usage:
  *   node scripts/beta-harness/code-scanning.mjs

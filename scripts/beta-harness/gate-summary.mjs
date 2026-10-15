@@ -42,6 +42,7 @@ export function classify(gate, exitCode) {
  *           tail?: number }} run
  */
 export function summarize({ total, notRequested, skipped, results, tail = 40 }) {
+  // A result without `status` (from a caller that predates it) is read from `passed`.
   const statusOf = (r) => r.status ?? (r.passed ? 'pass' : 'fail');
   const green = results.filter((r) => statusOf(r) === 'pass');
   const notRun = results.filter((r) => statusOf(r) === 'not-run').map((r) => r.id);

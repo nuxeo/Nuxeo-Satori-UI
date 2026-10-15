@@ -78,7 +78,10 @@ control('the real runner counts a skipped code-scanning gate as NOT RUN, not gre
     },
   );
   const out = `${run.stdout}${run.stderr}`;
-  expect(run.status === 0, `runner exited ${run.status}; a gate that did not run is not a failure`);
+  expect(
+    run.status === 0,
+    `runner exited ${run.status}, expected 0: a gate that did not run is not a failure`,
+  );
   expect(
     /\[run \] Code scanning \(CodeQL\) \.\.\. NOT RUN/.test(out),
     'the gate line does not say NOT RUN',
@@ -138,7 +141,7 @@ control('the real runner carries on after a gate that did not run', () => {
 });
 
 control(
-  'a full run with code scanning not run says "28 green, 1 NOT RUN", never "all 29 green"',
+  'the summary of a full run with code scanning not run says "28 green, 1 NOT RUN", never "all 29 green"',
   () => {
     const results = [...ids(28).map(pass), notRun('code-scanning')];
     const { verdict, lines } = summarize({ total: 29, notRequested: [], skipped: [], results });
@@ -151,18 +154,21 @@ control(
   },
 );
 
-control('a full run where every gate ran green still says "all 29 gates green"', () => {
-  const { verdict, lines } = summarize({
-    total: 29,
-    notRequested: [],
-    skipped: [],
-    results: ids(29).map(pass),
-  });
-  expect(
-    verdict === 'pass' && lines[0] === 'verdict  PASS — all 29 gates green',
-    `${verdict}: ${lines[0]}`,
-  );
-});
+control(
+  'the summary of a full run where every gate ran green still says "all 29 gates green"',
+  () => {
+    const { verdict, lines } = summarize({
+      total: 29,
+      notRequested: [],
+      skipped: [],
+      results: ids(29).map(pass),
+    });
+    expect(
+      verdict === 'pass' && lines[0] === 'verdict  PASS — all 29 gates green',
+      `${verdict}: ${lines[0]}`,
+    );
+  },
+);
 
 control(
   'a partial run names not-requested gates as NOT REQUESTED, and counts only green ones',
