@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { summarize } from './gate-summary.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -425,7 +426,6 @@ if (notRequested.length) {
 console.log('');
 
 const results = [];
-let firstFailure = null;
 
 for (const gate of selected) {
   process.stdout.write(`[run ] ${gate.label} ... `);
@@ -461,10 +461,7 @@ for (const gate of selected) {
     outputTail: lastLines(output, tail),
   });
 
-  if (!passed) {
-    firstFailure = results.at(-1);
-    break;
-  }
+  if (!passed) break;
 }
 
 const allPassed = results.every((r) => r.passed);
@@ -481,7 +478,13 @@ const full = notRequested.length === 0;
  * making the verdict itself carry the coverage means a partial run cannot be
  * quoted as if it were complete.
  */
-const verdict = !allPassed ? 'fail' : full ? 'pass' : 'pass-partial';
+const { verdict, lines: summaryLines } = summarize({
+  total: ALL_GATES.length,
+  notRequested,
+  skipped,
+  results,
+  tail,
+});
 
 /**
  * The commit the gate actually ran against, and whether the tree was dirty.
@@ -525,24 +528,7 @@ const reportPath = resolve(outDir, `${stamp}-${phase}.json`);
 await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
 console.log('');
-if (allPassed && full) {
-  console.log(`verdict  PASS — all ${ALL_GATES.length} gates green`);
-} else if (allPassed) {
-  console.log(`verdict  PASS (PARTIAL) — ${results.length} of ${ALL_GATES.length} gates green`);
-  console.log(`         NOT RUN: ${notRequested.join(', ')}`);
-  console.log(
-    '         A partial run is a fast inner loop, not a phase gate. Do not sign off on this.',
-  );
-} else {
-  console.log(`verdict  FAIL — first failing gate: ${firstFailure.id}`);
-  if (skipped.length) {
-    console.log(`skipped  ${skipped.join(', ')} (not run because an earlier gate failed)`);
-  }
-  console.log(`\ncommand  ${firstFailure.command}`);
-  console.log(`--- last ${tail} lines ---`);
-  console.log(firstFailure.outputTail);
-  console.log('--- end ---');
-}
+for (const line of summaryLines) console.log(line);
 console.log(`\nreport   ${reportPath}`);
 
 process.exit(allPassed ? 0 : 1);
