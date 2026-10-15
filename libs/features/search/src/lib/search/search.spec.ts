@@ -487,7 +487,7 @@ describe('SearchComponent', () => {
       expect(navigateSpy).toHaveBeenCalledWith(
         [],
         expect.objectContaining({
-          queryParams: { sortBy: 'dc:title', sortOrder: 'asc' },
+          queryParams: { sortBy: 'dc:title', sortOrder: 'asc', page: null },
         }),
       );
     });
@@ -885,7 +885,7 @@ describe('SearchComponent', () => {
       expect(navigateSpy).toHaveBeenCalledWith(
         [],
         expect.objectContaining({
-          queryParams: { sortBy: 'dc:modified', sortOrder: 'asc' },
+          queryParams: { sortBy: 'dc:modified', sortOrder: 'asc', page: null },
         }),
       );
     });
@@ -968,6 +968,52 @@ describe('SearchComponent', () => {
     it('should compute resultCount', () => {
       vi.spyOn(component, 'displayResults').mockReturnValue([row({ id: '1' }), row({ id: '2' })]);
       expect(component.resultCount()).toBe(2);
+    });
+
+    it('ignores a pager page asked for while a page loads, and takes it once the page has loaded', () => {
+      const session = component['session'];
+      const resultsState = vi.spyOn(
+        component as unknown as { resultsState: () => unknown },
+        'resultsState',
+      );
+      const state = (status: string) => ({
+        status,
+        items: [],
+        aggregations: {},
+        totalSize: 50,
+        hasNextPage: true,
+        error: null,
+      });
+
+      resultsState.mockReturnValue(state('loading'));
+      component.goToPage(2);
+      expect(session.pageIndex()).toBe(0);
+
+      // Control: the same request is taken once the page has loaded.
+      resultsState.mockReturnValue(state('loaded'));
+      component.goToPage(2);
+      expect(session.pageIndex()).toBe(2);
+    });
+
+    it('counts the server total for a standard search, and the rows shown for an AI search', () => {
+      vi.spyOn(component, 'displayResults').mockReturnValue([row({ id: '1' }), row({ id: '2' })]);
+      vi.spyOn(
+        component as unknown as { resultsState: () => unknown },
+        'resultsState',
+      ).mockReturnValue({
+        status: 'loaded',
+        items: [],
+        aggregations: {},
+        totalSize: 1772,
+        hasNextPage: true,
+        error: null,
+      });
+      // Control: the standard search's total is what the count shows.
+      expect(component.totalCount()).toBe(1772);
+
+      component.aiSearchMode.set(true);
+      component.aiSearchExecuted.set(true);
+      expect(component.totalCount()).toBe(2);
     });
 
     it('should compute selectedCount', () => {

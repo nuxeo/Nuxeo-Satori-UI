@@ -46,6 +46,7 @@ import {
   NxsColumnPickerComponent,
   NxsErrorStateComponent,
   NxsFavoriteToggleComponent,
+  NxsPagerComponent,
   NxsSavedSearchActionsComponent,
   NxsSpinnerComponent,
   NxsThumbnailComponent,
@@ -58,7 +59,11 @@ import {
 } from '@nuxeo-satori/platform/components';
 
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
-import { SearchSession, type SearchResultsState } from '../search-session/search-session';
+import {
+  SEARCH_PAGE_SIZE,
+  SearchSession,
+  type SearchResultsState,
+} from '../search-session/search-session';
 
 export type SortDirection = 'asc' | 'desc' | null;
 export type ViewMode = 'grid' | 'table' | 'list';
@@ -182,6 +187,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsColumnPickerComponent,
     NxsErrorStateComponent,
     NxsFavoriteToggleComponent,
+    NxsPagerComponent,
     NxsSavedSearchActionsComponent,
     NxsSpinnerComponent,
     NxsThumbnailComponent,
@@ -246,6 +252,8 @@ export class SearchComponent {
       status: 'loading',
       items: [],
       aggregations: {},
+      totalSize: -1,
+      hasNextPage: false,
       error: null,
     } as SearchResultsState,
   });
@@ -343,6 +351,23 @@ export class SearchComponent {
     if (sortOrder) this.gridSortOrder.set(sortOrder);
 
     this.session.setPageQuery({ quickFilters: quickFilters.trim(), sortBy, sortOrder });
+
+    // The URL counts pages from one; the session from zero. No `page` means the first.
+    const page = Number.parseInt(params.get('page') ?? '', 10);
+    this.urlPageIndex = Number.isFinite(page) && page > 1 ? page - 1 : 0;
+    this.session.setPageIndex(this.urlPageIndex);
+  }
+
+  /**
+   * The pager asked for another page. The request and the URL both follow the session.
+   *
+   * Ignored while a page loads. The pager still shows the last answer then, so the page it names
+   * can be out of date: after a filter change it would ask for a page of the new query that the
+   * reset has already moved past. The control stays enabled, so it keeps keyboard focus.
+   */
+  goToPage(pageIndex: number): void {
+    if (this.resultsState().status === 'loading') return;
+    this.session.setPageIndex(pageIndex);
   }
 
   readonly visibleColumns = computed(() =>
@@ -374,6 +399,22 @@ export class SearchComponent {
   });
 
   readonly resultCount = computed(() => this.displayResults().length);
+  /** Every match the server counted, or the rows on screen when it counted none. */
+  readonly totalCount = computed(() => {
+    // An AI search's rows are not the standard search's results, so its total is not theirs.
+    // An AI search's rows are not the standard search's results, so its total is not theirs.
+    if (this.aiSearchMode() && this.aiSearchExecuted()) return this.resultCount();
+    const total = this.resultsState().totalSize;
+    return total >= 0 ? total : this.resultCount();
+  });
+  readonly pageSize = SEARCH_PAGE_SIZE;
+  /**
+   * The paging of the last answer, which the pager reads. It stays on screen while the next page
+   * loads: a control removed while focused loses the keyboard user's place.
+   */
+  readonly pager = signal({ pageIndex: 0, itemCount: 0, totalSize: -1, hasNextPage: false });
+  /** The page the URL asked for, as the last applied URL; the URL follows the pager through it. */
+  private urlPageIndex = 0;
   readonly selectedCount = computed(() => this.selectionService.selectedCount());
   readonly SORTABLE_COLUMNS = new Set(['name', 'modified', 'contributor', 'author', 'created']);
 
@@ -404,7 +445,10 @@ export class SearchComponent {
 
     this.router.navigate([], {
       relativeTo: this.route,
-      queryParams: { quickFilters: orderedSelected.length > 0 ? orderedSelected.join(',') : null },
+      queryParams: {
+        quickFilters: orderedSelected.length > 0 ? orderedSelected.join(',') : null,
+        page: null,
+      },
       queryParamsHandling: 'merge',
     });
   }
@@ -505,6 +549,7 @@ export class SearchComponent {
       queryParams: {
         sortBy: apiFieldName || null,
         sortOrder: newSortDirection || null,
+        page: null,
       },
       queryParamsHandling: 'merge',
     });
@@ -712,6 +757,7 @@ export class SearchComponent {
       queryParams: {
         sortBy: apiFieldName,
         sortOrder: 'asc',
+        page: null,
       },
       queryParamsHandling: 'merge',
     });
@@ -727,6 +773,7 @@ export class SearchComponent {
       queryParams: {
         sortBy: apiFieldName,
         sortOrder: effectiveDirection,
+        page: null,
       },
       queryParamsHandling: 'merge',
     });
@@ -836,6 +883,35 @@ export class SearchComponent {
     this.route.queryParamMap
       .pipe(takeUntilDestroyed())
       .subscribe((params) => this.applyPageQuery(params));
+
+    // Each answer's paging, for the pager. Only an answer moves it: a page being loaded does not.
+    effect(() => {
+      const state = this.resultsState();
+      if (state.status !== 'loaded') return;
+      untracked(() =>
+        this.pager.set({
+          pageIndex: this.session.pageIndex(),
+          itemCount: state.items.length,
+          totalSize: state.totalSize,
+          hasNextPage: state.hasNextPage,
+        }),
+      );
+    });
+
+    // The page on screen is kept in the URL, so a deep link reopens it. A page the pager or a
+    // filter change moved to is written back, replacing the history entry rather than adding one.
+    effect(() => {
+      const pageIndex = this.session.pageIndex();
+      untracked(() => {
+        if (pageIndex === this.urlPageIndex) return;
+        void this.router.navigate([], {
+          relativeTo: this.route,
+          queryParams: { page: pageIndex > 0 ? pageIndex + 1 : null },
+          queryParamsHandling: 'merge',
+          replaceUrl: true,
+        });
+      });
+    });
 
     // The favourites enricher says which results are favourites; a star's own change is then kept
     // in `favoriteIds` until the next answer.

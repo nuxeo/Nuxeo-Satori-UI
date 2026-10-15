@@ -109,10 +109,10 @@
 
   <div class="results-toolbar">
     <div class="results-summary">
-      @if (resultCount() > 0) {
+      @if (totalCount() > 0) {
         <span class="results-count">{{
-          (resultCount() === 1 ? 'common.count.result-one' : 'common.count.result-many')
-            | translate: { count: resultCount() }
+          (totalCount() === 1 ? 'common.count.result-one' : 'common.count.result-many')
+            | translate: { count: totalCount() }
         }}</span>
       }
 
@@ -479,5 +479,15 @@
         </div>
       }
     </div>
+  }
+  @if (!resultsError() && !(aiSearchMode() && aiSearchExecuted())) {
+    <nxs-pager
+      [pageIndex]="pager().pageIndex"
+      [pageSize]="pageSize"
+      [itemCount]="pager().itemCount"
+      [totalSize]="pager().totalSize"
+      [hasNextPage]="pager().hasNextPage"
+      (pageChange)="goToPage($event)"
+    />
   }
 </div>

@@ -32,7 +32,7 @@ const item = (id: string): SearchResultItem =>
 describe('SearchSession', () => {
   let session: SearchSession;
   const search = vi.fn((_request?: unknown): Observable<SearchResponse> =>
-    of({ items: [], aggregations: {} }),
+    of({ items: [], aggregations: {}, totalSize: -1, hasNextPage: false }),
   );
   const searchService = {
     search,
@@ -54,7 +54,7 @@ describe('SearchSession', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    search.mockReturnValue(of({ items: [], aggregations: {} }));
+    search.mockReturnValue(of({ items: [], aggregations: {}, totalSize: -1, hasNextPage: false }));
     shared.drawerFilters.set({});
     shared.items.set([]);
     shared.selectedSavedSearchId.set('');
@@ -106,6 +106,8 @@ describe('SearchSession', () => {
         quickFilters: 'noFolder',
         sortBy: 'dc:title',
         sortOrder: 'asc',
+        pageIndex: 0,
+        pageSize: 40,
       });
       stop();
     });
@@ -141,8 +143,15 @@ describe('SearchSession', () => {
       answer.next({
         items: [item('a')],
         aggregations: { dc_nature_agg: { buckets: [{ key: 'x', docCount: 1 }] } },
+        totalSize: 25,
+        hasNextPage: true,
       });
-      expect(states.at(-1)).toMatchObject({ status: 'loaded', error: null });
+      expect(states.at(-1)).toMatchObject({
+        status: 'loaded',
+        error: null,
+        totalSize: 25,
+        hasNextPage: true,
+      });
       expect(shared.items().map((entry) => entry.id)).toEqual(['a']);
       expect(shared.aggregations()).toEqual({
         dc_nature_agg: { buckets: [{ key: 'x', docCount: 1 }] },
@@ -159,6 +168,8 @@ describe('SearchSession', () => {
         status: 'failed',
         items: [],
         aggregations: {},
+        totalSize: -1,
+        hasNextPage: false,
         error: { status: 403 },
       });
       expect(shared.items()).toEqual([]);
@@ -190,6 +201,19 @@ describe('SearchSession', () => {
 
       session.setFilters({ ...session.filters(), nature: [] });
       expect(session.dirty()).toBe(true);
+    });
+
+    it('starts an open saved search from the first page, even when its filters already match', async () => {
+      const params = { ecm_fulltext: 'invoice', dc_nature_agg: '["contract"]' };
+      searchService.getSavedSearchById.mockReturnValue(of(params));
+      await firstValueFrom(session.openSavedSearch('ss-1', 'Mine'), { defaultValue: undefined });
+      session.setPageIndex(2);
+
+      // The filters on screen already match the saved search: `setFilters` alone would keep page 3.
+      shared.drawerFilters.set(params);
+      await firstValueFrom(session.openSavedSearch('ss-1', 'Mine'), { defaultValue: undefined });
+
+      expect(session.pageIndex()).toBe(0);
     });
 
     it('is not dirty while the saved search is still being read', () => {

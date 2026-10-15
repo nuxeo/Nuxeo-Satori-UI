@@ -246,6 +246,28 @@ describe('SearchService', () => {
     });
   });
 
+  describe('search — the paging it reports', () => {
+    it('reports the server total and whether a page follows', async () => {
+      const result = firstValueFrom(service.search({ pageSize: 2 }));
+      http
+        .expectOne((r) => r.url === EXECUTE)
+        .flush({ ...executeResponse, resultsCount: 25, isNextPageAvailable: true });
+      const { totalSize, hasNextPage } = await result;
+      expect(totalSize).toBe(25);
+      expect(hasNextPage).toBe(true);
+    });
+
+    it('reports no total and no next page when the server counts neither', async () => {
+      const result = firstValueFrom(service.search({ pageSize: 2 }));
+      http
+        .expectOne((r) => r.url === EXECUTE)
+        .flush({ ...executeResponse, resultsCount: undefined, isNextPageAvailable: false });
+      const { totalSize, hasNextPage } = await result;
+      expect(totalSize).toBe(-1);
+      expect(hasNextPage).toBe(false);
+    });
+  });
+
   describe('saved searches', () => {
     it('reads a list parameter back as JSON, so a value containing a comma stays one value', async () => {
       const result = firstValueFrom(service.getSavedSearchById('ss/1'));

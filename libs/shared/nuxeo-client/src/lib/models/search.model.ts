@@ -13,6 +13,10 @@ export interface SearchAggregations {
 export interface SearchResponse {
   items: SearchResultItem[];
   aggregations: SearchAggregations;
+  /** Every match across every page; negative when the server did not count them. */
+  totalSize: number;
+  /** Whether the server has a page after this one. */
+  hasNextPage: boolean;
 }
 
 export interface SearchResultItem {

@@ -7,7 +7,7 @@ import {
 } from '@angular/common/http/testing';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { ActivatedRoute, convertToParamMap, provideRouter } from '@angular/router';
+import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angular/router';
 import { BehaviorSubject, of } from 'rxjs';
 
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
@@ -84,10 +84,10 @@ describe('one change of the search, one request', () => {
     fixture.detectChanges();
   }
 
-  /** The search requests sent since the last call, answered. */
-  function searches(): TestRequest[] {
+  /** The search requests sent since the last call, answered with `body`. */
+  function searches(body: object = answer): TestRequest[] {
     const sent = http.match((req) => req.url === EXECUTE);
-    for (const req of sent) req.flush(answer);
+    for (const req of sent) req.flush(body);
     return sent;
   }
 
@@ -156,5 +156,91 @@ describe('one change of the search, one request', () => {
     expect(sent).toHaveLength(1);
     expect(sent[0].request.params.get('quickFilters')).toBe('noFolder');
     queryParamMap.next(convertToParamMap({}));
+  });
+
+  describe('paging', () => {
+    /** Two of 5 matches on the page: the server has a next page. */
+    const paged = { ...answer, resultsCount: 5, isNextPageAvailable: true };
+
+    it('sends one request when the pager moves to the next page, and the URL follows', async () => {
+      searches(paged);
+      await settle();
+
+      const next = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        'nxs-pager .nxs-pager__next',
+      );
+      expect(next, 'the pager offers a next page').not.toBeNull();
+      next?.click();
+      await settle();
+
+      const sent = searches(paged);
+      expect(sent).toHaveLength(1);
+      expect(sent[0].request.params.get('currentPageIndex')).toBe('1');
+      expect(sent[0].request.params.get('offset')).toBe('40');
+      expect(TestBed.inject(Router).url).toContain('page=2');
+      queryParamMap.next(convertToParamMap({}));
+      searches(paged);
+    });
+
+    it('keeps the same pager control on screen while the next page loads', async () => {
+      searches(paged);
+      await settle();
+
+      const next = (fixture.nativeElement as HTMLElement).querySelector<HTMLButtonElement>(
+        'nxs-pager .nxs-pager__next',
+      );
+      next?.click();
+      await settle();
+
+      // The request is still in flight: the control a keyboard user just pressed is still there.
+      const during = (fixture.nativeElement as HTMLElement).querySelector(
+        'nxs-pager .nxs-pager__next',
+      );
+      expect(during).toBe(next);
+      expect(next?.isConnected).toBe(true);
+
+      expect(searches(paged)).toHaveLength(1);
+      queryParamMap.next(convertToParamMap({}));
+      searches(paged);
+    });
+
+    it('reopens the page a deep link names, with one request', async () => {
+      searches();
+      await settle();
+
+      queryParamMap.next(convertToParamMap({ page: '3' }));
+      await settle();
+
+      const sent = searches(paged);
+      expect(sent).toHaveLength(1);
+      expect(sent[0].request.params.get('currentPageIndex')).toBe('2');
+      queryParamMap.next(convertToParamMap({}));
+      searches(paged);
+    });
+
+    it('goes back to the first page with one request when the filters change', async () => {
+      searches(paged);
+      await settle();
+      queryParamMap.next(convertToParamMap({ page: '2' }));
+      await settle();
+      const onSecondPage = searches(paged);
+      expect(onSecondPage).toHaveLength(1);
+      expect(onSecondPage[0].request.params.get('currentPageIndex')).toBe('1');
+
+      const checkbox = (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
+        'nxs-search-filters mat-checkbox input',
+      );
+      checkbox?.click();
+      await settle();
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await settle();
+
+      const sent = searches(paged);
+      expect(sent).toHaveLength(1);
+      expect(sent[0].request.params.get('currentPageIndex')).toBe('0');
+      expect(sent[0].request.params.get('dc_modified_agg')).toBe('["last24h"]');
+      queryParamMap.next(convertToParamMap({}));
+      searches(paged);
+    });
   });
 });

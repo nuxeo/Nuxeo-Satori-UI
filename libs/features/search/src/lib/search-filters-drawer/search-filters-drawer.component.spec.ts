@@ -53,7 +53,9 @@ describe('SearchFiltersDrawerComponent', () => {
   const toast = { show: vi.fn(), error: vi.fn() };
   const dialog = { open: vi.fn() };
   const searchService = {
-    search: vi.fn((): Observable<SearchResponse> => of({ items: [], aggregations: {} })),
+    search: vi.fn((): Observable<SearchResponse> =>
+      of({ items: [], aggregations: {}, totalSize: -1, hasNextPage: false }),
+    ),
     getSavedSearches: vi.fn(() => of([])),
     getSavedSearchById: vi.fn((): Observable<Record<string, string>> => of({ ecm_fulltext: 'x' })),
     saveSavedSearch: vi.fn((): Observable<unknown> => of({ id: 'ss-1', title: 'Mine' })),
@@ -216,6 +218,13 @@ describe('SearchFiltersDrawerComponent', () => {
       component.toggleQueueQuickFilter('onlyValidated');
       await fixture.whenStable();
       expect(router.url).toBe('/search');
+    });
+
+    it('starts the results from the first page when a quick filter is toggled', async () => {
+      await router.navigateByUrl('/search?page=3');
+      component.toggleQueueQuickFilter('noFolder');
+      await fixture.whenStable();
+      expect(router.url).toBe('/search?quickFilters=noFolder');
     });
 
     it('reads the quick filters from the URL, ignoring unknown ones', () => {

@@ -186,8 +186,9 @@ export class SearchFiltersDrawerComponent {
     if (next.has(value)) next.delete(value);
     else next.add(value);
     this.selectedQueueQuickFilters.set(next);
+    // A different quick filter is a different result set, so the page starts again from the first.
     void this.router.navigate(['/search'], {
-      queryParams: { quickFilters: this.toQuickFiltersQueryParam() },
+      queryParams: { quickFilters: this.toQuickFiltersQueryParam(), page: null },
       queryParamsHandling: 'merge',
     });
   }

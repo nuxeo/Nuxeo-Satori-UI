@@ -567,6 +567,9 @@ export class SearchService {
             } satisfies SearchResultItem;
           }),
           aggregations: this.normalizeAggregations(res.aggregations),
+          totalSize:
+            typeof res.resultsCount === 'number' ? res.resultsCount : (res.totalSize ?? -1),
+          hasNextPage: res.isNextPageAvailable === true,
         })),
       );
   }
