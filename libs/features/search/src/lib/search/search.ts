@@ -358,8 +358,15 @@ export class SearchComponent {
     this.session.setPageIndex(this.urlPageIndex);
   }
 
-  /** The pager asked for another page. The request and the URL both follow the session. */
+  /**
+   * The pager asked for another page. The request and the URL both follow the session.
+   *
+   * Ignored while a page loads. The pager still shows the last answer then, so the page it names
+   * can be out of date: after a filter change it would ask for a page of the new query that the
+   * reset has already moved past. The control stays enabled, so it keeps keyboard focus.
+   */
   goToPage(pageIndex: number): void {
+    if (this.resultsState().status === 'loading') return;
     this.session.setPageIndex(pageIndex);
   }
 
