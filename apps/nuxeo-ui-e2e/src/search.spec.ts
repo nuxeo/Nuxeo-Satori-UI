@@ -1,5 +1,6 @@
 import { expect, expectSurfaceWithData, test } from './fixtures';
 import { type Page, type Request } from '@playwright/test';
+import { nuxeoCredentials } from './nuxeo-credentials';
 
 /**
  * Search — and the guard for the injection defect once found in the retired POC's search.
@@ -135,26 +136,78 @@ test.describe('search', () => {
   test('pages past the first page, and the count is the server total', async ({
     signedIn: page,
   }) => {
-    // The count is the answer the server gave, not the rows on screen: 40 rows a page, so the
-    // seeded data must run past one page or both halves of this are vacuous.
-    const [first] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes(PAGE_PROVIDER) && r.status() === 200),
-      page.goto('/#/search', { waitUntil: 'networkidle' }),
-    ]);
-    const total = (await first.json()).resultsCount as number;
-    expect(total, 'the seeded data runs past one page').toBeGreaterThan(40);
-    await expect(page.locator('lib-search .results-count')).toHaveText(
-      new RegExp(`^${total}\\s+results$`),
-    );
+    // An isolated dataset: 41 notes that share one unique term, in a workspace this test makes
+    // and deletes. The search is for that term, so the result is exactly these notes, past one
+    // page of 40, whatever else the instance holds.
+    const credentials = nuxeoCredentials();
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`,
+      'Content-Type': 'application/json',
+    };
+    const term = `nxsat641e2e${Date.now().toString(36)}`;
+    // The workspace is named apart from the term: its title would match the search and count as a result.
+    const setName = `nxsat641-set-${Date.now().toString(36)}`;
+    const workspacePath = `/nuxeo/api/v1/path/default-domain/workspaces/${setName}`;
+    const created = await page.request.post('/nuxeo/api/v1/path/default-domain/workspaces/', {
+      headers,
+      data: {
+        'entity-type': 'document',
+        name: setName,
+        type: 'Workspace',
+        properties: { 'dc:title': 'NXSAT-641 e2e set' },
+      },
+    });
+    expect(created.status(), 'the test workspace is created').toBe(201);
 
-    const next = page.locator('lib-search nxs-pager .nxs-pager__next');
-    await expect(next, 'the pager offers a next page').toBeEnabled();
-    const [second] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes(PAGE_PROVIDER) && r.status() === 200),
-      next.click(),
-    ]);
-    expect(new URL(second.url()).searchParams.get('currentPageIndex')).toBe('1');
-    await expect(page).toHaveURL(/[?&]page=2\b/);
+    try {
+      for (let i = 1; i <= 41; i++) {
+        const note = await page.request.post(`${workspacePath}/`, {
+          headers,
+          data: {
+            'entity-type': 'document',
+            name: `${term}-${i}`,
+            type: 'Note',
+            properties: { 'dc:title': `${term} ${i}` },
+          },
+        });
+        expect(note.status(), `note ${i} is created`).toBe(201);
+      }
+
+      // Indexing is asynchronous: wait until the term finds all 41 notes before searching for it.
+      await expect
+        .poll(
+          async () => {
+            const res = await page.request.get(
+              `/nuxeo/api/v1/search/pp/default_search/execute?ecm_fulltext=${term}&pageSize=1`,
+              { headers },
+            );
+            return (await res.json()).resultsCount as number;
+          },
+          { timeout: 120_000 },
+        )
+        .toBe(41);
+
+      await page.goto('/#/search', { waitUntil: 'networkidle' });
+      await fullTextInput(page).fill(term);
+      await fullTextInput(page).press('Enter');
+
+      // The count is the server's total, not the rows on screen: 40 rows a page, so 41 matches run
+      // past one page.
+      await expect(page.locator('lib-search .results-count')).toHaveText(/^41\s+results$/);
+
+      const next = page.locator('lib-search nxs-pager .nxs-pager__next');
+      await expect(next, 'the pager offers a next page').toBeEnabled();
+      const [second] = await Promise.all([
+        page.waitForResponse((r) => r.url().includes(PAGE_PROVIDER) && r.status() === 200),
+        next.click(),
+      ]);
+      expect(new URL(second.url()).searchParams.get('currentPageIndex')).toBe('1');
+      await expect(page).toHaveURL(/[?&]page=2\b/);
+      await expect(page.locator('lib-search .results-count')).toHaveText(/^41\s+results$/);
+    } finally {
+      const removed = await page.request.delete(workspacePath, { headers });
+      expect(removed.status(), 'the test workspace is removed').toBe(204);
+    }
   });
 
   test('a term that cannot match returns zero results rather than an error', async ({
