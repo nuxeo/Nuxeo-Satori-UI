@@ -55,12 +55,14 @@
  *   BETA_SKIP_CODE_SCANNING=1 node scripts/beta-harness/code-scanning.mjs
  *
  * Exit 1 on a high/critical alert, an unallowlisted or expired medium/low, a stale allowlist entry,
- * or a ref that has never been analysed. Exit 0 with a NOT RUN banner when skipped.
+ * or a ref that has never been analysed. Exit NOT_RUN_EXIT_CODE (78) with a NOT RUN banner when
+ * skipped, which `verify-gate` records as NOT RUN, never as a pass.
  */
 
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { NOT_RUN_EXIT_CODE } from './gate-summary.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..', '..');
 const argv = process.argv.slice(2);
@@ -76,13 +78,11 @@ if (process.env['BETA_SKIP_CODE_SCANNING'] === '1') {
       '  A skipped run asserts NOTHING about SAST findings. Do not read it as a pass, and do\n' +
       '  not sign a phase off on it.\n',
   );
-  process.exit(0);
+  process.exit(NOT_RUN_EXIT_CODE);
 }
 
 const allowlistPath = resolve(repoRoot, '.ai/state/supply-chain-allowlist.json');
-const allowlist = existsSync(allowlistPath)
-  ? JSON.parse(readFileSync(allowlistPath, 'utf8'))
-  : {};
+const allowlist = existsSync(allowlistPath) ? JSON.parse(readFileSync(allowlistPath, 'utf8')) : {};
 const accepted = allowlist.codeScanning ?? {};
 
 /** Severities that fail outright, allowlist or not. */
@@ -94,7 +94,11 @@ const fail = (msg) => problems.push(msg);
 
 /** @param {string[]} args */
 function gh(args) {
-  const res = spawnSync('gh', args, { cwd: repoRoot, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 });
+  const res = spawnSync('gh', args, {
+    cwd: repoRoot,
+    encoding: 'utf8',
+    maxBuffer: 32 * 1024 * 1024,
+  });
   if (res.error || res.status !== 0) {
     return { ok: false, err: (res.stderr || res.error?.message || '').trim().slice(0, 300) };
   }
@@ -170,10 +174,7 @@ if (slug && ref) {
     analyses = Array.isArray(a.data) ? a.data : [];
   }
 
-  const r = gh([
-    'api',
-    `repos/${slug}/code-scanning/alerts?ref=${ref}&state=open&per_page=100`,
-  ]);
+  const r = gh(['api', `repos/${slug}/code-scanning/alerts?ref=${ref}&state=open&per_page=100`]);
   if (!r.ok) {
     fail(`could not list code-scanning alerts for ${ref} (${r.err}).`);
   } else {
@@ -282,7 +283,11 @@ console.log(`  ref          ${ref ?? '(unresolved)'}   [${refKind ?? '-'}]`);
 console.log(`  analyses     ${analyses.length}`);
 console.log(
   `  open alerts  ${alerts.length}` +
-    (alerts.length ? `  (${Object.entries(bySeverity).map(([k, v]) => `${k}: ${v}`).join(', ')})` : ''),
+    (alerts.length
+      ? `  (${Object.entries(bySeverity)
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(', ')})`
+      : ''),
 );
 for (const n of notes) console.log(`\n  - ${n}`);
 

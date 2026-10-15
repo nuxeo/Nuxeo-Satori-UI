@@ -154,6 +154,9 @@ jobs:
           # The command that regenerates the shared derived files after a merge, held to its
           # derived-file list and its conflict handling.
           npm run sync:derived-selftest
+          # The gate runner's own counting: a gate that reports NOT RUN is never counted green,
+          # and a run containing one is `pass-incomplete`, not `pass`.
+          npm run beta:gate-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
           # instead would be permanently red (9 high, none shipped) and so bypassed.
