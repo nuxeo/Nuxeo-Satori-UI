@@ -165,6 +165,7 @@ export {
   nxsSearchFiltersToRecord,
   nxsSearchFiltersToSavedParams,
   nxsTermOptions,
+  type NxsFacetLabels,
   type NxsFacetOption,
   type NxsSearchFilters,
 } from './lib/search-filters/search-filters.model';

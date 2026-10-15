@@ -239,7 +239,7 @@
             @if (optionLabelKey(group, option.value); as key) {
               {{ key | translate }}
             } @else {
-              {{ option.value }}
+              {{ optionText(group, option.value) }}
             }
             @if (option.count !== null) {
               <span class="nxs-search-filters__count">({{ option.count }})</span>

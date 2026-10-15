@@ -13,7 +13,11 @@ import {
 } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { NxsSearchFiltersComponent } from './search-filters.component';
-import { NXS_EMPTY_SEARCH_FILTERS, type NxsSearchFilters } from './search-filters.model';
+import {
+  NXS_EMPTY_SEARCH_FILTERS,
+  type NxsFacetLabels,
+  type NxsSearchFilters,
+} from './search-filters.model';
 
 const AGGREGATIONS: SearchAggregations = {
   dc_modified_agg: {
@@ -38,6 +42,7 @@ const AGGREGATIONS: SearchAggregations = {
   template: `<nxs-search-filters
     [(filters)]="filters"
     [aggregations]="aggregations()"
+    [optionLabels]="labels()"
     (filtersReset)="resets = resets + 1"
     (saveAs)="saves = saves + 1"
   />`,
@@ -45,6 +50,7 @@ const AGGREGATIONS: SearchAggregations = {
 class HostComponent {
   readonly filters = signal<NxsSearchFilters>(NXS_EMPTY_SEARCH_FILTERS);
   readonly aggregations = signal<SearchAggregations>(AGGREGATIONS);
+  readonly labels = signal<NxsFacetLabels>({});
   resets = 0;
   saves = 0;
 }
@@ -427,5 +433,20 @@ describe('NxsSearchFiltersComponent', () => {
       expect(host.resets).toBe(1);
       expect(host.filters()).toEqual(NXS_EMPTY_SEARCH_FILTERS);
     });
+  });
+
+  it('shows a choice by its vocabulary label, and filters on the id it was counted under', async () => {
+    host.labels.set({ nature: { contract: 'Contrat' } });
+    await render();
+    toggle('Nature').click();
+    await render();
+
+    const choice = checkboxes('Nature')[0];
+    expect(choice.textContent).toContain('Contrat');
+    expect(choice.textContent).not.toContain('contract');
+
+    choice.querySelector<HTMLInputElement>('input')?.click();
+    await render();
+    expect(host.filters().nature).toEqual(['contract']);
   });
 });

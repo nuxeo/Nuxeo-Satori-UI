@@ -66,6 +66,12 @@ export interface NxsFacetOption {
 }
 
 /**
+ * Display text for facet choices, by checkbox field and bucket key: the vocabulary label of a nature,
+ * subject or coverage id. It changes only what is shown; the filter keeps the key.
+ */
+export type NxsFacetLabels = Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>;
+
+/**
  * The filters as the record a host keeps them in — `SearchAggregationService.drawerFilters` — with
  * a multi-value field as a JSON array, so a value containing a comma stays one value, and an empty
  * field left out.
