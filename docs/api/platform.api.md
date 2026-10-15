@@ -2926,6 +2926,8 @@ interface SearchQueryParams {
 interface SearchResponse {
     items: SearchResultItem[];
     aggregations: SearchAggregations;
+    totalSize: number;
+    hasNextPage: boolean;
     }
 }
 interface SearchResultItem {
