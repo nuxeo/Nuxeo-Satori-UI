@@ -26,11 +26,7 @@
  *    without `exactOptionalPropertyTypes` the compiler accepts `{ uid: undefined }` and the
  *    spread then overwrites the default with nothing. Required fields survive any override.
  *
- * Extracted from duplicate builders in:
- * - libs/shared/adf-hx-bridge/src/lib/api/nuxeo-document-api.spec.ts (lines 42-63)
- * - libs/shared/adf-hx-bridge/src/lib/api/nuxeo-copy-move-api.spec.ts (lines 22-30)
- * - libs/shared/adf-hx-bridge/src/lib/api/nuxeo-checkin-api.spec.ts (lines 23-31)
- * - libs/shared/adf-hx-bridge/src/lib/services/nuxeo-acl-write.spec.ts (lines 271-281, 341-351)
+ * Extracted from duplicate builders in the adf-hx bridge's port specs, since removed.
  */
 
 import type { NuxeoDocument, NuxeoAce } from '@nuxeo-satori/platform/nuxeo-client';

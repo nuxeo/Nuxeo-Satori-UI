@@ -174,10 +174,9 @@ has the table. That ordering is deliberate — a lint error usually explains the
 failure that would follow, and running the full set on a known-broken tree wastes
 minutes per iteration.
 
-`dependency-tree` is **report-only** until the ADF removal commit (NXSAT-308): it
-passes while listing every adf-hx, adf-core, adf-extensions, js-api and
-hxcs-js-client finding, and the removal commit sets `BLOCKING = true` in
-`dependency-tree.mjs` to make it fail on them.
+`dependency-tree` is **blocking** since the ADF removal (NXSAT-638) set `BLOCKING = true`
+in `dependency-tree.mjs`: any adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client
+finding fails it. Until then it was report-only and passed while listing them.
 
 Reports land in `$EVIDENCE_ROOT/beta/gates/<timestamp>-<phase>.json`.
 

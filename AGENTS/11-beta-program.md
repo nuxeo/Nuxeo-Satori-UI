@@ -109,16 +109,17 @@ Treat them as settled; if you contradict one, prove it first.
   upstream's would put ACS types in the signature every customer rule is written
   against. Its domain-neutral parts — `mergeObjects`, `mergeArrays`,
   `filterEnabled`, `sortByOrder`, `getValue` — are used directly.
-- **One registry serves every `@alfresco` package we need.** `@alfresco:registry`
-  points at GitHub Packages, and all four — `adf-extensions`, `js-api`,
-  `adf-core` and `adf-hx-content-services` — download from it. Verified twice by
-  fetching the tarballs with only that mapping present. adf-extensions, adf-core
-  and js-api are _also_ on public npm, which makes a two-registry split look
-  necessary; it is not. **Do not repoint this scope at public npm** — adf-hx is
-  GitHub-Packages-exclusive and Phase 3 would break.
-- Because `@alfresco/adf-extensions` is now a production dependency, CI requires
-  `SATORI_GH_READONLY_TOKEN` to carry `read:packages` for the **Alfresco** org,
-  not only `@hylandsoftware`.
+- **~~One registry serves every `@alfresco` package we need~~ — superseded by
+  NXSAT-637**, which removed the last `@alfresco` package and the `@alfresco:registry`
+  line from `.npmrc`. True when written: `@alfresco:registry` pointed at GitHub
+  Packages, and all four — `adf-extensions`, `js-api`, `adf-core` and
+  `adf-hx-content-services` — downloaded from it, verified twice by fetching the
+  tarballs with only that mapping present. adf-extensions, adf-core and js-api were
+  _also_ on public npm, which made a two-registry split look necessary; it was not.
+- **~~CI requires the token to carry `read:packages` for the Alfresco org~~ —
+  superseded by NXSAT-637.** It did while `@alfresco/adf-extensions` was a production
+  dependency. With no `@alfresco` package left, `SATORI_GH_READONLY_TOKEN` needs
+  `read:packages` on the Hyland org only.
 - **`.npmrc` alone does not decide where CI fetches from — `package-lock.json`
   does.** `npm ci` installs from each entry's `resolved` URL and ignores the
   registry mapping. After changing a scope's registry you must regenerate the
@@ -304,6 +305,9 @@ DocumentService`. The chain, read from the published bundle:
   and override `getTranslation`. Note the base declares a **private** `http`, so a
   subclass field of that name fails `TS2415`/`TS4114`. adf-core also fetches
   `assets/adf-core/i18n/<lang>.json`, which has to be added to the build's asset globs.
+  _Changed by NXSAT-636 (2026-10):_ with adf-core's wiring removed, `AppTranslateLoader` is a
+  plain `TranslateLoader` again and the adf-core asset glob is gone (W2 in
+  `docs/adf-hx-workarounds.md`).
 - **`nuxeo-ui` has no `typecheck` target, so the `typecheck` gate does not cover the
   app.** Two real `TS` errors in `app.config.ts`-adjacent app code passed
   `nx affected -t typecheck` and were caught only by `build`. This is the same trap as
@@ -416,6 +420,8 @@ DocumentService`. The chain, read from the published bundle:
   `MANAGE_VERSIONS.DIALOG.TITLE` as its heading. Both adf-hx catalogues are now **seeded**
   alongside adf-core's in `SEEDED_FOLDERS`, and the `bundle` gate asserts all three ship.
   **Adopting a new adf-hx component means checking its keys resolve, not just that it renders.**
+  _Changed by NXSAT-636 (2026-10):_ the seeding is removed (W6); the loader's `UPSTREAM_FOLDERS`
+  holds satori-ui's catalogue alone.
 - **`AsyncPipe` must be provided for any adf-hx component that renders a user.**
   `UserResolverPipe` calls `inject(AsyncPipe)` in its constructor and `AsyncPipe` carries no
   `providedIn`. Missing, it throws `NG0201` **while rendering** — the component's shell appears
@@ -666,7 +672,7 @@ Beyond the standing rules in `AGENTS.md`:
 | Verification gate       | `scripts/beta-harness/verify-gate.mjs`                      |
 | Node runtime preflight  | `scripts/beta-harness/node-version.mjs`                     |
 | Lockfile integrity gate | `scripts/beta-harness/lockfile-integrity.mjs`               |
-| Dependency-tree gate    | `scripts/beta-harness/dependency-tree.mjs` (report-only)    |
+| Dependency-tree gate    | `scripts/beta-harness/dependency-tree.mjs` (blocking)       |
 | Assertion audit         | `scripts/beta-harness/assertion-audit.mjs`                  |
 | Coverage ratchet        | `scripts/beta-harness/coverage-gate.mjs`                    |
 | Phase state check       | `scripts/beta-harness/state-check.mjs`                      |

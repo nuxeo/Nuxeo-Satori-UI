@@ -128,7 +128,7 @@ function placementFor(
           ? { tabs: [{ id: componentId, label: title, componentId }] }
           : {
               // A path of its own: the shell tells drawers apart by `path`, and a packaged one
-              // (`/browse-adf-hx`) would toggle that entry's drawer and navigate to its page.
+              // (`/browse`) would toggle that entry's drawer and navigate to its page.
               navbar: [
                 {
                   id: `acme.navbar.${propertyName}`,

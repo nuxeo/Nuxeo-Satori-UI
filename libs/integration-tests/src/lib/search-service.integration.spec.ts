@@ -182,18 +182,17 @@ describe('SearchService Integration Tests', () => {
 
   // The `HXQL Injection Guard` block that stood here is deleted rather than repaired.
   //
-  // It tested the wrong service. `escapeHxqlLiteral` has exactly one production call site —
-  // `libs/features/browse/src/lib/search-adf-hx/search-adf-hx.ts:110`, which interpolates a
-  // term into `SELECT * FROM SysContent WHERE sys_fulltext = '<term>*'` for adf-hx. The
+  // It tested the wrong service. `escapeHxqlLiteral` had exactly one production call site, the
+  // retired POC search page, which interpolated a term into
+  // `SELECT * FROM SysContent WHERE sys_fulltext = '<term>*'`; both have since been removed. The
   // platform `SearchService` injected here composes no query string at all; it builds
   // `HttpParams`. Reverting `escapeHxqlLiteral` to the identity function could not turn these
   // two tests red, and their only assertions were `toBeDefined()` on the response.
   //
   // So the block could not meet the acceptance criterion in this file's header, and left
-  // looking like coverage it made the criterion appear met. The guard now lives in
-  // `apps/nuxeo-ui-e2e/src/search.spec.ts`, drives the page that composes the HXQL, and
-  // asserts the query *on the wire* — verified red by replacing `escapeHxqlLiteral` with the
-  // identity function.
+  // looking like coverage it made the criterion appear met. The guard moved to
+  // `apps/nuxeo-ui-e2e/src/search.spec.ts`, which asserts *on the wire* that the term reaches
+  // Nuxeo as data from `/#/search`.
 
   describe('Filters', () => {
     it('excludes folderish documents when the noFolder quick filter is applied', async () => {

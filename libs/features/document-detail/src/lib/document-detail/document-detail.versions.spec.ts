@@ -301,7 +301,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await settle();
 
       expect(mockDetailService.restoreVersion).not.toHaveBeenCalled();
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1']);
     });
 
     it('lets a user who cannot write open a version too', async () => {
@@ -312,7 +312,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       versionItem('0.1')?.click();
       await settle();
 
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1']);
     });
 
     it("lists the live document's versions while a version is open, and leads back to it", async () => {
@@ -325,18 +325,28 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
       inMenu('.nxs-manage-versions__latest')?.click();
       await settle();
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
-    it('keeps the browse return mode when moving between a document and its versions', async () => {
+    it('ignores the browseReturn an old adf-hx browse link carries', async () => {
+      // The adf-hx browse route is retired, so its return mode is gone: breadcrumbs lead to
+      // /browse and moving to a version no longer carries the parameter along.
       await render(live(), { query: { browseReturn: 'adf-hx' } });
       await openVersionsList();
+
+      expect(
+        fixture.componentInstance
+          .breadcrumbItems()
+          .map((item) => ('href' in item ? item.href : undefined)),
+      ).toEqual([
+        '/browse/default-domain',
+        '/browse/default-domain/workspaces',
+        '/browse/default-domain/workspaces/ws',
+      ]);
 
       versionItem('0.1')?.click();
       await settle();
 
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1'], {
-        queryParams: { browseReturn: 'adf-hx' },
-      });
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1']);
     });
 
     it('ignores a slower response for a document the route has already left', async () => {
@@ -452,7 +462,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
       expect(el('.version-banner')?.textContent).toContain("You're viewing the 0.1 version.");
       await click('.version-banner-latest');
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
 
     it('is read-only even though the permissions enricher reports Write', async () => {
@@ -760,7 +770,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(mockDetailService.restoreVersion).toHaveBeenCalledWith('v-0-1');
       expect(toast.show).toHaveBeenCalledWith('Restored to version 0.1');
       expect(toast.error).not.toHaveBeenCalled();
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
 
     it.each([

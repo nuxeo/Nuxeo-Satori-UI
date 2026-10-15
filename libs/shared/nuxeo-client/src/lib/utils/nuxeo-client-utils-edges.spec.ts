@@ -12,14 +12,7 @@ import {
   readClipboardDocs,
   writeClipboardDocs,
 } from './clipboard.utils';
-import {
-  browseTreeContextPath,
-  isAdfHxBrowseRouterUrl,
-  parseAdfHxBrowsePathFromRouterUrl,
-  parseBrowseReturnMode,
-  toAdfHxBrowseRouterUrl,
-  toBrowseRouterUrlForReturnMode,
-} from './browse-path.utils';
+import { browseTreeContextPath } from './browse-path.utils';
 import { normalizeDocumentAcls, resolveAcePrincipal } from './ace-principal';
 import {
   findLocalAceForPrincipal,
@@ -207,55 +200,6 @@ describe('canPasteClipboard', () => {
     expect(canPasteClipboard([{ uid: 'd1', title: 'A' }], null)).toBe(false);
     expect(canPasteClipboard([{ uid: 'd1', title: 'A' }], undefined)).toBe(false);
     expect(canPasteClipboard([{ uid: 'd1', title: 'A' }], doc({ uid: 'file-1' }))).toBe(false);
-  });
-});
-
-describe('adf-hx browse routing', () => {
-  it('encodes the repository path into the query string', () => {
-    expect(toAdfHxBrowseRouterUrl('/default-domain/My Folder/')).toBe(
-      '/browse-adf-hx?path=%2Fdefault-domain%2FMy%20Folder',
-    );
-  });
-
-  it('drops the query entirely for the repository root', () => {
-    expect(toAdfHxBrowseRouterUrl('/')).toBe('/browse-adf-hx');
-    expect(toAdfHxBrowseRouterUrl('   ')).toBe('/browse-adf-hx');
-  });
-
-  it('recognises the adf-hx route with and without a hash or query', () => {
-    expect(isAdfHxBrowseRouterUrl('/browse-adf-hx')).toBe(true);
-    expect(isAdfHxBrowseRouterUrl('/#/browse-adf-hx?path=%2Fa')).toBe(true);
-    expect(isAdfHxBrowseRouterUrl('/browse-adf-hx/child')).toBe(true);
-    expect(isAdfHxBrowseRouterUrl('/#/browse/default-domain')).toBe(false);
-  });
-
-  it('round-trips a path through the adf-hx URL', () => {
-    const url = toAdfHxBrowseRouterUrl('/default-domain/My Folder');
-    expect(parseAdfHxBrowsePathFromRouterUrl(`/#${url}`)).toBe('/default-domain/My Folder');
-  });
-
-  it('falls back to the root when the adf-hx URL carries no query at all', () => {
-    expect(parseAdfHxBrowsePathFromRouterUrl('/#/browse-adf-hx')).toBe('/');
-  });
-
-  it('falls back to the root when the query has no path param', () => {
-    expect(parseAdfHxBrowsePathFromRouterUrl('/#/browse-adf-hx?other=1')).toBe('/');
-  });
-
-  it('routes a return-mode navigation to the matching browse route', () => {
-    expect(toBrowseRouterUrlForReturnMode('adf-hx', '/default-domain')).toBe(
-      '/browse-adf-hx?path=%2Fdefault-domain',
-    );
-    expect(toBrowseRouterUrlForReturnMode('default', '/default-domain')).toBe(
-      '/browse/default-domain',
-    );
-  });
-
-  it('treats any unrecognised return-mode param as the default route', () => {
-    expect(parseBrowseReturnMode('adf-hx')).toBe('adf-hx');
-    expect(parseBrowseReturnMode('something-else')).toBe('default');
-    expect(parseBrowseReturnMode(null)).toBe('default');
-    expect(parseBrowseReturnMode(undefined)).toBe('default');
   });
 });
 

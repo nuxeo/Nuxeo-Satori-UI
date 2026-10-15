@@ -227,7 +227,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       // `TranslateModule` is bootstrapped by the app, not the feature: the
-      // adf-hx components inside the detail template inject `TranslateService`.
+      // detail template's `translate` pipes inject `TranslateService`.
       imports: [DocumentDetailComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),

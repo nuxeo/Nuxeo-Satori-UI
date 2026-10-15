@@ -18,8 +18,7 @@ four-layer customisation contract.
 4. The `AGENTS/` file for your task — `01-services.md`, `02-nuxeo-apis.md`,
    `05-test-standards.md`, `07-security.md`, `08-bug-patterns.md`.
 
-For Beta work also read `docs/extension-reference.md` (the registered-ID contract) and
-`libs/shared/adf-hx-bridge/ARCHITECTURE.md`.
+For Beta work also read `docs/extension-reference.md` (the registered-ID contract).
 
 ## Where the programme stands
 
@@ -109,7 +108,8 @@ Two traps that have each cost a phase:
   `error` with Nx's permissive default and could not reject a single edge, and four
   violations had accumulated
 - Credentials from environment only; never hardcoded, never in a URL query string
-- **adf-hx types must never appear in our public API** — wrap them in `adf-hx-bridge`
+- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its
+  bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 - **Hiding an action in a manifest is not a security control** — server-side Nuxeo
   permissions still gate operations
@@ -120,8 +120,8 @@ Two traps that have each cost a phase:
   server proxies to it via `apps/nuxeo-ui/proxy.conf.json`.
 - `npx nx serve nuxeo-ui` → `http://localhost:4200`.
 - Credentials from `NUXEO_USER`/`NUXEO_PASS`, default `Administrator`.
-- `SATORI_GH_READONLY_TOKEN` is required to install `@hylandsoftware` and `@alfresco`
-  packages from GitHub Packages.
+- `SATORI_GH_READONLY_TOKEN` is required to install the `@hylandsoftware` packages from
+  GitHub Packages. No `@alfresco` package is installed since NXSAT-637.
 - Node is pinned to 20 (`.nvmrc`). On Node 22+ a built-in `localStorage` shadows jsdom's;
   `npm run beta:gate` works around it, a bare `nx test` does not.
 - Playwright is installed with `--no-save` on purpose, so CI installs stay unaffected.

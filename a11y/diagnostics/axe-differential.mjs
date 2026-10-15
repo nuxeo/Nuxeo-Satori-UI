@@ -102,7 +102,6 @@ const ALL_SURFACES = [
   ['tasks', '/#/tasks', 'lib-tasks-page'],
   ['administration', '/#/administration', 'lib-administration-shell'],
   ['knowledge-discovery', '/#/knowledge-discovery', 'lib-knowledge-discovery'],
-  ['browse-adf-hx', '/#/browse-adf-hx', 'lib-browse-adf-hx-poc'],
 ];
 
 /** Narrowed by `--surface`. Its length is the requested count the exit code is checked against. */
@@ -175,7 +174,8 @@ function resolveScoutReport() {
  * a11y-scout records the URL after any redirect, and `/#/administration` lands on
  * `/#/administration/analytics`, so `endsWith(route)` never matched it and a complete baseline
  * still exited 2 naming administration as unscanned. A child path or a query string counts; a
- * sibling that merely shares the prefix, `/#/browse-adf-hx` against `/#/browse`, does not.
+ * sibling that merely shares the prefix, as the retired `/#/browse-adf-hx` did `/#/browse`,
+ * does not.
  *
  * @param {unknown} url
  * @param {string} route

@@ -2,16 +2,18 @@
 title: Deployment & Troubleshooting
 parent: Engineering
 order: 13
-last_reviewed: 2026-10-08
-repo_commit: 2898046
+last_reviewed: 2026-10-14
+repo_commit: d36176c
 audience: engineering
 ---
 
 # Deployment & Troubleshooting
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> Only the `E404` row was re-verified at that commit, for NXSAT-637. On 2026-10-08 at `2898046`
+> (`feature/nxsat-308-ci-cold-cache-tooling`) the repository links were made relative rather than
+> pinned to `feature/adf-hx-browse-poc`, every target present. The rest of the page as of
+> 2026-08-24 · `77265f9`.
 > Packaging detail: [`NUXEO_MARKETPLACE_GUIDE.md`](../../NUXEO_MARKETPLACE_GUIDE.md)
 
 ---
@@ -195,7 +197,7 @@ Verify with `npm run beta:backend`.
 
 | Symptom                                                                                                       | Cause                                                                                            | Fix                                                                                                         |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `E404` on `@alfresco/*`                                                                                       | Token missing or lacks `read:packages` on the **Alfresco** org                                   | It needs both orgs, not just Hyland                                                                         |
+| `E404` on `@hylandsoftware/*`                                                                                 | Token missing or lacks `read:packages` on the **Hyland** org                                     | Set `SATORI_GH_READONLY_TOKEN`; it needs `read:packages` on the Hyland org                                  |
 | `npm ci` fails on CI, green locally                                                                           | A bare `npm install` on macOS pruned Linux-only optional entries                                 | Restore a known-good lock, merge only new entries, run the lockfile gate                                    |
 | CI fetches from the wrong registry after an `.npmrc` change                                                   | `npm ci` installs from each entry's `resolved` URL and **ignores** the mapping                   | Regenerate the lock                                                                                         |
 | `/nuxeo/agentic-ui-config/bootstrap.json` 404s                                                                | The servlet is not mapped: `nuxeo-agentic-core` not deployed, or `web.xml` not regenerated       | `nuxeoctl mp-list`; `nuxeo.war/WEB-INF/web.xml` must name "Agentic UI Configuration". Restart. See §2       |

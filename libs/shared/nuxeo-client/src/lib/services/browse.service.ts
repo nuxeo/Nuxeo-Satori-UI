@@ -506,9 +506,11 @@ export class BrowseService {
    * comma-separated, with a matching `sortOrder` list. Verified against the local instance.
    *
    * **A property Nuxeo cannot sort by returns HTTP 200 with zero entries**, not an error, which
-   * is indistinguishable from an empty folder. Callers must therefore validate the field before
-   * calling — see `NuxeoQueryApi`, which refuses a sort key it cannot map rather than forwarding
-   * it and rendering an empty list.
+   * is indistinguishable from an empty folder: `sortBy=ecm:isFolder` empties a folder of fifty
+   * children. Nuxeo has no sortable folderish property, so "folders first" cannot be asked of the
+   * server at all; `ecm:currentLifeCycleState` does sort. Callers must therefore validate the
+   * field before calling, as browse does against its `SORT_FIELDS`, rather than forward a key
+   * they cannot vouch for and render an empty list.
    */
   getChildren(
     nuxeoPath: string,
@@ -525,9 +527,10 @@ export class BrowseService {
     return this.api.get<NuxeoDocumentList>(`/nuxeo/api/v1/path${safePath}/@children`, params, {
       properties: '*',
       // `permissions` only — not the full enricher set `getFullDocument` asks for, which would
-      // multiply the payload of every row. Without it each row's `sys_effectivePermissions` is
-      // `undefined`, and upstream reads that as no permission at all, so row-level actions would
-      // disappear. Asking is cheaper than the alternatives: guessing, or hardcoding.
+      // multiply the payload of every row. Without it a row carries no
+      // `contextParameters.permissions`, and `hasDocumentPermission` reads that as no permission at
+      // all, so row-level actions would disappear. Asking is cheaper than the alternatives:
+      // guessing, or hardcoding.
       'enrichers.document': 'permissions',
     });
   }

@@ -11,10 +11,6 @@ import {
   parseBrowseNuxeoPathFromRouterUrl,
   toBrowseRouterUrl,
   topLevelNuxeoFolderPath,
-  toAdfHxBrowseRouterUrl,
-  parseAdfHxBrowsePathFromRouterUrl,
-  toBrowseRouterUrlForReturnMode,
-  parseBrowseReturnMode,
   isUserWorkspacePath,
   userWorkspaceOwnerFromPath,
   userWorkspaceRootFromPath,
@@ -149,28 +145,6 @@ describe('browse-path.utils', () => {
     it('encodes browse routes from repository paths', () => {
       expect(toBrowseRouterUrl('/domain-1/workspaces')).toBe('/browse/domain-1/workspaces');
       expect(toBrowseRouterUrl('/')).toBe('/browse');
-    });
-  });
-
-  describe('adf-hx browse return routing', () => {
-    it('builds adf-hx browse URLs with path query param', () => {
-      expect(toAdfHxBrowseRouterUrl('/')).toBe('/browse-adf-hx');
-      expect(toAdfHxBrowseRouterUrl('/default-domain/workspaces')).toBe(
-        '/browse-adf-hx?path=%2Fdefault-domain%2Fworkspaces',
-      );
-    });
-
-    it('parses adf-hx browse path from router URL', () => {
-      expect(parseAdfHxBrowsePathFromRouterUrl('/#/browse-adf-hx?path=%2Ffoo%2Fbar')).toBe(
-        '/foo/bar',
-      );
-    });
-
-    it('returns adf-hx URLs when browseReturn mode is adf-hx', () => {
-      expect(parseBrowseReturnMode('adf-hx')).toBe('adf-hx');
-      expect(parseBrowseReturnMode(null)).toBe('default');
-      expect(toBrowseRouterUrlForReturnMode('adf-hx', '/foo')).toBe('/browse-adf-hx?path=%2Ffoo');
-      expect(toBrowseRouterUrlForReturnMode('default', '/foo')).toBe('/browse/foo');
     });
   });
 

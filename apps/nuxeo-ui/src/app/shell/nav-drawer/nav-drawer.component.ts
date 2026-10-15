@@ -53,8 +53,6 @@ import {
   DocTypeLabelPipe,
   taskDueDistance,
 } from '@nuxeo-satori/platform/nuxeo-client';
-import { toAdfHxBrowseRouterUrl } from '@agentic-ui/shared/adf-hx-bridge';
-import { HxpBrowseNavDrawerComponent } from '@agentic-ui/shared/adf-hx-bridge/providers';
 import {
   AppExtensionsService,
   DescriptorLabelPipe,
@@ -101,7 +99,6 @@ export interface FolderNode {
     MatSnackBarModule,
     TranslatePipe,
     ExtensionOutletComponent,
-    HxpBrowseNavDrawerComponent,
     NxsDocumentTreeComponent,
   ],
   templateUrl: './nav-drawer.component.html',
@@ -329,14 +326,6 @@ export class NavDrawerComponent {
 
   get isBrowse(): boolean {
     return this.activeItem()?.id === 'app.navbar.browse';
-  }
-
-  get isBrowseAdfHx(): boolean {
-    return this.activeItem()?.id === 'app.navbar.browseAdfHx';
-  }
-
-  onAdfHxBrowseNavigate(nuxeoPath: string): void {
-    this.navigateKeepDrawer.emit(toAdfHxBrowseRouterUrl(nuxeoPath));
   }
 
   get isPersonalSpace(): boolean {

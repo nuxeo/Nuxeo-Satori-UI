@@ -24,14 +24,6 @@
       "sTotal": 101,
       "sCovered": 101
     },
-    "adf-hx-bridge": {
-      "lines": 99.82,
-      "statements": 99.82,
-      "branches": 93.58,
-      "functions": 100,
-      "sTotal": 2258,
-      "sCovered": 2254
-    },
     "administration": {
       "lines": 96.25,
       "statements": 96.25,

@@ -73,7 +73,7 @@ import {
 
 const THEME_STORAGE_KEY = 'agentic_ui_color_theme';
 
-/** The same seven surfaces `surfaces.a11y.spec.ts` covers, so results are comparable. */
+/** The same six surfaces `surfaces.a11y.spec.ts` covers, so results are comparable. */
 const ROUTES: ReadonlyArray<readonly [label: string, route: string, host: string]> = [
   ['browse', '/#/browse', 'lib-browse'],
   ['search', '/#/search', 'lib-search'],
@@ -81,7 +81,6 @@ const ROUTES: ReadonlyArray<readonly [label: string, route: string, host: string
   ['tasks', '/#/tasks', 'lib-tasks-page'],
   ['administration', '/#/administration', 'lib-administration-shell'],
   ['knowledge discovery', '/#/knowledge-discovery', 'lib-knowledge-discovery'],
-  ['adf-hx browse POC', '/#/browse-adf-hx', 'lib-browse-adf-hx-poc'],
 ];
 
 interface ModeResult {

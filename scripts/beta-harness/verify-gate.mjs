@@ -85,10 +85,9 @@ const ALL_GATES = [
   },
   // NXSAT-308 criterion 3: none of adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client in
   // the lock, the installed tree, a manifest, `.npmrc` or an import. Next to `lockfile` because both
-  // read the dependency tree. REPORT-ONLY until the ADF removal commit flips `BLOCKING` in the
-  // script, so on main it is green while listing every finding — which is why it echoes on a pass:
-  // the list is the removal backlog. It still fails in report-only mode when a location cannot be
-  // read, and when the tree is clean but nobody flipped the switch.
+  // read the dependency tree. BLOCKING since the ADF removal (NXSAT-638) set `BLOCKING` in the
+  // script: any finding fails it, and so does a location that cannot be read. It echoes on a pass
+  // so the verdict line, which names the mode, is in the log.
   {
     id: 'dependency-tree',
     label: 'Dependency tree (ADF removal)',

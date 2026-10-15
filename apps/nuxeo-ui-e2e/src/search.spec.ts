@@ -2,12 +2,10 @@ import { expect, expectSurfaceWithData, test } from './fixtures';
 import { type Page, type Request } from '@playwright/test';
 
 /**
- * Search — the path that carries the query translation Phase 3 built, and the one an
- * injection defect was found in.
+ * Search — and the guard for the injection defect once found in the retired POC's search.
  *
- * `escapeNxqlLiteral` and `escapeHxqlLiteral` have unit specs for the escaping itself; what those
- * cannot show is that a real query reaches a real OpenSearch index and comes back. That is this
- * file.
+ * `escapeNxqlLiteral` has unit specs for the escaping itself; what those cannot show is that a
+ * real query reaches a real OpenSearch index and comes back. That is this file.
  */
 
 /**
@@ -161,8 +159,8 @@ test.describe('search', () => {
  *
  * These two cases used to drive `/#/search-adf-hx`, which interpolated the term into a
  * `sys_fulltext = '<term>*'` literal through `escapeHxqlLiteral` — the path the original
- * adversarial review found the injection in. NXSAT-308 deletes that route with the rest of
- * adf-hx, so the coverage moves to the search page that stays, before the route goes.
+ * adversarial review found the injection in. That route is retired with the rest of adf-hx and
+ * now only redirects here, so the coverage lives on the search page that stays.
  *
  * `/#/search` writes no query text at all. `SearchService.search` sends the drawer's term to the
  * `default_search` page provider as the `ecm_fulltext` named parameter, and Nuxeo binds it into

@@ -16,8 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 # Least privilege. This job reads the tree and writes a job summary; it needs nothing else.
-# `packages: read` is required because `npm ci` resolves @hylandsoftware and @alfresco from
-# GitHub Packages.
+# `packages: read` is required because `npm ci` resolves @hylandsoftware from GitHub Packages.
 permissions:
   contents: read
   packages: read
