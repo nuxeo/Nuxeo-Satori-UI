@@ -114,7 +114,7 @@ Both name the landmark from our `label`; with no label, Satori's uses its own tr
 
 ![Rich tooltip: without Satori on the left, with Satori on the right](rich-tooltip-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs, opened from the keyboard.')
 
-Both open on hover or keyboard focus after 200 ms, close 1.5 s after the pointer leaves, and close at once on Escape. The built-in one also opens on click, Enter or Space, which Satori's ignores, so a touch screen can open it; and it closes as soon as keyboard focus leaves, where Satori's waits 1.5 s. The built-in panel is never wider than the window and moves sideways to stay on screen near either edge, in either reading direction.
+Both open on hover or keyboard focus after 200 ms, close 1.5 s after the pointer leaves, and close at once on Escape. The built-in one also opens on click, Enter or Space, which Satori's ignores; and it closes as soon as keyboard focus leaves, where Satori's waits 1.5 s. The built-in panel is never wider than the window and moves sideways to stay on screen near either edge, in either reading direction.
 
 Screen readers: the built-in version uses `aria-expanded`/`aria-controls` and a live region; Satori uses `role=tooltip` with linked hidden text ending "Press Escape key to close". Both use the Material Icons font for the trigger icon.
 

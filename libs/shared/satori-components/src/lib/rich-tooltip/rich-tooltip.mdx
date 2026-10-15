@@ -99,9 +99,9 @@ what it explains, not for the icon.
   closes and reopens it. **Escape** closes it and keeps focus on the button. Moving focus out of the
   component closes it.
 - **Pointer and touch.** Resting the pointer on the button opens the panel after 200 ms. It stays
-  open while the pointer is on the button or the panel, and closes 1.5 s after the pointer leaves, so
-  the pointer can cross to the panel. A click keeps it open until a second click. A tap opens it and
-  a second tap closes it.
+  open while the pointer is on the button or the panel, and closes 1.5 s after the pointer leaves,
+  so the pointer can cross to the panel. A click keeps it open after the pointer leaves, until a
+  second click, **Escape** or focus moving away. A tap opens it and a second tap closes it.
 - **Announcement.** The panel opens inside a `status` live region, so a screen reader reads the title
   and text while focus stays on the button. It is not a dialog: a dialog takes focus when it opens.
 - **Content.** Keep the text short and plain. The panel holds no links or buttons.
@@ -117,8 +117,8 @@ What behaves differently:
 
 - **How it opens.** Both open when the pointer rests on the button or keyboard focus reaches it,
   after 200 ms, and close 1.5 s after the pointer leaves. The built-in one also opens on a click, a
-  tap, **Enter** or **Space**, which Satori's ignores, so it works on a touch screen. It closes as
-  soon as focus leaves; Satori's waits 1.5 s.
+  tap, **Enter** or **Space**, which Satori's ignores. It closes as soon as focus leaves; Satori's
+  waits 1.5 s.
 - **Styling.** Satori's panel uses Satori's surface, type and close hint. The built-in panel uses your
   Material theme.
 

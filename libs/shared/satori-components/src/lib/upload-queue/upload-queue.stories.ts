@@ -75,7 +75,7 @@ export const Chosen: Story = {};
 
 /**
  * Uploading: the first done, the second on its way with its own progress, the third waiting. The
- * list does not scroll, so Tab passes it by.
+ * list does not scroll, so it takes no tab stop.
  */
 export const Uploading: Story = {
   args: { items: at('uploading') },

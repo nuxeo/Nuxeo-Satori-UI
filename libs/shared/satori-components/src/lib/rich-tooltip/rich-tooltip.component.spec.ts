@@ -183,7 +183,7 @@ describe('NxsRichTooltipComponent', () => {
       expect(panel()).toBeNull();
     });
 
-    it('stays open while the pointer comes back, to the button or the panel', () => {
+    it('stays open when the pointer comes back within 1.5 s', () => {
       pointer('pointerenter');
       wait(200);
       pointer('pointerleave');
@@ -231,7 +231,7 @@ describe('NxsRichTooltipComponent', () => {
       expect(panel()).not.toBeNull();
     });
 
-    it('closes on Enter or Space when focus opened it, as a toggle does', () => {
+    it('closes when activated, as Enter or Space does by a click, once focus opened it', () => {
       trigger().focus();
       wait(200);
       trigger().click();

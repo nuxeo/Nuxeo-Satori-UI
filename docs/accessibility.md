@@ -255,13 +255,13 @@ checked against `/me`.
 | `color-contrast` (serious, 1.4.3): 3.11:1 on the disabled dropzone's text         | Dropzone: Disabled                                                                       | Browse, Create / Import, Import tab, while an import is in flight      | 3.12:1, the same failure                                                                                                    | Real in the app while an import runs. Idle, the same dialog is clean                               |
 
 - **The chip grid.** Material's `mat-chip-grid` has the `grid` role, which may hold only rows, and
-  Material's own examples put the chip input inside it. `nxs-tag-editor` already keeps its input
-  outside its grid for this rule; the three components above have not followed it yet.
-- **The dropzone.** WCAG 1.4.3 does not apply to an inactive component's text, but nothing marks
-  the text inactive: the host's `opacity: 0.6` dims a plain `<span>`, and only the button inside is
-  disabled. The runtime layer would fail it if it reached the state, so the fix belongs in the
-  component rather than in a suppression: keep the text at full contrast and let the disabled
-  button and the icon carry the state.
+  the three components put their input inside it. `nxs-tag-editor` already keeps its input outside
+  its grid for this rule; the three components above have not followed it yet.
+- **The dropzone.** WCAG 1.4.3 does not apply to an inactive component's text, but nothing marks the
+  text inactive: the host's `opacity: 0.6` dims a plain `<span>`, and only the button and the hidden
+  file input are disabled. The runtime layer would fail it if it reached the state, so the fix
+  belongs in the component rather than in a suppression: keep the text at full contrast and let the
+  disabled button and the icon carry the state.
 - **Found on the way, not a Storybook observation.** Document detail for a File without a main
   file shows its viewer placeholder at 2.72:1 (`color-contrast`, `.viewer-placeholder > p`,
   `#999999` on `#fafafa`). Neither phase-6 visit sees it: one opens a Picture, the other a File
