@@ -449,4 +449,25 @@ describe('NxsSearchFiltersComponent', () => {
     await render();
     expect(host.filters().nature).toEqual(['contract']);
   });
+
+  it('shows an unlabelled bucket named like an inherited property as its key, not the property', async () => {
+    host.labels.set({ nature: {} });
+    host.aggregations.set({
+      dc_nature_agg: {
+        buckets: [
+          { key: 'constructor', docCount: 1 },
+          { key: 'toString', docCount: 1 },
+          { key: '__proto__', docCount: 1 },
+        ],
+      },
+    });
+    await render();
+    toggle('Nature').click();
+    await render();
+
+    const shown = checkboxes('Nature').map((node) =>
+      node.textContent?.replace(/\(\d+\)/, '').trim(),
+    );
+    expect(shown).toEqual(['constructor', 'toString', '__proto__']);
+  });
 });

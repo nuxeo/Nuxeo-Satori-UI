@@ -260,7 +260,9 @@ export class NxsSearchFiltersComponent {
   }
 
   protected optionText(group: CheckboxGroup, value: string): string {
-    return this.optionLabels()[group.field]?.[value] ?? value;
+    // An own key only: `constructor` or `__proto__` is a bucket key too, not an inherited property.
+    const labels = this.optionLabels()[group.field];
+    return labels && Object.prototype.hasOwnProperty.call(labels, value) ? labels[value] : value;
   }
 
   protected applyFulltext(): void {
