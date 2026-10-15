@@ -90,13 +90,17 @@ export function styleSpecifiers(text, file = '', { stripWebpackPrefix = true } =
   const statement = file.endsWith('.sass')
     ? /(?:^|\n)[ \t]*@(use|forward|import)\b([^\n]*)/dg
     : /(?:^|[;{}])\s*@(use|forward|import)\b([^;{}]*)/dg;
-  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([^'"\n]*)\3/dg;
+  // Quoted targets may continue across `\` + newline inside the string (Sass line continuation).
+  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([\s\S]*?)\3/dg;
   const found = [];
   for (const s of mask.matchAll(statement)) {
     const [from, to] = s.indices[2];
     for (const t of mask.slice(from, to).matchAll(target)) {
       const span = t.indices[2] ?? t.indices[4];
       let value = text.slice(from + span[0], from + span[1]);
+      if (t[3]) {
+        value = value.replace(/\\\r?\n[ \t]*/g, '');
+      }
       if (stripWebpackPrefix) {
         value = value.replace(/^~/, '');
       }
@@ -177,6 +181,12 @@ const SPECIFIER_CONTROLS = [
   ['unquoted url() target', `@import url(${PKG}/a.css);\n`, 'a.css', [`${PKG}/a.css`]],
   ['indented .sass: one statement per line', `@use 'a'\n@use '${PKG}'\n`, 'a.sass', ['a', PKG]],
   ['braced syntax: a statement runs to ";"', `@use 'a'\n@use '${PKG}'\n`, 'a.scss', ['a']],
+  [
+    'quoted URL with backslash-newline continuation',
+    `@use '${PKG}/\\\n  theme';\n`,
+    'a.scss',
+    [`${PKG}/theme`],
+  ],
 ];
 
 /**
@@ -193,6 +203,12 @@ const SASS_LOADED_URL_CONTROLS = [
     [`${PKG}/theme`],
   ],
   ['unquoted indented import list', `@import foo, bar\n`, { indented: true }, ['foo', 'bar']],
+  [
+    'sassLoadedUrls: backslash-newline in quoted @use',
+    `@use '${PKG}/\\\n  theme';\n`,
+    {},
+    [`${PKG}/theme`],
+  ],
 ];
 
 /**
