@@ -161,7 +161,9 @@ export function measureDialogLayout(rules) {
 
   const hidden = (el) => {
     if (style(el).visibility === 'hidden') return true;
-    for (let n = el; n && n !== surface.parentElement; n = n.parentElement) {
+    // Walk to the document root: opacity is not inherited, so `opacity: 0` on a preview container,
+    // pane or story root hides the dialog while layout measurements still pass.
+    for (let n = el; n; n = n.parentElement) {
       const st = style(n);
       if (st.display === 'none' || parseFloat(st.opacity) === 0) return true;
       // Visually hidden, as `.cdk-visually-hidden` and Nuxeo Drive's checking title are.

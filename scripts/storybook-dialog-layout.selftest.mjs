@@ -231,3 +231,11 @@ test('a hidden surface is reported, not passed with a zero-rect', async () => {
   );
   reports(failures, /the dialog surface is hidden/);
 });
+
+test('an invisible preview container hides the dialog', async () => {
+  // opacity: 0 on the story root makes the dialog invisible while layout measurements pass.
+  const failures = await check(
+    dialog({ css: '#storybook-root { opacity: 0; }' }),
+  );
+  reports(failures, /the dialog surface is hidden/);
+});

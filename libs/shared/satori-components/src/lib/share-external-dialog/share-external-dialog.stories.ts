@@ -108,9 +108,11 @@ export const PopulatedDates: Story = {
   decorators: [withDialog()],
   play: async ({ canvasElement }) => {
     // Wait for the dialog to mount, then set date input values to exercise the wrapping check.
+    // Scope to the dates row: the first required input in the full dialog is Email, not To.
     await new Promise((resolve) => setTimeout(resolve, 100));
-    const from = canvasElement.querySelector<HTMLInputElement>('input[matInput]:not([required])');
-    const to = canvasElement.querySelector<HTMLInputElement>('input[matInput][required]');
+    const dates = canvasElement.querySelector('.nxs-share-external-dialog__dates');
+    const from = dates?.querySelector<HTMLInputElement>('input[matInput]:not([required])');
+    const to = dates?.querySelector<HTMLInputElement>('input[matInput][required]');
     if (from) {
       from.value = '1/2/2030';
       from.dispatchEvent(new Event('input', { bubbles: true }));
