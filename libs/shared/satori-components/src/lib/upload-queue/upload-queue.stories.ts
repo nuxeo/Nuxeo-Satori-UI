@@ -73,8 +73,20 @@ type Story = StoryObj<NxsUploadQueueComponent>;
 /** Chosen, not uploading yet: each with its size and a Remove. */
 export const Chosen: Story = {};
 
-/** Uploading: the first done, the second on its way with its own progress, the third waiting. */
-export const Uploading: Story = { args: { items: at('uploading') } };
+/**
+ * Uploading: the first done, the second on its way with its own progress, the third waiting. The
+ * list does not scroll, so Tab passes it by.
+ */
+export const Uploading: Story = {
+  args: { items: at('uploading') },
+  play: async ({ canvasElement }) => {
+    const list = within(canvasElement).getByRole('list', { name: 'Files to upload' });
+    await expect(list.scrollHeight).toBeLessThanOrEqual(list.clientHeight);
+    // The list measures itself after it renders; give it the frame it would take to say otherwise.
+    await new Promise((settled) => requestAnimationFrame(() => requestAnimationFrame(settled)));
+    await expect(list).not.toHaveAttribute('tabindex');
+  },
+};
 
 /** The server refused the second: it says why, with Retry; the third waits for another run. */
 export const Refused: Story = {
