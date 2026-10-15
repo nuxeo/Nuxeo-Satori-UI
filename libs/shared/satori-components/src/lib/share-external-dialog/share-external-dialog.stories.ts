@@ -98,3 +98,26 @@ export const TypeRights: Story = {
 export const Refused: Story = {
   decorators: [withDialog({}, () => throwError(() => new HttpErrorResponse({ status: 403 })))],
 };
+
+/**
+ * With populated From/To dates, for the regression check to validate that date inputs wrap at
+ * narrow widths without clipping their values. The dates are set programmatically after mount,
+ * since Share external is for new permissions and its form starts empty by design.
+ */
+export const PopulatedDates: Story = {
+  decorators: [withDialog()],
+  play: async ({ canvasElement }) => {
+    // Wait for the dialog to mount, then set date input values to exercise the wrapping check.
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    const from = canvasElement.querySelector<HTMLInputElement>('input[matInput]:not([required])');
+    const to = canvasElement.querySelector<HTMLInputElement>('input[matInput][required]');
+    if (from) {
+      from.value = '1/2/2030';
+      from.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    if (to) {
+      to.value = '3/4/2030';
+      to.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  },
+};

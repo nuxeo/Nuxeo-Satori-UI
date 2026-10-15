@@ -134,6 +134,12 @@ test('the surface may be found without Material classes, by its background and c
   assert.deepEqual(await check(html.replace(BASE_CSS, css)), []);
 });
 
+test('text-only dialog content is checked for side spacing', async () => {
+  // Content with direct text nodes, no child elements: the check must still measure spacing.
+  const content = 'This dialog has only text in its content, no elements.';
+  assert.deepEqual(await check(dialog({ content })), []);
+});
+
 // ---------------------------------------------------------------- each rule: must fail
 
 test('title flush with the surface: in the corner and too close to the edges', async () => {
@@ -217,4 +223,11 @@ test('no dialog on the page', async () => {
     await check('<div id="storybook-root"><p>Nothing here</p></div>'),
     /no dialog on the page/,
   );
+});
+
+test('a hidden surface is reported, not passed with a zero-rect', async () => {
+  const failures = await check(
+    dialog({ css: '.mat-mdc-dialog-surface { display: none; }' }),
+  );
+  reports(failures, /the dialog surface is hidden/);
 });

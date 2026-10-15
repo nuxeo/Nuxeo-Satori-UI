@@ -240,6 +240,14 @@ export function measureDialogLayout(rules) {
     `${px(box.left - s.left)} from the left, ${px(s.right - box.right)} from the right, ` +
     `${px(box.top - s.top)} from the top, ${px(s.bottom - box.bottom)} from the bottom`;
 
+  // A hidden surface (display: none, visibility: hidden, or zero-size parent) would pass with
+  // a zero-rect or an inherited rect, neither meaningful. Require a painted surface.
+  if (hidden(surface)) {
+    return {
+      failures: ['the dialog surface is hidden: checks require a visible dialog'],
+    };
+  }
+
   // Inside the surface, rounded corners included.
   const outside = [];
   for (const el of surface.querySelectorAll('*')) {
@@ -280,7 +288,8 @@ export function measureDialogLayout(rules) {
   // Spacing: the content.
   for (const content of surface.querySelectorAll('.mat-mdc-dialog-content')) {
     if (hidden(content)) continue;
-    const boxes = [...content.querySelectorAll('*')].flatMap((el) =>
+    // Include the content element itself: if it has direct text nodes, paintedBoxes captures them.
+    const boxes = [content, ...content.querySelectorAll('*')].flatMap((el) =>
       paintedBoxes(el).map(({ box }) => box),
     );
     if (!boxes.length) continue;
