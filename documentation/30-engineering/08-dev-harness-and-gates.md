@@ -282,7 +282,7 @@ npm run beta:state
 
 A phase may claim `complete` only if its cited manifest exists, says `pass`, records
 non-zero checks, has `totals.failed === 0`, and cites a gate report that is `pass` — not
-`pass-partial`.
+`pass-partial`, and not `pass-incomplete`.
 
 It exists because Phase 1 was recorded complete, in prose and in the agent contract, and
 used to downgrade a risk, while its upgrade-safe config path was wrong by one segment and

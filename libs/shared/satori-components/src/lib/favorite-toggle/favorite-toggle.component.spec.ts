@@ -196,9 +196,11 @@ describe('NxsFavoriteToggleComponent', () => {
     await render();
 
     expect(button().disabled).toBe(true);
-    fixture.debugElement
-      .query((el) => el.name === 'nxs-favorite-toggle')
-      .componentInstance.toggle();
+    // A disabled button fires no click, so the guard is reached directly.
+    (
+      fixture.debugElement.query((el) => el.name === 'nxs-favorite-toggle')
+        .componentInstance as unknown as { toggle(): void }
+    ).toggle();
 
     expect(addToFavorites).not.toHaveBeenCalled();
   });

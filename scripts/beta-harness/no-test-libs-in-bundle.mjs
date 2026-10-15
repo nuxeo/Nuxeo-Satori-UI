@@ -107,13 +107,26 @@ const UPSTREAM_MARKERS = ['adf-datatable', 'adf-enterprise-adf-hx'];
  * empty catalogue passed. So did a truncated one, and so did a 0-byte file.
  *
  * `key` is a dotted path that must resolve to a non-empty string. Each one is a key the
- * application actually renders, not the first key in the file: `MANAGE_VERSIONS.DIALOG.TITLE`,
- * adf-hx's versions-panel heading that once shipped raw, is the reason the list exists at all.
+ * application actually renders, not the first key in the file. The list began with adf-hx's
+ * `MANAGE_VERSIONS.DIALOG.TITLE`, a heading that once shipped raw; adf-hx has since been removed.
  */
-// Empty since adf-hx's two catalogues and its icon set left with the package. satori-ui's
-// catalogue (`assets/satori-ui/i18n`) is also copied in by a glob and fetched at runtime, and is
-// not listed yet.
-const REQUIRED_FILES = [];
+// Both catalogues `AppTranslateLoader` fetches at runtime. Each fails silently when missing: the
+// satori-ui fetch is caught to `{}` and the app's falls back to the English map, so a lost glob
+// shows only as raw `sat.*` keys or English in every other language.
+const REQUIRED_FILES = [
+  {
+    path: 'i18n/en.json',
+    key: 'shell.search.placeholder',
+    why: "The app's English catalogue, fetched as i18n/<lang>.json; the header search label reads this key.",
+    fix: 'Check the asset glob for apps/nuxeo-ui/public in angular.json.',
+  },
+  {
+    path: 'assets/satori-ui/i18n/en.json',
+    key: 'sat.platform-nav.expand',
+    why: "satori-ui's catalogue (UPSTREAM_FOLDERS in app-translate-loader.ts); the platform nav's expand button reads this key.",
+    fix: 'Check the asset glob for node_modules/@hylandsoftware/satori-ui/i18n in angular.json.',
+  },
+];
 
 /** @type {{ pattern: string, file: string, count: number, why: string, fix: string }[]} */
 const hits = [];
@@ -146,21 +159,22 @@ for await (const file of walk(distDir)) {
   }
 }
 
-/** @type {string[]} */
+/** @type {{ required: (typeof REQUIRED_FILES)[number], reason: string }[]} */
 const missingFiles = [];
 for (const required of REQUIRED_FILES) {
   const full = resolve(distDir, required.path);
   if (!existsSync(full)) {
-    missingFiles.push(`${required.path} — absent`);
+    missingFiles.push({ required, reason: 'absent' });
     continue;
   }
   // Content, not existence. See the note on REQUIRED_FILES: the documented failure mode is
   // a catalogue that resolves to `{}`, which existence cannot distinguish from a good one.
   const text = readFileSync(full, 'utf8');
   if (required.contains && !text.includes(required.contains)) {
-    missingFiles.push(
-      `${required.path} — present (${text.length} bytes) but does not contain \`${required.contains}\``,
-    );
+    missingFiles.push({
+      required,
+      reason: `present (${text.length} bytes) but does not contain \`${required.contains}\``,
+    });
     continue;
   }
   if (required.key) {
@@ -168,15 +182,17 @@ for (const required of REQUIRED_FILES) {
     try {
       value = required.key.split('.').reduce((o, part) => o?.[part], JSON.parse(text));
     } catch (error) {
-      missingFiles.push(`${required.path} — present but is not valid JSON (${error.message})`);
+      missingFiles.push({ required, reason: `present but is not valid JSON (${error.message})` });
       continue;
     }
     if (typeof value !== 'string' || value === '') {
-      missingFiles.push(
-        `${required.path} — present (${text.length} bytes) but \`${required.key}\` is ` +
+      missingFiles.push({
+        required,
+        reason:
+          `present (${text.length} bytes) but \`${required.key}\` is ` +
           `${value === undefined ? 'absent' : JSON.stringify(value)}, so the catalogue is ` +
           'empty or truncated and the UI renders raw keys',
-      );
+      });
     }
   }
 }
@@ -191,9 +207,10 @@ console.log(
     `${(bytesScanned / 1048576).toFixed(2)} MB\n`,
 );
 
-for (const required of REQUIRED_FILES) {
-  if (!missingFiles.includes(required.path)) continue;
-  console.log(`  [FAIL] missing ${required.path}`);
+// Each one by name. This loop used to match `missingFiles` entries against bare paths while
+// they held "path — reason" strings, so a failure printed only the count.
+for (const { required, reason } of missingFiles) {
+  console.log(`  [FAIL] ${required.path}: ${reason}`);
   console.log(`         ${required.why}`);
   console.log(`         ${required.fix}`);
 }

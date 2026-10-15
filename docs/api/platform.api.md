@@ -771,7 +771,7 @@ class NxsFavoriteToggleComponent {
     readonly changed: _angular_core.OutputEmitterRef<boolean>;
     readonly failed: _angular_core.OutputEmitterRef<unknown>;
     protected readonly busy: _angular_core.Signal<boolean>;
-    toggle(): void;
+    protected toggle(): void;
     protected press(event: Event): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "favorite": { "alias": "favorite"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "favorite": "favoriteChange"; "changed": "changed"; "failed": "failed"; }, never, never, true, never>;
@@ -1078,8 +1078,13 @@ class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     protected readonly panelId: string;
     protected readonly shift: _angular_core.WritableSignal<number>;
     constructor();
-    protected toggle(): void;
-    protected closeAndRefocus(): void;
+    protected onPointerEnter(event: PointerEvent): void;
+    protected onPointerLeave(event: PointerEvent): void;
+    protected onPointerDown(): void;
+    protected onPressEnd(): void;
+    protected onFocus(): void;
+    protected onClick(): void;
+    protected onEscape(): void;
     protected onFocusOut(event: FocusEvent): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRichTooltipComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRichTooltipComponent, "nxs-rich-tooltip", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "content": { "alias": "content"; "required": true; "isSignal": true; }; "triggerLabel": { "alias": "triggerLabel"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;

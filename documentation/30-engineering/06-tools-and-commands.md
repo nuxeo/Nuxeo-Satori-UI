@@ -66,8 +66,9 @@ Recovery: restore a known-good lock, merge only the new entries, run
 | `npm run beta:gate -- --base <ref>`                     | Change the affected-calculation base (default `origin/main`) |
 | `npm run beta:gate -- --tail <n>`                       | Lines of failing output to show (default 40)                 |
 
-Verdicts: `pass` (every gate), `pass-partial` (a filtered run — **not** a phase gate),
-`fail`. A report is written under `~/Desktop/agentic-ui-evidence/beta/gates/`.
+Verdicts: `pass` (every gate ran green), `pass-incomplete` (every gate requested, none failed,
+but one reported NOT RUN, e.g. code scanning skipped — **not** a phase gate), `pass-partial` (a
+filtered run — **not** a phase gate), `fail`. A report is written under `~/Desktop/agentic-ui-evidence/beta/gates/`.
 
 ### Individual gates
 

@@ -14,8 +14,10 @@ clutter the page if it were always shown. For one word or a short phrase, a plai
 
 - **A title and a sentence or two.** `heading` is the title and `content` the explanation, both
   plain text.
-- **Opens on demand.** The button opens the panel; **Escape** or moving focus away closes it. The
-  panel does not cover the page or trap focus.
+- **Opens on hover, focus or a tap.** The panel opens when the pointer rests on the button or
+  keyboard focus reaches it, as Satori's does, and on a click or tap, because a touch screen has
+  neither. **Escape** or moving focus away closes it. The panel does not cover the page or trap
+  focus.
 - **Announced when it opens.** The panel opens inside a live region, so a screen reader reads it
   without the user moving to it.
 - **Stays on screen.** The panel is never wider than the window, and moves sideways to stay inside
@@ -26,7 +28,8 @@ clutter the page if it were always shown. For one word or a short phrase, a plai
 
 ## Demo showcase
 
-Select the button to open the panel. The **Open** story in the sidebar shows it open.
+Rest the pointer on the button, Tab to it, or select it to open the panel. The **Open**, **Opens On
+Hover** and **Opens On Focus** stories in the sidebar show it opened each way.
 
 <Canvas of={RichTooltipStories.Closed} />
 
@@ -92,8 +95,13 @@ what it explains, not for the icon.
   explanation is about, such as "About versioning", not "Info".
 - **State.** The button reports whether the panel is open (`aria-expanded`) and which element it
   controls (`aria-controls`).
-- **Keyboard.** **Tab** reaches the button. **Enter** or **Space** opens and closes the panel.
-  **Escape** closes it and keeps focus on the button. Moving focus out of the component closes it.
+- **Keyboard.** **Tab** reaches the button and opens the panel after 200 ms. **Enter** or **Space**
+  then closes it, and pressed again opens it again. **Escape** closes it wherever focus is, and
+  leaves focus where it is. Moving focus out of the component closes it.
+- **Pointer and touch.** Resting the pointer on the button opens the panel after 200 ms. It stays
+  open while the pointer is on the button or the panel, and closes 1.5 s after the pointer leaves,
+  so the pointer can cross to the panel. A click keeps it open after the pointer leaves, until a
+  second click, **Escape** or focus moving away. A tap opens it and a second tap closes it.
 - **Announcement.** The panel opens inside a `status` live region, so a screen reader reads the title
   and text while focus stays on the button. It is not a dialog: a dialog takes focus when it opens.
 - **Content.** Keep the text short and plain. The panel holds no links or buttons.
@@ -107,9 +115,11 @@ Both take the same four inputs.
 
 What behaves differently:
 
-- **How it opens.** Satori's rich tooltip opens when the pointer rests on the button or the button
-  receives keyboard focus, and closes when they leave. The built-in one opens when the button is
-  activated — a click, **Enter** or **Space** — and stays open until **Escape** or focus moves away.
+- **How it opens.** Both open when the pointer rests on the button or keyboard focus reaches it,
+  after 200 ms, and close 1.5 s after the pointer leaves. The built-in one also opens on a click, a
+  tap, **Enter** or **Space**, which Satori's ignores. It closes as soon as focus leaves; Satori's
+  waits 1.5 s. Escape closes the built-in one wherever focus is; Satori's only while focus is on its
+  button.
 - **Styling.** Satori's panel uses Satori's surface, type and close hint. The built-in panel uses your
   Material theme.
 
