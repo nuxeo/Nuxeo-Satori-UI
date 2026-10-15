@@ -109,6 +109,7 @@ describe('loadFacetLabels', () => {
     expect(labels.coverage).toEqual({
       europe: 'Europe',
       'europe/france': 'Europe/France',
+      france: 'Europe/France',
     });
   });
 
@@ -133,6 +134,56 @@ describe('loadFacetLabels', () => {
       'europe/other': 'Europe/Autre',
       'asia/other': 'Asie/Autre',
     });
+  });
+
+  it('also labels a child by its bare id when no other entry shares that id', async () => {
+    const service = directories({
+      getAllL10nEntries: vi.fn(() =>
+        of([
+          l10n('africa', 'Africa', 'Afrique'),
+          l10n('tanzania', 'Tanzania', 'Tanzanie', 'africa'),
+        ]),
+      ),
+    });
+    const labels = await firstValueFrom(
+      loadFacetLabels(service as unknown as DirectoryService, 'fr'),
+    );
+
+    expect(labels.coverage).toEqual({
+      africa: 'Afrique',
+      'africa/tanzania': 'Afrique/Tanzanie',
+      tanzania: 'Afrique/Tanzanie',
+    });
+  });
+
+  it('gives no bare-id alias to a child id that two parents share', async () => {
+    const service = directories({
+      getAllL10nEntries: vi.fn(() =>
+        of([
+          l10n('europe', 'Europe', 'Europe'),
+          l10n('asia', 'Asia', 'Asie'),
+          l10n('other', 'Other', 'Autre', 'europe'),
+          l10n('other', 'Other', 'Autre', 'asia'),
+        ]),
+      ),
+    });
+    const labels = await firstValueFrom(
+      loadFacetLabels(service as unknown as DirectoryService, 'fr'),
+    );
+
+    expect(labels.coverage).not.toHaveProperty('other');
+  });
+
+  it('keeps an id named __proto__ as its own key', async () => {
+    const service = directories({
+      getAllL10nEntries: vi.fn(() => of([l10n('__proto__', 'Proto', 'Proto')])),
+    });
+    const labels = await firstValueFrom(
+      loadFacetLabels(service as unknown as DirectoryService, 'en'),
+    );
+
+    expect(Object.hasOwn(labels.subjects ?? {}, '__proto__')).toBe(true);
+    expect(Object.getPrototypeOf(labels.subjects)).toBe(Object.prototype);
   });
 
   it('counts fr-FR as French', async () => {
