@@ -46,11 +46,25 @@ export interface SearchResultsState {
   readonly status: 'loading' | 'loaded' | 'failed';
   readonly items: readonly SearchResultItem[];
   readonly aggregations: SearchAggregations;
+  /** Every match across every page; negative when the server did not count them. */
+  readonly totalSize: number;
+  /** Whether the server has a page after this one. */
+  readonly hasNextPage: boolean;
   /** The request's error, when it failed. */
   readonly error: unknown;
 }
 
-const LOADING: SearchResultsState = { status: 'loading', items: [], aggregations: {}, error: null };
+/** How many results one page of the search holds. */
+export const SEARCH_PAGE_SIZE = 40;
+
+const LOADING: SearchResultsState = {
+  status: 'loading',
+  items: [],
+  aggregations: {},
+  totalSize: -1,
+  hasNextPage: false,
+  error: null,
+};
 const EMPTY_PAGE_QUERY: SearchPageQuery = { quickFilters: '', sortBy: null, sortOrder: null };
 
 const samePageQuery = (a: SearchPageQuery, b: SearchPageQuery) =>
@@ -78,11 +92,16 @@ export class SearchSession {
 
   private readonly pageQuery = signal<SearchPageQuery>(EMPTY_PAGE_QUERY, { equal: samePageQuery });
   private readonly attempt = signal(0);
+  private readonly pageIndexSignal = signal(0);
+  /** The page on screen, from zero. */
+  readonly pageIndex = this.pageIndexSignal.asReadonly();
 
-  /** The request the current filters, quick filters and sort make. */
-  readonly request = computed<SearchQueryParams>(() =>
-    nxsSearchFiltersToQuery(this.filters(), this.pageQuery()),
-  );
+  /** The request the current filters, quick filters, sort and page make. */
+  readonly request = computed<SearchQueryParams>(() => ({
+    ...nxsSearchFiltersToQuery(this.filters(), this.pageQuery()),
+    pageIndex: this.pageIndexSignal(),
+    pageSize: SEARCH_PAGE_SIZE,
+  }));
 
   readonly results$: Observable<SearchResultsState> = combineLatest([
     toObservable(this.request),
@@ -94,10 +113,19 @@ export class SearchSession {
           status: 'loaded',
           items: response.items,
           aggregations: response.aggregations,
+          totalSize: response.totalSize,
+          hasNextPage: response.hasNextPage,
           error: null,
         })),
         catchError((error: unknown) =>
-          of<SearchResultsState>({ status: 'failed', items: [], aggregations: {}, error }),
+          of<SearchResultsState>({
+            status: 'failed',
+            items: [],
+            aggregations: {},
+            totalSize: -1,
+            hasNextPage: false,
+            error,
+          }),
         ),
         startWith(LOADING),
       ),
@@ -130,13 +158,20 @@ export class SearchSession {
     return saved !== null && !nxsSameSearchFilters(saved, this.filters());
   });
 
+  /** A change of filters starts again from the first page: the old page may not exist any more. */
   setFilters(filters: NxsSearchFilters): void {
+    if (!nxsSameSearchFilters(this.filters(), filters)) this.pageIndexSignal.set(0);
     this.shared.drawerFilters.set(nxsSearchFiltersToRecord(filters));
   }
 
   /** The search page's URL changed: its quick filters and sort are part of the query. */
   setPageQuery(query: SearchPageQuery): void {
     this.pageQuery.set(query);
+  }
+
+  /** The page the URL or the pager asks for, from zero. */
+  setPageIndex(pageIndex: number): void {
+    this.pageIndexSignal.set(Math.max(0, Math.floor(pageIndex)));
   }
 
   /** Runs the current query again. */

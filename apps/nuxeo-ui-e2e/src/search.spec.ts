@@ -132,6 +132,31 @@ test.describe('search', () => {
     await expect(page.locator('lib-search .results-count')).toHaveText(/^[1-9]\d*\s+results?$/);
   });
 
+  test('pages past the first page, and the count is the server total', async ({
+    signedIn: page,
+  }) => {
+    // The count is the answer the server gave, not the rows on screen: 40 rows a page, so the
+    // seeded data must run past one page or both halves of this are vacuous.
+    const [first] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes(PAGE_PROVIDER) && r.status() === 200),
+      page.goto('/#/search', { waitUntil: 'networkidle' }),
+    ]);
+    const total = (await first.json()).resultsCount as number;
+    expect(total, 'the seeded data runs past one page').toBeGreaterThan(40);
+    await expect(page.locator('lib-search .results-count')).toHaveText(
+      new RegExp(`^${total}\\s+results$`),
+    );
+
+    const next = page.locator('lib-search nxs-pager .nxs-pager__next');
+    await expect(next, 'the pager offers a next page').toBeEnabled();
+    const [second] = await Promise.all([
+      page.waitForResponse((r) => r.url().includes(PAGE_PROVIDER) && r.status() === 200),
+      next.click(),
+    ]);
+    expect(new URL(second.url()).searchParams.get('currentPageIndex')).toBe('1');
+    await expect(page).toHaveURL(/[?&]page=2\b/);
+  });
+
   test('a term that cannot match returns zero results rather than an error', async ({
     signedIn: page,
   }) => {
