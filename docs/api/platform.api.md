@@ -399,6 +399,11 @@ class NxsDeletePermissionDialogComponent {
     protected readonly right: string;
     protected readonly timeFrame: string;
     protected readonly grantedBy: string;
+    protected readonly fields: {
+    label: string;
+    value: string;
+    }[];
+    protected readonly narrow: _angular_core.Signal<boolean>;
     protected confirm(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDeletePermissionDialogComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDeletePermissionDialogComponent, "nxs-delete-permission-dialog", never, {}, {}, never, never, true, never>;
