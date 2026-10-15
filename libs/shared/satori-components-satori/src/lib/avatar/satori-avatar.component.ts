@@ -6,7 +6,7 @@ import {
   type NxsAvatarColor,
   type NxsAvatarInputs,
   type NxsAvatarSize,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 /**
  * `nxs.primitives.avatar` on Satori's `sat-avatar`, with the same accessible name as Material's.

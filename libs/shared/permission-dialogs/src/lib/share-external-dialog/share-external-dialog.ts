@@ -1,5 +1,5 @@
 import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -16,10 +16,10 @@ import {
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
   isMailSendError,
   permissionCreateMailFailureMessage,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
-import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
+import { provideTranslatedDatepickerIntl } from '@nuxeo/satori-platform/ui';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface ShareExternalDialogData {
   documentUid: string;

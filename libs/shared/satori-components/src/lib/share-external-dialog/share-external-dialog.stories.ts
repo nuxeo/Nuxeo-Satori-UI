@@ -8,7 +8,7 @@ import { action } from 'storybook/actions';
 import {
   DocumentDetailService,
   type PermissionWithNotificationResult,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   NxsShareExternalDialogComponent,

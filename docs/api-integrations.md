@@ -1012,7 +1012,7 @@ toolbar's Publish (`app.rules.canPublish`).
 
 **State Detection:** Via the `favorites` enricher: `contextParameters.favorites.isFavorite` (`true`/`false`).
 
-**Used by:** `nxsToggleFavorite()` in `@nuxeo-satori/platform/components`, the one caller of both,
+**Used by:** `nxsToggleFavorite()` in `@nuxeo/satori-platform/components`, the one caller of both,
 which also fires the `favorites-changed` window event the shell's Favorites views re-read on:
 
 - **`nxs-favorite-toggle`** — the star on search result cards and list rows
@@ -1655,7 +1655,7 @@ so it suggests nothing on Nuxeo 2025 until it moves onto `suggestTags`.
 
 `nxs-date-input` makes no request.
 
-**Usage:** none yet. The pickers are in `@nuxeo-satori/platform/components`, documented in its
+**Usage:** none yet. The pickers are in `@nuxeo/satori-platform/components`, documented in its
 Storybook; screens move onto them in a later change.
 
 ---

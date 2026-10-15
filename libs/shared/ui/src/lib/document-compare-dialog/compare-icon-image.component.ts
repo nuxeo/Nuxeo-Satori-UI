@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Component, effect, inject, input, OnDestroy, signal } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 import { catchError, of } from 'rxjs';
-import { NUXEO_API_ORIGIN, resolveNuxeoIconPath } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN, resolveNuxeoIconPath } from '@nuxeo/satori-platform/nuxeo-client';
 
 @Component({
   selector: 'lib-compare-icon-image',

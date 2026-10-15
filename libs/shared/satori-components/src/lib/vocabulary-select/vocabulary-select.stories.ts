@@ -7,7 +7,7 @@ import {
   DirectoryService,
   type DirectoryEntry,
   type L10nDirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsVocabularySelectComponent } from './vocabulary-select.component';
 

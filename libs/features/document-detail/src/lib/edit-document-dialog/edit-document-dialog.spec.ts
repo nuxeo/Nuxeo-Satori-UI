@@ -16,7 +16,7 @@ import { Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import { DocumentLayoutFormComponent } from '@agentic-ui/shared/document-layouts';
-import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { EditDocumentDialogComponent } from './edit-document-dialog';
 

@@ -13,9 +13,9 @@ import { NavigationEnd, Router, provideRouter, withComponentInputBinding } from 
 import { filter } from 'rxjs/operators';
 
 import { provideAcmeExtensions } from '@agentic-ui/acme-extensions';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { ExtensionRuleContextService } from '@nuxeo-satori/platform/extensions';
-import { CURRENT_USERNAME, NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { ExtensionRuleContextService } from '@nuxeo/satori-platform/extensions';
+import { CURRENT_USERNAME, NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { routes } from './app.routes';
 import { provideTemplateExtensions } from './extensions/template-extensions';

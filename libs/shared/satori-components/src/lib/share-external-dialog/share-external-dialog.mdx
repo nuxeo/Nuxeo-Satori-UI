@@ -39,7 +39,7 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   NxsShareExternalDialogComponent,
   type NxsShareExternalDialogData,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 private readonly dialog = inject(MatDialog);
 
@@ -63,7 +63,7 @@ protected shareExternally(): void {
 
 It has no inputs or outputs. Read the document with the `userVisiblePermissions` enricher to pass
 the type's rights. The dialog lists its own toast and date adapter providers; it needs
-`DocumentDetailService`, which an application using `@nuxeo-satori/platform/nuxeo-client` already
+`DocumentDetailService`, which an application using `@nuxeo/satori-platform/nuxeo-client` already
 has. Its labels are translated under `satori-components.permission-dialogs.*`, with English from
 `providePlatformEnglishFallback()`.
 

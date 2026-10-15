@@ -10,8 +10,8 @@ import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslatePipe } from '@ngx-translate/core';
-import { NxsDocumentTreeComponent } from '@nuxeo-satori/platform/components';
-import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { NxsDocumentTreeComponent } from '@nuxeo/satori-platform/components';
+import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { of } from 'rxjs';
 
 import { testTranslateModule } from '../i18n/translate-testing';

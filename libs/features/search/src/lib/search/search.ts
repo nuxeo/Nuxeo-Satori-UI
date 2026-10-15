@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
-import { DescriptorLabelPipe, descriptorLabel } from '@nuxeo-satori/platform/extensions';
+import { DescriptorLabelPipe, descriptorLabel } from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
@@ -26,7 +26,7 @@ import {
   ConfirmDialogComponent,
   ShareSavedSearchDialogComponent,
   type ConfirmDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 import {
   SelectionService,
   DocumentDetailService,
@@ -35,7 +35,7 @@ import {
   NON_CONTENT_DOCUMENT_TYPES,
   type SearchResultItem,
   DocTypeLabelPipe,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,
@@ -56,7 +56,7 @@ import {
   type NxsPickableColumn,
   NxsToastService,
   provideNxsToast,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 import { askSavedSearchName } from '../search-session/saved-search-dialogs';
 import {

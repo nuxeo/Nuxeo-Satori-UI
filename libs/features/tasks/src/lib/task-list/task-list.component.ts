@@ -4,7 +4,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { NuxeoTask, TaskService, CURRENT_USERNAME } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoTask, TaskService, CURRENT_USERNAME } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 @Component({

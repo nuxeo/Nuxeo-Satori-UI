@@ -4,7 +4,7 @@ import { MatTooltip } from '@angular/material/tooltip';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsFavoriteToggleComponent } from './favorite-toggle.component';
 import { NXS_FAVORITES_CHANGED_EVENT, nxsToggleFavorite } from './toggle-favorite';

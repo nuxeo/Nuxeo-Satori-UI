@@ -16,11 +16,11 @@ import {
   type ImportProgress,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { CreateImportDialogComponent } from './create-import-dialog.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 const PARENT_PATH = '/default-domain/workspaces/ws';
 

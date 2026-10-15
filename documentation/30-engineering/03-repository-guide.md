@@ -101,7 +101,7 @@ Anything that is inherently _the shell_ and would be wrong to make reusable:
 It is what a customer forks. It ships **no Satori design system** on purpose — nothing in it
 imports `@hylandsoftware/satori-ui` — so a fork does not have to remove ours before adding
 theirs. It does load Angular Material's prebuilt `indigo-pink` theme in `src/styles.scss`,
-because `@nuxeo-satori/platform/ui` is built on Material. Its own chrome reads `--shell-*`
+because `@nuxeo/satori-platform/ui` is built on Material. Its own chrome reads `--shell-*`
 custom properties, which `TemplateThemeService` writes from Layer 0 `themes[].tokens`; that is
 why `--shell-*` is a recognised themed namespace in the guardrails rather than a faked one.
 
@@ -144,17 +144,17 @@ The adf-hx bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes 
 
 | Library                    |  Lines | Specs | Responsibility                                                                                                                                                                             |
 | -------------------------- | -----: | ----: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `satori-components`        | 38,898 |    59 | The `nxs-` components, Material-backed with no Satori import. **Published** as `@nuxeo-satori/platform/components` (NXSAT-308)                                                             |
-| `nuxeo-client`             | 22,926 |    55 | **The integration layer.** 26 services, models, utils. Everything that talks to Nuxeo. **Published** as `@nuxeo-satori/platform/nuxeo-client`                                              |
-| `ui`                       | 10,179 |    26 | Shared presentational components and dialogs. **Published** as `@nuxeo-satori/platform/ui`                                                                                                 |
-| `extensions`               |  6,032 |    14 | The 4 registries, rules, `provideSatoriExtensions`. **Published** as `@nuxeo-satori/platform/extensions`                                                                                   |
+| `satori-components`        | 38,898 |    59 | The `nxs-` components, Material-backed with no Satori import. **Published** as `@nuxeo/satori-platform/components` (NXSAT-308)                                                             |
+| `nuxeo-client`             | 22,926 |    55 | **The integration layer.** 26 services, models, utils. Everything that talks to Nuxeo. **Published** as `@nuxeo/satori-platform/nuxeo-client`                                              |
+| `ui`                       | 10,179 |    26 | Shared presentational components and dialogs. **Published** as `@nuxeo/satori-platform/ui`                                                                                                 |
+| `extensions`               |  6,032 |    14 | The 4 registries, rules, `provideSatoriExtensions`. **Published** as `@nuxeo/satori-platform/extensions`                                                                                   |
 | `document-layouts`         |  4,662 |     8 | Per-type layouts for the Properties panel and the edit and create forms: a package's layout file, or generated from the type's schemas (NXSAT-311)                                         |
 | `kd-client`                |  3,340 |     4 | Knowledge Discovery client                                                                                                                                                                 |
-| `app-config`               |  2,709 |     6 | Layer 0 loader. **Published** as `@nuxeo-satori/platform/app-config`                                                                                                                       |
+| `app-config`               |  2,709 |     6 | Layer 0 loader. **Published** as `@nuxeo/satori-platform/app-config`                                                                                                                       |
 | `permission-dialogs`       |  1,864 |     3 | The 4 permission/sharing dialogs — moved here 2026-08-24 from `features/collections`                                                                                                       |
 | `ke-client`                |  1,231 |     2 | Knowledge Enrichment client                                                                                                                                                                |
 | `ai-client`                |  1,188 |     4 | The 12 `AI.*` operations. Thin HTTP client                                                                                                                                                 |
-| `satori-components-satori` |    722 |     1 | Four `nxs-` primitive IDs — avatar, breadcrumbs, tag, rich tooltip — on Satori, and the platform package's only Satori import. **Published** as `@nuxeo-satori/platform/components-satori` |
+| `satori-components-satori` |    722 |     1 | Four `nxs-` primitive IDs — avatar, breadcrumbs, tag, rich tooltip — on Satori, and the platform package's only Satori import. **Published** as `@nuxeo/satori-platform/components-satori` |
 | `testing`                  |    330 |     1 | Typed Nuxeo model fixtures, `nuxeoDocument` and `nuxeoAce`. Extracted from the bridge's port specs; nothing imports it since those went                                                    |
 | `util`                     |      4 |     0 | One Nx-scaffold function, `sharedUtil()`. Nothing imports it                                                                                                                               |
 
@@ -162,14 +162,14 @@ The adf-hx bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes 
 
 | Library                                                                    | Lines | Specs | Purpose                                                                                                                                                                                   |
 | -------------------------------------------------------------------------- | ----: | ----: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [`libs/platform`](../../libs/platform)                                     |    41 |     0 | `@nuxeo-satori/platform` — the publishable package. Its own code is `PLATFORM_ENTRY_POINTS`; it wraps 6 shared libs as entry points and ships docs, generators and the customer guardrail |
+| [`libs/platform`](../../libs/platform)                                     |    41 |     0 | `@nuxeo/satori-platform` — the publishable package. Its own code is `PLATFORM_ENTRY_POINTS`; it wraps 6 shared libs as entry points and ships docs, generators and the customer guardrail |
 | [`libs/core`](../../libs/core)                                             |    42 |     1 | The untouched Nx scaffold — a placeholder `lib-core` component that nothing imports. Its `scope:core` tag is the bottom of the dependency graph                                           |
 | [`libs/extensions/acme-extensions`](../../libs/extensions/acme-extensions) |   809 |     4 | The **reference customer** Layer 2 library — 7 registered IDs. Also the subject of `beta:customer-guardrails`                                                                             |
 | [`libs/integration-tests`](../../libs/integration-tests)                   | 6,321 |     8 | Specs against a **live Nuxeo** (`npm run beta:integration`); its `test` target runs only the 2 server-free `*.unit.spec.ts`. Nothing may import it — see §4                               |
 
 ### Why `permission-dialogs` is not in `shared/ui`
 
-`libs/shared/ui` is a **published** entry point (`@nuxeo-satori/platform/ui`). Putting the
+`libs/shared/ui` is a **published** entry point (`@nuxeo/satori-platform/ui`). Putting the
 four dialogs there would have added eight symbols to the customer-facing API for components
 that are internal application UI. Once a customer can import a name, renaming it is a
 breaking change. `document-layouts` is kept out of the published entry points for the same

@@ -4,9 +4,9 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
 import { of, throwError, type Observable } from 'rxjs';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { ExtensionRuleContextService } from '@nuxeo-satori/platform/extensions';
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { ExtensionRuleContextService } from '@nuxeo/satori-platform/extensions';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SelectionTopbarComponent } from './selection-topbar.component';
 

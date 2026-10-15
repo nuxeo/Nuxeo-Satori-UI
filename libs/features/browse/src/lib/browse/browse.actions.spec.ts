@@ -7,12 +7,12 @@ import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/r
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   ExtensionActionRegistry,
   ExtensionRuleContextService,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   ADMIN_ACCESS_CHECKS,
   BrowseContextService,
@@ -26,11 +26,11 @@ import {
   type AuditEntry,
   type DirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import type { ExportDialogData } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import type { ExportDialogData } from '@nuxeo/satori-platform/ui';
 
 import { BrowseComponent } from './browse';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /** A complete `NuxeoDocument`, so a fixture states only the fields its test is about. */
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {

@@ -8,12 +8,12 @@ import { TranslateModule } from '@ngx-translate/core';
 import { EMPTY, of } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   EXTENSION_SLOTS,
   PACKAGED_BROWSE_CONTEXT_MENU,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   BrowseService,
   DirectoryService,
@@ -21,7 +21,7 @@ import {
   SelectionService,
   TagService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';

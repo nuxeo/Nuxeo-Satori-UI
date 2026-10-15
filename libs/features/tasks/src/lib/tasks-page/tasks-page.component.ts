@@ -30,12 +30,12 @@ import {
   CURRENT_USERNAME,
   trustObjectUrl,
   taskDueDistance,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   DocumentViewerComponent,
   provideTranslatedDatepickerIntl,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 

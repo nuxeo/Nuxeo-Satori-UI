@@ -1,5 +1,5 @@
 import { computed, signal } from '@angular/core';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { nxsErrorStatus, type NxsErrorStatus } from '../error-state/error-status';
 

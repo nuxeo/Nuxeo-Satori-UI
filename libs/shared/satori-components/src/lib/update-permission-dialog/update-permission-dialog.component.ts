@@ -24,7 +24,7 @@ import {
   permissionRightLabel,
   permissionUpdateMailFailureMessage,
   type NuxeoAce,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { failureKey, offeredRights, principalLabel } from '../permission-dialog-support';
 import { dateToWrite, dayToDate, toDay } from '../permissions-panel/permissions-model';

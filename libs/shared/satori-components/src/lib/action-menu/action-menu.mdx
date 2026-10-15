@@ -33,12 +33,12 @@ Open the menu and choose an entry: the Actions panel records `selected` with it.
 
 ## Usage
 
-export const usageTs = `import { NxsActionMenuComponent, type NxsMenuAction } from '@nuxeo-satori/platform/components';
+export const usageTs = `import { NxsActionMenuComponent, type NxsMenuAction } from '@nuxeo/satori-platform/components';
 import {
   EXTENSION_SLOTS,
   descriptorLabel,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 readonly actions = computed<readonly ExtensionActionDescriptor[]>(() =>
   this.extensions.resolve<ExtensionActionDescriptor>(

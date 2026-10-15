@@ -16,7 +16,7 @@ import {
   permissionRightLabel,
   resolveAcePrincipal,
   type NuxeoAce,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { failureKey, nxsAceTimeFrame, principalLabel } from '../permission-dialog-support';
 import { NxsToastService, provideNxsToast } from '../toast/toast.service';

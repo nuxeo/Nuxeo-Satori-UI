@@ -17,7 +17,7 @@ import {
   type AuditLogQuery,
   type AuditLogSortField,
   type DirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   catchError,
   debounceTime,

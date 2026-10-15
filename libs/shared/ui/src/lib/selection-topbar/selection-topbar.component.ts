@@ -21,9 +21,9 @@ import {
   ExtensionActionRegistry,
   ExtensionRuleContextService,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe } from '@ngx-translate/core';
-import { NxsThumbnailComponent, provideNxsThumbnailCache } from '@nuxeo-satori/platform/components';
+import { NxsThumbnailComponent, provideNxsThumbnailCache } from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'lib-selection-topbar',

@@ -17,15 +17,15 @@ import {
   NxsDeletePermissionDialogComponent,
   NxsShareExternalDialogComponent,
   NxsUpdatePermissionDialogComponent,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   ARenderService,
   BrowseService,
@@ -38,14 +38,14 @@ import {
   WorkflowService,
   type NuxeoAce,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiChatService,
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
 import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
-import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo-satori/platform/ui';
+import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/satori-platform/ui';
 
 import { DocumentDetailComponent } from './document-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';

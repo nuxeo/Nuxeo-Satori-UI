@@ -12,7 +12,7 @@ import {
   nxsVisibleText,
   type NxsBreadcrumbItem,
   type NxsBreadcrumbsInputs,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 /**
  * `nxs.primitives.breadcrumbs` on Satori's `sat-breadcrumbs`, which collapses a long trail.

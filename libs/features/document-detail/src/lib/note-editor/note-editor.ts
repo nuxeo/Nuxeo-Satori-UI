@@ -36,7 +36,7 @@ import {
   sanitizeDocumentName,
   titleFromFileName,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import DOMPurify from 'dompurify';
 import Quill from 'quill';
 import { applyHeaderFormatSelectionOnly, type QuillRange } from './note-quill-header';
@@ -48,7 +48,7 @@ import {
   NxsSpinnerComponent,
   NxsToastService,
   provideNxsToast,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'lib-note-editor',

@@ -47,7 +47,7 @@ fourth ships AI generators and guardrails so that writing the third is cheap.
 | **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                     |
 | **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                      |
 | **Maturity**        | Phases 0–5 complete with evidence; Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
-| **Distribution**    | One npm package (`@nuxeo-satori/platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
+| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
 | **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                            |
 
 ---
@@ -77,9 +77,9 @@ product follows from it.
 | Artifact                                  | What they do with it                                                                                                                                                               |
 | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **The marketplace package**               | Install into Nuxeo. Gets the application and our configuration defaults; their own configuration is a package of theirs that depends on ours, which **no upgrade of ours touches** |
-| **`@nuxeo-satori/platform`** (npm)        | Depend on it from their own extension library. 4 entry points, 10 declared peers, 347 kB                                                                                           |
+| **`@nuxeo/satori-platform`** (npm)        | Depend on it from their own extension library. 4 entry points, 10 declared peers, 347 kB                                                                                           |
 | **The app template**                      | Fork it. Deliberately thin, and ships **no design system**, so they add their own rather than removing ours                                                                        |
-| **The generators**                        | `npx nx g @nuxeo-satori/platform:extension-library …` — shipped inside the package                                                                                                 |
+| **The generators**                        | `npx nx g @nuxeo/satori-platform:extension-library …` — shipped inside the package                                                                                                 |
 | **The guardrail script**                  | Run in their own CI, so an AI agent can verify its own output before a human reviews it                                                                                            |
 | **`AGENTS.md` + the extension reference** | A knowledge base any AI coding tool can read, versioned as a product artifact                                                                                                      |
 
@@ -175,7 +175,7 @@ Worth knowing if you are reading the RFC alongside the code.
 
 | RFC planned                                                                                                                   | What shipped                                                                                                                                                                                                                                    |
 | ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo-satori/platform`, with 4 secondary entry points. Simpler to version and to support; the bridge was deliberately never published, keeping adf-hx types out of the public API, and was removed on 2026-10-14 (NXSAT-635) |
+| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo/satori-platform`, with 4 secondary entry points. Simpler to version and to support; the bridge was deliberately never published, keeping adf-hx types out of the public API, and was removed on 2026-10-14 (NXSAT-635) |
 | **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                                                                |
 
 Neither is a defect — both are simplifications — but the RFC has not been revised, so the

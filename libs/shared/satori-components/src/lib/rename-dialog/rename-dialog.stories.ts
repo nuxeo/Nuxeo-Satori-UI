@@ -5,7 +5,7 @@ import { of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
 import { expect, userEvent, within } from 'storybook/test';
 
-import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsRenameDialogComponent } from './rename-dialog.component';
 

@@ -1,6 +1,6 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPropertiesPanelComponent, type NxsVocabularyLabel } from './properties-panel.component';
 import { nxsInitial, nxsPropertyText } from './property-text';

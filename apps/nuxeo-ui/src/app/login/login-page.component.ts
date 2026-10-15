@@ -29,11 +29,11 @@ import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate
 
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
-import type { NuxeoSamlLoginEndpoint } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoSamlLoginEndpoint } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { observeStripRedundantMatInputAriaRequired } from '@nuxeo-satori/platform/ui';
+import { observeStripRedundantMatInputAriaRequired } from '@nuxeo/satori-platform/ui';
 
 import { AuthService, SignInError } from '../auth/auth.service';
 

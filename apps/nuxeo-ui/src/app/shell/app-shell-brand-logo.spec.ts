@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';

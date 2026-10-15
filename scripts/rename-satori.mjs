@@ -8,13 +8,19 @@ import { pathToFileURL } from 'node:url';
 
 const OLD_PACKAGE = '@nuxeo-satori/platform';
 const NEW_PACKAGE = '@nuxeo/satori-platform';
+const HISTORICAL_DOC = /^docs\/adf-hx-[^/]+$/;
+// Tool, skill, document and evidence filenames are stable identifiers, not owned UI source.
+const STABLE_NAMES = /^(?:docs|AGENTS|scripts|tools|\.[^/]+)\//;
+const LEGACY_ROUTE = /^(?:browse|search)-adf-hx$/;
 const SELF = /^scripts\/rename-satori(?:\.selftest)?\.mjs$/;
 export const EXCLUSIONS = [
   'CHANGELOG files (at any depth, case insensitive)',
+  'docs/adf-hx-* and .cursor/plans history files and their references; Beta evidence IDs and step filenames',
+  'legacy redirect paths, evidence routes and historical prose (Markdown link targets use /browse and /search)',
   'scripts/rename-satori.mjs and scripts/rename-satori.selftest.mjs (migration rules and fixtures)',
   'docs/rename-sweep.md (historical migration mappings and baseline evidence)',
   'untracked files, symlinks, submodules and files containing a NUL byte',
-  'upstream @alfresco package names, external URLs except owned loopback-app hash routes, Hxp/AdfHx class names and --hxp-* theme tokens',
+  'upstream @alfresco package names, external URLs except owned loopback-app hash routes in Markdown link targets, Hxp/AdfHx class names and --hxp-* theme tokens',
 ];
 const git = (root, args, options = {}) =>
   execFileSync('git', args, {
@@ -24,7 +30,11 @@ const git = (root, args, options = {}) =>
   });
 const escape = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const excluded = (path) =>
-  /(^|\/)changelog(?:[./_-]|$)/i.test(path) || SELF.test(path) || path === 'docs/rename-sweep.md';
+  /(^|\/)changelog(?:[./_-]|$)/i.test(path) ||
+  SELF.test(path) ||
+  path === 'docs/rename-sweep.md' ||
+  HISTORICAL_DOC.test(path) ||
+  path.startsWith('.cursor/plans/');
 /** Pin the repository root and reject symlinks/junctions beneath it before filesystem access. */
 const pathGuard = (root, io = fs) => {
   root = resolve(root);
@@ -58,12 +68,34 @@ const renameLocalRoute = (url) => {
     const hash = url.indexOf('#');
     if (hash === -1) return url;
     return (
-      url.slice(0, hash) +
-      url.slice(hash).replace(/^#\/(browse|search)-adf-hx(?![\w-])/, '#/$1-satori')
+      url.slice(0, hash) + url.slice(hash).replace(/^#\/(browse|search)-adf-hx(?![\w-])/, '#/$1')
     );
   } catch {
     return url;
   }
+};
+/** Canonicalize navigation destinations only; prose, code and provenance URLs stay historical. */
+const renameMarkdownRoutes = (content) => {
+  const destination = (target) =>
+    /^https?:\/\//.test(target)
+      ? renameLocalRoute(target)
+      : target.replace(/^(\/(?:#\/)?)(browse|search)-adf-hx(?![\w-])/, '$1$2');
+  return content
+    .split(/(```[\s\S]*?```|~~~[\s\S]*?~~~|`+[^`\r\n]*`+)/g)
+    .map((part, index) =>
+      index % 2
+        ? part
+        : part
+            .replace(
+              /(\]\([ \t]*<?)([^<>\s)]+)(?=>?(?:[ \t]|\)))/g,
+              (_, prefix, target) => prefix + destination(target),
+            )
+            .replace(
+              /^([ \t]{0,3}\[[^\]\r\n]+\]:[ \t]*<?)([^<>\s]+)(?=>?(?:[ \t]|$))/gm,
+              (_, prefix, target) => prefix + destination(target),
+            ),
+    )
+    .join('');
 };
 const canonicalPath = (path) => {
   try {
@@ -137,7 +169,10 @@ export function planRename(files) {
   );
   const tokens = new Map();
   for (const path of textFiles.keys()) {
+    // Evidence names are durable keys consumed by saved results and phase definitions.
+    if (STABLE_NAMES.test(path)) continue;
     for (const segment of path.split('/')) {
+      if (LEGACY_ROUTE.test(segment)) continue;
       const renamed = segment.replaceAll('adf-hx', 'satori').replace(/^(_?)hxp-/, '$1nxs-');
       if (renamed !== segment) {
         tokens.set(segment, renamed);
@@ -161,9 +196,6 @@ export function planRename(files) {
     }
   }
   for (const entry of selectors) tokens.set(...entry);
-  // These route names also occur in manifests, links and evidence scenes.
-  tokens.set('browse-adf-hx', 'browse-satori');
-  tokens.set('search-adf-hx', 'search-satori');
   const ordered = [...tokens].sort(([a], [b]) => b.length - a.length || a.localeCompare(b));
   const tokenPattern = ordered.length
     ? new RegExp(
@@ -171,13 +203,14 @@ export function planRename(files) {
         'g',
       )
     : null;
-  const transform = (content) =>
-    content
-      .split(/(@alfresco\/[\w./-]+|https?:\/\/[^\s'"<>`]+)/g)
+  const transform = (content, path) =>
+    (path.endsWith('.md') ? renameMarkdownRoutes(content) : content)
+      .split(/(@alfresco(?:\\?\/)[\w./\\-]+|https?:\/\/[^\s'"<>`]+)/g)
       .map((part, index) => {
-        if (index % 2) return part.startsWith('@alfresco/') ? part : renameLocalRoute(part);
-        const renamed = part.replace(/@nuxeo-satori(\\?\/)platform(?![\w-])/g, (_, slash) =>
-          NEW_PACKAGE.replace('/', slash),
+        if (index % 2) return part;
+        const renamed = part.replace(
+          /(@|&#64;)nuxeo-satori(\\?\/)platform(?![\w-])/g,
+          (_, at, slash) => NEW_PACKAGE.replace('@', at).replace('/', slash),
         );
         return tokenPattern ? renamed.replace(tokenPattern, (token) => tokens.get(token)) : renamed;
       })
@@ -191,7 +224,7 @@ export function planRename(files) {
       .split('/')
       .map((segment) => tokens.get(segment) ?? segment)
       .join('/');
-    const after = transform(before);
+    const after = transform(before, path);
     if (targets.has(to) && targets.get(to) !== path)
       blockers.push(`Path collision: ${targets.get(to)} and ${path} -> ${to}`);
     targets.set(to, path);

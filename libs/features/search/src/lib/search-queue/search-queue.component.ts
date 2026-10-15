@@ -5,8 +5,8 @@ import { MatIconModule } from '@angular/material/icon';
 import {
   SearchAggregationService,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { NxsThumbnailComponent, provideNxsThumbnailCache } from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { NxsThumbnailComponent, provideNxsThumbnailCache } from '@nuxeo/satori-platform/components';
 import { TranslatePipe } from '@ngx-translate/core';
 
 interface ActiveFilter {

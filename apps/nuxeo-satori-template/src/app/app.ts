@@ -1,13 +1,13 @@
 import { Component, computed, inject } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
   ExtensionRuleContextService,
   type NavItemDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { SignInComponent } from './pages/sign-in/sign-in';
 import { TemplateSessionService } from './template-session.service';

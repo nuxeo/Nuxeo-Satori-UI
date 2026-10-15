@@ -17,7 +17,7 @@ import {
   AuditEntry,
   DirectoryEntry,
   DirectoryService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,
@@ -26,7 +26,7 @@ import {
   AuditFilterResponse,
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { provideTranslatedDatepickerIntl } from '@nuxeo/satori-platform/ui';
 
 @Component({
   selector: 'lib-admin-audit-page',

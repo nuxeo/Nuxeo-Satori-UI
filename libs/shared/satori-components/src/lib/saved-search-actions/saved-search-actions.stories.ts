@@ -3,7 +3,7 @@ import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular'
 import { of } from 'rxjs';
 import { fn } from 'storybook/test';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsSavedSearchActionsComponent } from './saved-search-actions.component';
 

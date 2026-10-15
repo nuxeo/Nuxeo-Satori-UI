@@ -13,8 +13,8 @@
  *
  * ## Why not `libs/shared/ui`
  *
- * `libs/shared/ui` is a **published** entry point of `@nuxeo-satori/platform` — it is
- * `@nuxeo-satori/platform/ui`. Putting these here rather than there keeps eight symbols
+ * `libs/shared/ui` is a **published** entry point of `@nuxeo/satori-platform` — it is
+ * `@nuxeo/satori-platform/ui`. Putting these here rather than there keeps eight symbols
  * out of the customer-facing API surface. They are internal application UI, and once a
  * customer can import a name, renaming it is a breaking change.
  */

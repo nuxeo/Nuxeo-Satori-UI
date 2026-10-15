@@ -14,10 +14,10 @@ import {
   buildDocumentCompareSections,
   isCompareIconField,
   type CompareRow,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { CompareIconImageComponent } from './compare-icon-image.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 export interface DocumentCompareDialogData {
   items: Array<{ id: string; name: string }>;

@@ -238,7 +238,7 @@ watched fail on purpose.
 
 ### Phase 4: the shipped package
 
-`@nuxeo-satori/platform` builds with `@nx/angular:package` — one publishable library with
+`@nuxeo/satori-platform` builds with `@nx/angular:package` — one publishable library with
 four secondary entry points, `./app-config`, `./extensions`, `./nuxeo-client` and `./ui`,
 pointing at the existing shared library sources. A 347 kB tarball of 25 files: FESM
 bundles, rolled-up declarations, the customer `AGENTS.md`, the extension reference, and the
@@ -475,7 +475,7 @@ above, not a new boundary break.
 **`maximumError` was raised a third time, 4.0 → 4.25 MB (2026-10-14, NXSAT-308 wave 3).**
 Combining the four wave-3 batches took the initial bundle to **4.07 MB**; each batch on its own,
 and the three without B2, built at 3.91 MB. The cause was measured, and it is not adf-hx: the app
-imports `@nuxeo-satori/platform/components` eagerly — `provideNxsComponents()` in `app.config.ts`,
+imports `@nuxeo/satori-platform/components` eagerly — `provideNxsComponents()` in `app.config.ts`,
 and the spinner, toast and thumbnail in `libs/shared/ui` — and esbuild assigns a module to a chunk
 by the import edges that reach it. So every `nxs-` component a lazy route uses sits in a 492 kB
 chunk that `main` imports. Declaring the library's sources free of side effects, as the published

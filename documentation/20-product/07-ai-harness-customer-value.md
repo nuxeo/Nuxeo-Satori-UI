@@ -30,7 +30,7 @@ says "the harness", it means the second.** This page is about the second.
 
 ## What the customer actually receives
 
-Four artifacts, all inside `@nuxeo-satori/platform`. Verified present in the 347 kB tarball
+Four artifacts, all inside `@nuxeo/satori-platform`. Verified present in the 347 kB tarball
 by unpacking it.
 
 | Artifact                    | What it does                                                                                                                     | Status      |
@@ -42,9 +42,9 @@ by unpacking it.
 
 ```bash
 # What a customer's developer runs — from the installed package, no clone of ours
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/acme-extensions
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/acme-extensions
 ```
 
 ---

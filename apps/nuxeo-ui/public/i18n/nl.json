@@ -1080,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "Contract ABC-123.pdf",
     "saved-search-placeholder": "bijv. \"Openstaande beoordelingen contracten K3\"",
-    "showcase-dialog-message": "Dit dialoogvenster wordt geïmporteerd uit @nuxeo-satori/platform/ui. Klanten kunnen het gebruiken voor bevestigingsprompts, waarschuwingen en destructieve acties.",
+    "showcase-dialog-message": "Dit dialoogvenster wordt geïmporteerd uit @nuxeo/satori-platform/ui. Klanten kunnen het gebruiken voor bevestigingsprompts, waarschuwingen en destructieve acties.",
     "showcase-dialog-title": "Demo componentshowcase"
   },
   "dashboard": {

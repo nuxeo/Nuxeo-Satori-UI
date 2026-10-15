@@ -161,7 +161,7 @@ const auth = process.env['NUXEO_AUTH'] ?? '';
 import { SearchComponent } from '@agentic-ui/feature-search';
 
 // GOOD ✅ — move shared logic to libs/shared/ first
-import { SearchService } from '@nuxeo-satori/platform/nuxeo-client';
+import { SearchService } from '@nuxeo/satori-platform/nuxeo-client';
 ```
 
 ---

@@ -12,13 +12,13 @@ import {
   SelectionService,
   readClipboardDocs,
   writeClipboardDocs,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   ConfirmDialogComponent,
   openDocumentCompareDialog,
   trashSelectedDocumentsConfirmData,
-} from '@nuxeo-satori/platform/ui';
-import type { ExtensionActionHandler } from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/ui';
+import type { ExtensionActionHandler } from '@nuxeo/satori-platform/extensions';
 
 /**
  * The packaged bulk actions, one service per action.

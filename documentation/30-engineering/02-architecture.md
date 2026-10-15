@@ -51,7 +51,7 @@ flowchart TD
 
   subgraph dist["Distribution"]
     pkg["nuxeo-agentic-ui-package<br/>Maven marketplace package"]
-    plat["@nuxeo-satori/platform<br/>npm, 4 entry points"]
+    plat["@nuxeo/satori-platform<br/>npm, 4 entry points"]
     tmpl["apps/nuxeo-satori-template<br/>forkable customer app"]
   end
   shell --> pkg
@@ -96,7 +96,7 @@ including a `libs/shared/` library that depended on two feature libraries.
 | `type:publishable` | `scope:shared`, `scope:core`                            |
 
 The `type:extension` row is deliberately weaker than it looks, and the config says so:
-`tsconfig.base.json` maps `@nuxeo-satori/platform/extensions` to
+`tsconfig.base.json` maps `@nuxeo/satori-platform/extensions` to
 `libs/shared/extensions/src/index.ts`, so the supported specifier and a raw internal import
 are the **same graph edge to the same project**. A tag constraint sees projects, not
 specifiers. What actually enforces the entry-point boundary is
@@ -231,7 +231,7 @@ Detailed in [Extensibility Contract](07-extensibility-contract.md). In outline:
 flowchart TD
   L0["Layer 0 — Configuration<br/>bootstrap fragments: theme, branding, languages<br/>no code, no build"]
   L1["Layer 1 — Declarative wiring<br/>manifest fragments holding JSON: slots, overrides, rules by ID<br/>no customer code"]
-  L2["Layer 2 — Customer code<br/>their own npm library against @nuxeo-satori/platform<br/>their repo, their build"]
+  L2["Layer 2 — Customer code<br/>their own npm library against @nuxeo/satori-platform<br/>their repo, their build"]
   L3["Layer 3 — Agent harness<br/>generators + guardrails shipped IN the package<br/>makes Layer 2 cheap"]
   L0 --> L1 --> L2
   L3 --> L2

@@ -35,7 +35,7 @@ its content.
 <Source
   language="typescript"
   dark
-  code={`import { NxsThumbnailComponent } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsThumbnailComponent } from '@nuxeo/satori-platform/components';`}
 />
 
 export const usageHtml = `<nxs-thumbnail
@@ -55,7 +55,7 @@ Only `documentId` is required; `alt` defaults to `''`. Size the thumbnail with a
 the host — the image fills it and takes the host's `object-fit` and `border-radius`. Used directly,
 it needs no providers. A page listing many documents should also list `provideNxsThumbnailCache()`:
 
-export const usageTs = `import { provideNxsThumbnailCache } from '@nuxeo-satori/platform/components';
+export const usageTs = `import { provideNxsThumbnailCache } from '@nuxeo/satori-platform/components';
 
 @Component({ providers: [provideNxsThumbnailCache()] })
 export class ResultsListComponent {}`;

@@ -3,7 +3,7 @@ import {
   resolveAcePrincipal,
   type NuxeoAce,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The grants the external review asked for (NXSAT-300): Nuxeo's twelve permission levels and the

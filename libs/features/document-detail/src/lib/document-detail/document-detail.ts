@@ -24,7 +24,7 @@ import {
   type ExtensionActionDescriptor,
   type ExtensionDocumentViewDescriptor,
   type ExtensionTabDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe, NgTemplateOutlet } from '@angular/common';
@@ -110,7 +110,7 @@ import {
   type ClipboardDoc,
   formatRelativeTime,
   permissionRightLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { SatTagModule, SatTagCategory } from '@hylandsoftware/satori-ui/tag';
@@ -163,7 +163,7 @@ import {
   type VideoInfo,
   type VideoSource,
   provideTranslatedDatepickerIntl,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
 import { PublishDialogComponent, PublishDialogData } from '../publish-dialog/publish-dialog';
 import { AttachmentPreviewDialogComponent } from '../attachment-preview-dialog/attachment-preview-dialog';
@@ -173,7 +173,7 @@ import { EditDocumentDialogComponent } from '../edit-document-dialog/edit-docume
 import { NoteEditorComponent } from '../note-editor/note-editor';
 import { documentTypeTraits, type PackagedDocumentView } from './document-type-traits';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsCommentExtraDirective,
@@ -208,7 +208,7 @@ import {
   type NxsTab,
   type NxsToolbarAction,
   type NxsVocabularyLabel,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 export interface SectionNode {
   doc: NuxeoDocument;

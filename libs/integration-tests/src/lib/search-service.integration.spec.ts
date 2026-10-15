@@ -55,7 +55,7 @@ import {
   type SavedSearchOption,
   type SearchQueryParams,
   type SearchResponse,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   setupIntegrationHarness,
   createTestDocument,

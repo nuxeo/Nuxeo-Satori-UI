@@ -885,7 +885,7 @@ fails any source that is not.
   `libs/shared/extensions` reference **120 distinct keys** (`shared-ui.*`, `extensions.*`) that exist
   only in `apps/nuxeo-ui/public/i18n/en.json`. Neither library ships an `i18n/` directory and
   `libs/platform/ng-package.json` packages no catalogue, so someone installing
-  `@nuxeo-satori/platform/ui` gets templates asking for keys nothing supplies.
+  `@nuxeo/satori-platform/ui` gets templates asking for keys nothing supplies.
 
   Adding `@ngx-translate/core` as a peer dependency made the pipe resolvable; it did not make the
   STRINGS available, and those are two different problems that look like one.
@@ -896,7 +896,7 @@ fails any source that is not.
   required per-library catalogues, so the requirement is not new, only unmet.
 
   **Partly closed, 29 Sep 2026: English travels with the package.** `PLATFORM_EN_TRANSLATIONS` in
-  `@nuxeo-satori/platform/ui` is the English for the 299 keys the package's entry points reference,
+  `@nuxeo/satori-platform/ui` is the English for the 299 keys the package's entry points reference,
   generated from `en.json` by `tools/i18n/platform-english.mjs`. A host opts in with
   `providePlatformEnglishFallback()`, a missing-translation handler that answers only keys its own
   catalogues lack and can hand anything else to the host's existing handler. `nuxeo-ui` does not opt

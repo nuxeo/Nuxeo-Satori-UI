@@ -6,8 +6,8 @@ import {
   type NxsAvatarColor,
   type NxsAvatarSize,
   type NxsTagColor,
-} from '@nuxeo-satori/platform/components';
-import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/components';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
@@ -25,7 +25,7 @@ import { NxsSatoriTagComponent } from './tag/satori-tag.component';
  * Satori-if-available, Material otherwise, decided by which providers an application lists — not
  * at build time and not by a runtime probe. This entry point is the only one in the package that
  * imports `@hylandsoftware/satori-ui`, an optional peer, so an application without GitHub Packages
- * access never imports it and still gets every ID from `@nuxeo-satori/platform/components`.
+ * access never imports it and still gets every ID from `@nuxeo/satori-platform/components`.
  *
  * List it after `provideNxsComponents()`, because later registrations win. The Satori components
  * also need what any Satori host provides: `provideSatori()` from

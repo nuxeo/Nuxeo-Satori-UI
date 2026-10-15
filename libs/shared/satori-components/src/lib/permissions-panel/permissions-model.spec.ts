@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { NuxeoAce, NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoAce, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   NXS_STANDARD_PERMISSIONS,

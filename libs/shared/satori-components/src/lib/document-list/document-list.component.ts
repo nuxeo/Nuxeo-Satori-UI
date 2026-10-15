@@ -24,7 +24,7 @@ import { MatSortModule, type Sort } from '@angular/material/sort';
 import { MatTableModule } from '@angular/material/table';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { merge } from 'rxjs';
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import {
   DocTypeLabelPipe,
   NON_CONTENT_DOCUMENT_TYPES,
@@ -32,7 +32,7 @@ import {
   docTypeIcon,
   isFolderishDocument,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsActionMenuComponent, type NxsMenuAction } from '../action-menu/action-menu.component';
 import { NxsAvatarComponent } from '../avatar/avatar.component';

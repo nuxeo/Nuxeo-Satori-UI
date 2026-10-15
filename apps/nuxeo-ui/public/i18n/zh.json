@@ -1080,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "合同 ABC-123.pdf",
     "saved-search-placeholder": "例如：“第三季度待审核合同”",
-    "showcase-dialog-message": "此对话框从 @nuxeo-satori/platform/ui 导入。客户可将其用于确认提示、警告和破坏性操作。",
+    "showcase-dialog-message": "此对话框从 @nuxeo/satori-platform/ui 导入。客户可将其用于确认提示、警告和破坏性操作。",
     "showcase-dialog-title": "组件展示演示"
   },
   "dashboard": {

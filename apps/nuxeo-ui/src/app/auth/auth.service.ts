@@ -30,7 +30,7 @@ import {
   isPowerUserFromGroups,
   readGroupsFromMe,
   type NuxeoSamlLoginEndpoint,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 const STORAGE_KEY = 'agentic_ui_nuxeo_session';
 const SIGNED_OUT_KEY = 'agentic_ui_signed_out';

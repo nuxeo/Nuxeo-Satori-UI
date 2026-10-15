@@ -155,10 +155,10 @@ and silently corrupts the snapshot.
 npx nx g ./tools/satori-generators:extension-library acme-extensions --owner=acme
 
 # From the published package, as a customer
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-component claim-summary --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
 ```
 
 `--directory` is the **parent**: `--directory=libs/custom` yields `libs/custom/<name>`.

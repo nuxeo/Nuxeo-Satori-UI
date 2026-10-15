@@ -8,7 +8,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of, throwError } from 'rxjs';
 import { MockInstance, vi } from 'vitest';
 
-import { UserService } from '@nuxeo-satori/platform/nuxeo-client';
+import { UserService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { UserFormDialogComponent, UserFormDialogData } from './user-form-dialog.component';
 

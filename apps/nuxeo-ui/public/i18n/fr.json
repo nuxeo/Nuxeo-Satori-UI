@@ -1080,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "Contrat ABC-123.pdf",
     "saved-search-placeholder": "ex. : « Contrats T3 en attente de vérification »",
-    "showcase-dialog-message": "Cette boîte de dialogue est importée depuis @nuxeo-satori/platform/ui. Les clients peuvent l'utiliser pour les invites de confirmation, les avertissements et les actions destructrices.",
+    "showcase-dialog-message": "Cette boîte de dialogue est importée depuis @nuxeo/satori-platform/ui. Les clients peuvent l'utiliser pour les invites de confirmation, les avertissements et les actions destructrices.",
     "showcase-dialog-title": "Démonstration de la vitrine des composants"
   },
   "dashboard": {

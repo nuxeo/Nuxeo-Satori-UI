@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -12,7 +12,7 @@ import {
   type DirectoryEntry,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { EditMetadataDialogComponent, type EditMetadataDialogData } from './edit-metadata-dialog';
 

@@ -396,7 +396,7 @@ const SHOTS = [
 
   // =====================================================================================
   // TRACK B — build a UI from scratch on the published package. A separate app on :4310,
-  // importing only @nuxeo-satori/platform entry points.
+  // importing only @nuxeo/satori-platform entry points.
   // =====================================================================================
   // The template app authenticates through its OWN login form — it does not share the product's
   // session. Without `signIn`, every one of these captures the login page instead of the page named,

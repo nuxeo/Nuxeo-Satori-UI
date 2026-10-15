@@ -30,7 +30,7 @@ import {
   type NuxeoAce,
   type NuxeoComment,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
@@ -43,10 +43,10 @@ import {
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * The tab surfaces: publishing, permissions, comments, activity and attachments,

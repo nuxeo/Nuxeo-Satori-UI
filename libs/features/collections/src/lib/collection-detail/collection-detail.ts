@@ -50,7 +50,7 @@ import {
   canManageDocumentPermissions,
   decodeNuxeoPathSegment,
   permissionRightLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
@@ -64,9 +64,9 @@ import {
   EditCollectionDialogComponent,
   EditCollectionDialogData,
   provideTranslatedDatepickerIntl,
-} from '@nuxeo-satori/platform/ui';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/ui';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
@@ -91,7 +91,7 @@ import {
   type NxsErrorStatus,
   type NxsShareExternalDialogData,
   type NxsUpdatePermissionDialogData,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 /**
  * The property each member column sorts by on the server: the three columns this page shows, each

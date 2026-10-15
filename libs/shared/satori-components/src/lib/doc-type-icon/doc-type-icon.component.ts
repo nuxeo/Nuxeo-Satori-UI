@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, computed, input } from '@angular/core';
-import { docTypeIcon } from '@nuxeo-satori/platform/nuxeo-client';
+import { docTypeIcon } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsIconComponent } from '../icon/icon.component';
 

@@ -88,7 +88,7 @@ export default [
             // published platform entry points. **This rule cannot enforce that**, and the
             // limitation is worth stating rather than papering over.
             //
-            // `tsconfig.base.json` maps `@nuxeo-satori/platform/extensions` to
+            // `tsconfig.base.json` maps `@nuxeo/satori-platform/extensions` to
             // `libs/shared/extensions/src/index.ts`, so in the project graph the supported
             // specifier and a raw `@agentic-ui/shared-extensions` are the *same edge* to
             // the *same* project. A tag constraint sees projects, not specifiers, so it

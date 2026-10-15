@@ -42,7 +42,7 @@ import {
   type NuxeoComment,
   type NuxeoDocument,
   type NuxeoDocumentList,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   catchError,
   finalize,

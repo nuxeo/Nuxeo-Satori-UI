@@ -18,11 +18,11 @@ import {
   NxsRichTooltipComponent,
   NxsTagComponent,
   provideNxsComponents,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 import {
   ExtensionComponentRegistry,
   ExtensionOutletComponent,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';

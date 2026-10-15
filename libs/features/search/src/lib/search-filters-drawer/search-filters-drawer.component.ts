@@ -16,13 +16,13 @@ import {
   provideNxsToast,
   type NxsSavedSearchChoice,
   type NxsSearchFilters,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 import {
   DirectoryService,
   FOLDERISH_TYPES,
   SearchAggregationService,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SearchQueueComponent } from '../search-queue/search-queue.component';
 import { loadFacetLabels } from './facet-labels';

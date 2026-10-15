@@ -23,14 +23,14 @@ import {
   NuxeoDocument,
   SearchService,
   SelectionService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { extractMainBlobFileName } from './note-image-url';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NxsSpinnerComponent,
   NxsThumbnailComponent,
   provideNxsThumbnailCache,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'lib-note-image-picker-dialog',

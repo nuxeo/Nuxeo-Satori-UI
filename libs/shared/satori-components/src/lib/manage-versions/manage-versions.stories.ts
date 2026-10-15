@@ -5,7 +5,7 @@ import { delay, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsManageVersionsComponent } from './manage-versions.component';
 

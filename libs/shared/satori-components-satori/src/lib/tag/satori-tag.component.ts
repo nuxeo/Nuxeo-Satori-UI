@@ -1,6 +1,6 @@
 import { ChangeDetectionStrategy, Component, input } from '@angular/core';
 import { SatCategoryTag } from '@hylandsoftware/satori-ui/tag';
-import type { NxsTagColor, NxsTagInputs } from '@nuxeo-satori/platform/components';
+import type { NxsTagColor, NxsTagInputs } from '@nuxeo/satori-platform/components';
 
 /** `nxs.primitives.tag` on Satori's `sat-category-tag`. */
 @Component({

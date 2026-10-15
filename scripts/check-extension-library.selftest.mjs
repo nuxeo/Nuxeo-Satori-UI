@@ -67,7 +67,7 @@ const panel = ({
   `export class ${className}${implementsClause} {}\n`;
 
 const extensions = (entry) =>
-  "import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';\n" +
+  "import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';\n" +
   'export const provideAcme = () =>\n' +
   '  provideSatoriExtensions({\n' +
   "    rules: { 'acme.rules.isLegal': () => false },\n" +
@@ -83,7 +83,7 @@ const library = (overrides = {}) => ({
   'src/lib/extensions.ts': extensions(LAZY),
   'src/lib/claims/claims.ts': panel(),
   'src/lib/extensions.spec.ts':
-    "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+    "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
     "it('registers', () => expect(registry(ExtensionComponentRegistry).has('acme.panel.claims')).toBe(true));\n",
   ...overrides,
 });
@@ -115,7 +115,7 @@ expectGreen(
         "[IDS.components[0]]: () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
       ),
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "it('registers', () => expect(r(ExtensionComponentRegistry).has(IDS.components[0])).toBe(true));\n",
   }),
   /1 component registration\(s\)/,
@@ -128,24 +128,24 @@ expectGreen(
       "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
     ),
     'src/lib/claims/claims.ts':
-      "import type { NxsTagInputs } from '@nuxeo-satori/platform/components';\n" +
+      "import type { NxsTagInputs } from '@nuxeo/satori-platform/components';\n" +
       panel({ implementsClause: ' implements NxsTagInputs' }),
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "it('overrides', () => expect(r(ExtensionComponentRegistry).peek('nxs.primitives.tag')).toBe(AcmeClaimsComponent));\n",
   }),
 );
 
 const overrideSpec = (id) =>
-  "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+  "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
   `it('overrides', () => expect(r(ExtensionComponentRegistry).peek('${id}')).toBe(AcmeClaimsComponent));\n`;
-const TAG_CONTRACT = "import type { NxsTagInputs } from '@nuxeo-satori/platform/components';\n";
+const TAG_CONTRACT = "import type { NxsTagInputs } from '@nuxeo/satori-platform/components';\n";
 
 /** A library whose only ID is a platform primitive it overrides: no `acme.` ID to infer from. */
 const primitiveOnly = (claims) => ({
   'src/index.ts': "export { provideAcme } from './lib/extensions';\n",
   'src/lib/extensions.ts':
-    "import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';\n" +
+    "import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';\n" +
     'export const provideAcme = () =>\n' +
     '  provideSatoriExtensions({\n' +
     "    components: { 'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent) },\n" +
@@ -260,7 +260,7 @@ expectGreen(
       "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
     ),
     'src/lib/claims/claims.ts':
-      "import type { NxsTagInputs as PlatformTagInputs } from '@nuxeo-satori/platform/components';\n" +
+      "import type { NxsTagInputs as PlatformTagInputs } from '@nuxeo/satori-platform/components';\n" +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements PlatformTagInputs'),
     'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
@@ -274,7 +274,7 @@ expectGreen(
       "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
     ),
     'src/lib/claims/claims.ts':
-      "import type * as platform from '@nuxeo-satori/platform/components';\n" +
+      "import type * as platform from '@nuxeo/satori-platform/components';\n" +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements platform.NxsTagInputs'),
     'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
@@ -284,7 +284,7 @@ expectGreen(
 // ---------------------------------------------------------------- negatives ----
 
 const specNaming = (body) =>
-  "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" + body;
+  "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" + body;
 
 expectRed(
   'a spec naming only a longer ID that begins with the registered one',
@@ -357,27 +357,27 @@ expectRed(
       "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
     ),
     'src/lib/claims/claims.ts':
-      "import type { NxsTagInputs as PlatformTagInputs } from '@nuxeo-satori/platform/components';\n" +
+      "import type { NxsTagInputs as PlatformTagInputs } from '@nuxeo/satori-platform/components';\n" +
       'interface NxsTagInputs {}\n' +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
     'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
   }),
-  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+  /does not implement `NxsTagInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
 expectRed(
   'a typed contributions constant in a file of its own, with a wrong path',
   library({
     'src/lib/contributions.ts':
-      "import type { SatoriExtensionContributions } from '@nuxeo-satori/platform/extensions';\n" +
+      "import type { SatoriExtensionContributions } from '@nuxeo/satori-platform/extensions';\n" +
       'export const ACME_CONTRIBUTIONS: SatoriExtensionContributions = {\n' +
       "  rules: { 'acme.rules.isLegal': () => false },\n" +
       "  failClosedRules: ['acme.rules.isLegal'],\n" +
       "  components: { 'acme.panel.claims': () => import('./claim/claims').then((m) => m.AcmeClaimsComponent) },\n" +
       '};\n',
     'src/lib/extensions.ts':
-      "import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';\n" +
       "import { ACME_CONTRIBUTIONS } from './contributions';\n" +
       'export const provideAcme = () => provideSatoriExtensions(ACME_CONTRIBUTIONS);\n',
   }),
@@ -453,7 +453,7 @@ expectRed(
       'interface NxsTagInputs {}\n' + panel({ implementsClause: ' implements NxsTagInputs' }),
     'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
   }),
-  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+  /does not implement `NxsTagInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
 expectRed(
@@ -467,7 +467,7 @@ expectRed(
       panel({ implementsClause: ' implements NxsTagInputs' }),
     'src/lib/extensions.spec.ts': overrideSpec('nxs.primitives.tag'),
   }),
-  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+  /does not implement `NxsTagInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
 expectRed(
@@ -507,7 +507,7 @@ expectRed(
   'a registered component no spec names',
   library({
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "it('has a registry', () => expect(ExtensionComponentRegistry).toBeDefined());\n",
   }),
   /registers 'acme\.panel\.claims' \(`AcmeClaimsComponent`\), and no spec names it/,
@@ -517,7 +517,7 @@ expectRed(
   'a component named only in a spec comment',
   library({
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "// TODO: assert 'acme.panel.claims' and AcmeClaimsComponent\n" +
       "it('has a registry', () => expect(ExtensionComponentRegistry).toBeDefined());\n",
   }),
@@ -539,7 +539,7 @@ expectRed(
       "'nxs.primitives.tag': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
     ),
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "it('overrides', () => expect(r(ExtensionComponentRegistry).peek('nxs.primitives.tag')).toBe(AcmeClaimsComponent));\n",
   }),
   /overriding a platform primitive, but `AcmeClaimsComponent` does not implement `NxsTagInputs`/,
@@ -553,7 +553,7 @@ expectRed(
     ),
     'src/lib/claims/claims.ts': panel({ implementsClause: ' implements NxsTagInputs' }),
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "it('overrides', () => expect(r(ExtensionComponentRegistry).peek('nxs.primitives.avatar')).toBe(AcmeClaimsComponent));\n",
   }),
   /does not implement `NxsAvatarInputs`/,
@@ -566,7 +566,7 @@ expectRed(
       "'nxs.primitives.chip': () => import('./claims/claims').then((m) => m.AcmeClaimsComponent),",
     ),
     'src/lib/extensions.spec.ts':
-      "import { ExtensionComponentRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+      "import { ExtensionComponentRegistry } from '@nuxeo/satori-platform/extensions';\n" +
       "it('overrides', () => expect(r(ExtensionComponentRegistry).has('nxs.primitives.chip')).toBe(true));\n",
   }),
   /the platform has no `nxs\.primitives\.chip` to override/,
@@ -594,7 +594,7 @@ const UNREAD = /in a shape this check does not read/;
 const ONE = /1 component registration\(s\)/;
 const withComponents = (componentsPart, head = '') =>
   head +
-  "import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';\n" +
+  "import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';\n" +
   'export const provideAcme = () =>\n' +
   '  provideSatoriExtensions({\n' +
   "    rules: { 'acme.rules.isLegal': () => false },\n" +
@@ -778,7 +778,7 @@ expectGreen(
   ONE,
 );
 
-for (const pkg of ['@nuxeo-satori/platform', '@nuxeo-satori/platform/components']) {
+for (const pkg of ['@nuxeo/satori-platform', '@nuxeo/satori-platform/components']) {
   expectGreen(
     `[D] a platform class from \`${pkg}\`, re-registered, is left alone without a warning`,
     library({
@@ -794,7 +794,7 @@ for (const pkg of ['@nuxeo-satori/platform', '@nuxeo-satori/platform/components'
 
 // Check 2 already fails these two as unpublished entry points; check 6 must not count them as the
 // platform's and skip them silently as well.
-for (const pkg of ['@nuxeo-satori/platform-extras', '@nuxeo-satori/platformkit']) {
+for (const pkg of ['@nuxeo/satori-platform-extras', '@nuxeo/satori-platformkit']) {
   expectRed(
     `[D] an eager class from \`${pkg}\`, which only begins like the platform, is not the platform's`,
     library({ 'src/lib/extensions.ts': eager(`import { AcmeClaimsComponent } from '${pkg}';\n`) }),
@@ -1090,19 +1090,19 @@ expectGreen(
 );
 
 const primitiveIdsImport =
-  "import { NXS_PRIMITIVE_IDS } from '@nuxeo-satori/platform/components';\n";
+  "import { NXS_PRIMITIVE_IDS } from '@nuxeo/satori-platform/components';\n";
 for (const [variant, key, head = ''] of [
   ['`NXS_PRIMITIVE_IDS.tag`', '[NXS_PRIMITIVE_IDS.tag]', primitiveIdsImport],
   ["`NXS_PRIMITIVE_IDS['tag']`", "[NXS_PRIMITIVE_IDS['tag']]", primitiveIdsImport],
   [
     'an aliased `NXS_PRIMITIVE_IDS`',
     '[IDS.tag]',
-    "import { NXS_PRIMITIVE_IDS as IDS } from '@nuxeo-satori/platform/components';\n",
+    "import { NXS_PRIMITIVE_IDS as IDS } from '@nuxeo/satori-platform/components';\n",
   ],
   [
     'a namespace import',
     '[nxs.NXS_PRIMITIVE_IDS.tag]',
-    "import * as nxs from '@nuxeo-satori/platform/components';\n",
+    "import * as nxs from '@nuxeo/satori-platform/components';\n",
   ],
   ['a computed string literal', "['nxs.primitives.tag']"],
   ['a double-quoted ID', '"nxs.primitives.tag"'],
@@ -1143,7 +1143,7 @@ const tagOverride = (claims) =>
 for (const [variant, claims] of [
   [
     'an inline `type` modifier',
-    "import { type NxsTagInputs } from '@nuxeo-satori/platform/components';\n" +
+    "import { type NxsTagInputs } from '@nuxeo/satori-platform/components';\n" +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
   ],
@@ -1155,7 +1155,7 @@ for (const [variant, claims] of [
   ],
   [
     'a double-quoted entry point',
-    'import type { NxsTagInputs } from "@nuxeo-satori/platform/components";\n' +
+    'import type { NxsTagInputs } from "@nuxeo/satori-platform/components";\n' +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
   ],
@@ -1181,7 +1181,7 @@ const errorStateOverride = (claims) =>
 expectGreen(
   '[K] an error-state override implementing NxsErrorStateInputs',
   errorStateOverride(
-    "import type { NxsErrorStateInputs } from '@nuxeo-satori/platform/components';\n" +
+    "import type { NxsErrorStateInputs } from '@nuxeo/satori-platform/components';\n" +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements NxsErrorStateInputs'),
   ),
@@ -1194,17 +1194,17 @@ expectRed(
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
   ),
-  /does not implement `NxsErrorStateInputs` from '@nuxeo-satori\/platform\/components'/,
+  /does not implement `NxsErrorStateInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
 expectRed(
   '[K] an override implementing a same-named interface from another platform entry point',
   tagOverride(
-    "import type { NxsTagInputs } from '@nuxeo-satori/platform/components-satori';\n" +
+    "import type { NxsTagInputs } from '@nuxeo/satori-platform/components-satori';\n" +
       ANGULAR +
       component('AcmeClaimsComponent', 'acme-claims', ' implements NxsTagInputs'),
   ),
-  /does not implement `NxsTagInputs` from '@nuxeo-satori\/platform\/components'/,
+  /does not implement `NxsTagInputs` from '@nuxeo\/satori-platform\/components'/,
 );
 
 // ------------------------------------------------------------------- report ----

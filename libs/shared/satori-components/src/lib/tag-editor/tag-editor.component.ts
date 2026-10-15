@@ -28,7 +28,7 @@ import {
 import { MatFormField } from '@angular/material/form-field';
 import { MatIcon } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { TagService } from '@nuxeo-satori/platform/nuxeo-client';
+import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   catchError,
   concatMap,

@@ -9,7 +9,7 @@ import {
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Observable, catchError, map, of, switchMap, tap } from 'rxjs';
 
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsThumbnailCache } from './thumbnail-cache';
 

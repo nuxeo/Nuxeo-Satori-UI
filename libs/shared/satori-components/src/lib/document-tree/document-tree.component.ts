@@ -27,7 +27,7 @@ import {
   nuxeoPathSegments,
   topLevelNuxeoFolderPath,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { Observable, catchError, map, of, switchMap } from 'rxjs';
 
 import { NxsErrorStateComponent } from '../error-state/error-state.component';

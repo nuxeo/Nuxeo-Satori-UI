@@ -31,7 +31,7 @@ import {
   isPermissionDeniedError,
   permissionRightLabel,
   type UserGroupSuggestion,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   dayToDate,

@@ -2,7 +2,7 @@ import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of, throwError, type Observable } from 'rxjs';
 
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsThumbnailComponent } from './thumbnail.component';
 import { provideNxsThumbnailCache } from './thumbnail-cache';

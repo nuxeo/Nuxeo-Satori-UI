@@ -11,8 +11,8 @@ import {
   nxsSearchFiltersToRecord,
   nxsSearchFiltersToSavedParams,
   type NxsSearchFilters,
-} from '@nuxeo-satori/platform/components';
-import { NUXEO_API_ORIGIN, SearchService } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/components';
+import { NUXEO_API_ORIGIN, SearchService } from '@nuxeo/satori-platform/nuxeo-client';
 
 const EXECUTE = '/nuxeo/api/v1/search/pp/default_search/execute';
 const PAGING = ['currentPageIndex', 'offset', 'pageSize', 'quickFilters', 'sortBy', 'sortOrder'];

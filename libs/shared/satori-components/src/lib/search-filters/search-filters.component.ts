@@ -25,7 +25,7 @@ import {
   SearchService,
   type SearchAggregations,
   type SearchCollectionOption,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   NXS_EMPTY_SEARCH_FILTERS,

@@ -7,7 +7,7 @@ import {
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, throwError, type Observable } from 'rxjs';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { DEFAULT_KE_CIC_OPERATIONS, KE_CIC_OPERATIONS } from './ke.config';
 import { KeClientService, KeEnrichmentError } from './ke-client.service';

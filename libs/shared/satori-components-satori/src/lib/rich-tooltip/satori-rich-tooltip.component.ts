@@ -7,7 +7,7 @@ import {
   SatRichTooltipTitle,
   SatRichTooltipTrigger,
 } from '@hylandsoftware/satori-ui/rich-tooltip';
-import type { NxsRichTooltipInputs } from '@nuxeo-satori/platform/components';
+import type { NxsRichTooltipInputs } from '@nuxeo/satori-platform/components';
 
 /** `nxs.primitives.richTooltip` on Satori's rich tooltip, which opens on hover and focus. */
 @Component({

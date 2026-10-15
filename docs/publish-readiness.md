@@ -1,4 +1,4 @@
-# Publishing `@nuxeo-satori/platform` — what is left, and who decides
+# Publishing `@nuxeo/satori-platform` — what is left, and who decides
 
 > **SUPERSEDED, for the scope decision only.** The scope is settled:
 > **`@nuxeo/satori-platform` on `https://packages.nuxeo.com/repository/npm-public/`**,
@@ -25,7 +25,7 @@ application against its published types, and — since 2026-08-24 — **survives
 
 ## 1. The decision — superseded, see the note above
 
-`@nuxeo-satori` is **unclaimed** on public npm — `npm view @nuxeo-satori/platform`
+`@nuxeo-satori` is **unclaimed** on public npm — `npm view @nuxeo/satori-platform`
 returns 404 and no package exists under the scope. So nothing is blocked by a name
 collision; the question is which registry and scope the Beta should ship under.
 
@@ -74,7 +74,7 @@ The package name is authored in two files, and only one of them is a single line
 
 | File                         | What it holds                                      | Edit size  |
 | ---------------------------- | -------------------------------------------------- | ---------- |
-| `libs/platform/package.json` | `"name": "@nuxeo-satori/platform"`                 | one line   |
+| `libs/platform/package.json` | `"name": "@nuxeo/satori-platform"`                 | one line   |
 | `tsconfig.base.json`         | five alias keys mapping the entry points to source | five lines |
 
 Everything downstream is derived:
@@ -84,7 +84,7 @@ Everything downstream is derived:
 - `scripts/beta-harness/fork-simulation.mjs` — reads `name` from the built
   `package.json` and repoints aliases by prefix, so it needs no edit
 
-The **import specifiers** in source (`@nuxeo-satori/platform/extensions`) and their
+The **import specifiers** in source (`@nuxeo/satori-platform/extensions`) and their
 `tsconfig.base.json` aliases do need a rename, which is a mechanical find-and-replace
 across 190 sites — the same operation already done once, verified by running
 `typecheck build test` across all projects.

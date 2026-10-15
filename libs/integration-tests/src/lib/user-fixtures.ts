@@ -15,7 +15,7 @@
 
 import { randomBytes } from 'node:crypto';
 
-import type { NuxeoUser } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoUser } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * A password for one test user, for one run.

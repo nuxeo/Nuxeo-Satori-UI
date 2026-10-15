@@ -2,7 +2,7 @@ import type { MatDialog } from '@angular/material/dialog';
 import type { TranslateService } from '@ngx-translate/core';
 import { type Observable, filter, map } from 'rxjs';
 
-import { SavedSearchDialogComponent } from '@nuxeo-satori/platform/ui';
+import { SavedSearchDialogComponent } from '@nuxeo/satori-platform/ui';
 
 /**
  * Asks for a saved search's name — for Save as, or with `initial` for Rename — and emits it trimmed,

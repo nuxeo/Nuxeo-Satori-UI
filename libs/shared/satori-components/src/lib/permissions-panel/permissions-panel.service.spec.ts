@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, of, throwError } from 'rxjs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import type { NxsAceRow, NxsPermissionChange } from './permissions-model';
 import { NxsPermissionsService } from './permissions-panel.service';

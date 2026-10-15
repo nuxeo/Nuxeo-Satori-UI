@@ -10,7 +10,7 @@ import {
   DocumentDetailService,
   type NuxeoDocument,
   type NuxeoDocumentList,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { PublishDialogComponent, type PublishDialogData } from './publish-dialog';
 

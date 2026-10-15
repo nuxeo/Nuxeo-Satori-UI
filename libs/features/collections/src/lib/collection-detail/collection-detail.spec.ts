@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -25,7 +25,7 @@ import {
   DirectoryService,
   type NuxeoAce,
   NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { CollectionDetailComponent } from './collection-detail';
 import {
@@ -33,7 +33,7 @@ import {
   NxsShareExternalDialogComponent,
   NxsToastService,
   NxsUpdatePermissionDialogComponent,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 const TEST_USERNAME = 'jdoe';
 

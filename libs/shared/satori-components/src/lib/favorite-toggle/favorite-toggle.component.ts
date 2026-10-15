@@ -15,7 +15,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { nxsToggleFavorite } from './toggle-favorite';
 

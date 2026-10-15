@@ -1,6 +1,6 @@
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { fn } from 'storybook/test';
 

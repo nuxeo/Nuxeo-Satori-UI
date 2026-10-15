@@ -1080,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "Vertrag ABC-123.pdf",
     "saved-search-placeholder": "z.B. „Verträge Q3 mit ausstehender Überprüfung“",
-    "showcase-dialog-message": "Dieser Dialog wird aus @nuxeo-satori/platform/ui importiert. Kunden können ihn für Bestätigungsaufforderungen, Warnungen und destruktive Aktionen verwenden.",
+    "showcase-dialog-message": "Dieser Dialog wird aus @nuxeo/satori-platform/ui importiert. Kunden können ihn für Bestätigungsaufforderungen, Warnungen und destruktive Aktionen verwenden.",
     "showcase-dialog-title": "Komponenten-Showcase-Demo"
   },
   "dashboard": {

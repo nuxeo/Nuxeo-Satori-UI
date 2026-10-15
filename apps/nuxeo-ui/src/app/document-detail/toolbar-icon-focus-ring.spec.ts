@@ -19,7 +19,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
   NxsDocumentToolbarComponent,
   type NxsToolbarAction,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 

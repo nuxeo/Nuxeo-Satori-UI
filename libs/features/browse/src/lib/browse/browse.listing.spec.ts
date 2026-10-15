@@ -9,9 +9,9 @@ import { ROUTES, Router, provideRouter, withDisabledInitialNavigation } from '@a
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
-import { provideNxsComponents } from '@nuxeo-satori/platform/components';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
+import { provideNxsComponents } from '@nuxeo/satori-platform/components';
 import {
   BrowseService,
   ClipboardTargetService,
@@ -20,7 +20,7 @@ import {
   SelectionService,
   TagService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';

@@ -15,14 +15,14 @@ import {
   DocumentDetailService,
   type NuxeoUser,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   ShareSavedSearchAddPermissionDialogComponent,
   type ShareSavedSearchAddPermissionResult,
 } from '../share-saved-search-add-permission-dialog/share-saved-search-add-permission-dialog.component';
 import { ShareSavedSearchExternalDialogComponent } from '../share-saved-search-external-dialog/share-saved-search-external-dialog.component';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 export interface PermissionEntry {
   id: string;

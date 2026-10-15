@@ -6,7 +6,7 @@ import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
 import { of } from 'rxjs';
 
-// Import from @nuxeo-satori/platform/ui - what customers have access to
+// Import from @nuxeo/satori-platform/ui - what customers have access to
 import {
   WidgetContainerComponent,
   WidgetGridComponent,
@@ -19,7 +19,7 @@ import {
   type ShareDialogData,
   type ExportDialogData,
   type SavedSearchDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 @Component({

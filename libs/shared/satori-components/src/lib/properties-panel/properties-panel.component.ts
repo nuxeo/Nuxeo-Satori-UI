@@ -5,7 +5,7 @@ import {
   avatarColor,
   documentHasPersistedMainBlob,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsAvatarComponent } from '../avatar/avatar.component';
 import type { NxsHeadingLevel } from '../heading-level';

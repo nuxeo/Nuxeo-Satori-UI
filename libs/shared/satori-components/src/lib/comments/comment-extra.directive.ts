@@ -1,5 +1,5 @@
 import { Directive, inject, TemplateRef } from '@angular/core';
-import type { NuxeoComment } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoComment } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** What a projected `[nxsCommentExtra]` template receives: the comment or reply it sits under. */
 export interface NxsCommentContext {

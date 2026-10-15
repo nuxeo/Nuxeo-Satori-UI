@@ -45,7 +45,7 @@
     //
     // The consequence was not subtle and still went unnoticed for a whole phase:
     // ng-packagr writes a `prepublishOnly` script that hard-fails `npm publish` for any
-    // full-mode package, so `@nuxeo-satori/platform` could not be published at all —
+    // full-mode package, so `@nuxeo/satori-platform` could not be published at all —
     // while Phase 4's central claim was that a customer upgrade is an `npm version` bump.
     // `scripts/beta-harness/publishability.mjs` is the gate that now runs a real
     // `npm publish --dry-run` against the built bytes, which is the only check that

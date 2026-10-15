@@ -33,7 +33,7 @@ only as a new version of this package, built from reviewed source.
 | `schema/`                                 | JSON schemas your editor uses to check the fragments as you type     |
 | `build.mjs`                               | Checks the package and writes the installable zip                    |
 
-The keys each fragment accepts are documented in `@nuxeo-satori/platform`'s
+The keys each fragment accepts are documented in `@nuxeo/satori-platform`'s
 `extension-reference.md`.
 
 ## Change, build, install

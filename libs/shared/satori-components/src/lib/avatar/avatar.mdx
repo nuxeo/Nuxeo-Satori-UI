@@ -37,7 +37,7 @@ Import it from the components entry point. Used directly, it needs no providers.
 <Source
   language="typescript"
   dark
-  code={`import { NxsAvatarComponent } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsAvatarComponent } from '@nuxeo/satori-platform/components';`}
 />
 
 <Source
@@ -112,7 +112,7 @@ under `nxs.primitives.avatar` appears here.
 ## Satori and the built-in avatar
 
 The same ID, `nxs.primitives.avatar`, renders **Satori's avatar** when
-`@nuxeo-satori/platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+`@nuxeo/satori-platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
 after `provideNxsComponents()`. Otherwise it renders the **built-in avatar** shown on this page.
 Both take the same four inputs, so the screens that render the ID do not change.
 

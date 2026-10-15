@@ -4,7 +4,7 @@ import {
   AppExtensionsService,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 /**
  * A customer-owned component, reachable two ways at once.

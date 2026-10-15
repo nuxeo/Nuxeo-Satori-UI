@@ -5,7 +5,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { of, throwError } from 'rxjs';
 
 import { AdminNxqlSearchPageComponent } from './admin-nxql-search-page.component';
-import { AdministrationService, NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { AdministrationService, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { AiGatewayService, AiFeatureFlagService } from '@agentic-ui/shared/ai-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 

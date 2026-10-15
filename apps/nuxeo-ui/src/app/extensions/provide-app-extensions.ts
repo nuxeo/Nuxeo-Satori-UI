@@ -25,13 +25,13 @@ import {
   provideExtensionRoutes,
   provideSatoriExtensions,
   type ExtensionActionHandler,
-} from '@nuxeo-satori/platform/extensions';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+} from '@nuxeo/satori-platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsPermissionsPanelComponent,
-} from '@nuxeo-satori/platform/components';
-import { SelectionService } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/components';
+import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from '../auth/auth.service';
 
@@ -41,7 +41,7 @@ type BulkActionModule = typeof import('./bulk-action.services');
  * A handler that loads its action service on first use.
  *
  * The registration runs eagerly, and the action services pull in dialogs from
- * `@nuxeo-satori/platform/ui`. Importing them statically moved ~440 kB of dialog
+ * `@nuxeo/satori-platform/ui`. Importing them statically moved ~440 kB of dialog
  * code out of the lazily-loaded shell chunk and into the initial bundle, which
  * the build budget correctly refused. Deferring the import to the click keeps the
  * registration eager — so the descriptors are always addressable — while the

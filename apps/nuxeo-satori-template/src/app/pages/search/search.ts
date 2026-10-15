@@ -4,7 +4,7 @@ import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { catchError, debounceTime, map, of, startWith, switchMap } from 'rxjs';
 
-import { SearchService, type SearchResultItem } from '@nuxeo-satori/platform/nuxeo-client';
+import { SearchService, type SearchResultItem } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { formatBytes, formatTimestamp } from '../documents/document-fields';
 

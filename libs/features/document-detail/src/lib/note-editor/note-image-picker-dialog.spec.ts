@@ -10,7 +10,7 @@ import {
   SearchService,
   SelectionService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NoteImagePickerDialogComponent } from './note-image-picker-dialog';
 

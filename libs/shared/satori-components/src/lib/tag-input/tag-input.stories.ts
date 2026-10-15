@@ -3,7 +3,7 @@ import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular'
 import { delay, of } from 'rxjs';
 import { expect, userEvent, within } from 'storybook/test';
 
-import { TagService } from '@nuxeo-satori/platform/nuxeo-client';
+import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsTagInputComponent } from './tag-input.component';
 

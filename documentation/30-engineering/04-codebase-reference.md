@@ -47,23 +47,23 @@ If you read six files, read these.
 
 ## 2. `apps/nuxeo-ui` — the shell
 
-| Path                                               | Responsibility                        | Notes                                                                                                                                                                |
-| -------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/main.ts`                                      | Bootstrap                             | 6 lines: `bootstrapApplication(App, appConfig)`                                                                                                                      |
-| `src/app/app.config.ts`                            | **Composition root**                  | Layer 0 loader → Layer 1 registrations → theme initializer → HTTP + interceptor → router (hash location) → Satori → i18n → `CURRENT_USERNAME`, `ADMIN_ACCESS_CHECKS` |
-| `src/app/app.routes.ts`                            | Routing                               | `login` (with `loginGuard`), then a shell route with `authGuard` and 22 children. `administration` adds `adminGuard`                                                 |
-| `src/app/auth/auth.service.ts`                     | Session lifecycle                     | Basic + cookie sessions, `ensureHydrated()`, SSO detection via `/me`, explicit sign-out flag, share tokens                                                           |
-| `src/app/auth/auth.guards.ts`                      | `authGuard`, `loginGuard`             | Both await `ensureHydrated()`                                                                                                                                        |
-| `src/app/auth/admin.guard.ts`                      | `adminGuard`                          | Admits `hasAdministrationAccess()`; others → `/dashboard`                                                                                                            |
-| `src/app/auth/nuxeo-auth.interceptor.ts`           | Adds `Authorization` to every request | **The reason `<img [src]>` is forbidden** — the browser bypasses this                                                                                                |
-| `src/app/auth/session-timeout.service.ts` + dialog | Expiry warning                        |                                                                                                                                                                      |
-| `src/app/auth/share-token.util.ts`                 | External share links                  | Read once during hydration, then stripped from the URL                                                                                                               |
-| `src/app/config/provide-app-config.ts`             | Layer 0 wiring                        | Loads `bootstrap.json` and **repoints every configuration token** at the result                                                                                      |
-| `src/app/extensions/provide-app-extensions.ts`     | Layer 1 registrations                 | The app's slots, rules, components, actions — incl. the **12 packaged `documentList` columns**                                                                       |
-| `src/app/theme/app-theme.service.ts`               | Runtime theming                       | Invoked by `APP_INITIALIZER`                                                                                                                                         |
-| `src/app/i18n/app-translate-loader.ts` | Layered catalogues | Precedence: satori-ui's catalogue, the app's catalogue, then manifest `labels`. Failed satori-ui fetches return `{}`; failed app fetches fall back to compiled-in English. |
-| `src/app/shell/`                                   | App shell, nav drawer                 |                                                                                                                                                                      |
-| `src/app/dashboard/`, `settings/`, `login/`        | Shell-level pages                     |                                                                                                                                                                      |
+| Path                                               | Responsibility                        | Notes                                                                                                                                                                      |
+| -------------------------------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/main.ts`                                      | Bootstrap                             | 6 lines: `bootstrapApplication(App, appConfig)`                                                                                                                            |
+| `src/app/app.config.ts`                            | **Composition root**                  | Layer 0 loader → Layer 1 registrations → theme initializer → HTTP + interceptor → router (hash location) → Satori → i18n → `CURRENT_USERNAME`, `ADMIN_ACCESS_CHECKS`       |
+| `src/app/app.routes.ts`                            | Routing                               | `login` (with `loginGuard`), then a shell route with `authGuard` and 22 children. `administration` adds `adminGuard`                                                       |
+| `src/app/auth/auth.service.ts`                     | Session lifecycle                     | Basic + cookie sessions, `ensureHydrated()`, SSO detection via `/me`, explicit sign-out flag, share tokens                                                                 |
+| `src/app/auth/auth.guards.ts`                      | `authGuard`, `loginGuard`             | Both await `ensureHydrated()`                                                                                                                                              |
+| `src/app/auth/admin.guard.ts`                      | `adminGuard`                          | Admits `hasAdministrationAccess()`; others → `/dashboard`                                                                                                                  |
+| `src/app/auth/nuxeo-auth.interceptor.ts`           | Adds `Authorization` to every request | **The reason `<img [src]>` is forbidden** — the browser bypasses this                                                                                                      |
+| `src/app/auth/session-timeout.service.ts` + dialog | Expiry warning                        |                                                                                                                                                                            |
+| `src/app/auth/share-token.util.ts`                 | External share links                  | Read once during hydration, then stripped from the URL                                                                                                                     |
+| `src/app/config/provide-app-config.ts`             | Layer 0 wiring                        | Loads `bootstrap.json` and **repoints every configuration token** at the result                                                                                            |
+| `src/app/extensions/provide-app-extensions.ts`     | Layer 1 registrations                 | The app's slots, rules, components, actions — incl. the **12 packaged `documentList` columns**                                                                             |
+| `src/app/theme/app-theme.service.ts`               | Runtime theming                       | Invoked by `APP_INITIALIZER`                                                                                                                                               |
+| `src/app/i18n/app-translate-loader.ts`             | Layered catalogues                    | Precedence: satori-ui's catalogue, the app's catalogue, then manifest `labels`. Failed satori-ui fetches return `{}`; failed app fetches fall back to compiled-in English. |
+| `src/app/shell/`                                   | App shell, nav drawer                 |                                                                                                                                                                            |
+| `src/app/dashboard/`, `settings/`, `login/`        | Shell-level pages                     |                                                                                                                                                                            |
 
 ---
 
@@ -125,7 +125,7 @@ held. The Nuxeo-owned components that replaced the adf-hx ones are in
 
 ## 5. `libs/shared/extensions` — the four registries
 
-3,101 lines, 9 spec files, 96.0% coverage. **Published** as `@nuxeo-satori/platform/extensions`.
+3,101 lines, 9 spec files, 96.0% coverage. **Published** as `@nuxeo/satori-platform/extensions`.
 
 | File                                          | Responsibility                                                                                                                                                                                      |
 | --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -144,7 +144,7 @@ held. The Nuxeo-owned components that replaced the adf-hx ones are in
 
 ## 5a. `libs/shared/document-layouts` — per-type layouts
 
-Internal: no `@nuxeo-satori/platform` entry point re-exports it. Its contract is the layout-file
+Internal: no `@nuxeo/satori-platform` entry point re-exports it. Its contract is the layout-file
 format in [`docs/extension-reference.md`](../../docs/extension-reference.md) §9b.
 
 | File                                 | Responsibility                                                                                                                                                                                        |

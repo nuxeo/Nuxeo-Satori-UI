@@ -2,7 +2,7 @@ import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError, type Observable } from 'rxjs';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsFavoriteToggleComponent } from './favorite-toggle.component';
 

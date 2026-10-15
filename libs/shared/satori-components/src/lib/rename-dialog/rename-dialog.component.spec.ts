@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 

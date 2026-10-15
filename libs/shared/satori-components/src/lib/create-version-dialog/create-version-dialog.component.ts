@@ -10,7 +10,7 @@ import {
   DocumentDetailService,
   isPermissionDeniedError,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsToastService, provideNxsToast } from '../toast/toast.service';
 

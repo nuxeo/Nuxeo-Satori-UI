@@ -2,7 +2,7 @@ import { ChangeDetectionStrategy, Component, inject, signal } from '@angular/cor
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe } from '@ngx-translate/core';
-import { NuxeoDriveService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoDriveService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
 

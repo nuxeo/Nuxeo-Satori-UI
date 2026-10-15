@@ -1,6 +1,6 @@
 import { map, tap, type Observable } from 'rxjs';
 
-import type { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import type { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** The window event the shell's Favorites views listen for, to re-read the list. */
 export const NXS_FAVORITES_CHANGED_EVENT = 'favorites-changed';

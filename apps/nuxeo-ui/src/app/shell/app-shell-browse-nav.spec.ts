@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 
-import { BrowseContextService } from '@nuxeo-satori/platform/nuxeo-client';
+import { BrowseContextService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';

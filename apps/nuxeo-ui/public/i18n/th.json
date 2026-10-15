@@ -1080,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "สัญญา ABC-123.pdf",
     "saved-search-placeholder": "เช่น \"สัญญาไตรมาส 3 ที่รอการตรวจทาน\"",
-    "showcase-dialog-message": "กล่องโต้ตอบนี้นำเข้าจาก @nuxeo-satori/platform/ui ลูกค้าสามารถใช้สำหรับข้อความแจ้งยืนยัน คำเตือน และการดำเนินการที่ไม่สามารถย้อนกลับได้.",
+    "showcase-dialog-message": "กล่องโต้ตอบนี้นำเข้าจาก @nuxeo/satori-platform/ui ลูกค้าสามารถใช้สำหรับข้อความแจ้งยืนยัน คำเตือน และการดำเนินการที่ไม่สามารถย้อนกลับได้.",
     "showcase-dialog-title": "การสาธิตคอมโพเนนต์"
   },
   "dashboard": {

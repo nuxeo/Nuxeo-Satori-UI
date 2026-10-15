@@ -49,7 +49,7 @@
  * `--break-slot toolbar` is the one that matters. `toolbar` is named in the JSON manifest
  * and referenced by **no** TypeScript in the customer's tree, so:
  *
- *     the customer app compiles against @nuxeo-satori/platform@0.2.0 (after the upgrade)
+ *     the customer app compiles against @nuxeo/satori-platform@0.2.0 (after the upgrade)
  *     upgrade-rehearsal: FAIL — 1 problem(s)
  *     - The manifest names 1 slot(s) the upgraded package no longer has: toolbar.
  *
@@ -262,7 +262,7 @@ try {
    *
    * ## What survives an upgrade, and therefore what is worth asserting
    *
-   * A deep import into platform internals. `@nuxeo-satori/platform/extensions` is supported
+   * A deep import into platform internals. `@nuxeo/satori-platform/extensions` is supported
    * and will still resolve next version; a path into its guts is not, and is precisely what
    * breaks when the internals move — the failure this phase's claim depends on not
    * happening. So the staged customer tree is checked for specifiers outside the published
@@ -274,7 +274,7 @@ try {
       .map((s) => s.replace(/^\./, pkg.name)),
   );
   // Four forms, and the fourth was missing until a probe used it. A **bare side-effect
-  // import** — `import '@nuxeo-satori/platform/extensions/internal/x';` — has no `from` and
+  // import** — `import '@nuxeo/satori-platform/extensions/internal/x';` — has no `from` and
   // no parentheses, so the first version of this regex sailed straight past the exact shape
   // the check exists to reject. `\\bimport\\s*['"]` is that case.
   const SPECIFIER = new RegExp(

@@ -7,7 +7,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { DocumentViewerComponent } from '@nuxeo-satori/platform/ui';
+import { DocumentViewerComponent } from '@nuxeo/satori-platform/ui';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';

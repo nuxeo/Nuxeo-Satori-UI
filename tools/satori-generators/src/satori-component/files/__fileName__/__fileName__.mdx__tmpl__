@@ -30,7 +30,7 @@ Use it <%- host.whenToUse %>.
 <Source
   language="typescript"
   dark
-  code={`import { <%= className %> } from '@nuxeo-satori/platform/components';`}
+  code={`import { <%= className %> } from '@nuxeo/satori-platform/components';`}
 />
 
 <Source

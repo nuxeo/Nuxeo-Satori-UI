@@ -50,11 +50,11 @@ import {
   toBrowseRouterUrl,
   type GlobalSearchSuggestion,
   docTypeIcon,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { SelectionTopbarComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { SelectionTopbarComponent } from '@nuxeo/satori-platform/ui';
 import { AiChatService, AiFeatureFlagService } from '@agentic-ui/shared/ai-client';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from '@nuxeo-satori/platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { APP_NAV_ITEMS, PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { AuthService } from '../auth/auth.service';

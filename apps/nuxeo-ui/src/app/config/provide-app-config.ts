@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
 import { APP_INITIALIZER, DestroyRef, LOCALE_ID, Provider, inject } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateService } from '@ngx-translate/core';
 
 import { REGISTERED_LOCALES } from '../i18n/register-locale-data';
@@ -16,7 +16,7 @@ import {
   NUXEO_SERVER_URL,
   NUXEO_SSO_POST_LOGIN_PATH,
   NUXEO_SSO_RETURN_QUERY_PARAM,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   DEFAULT_SESSION_TIMEOUT_CONFIG,

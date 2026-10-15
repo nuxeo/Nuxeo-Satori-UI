@@ -47,7 +47,7 @@ import {
   formatHierarchicalL10nLabel,
   groupL10nChildrenByParent,
   l10nEntryLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import type { NxsHeadingLevel } from '../heading-level';
 import { nxsPropertyText } from '../properties-panel/property-text';

@@ -11,7 +11,7 @@ import {
 } from './compodoc';
 
 /** Every component documented here is imported from this entry point. */
-const ENTRY_POINT = '@nuxeo-satori/platform/components';
+const ENTRY_POINT = '@nuxeo/satori-platform/components';
 
 const NONE = '—';
 

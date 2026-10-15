@@ -32,7 +32,7 @@ the page title.
 
 ## Usage
 
-export const usageTs = `import { NxsBreadcrumbsComponent, type NxsBreadcrumbItem } from '@nuxeo-satori/platform/components';
+export const usageTs = `import { NxsBreadcrumbsComponent, type NxsBreadcrumbItem } from '@nuxeo/satori-platform/components';
 
 protected readonly trail: NxsBreadcrumbItem[] = [
   { label: 'Domain', routerLink: ['/browse'], queryParams: { path: '/default-domain' } },
@@ -129,7 +129,7 @@ name is cut short with "…" and shown in full on hover.
 ## Satori and the built-in breadcrumbs
 
 The same ID, `nxs.primitives.breadcrumbs`, renders **Satori's breadcrumbs** when
-`@nuxeo-satori/platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+`@nuxeo/satori-platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
 after `provideNxsComponents()`. Otherwise it renders the **built-in breadcrumbs** shown on this page.
 Both take the same inputs.
 

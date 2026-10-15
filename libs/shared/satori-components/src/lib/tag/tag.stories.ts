@@ -1,5 +1,5 @@
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { NXS_PRIMITIVE_IDS } from '../primitives';

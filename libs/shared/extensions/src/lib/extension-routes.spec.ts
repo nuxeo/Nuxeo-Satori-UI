@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { RouterOutlet, provideRouter, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { AppExtensionsService } from './app-extensions.service';
 import { extensionRoutes, provideExtensionRoutes } from './extension-routes';

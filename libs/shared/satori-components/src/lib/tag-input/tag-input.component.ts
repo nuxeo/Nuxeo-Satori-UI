@@ -26,7 +26,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
-import { TagService } from '@nuxeo-satori/platform/nuxeo-client';
+import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';

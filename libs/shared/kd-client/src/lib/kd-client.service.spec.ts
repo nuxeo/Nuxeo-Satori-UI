@@ -4,7 +4,7 @@ import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
 import { vi } from 'vitest';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   DEFAULT_KD_CIC_OPERATIONS,

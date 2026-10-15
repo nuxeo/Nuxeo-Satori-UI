@@ -1,6 +1,6 @@
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { docTypeIcon } from '@nuxeo-satori/platform/nuxeo-client';
+import { docTypeIcon } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsDocTypeIconComponent } from './doc-type-icon.component';
 

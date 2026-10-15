@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter, type Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { parseBrowseNuxeoPathFromRouterUrl } from '@nuxeo-satori/platform/nuxeo-client';
+import { parseBrowseNuxeoPathFromRouterUrl } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { routes } from './app.routes';
 import { RETIRED_ROUTES } from './retired-routes';

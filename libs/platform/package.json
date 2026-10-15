@@ -1,5 +1,5 @@
 {
-  "name": "@nuxeo-satori/platform",
+  "name": "@nuxeo/satori-platform",
   "version": "0.2.0",
   "generators": "./generators.json",
   "description": "Nuxeo Satori platform — the Layer 0/1/2 extensibility contract, configuration loader, Nuxeo client and shared UI.",

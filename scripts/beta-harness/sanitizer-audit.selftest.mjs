@@ -844,7 +844,7 @@ control(
     // case, covered below.
     //
     // The alias must also be RE-EXPORTED from the package barrel. Without that step this control was
-    // passing for the wrong reason: `@nuxeo-satori/platform/nuxeo-client` maps to `src/index.ts`,
+    // passing for the wrong reason: `@nuxeo/satori-platform/nuxeo-client` maps to `src/index.ts`,
     // whose export list is explicit, so the import resolved to the error type, check 4 fell back to
     // its `unresolvable type in a NONE context` finding, and that finding names the same file — which
     // satisfied a bare `document-viewer.component.html` expectation. The control therefore proved the
@@ -871,7 +871,7 @@ control(
       return s
         .replace(
           importAnchor,
-          `${importAnchor}\nimport type { CrossFileMediaUrl } from '@nuxeo-satori/platform/nuxeo-client';`,
+          `${importAnchor}\nimport type { CrossFileMediaUrl } from '@nuxeo/satori-platform/nuxeo-client';`,
         )
         .replace(inputAnchor, 'readonly posterUrl = input<CrossFileMediaUrl | null>(null);');
     });

@@ -2,8 +2,8 @@ import { provideRouter, withDisabledInitialNavigation, withHashLocation } from '
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { provideAndConfigureSatoriUITranslations } from '@hylandsoftware/satori-ui/translations';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { NXS_PRIMITIVE_IDS, provideNxsComponents } from '@nuxeo-satori/platform/components';
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { NXS_PRIMITIVE_IDS, provideNxsComponents } from '@nuxeo/satori-platform/components';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
 

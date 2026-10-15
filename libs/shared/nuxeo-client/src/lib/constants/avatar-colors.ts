@@ -8,7 +8,7 @@
  *
  * The first is the rule: a third-party design-system type has no business in our public
  * API, for the same reason `AGENTS/11-beta-program.md` §7 forbids adf-hx types there. A
- * customer writing against `@nuxeo-satori/platform/nuxeo-client` should not have to know
+ * customer writing against `@nuxeo/satori-platform/nuxeo-client` should not have to know
  * that our avatars come from a design system, and we should be free to change that without
  * it being a breaking change for them.
  *
@@ -32,7 +32,7 @@
  *
  * It is not here because this library's shipped sources may not import a design-system
  * package, not even a type: `libs/shared/satori-components` is allowed to import
- * `@nuxeo-satori/platform/nuxeo-client` (it does not yet), and its guardrail follows imports
+ * `@nuxeo/satori-platform/nuxeo-client` (it does not yet), and its guardrail follows imports
  * transitively and would reject any `@hylandsoftware/*` reached through this barrel.
  */
 export type AvatarColor =

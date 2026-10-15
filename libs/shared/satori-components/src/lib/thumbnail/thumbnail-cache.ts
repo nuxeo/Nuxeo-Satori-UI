@@ -13,7 +13,7 @@ import {
   type Observable,
 } from 'rxjs';
 
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** How many thumbnail requests one cache keeps in flight at once. */
 export const NXS_THUMBNAIL_CONCURRENCY = 4;

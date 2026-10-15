@@ -80,7 +80,7 @@ what the server would reject — JSON that does not parse, a repeated key, a fra
 missing asset — and writes the installable zip: `node config-packages/acme-config/build.mjs`. The
 `config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
 `npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
-of this repository, or `npx nx g @nuxeo-satori/platform:config-package acme-config --owner=acme`
+of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
 from the published package. `config-packages/presales-demo` in this repository is one, with two
 demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
@@ -557,7 +557,7 @@ descriptor with no handler renders and is inert rather than throwing, so a
 manifest can be written before the Layer 2 library that backs it ships.
 
 ```ts
-import { ExtensionActionRegistry } from '@nuxeo-satori/platform/extensions';
+import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
 inject(ExtensionActionRegistry).register({
   'acme.bulkActions.archive': inject(AcmeArchiveActionService),
@@ -642,8 +642,8 @@ item whose ID follows the convention picks up a registered component with no fur
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
 Five component-registry IDs for the primitives Satori also ships. Each resolves to a Material
-implementation from `@nuxeo-satori/platform/components`, and the first four to a Satori-backed one
-when `@nuxeo-satori/platform/components-satori` is provided after it. That second entry point is the only
+implementation from `@nuxeo/satori-platform/components`, and the first four to a Satori-backed one
+when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
 
@@ -662,8 +662,8 @@ later wins per ID — so the order is the mechanism:
 
 ```ts
 providers: [
-  provideNxsComponents(), // Material, from @nuxeo-satori/platform/components
-  provideNxsSatoriComponents(), // optional: Satori, from @nuxeo-satori/platform/components-satori
+  provideNxsComponents(), // Material, from @nuxeo/satori-platform/components
+  provideNxsSatoriComponents(), // optional: Satori, from @nuxeo/satori-platform/components-satori
   provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTag } }), // yours wins
 ];
 ```
@@ -1194,12 +1194,12 @@ until a report arrives, the form counts as not valid. For an edit, report only t
 user changed; Save closes without a request when there are none. `showErrors` turns `true` when the
 user presses Save, which is the moment to show every field's error, and messages the server
 returns are shown by the host, above the form. Both types are exported from
-`@nuxeo-satori/platform/extensions`:
+`@nuxeo/satori-platform/extensions`:
 
 ```ts
 import { Component, input } from '@angular/core';
-import type { DocumentLayoutChange } from '@nuxeo-satori/platform/extensions';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { DocumentLayoutChange } from '@nuxeo/satori-platform/extensions';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 @Component({ selector: 'acme-claim-form', templateUrl: './claim-form.html' })
 export class ClaimFormComponent {
@@ -1460,7 +1460,7 @@ that is Layer 2 — see section 14.
 import {
   AppExtensionsService,
   ExtensionComponentRegistry,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 const extensions = inject(AppExtensionsService);
 const components = inject(ExtensionComponentRegistry);
@@ -1495,7 +1495,7 @@ component without forking.
 Section 1 explains why a manifest cannot rebind a packaged action. Here is where you can:
 
 ```ts
-import { ExtensionActionRegistry } from '@nuxeo-satori/platform/extensions';
+import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
 const actions = inject(ExtensionActionRegistry);
 

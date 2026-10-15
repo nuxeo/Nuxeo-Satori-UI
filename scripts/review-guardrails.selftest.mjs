@@ -5692,8 +5692,8 @@ const NXS_LIB = (extra = {}, paths = {}) => ({
     {
       compilerOptions: {
         paths: {
-          '@nuxeo-satori/platform/components': [`${NXS_ROOT}/src/index.ts`],
-          '@nuxeo-satori/platform/nuxeo-client': ['libs/shared/nuxeo-client/src/index.ts'],
+          '@nuxeo/satori-platform/components': [`${NXS_ROOT}/src/index.ts`],
+          '@nuxeo/satori-platform/nuxeo-client': ['libs/shared/nuxeo-client/src/index.ts'],
           ...paths,
         },
       },
@@ -5725,7 +5725,7 @@ expectGreen(
   'checkSatoriComponentsDependencies',
   NXS_LIB({
     [NXS_COMPONENT]: nxsComponent({
-      imports: "import { clean } from '@nuxeo-satori/platform/nuxeo-client';",
+      imports: "import { clean } from '@nuxeo/satori-platform/nuxeo-client';",
     }),
   }),
 );
@@ -5760,8 +5760,8 @@ const NXS_PROBE = `${NXS_ROOT}/src/lib/probe/probe.ts`;
 const REAL_LIBS_WITH_PROBE = {
   ...REAL_LIBS,
   [NXS_PROBE]:
-    "import { avatarColor } from '@nuxeo-satori/platform/nuxeo-client';\n" +
-    "import { ExtensionRuleRegistry } from '@nuxeo-satori/platform/extensions';\n" +
+    "import { avatarColor } from '@nuxeo/satori-platform/nuxeo-client';\n" +
+    "import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';\n" +
     'export const probe = [avatarColor, ExtensionRuleRegistry];\n',
 };
 const AVATAR_COLORS = 'libs/shared/nuxeo-client/src/lib/constants/avatar-colors.ts';
@@ -5859,7 +5859,7 @@ expectRed(
   'checkSatoriComponentsDependencies',
   NXS_LIB({
     [NXS_COMPONENT]: nxsComponent({
-      imports: "import { clean } from '@nuxeo-satori/platform/nuxeo-client';",
+      imports: "import { clean } from '@nuxeo/satori-platform/nuxeo-client';",
     }),
     'libs/shared/nuxeo-client/src/lib/clean.ts':
       "import type { SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';\n" +
@@ -5875,7 +5875,7 @@ expectRed(
   'checkSatoriComponentsDependencies',
   NXS_LIB({
     [NXS_COMPONENT]: nxsComponent({
-      imports: "import { clean } from '@nuxeo-satori/platform/nuxeo-client';",
+      imports: "import { clean } from '@nuxeo/satori-platform/nuxeo-client';",
     }),
     'libs/shared/nuxeo-client/src/index.ts': "export * from './lib/clean.js';\n",
     'libs/shared/nuxeo-client/src/lib/clean.ts':
@@ -6109,7 +6109,7 @@ expectGreen(
   'a consumer importing through the entry point',
   'checkSatoriComponentsEntryPoint',
   NXS_LIB({
-    [NXS_CONSUMER]: "import { NxsThingComponent } from '@nuxeo-satori/platform/components';\n",
+    [NXS_CONSUMER]: "import { NxsThingComponent } from '@nuxeo/satori-platform/components';\n",
   }),
 );
 
@@ -6118,10 +6118,10 @@ expectRed(
   'checkSatoriComponentsEntryPoint',
   NXS_LIB({
     [NXS_CONSUMER]:
-      "import { NxsThingComponent } from '@nuxeo-satori/platform/components/lib/thing/thing.component';\n",
+      "import { NxsThingComponent } from '@nuxeo/satori-platform/components/lib/thing/thing.component';\n",
   }),
   null,
-  /x\.ts imports `@nuxeo-satori\/platform\/components\/lib\/thing\/thing\.component`, which reaches into libs\/shared\/satori-components past its entry point/,
+  /x\.ts imports `@nuxeo\/satori-platform\/components\/lib\/thing\/thing\.component`, which reaches into libs\/shared\/satori-components past its entry point/,
 );
 
 expectRed(
@@ -6148,10 +6148,10 @@ expectRed(
   'checkSatoriComponentsEntryPoint',
   NXS_LIB(
     {},
-    { '@nuxeo-satori/platform/components': [`${NXS_ROOT}/src/lib/thing/thing.component.ts`] },
+    { '@nuxeo/satori-platform/components': [`${NXS_ROOT}/src/lib/thing/thing.component.ts`] },
   ),
   null,
-  /must map `@nuxeo-satori\/platform\/components` to exactly `libs\/shared\/satori-components\/src\/index\.ts`/,
+  /must map `@nuxeo\/satori-platform\/components` to exactly `libs\/shared\/satori-components\/src\/index\.ts`/,
 );
 
 expectRed(
@@ -6190,7 +6190,7 @@ expectRed(
     'tsconfig.base.json': `${JSON.stringify({
       compilerOptions: {
         baseUrl: '.',
-        paths: { '@nuxeo-satori/platform/components': [`${NXS_ROOT}/src/index.ts`] },
+        paths: { '@nuxeo/satori-platform/components': [`${NXS_ROOT}/src/index.ts`] },
       },
     })}\n`,
     'libs/features/x/tsconfig.json': projectTsconfig({
@@ -6219,14 +6219,14 @@ expectRed(
   NXS_LIB({
     'libs/features/x/tsconfig.json': projectTsconfig({
       paths: {
-        '@nuxeo-satori/platform/components': [
+        '@nuxeo/satori-platform/components': [
           '../../shared/satori-components/src/lib/thing/thing.component.ts',
         ],
       },
     }),
   }),
   null,
-  /libs\/features\/x\/tsconfig\.json maps `@nuxeo-satori\/platform\/components` to \["libs\/shared\/satori-components\/src\/lib\/thing\/thing\.component\.ts"\]/,
+  /libs\/features\/x\/tsconfig\.json maps `@nuxeo\/satori-platform\/components` to \["libs\/shared\/satori-components\/src\/lib\/thing\/thing\.component\.ts"\]/,
 );
 
 falsePositiveControls += 1;
@@ -6236,10 +6236,10 @@ expectGreen(
   NXS_LIB({
     'libs/features/x/tsconfig.json': projectTsconfig({
       paths: {
-        '@nuxeo-satori/platform/components': ['../../shared/satori-components/src/index.ts'],
+        '@nuxeo/satori-platform/components': ['../../shared/satori-components/src/index.ts'],
       },
     }),
-    [NXS_CONSUMER]: "import { NxsThingComponent } from '@nuxeo-satori/platform/components';\n",
+    [NXS_CONSUMER]: "import { NxsThingComponent } from '@nuxeo/satori-platform/components';\n",
   }),
 );
 
@@ -6645,7 +6645,7 @@ expectGreen(
   'checkSatoriComponentsHaveStories',
   NXS_STORYBOOK({
     [NXS_STORY]: nxsStory({
-      imports: "import { NxsThingComponent } from '@nuxeo-satori/platform/components';",
+      imports: "import { NxsThingComponent } from '@nuxeo/satori-platform/components';",
     }),
   }),
 );
@@ -7498,7 +7498,7 @@ expectGreen(
     [NXS_STORY]: nxsStory(),
     ...NXS_NOTICE_LIB({
       [NXS_NOTICE_STORY]: nxsNoticeStory(
-        "import { NxsNoticeService } from '@nuxeo-satori/platform/components';",
+        "import { NxsNoticeService } from '@nuxeo/satori-platform/components';",
       ),
     }),
   }),
@@ -7568,7 +7568,7 @@ expectRed(
   NXS_DOCS(
     NXS_NOTICE_LIB({
       [NXS_NOTICE_STORY]: nxsNoticeStory(
-        "import { NXS_NOTICE_DURATION } from '@nuxeo-satori/platform/components';",
+        "import { NXS_NOTICE_DURATION } from '@nuxeo/satori-platform/components';",
       ),
       [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
     }),
@@ -7796,11 +7796,11 @@ const NXS_FALLBACK = (extra = {}, paths = {}) =>
       [`${NXS_SAT_ROOT}/src/index.ts`]: "export { provide } from './lib/provide';\n",
       [NXS_SAT_PROVIDER]:
         "import { SatTag } from '@hylandsoftware/satori-ui/tag';\n" +
-        "import { NxsThingComponent } from '@nuxeo-satori/platform/components';\n" +
+        "import { NxsThingComponent } from '@nuxeo/satori-platform/components';\n" +
         'export const provide = () => [SatTag, NxsThingComponent];\n',
       ...extra,
     },
-    { '@nuxeo-satori/platform/components-satori': [`${NXS_SAT_ROOT}/src/index.ts`], ...paths },
+    { '@nuxeo/satori-platform/components-satori': [`${NXS_SAT_ROOT}/src/index.ts`], ...paths },
   );
 
 // checkSatoriFallbackDependencies
@@ -7838,7 +7838,7 @@ expectRed(
   'checkSatoriFallbackDependencies',
   NXS_FALLBACK({
     [NXS_SAT_PROVIDER]:
-      "import { clean } from '@nuxeo-satori/platform/nuxeo-client';\nexport const provide = clean;\n",
+      "import { clean } from '@nuxeo/satori-platform/nuxeo-client';\nexport const provide = clean;\n",
     'libs/shared/nuxeo-client/src/lib/clean.ts':
       "import type { Document } from '@hylandsoftware/hxcs-js-client';\nexport const clean: Document | 1 = 1;\n",
   }),
@@ -7860,7 +7860,7 @@ expectRed(
   'checkSatoriComponentsDependencies',
   NXS_FALLBACK({
     [NXS_COMPONENT]: nxsComponent({
-      imports: "import { provide } from '@nuxeo-satori/platform/components-satori';",
+      imports: "import { provide } from '@nuxeo/satori-platform/components-satori';",
     }),
   }),
   null,
@@ -7873,7 +7873,7 @@ expectGreen(
   'a consumer importing the Satori entry point by its specifier',
   'checkSatoriFallbackEntryPoint',
   NXS_FALLBACK({
-    [NXS_CONSUMER]: "import { provide } from '@nuxeo-satori/platform/components-satori';\n",
+    [NXS_CONSUMER]: "import { provide } from '@nuxeo/satori-platform/components-satori';\n",
   }),
 );
 
@@ -7882,10 +7882,10 @@ expectRed(
   'checkSatoriFallbackEntryPoint',
   NXS_FALLBACK({
     [NXS_CONSUMER]:
-      "import { provide } from '@nuxeo-satori/platform/components-satori/lib/provide';\n",
+      "import { provide } from '@nuxeo/satori-platform/components-satori/lib/provide';\n",
   }),
   null,
-  /x\.ts imports `@nuxeo-satori\/platform\/components-satori\/lib\/provide`, which reaches into libs\/shared\/satori-components-satori past its entry point/,
+  /x\.ts imports `@nuxeo\/satori-platform\/components-satori\/lib\/provide`, which reaches into libs\/shared\/satori-components-satori past its entry point/,
 );
 
 expectRed(
@@ -7902,9 +7902,9 @@ expectRed(
 expectRed(
   'the Satori entry point not aliased',
   'checkSatoriFallbackEntryPoint',
-  NXS_FALLBACK({}, { '@nuxeo-satori/platform/components-satori': [] }),
+  NXS_FALLBACK({}, { '@nuxeo/satori-platform/components-satori': [] }),
   null,
-  /must map `@nuxeo-satori\/platform\/components-satori` to exactly/,
+  /must map `@nuxeo\/satori-platform\/components-satori` to exactly/,
 );
 
 expectRed(
@@ -7941,7 +7941,7 @@ expectGreen(
   'the base entry point check beside the Satori entry point',
   'checkSatoriComponentsEntryPoint',
   NXS_FALLBACK({
-    [NXS_CONSUMER]: "import { provide } from '@nuxeo-satori/platform/components-satori';\n",
+    [NXS_CONSUMER]: "import { provide } from '@nuxeo/satori-platform/components-satori';\n",
   }),
 );
 
@@ -8034,7 +8034,7 @@ expectGreen(
   'a component whose spec imports it through the published entry point',
   'checkSatoriComponentsHaveSpecs',
   NXS_LIB({
-    [NXS_SPEC]: nxsSpec("import { NxsThingComponent } from '@nuxeo-satori/platform/components';"),
+    [NXS_SPEC]: nxsSpec("import { NxsThingComponent } from '@nuxeo/satori-platform/components';"),
   }),
 );
 
@@ -8126,7 +8126,7 @@ expectRed(
   'checkPlatformEntryPointsListed',
   NXS_LIB({ 'libs/platform/ui/ng-package.json': '{ "lib": { "entryFile": "x.ts" } }\n' }),
   null,
-  /libs\/platform\/ui\/ng-package\.json publishes `@nuxeo-satori\/platform\/ui`, and .* does not list 'ui'/,
+  /libs\/platform\/ui\/ng-package\.json publishes `@nuxeo\/satori-platform\/ui`, and .* does not list 'ui'/,
 );
 
 expectRed(
@@ -8173,7 +8173,7 @@ expectGreen(
   mdx(
     'export const usageHtml = `<nxs-thing\n  [heading]="title()"\n  [subheading]="typeName()"\n  [documentType]="type()"\n  (selected)="open($event)"\n/>`;\n\n' +
       '<Source language="html" code={usageHtml} />\n\n' +
-      '<Source language="typescript" code={`import { NxsThingComponent } from \'@nuxeo-satori/platform/components\';`} />\n\n' +
+      '<Source language="typescript" code={`import { NxsThingComponent } from \'@nuxeo/satori-platform/components\';`} />\n\n' +
       "export const usageTs = `import { signal } from '@angular/core';\n\nreadonly open = signal(false);\n\ntoggle(): void {\n  this.open.update((open) => !open);\n}`;\n\n" +
       '<Source language="typescript" code={usageTs} />',
   ),

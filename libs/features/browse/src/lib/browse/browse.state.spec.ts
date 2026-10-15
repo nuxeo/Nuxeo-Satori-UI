@@ -7,7 +7,7 @@ import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/r
 import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   ADMIN_ACCESS_CHECKS,
   BrowseContextService,
@@ -21,10 +21,10 @@ import {
   TagService,
   type AuditEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
   return {

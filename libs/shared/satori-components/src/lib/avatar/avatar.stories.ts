@@ -1,4 +1,4 @@
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 

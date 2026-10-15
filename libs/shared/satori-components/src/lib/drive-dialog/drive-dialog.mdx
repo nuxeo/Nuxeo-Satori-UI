@@ -34,7 +34,7 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   NxsDriveDialogComponent,
   type NxsDriveDialogData,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 private readonly dialog = inject(MatDialog);
 
@@ -52,7 +52,7 @@ protected openInDrive(folderPath: string): void {
 
 It has no inputs or outputs: it reads `folderPath` from the dialog's data, and closing the dialog is
 how it reports that it is done. It needs `HttpClient` and the platform's `NuxeoDriveService`, which an
-application using `@nuxeo-satori/platform/nuxeo-client` already has, and ngx-translate for its title,
+application using `@nuxeo/satori-platform/nuxeo-client` already has, and ngx-translate for its title,
 labels and button, under `satori-components.drive-dialog.*`. `providePlatformEnglishFallback()`
 supplies the English when your catalogue does not.
 

@@ -52,7 +52,7 @@ import {
   formatRelativeTime,
   DocTypeLabelPipe,
   taskDueDistance,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AppExtensionsService,
   DescriptorLabelPipe,
@@ -61,7 +61,7 @@ import {
   ExtensionOutletComponent,
   ExtensionRuleContextService,
   type ExtensionElement,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { AuthService } from '../../auth/auth.service';
 import { Router, RouterLink, RouterLinkActive } from '@angular/router';
 import {
@@ -72,7 +72,7 @@ import {
 } from '../../platform-nav-items';
 import { ThemingFeatureFlagService } from '../../theme/theming-feature-flag.service';
 import { drawerDueKey } from './nav-drawer-due';
-import { NxsDocumentTreeComponent } from '@nuxeo-satori/platform/components';
+import { NxsDocumentTreeComponent } from '@nuxeo/satori-platform/components';
 
 export interface FolderNode {
   doc: NuxeoDocument;

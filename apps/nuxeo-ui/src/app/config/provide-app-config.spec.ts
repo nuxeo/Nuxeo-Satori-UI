@@ -12,7 +12,7 @@ import {
   AppConfigService,
   DEFAULT_APP_BOOTSTRAP_CONFIG,
   type AppConfigLayer,
-} from '@nuxeo-satori/platform/app-config';
+} from '@nuxeo/satori-platform/app-config';
 import {
   ApplicationInitStatus,
   DestroyRef,

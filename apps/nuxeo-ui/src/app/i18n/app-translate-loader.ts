@@ -1,6 +1,6 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { TranslateLoader } from '@ngx-translate/core';
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 

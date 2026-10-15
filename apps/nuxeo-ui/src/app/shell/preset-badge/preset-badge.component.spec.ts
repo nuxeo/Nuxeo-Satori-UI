@@ -1,7 +1,7 @@
 import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
-import { AppConfigService, type AppActivePreset } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService, type AppActivePreset } from '@nuxeo/satori-platform/app-config';
 
 import { testTranslateModule } from '../../i18n/translate-testing';
 import { PresetBadgeComponent } from './preset-badge.component';

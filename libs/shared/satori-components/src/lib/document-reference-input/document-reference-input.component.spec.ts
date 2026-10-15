@@ -5,7 +5,7 @@ import { FormControl, ReactiveFormsModule } from '@angular/forms';
 import { of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { NuxeoApiBase, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoApiBase, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NXS_SEARCH_DEBOUNCE_MS } from '../pickers/search-as-you-type';
 import {
