@@ -1,6 +1,7 @@
 import {
   ChangeDetectionStrategy,
   Component,
+  DestroyRef,
   ElementRef,
   afterRenderEffect,
   inject,
@@ -18,13 +19,24 @@ let nextId = 0;
 /** The least gap, in px, the open panel keeps from either side of the viewport. */
 const VIEWPORT_MARGIN = 8;
 
+/** How long, in ms, the pointer rests or focus stays on the button before the panel opens: Satori's `showDelay`. */
+const SHOW_DELAY = 200;
+
+/** How long, in ms, the panel stays after the pointer leaves, so it can come back: Satori's `hideDelay`. */
+const HIDE_DELAY = 1500;
+
+/** What opened the panel, which decides what closes it. */
+type Opener = 'hover' | 'focus' | 'click';
+
 /**
  * An icon button that opens a titled explanation — the Material implementation of
  * `nxs.primitives.richTooltip`.
  *
- * Material's `matTooltip` holds one line of plain text, so this is a toggletip: the button opens a
- * non-modal panel, and Escape or moving focus out of the component closes it. Satori's opens on
- * hover and focus instead; the content contract is the same.
+ * It opens as Satori's does: when the pointer rests on the button or keyboard focus reaches it.
+ * Unlike Satori's, a click also opens it, because a touch screen has neither: a tap toggles the
+ * panel, and a click keeps open a panel the pointer opened. Escape, wherever focus is, or focus
+ * moving out of the component, closes it at once; the pointer leaving closes a panel the pointer
+ * opened, after a delay long enough to reach the panel.
  *
  * Focus stays on the button, as it does on Satori's, and the panel opens inside a live region so a
  * screen reader announces it. It is not a dialog: a dialog takes focus when it opens.
@@ -41,8 +53,12 @@ const VIEWPORT_MARGIN = 8;
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: {
     class: 'nxs-rich-tooltip',
-    '(keydown.escape)': 'closeAndRefocus()',
+    '(document:keydown.escape)': 'onEscape()',
+    '(document:pointerup)': 'onPressEnd()',
+    '(document:pointercancel)': 'onPressEnd()',
     '(focusout)': 'onFocusOut($event)',
+    '(pointerenter)': 'onPointerEnter($event)',
+    '(pointerleave)': 'onPointerLeave($event)',
   },
 })
 export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
@@ -66,6 +82,15 @@ export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
   });
   private readonly panel = viewChild('panel', { read: ElementRef<HTMLElement> });
 
+  /** What opened the panel while it is open; `null` while it is closed. */
+  private opener: Opener | null = null;
+  /** What will open the panel once `SHOW_DELAY` has passed. */
+  private pending: Opener | null = null;
+  private showTimer: ReturnType<typeof setTimeout> | undefined;
+  private hideTimer: ReturnType<typeof setTimeout> | undefined;
+  /** A pointer is pressing the button, so the focus it gives is the click's to handle. */
+  private pressing = false;
+
   constructor() {
     afterRenderEffect((onCleanup) => {
       if (!this.open()) return;
@@ -75,21 +100,113 @@ export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
       view?.addEventListener('resize', replace);
       onCleanup(() => view?.removeEventListener('resize', replace));
     });
+    inject(DestroyRef).onDestroy(() => {
+      clearTimeout(this.showTimer);
+      clearTimeout(this.hideTimer);
+    });
   }
 
-  protected toggle(): void {
-    this.open.update((open) => !open);
+  /** A pointer rests on the button or the panel. A touch has no hover; its tap is a click. */
+  protected onPointerEnter(event: PointerEvent): void {
+    if (event.pointerType === 'touch') return;
+    clearTimeout(this.hideTimer);
+    if (!this.open()) this.openSoon('hover');
   }
 
-  protected closeAndRefocus(): void {
+  protected onPointerLeave(event: PointerEvent): void {
+    if (event.pointerType === 'touch') return;
+    if (this.pending === 'hover') this.cancelOpening();
+    if (this.opener !== 'hover') return;
+    clearTimeout(this.hideTimer);
+    this.hideTimer = setTimeout(() => this.close(), HIDE_DELAY);
+  }
+
+  protected onPointerDown(): void {
+    this.pressing = true;
+  }
+
+  /**
+   * Any press ends here, anywhere in the document: one that becomes a scroll (`pointercancel`) or is
+   * released off the button never clicks, and would otherwise leave the next keyboard focus ignored.
+   * A mouse focuses the button when it goes down, so its focus has passed by now; a tap's comes
+   * after this, with its click a moment later, which cancels the opening the focus starts.
+   */
+  protected onPressEnd(): void {
+    this.pressing = false;
+  }
+
+  /** Keyboard focus opens the panel. The focus a press gives is left to its click. */
+  protected onFocus(): void {
+    if (this.pressing) return;
+    if (!this.open()) {
+      this.openSoon('focus');
+    } else if (this.opener === 'hover') {
+      clearTimeout(this.hideTimer);
+      this.opener = 'focus';
+    }
+  }
+
+  /**
+   * A click, a tap, Enter or Space. A click on a panel the pointer opened keeps it open once the
+   * pointer leaves; otherwise activating the button opens or closes the panel.
+   */
+  protected onClick(): void {
+    this.pressing = false;
+    this.cancelOpening();
+    if (this.open() && this.opener !== 'hover') this.close();
+    else this.show('click');
+  }
+
+  /**
+   * Escape closes the panel, or stops it opening, wherever focus is: a panel the pointer opened
+   * must close while focus is on another control (WCAG 1.4.13). Focus inside the component goes
+   * back to the button; focus anywhere else stays where it is.
+   */
+  protected onEscape(): void {
+    this.cancelOpening();
     if (!this.open()) return;
-    this.open.set(false);
-    this.trigger().nativeElement.focus();
+    const host = this.host.nativeElement;
+    const focusInside = host.contains(host.ownerDocument.activeElement);
+    this.close();
+    if (focusInside) this.trigger().nativeElement.focus();
   }
 
   protected onFocusOut(event: FocusEvent): void {
     const next = event.relatedTarget;
     if (next instanceof Node && this.host.nativeElement.contains(next)) return;
+    this.pressing = false;
+    this.cancelOpening();
+    this.close();
+  }
+
+  /** Opens after `SHOW_DELAY`, unless it opens or is cancelled first. Focus outranks hover. */
+  private openSoon(opener: Opener): void {
+    if (this.pending) {
+      if (opener === 'focus') this.pending = opener;
+      return;
+    }
+    this.pending = opener;
+    this.showTimer = setTimeout(() => {
+      const pending = this.pending;
+      this.pending = null;
+      if (pending) this.show(pending);
+    }, SHOW_DELAY);
+  }
+
+  private cancelOpening(): void {
+    clearTimeout(this.showTimer);
+    this.pending = null;
+  }
+
+  private show(opener: Opener): void {
+    clearTimeout(this.hideTimer);
+    this.opener = opener;
+    this.open.set(true);
+  }
+
+  private close(): void {
+    clearTimeout(this.hideTimer);
+    this.opener = null;
     this.open.set(false);
   }
 

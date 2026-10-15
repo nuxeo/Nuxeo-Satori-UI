@@ -240,6 +240,33 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
   it. Card view, and the journey's screens other than those six, have never been measured at
   320px with the drawer closed.
 
+## Storybook observations — triaged 2026-10-15
+
+The interaction runner's axe pass flagged eight stories. None is a best-practice-only finding:
+each fails under the runtime layer's own tags (`wcag2a`, `wcag2aa`, `wcag21a`, `wcag21aa`, axe-core
+4.13.0). The runtime layer has said nothing about any of them because none of its steps reaches
+where they render, so each was measured again with its rules in the running app, signed in and
+checked against `/me`.
+
+| Finding                                                                           | Stories                                                                                  | Where the app renders it                                               | With the runtime layer's rules, in the app                                                                                  | Verdict                                                                                            |
+| --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| `aria-required-children` (critical, 1.3.1): the combobox sits inside the `grid`   | Tag input: Adding tags, Disabled, With tags. Vocabulary select: Several from a hierarchy | Nowhere yet: no screen uses either picker                              | Not reachable                                                                                                               | A real defect in both components. Fix it before a screen adopts them                               |
+| `aria-required-children` (critical, 1.3.1): the text input sits inside the `grid` | Metadata editor: As tabs, Customer type, Saving                                          | Document detail's Edit dialog, for a field holding a list of free text | Edit on a File: no chip grid. Its fields are title, description, nature, subjects, coverage and expiry; none is such a list | A real defect, latent with the default types. A customer type with a free-text list field shows it |
+| `color-contrast` (serious, 1.4.3): 3.11:1 on the disabled dropzone's text         | Dropzone: Disabled                                                                       | Browse, Create / Import, Import tab, while an import is in flight      | 3.12:1, the same failure                                                                                                    | Real in the app while an import runs. Idle, the same dialog is clean                               |
+
+- **The chip grid.** Material's `mat-chip-grid` has the `grid` role, which may hold only rows, and
+  the three components put their input inside it. `nxs-tag-editor` already keeps its input outside
+  its grid for this rule; the three components above have not followed it yet.
+- **The dropzone.** WCAG 1.4.3 does not apply to an inactive component's text, but nothing marks the
+  text inactive: the host's `opacity: 0.6` dims a plain `<span>`, and only the button and the hidden
+  file input are disabled. The runtime layer would fail it if it reached the state, so the fix
+  belongs in the component rather than in a suppression: keep the text at full contrast and let the
+  disabled button and the icon carry the state.
+- **Found on the way, not a Storybook observation.** Document detail for a File without a main
+  file shows its viewer placeholder at 2.72:1 (`color-contrast`, `.viewer-placeholder > p`,
+  `#999999` on `#fafafa`). Neither phase-6 visit sees it: one opens a Picture, the other a File
+  with a main blob.
+
 ## The disagreement — resolved 2026-09-11, against phase-6
 
 The first a11y-scout baseline reported **8 `color-contrast`** and **2 `button-name`** findings

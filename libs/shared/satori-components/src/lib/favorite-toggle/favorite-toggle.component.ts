@@ -62,7 +62,7 @@ export class NxsFavoriteToggleComponent {
   private readonly destroyRef = inject(DestroyRef);
 
   /** Adds or removes the document. Ignored while disabled or while a request is in flight. */
-  toggle(): void {
+  protected toggle(): void {
     const documentId = this.documentId();
     if (!documentId || this.disabled() || this.busy()) return;
     this.pending.set(documentId);

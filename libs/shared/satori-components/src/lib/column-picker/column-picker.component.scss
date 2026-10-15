@@ -1,3 +1,7 @@
+// The panel's background, which the list's covers must match.
+$panel-background: var(--mat-sys-surface-container-lowest);
+$scroll-cue: color-mix(in srgb, var(--mat-sys-on-surface) 22%, transparent);
+
 // Both children are positioned, so a box of its own would only be an empty row in the host's
 // layout — and a flex gap around nothing.
 :host {
@@ -27,7 +31,7 @@
   padding: 14px 16px;
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 8px;
-  background: var(--mat-sys-surface-container-lowest);
+  background: $panel-background;
   box-shadow: var(--mat-sys-level3);
 }
 
@@ -38,10 +42,21 @@
   color: var(--mat-sys-on-surface);
 }
 
+// A shadow along an edge says more columns lie past it, where an overlay scrollbar shows nothing
+// until the list is scrolled. Two covers in the panel's colour scroll with the columns (`local`)
+// and hide each shadow, which stays on the edge (`scroll`), once that end is reached.
 .nxs-column-picker__list {
   flex: 1;
   overflow-y: auto;
   margin-bottom: 2px;
+  background:
+    linear-gradient($panel-background 30%, transparent) top / 100% 32px no-repeat local,
+    linear-gradient(transparent, $panel-background 70%) bottom / 100% 32px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, $scroll-cue, transparent) top / 100% 12px no-repeat
+      scroll,
+    radial-gradient(farthest-side at 50% 100%, $scroll-cue, transparent) bottom / 100% 12px
+      no-repeat scroll,
+    $panel-background;
 }
 
 .nxs-column-picker__option {

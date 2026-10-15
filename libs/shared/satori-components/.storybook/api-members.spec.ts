@@ -66,10 +66,13 @@ describe('the API page', () => {
   });
 
   it('lists a component’s public methods, and not its protected ones', () => {
-    // `press()` on the favorite toggle and `toggle()` on the rich tooltip are protected.
-    expect(apiMethods(entryFor('NxsFavoriteToggleComponent')).map((method) => method.name)).toEqual(
-      ['toggle'],
-    );
+    // The pager's `canNext` and `canPrevious` are protected; so are `toggle()` and `press()` on the
+    // favorite toggle, and the rich tooltip's event handlers.
+    expect(apiMethods(entryFor('NxsPagerComponent')).map((method) => method.name)).toEqual([
+      'next',
+      'previous',
+    ]);
+    expect(apiMethods(entryFor('NxsFavoriteToggleComponent'))).toEqual([]);
     expect(apiMethods(entryFor('NxsRichTooltipComponent'))).toEqual([]);
   });
 
