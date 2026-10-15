@@ -714,7 +714,7 @@ Classic Web UI sends `clientReason=view` when loading blob content for preview a
 | Field           | Value                                                                                 |
 | --------------- | ------------------------------------------------------------------------------------- |
 | **Service**     | `DirectoryService` (`libs/shared/nuxeo-client/src/lib/services/directory.service.ts`) |
-| **Method**      | `getEntries(directoryName)` / `getEventTypes()` / `getEventCategories()`              |
+| **Method**      | `getEntries(directoryName, lang?)` / `getEventTypes()` / `getEventCategories()`       |
 | **HTTP Method** | `POST`                                                                                |
 | **Endpoint**    | `/nuxeo/api/v1/automation/Directory.SuggestEntries`                                   |
 
