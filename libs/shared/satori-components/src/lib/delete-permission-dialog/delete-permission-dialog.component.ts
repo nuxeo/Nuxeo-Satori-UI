@@ -1,3 +1,4 @@
+import { BreakpointObserver, Breakpoints } from '@angular/cdk/layout';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -6,11 +7,12 @@ import {
   inject,
   signal,
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { map } from 'rxjs';
 import {
   DocumentDetailService,
   permissionRightLabel,
@@ -71,6 +73,23 @@ export class NxsDeletePermissionDialogComponent {
   protected readonly grantedBy = this.data.ace.creator
     ? resolveAcePrincipal(this.data.ace.creator)
     : '—';
+  /** The entry's four fields, under the labels of the Permissions tab's columns. */
+  protected readonly fields = [
+    { label: 'satori-components.permission-dialogs.user-group', value: this.principal },
+    { label: 'satori-components.permission-dialogs.right', value: this.right },
+    { label: 'satori-components.permission-dialogs.time-frame', value: this.timeFrame },
+    { label: 'satori-components.permission-dialogs.granted-by', value: this.grantedBy },
+  ];
+  /**
+   * Below Material's small-screen breakpoint, where MatDialog narrows to the screen, the four
+   * columns do not fit, so the entry shows as one label and value row per field instead.
+   */
+  protected readonly narrow = toSignal(
+    inject(BreakpointObserver)
+      .observe(Breakpoints.XSmall)
+      .pipe(map((state) => state.matches)),
+    { requireSync: true },
+  );
 
   protected confirm(): void {
     if (this.deleting()) return;

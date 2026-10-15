@@ -1,24 +1,33 @@
 <h2 mat-dialog-title>{{ 'satori-components.permission-dialogs.delete.title' | translate }}</h2>
 
 <mat-dialog-content>
-  <table class="nxs-delete-permission-dialog__entry">
-    <thead>
-      <tr>
-        <th scope="col">{{ 'satori-components.permission-dialogs.user-group' | translate }}</th>
-        <th scope="col">{{ 'satori-components.permission-dialogs.right' | translate }}</th>
-        <th scope="col">{{ 'satori-components.permission-dialogs.time-frame' | translate }}</th>
-        <th scope="col">{{ 'satori-components.permission-dialogs.granted-by' | translate }}</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>{{ principal }}</td>
-        <td>{{ right }}</td>
-        <td>{{ timeFrame }}</td>
-        <td>{{ grantedBy }}</td>
-      </tr>
-    </tbody>
-  </table>
+  @if (narrow()) {
+    <dl class="nxs-delete-permission-dialog__rows">
+      @for (field of fields; track field.label) {
+        <div>
+          <dt>{{ field.label | translate }}</dt>
+          <dd>{{ field.value }}</dd>
+        </div>
+      }
+    </dl>
+  } @else {
+    <table class="nxs-delete-permission-dialog__entry">
+      <thead>
+        <tr>
+          @for (field of fields; track field.label) {
+            <th scope="col">{{ field.label | translate }}</th>
+          }
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          @for (field of fields; track field.label) {
+            <td>{{ field.value }}</td>
+          }
+        </tr>
+      </tbody>
+    </table>
+  }
 </mat-dialog-content>
 
 <mat-dialog-actions align="end">

@@ -1,3 +1,4 @@
+import { BreakpointObserver, type BreakpointState } from '@angular/cdk/layout';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MATERIAL_ANIMATIONS } from '@angular/material/core';
@@ -85,6 +86,23 @@ describe('NxsDeletePermissionDialogComponent', () => {
       'col',
     ]);
     expect(cells()).toEqual(['ext@example.com', 'Edit', 'Permanent', 'Administrator']);
+  });
+
+  it('on a small screen, shows the entry as one label and value row per field', async () => {
+    const small: BreakpointState = { matches: true, breakpoints: {} };
+    TestBed.overrideProvider(BreakpointObserver, { useValue: { observe: () => of(small) } });
+    await open({ ace: ace({ permission: 'ReadWrite' }) });
+
+    expect(overlay().querySelector('table')).toBeNull();
+    const text = (selector: string) =>
+      [...overlay().querySelectorAll(selector)].map((el) => el.textContent?.trim() ?? '');
+    expect(text('dl > div > dt')).toEqual(['User / Group', 'Right', 'Time frame', 'Granted by']);
+    expect(text('dl > div > dd')).toEqual([
+      'ext@example.com',
+      'Edit',
+      'Permanent',
+      'Administrator',
+    ]);
   });
 
   it('shows the day the entry ends as its writer picked it, and a dash for an unknown granter', async () => {

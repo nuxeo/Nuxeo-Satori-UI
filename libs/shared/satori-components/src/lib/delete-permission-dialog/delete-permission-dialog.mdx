@@ -12,7 +12,9 @@ go, then deletes it. It is the counterpart of Web UI's `documentAclTable` delete
 ## Key features
 
 - **Shows what goes.** The entry's user or group, right, time frame and who granted it, in the
-  columns the Permissions tab uses. An external user's share shows their email address.
+  columns the Permissions tab uses. An external user's share shows their email address. On a
+  screen narrower than 600 px, where the four columns do not fit, each field is a row of its own,
+  its label beside its value.
 - **Deletes one entry.** It deletes the entry by its id, as Web UI does, so the same user's other
   entries on the document stay.
 - **A refusal reads as one.** When Nuxeo answers 401 or 403, the toast says the user may not change
@@ -97,7 +99,8 @@ Press **Delete**: Nuxeo answers 403, and the toast says the change was refused.
 - **An alert dialog.** Open it with `role: 'alertdialog'`, so a screen reader announces it as a
   confirmation. Its title is a heading that Material's dialog uses as its accessible name.
 - **A real table.** The entry is a one-row table whose column headers are `th scope="col"`, so each
-  value is read with its column's name.
+  value is read with its column's name. Below 600 px it is a description list instead, each value a
+  `dd` after its label's `dt`, so it is still read with its name.
 - **Progress has a name.** While Nuxeo deletes the entry, the Delete button reads "Deleting the
   permission" beside a turning icon hidden from assistive technology — text, not a progress
   indicator nested in the button — and both buttons are disabled so it cannot be pressed twice.
