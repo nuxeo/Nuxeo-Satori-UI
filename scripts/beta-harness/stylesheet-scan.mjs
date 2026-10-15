@@ -32,8 +32,16 @@ export function maskStylesheet(text) {
     const c = text[i];
     if (quote) {
       if (c === '\\' && i + 1 < text.length) {
-        out += text[i + 1] === '\n' ? '_\n' : '__';
-        i += 1;
+        if (text[i + 1] === '\n') {
+          out += '_\n';
+          i += 1;
+        } else if (text[i + 1] === '\r' && i + 2 < text.length && text[i + 2] === '\n') {
+          out += '_\r\n';
+          i += 2;
+        } else {
+          out += '__';
+          i += 1;
+        }
       } else if (c === quote || c === '\n') {
         quote = null;
         out += c;
@@ -99,7 +107,7 @@ export function styleSpecifiers(text, file = '', { stripWebpackPrefix = true } =
       const span = t.indices[2] ?? t.indices[4];
       let value = text.slice(from + span[0], from + span[1]);
       if (t[3]) {
-        value = value.replace(/\\\r?\n[ \t]*/g, '');
+        value = value.replace(/\\(?:\r\n|\r|\n)[ \t]*/g, '');
       }
       if (stripWebpackPrefix) {
         value = value.replace(/^~/, '');
@@ -186,6 +194,12 @@ const SPECIFIER_CONTROLS = [
     `@use '${PKG}/\\\n  theme';\n`,
     'a.scss',
     [`${PKG}/theme`],
+  ],
+  [
+    'backslash-CRLF continuation keeps following @use',
+    `@use 'local/\\\r\ntheme';\r\n@use '${PKG}/theme';\r\n`,
+    'a.scss',
+    ['local/theme', `${PKG}/theme`],
   ],
 ];
 
