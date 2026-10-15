@@ -770,7 +770,7 @@ class NxsFavoriteToggleComponent {
     readonly changed: _angular_core.OutputEmitterRef<boolean>;
     readonly failed: _angular_core.OutputEmitterRef<unknown>;
     protected readonly busy: _angular_core.Signal<boolean>;
-    toggle(): void;
+    protected toggle(): void;
     protected press(event: Event): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "favorite": { "alias": "favorite"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "favorite": "favoriteChange"; "changed": "changed"; "failed": "failed"; }, never, never, true, never>;
