@@ -32,8 +32,16 @@ export function maskStylesheet(text) {
     const c = text[i];
     if (quote) {
       if (c === '\\' && i + 1 < text.length) {
-        out += text[i + 1] === '\n' ? '_\n' : '__';
-        i += 1;
+        if (text[i + 1] === '\n') {
+          out += '_\n';
+          i += 1;
+        } else if (text[i + 1] === '\r' && i + 2 < text.length && text[i + 2] === '\n') {
+          out += '_\r\n';
+          i += 2;
+        } else {
+          out += '__';
+          i += 1;
+        }
       } else if (c === quote || c === '\n') {
         quote = null;
         out += c;
@@ -82,20 +90,33 @@ export function maskStylesheet(text) {
  * be lines away; the indented `.sass` syntax has none, so there it runs to the end of the line.
  * @param {string} text
  * @param {string} [file]  the stylesheet's path, read only for a `.sass` extension
+ * @param {{ stripWebpackPrefix?: boolean }} [opts]
  * @returns {string[]}
  */
-export function styleSpecifiers(text, file = '') {
+export function styleSpecifiers(text, file = '', { stripWebpackPrefix = true } = {}) {
   const mask = maskStylesheet(text);
   const statement = file.endsWith('.sass')
     ? /(?:^|\n)[ \t]*@(use|forward|import)\b([^\n]*)/dg
     : /(?:^|[;{}])\s*@(use|forward|import)\b([^;{}]*)/dg;
-  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([^'"\n]*)\3/dg;
+  // Quoted targets may continue across `\` + newline inside the string (Sass line continuation).
+  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([\s\S]*?)\3/dg;
   const found = [];
   for (const s of mask.matchAll(statement)) {
     const [from, to] = s.indices[2];
     for (const t of mask.slice(from, to).matchAll(target)) {
       const span = t.indices[2] ?? t.indices[4];
-      found.push(text.slice(from + span[0], from + span[1]).replace(/^~/, ''));
+      let value = text.slice(from + span[0], from + span[1]);
+      if (t[3]) {
+        value = value.replace(/\\(?:\r\n|\r|\n)[ \t]*/g, '');
+      }
+      if (stripWebpackPrefix) {
+        value = value.replace(/^~/, '');
+      }
+      // Trim trailing whitespace from unquoted url() targets (group 2, when group 1 is empty)
+      if (t[1] === '') {
+        value = value.trimEnd();
+      }
+      found.push(value);
       if (s[1] !== 'import') break;
     }
   }
@@ -168,6 +189,40 @@ const SPECIFIER_CONTROLS = [
   ['unquoted url() target', `@import url(${PKG}/a.css);\n`, 'a.css', [`${PKG}/a.css`]],
   ['indented .sass: one statement per line', `@use 'a'\n@use '${PKG}'\n`, 'a.sass', ['a', PKG]],
   ['braced syntax: a statement runs to ";"', `@use 'a'\n@use '${PKG}'\n`, 'a.scss', ['a']],
+  [
+    'quoted URL with backslash-newline continuation',
+    `@use '${PKG}/\\\n  theme';\n`,
+    'a.scss',
+    [`${PKG}/theme`],
+  ],
+  [
+    'backslash-CRLF continuation keeps following @use',
+    `@use 'local/\\\r\ntheme';\r\n@use '${PKG}/theme';\r\n`,
+    'a.scss',
+    ['local/theme', `${PKG}/theme`],
+  ],
+];
+
+/**
+ * `[name, text, opts, targets]` — `sassLoadedUrls` contract for dependency closure.
+ * @type {[string, string, { indented?: boolean }, string[]][]}
+ */
+const SASS_LOADED_URL_CONTROLS = [
+  ['webpack ~ prefix preserved', `@use '~theme';\n`, {}, ['~theme']],
+  ['commented load-css ignored', `// load-css('${PKG}');\n`, {}, []],
+  [
+    'load-css collected when live',
+    `@include meta.load-css('${PKG}/theme');\n`,
+    {},
+    [`${PKG}/theme`],
+  ],
+  ['unquoted indented import list', `@import foo, bar\n`, { indented: true }, ['foo', 'bar']],
+  [
+    'sassLoadedUrls: backslash-newline in quoted @use',
+    `@use '${PKG}/\\\n  theme';\n`,
+    {},
+    [`${PKG}/theme`],
+  ],
 ];
 
 /**
@@ -178,23 +233,39 @@ const SPECIFIER_CONTROLS = [
  * an `@import` list unquoted.
  */
 export function sassLoadedUrls(body, { indented = false } = {}) {
-  const urls = [];
-  const rules = indented
-    ? /@(use|forward|import)[ \t]+([^\n]*)/g
-    : /@(use|forward|import)\s+([^;{}]*)/g;
-  for (const rule of body.matchAll(rules)) {
-    let strings = [...rule[2].matchAll(/['"]([^'"]+)['"]|url\(\s*([^'"()\s]+)\s*\)/g)].map(
-      (match) => match[1] ?? match[2],
-    );
-    if (indented && rule[1] === 'import' && strings.length === 0) {
-      strings = rule[2]
-        .split(',')
-        .map((url) => url.trim())
-        .filter(Boolean);
+  // Preserve webpack's `~` prefix — dependency closure uses it to skip package URLs.
+  const urls = styleSpecifiers(body, indented ? 'dummy.sass' : 'dummy.scss', {
+    stripWebpackPrefix: false,
+  });
+
+  // For indented Sass, add fallback for unquoted @import lists that styleSpecifiers doesn't catch
+  if (indented) {
+    const mask = maskStylesheet(body);
+    for (const match of mask.matchAll(/(?:^|\n)[ \t]*@import\b([^\n]*)/dg)) {
+      const [from, to] = match.indices[1];
+      const maskedContent = mask.slice(from, to).trim();
+      const importList = body.slice(from, to).trim();
+      // Only process if the masked version has non-space chars (not all masked/commented)
+      // and doesn't start with a quote or url() (those are handled by styleSpecifiers)
+      if (maskedContent && !/^['"]|url\(/.test(maskedContent) && !/^['"]|url\(/.test(importList)) {
+        // This is an unquoted import list; split and add each item
+        for (const item of importList.split(',')) {
+          const trimmed = item.trim();
+          if (trimmed && !urls.includes(trimmed)) {
+            urls.push(trimmed);
+          }
+        }
+      }
     }
-    urls.push(...(rule[1] === 'import' ? strings : strings.slice(0, 1)));
   }
-  for (const call of body.matchAll(/load-css\(\s*['"]([^'"]+)['"]/g)) urls.push(call[1]);
+
+  // Also collect load-css() directives (with masking to ignore commented ones)
+  const mask = maskStylesheet(body);
+  for (const call of mask.matchAll(/load-css\(\s*(['"])([^'"]*)\1/dg)) {
+    const [from, to] = call.indices[2];
+    urls.push(body.slice(from, to));
+  }
+
   return urls;
 }
 
@@ -224,6 +295,14 @@ export function selfCheck() {
       );
     }
   }
+  for (const [name, text, opts, expected] of SASS_LOADED_URL_CONTROLS) {
+    const got = sassLoadedUrls(text, opts);
+    if (JSON.stringify(got) !== JSON.stringify(expected)) {
+      failures.push(
+        `sassLoadedUrls, ${name}: got ${JSON.stringify(got)}, expected ${JSON.stringify(expected)}`,
+      );
+    }
+  }
   return failures;
 }
 
@@ -231,4 +310,5 @@ export const CONTROL_COUNT = {
   mask: MASK_CONTROLS.length,
   negative: SPECIFIER_CONTROLS.filter((c) => c[3].length === 0).length,
   positive: SPECIFIER_CONTROLS.filter((c) => c[3].length > 0).length,
+  sassLoadedUrls: SASS_LOADED_URL_CONTROLS.length,
 };
