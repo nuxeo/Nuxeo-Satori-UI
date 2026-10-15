@@ -83,6 +83,8 @@ export class NxsDeletePermissionDialogComponent {
   /**
    * Below Material's small-screen breakpoint, where MatDialog narrows to the screen, the four
    * columns do not fit, so the entry shows as one label and value row per field instead.
+   * `observe()` answers with the current state as it subscribes, so the first render already has
+   * the right layout and a phone never sees the table first.
    */
   protected readonly narrow = toSignal(
     inject(BreakpointObserver)

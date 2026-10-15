@@ -111,6 +111,23 @@ test('a free-text field scrolling a long value is not judged', async () => {
   assert.deepEqual(await check(dialog({ content, css: 'input { width: 120px; }' })), []);
 });
 
+test('a focusable element outside the dialog is tabbed past, not judged', async () => {
+  // Beside the surface, so its focus ring paints inside the screenshot around it, outside the
+  // outline. It is not the dialog's, so it must not count.
+  const reset = '<button style="align-self: center">Reset</button>';
+  const html = dialog().replace('<div id="storybook-root">', `<div id="storybook-root">${reset}`);
+  assert.deepEqual(await check(html), []);
+});
+
+test('the surface may be found by a background and any rounded corner', async () => {
+  const html = dialog().replace('class="mat-mdc-dialog-surface"', 'class="painted"');
+  const css = BASE_CSS.replaceAll('.mat-mdc-dialog-surface', '.painted').replace(
+    'border-radius: 28px;',
+    'border-radius: 0 0 28px 28px;',
+  );
+  assert.deepEqual(await check(html.replace(BASE_CSS, css)), []);
+});
+
 test('the surface may be found without Material classes, by its background and corners', async () => {
   const html = dialog().replace('class="mat-mdc-dialog-surface"', 'class="painted"');
   const css = BASE_CSS.replaceAll('.mat-mdc-dialog-surface', '.painted');

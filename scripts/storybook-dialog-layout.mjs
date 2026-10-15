@@ -52,7 +52,8 @@ export const isDialogStory = (story) => /^Dialogs\//.test(story.title ?? '');
 
 /**
  * Runs in the page and returns `{ failures, surface }`. Self-contained, because Playwright sends
- * the function's source and not its scope: every helper is declared inside it.
+ * the function's source and not its scope: every helper is declared inside it. Marks the surface
+ * it judged with `data-nxs-layout-surface`, which the focus pass reads.
  *
  * `rules.root` selects the element the dialog is looked for in, `#storybook-root` by default;
  * `rules.index` picks one when the selector matches several, as the previews of a docs page do.
@@ -85,7 +86,13 @@ export function measureDialogLayout(rules) {
   }
   const painted = (el) => {
     const st = style(el);
-    return alpha(st.backgroundColor) > 0 && parseFloat(st.borderTopLeftRadius) > 0;
+    const radii = [
+      st.borderTopLeftRadius,
+      st.borderTopRightRadius,
+      st.borderBottomRightRadius,
+      st.borderBottomLeftRadius,
+    ];
+    return alpha(st.backgroundColor) > 0 && radii.some((r) => parseFloat(r) > 0);
   };
   let surface = anchor.closest('.mat-mdc-dialog-surface');
   for (let n = anchor.parentElement; !surface && n && n !== document.body; n = n.parentElement) {
@@ -99,6 +106,9 @@ export function measureDialogLayout(rules) {
       ],
     };
   }
+
+  // Tagged for the focus pass, which runs in a later evaluation and judges focus inside it only.
+  surface.setAttribute('data-nxs-layout-surface', '');
 
   const s = surface.getBoundingClientRect();
   const surfaceStyle = style(surface);
@@ -367,18 +377,20 @@ export function measureDialogLayout(rules) {
 function focusState(rules) {
   const roots = document.querySelectorAll(rules.root ?? '#storybook-root');
   const root = roots[rules.index ?? 0] ?? document.body;
+  const surface = root.querySelector('[data-nxs-layout-surface]');
   const active = document.activeElement;
   const text = (active?.textContent ?? '').trim().replace(/\s+/g, ' ').slice(0, 30);
   const label = active?.getAttribute('aria-label') ?? active?.getAttribute('name');
   return {
-    inside: !!active && active !== document.body && root.contains(active),
+    focused: !!active && active !== document.body,
+    inside: !!surface && !!active && surface.contains(active),
     name: active
       ? `<${active.localName}>${text ? ` "${text}"` : ''}${label ? ` [${label}]` : ''}`
       : null,
     id: active ? [...document.querySelectorAll('*')].indexOf(active) : -1,
     scroll: [window.scrollX, window.scrollY],
     tabbable: [
-      ...root.querySelectorAll(
+      ...(surface ?? root).querySelectorAll(
         'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
           'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
       ),
@@ -496,12 +508,16 @@ async function checkFocus(page, rules) {
     const start = await page.evaluate(focusState, rules);
     const before = (await page.screenshot({ clip })).toString('base64');
     const seen = new Set();
+    let judged = 0;
     for (let i = 0; i < MAX_TABS; i++) {
       await page.keyboard.press('Tab');
       await page.waitForTimeout(SETTLE_MS);
       const state = await page.evaluate(focusState, rules);
-      if (!state.inside || seen.has(state.id)) break;
+      if (!state.focused || seen.has(state.id)) break;
       seen.add(state.id);
+      // Something on the page outside the dialog: Tab on past it, without judging it.
+      if (!state.inside) continue;
+      judged++;
       if (state.scroll.join() !== start.scroll.join()) {
         await page.evaluate(([x, y]) => window.scrollTo(x, y), start.scroll);
         await page.waitForTimeout(50);
@@ -516,7 +532,7 @@ async function checkFocus(page, rules) {
         );
       }
     }
-    if (seen.size === 0 && start.tabbable > 0) {
+    if (judged === 0 && start.tabbable > 0) {
       failures.push(`Tab never reached the dialog's ${start.tabbable} focusable element(s)`);
     }
   } finally {
