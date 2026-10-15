@@ -95,7 +95,12 @@ export function styleSpecifiers(text, file = '') {
     const [from, to] = s.indices[2];
     for (const t of mask.slice(from, to).matchAll(target)) {
       const span = t.indices[2] ?? t.indices[4];
-      found.push(text.slice(from + span[0], from + span[1]).replace(/^~/, ''));
+      let value = text.slice(from + span[0], from + span[1]).replace(/^~/, '');
+      // Trim trailing whitespace from unquoted url() targets (group 2, when group 1 is empty)
+      if (t[1] === '') {
+        value = value.trimEnd();
+      }
+      found.push(value);
       if (s[1] !== 'import') break;
     }
   }
