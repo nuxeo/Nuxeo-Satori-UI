@@ -20,6 +20,11 @@
  * - An untranslated `satori-components.*` or `shared-ui.*` key left on screen once the story
  *   finished. The preview loads the catalogue before the first story renders (`preview.ts`), so a
  *   play function never races the translations; a key still showing is a missing translation.
+ * - A `Dialogs/` story whose preview is not laid out as MatDialog lays the dialog out in the
+ *   application, at 1280 px or on a fresh page at 320 px: an element outside the surface or its
+ *   rounded corners, title, content or buttons closer to the edge than Material's spacing, a field
+ *   that cuts off its value, a sideways scroll, or a focus indicator painting outside the surface.
+ *   The rules and their negative controls are in `storybook-dialog-layout.mjs` and its selftest.
  *
  * ## What does not
  *
@@ -48,6 +53,11 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { extname, join, normalize, resolve, sep } from 'node:path';
 
 import { PLAYWRIGHT_TEST_VERSION } from '../a11y/versions.mjs';
+import {
+  DIALOG_LAYOUT_WIDTHS,
+  checkDialogLayout,
+  isDialogStory,
+} from './storybook-dialog-layout.mjs';
 
 const argv = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -202,6 +212,10 @@ async function main() {
   const failed = results.filter((result) => result.failures.length);
   const plays = results.filter((result) => result.play);
   const withViolations = results.filter((result) => result.a11y > 0);
+  const dialogs = results.filter((result) => result.layout);
+  const laidOut = dialogs.filter((result) =>
+    Object.values(result.layout).every((problems) => problems.length === 0),
+  );
   for (const result of failed) {
     console.error(`FAIL ${result.id}`);
     for (const failure of result.failures) console.error(`     ${failure}`);
@@ -210,6 +224,10 @@ async function main() {
   console.log(
     `storybook-interactions: ${results.length - failed.length} of ${results.length} stories passed ` +
       `(${plays.length} with a play function) in ${seconds}s.`,
+  );
+  console.log(
+    `storybook-interactions: dialog layout at ${DIALOG_LAYOUT_WIDTHS.join(' and ')} px: ` +
+      `${laidOut.length} of ${dialogs.length} dialog stories laid out as MatDialog lays them out.`,
   );
   console.log(
     `storybook-interactions: axe, observation only (docs/accessibility.md): ${withViolations.length} ` +
@@ -229,27 +247,7 @@ async function runStory(context, story) {
   const failures = [];
   page.on('pageerror', (error) => failures.push(`uncaught on the page: ${error.message}`));
   try {
-    await page.goto(
-      `http://127.0.0.1:${port}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`,
-    );
-    try {
-      await page.waitForFunction(
-        ([terminal, id]) =>
-          window.__nxsStoryEvents?.some(
-            (event) => terminal.includes(event.name) && (event.payload?.storyId ?? id) === id,
-          ),
-        [TERMINAL, story.id],
-        { timeout: storyTimeout },
-      );
-    } catch {
-      failures.push(`no storyFinished, storyErrored or storyMissing within ${storyTimeout} ms`);
-    }
-    // An exception event can trail the terminal one by a task.
-    await page.waitForTimeout(50);
-    const events = await page.evaluate(() => window.__nxsStoryEvents ?? []);
-    for (const event of events.filter((e) => FAILING.includes(e.name))) {
-      failures.push(`${event.name}: ${describe(event.payload)}`);
-    }
+    const events = await openStory(page, story, failures);
     const finished = events.find((event) => event.name === 'storyFinished');
     const a11y = (finished?.payload?.reporters ?? [])
       .filter((reporter) => reporter?.type === 'a11y')
@@ -259,6 +257,11 @@ async function runStory(context, story) {
       const raw = RAW_KEY.exec(text);
       if (raw) failures.push(`an untranslated key is on screen: ${raw[0]}`);
     }
+    const layout =
+      isDialogStory(story) && !failures.length ? await checkLayout(context, page, story) : null;
+    for (const [width, problems] of Object.entries(layout ?? {})) {
+      for (const problem of problems) failures.push(`at ${width} px: ${problem}`);
+    }
     return {
       id: story.id,
       play: (story.tags ?? []).includes('play-fn'),
@@ -266,10 +269,64 @@ async function runStory(context, story) {
       finished: finished?.payload?.status ?? null,
       failures,
       a11y,
+      ...(layout ? { layout } : {}),
     };
   } finally {
     await page.close();
   }
+}
+
+/** Opens a story's iframe, waits for it to finish and records the events that fail it. */
+async function openStory(page, story, failures) {
+  await page.goto(
+    `http://127.0.0.1:${port}/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story`,
+  );
+  try {
+    await page.waitForFunction(
+      ([terminal, id]) =>
+        window.__nxsStoryEvents?.some(
+          (event) => terminal.includes(event.name) && (event.payload?.storyId ?? id) === id,
+        ),
+      [TERMINAL, story.id],
+      { timeout: storyTimeout },
+    );
+  } catch {
+    failures.push(`no storyFinished, storyErrored or storyMissing within ${storyTimeout} ms`);
+  }
+  // An exception event can trail the terminal one by a task.
+  await page.waitForTimeout(50);
+  const events = await page.evaluate(() => window.__nxsStoryEvents ?? []);
+  for (const event of events.filter((e) => FAILING.includes(e.name))) {
+    failures.push(`${event.name}: ${describe(event.payload)}`);
+  }
+  return events;
+}
+
+/**
+ * The dialog layout check at each width, keyed by width: on the page already open when it is at
+ * that width, otherwise on a fresh page opened at it, so the story renders as it would on that
+ * screen rather than being resized after it rendered.
+ */
+async function checkLayout(context, page, story) {
+  const layout = {};
+  for (const width of DIALOG_LAYOUT_WIDTHS) {
+    if (page.viewportSize()?.width === width) {
+      layout[width] = await checkDialogLayout(page);
+      continue;
+    }
+    const other = await context.newPage();
+    const failures = [];
+    other.on('pageerror', (error) => failures.push(`uncaught on the page: ${error.message}`));
+    try {
+      await other.setViewportSize({ width, height: 800 });
+      await openStory(other, story, failures);
+      if (!failures.length) failures.push(...(await checkDialogLayout(other)));
+      layout[width] = failures;
+    } finally {
+      await other.close();
+    }
+  }
+  return layout;
 }
 
 function describe(payload) {

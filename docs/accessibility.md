@@ -42,6 +42,15 @@ cross-check: triage a finding against the axe runtime layer, as for any disagree
 its `axe-core` to the same 4.13.0 that `a11y/versions.mjs` records as the baseline engine, so a
 difference between the two is not an engine difference.
 
+**Not an accessibility verdict either: the dialog layout check.** The same runner fails a
+`Dialogs/` story whose preview is not laid out as MatDialog lays the dialog out in the application,
+at 1280 px and at 320 px (`scripts/storybook-dialog-layout.mjs`, its negative controls in
+`storybook-dialog-layout.selftest.mjs`). Some of what it measures has an accessibility name, such
+as a sideways scroll at 320 px or a focus indicator painting outside the dialog, but the verdict it
+owns is narrower: that a preview shows the dialog a page opens. Reflow (1.4.10) and focus visibility
+stay a11y-scout's, on the application's screens; a preview that fits 320 px says nothing about a
+route that opens it.
+
 ### Why axe is owned by `phase-6-a11y.mjs` and not by a11y-scout
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:
@@ -233,7 +242,8 @@ Stated explicitly, because "WCAG 2.1 AA met" is a claim whose scope is what make
 - **Horizontal scrolling inside a region at 320px.** Reflow checks the document's `scrollWidth`
   only, and overflow inside a scroll container never reaches it — search and trash results and
   the browse table wrapper all scroll inside their own box. See "Reflow measured the nav drawer"
-  below.
+  below. The component library's dialog previews are measured for it, as layout rather than as a
+  verdict, by the dialog layout check above; the application's dialogs are not.
 - **The narrow layout as a user first sees it.** At 320px every route `reflow-probe.mjs`
   measured — six, on 2026-10-02 — opens behind the nav drawer with the screen 0px wide. The probe
   measures the screen only after closing the drawer; a11y-scout's reflow check does not close

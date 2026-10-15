@@ -196,15 +196,18 @@ jobs:
       # section 9.4). Built here with `@hylandsoftware` and `@alfresco` REMOVED from node_modules,
       # because with them installed an accidental Satori import compiles and the claim is untested.
       # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
-      # proves it. About a minute, so only when the library is affected — and a skip says so.
+      # proves it. About a minute, so only when the library is affected, or the interaction runner
+      # below or its dialog layout check changed — a script outside every project affects none.
+      # A skip says so.
       - name: Storybook builds without GitHub Packages (satori-components)
         shell: bash
         run: |
           set -euo pipefail
           # Captured first, so a failing query fails the step instead of reading as "not affected".
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
-          if ! grep -qx satori-components <<<"$affected"; then
-            echo "satori-components is not affected: Storybook build NOT RUN"
+          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
+          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ]; then
+            echo "satori-components is not affected and the runner is unchanged: Storybook build NOT RUN"
             exit 0
           fi
           hidden="$RUNNER_TEMP/github-packages-scopes"
@@ -224,7 +227,9 @@ jobs:
       # or an untranslated key. axe results from the a11y addon are printed, never judged:
       # docs/accessibility.md gives that verdict to the axe runtime layer. Only the token-free
       # Storybook; the Satori adapter's needs GitHub Packages and is not run. Playwright is installed
-      # with --no-save, so the lockfile and `npm ci` are untouched. About two minutes.
+      # with --no-save, so the lockfile and `npm ci` are untouched. Every `Dialogs/` story is also
+      # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
+      # that check's own negative controls have run. About four minutes.
       - name: Storybook interactions (satori-components)
         shell: bash
         timeout-minutes: 10
@@ -235,13 +240,16 @@ jobs:
         run: |
           set -euo pipefail
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
-          if ! grep -qx satori-components <<<"$affected"; then
-            echo "satori-components is not affected: Storybook interactions NOT RUN"
+          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
+          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ]; then
+            echo "satori-components is not affected and the runner is unchanged: Storybook interactions NOT RUN"
             exit 0
           fi
           version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
           npm install --no-save --no-audit --no-fund "@playwright/test@${version}"
           npx playwright install --with-deps chromium
+          # The dialog layout check's negative controls first: a check that cannot fail proves nothing.
+          node --test scripts/storybook-dialog-layout.selftest.mjs
           node scripts/storybook-interactions.mjs --json "$RUNNER_TEMP/storybook-interactions.json"
 
       - name: Upload the Storybook interaction results
