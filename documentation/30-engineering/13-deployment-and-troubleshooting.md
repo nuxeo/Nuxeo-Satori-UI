@@ -2,15 +2,17 @@
 title: Deployment & Troubleshooting
 parent: Engineering
 order: 13
-last_reviewed: 2026-10-14
-repo_commit: d36176c
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Deployment & Troubleshooting
 
-> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
-> Only the `E404` row was re-verified at that commit, for NXSAT-637. On 2026-10-08 at `2898046`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the Runtime table's i18n row was re-verified at that commit, for NXSAT-648, and its
+> `NG0201` row, about adf-hx's API ports, was removed with them. On 2026-10-14 at `d36176c`
+> (`feature/nxsat-308-remove-adf-packages`) the `E404` row was re-verified, for NXSAT-637. On 2026-10-08 at `2898046`
 > (`feature/nxsat-308-ci-cold-cache-tooling`) the repository links were made relative rather than
 > pinned to `feature/adf-hx-browse-poc`, every target present. The rest of the page as of
 > 2026-08-24 · `77265f9`.
@@ -212,8 +214,7 @@ Verify with `npm run beta:backend`.
 
 | Symptom                                                    | Cause                                                                                                         | Fix                                                                                                  |
 | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `NG0201: No provider for …`                                | An upstream `providedIn: 'root'` service resolving a port from the root injector                              | Provide the port in the **root** injector. See the comment at `app.config.ts:37`                     |
-| Raw i18n keys — `MANAGE_VERSIONS.DIALOG.TITLE`             | A seeded catalogue folder whose file is not shipped. The loader catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — asserts required assets present **and non-empty**                            |
+| Unresolved `sat.*` keys, or English in another language    | Missing from the build: satori-ui's catalogue is caught to `{}`; the app's falls back to English **silently** | `npm run beta:bundle` — asserts both runtime catalogues ship, each resolving a key the app renders   |
 | An edited manifest Note has no effect                      | The application no longer reads it (NXSAT-312), with no migration                                             | Re-create its content as a `manifest` fragment in a configuration package                            |
 | `?preset=` does nothing and no badge appears               | No package sets `presales.presetSwitching: true`, or the preset name is not defined                           | The console shows `[agentic-ui-config] preset … ignored: …`; enable it in the demo package only      |
 | Under `nx serve`, configuration falls back to the defaults | `public/agentic-ui-config/*.json` missing, created after the server started, or not an envelope               | `npm run config:dev`, then restart `nx serve`                                                        |
