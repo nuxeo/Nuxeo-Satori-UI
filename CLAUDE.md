@@ -1,8 +1,9 @@
 # CLAUDE.md — Nuxeo Agentic UI
 
 Angular 20 + Nx monorepo. A Nuxeo content management UI being converted into a
-customer-shippable Beta ("Nuxeo Satori") on real `adf-hx` components, with a
-four-layer customisation contract.
+customer-shippable Beta ("Nuxeo Satori") on our own `nxs-` components
+(`libs/shared/satori-components`), with a four-layer customisation contract. It began on
+`adf-hx`; NXSAT-308 removed adf-hx and ADF.
 
 ---
 
@@ -47,15 +48,18 @@ before starting.
 and run `npm run mirror:agents`. The `agent-mirror` gate fails when they drift, because three
 copies with nothing comparing them is how a wrong half survives unread.
 
-| Skill                             | Use for                                                    |
-| --------------------------------- | ---------------------------------------------------------- |
-| `beta-phase/SKILL.md`             | Running any Beta phase end to end. **Start here.**         |
-| `verify-gate/SKILL.md`            | Getting to green without churning                          |
-| `capture-phase-evidence/SKILL.md` | Producing evidence that proves something                   |
-| `implement-api-port/SKILL.md`     | One of the twelve adf-hx API ports (Phase 3, ~10 of these) |
-| `adopt-adf-hx-component/SKILL.md` | Swapping a hand-written `hxp-*` for the real component     |
-| `add-extension-point/SKILL.md`    | Making something manifest-addressable                      |
-| `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket            |
+| Skill                             | Use for                                            |
+| --------------------------------- | -------------------------------------------------- |
+| `beta-phase/SKILL.md`             | Running any Beta phase end to end. **Start here.** |
+| `verify-gate/SKILL.md`            | Getting to green without churning                  |
+| `capture-phase-evidence/SKILL.md` | Producing evidence that proves something           |
+| `add-extension-point/SKILL.md`    | Making something manifest-addressable              |
+| `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket    |
+
+`implement-api-port` and `adopt-adf-hx-component` are kept as a record only: the adf-hx API
+ports and components they describe were removed with adf-hx (NXSAT-635, NXSAT-637). A new
+`nxs-` component starts from the `satori-component` generator — `AGENTS/00-architecture.md`,
+"Adding a component".
 
 ## The gate — six, not three
 
