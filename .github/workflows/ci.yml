@@ -75,6 +75,9 @@ jobs:
       # never checks they are capable of failing, which is how a guardrail regresses into an
       # always-green implementation with the required check still reported as passing.
       # Builds throwaway git repositories under the runner's temp dir; touches nothing tracked.
+      - name: Run Satori rename codemod controls
+        run: node --test scripts/rename-satori.selftest.mjs
+
       - name: Run i18n guardrail negative controls
         run: npm run review:guardrails-selftest
 
