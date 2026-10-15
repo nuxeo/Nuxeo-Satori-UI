@@ -1080,6 +1080,7 @@ class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     protected onPointerEnter(event: PointerEvent): void;
     protected onPointerLeave(event: PointerEvent): void;
     protected onPointerDown(): void;
+    protected onPressEnd(): void;
     protected onFocus(): void;
     protected onClick(): void;
     protected onEscape(): void;

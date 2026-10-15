@@ -54,6 +54,8 @@ type Opener = 'hover' | 'focus' | 'click';
   host: {
     class: 'nxs-rich-tooltip',
     '(document:keydown.escape)': 'onEscape()',
+    '(document:pointerup)': 'onPressEnd()',
+    '(document:pointercancel)': 'onPressEnd()',
     '(focusout)': 'onFocusOut($event)',
     '(pointerenter)': 'onPointerEnter($event)',
     '(pointerleave)': 'onPointerLeave($event)',
@@ -121,6 +123,16 @@ export class NxsRichTooltipComponent implements NxsRichTooltipInputs {
 
   protected onPointerDown(): void {
     this.pressing = true;
+  }
+
+  /**
+   * Any press ends here, anywhere in the document: one that becomes a scroll (`pointercancel`) or is
+   * released off the button never clicks, and would otherwise leave the next keyboard focus ignored.
+   * A mouse focuses the button when it goes down, so its focus has passed by now; a tap's comes
+   * after this, with its click a moment later, which cancels the opening the focus starts.
+   */
+  protected onPressEnd(): void {
+    this.pressing = false;
   }
 
   /** Keyboard focus opens the panel. The focus a press gives is left to its click. */

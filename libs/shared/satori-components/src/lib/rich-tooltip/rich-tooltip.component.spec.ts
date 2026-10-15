@@ -133,18 +133,22 @@ describe('NxsRichTooltipComponent', () => {
     const component = () => required<HTMLElement>('nxs-rich-tooltip');
     const pointer = (type: string, target: Element = component(), pointerType = 'mouse') =>
       target.dispatchEvent(
-        new PointerEvent(type, { pointerType, bubbles: type === 'pointerdown' }),
+        new PointerEvent(type, { pointerType, bubbles: !/^pointer(enter|leave)$/.test(type) }),
       );
     /** Lets `ms` pass, then renders what the timers changed. */
     const wait = (ms: number) => {
       vi.advanceTimersByTime(ms);
       fixture.detectChanges();
     };
-    /** A press as a browser reports it: the button takes focus, then the click follows its release. */
+    /**
+     * A press as a mouse reports it: the button takes focus as it goes down, and the click follows
+     * the release.
+     */
     const press = (pointerType: string, hold = 0) => {
       pointer('pointerdown', trigger(), pointerType);
       trigger().focus();
       wait(hold);
+      pointer('pointerup', trigger(), pointerType);
       trigger().click();
       wait(0);
     };
@@ -349,6 +353,49 @@ describe('NxsRichTooltipComponent', () => {
         pointer('pointerenter', component(), 'touch');
         wait(300);
         expect(panel()).toBeNull();
+      });
+
+      // Android focuses the button after the finger lifts, just before the click.
+      describe('when focus follows the release', () => {
+        const tapAndroid = () => {
+          pointer('pointerdown', trigger(), 'touch');
+          wait(300);
+          pointer('pointerup', trigger(), 'touch');
+          if (document.activeElement !== trigger()) trigger().focus();
+          trigger().click();
+          wait(5000);
+        };
+
+        it('opens on a tap and stays open', () => {
+          tapAndroid();
+          expect(panel()).not.toBeNull();
+        });
+
+        it('closes on a second tap', () => {
+          tapAndroid();
+          tapAndroid();
+          expect(panel()).toBeNull();
+        });
+      });
+    });
+
+    // A press that never clicks must not leave the next keyboard focus ignored.
+    describe('after a press that does not click', () => {
+      it('opens on keyboard focus once a touch turned into a scroll', () => {
+        pointer('pointerdown', trigger(), 'touch');
+        pointer('pointercancel', trigger(), 'touch');
+        trigger().focus();
+        wait(200);
+        expect(panel()).not.toBeNull();
+      });
+
+      it('opens on keyboard focus once a press was released off the button', () => {
+        // Safari does not focus a button it presses, so no focus event marks the press's end.
+        pointer('pointerdown', trigger(), 'mouse');
+        pointer('pointerup', required<HTMLButtonElement>('.outside'), 'mouse');
+        trigger().focus();
+        wait(200);
+        expect(panel()).not.toBeNull();
       });
     });
 
