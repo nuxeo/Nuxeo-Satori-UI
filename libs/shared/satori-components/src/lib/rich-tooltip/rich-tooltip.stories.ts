@@ -1,7 +1,7 @@
 import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
-import { expect } from 'storybook/test';
+import { expect, waitFor } from 'storybook/test';
 
 import { NXS_PRIMITIVE_IDS } from '../primitives';
 import { provideNxsComponents } from '../provide-nxs-components';
@@ -24,10 +24,10 @@ export default meta;
 
 type Story = StoryObj<NxsRichTooltipComponent>;
 
-/** Closed. Activate the button to open it; Escape or moving focus away closes it. */
+/** Closed. Rest the pointer on the button, Tab to it, or click or tap it to open it. */
 export const Closed: Story = {};
 
-/** Opened by activating the button, as a user does. Focus stays on the button. */
+/** Opened by clicking the button, as a touch user taps it. Focus stays on the button. */
 export const Open: Story = {
   play: async ({ args, canvas, canvasElement, userEvent }) => {
     const trigger = canvas.getByRole('button', { name: 'About versioning' });
@@ -39,6 +39,35 @@ export const Open: Story = {
     await expect(panel).toHaveTextContent(args.heading);
     await expect(panel).toHaveTextContent(args.content);
     await expect(panel).toBeVisible();
+    await expect(trigger).toHaveFocus();
+  },
+};
+
+/** Opened by resting the pointer on the button, as Satori's opens. */
+export const OpensOnHover: Story = {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'About versioning' });
+    await userEvent.hover(trigger);
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    const panel = canvasElement.ownerDocument.getElementById(
+      trigger.getAttribute('aria-controls') ?? '',
+    );
+    await expect(panel).toHaveTextContent(args.content);
+    await expect(panel).toBeVisible();
+  },
+};
+
+/** Opened by reaching the button with Tab, as Satori's opens. Focus stays on the button. */
+export const OpensOnFocus: Story = {
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const trigger = canvas.getByRole('button', { name: 'About versioning' });
+    await userEvent.tab();
+    await expect(trigger).toHaveFocus();
+    await waitFor(() => expect(trigger).toHaveAttribute('aria-expanded', 'true'));
+    const panel = canvasElement.ownerDocument.getElementById(
+      trigger.getAttribute('aria-controls') ?? '',
+    );
+    await expect(panel).toHaveTextContent(args.content);
     await expect(trigger).toHaveFocus();
   },
 };

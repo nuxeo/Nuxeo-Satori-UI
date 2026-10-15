@@ -67,7 +67,7 @@ describe('the API page', () => {
 
   it('lists a component’s public methods, and not its protected ones', () => {
     // The pager's `canNext` and `canPrevious` are protected; so are `toggle()` and `press()` on the
-    // favorite toggle, and `toggle()` on the rich tooltip.
+    // favorite toggle, and the rich tooltip's event handlers.
     expect(apiMethods(entryFor('NxsPagerComponent')).map((method) => method.name)).toEqual([
       'next',
       'previous',

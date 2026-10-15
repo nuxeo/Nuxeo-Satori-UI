@@ -6,7 +6,9 @@
   [attr.aria-label]="triggerLabel()"
   [attr.aria-expanded]="open()"
   [attr.aria-controls]="panelId"
-  (click)="toggle()"
+  (pointerdown)="onPointerDown()"
+  (focus)="onFocus()"
+  (click)="onClick()"
 >
   <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
 </button>

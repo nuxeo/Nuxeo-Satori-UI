@@ -114,7 +114,7 @@ Both name the landmark from our `label`; with no label, Satori's uses its own tr
 
 ![Rich tooltip: without Satori on the left, with Satori on the right](rich-tooltip-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs, opened from the keyboard.')
 
-The biggest behaviour difference. The built-in one opens on click, Enter or Space and closes straight away; Satori's opens on hover or keyboard focus after 200 ms, ignores clicks, and closes 1.5 s after you leave (Escape closes it at once). The built-in panel is never wider than the window and moves sideways to stay on screen near either edge, in either reading direction.
+Both open on hover or keyboard focus after 200 ms, close 1.5 s after the pointer leaves, and close at once on Escape. The built-in one also opens on click, Enter or Space, which Satori's ignores, so a touch screen can open it; and it closes as soon as keyboard focus leaves, where Satori's waits 1.5 s. The built-in panel is never wider than the window and moves sideways to stay on screen near either edge, in either reading direction.
 
 Screen readers: the built-in version uses `aria-expanded`/`aria-controls` and a live region; Satori uses `role=tooltip` with linked hidden text ending "Press Escape key to close". Both use the Material Icons font for the trigger icon.
 
@@ -714,12 +714,12 @@ Storybook's "Primitives/By registered ID" story renders the four registered IDs 
 
 Colours are given as background / text.
 
-| Primitive        | Without Satori (built-in, Material theme)                                                                                                                        | With Satori (`sat-*`, Satori theme)                                                                                                                       |
-| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Avatar**       | 36 px circle, no border, teal `#d2e6e9`/`#076768`                                                                                                                | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
-| **Tag**          | 20 px, 12 px text, padding 2/8, purple `#e9d7f0`/`#602072`, wraps a long label inside the tag                                                                    | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
-| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, collapses to "…" ("Show more breadcrumbs")                               | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
-| **Rich tooltip** | Click/Enter/Space, panel under the button (radius 8, max 320 px, kept on screen), closes instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring |
+| Primitive        | Without Satori (built-in, Material theme)                                                                                                                                                                                         | With Satori (`sat-*`, Satori theme)                                                                                                                       |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Avatar**       | 36 px circle, no border, teal `#d2e6e9`/`#076768`                                                                                                                                                                                 | 36 px with 1 px white border, teal `#e1f7f7`/`#3d7879`, Noto Sans                                                                                         |
+| **Tag**          | 20 px, 12 px text, padding 2/8, purple `#e9d7f0`/`#602072`, wraps a long label inside the tag                                                                                                                                     | 24 px, 14 px text, padding 2/6, white inset ring, `#f4f0fb`/`#5c59b6`, never truncates                                                                    |
+| **Breadcrumbs**  | 20 px high, link `#005cbb`, grey 18 px Material chevron, browser default focus outline, collapses to "…" ("Show more breadcrumbs")                                                                                                | 28 px high, link `#5654ac`, 16 px Satori SVG chevron, rounded purple focus ring, collapses to "…" ("Show more breadcrumbs")                               |
+| **Rich tooltip** | Hover or focus after 200 ms, and click/Enter/Space; panel under the button (radius 8, max 320 px, kept on screen), closes 1.5 s after the pointer leaves, instantly on Escape, Tab-away or outside click, grey highlight on focus | Hover or focus after 200 ms, floating 20 px below (radius 12, max 40% of viewport width), Escape instant, otherwise closes after 1.5 s, purple focus ring |
 
 ## What a customer without access also loses
 
@@ -738,7 +738,6 @@ Only things rendered by ID, such as customer extensions, go through the choice.
 
 ## Open questions
 
-- Should the built-in tooltip copy Satori's hover-and-focus opening, or keep click-to-open (easier for keyboard and touch users)?
 - Should our own screens move from `sat-*` to the registered IDs so customers can swap them?
 - Does the status tag need a built-in version?
 
