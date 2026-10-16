@@ -283,10 +283,13 @@ except counting `results` by hand. Only `verdict: "pass"` may be cited for a pha
 
 Credentials come from the environment only. Never commit real ones.
 
-`NUXEO_USER` and `NUXEO_PASS` have **no default**. The runner, `backend-preflight.mjs` and
-`annotate-showcase.mjs` exit **2** — precondition not met — before launching a browser when
-either is unset, and `h.login()` throws a `PreconditionError`. A steps file that needs no backend
-exports `skipHttpCredentials = true` (as `phase-0-no-backend` and `phase-4-platform` do) and runs
-with no credentials at all. Both used to default to `Administrator` (NXSAT-649): a working login
+`NUXEO_USER` and `NUXEO_PASS` have **no default**. `backend-preflight.mjs` and
+`annotate-showcase.mjs` exit **2** — precondition not met — when either is unset, and so does the
+runner, before launching a browser, for a steps file that needs them; `h.login()` throws a
+`PreconditionError`. A steps file that needs no backend exports `skipHttpCredentials = true` (as
+`phase-0-no-backend` and `phase-4-platform` do) and runs with no credentials at all. A steps file
+that fails to load is reported as that load error, not as missing credentials.
+`story-runner.mjs` under `scripts/collect-evidence/` refuses a missing pair with exit 2 too, but
+a scenes file's own `PreconditionError` ends that run with exit 1. Both used to default to `Administrator` (NXSAT-649): a working login
 in the repository, and a capture that silently ran as an administrator whenever the variables
 were unset. The shared reader is `nuxeo-credentials.mjs`.

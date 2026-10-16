@@ -47,8 +47,14 @@ export class PreconditionError extends Error {
  * `NUXEO_USER` / `NUXEO_PASS` for a steps file, or a `PreconditionError` naming what is missing.
  *
  * There is no default (NXSAT-649) — see `nuxeo-credentials.mjs`. A `PreconditionError` rather
- * than a plain `Error`, because both runners key on it: a missing pair is the environment, and
- * reporting it as `[error] steps aborted` (exit 1) invites someone to change working code.
+ * than a plain `Error`, because both runners key their verdict on it — `precondition-not-met`,
+ * not `error`: a missing pair is the environment, and reporting it as `[error] steps aborted`
+ * invites someone to change working code. Their exit codes differ: `phase-runner.mjs` exits 2,
+ * while `story-runner.mjs` exits 1 for every `precondition-not-met` capture.
+ *
+ * Under either runner this rarely fires for `NUXEO_USER` / `NUXEO_PASS` themselves. Both refuse
+ * a missing pair with exit 2 before any step runs, unless the file exported
+ * `skipHttpCredentials = true`.
  *
  * @param {string} purpose completes "must both be set to …"
  * @returns {import('./nuxeo-credentials.mjs').NuxeoCredentials}

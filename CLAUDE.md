@@ -120,9 +120,9 @@ Two traps that have each cost a phase:
   server proxies to it via `apps/nuxeo-ui/proxy.conf.json`.
 - `npx nx serve nuxeo-ui` → `http://localhost:4200`.
 - Credentials from `NUXEO_USER`/`NUXEO_PASS`, **required — there is no default**. Export them
-  yourself; a local Docker Nuxeo uses its documented default administrator account. Harnesses,
-  preflights and tools refuse without them (exit 2 from a CLI); only `phase-0-no-backend` and
-  `phase-4-platform` need none. `checkNoNuxeoCredentialDefaults` fails a reintroduced fallback.
+  yourself; a local Docker Nuxeo uses its documented default administrator account. A steps or
+  scenes file that needs no backend opts out with `skipHttpCredentials = true`. What refuses,
+  and with which exit code, is in `scripts/beta-harness/README.md`.
 - `SATORI_GH_READONLY_TOKEN` is required to install `@hylandsoftware` and `@alfresco`
   packages from GitHub Packages.
 - Node is pinned to 20 (`.nvmrc`). On Node 22+ a built-in `localStorage` shadows jsdom's;

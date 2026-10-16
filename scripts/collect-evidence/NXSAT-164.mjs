@@ -12,7 +12,13 @@
  *
  * The administrator pair was a literal `'Administrator', 'Administrator'` and the isolated pair
  * defaulted to that account's password, so this file carried two working logins (NXSAT-649).
- * Either pair missing is a `PreconditionError` — the runner reports it as exit 2, not a defect.
+ *
+ * What a missing pair does depends on which one, because `story-runner.mjs` checks only the
+ * first. A missing `NUXEO_USER` / `NUXEO_PASS` never reaches this file: the runner refuses it
+ * with exit 2 before any scene runs. A missing `NUXEO_ISOLATED_*` pair is a `PreconditionError`
+ * thrown when the capture starts, after the browser and the recording have opened; story-runner
+ * records it as verdict `precondition-not-met`, but exits **1**, as it does for every
+ * `precondition-not-met` capture. Only `phase-runner.mjs` maps a `PreconditionError` to exit 2.
  */
 
 import { PreconditionError, requireStepCredentials } from '../beta-harness/helpers.mjs';

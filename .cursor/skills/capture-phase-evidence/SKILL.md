@@ -24,10 +24,11 @@ npm run beta:backend     # start nuxeo + nuxeo-opensearch, wait for the REST API
 npx nx serve nuxeo-ui    # separate terminal, must be running
 ```
 
-**The credentials have no default.** Unset, `beta:backend` and `beta:evidence` exit **2**
-(precondition not met) before a browser opens — fix the environment, not the code. Only
-`phase-0-no-backend` and `phase-4-platform` run without them; a new steps file that needs no
-backend says so with `export const skipHttpCredentials = true`.
+**The credentials have no default.** Unset, `beta:backend` exits **2** (precondition not met),
+and so does `beta:evidence` for any steps file that needs them, before a browser opens — fix the
+environment, not the code. A steps file that needs no backend says so with
+`export const skipHttpCredentials = true` and runs without them;
+`git grep -l skipHttpCredentials scripts/beta-harness/steps` lists which do.
 
 **Check the backend before diagnosing selector failures.** A stopped container
 produces a dozen scattered "selector not visible" reds that read exactly like

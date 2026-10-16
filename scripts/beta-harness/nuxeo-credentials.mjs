@@ -24,8 +24,10 @@
  * profile sets the variable to `''`, and sending that is a guaranteed 401 dressed as a pass/fail
  * question about the product.
  *
- * `checkNoNuxeoCredentialDefaults` in `scripts/review-guardrails.mjs` fails a reintroduced
- * fallback anywhere under `scripts/`, `tools/` and `a11y/`.
+ * `checkNoNuxeoCredentialDefaults` in `scripts/review-guardrails.mjs` fails the common shapes of
+ * a reintroduced fallback under `scripts/`, `tools/` and `a11y/`. That includes this file's own
+ * reads through `NUXEO_USER_ENV` / `NUXEO_PASS_ENV`, which its selftest mutates to prove it; the
+ * guardrail's docblock lists the shapes it does not see.
  */
 
 export const NUXEO_USER_ENV = 'NUXEO_USER';
@@ -80,7 +82,8 @@ export function missingNuxeoCredentialsMessage(purpose) {
  *
  * @param {string} purpose see `missingNuxeoCredentialsMessage`
  * @param {{ errorClass?: new (message: string) => Error }} [options] the class to throw —
- *   `helpers.mjs` passes `PreconditionError` so the runners report exit 2, not a defect
+ *   `helpers.mjs` passes `PreconditionError`, so the runners record `precondition-not-met`
+ *   rather than a defect
  * @returns {NuxeoCredentials}
  */
 export function requireNuxeoCredentials(purpose, { errorClass = Error } = {}) {

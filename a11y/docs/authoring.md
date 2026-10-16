@@ -207,7 +207,8 @@ and `../fixtures.ts` call it, so a run fails at load rather than scanning as a g
 identity. The diagnostics wrap it in `credentialsOrExit()` so the same failure exits 2. Do not reintroduce a `?? 'Administrator'` fallback: besides the security
 rule, a default silently authenticates as the wrong user against any server that accepts it,
 and nothing in the report says so. `checkNoNuxeoCredentialDefaults` in
-`scripts/review-guardrails.mjs` fails one anywhere under `a11y/`, `scripts/` or `tools/`.
+`scripts/review-guardrails.mjs` fails the common shapes of one under `a11y/`, `scripts/` and
+`tools/`; its docblock lists the shapes it does not see.
 
 ### 2b. Assert the surface rendered before you scan it
 
