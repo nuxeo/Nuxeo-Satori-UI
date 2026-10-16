@@ -5,7 +5,7 @@ import { MATERIAL_ANIMATIONS } from '@angular/material/core';
 import { MatDialog, type MatDialogRef } from '@angular/material/dialog';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { type MockInstance } from 'vitest';
-import { DocumentDetailService, type NuxeoAce } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoAce } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsToastService } from '../toast/toast.service';
 import {

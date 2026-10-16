@@ -4,8 +4,8 @@ import {
   ExtensionComponentRegistry,
   type ExtensionDocumentLayoutDescriptor,
   type ExtensionRuleContext,
-} from '@nuxeo-satori/platform/extensions';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/extensions';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { LayoutMode } from './layout.model';
 

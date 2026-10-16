@@ -16,7 +16,7 @@ import {
   isFolderishDocument,
   normalizeNuxeoPath,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { forkJoin } from 'rxjs';
 
 import { nxsErrorStatus, type NxsErrorStatus } from '../error-state/error-status';

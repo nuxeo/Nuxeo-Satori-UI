@@ -3,7 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface ShareDialogData {
   title: string;

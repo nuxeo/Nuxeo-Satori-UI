@@ -11,7 +11,7 @@ import {
   DocumentService,
   TaskService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
 
 import { AuthService } from '../auth/auth.service';

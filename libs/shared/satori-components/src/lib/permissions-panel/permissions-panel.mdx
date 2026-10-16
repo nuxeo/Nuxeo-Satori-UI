@@ -40,7 +40,7 @@ call the panel makes.
 <Source
   language="typescript"
   dark
-  code={`import { NxsPermissionsPanelComponent } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsPermissionsPanelComponent } from '@nuxeo/satori-platform/components';`}
 />
 
 <Source
@@ -54,7 +54,7 @@ optional callback the panel calls after any write that may have changed the docu
 so you can refresh anything else you show that depends on them.
 
 The panel needs `HttpClient` and the platform's `DocumentDetailService`, which an application using
-`@nuxeo-satori/platform/nuxeo-client` already has. Its labels and the permission names are translated
+`@nuxeo/satori-platform/nuxeo-client` already has. Its labels and the permission names are translated
 with ngx-translate, under `satori-components.permissions-panel.*` and `permissions.right.*`;
 `providePlatformEnglishFallback()` supplies the English when your catalogue does not.
 

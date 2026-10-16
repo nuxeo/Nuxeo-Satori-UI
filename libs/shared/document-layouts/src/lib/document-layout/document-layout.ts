@@ -18,8 +18,8 @@ import {
   ExtensionOutletComponent,
   ExtensionRuleContextService,
   type ExtensionDocumentLayoutDescriptor,
-} from '@nuxeo-satori/platform/extensions';
-import { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/extensions';
+import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';

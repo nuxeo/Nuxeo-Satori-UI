@@ -1,4 +1,4 @@
-import { APP_CONFIG_FORMAT } from '@nuxeo-satori/platform/app-config';
+import { APP_CONFIG_FORMAT } from '@nuxeo/satori-platform/app-config';
 
 import { LayoutDisplay } from './layout.model';
 

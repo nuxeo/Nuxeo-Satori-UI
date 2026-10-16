@@ -12,8 +12,8 @@ import {
   NxsDetailsPanelComponent,
   NxsPropertiesPanelComponent,
   type NxsDetailsPanelTab,
-} from '@nuxeo-satori/platform/components';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/components';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';

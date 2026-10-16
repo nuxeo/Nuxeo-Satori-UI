@@ -225,7 +225,7 @@ Two independent artefacts, and a clean support boundary.
 
 ### 1. The npm library — what customers code against
 
-`@nuxeo-satori/platform`, six entry points: `.`, `/app-config`, `/components`, `/extensions`,
+`@nuxeo/satori-platform`, six entry points: `.`, `/app-config`, `/components`, `/extensions`,
 `/nuxeo-client`, `/ui`. The built package also ships `AGENTS.md`, `extension-reference.md`, five Nx generators —
 four for Layer 2 libraries, one for configuration packages — and the guardrail script.
 
@@ -234,7 +234,7 @@ step. `private: true` remains in the built `package.json` as an intentional trip
 publishability check _fails_ if it is missing. Verified: `nx build platform` exit 0,
 `npm publish --dry-run` succeeds, and the template app compiles against the built types.
 
-**On the name:** the package in the repo today is `@nuxeo-satori/platform`, and that is the form
+**On the name:** the package in the repo today is `@nuxeo/satori-platform`, and that is the form
 the guardrail prints on screen in Beat 10 when it lists the published entry points. A rename to
 `@nuxeo/satori-platform` on `packages.nuxeo.com` is written up in
 `docs/publishing-to-nuxeo-registry.md` §5.1, but **no rename decision was verified** — treat it as
@@ -267,7 +267,7 @@ The interesting engineering detail, and it is worth reading aloud from
 
 |                           |                                                                                                                                                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer depends on       | `@nuxeo-satori/platform` + peers: Angular 20.3, Material/CDK 20.2, `@hylandsoftware/satori-ui ^0.2`, `@ngx-translate/core ^17`, `rxjs ^7.8`                                                                            |
+| Customer depends on       | `@nuxeo/satori-platform` + peers: Angular 20.3, Material/CDK 20.2, `@hylandsoftware/satori-ui ^0.2`, `@ngx-translate/core ^17`, `rxjs ^7.8`                                                                            |
 | Customer **cannot** reach | adf-hx, at all. `libs/shared/adf-hx-bridge`, which held the twelve API ports, the Nuxeo↔Hx mappers and thirteen of our `hxp-`* components, was internal and never published, and was removed on 2026-10-14 (NXSAT-635) |
 
 **The line for leadership:** adf-hx is an implementation detail of the product, not part of the
@@ -658,7 +658,7 @@ you have watched it fail.
    sitting alongside the platform's `app.rules.*`.
 
 "Zero edits to our libraries" is verified: every non-relative import across all six source files
-is `@angular/*` or `@nuxeo-satori/platform/extensions`. One published entry point. 291 lines.
+is `@angular/*` or `@nuxeo/satori-platform/extensions`. One published entry point. 291 lines.
 
 ### Beat 10 — The guardrail that makes it safe (3 min)
 
@@ -671,7 +671,7 @@ This is gate 17 of 17, and it ships **inside** the customer package. Then show i
 with a deep import into internals gives:
 
 ```
-- src/lib/rules.service.ts imports `@nuxeo-satori/platform/extensions/internal/rule-registry`,
+- src/lib/rules.service.ts imports `@nuxeo/satori-platform/extensions/internal/rule-registry`,
   which is not a published entry point.
     A deep path into internals will break without that being a breaking change.
 ```
@@ -737,7 +737,7 @@ npx nx build contoso-config     # writes dist/config-packages/contoso-config/con
 ### Beat 13 — AI-Assisted Development (8 min, optional)
 
 **Purpose:** Show customers they can clone the repo and use AI agents (Claude, GitHub Copilot, etc.)
-to build features immediately, leveraging `@nuxeo-satori/platform` components and the extension system.
+to build features immediately, leveraging `@nuxeo/satori-platform` components and the extension system.
 
 **What to demonstrate:** An AI agent can read the codebase, understand the architecture, and build
 complete features using the platform APIs and UI components. This is not theoretical — the showcase
@@ -749,7 +749,7 @@ Clone a fresh copy and give this prompt to an AI coding agent:
 
 > "Create a new dashboard page in `apps/nuxeo-satori-template` at `/dashboard` that shows:
 >
-> - A 3-column grid using `WidgetGridComponent` from `@nuxeo-satori/platform/ui`
+> - A 3-column grid using `WidgetGridComponent` from `@nuxeo/satori-platform/ui`
 > - Three stat tiles: Active Documents (fetch count via `DocumentService`), Recent Uploads (last 7 days), Storage Used
 > - A Recent Activity section using `WidgetContainerComponent`
 > - Add it to the navbar with order 15
@@ -760,7 +760,7 @@ Clone a fresh copy and give this prompt to an AI coding agent:
 
 - Agent reads `apps/nuxeo-satori-template/src/app/pages/` for patterns
 - Creates `dashboard/dashboard.ts`, `.html`, `.scss` following template conventions
-- Imports from `@nuxeo-satori/platform/ui` and `@nuxeo-satori/platform/nuxeo-client`
+- Imports from `@nuxeo/satori-platform/ui` and `@nuxeo/satori-platform/nuxeo-client`
 - Adds route to `app.routes.ts`
 - Adds nav entry to `extensions/template-extensions.ts`
 - Working page in 2-3 minutes
@@ -797,7 +797,7 @@ and replicate the pattern.
 
 **Expected outcome:**
 
-- Agent reads `SearchService` from `@nuxeo-satori/platform/nuxeo-client`
+- Agent reads `SearchService` from `@nuxeo/satori-platform/nuxeo-client`
 - Sees the existing `search/search.ts` page for patterns
 - Implements signal-based state management
 - Adds `toSignal()` and RxJS operators correctly
@@ -809,7 +809,7 @@ describe what you want in plain English, and the agent will:
 
 1. **Read the architecture** — `AGENTS.md`, `ARCHITECTURE.md`, the component showcase
 2. **Follow existing patterns** — it sees how we use signals, services, and widgets
-3. **Use the right imports** — `@nuxeo-satori/platform/*` entry points are discoverable
+3. **Use the right imports** — `@nuxeo/satori-platform/*` entry points are discoverable
 4. **Generate working code** — not pseudocode, actual components that compile and run
 
 The platform is designed for this workflow: clear conventions, typed APIs, documented extension
@@ -818,7 +818,7 @@ points, and plenty of working examples to learn from."
 #### What to Show on Screen
 
 1. Open the template app's `components.ts` page — "This was built with AI assistance"
-2. Show the import statements: `from '@nuxeo-satori/platform/ui'`
+2. Show the import statements: `from '@nuxeo/satori-platform/ui'`
 3. Open `AGENTS.md` — "The AI reads this to understand the architecture"
 4. Show a split screen: AI prompt on left, generated code on right
 5. Run the generated feature: `npx nx serve nuxeo-satori-template --port 4310`
@@ -865,7 +865,7 @@ ours. Use the Part 1 table.
 
 **"Can I install it from npm today?"**
 No. It is publishable and verified by dry run; the first publish is a deliberate later step, and the
-final package name is part of that step. Today's name in the repo is `@nuxeo-satori/platform` — the
+final package name is part of that step. Today's name in the repo is `@nuxeo/satori-platform` — the
 same form the guardrail prints in Beat 10.
 
 **"How big is the bundle?"**

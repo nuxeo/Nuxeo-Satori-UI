@@ -1,17 +1,17 @@
 /**
- * `@nuxeo-satori/platform` — the package root.
+ * `@nuxeo/satori-platform` — the package root.
  *
  * The API lives in **entry points**, not here, so that importing the extension
  * contract does not drag the Nuxeo client or Angular Material in with it:
  *
  * | Entry point                            | What it is                                          |
  * | -------------------------------------- | --------------------------------------------------- |
- * | `@nuxeo-satori/platform/extensions`    | Layer 1/2 — slots, rules, actions, registration      |
- * | `@nuxeo-satori/platform/app-config`    | Layer 0 — bootstrap config and the runtime manifest  |
- * | `@nuxeo-satori/platform/components`    | `nxs-` components, Material-backed, no Satori import |
- * | `@nuxeo-satori/platform/components-satori` | The same IDs on Satori; the only Satori import   |
- * | `@nuxeo-satori/platform/nuxeo-client`  | Nuxeo REST services and document models             |
- * | `@nuxeo-satori/platform/ui`            | Shared components and dialogs                       |
+ * | `@nuxeo/satori-platform/extensions`    | Layer 1/2 — slots, rules, actions, registration      |
+ * | `@nuxeo/satori-platform/app-config`    | Layer 0 — bootstrap config and the runtime manifest  |
+ * | `@nuxeo/satori-platform/components`    | `nxs-` components, Material-backed, no Satori import |
+ * | `@nuxeo/satori-platform/components-satori` | The same IDs on Satori; the only Satori import   |
+ * | `@nuxeo/satori-platform/nuxeo-client`  | Nuxeo REST services and document models             |
+ * | `@nuxeo/satori-platform/ui`            | Shared components and dialogs                       |
  *
  * Shipping as one versioned package with sub-entry points, rather than four
  * packages, is deliberate: the distribution model in `docs/adf-hx-beta-plan.md`

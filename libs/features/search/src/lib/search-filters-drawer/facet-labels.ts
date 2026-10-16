@@ -1,7 +1,7 @@
 import { Observable, catchError, forkJoin, map, of } from 'rxjs';
 
-import type { NxsFacetLabels } from '@nuxeo-satori/platform/components';
-import { DirectoryService, type L10nDirectoryEntry } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NxsFacetLabels } from '@nuxeo/satori-platform/components';
+import { DirectoryService, type L10nDirectoryEntry } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The vocabulary each facet's bucket keys are labelled from: the same directories the metadata

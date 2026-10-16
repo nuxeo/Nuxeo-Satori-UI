@@ -2674,7 +2674,7 @@ function checkTranslatorNotesFlagProductsAndAcronyms() {
 }
 
 /**
- * The English `@nuxeo-satori/platform` ships must be the application's English, for exactly the
+ * The English `@nuxeo/satori-platform` ships must be the application's English, for exactly the
  * keys the package uses.
  *
  * The package's entry points reference ~300 keys that live only in `apps/nuxeo-ui/public/i18n/en.json`,
@@ -6529,7 +6529,7 @@ function checkTranslateIsInjectedWhereUsed() {
 /* ---------------- libs/shared/satori-components (NXSAT-308) ---------------- */
 
 /**
- * The `nxs-` component library, published as `@nuxeo-satori/platform/components`.
+ * The `nxs-` component library, published as `@nuxeo/satori-platform/components`.
  *
  * Three rules hold it to the plan of record (`satori_component_library` plan, sections 3 and 7):
  * it builds and ships with no ADF, no HxCS client and no Satori, because Satori is to enter only
@@ -6538,16 +6538,16 @@ function checkTranslateIsInjectedWhereUsed() {
  * it stays cheap to turn into a federated remote later.
  */
 const SATORI_COMPONENTS_ROOT = 'libs/shared/satori-components';
-const SATORI_COMPONENTS_ENTRY = '@nuxeo-satori/platform/components';
+const SATORI_COMPONENTS_ENTRY = '@nuxeo/satori-platform/components';
 const SATORI_COMPONENTS_BARREL = `${SATORI_COMPONENTS_ROOT}/src/index.ts`;
 
 /**
- * `@nuxeo-satori/platform/components-satori`: the same primitive IDs re-registered on Satori, and
+ * `@nuxeo/satori-platform/components-satori`: the same primitive IDs re-registered on Satori, and
  * the one place in the library family allowed to import `@hylandsoftware/satori-ui` (plan section 3).
  * Its own project, so the base library's no-Satori rule needs no exception carved into it.
  */
 const SATORI_FALLBACK_ROOT = 'libs/shared/satori-components-satori';
-const SATORI_FALLBACK_ENTRY = '@nuxeo-satori/platform/components-satori';
+const SATORI_FALLBACK_ENTRY = '@nuxeo/satori-platform/components-satori';
 const SATORI_FALLBACK_BARREL = `${SATORI_FALLBACK_ROOT}/src/index.ts`;
 
 /** Each library in the family, with its entry point and the `ng-package.json` that publishes it. */
@@ -7051,7 +7051,7 @@ function checkDependencyClosure({ root, roots, styleRoots = [], banned }) {
 
 /**
  * Each library is reached through its entry point and nothing else —
- * `@nuxeo-satori/platform/components`, and `@nuxeo-satori/platform/components-satori`.
+ * `@nuxeo/satori-platform/components`, and `@nuxeo/satori-platform/components-satori`.
  *
  * A deep import into a library cannot be versioned — the reason the customer guardrail rejects
  * deep platform imports — and across a federation boundary it cannot be loaded at all. So: no
@@ -7181,7 +7181,7 @@ function checkLibraryEntryPoint({ root, entry, barrel, ngPackage }) {
     }
   }
 
-  const subpath = entry.slice('@nuxeo-satori/platform/'.length);
+  const subpath = entry.slice('@nuxeo/satori-platform/'.length);
   const listed = platformEntryPoints();
   if (!listed) {
     fail(
@@ -8261,7 +8261,7 @@ function declaredComponentClasses(file) {
  * Read from each library's sources, every `@Component` class whether the barrel exports it or not;
  * Storybook stories and specs are not components. A spec covers a component when it imports the
  * class by value — from its own module, or through a module that re-exports it, such as the barrel
- * or `@nuxeo-satori/platform/components` — so a same-named fake declared in the spec, a type-only
+ * or `@nuxeo/satori-platform/components` — so a same-named fake declared in the spec, a type-only
  * import, or a name in a comment or a string covers nothing. A component the barrel ships only by
  * opening it, as `NxsToastService` opens `NxsToastComponent` (see `openedComponentClasses`), is
  * covered by a spec that imports what opens it.
@@ -8335,7 +8335,7 @@ function checkPlatformEntryPointsListed() {
   }
   for (const subpath of published.filter((name) => !listed.includes(name))) {
     fail(
-      `libs/platform/${subpath}/ng-package.json publishes \`@nuxeo-satori/platform/${subpath}\`, ` +
+      `libs/platform/${subpath}/ng-package.json publishes \`@nuxeo/satori-platform/${subpath}\`, ` +
         `and ${PLATFORM_INDEX} does not list '${subpath}' in \`PLATFORM_ENTRY_POINTS\`.`,
     );
   }

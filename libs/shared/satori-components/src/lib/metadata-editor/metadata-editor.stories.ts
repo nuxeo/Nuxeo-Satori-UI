@@ -2,7 +2,7 @@ import {
   DirectoryService,
   type DirectoryEntry,
   type L10nDirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { of } from 'rxjs';
 import { fn } from 'storybook/test';

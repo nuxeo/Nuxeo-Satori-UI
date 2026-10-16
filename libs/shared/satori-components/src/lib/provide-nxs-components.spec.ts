@@ -10,7 +10,7 @@ import {
   ExtensionComponentRegistry,
   ExtensionOutletComponent,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';

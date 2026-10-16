@@ -6,7 +6,7 @@ import { MatMenuModule } from '@angular/material/menu';
 import { TranslatePipe } from '@ngx-translate/core';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
 
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** The permission Web UI requires on a saved search before it offers to change it. */
 const EDIT_PERMISSION = 'WriteProperties';

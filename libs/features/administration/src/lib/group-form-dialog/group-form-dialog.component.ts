@@ -14,7 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { Subject, debounceTime, distinctUntilChanged, switchMap } from 'rxjs';
 
-import { NuxeoGroup, NuxeoUser, UserService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoGroup, NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 export interface GroupFormDialogData {

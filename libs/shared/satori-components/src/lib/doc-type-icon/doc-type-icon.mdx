@@ -13,7 +13,7 @@ same icon for the same type.
 ## Key features
 
 - **One table for every screen.** The type-to-icon table is `docTypeIcon()` from
-  `@nuxeo-satori/platform/nuxeo-client`, so a document type looks the same everywhere.
+  `@nuxeo/satori-platform/nuxeo-client`, so a document type looks the same everywhere.
 - **Never blank.** A type the table does not know, such as a custom type, gets the generic file
   icon.
 - **No request.** The table is part of the library; the icon needs no call to the server.
@@ -31,7 +31,7 @@ same icon for the same type.
 <Source
   language="typescript"
   dark
-  code={`import { NxsDocTypeIconComponent } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsDocTypeIconComponent } from '@nuxeo/satori-platform/components';`}
 />
 
 export const usageHtml = `<nxs-doc-type-icon [type]="document.type" /> <span>{{ document.title }}</span>`;

@@ -6,12 +6,12 @@ import { MatDialog } from '@angular/material/dialog';
 import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
   PACKAGED_BROWSE_COLUMNS,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   BrowseService,
   DirectoryService,
@@ -19,7 +19,7 @@ import {
   DocumentImportService,
   SelectionService,
   TagService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
 import { ALL_COLUMNS } from '../column-settings-dialog/column-settings-dialog';

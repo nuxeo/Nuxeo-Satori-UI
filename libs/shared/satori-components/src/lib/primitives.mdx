@@ -9,7 +9,7 @@ import * as ByIdStories from './primitives.stories';
 Four components here are also in Satori's own component library: the avatar, the breadcrumbs, the
 tag and the rich tooltip. Each one is registered under an ID. A screen that renders the ID, rather
 than the component, shows whichever version the application registered: Satori's, when
-`@nuxeo-satori/platform/components-satori` is installed and provided, or the built-in version
+`@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
 otherwise. A fifth, the error state, is registered the same way; Satori's own error states arrive with
 Satori 1.0, which needs a newer Angular than this package supports, so it renders the built-in
 version either way for now.
@@ -116,8 +116,8 @@ The error state's own page shows it by ID.
   </tbody>
 </table>
 
-The IDs are exported as `NXS_PRIMITIVE_IDS` from `@nuxeo-satori/platform/components`. Render one
-with `lib-extension-outlet` from `@nuxeo-satori/platform/extensions`:
+The IDs are exported as `NXS_PRIMITIVE_IDS` from `@nuxeo/satori-platform/components`. Render one
+with `lib-extension-outlet` from `@nuxeo/satori-platform/extensions`:
 
 export const byIdHtml = `<lib-extension-outlet
   [componentId]="ids.tag"
@@ -162,8 +162,8 @@ Register your component under the ID after the library's providers. It implement
 so screens pass it the same inputs.
 
 export const withYourOwnTagTs = `import { Component, input } from '@angular/core';
-import type { NxsTagColor, NxsTagInputs } from '@nuxeo-satori/platform/components';
-import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+import type { NxsTagColor, NxsTagInputs } from '@nuxeo/satori-platform/components';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 @Component({ selector: 'acme-tag', templateUrl: './acme-tag.html' })
 export class AcmeTagComponent implements NxsTagInputs {

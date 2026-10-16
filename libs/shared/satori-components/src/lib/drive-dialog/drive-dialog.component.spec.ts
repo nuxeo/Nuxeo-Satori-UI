@@ -9,7 +9,7 @@ import {
   CURRENT_USERNAME,
   NUXEO_SERVER_URL,
   NuxeoDriveService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsDriveDialogComponent, type NxsDriveDialogData } from './drive-dialog.component';
 

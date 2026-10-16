@@ -26,7 +26,7 @@ audience: leadership
                                  │ depends on, by version
         ┌────────────────────────┴────────────────────────────┐
         │  WE OWN AND VERSION                                 │
-        │  ├─ @nuxeo-satori/platform  (npm, 4 entry points)   │
+        │  ├─ @nuxeo/satori-platform  (npm, 4 entry points)   │
         │  ├─ The application  (marketplace package)          │
         │  └─ Layer 3 harness  (generators + guardrails,      │
         │                       shipped INSIDE the package)   │

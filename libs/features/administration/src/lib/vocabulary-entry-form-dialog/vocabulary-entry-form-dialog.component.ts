@@ -21,7 +21,7 @@ import {
   resolveParentSourceName,
   vocabularyParentRequired,
   vocabularySupportsParent,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 export interface VocabularyEntryFormDialogData {

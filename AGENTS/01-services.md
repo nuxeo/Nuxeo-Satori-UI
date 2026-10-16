@@ -1,7 +1,7 @@
 # Services — All Public Methods
 
 Most frontend data services live in `libs/shared/nuxeo-client/src/lib/services/` and are
-imported from `@nuxeo-satori/platform/nuxeo-client`.
+imported from `@nuxeo/satori-platform/nuxeo-client`.
 
 Knowledge Discovery uses the dedicated shared client in `libs/shared/kd-client/src/lib/`
 and is imported from `@agentic-ui/shared/kd-client`. It calls Knowledge Discovery through
@@ -466,7 +466,7 @@ Admin console operations (users, groups, system info).
 
 ## AppConfigService (`libs/shared/app-config/src/lib/app-config.service.ts`)
 
-Layer 0/1 configuration, loaded once at startup. Import: `@nuxeo-satori/platform/app-config`.
+Layer 0/1 configuration, loaded once at startup. Import: `@nuxeo/satori-platform/app-config`.
 
 | Member                                                                      | Notes                                                                                                                                                                                                                                                                                                      |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -484,7 +484,7 @@ Removed in NXSAT-312, with no replacement: `loadBootstrap()`, `loadManifest()`, 
 ## NxsToastService (`libs/shared/satori-components/src/lib/toast/toast.service.ts`)
 
 The core slice's one toast (NXSAT-308), over Material's `MatSnackBar`. Import:
-`@nuxeo-satori/platform/components`. Not provided in root: list `provideNxsToast()` in the
+`@nuxeo/satori-platform/components`. Not provided in root: list `provideNxsToast()` in the
 component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, { useValue })`.
 
 | Member                                                         | Notes                                                                                                                                                                                                                                                           |
@@ -498,7 +498,7 @@ component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, {
 ## DocumentLayoutService (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)
 
 Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports only the
-`<lib-document-layout [document] mode>` component that uses it, and no `@nuxeo-satori/platform`
+`<lib-document-layout [document] mode>` component that uses it, and no `@nuxeo/satori-platform`
 entry point re-exports the library.
 
 | Member                                                                                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |

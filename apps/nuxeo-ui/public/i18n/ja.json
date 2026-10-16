@@ -1080,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "契約 ABC-123.pdf",
     "saved-search-placeholder": "例: 「第 3 四半期のレビュー保留中の契約」",
-    "showcase-dialog-message": "このダイアログは @nuxeo-satori/platform/ui からインポートされています。確認プロンプト、警告、破壊的な操作に使用できます。",
+    "showcase-dialog-message": "このダイアログは @nuxeo/satori-platform/ui からインポートされています。確認プロンプト、警告、破壊的な操作に使用できます。",
     "showcase-dialog-title": "コンポーネントショーケースのデモ"
   },
   "dashboard": {

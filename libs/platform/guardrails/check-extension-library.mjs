@@ -2,10 +2,10 @@
 /**
  * Guardrails for a **customer** Satori extension library.
  *
- * Ships inside `@nuxeo-satori/platform` so a customer can run it against their own
+ * Ships inside `@nuxeo/satori-platform` so a customer can run it against their own
  * library in their own CI:
  *
- *   node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs <dir>
+ *   node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs <dir>
  *
  * ## Why this is not our own guardrail script
  *
@@ -23,7 +23,7 @@
  * 1. **Every registered ID carries the library's own owner prefix.** An ID is a public
  *    contract; borrowing the platform's `app.` prefix means a platform upgrade can
  *    collide with you.
- * 2. **No import reaches past a published entry point.** `@nuxeo-satori/platform/extensions`
+ * 2. **No import reaches past a published entry point.** `@nuxeo/satori-platform/extensions`
  *    is supported; a deep path into its internals is not, and will break without being
  *    a breaking change.
  * 3. **A specs file asserts registry state.** A library whose tests never touch the
@@ -49,7 +49,7 @@ const target = process.argv[2];
 if (!target) {
   console.error(
     'Usage: node check-extension-library.mjs <library-directory>\n\n' +
-      'e.g. node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/acme-extensions',
+      'e.g. node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/acme-extensions',
   );
   process.exit(2);
 }
@@ -150,13 +150,13 @@ if (!owner) {
 // ------------------------------------------------------- 2. deep platform imports ----
 
 const PUBLISHED = new Set([
-  '@nuxeo-satori/platform',
-  '@nuxeo-satori/platform/extensions',
-  '@nuxeo-satori/platform/app-config',
-  '@nuxeo-satori/platform/components',
-  '@nuxeo-satori/platform/components-satori',
-  '@nuxeo-satori/platform/nuxeo-client',
-  '@nuxeo-satori/platform/ui',
+  '@nuxeo/satori-platform',
+  '@nuxeo/satori-platform/extensions',
+  '@nuxeo/satori-platform/app-config',
+  '@nuxeo/satori-platform/components',
+  '@nuxeo/satori-platform/components-satori',
+  '@nuxeo/satori-platform/nuxeo-client',
+  '@nuxeo/satori-platform/ui',
 ]);
 
 /**
@@ -165,14 +165,14 @@ const PUBLISHED = new Set([
  * `from '…'`, `import('…')`, `require('…')` **and a bare `import '…'`**.
  *
  * The first cut matched only the static `from` form, so
- * `import('@nuxeo-satori/platform/extensions/internal/secret')` — a deep path into
+ * `import('@nuxeo/satori-platform/extensions/internal/secret')` — a deep path into
  * internals, the exact thing this check exists to reject — passed. The second cut added the
  * call forms and still missed a **bare side-effect import**, which has neither `from` nor
  * parentheses; that was found when a probe against `upgrade-rehearsal.mjs`, which carried
  * the same regex, used precisely that form and was not caught.
  */
 const SPECIFIER =
-  /(?:from\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s*)['"](@nuxeo-satori\/platform[^'"]*)['"]/g;
+  /(?:from\s*|\bimport\s*\(\s*|\brequire\s*\(\s*|\bimport\s*)['"](@nuxeo\/satori-platform[^'"]*)['"]/g;
 
 for (const [file, text] of sources) {
   for (const m of text.matchAll(SPECIFIER)) {
@@ -552,9 +552,9 @@ const isReserved = ({ kind, name }, prefix) =>
 const isOwners = ({ kind, name }, owner) =>
   kind === 'element' ? name.startsWith(`${owner}-`) : name.startsWith(owner);
 
-/** The package or one of its entry points — not `@nuxeo-satori/platform-extras`. */
-const isPlatform = (specifier) => /^@nuxeo-satori\/platform(?:\/|$)/.test(specifier);
-const isComponentsEntry = (specifier) => specifier === '@nuxeo-satori/platform/components';
+/** The package or one of its entry points — not `@nuxeo/satori-platform-extras`. */
+const isPlatform = (specifier) => /^@nuxeo\/satori-platform(?:\/|$)/.test(specifier);
+const isComponentsEntry = (specifier) => specifier === '@nuxeo/satori-platform/components';
 const isAngularCore = (specifier) => specifier === '@angular/core';
 
 const KEY = String.raw`(\[(?:[^\[\]]|\[[^\]]*\])+\]|['"\x60][^'"\x60]+['"\x60])`;
@@ -751,7 +751,7 @@ for (const { file, key, className, exported, target, from } of contributions) {
   } else if (contract && !implementsContract) {
     fail(
       `${where}, overriding a platform primitive, but \`${declared.name}\` does not implement ` +
-        `\`${contract}\` from '@nuxeo-satori/platform/components'. A host passes that interface's ` +
+        `\`${contract}\` from '@nuxeo/satori-platform/components'. A host passes that interface's ` +
         'inputs and the outlet drops any the component does not declare, so it would render with ' +
         'the wrong inputs and nothing would fail.',
     );

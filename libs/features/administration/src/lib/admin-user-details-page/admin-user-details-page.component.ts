@@ -20,9 +20,9 @@ import {
   PrincipalPermissionsService,
   UserService,
   principalPermissionTimeFrameLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
-import { ConfirmDialogComponent, ConfirmDialogData } from '@nuxeo-satori/platform/ui';
+import { ConfirmDialogComponent, ConfirmDialogData } from '@nuxeo/satori-platform/ui';
 import {
   UserFormDialogComponent,
   UserFormDialogData,

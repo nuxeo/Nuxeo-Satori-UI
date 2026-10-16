@@ -3,7 +3,7 @@ import {
   isPermissionDeniedError,
   resolveAcePrincipal,
   type NuxeoAce,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { instantToDay } from './permissions-panel/permissions-model';
 

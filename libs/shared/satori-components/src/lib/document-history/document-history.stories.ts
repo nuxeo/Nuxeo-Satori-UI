@@ -13,7 +13,7 @@ import {
   type AuditLogList,
   type AuditLogQuery,
   type DirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsDocumentHistoryComponent } from './document-history.component';
 

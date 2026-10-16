@@ -13,7 +13,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
   NxsDetailsPanelComponent,
   type NxsDetailsPanelTab,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';

@@ -79,8 +79,8 @@ test('renames locally owned selectors and path references, preserving upstream n
     '<nxs-widget /><hxp-upstream /> .nxs-widget { color: var(--hxp-widget); }',
   );
   assert.match(content(plan, 'app.ts'), /shared\/satori-bridge/);
-  assert.match(content(plan, 'app.ts'), /browse-satori/);
-  assert.match(content(plan, 'app.ts'), /search-satori/);
+  assert.match(content(plan, 'app.ts'), /browse-adf-hx/);
+  assert.match(content(plan, 'app.ts'), /search-adf-hx/);
   assert.equal(
     plan.changes.some(({ from }) => from === 'upstream.ts'),
     false,
@@ -104,7 +104,7 @@ test('preserves CHANGELOG history at any depth, binaries and the codemod fixture
   assert.equal(planRename(plan.next).changes.length, 0);
 });
 
-test('renames owned hash routes in loopback app URLs while preserving third-party URLs', () => {
+test('renames owned hash-route Markdown link targets while preserving third-party URLs', () => {
   const before = [
     'http://localhost:4200/#/browse-adf-hx',
     'http://127.0.0.1:4300/nuxeo/ui/#/search-adf-hx?query=adf-hx',
@@ -113,14 +113,16 @@ test('renames owned hash routes in loopback app URLs while preserving third-part
     'https://localhost.example/#/search-adf-hx',
     'http://localhost:4200/#/browse-adf-hx-extra',
     'http://localhost:4200/adf-hx-bridge?next=search-adf-hx',
-  ].join('\n');
+  ]
+    .map((url) => `[Navigate](${url})`)
+    .join('\n');
   const plan = planRename(tree({ 'runbook.md': before }));
   assert.equal(
     content(plan, 'runbook.md'),
     before
-      .replace('4200/#/browse-adf-hx\n', '4200/#/browse-satori\n')
-      .replace('/#/search-adf-hx?query=', '/#/search-satori?query=')
-      .replace('/#/browse-adf-hx/doc', '/#/browse-satori/doc'),
+      .replace('4200/#/browse-adf-hx)', '4200/#/browse)')
+      .replace('/#/search-adf-hx?query=', '/#/search?query=')
+      .replace('/#/browse-adf-hx/doc', '/#/browse/doc'),
   );
   assert.equal(planRename(plan.next).changes.length, 0);
 });
@@ -514,5 +516,139 @@ test('Sass partial moves preserve underscore-free @use imports', () => {
   );
   assert.ok(plan.next.has('styles/_nxs-shared.scss'));
   assert.equal(content(plan, 'styles/component.scss'), "@use './nxs-shared';");
+  assert.equal(planRename(plan.next).changes.length, 0);
+});
+
+test('preserves historical document paths, bytes and links from current instructions', () => {
+  const history = OLD + ' docs/adf-hx-beta-plan.md /browse-adf-hx';
+  const files = tree({
+    '.cursor/plans/adf-hx_beta_deliverable.plan.md': history,
+    'docs/adf-hx-beta-plan.md': history,
+    'docs/adf-hx-workarounds.md': history,
+    'docs/adf-hx-poc-action-plan.md': history,
+    'docs/adf-hx-upstream-findings.md': history,
+    'AGENTS.md': 'See docs/adf-hx-beta-plan.md and [register](docs/adf-hx-workarounds.md).',
+  });
+  const plan = planRename(files);
+  assert.equal(plan.changes.length, 0);
+  for (const [path, body] of files) assert.deepEqual(plan.next.get(path), body);
+});
+
+test('preserves Beta phase and showcase keys, step filenames and legacy evidence routes', () => {
+  const entries = {
+    'scripts/beta-harness/steps/phase-3-adf-hx.mjs':
+      "const id = 'phase-3-adf-hx'; const route = '/#/browse-adf-hx';",
+    'scripts/beta-harness/steps/showcase-adf-hx.mjs': "const id = 'showcase-adf-hx';",
+    'scripts/beta-harness/phases.json':
+      '{"phase-3-adf-hx":{"steps":"steps/phase-3-adf-hx.mjs"},"showcase-adf-hx":{}}',
+    'docs/beta-commands.md':
+      'npm run beta:evidence -- phase-3-adf-hx; steps/phase-3-adf-hx.mjs; showcase-adf-hx',
+  };
+  const plan = planRename(tree(entries));
+  assert.equal(plan.changes.length, 0);
+  for (const [path, body] of Object.entries(entries)) assert.equal(content(plan, path), body);
+});
+
+test('keeps retired redirect declarations and tests while migrating their real package imports', () => {
+  for (const path of [
+    'apps/nuxeo-ui/src/app/retired-routes.ts',
+    'apps/nuxeo-ui/src/app/retired-routes.spec.ts',
+  ]) {
+    const before =
+      "import { x } from '" +
+      OLD +
+      "/nuxeo-client';\n" +
+      "path: 'browse-adf-hx'; redirectTo: 'browse'; path: 'search-adf-hx'; redirectTo: 'search';\n" +
+      "navigateByUrl('/browse-adf-hx?path=%2Fa'); navigateByUrl('/search-adf-hx?q=x');";
+    const plan = planRename(tree({ [path]: before }));
+    assert.equal(content(plan, path), before.replace(OLD, NEW));
+    assert.equal(planRename(plan.next).changes.length, 0);
+  }
+});
+
+test('canonicalizes Markdown navigation destinations while preserving labels, code and provenance', () => {
+  const before =
+    '[Browse](/#/browse-adf-hx?path=%2Fa) [Search](/search-adf-hx?q=x) ' +
+    '[Local](http://localhost:4200/#/search-adf-hx) ' +
+    '[Third party](https://example.org/#/browse-adf-hx) [Other](/browse-adf-hx-extra)\n' +
+    '[browse]: /#/browse-adf-hx\n' +
+    '[search]: <http://127.0.0.1:4200/#/search-adf-hx> "Search"\n' +
+    '[IPv6](http://[::1]:4200/#/browse-adf-hx)';
+  const plan = planRename(tree({ 'docs/current-guide.md': before }));
+  assert.equal(
+    content(plan, 'docs/current-guide.md'),
+    '[Browse](/#/browse?path=%2Fa) [Search](/search?q=x) ' +
+      '[Local](http://localhost:4200/#/search) ' +
+      '[Third party](https://example.org/#/browse-adf-hx) [Other](/browse-adf-hx-extra)\n' +
+      '[browse]: /#/browse\n' +
+      '[search]: <http://127.0.0.1:4200/#/search> "Search"\n' +
+      '[IPv6](http://[::1]:4200/#/browse)',
+  );
+  assert.doesNotMatch(content(plan, 'docs/current-guide.md'), /(?:browse|search)-satori/);
+  assert.equal(planRename(plan.next).changes.length, 0);
+});
+
+test('preserves removed-route history, benchmark provenance and standalone loopback URLs', () => {
+  const before =
+    'Removed `/browse-adf-hx`; `/search-adf-hx` redirects to `/search`.\n' +
+    '| Historical upstream benchmark | /browse-adf-hx | 9 failures |\n' +
+    'Captured at http://localhost:4200/#/browse-adf-hx; /search-adf-hx?q=x\n' +
+    '`[Historical example](/#/browse-adf-hx)`\n' +
+    '```md\n[Historical capture](/#/search-adf-hx)\n```\n' +
+    '~~~md\n[Historical capture](/#/browse-adf-hx)\n~~~';
+  const plan = planRename(tree({ 'AGENTS/11-beta-program.md': before }));
+  assert.equal(content(plan, 'AGENTS/11-beta-program.md'), before);
+  assert.equal(plan.changes.length, 0);
+});
+
+test('preserves banned upstream package specifiers in scanners and their negative fixtures', () => {
+  const banned = [
+    '@alfresco/adf-hx-content-services',
+    '@alfresco/adf-core',
+    '@alfresco/adf-extensions',
+    '@alfresco/js-api',
+    '@hylandsoftware/hxcs-js-client',
+  ];
+  const entries = {
+    'scripts/beta-harness/dependency-tree.mjs':
+      'const FORBIDDEN = ' +
+      JSON.stringify(banned) +
+      String.raw`; const bannedImport = /^@alfresco\/adf-hx-content-services(?:\/|$)/;`,
+    'scripts/beta-harness/dependency-tree.selftest.mjs': banned
+      .map((pkg) => "import '" + pkg + "';")
+      .join('\n'),
+    'libs/shared/adf-hx-content-services/package.json': '{}',
+  };
+  const plan = planRename(tree(entries));
+  for (const path of Object.keys(entries).slice(0, 2))
+    assert.equal(content(plan, path), entries[path]);
+  assert.ok(plan.next.has('libs/shared/satori-content-services/package.json'));
+});
+
+test('keeps tooling and skill filenames and their invocation keys stable', () => {
+  const entries = {
+    '.cursor/skills/adopt-adf-hx-component/SKILL.md': 'Use adopt-adf-hx-component.',
+    '.agent/skills/adopt-adf-hx-component/SKILL.md': 'Use adopt-adf-hx-component.',
+    '.claude/skills/adopt-adf-hx-component/SKILL.md': 'Use adopt-adf-hx-component.',
+    'scripts/beta-harness/annotate-showcase-adf-hx.mjs': "const key = 'annotate-showcase-adf-hx';",
+    'tools/video/adf-hx-provenance.mjs': "const key = 'adf-hx-provenance';",
+    'AGENTS.md':
+      'Read .cursor/skills/adopt-adf-hx-component/SKILL.md and tools/video/adf-hx-provenance.mjs.',
+  };
+  const plan = planRename(tree(entries));
+  assert.equal(plan.changes.length, 0);
+  for (const [path, body] of Object.entries(entries)) assert.equal(content(plan, path), body);
+});
+
+test('renames HTML entity package examples without losing Angular template escaping', () => {
+  const before =
+    '<h1>&#64;nuxeo-satori/platform/ui</h1> <code>from &#64;nuxeo-satori/platform</code> ' +
+    '&#64;nuxeo-satori/platform-extras; @alfresco/adf-hx-content-services';
+  const plan = planRename(tree({ 'apps/example/components.html': before }));
+  assert.equal(
+    content(plan, 'apps/example/components.html'),
+    '<h1>&#64;nuxeo/satori-platform/ui</h1> <code>from &#64;nuxeo/satori-platform</code> ' +
+      '&#64;nuxeo-satori/platform-extras; @alfresco/adf-hx-content-services',
+  );
   assert.equal(planRename(plan.next).changes.length, 0);
 });

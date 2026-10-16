@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/angular';<% if (isDocumentView) { %>
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';<% } %>
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';<% } %>
 
 import type { NxsHeadingLevel } from '../heading-level';
 import { <%= className %> } from './<%= fileName %>.component';

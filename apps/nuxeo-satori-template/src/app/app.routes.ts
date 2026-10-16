@@ -1,6 +1,6 @@
 import type { Routes } from '@angular/router';
 
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 /**
  * Routes the template ships with.

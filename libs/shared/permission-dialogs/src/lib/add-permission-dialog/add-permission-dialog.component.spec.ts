@@ -9,10 +9,10 @@ import { vi } from 'vitest';
 import {
   DocumentDetailService,
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AddPermissionDialogComponent } from './add-permission-dialog';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 describe('AddPermissionDialogComponent (NXSAT-159)', () => {
   let fixture: ComponentFixture<AddPermissionDialogComponent>;

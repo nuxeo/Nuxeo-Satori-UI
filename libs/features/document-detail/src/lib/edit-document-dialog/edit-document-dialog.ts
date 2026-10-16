@@ -18,8 +18,8 @@ import {
   DocumentLayoutFormComponent,
   readValidationFailure,
 } from '@agentic-ui/shared/document-layouts';
-import { BrowseService, NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { BrowseService, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+import { provideTranslatedDatepickerIntl } from '@nuxeo/satori-platform/ui';
 
 export interface EditDocumentDialogData {
   document: NuxeoDocument;

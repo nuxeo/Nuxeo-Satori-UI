@@ -8,7 +8,7 @@ import {
   DocumentDetailService,
   parentNuxeoFolderPath,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { formatBytes, formatTimestamp, mainBlob, stringProperty } from './document-fields';
 

@@ -6,7 +6,7 @@ import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
-import { NuxeoUser, UserService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { GroupFormDialogComponent, GroupFormDialogData } from './group-form-dialog.component';
 

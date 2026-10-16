@@ -6,7 +6,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { SearchService, type SavedSearchOption } from '@nuxeo-satori/platform/nuxeo-client';
+import { SearchService, type SavedSearchOption } from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   NxsSavedSearchSelectComponent,

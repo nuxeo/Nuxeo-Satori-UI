@@ -28,7 +28,7 @@ Three artifacts:
 | ---------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Marketplace package**      | Maven — `nuxeo-agentic-ui-package` | The built Angular app, the OSGi bundle, and the seed config                                                           |
 | **`nuxeo-agentic-core`**     | Maven                              | 189 lines of Java/OSGi: an `AgenticNotificationDocumentIdCodec`, an auth-config fragment, a login start-page fragment |
-| **`@nuxeo-satori/platform`** | `nx build platform`                | The npm package customers depend on. 347 kB, 25 files, 4 entry points. **`private: true` — not yet published**        |
+| **`@nuxeo/satori-platform`** | `nx build platform`                | The npm package customers depend on. 347 kB, 25 files, 4 entry points. **`private: true` — not yet published**        |
 
 `pom.xml` is a Maven parent over three modules: `apps/nuxeo-ui`, `nuxeo-agentic-core`,
 `nuxeo-agentic-ui-package`.
@@ -119,7 +119,7 @@ with Node 20 alone — no `npm ci`, no registry token — and `node config-packa
 checks its fragments and writes the zip `nuxeoctl mp-install` takes, to `config-packages/<name>/dist/`.
 Where Nx is installed, the `config-package` generator writes the same files
 (`npx nx g ./tools/satori-generators:config-package <name> --owner=<owner>` after a full install,
-or `npx nx g @nuxeo-satori/platform:config-package …` from the published package) and
+or `npx nx g @nuxeo/satori-platform:config-package …` from the published package) and
 `npx nx build <name>` runs the same `build.mjs`. `config-packages/presales-demo` is the demo
 package presales installs.
 

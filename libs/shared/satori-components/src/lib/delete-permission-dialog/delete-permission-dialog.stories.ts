@@ -9,7 +9,7 @@ import {
   DocumentDetailService,
   type NuxeoAce,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { dialogPreview } from '../../../.storybook/dialog-preview';
 

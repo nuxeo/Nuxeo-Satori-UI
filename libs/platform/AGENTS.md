@@ -40,7 +40,7 @@ nuxeoctl mp-install config-packages/acme-config/dist/acme-config-1.0.0.zip   # t
 ```
 
 Where this package is installed, the same script is
-`node_modules/@nuxeo-satori/platform/generators/config-package/create.mjs`.
+`node_modules/@nuxeo/satori-platform/generators/config-package/create.mjs`.
 
 It writes the Marketplace package — `package.xml` depending on `nuxeo-agentic-ui`, a component
 that `<require>`s Satori's defaults, starter `bootstrap.json` and `manifest.json` with JSON
@@ -52,7 +52,7 @@ Where Nx is installed, the `config-package` generator writes the same files, byt
 `nx build` runs the same `build.mjs`:
 
 ```bash
-npx nx g @nuxeo-satori/platform:config-package acme-config --owner=acme
+npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme
 npx nx build acme-config          # writes dist/config-packages/acme-config/acme-config-1.0.0.zip
 ```
 
@@ -64,12 +64,12 @@ For Layer 2 — code — the other four:
 
 ```bash
 # once, per library
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
 
 # then, per contribution
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-component claim-summary --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
 ```
 
 > These commands used to read `npx nx g ./tools/satori-generators:…` — a path inside the
@@ -88,7 +88,7 @@ The library is **inert until an application opts in**. One line:
 providers: [/* … */ provideAcmeExtensions()];
 ```
 
-That is the whole integration. **No edit to any `@nuxeo-satori/platform` library** —
+That is the whole integration. **No edit to any `@nuxeo/satori-platform` library** —
 if you find yourself needing one, stop and raise it.
 
 ### The generators edit your `extensions.ts` through marker comments
@@ -186,7 +186,7 @@ cannot tell you that you have made one of the five mistakes below, because each 
 green code. This package ships the check as an executable:
 
 ```bash
-node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/<your-library>
+node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/<your-library>
 ```
 
 It exits non-zero on: an ID registered under a prefix you do not own, an import that
@@ -223,7 +223,7 @@ of them named the new IDs.
 
 ## 5. If you are an AI agent
 
-- **Do not edit anything under `@nuxeo-satori/platform`.** If a task seems to require
+- **Do not edit anything under `@nuxeo/satori-platform`.** If a task seems to require
   it, the task is either a Layer 0/1 change in disguise or a genuine gap to report.
 - **Prefer a generator to hand-writing a file.** They emit the specs and the guard
   rails; hand-written contributions routinely omit both.
@@ -239,13 +239,13 @@ of them named the new IDs.
 | What                                             | Where                                                                                         |
 | ------------------------------------------------ | --------------------------------------------------------------------------------------------- |
 | Every addressable ID, and each slot's real state | `extension-reference.md`                                                                      |
-| The published API surface                        | `@nuxeo-satori/platform` type declarations                                                    |
-| Entry points                                     | `@nuxeo-satori/platform/{extensions,app-config,components,components-satori,nuxeo-client,ui}` |
+| The published API surface                        | `@nuxeo/satori-platform` type declarations                                                    |
+| Entry points                                     | `@nuxeo/satori-platform/{extensions,app-config,components,components-satori,nuxeo-client,ui}` |
 | Your contributions                               | your own library, `provideSatoriExtensions()`                                                 |
 
 ## 7. The `nxs-` components — compose, override, place
 
-`@nuxeo-satori/platform/components` is the Nuxeo-owned component library: `nxs-` selectors,
+`@nuxeo/satori-platform/components` is the Nuxeo-owned component library: `nxs-` selectors,
 built on Angular Material, with no ADF and no Satori import of its own. There are three things
 you can do with it, and they are different promises.
 
@@ -254,7 +254,7 @@ you can do with it, and they are different promises.
 Every component the entry point exports can be imported and used in your Layer 2 components:
 
 ```ts
-import { NxsEmptyStateComponent } from '@nuxeo-satori/platform/components';
+import { NxsEmptyStateComponent } from '@nuxeo/satori-platform/components';
 ```
 
 ```html
@@ -331,7 +331,7 @@ so the host re-reads the external-user section it owns.
 | `nxs.primitives.errorState`  | `NxsErrorStateInputs`  | `nxs-error-state`            | — (needs Satori 1.0)              |
 
 `provideNxsComponents()` registers them on Material. Only with GitHub Packages access, add
-`provideNxsSatoriComponents()` from `@nuxeo-satori/platform/components-satori` after it to
+`provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori` after it to
 re-register them on Satori — the one entry point that needs the optional
 `@hylandsoftware/satori-ui` peer. Registrations layer in provider order and later wins, so yours
 goes last:
@@ -397,12 +397,12 @@ not a registration, so give an object like that plain keys. It fails a registrat
   collide on an upgrade, as an element, an attribute or a class. A component with no selector is
   allowed;
 - **overrides an `nxs.primitives.*` ID without implementing its contract** — the interface
-  imported from `@nuxeo-satori/platform/components`, under whatever name you import it, not a
+  imported from `@nuxeo/satori-platform/components`, under whatever name you import it, not a
   same-named one of your own — or one that does not exist. The ID may be written as
   `'nxs.primitives.tag'` or as `[NXS_PRIMITIVE_IDS.tag]`, under any name you import that by.
 
 Any other shape — a class declared in the same file, a default or namespace import, a class from
-another package (`@nuxeo-satori/platform-extras` is another package) — gets a warning that **none
+another package (`@nuxeo/satori-platform-extras` is another package) — gets a warning that **none
 of these checks ran on it**, and the command still exits 0. So does `components: SOME_CONSTANT`, a
 `...spread` inside `components`, and a selector that is not a string literal. Treat each warning
 as a failure, or rewrite it in one of the shapes above.

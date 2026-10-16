@@ -18,8 +18,8 @@ import {
   WorkflowService,
   type NuxeoDocument,
   type NuxeoTask,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { DocumentViewerComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { DocumentViewerComponent } from '@nuxeo/satori-platform/ui';
 
 import { TasksPageComponent } from './tasks-page.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';

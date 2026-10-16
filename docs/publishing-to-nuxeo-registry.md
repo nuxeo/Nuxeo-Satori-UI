@@ -175,7 +175,7 @@ Do this at the **final deployment stage**, not before.
 
 ### 5.1 Rename the scope (one-off)
 
-`@nuxeo-satori/platform` → `@nuxeo/satori-platform`. Two authored files plus a
+`@nuxeo/satori-platform` → `@nuxeo/satori-platform`. Two authored files plus a
 mechanical rename:
 
 1. `libs/platform/package.json` — the `name` field
@@ -209,7 +209,7 @@ alignment argues for the train. This is a product decision, not a technical one.
 In `libs/platform/package.json`:
 
 ```diff
-- "name": "@nuxeo-satori/platform",
+- "name": "@nuxeo/satori-platform",
 + "name": "@nuxeo/satori-platform",
 - "private": true,
 + "version": "<agreed version>",

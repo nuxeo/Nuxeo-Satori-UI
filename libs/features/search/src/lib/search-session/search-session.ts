@@ -22,14 +22,14 @@ import {
   nxsSearchFiltersToRecord,
   nxsSearchFiltersToSavedParams,
   type NxsSearchFilters,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 import {
   SearchAggregationService,
   SearchService,
   type SearchAggregations,
   type SearchQueryParams,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 /** The page provider every search here runs, and every saved search is saved against. */
 export const SEARCH_PAGE_PROVIDER = 'default_search';

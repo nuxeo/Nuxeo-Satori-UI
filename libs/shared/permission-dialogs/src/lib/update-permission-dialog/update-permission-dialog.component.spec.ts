@@ -9,10 +9,10 @@ import {
   DocumentDetailService,
   NuxeoAce,
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { UpdatePermissionDialogComponent } from './update-permission-dialog';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 const ace: NuxeoAce = {
   id: 'ace-1',

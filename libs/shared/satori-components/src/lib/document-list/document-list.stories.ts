@@ -2,7 +2,7 @@ import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular'
 import { throwError } from 'rxjs';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import type { NxsHeadingLevel } from '../heading-level';
 import { provideNxsComponents } from '../provide-nxs-components';

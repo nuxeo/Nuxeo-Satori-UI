@@ -32,7 +32,7 @@ import {
   NuxeoApiBase,
   escapeNxqlLiteral,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsDocTypeIconComponent } from '../doc-type-icon/doc-type-icon.component';
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';

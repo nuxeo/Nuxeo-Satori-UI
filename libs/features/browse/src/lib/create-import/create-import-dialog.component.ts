@@ -59,9 +59,9 @@ import {
   shouldShowExpiresFieldError,
   documentNavigationUrl,
   isCollectionDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import { provideTranslatedDatepickerIntl } from '@nuxeo/satori-platform/ui';
 import {
   NxsDocTypeIconComponent,
   NxsDropzoneComponent,
@@ -70,7 +70,7 @@ import {
   NxsUploadQueue,
   NxsUploadQueueComponent,
   provideNxsToast,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 export interface CreateImportDialogData {
   /** Import target folder; if omitted, falls back to `DocumentImportService.getDefaultImportParentPath()`. */

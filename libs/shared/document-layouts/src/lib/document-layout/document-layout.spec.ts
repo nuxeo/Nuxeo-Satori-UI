@@ -7,8 +7,8 @@ import {
   ExtensionComponentRegistry,
   type ExtensionDocumentLayoutDescriptor,
   type ExtensionRuleContext,
-} from '@nuxeo-satori/platform/extensions';
-import { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/extensions';
+import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Observable, Subject, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';

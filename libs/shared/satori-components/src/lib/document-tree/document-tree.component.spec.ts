@@ -1,7 +1,7 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 

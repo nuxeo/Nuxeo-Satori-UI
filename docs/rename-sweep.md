@@ -11,12 +11,19 @@ Slash-escaped package patterns such as `@nuxeo-satori\/platform` also migrate to
 The planner reads tracked files, including hidden agent instructions, package metadata,
 secondary-entry paths, the API snapshot, docs, generator templates, acme-extensions,
 and the nuxeo-satori-template application. It derives local path replacements from
-tracked filenames: `adf-hx` becomes `satori`, and filenames beginning with `hxp-`
+owned source filenames: `adf-hx` becomes `satori`, and filenames beginning with `hxp-`
 (or `_hxp-` Sass partials) become `nxs-` (or `_nxs-`). It updates references to those
-segments, extensionless imports and stems in text files. The legacy routes
-`browse-adf-hx` and `search-adf-hx` become `browse-satori` and `search-satori`.
-Owned hash routes in absolute loopback-app URLs (`localhost`, `127.0.0.1`, and `::1`)
-also change; unrelated URL paths, query parameters, and third-party hosts remain intact.
+segments, extensionless imports and stems in text files. Historical `.cursor/plans/` and `docs/adf-hx-*`
+files remain byte-identical, and their names and links remain stable. Tool and skill filenames and Beta evidence step
+filenames and keys, including `phase-3-adf-hx` and `showcase-adf-hx`, also stay stable.
+The retired `browse-adf-hx` and `search-adf-hx` redirect declarations, their tests and
+historical evidence routes remain intact. Only Markdown navigation link destinations
+(inline links and reference definitions) canonicalize to `/browse` and `/search`,
+including hash links in absolute loopback-app URLs
+(`localhost`, `127.0.0.1`, and `::1`). Unrelated URL paths, query parameters,
+and third-party hosts remain intact. Historical prose, benchmark rows, inline and fenced
+code, and standalone provenance URLs retain their original route identifiers. The sweep
+introduces no new route names.
 
 Only selectors declared locally in TypeScript are candidates for `hxp-` to `nxs-`
 replacement. Their declarations, markup and matching CSS selectors change together,
@@ -28,11 +35,16 @@ would also rename upstream packages and selectors the repository does not own.
 ## 2. Exclusions
 
 - CHANGELOG files and directories at any depth, case insensitive: history stays intact.
+- Historical `docs/adf-hx-*` files and references; Beta evidence step filenames and keys.
+- Legacy redirect declarations, redirect tests, historical prose and evidence routes.
+- Route identifiers in Markdown prose/code and standalone provenance URLs; only actual
+  inline-link destinations and reference definitions canonicalize.
+- Banned upstream package specifiers in guardrails and their negative test fixtures.
 - The codemod and its self-test: their old-name rules and fixtures must remain runnable.
 - This migration guide (`docs/rename-sweep.md`): historical mappings and measurements stay intact.
 - Untracked files, symlinks, submodules and binary files containing a NUL byte.
 - Upstream `@alfresco` package names and external HTTP(S) URLs, except the owned
-  loopback-app hash routes described above.
+  loopback-app hash routes in Markdown link destinations described above.
 - `Hxp` / `AdfHx` TypeScript class names and `--hxp-*` theme tokens. These are distinct
   contracts; this script does not replace them just because a selector changes.
 

@@ -14,8 +14,8 @@ audience: engineering
 > Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
 > Only "The six guardrail checks" was verified at that commit, against
 > `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
-> `@nuxeo-satori/platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
-> The `@nuxeo-satori/platform/components` row in §6 was re-verified at
+> `@nuxeo/satori-platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
+> The `@nuxeo/satori-platform/components` row in §6 was re-verified at
 > `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
 > upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
 > in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.
@@ -34,7 +34,7 @@ promise checkable rather than aspirational.
 | -------------------------- | --------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------ |
 | **0 — Configuration**      | JSON + CSS custom properties: theme tokens, branding, languages             | No                     | Yes — it is a fragment in the customer's package |
 | **1 — Declarative wiring** | JSON referencing components, rules, actions and routes **by registered ID** | No                     | Yes — it is a fragment in the customer's package |
-| **2 — Customer code**      | A TypeScript library against `@nuxeo-satori/platform`                       | Yes, in **their** repo | Yes — npm semver                                 |
+| **2 — Customer code**      | A TypeScript library against `@nuxeo/satori-platform`                       | Yes, in **their** repo | Yes — npm semver                                 |
 | **3 — Agent harness**      | Prompts. The generators and guardrails ship inside the package              | Yes, in their repo     | Yes                                              |
 
 Layers 0 and 1 are expected to absorb most customer requests and need no build of the application:
@@ -276,20 +276,20 @@ upstream's output.
 
 ---
 
-## 6. Layer 2 — `@nuxeo-satori/platform`
+## 6. Layer 2 — `@nuxeo/satori-platform`
 
 One publishable library, six secondary entry points; `npm pack --dry-run` on the build gives a
 556 kB tarball of 70 files (measured 2026-10-08).
 
 | Entry point                                | Wraps                                                                                                                                            |
 | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `@nuxeo-satori/platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
-| `@nuxeo-satori/platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
-| `@nuxeo-satori/platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
-| `@nuxeo-satori/platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
-| `@nuxeo-satori/platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
-| `@nuxeo-satori/platform/nuxeo-client`      | Services and models                                                                                                                              |
-| `@nuxeo-satori/platform/ui`                | Shared presentational components                                                                                                                 |
+| `@nuxeo/satori-platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
+| `@nuxeo/satori-platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
+| `@nuxeo/satori-platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
+| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo/satori-platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo/satori-platform/nuxeo-client`      | Services and models                                                                                                                              |
+| `@nuxeo/satori-platform/ui`                | Shared presentational components                                                                                                                 |
 
 ### One declarative object reaches four registries
 
@@ -342,16 +342,16 @@ compiler reported either. If you touch
 Four Nx generators, shipped **inside** the package at its root as a proper plugin:
 
 ```bash
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-component claim-summary --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
 ```
 
 Plus the guardrail a customer runs in their own CI:
 
 ```bash
-node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/<their-library>
+node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/<their-library>
 ```
 
 > Until 2026-08-24 the customer guide told customers to run

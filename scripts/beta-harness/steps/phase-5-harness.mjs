@@ -214,8 +214,8 @@ export default async function run(page, h) {
         writeFileSync(
           f,
           readFileSync(f, 'utf8').replace(
-            "from '@nuxeo-satori/platform/extensions'",
-            "from '@nuxeo-satori/platform/extensions/lib/internal'",
+            "from '@nuxeo/satori-platform/extensions'",
+            "from '@nuxeo/satori-platform/extensions/lib/internal'",
           ),
         );
       },

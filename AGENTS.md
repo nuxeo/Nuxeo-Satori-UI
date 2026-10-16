@@ -50,7 +50,7 @@ project cannot depend on anything**, so a new library needs tags before it can i
 
 ## 3. Key Services (quick reference)
 
-All in `libs/shared/nuxeo-client/src/lib/services/` · Import: `@nuxeo-satori/platform/nuxeo-client`
+All in `libs/shared/nuxeo-client/src/lib/services/` · Import: `@nuxeo/satori-platform/nuxeo-client`
 
 | Service                    | Primary use                                                                  |
 | -------------------------- | ---------------------------------------------------------------------------- |

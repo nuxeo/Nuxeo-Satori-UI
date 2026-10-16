@@ -89,7 +89,7 @@ import {
   formatAceDateRange,
   permissionRightLabel,
   DocTypeLabelPipe,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
@@ -107,7 +107,7 @@ import {
   trashDocumentConfirmData,
   trashSelectedDocumentsConfirmData,
   provideTranslatedDatepickerIntl,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 
 import {
   UpdatePermissionDialogComponent,
@@ -128,7 +128,7 @@ import {
   type ExtensionActionDescriptor,
   type ExtensionColumnDescriptor,
   type ExtensionRuleContext,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import {
   ALL_COLUMNS,
@@ -176,7 +176,7 @@ import {
   type NxsPickableColumn,
   NxsToastService,
   provideNxsToast,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 /**
  * The packaged column set as descriptors, for an injector where Layer 1

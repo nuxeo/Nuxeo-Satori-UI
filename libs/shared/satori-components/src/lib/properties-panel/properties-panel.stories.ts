@@ -1,4 +1,4 @@
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import type { Meta, StoryObj } from '@storybook/angular';
 import { fn } from 'storybook/test';
 

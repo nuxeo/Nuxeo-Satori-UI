@@ -1,6 +1,6 @@
 import { inject } from '@angular/core';
 import { Router, type Route } from '@angular/router';
-import { toBrowseRouterUrl } from '@nuxeo-satori/platform/nuxeo-client';
+import { toBrowseRouterUrl } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The adf-hx proof of concept's two routes, retired. Bookmarks and shared links to them still

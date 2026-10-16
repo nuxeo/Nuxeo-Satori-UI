@@ -29,10 +29,10 @@ import {
   l10nEntryLabel,
   PERMISSION_DENIED_KEY,
   isPermissionDeniedError,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
-import { NxsToastService, provideNxsToast } from '@nuxeo-satori/platform/components';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface EditCollectionDialogData {
   document: NuxeoDocument;

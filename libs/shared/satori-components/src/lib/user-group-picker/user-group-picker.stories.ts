@@ -9,7 +9,7 @@ import {
   type NuxeoGroup,
   type NuxeoUser,
   type UserGroupSuggestion,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsUserGroupPickerComponent } from './user-group-picker.component';
 

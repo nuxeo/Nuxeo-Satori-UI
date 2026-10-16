@@ -10,7 +10,7 @@ import {
   APP_BOOTSTRAP_CONFIG_URL,
   APP_CONFIG_FORMAT,
   type AppConfigLayer,
-} from '@nuxeo-satori/platform/app-config';
+} from '@nuxeo/satori-platform/app-config';
 import {
   ARENDER_CONFIG,
   NUXEO_API_ORIGIN,
@@ -18,7 +18,7 @@ import {
   NUXEO_SERVER_URL,
   NUXEO_SSO_POST_LOGIN_PATH,
   NUXEO_SSO_RETURN_QUERY_PARAM,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';

@@ -26,7 +26,7 @@ import {
   trustObjectUrl,
   mediaTypeEssence,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 export interface KdCitationDialogData {

@@ -29,7 +29,7 @@
  * Extracted from duplicate builders in the adf-hx bridge's port specs, since removed.
  */
 
-import type { NuxeoDocument, NuxeoAce } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument, NuxeoAce } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * Drop keys whose value is `undefined`, so an override cannot delete a default.

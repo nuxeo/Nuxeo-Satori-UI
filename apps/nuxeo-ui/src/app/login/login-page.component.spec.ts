@@ -5,8 +5,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { firstValueFrom, of, Observable } from 'rxjs';
 
-import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo-satori/platform/app-config';
-import type { NuxeoSamlLoginEndpoint } from '@nuxeo-satori/platform/nuxeo-client';
+import { AppConfigService, DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
+import type { NuxeoSamlLoginEndpoint } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService, SignInError } from '../auth/auth.service';
 import { LoginPageComponent } from './login-page.component';

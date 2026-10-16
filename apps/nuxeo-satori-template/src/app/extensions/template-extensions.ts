@@ -5,7 +5,7 @@ import {
   provideSatoriExtensions,
   type NavItemDescriptor,
   type SatoriExtensionContributions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { TemplateSessionService } from '../template-session.service';
 

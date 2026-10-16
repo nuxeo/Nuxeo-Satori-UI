@@ -5,7 +5,7 @@ import { defer, delay, of, throwError, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
 import { expect, userEvent, waitFor, within } from 'storybook/test';
 
-import { TagService } from '@nuxeo-satori/platform/nuxeo-client';
+import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsTagEditorComponent } from './tag-editor.component';
 

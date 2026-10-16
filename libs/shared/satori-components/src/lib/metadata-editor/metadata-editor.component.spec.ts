@@ -5,7 +5,7 @@ import {
   DirectoryService,
   type DirectoryEntry,
   type L10nDirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 

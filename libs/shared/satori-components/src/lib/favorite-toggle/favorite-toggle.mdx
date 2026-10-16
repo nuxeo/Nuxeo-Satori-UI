@@ -41,7 +41,7 @@ Press the star: it fills once the in-memory server confirms.
 <Source
   language="typescript"
   dark
-  code={`import { NxsFavoriteToggleComponent } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsFavoriteToggleComponent } from '@nuxeo/satori-platform/components';`}
 />
 
 export const usageHtml = `<nxs-favorite-toggle
@@ -63,7 +63,7 @@ the star without letting it be pressed. `changed` carries the new state and `fai
 error, with `favorite` left as it was.
 
 The toggle needs `HttpClient` and the platform's `DocumentDetailService`, which an application using
-`@nuxeo-satori/platform/nuxeo-client` already has; it needs no providers of its own. Its name and
+`@nuxeo/satori-platform/nuxeo-client` already has; it needs no providers of its own. Its name and
 tooltips are translated with ngx-translate, under `satori-components.favorite-toggle.*`;
 `providePlatformEnglishFallback()` supplies the English when your catalogue does not. It has no
 registered ID: place it in a template by its selector. A favorite star takes the theme's primary
@@ -74,7 +74,7 @@ colour; set `--nxs-favorite-toggle-active-color` to change it.
 `nxsToggleFavorite(documentDetailService, documentId, favorite)` runs the same request, dispatches the
 same event, and emits the state the server now holds:
 
-export const asAMenuEntryTs = `import { nxsToggleFavorite } from '@nuxeo-satori/platform/components';
+export const asAMenuEntryTs = `import { nxsToggleFavorite } from '@nuxeo/satori-platform/components';
 
 nxsToggleFavorite(this.documents, document.uid, this.isFavorite())
   .pipe(takeUntilDestroyed(this.destroyRef))

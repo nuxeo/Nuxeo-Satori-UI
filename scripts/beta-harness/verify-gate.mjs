@@ -284,7 +284,7 @@ const ALL_GATES = [
   },
   // The gate that asserts the package can be *published*, by running a real
   // `npm publish --dry-run` on a copy of the built bytes. Nothing above it runs a
-  // publish, so for the whole of Phase 4 `@nuxeo-satori/platform` was unpublishable —
+  // publish, so for the whole of Phase 4 `@nuxeo/satori-platform` was unpublishable —
   // ng-packagr had written a `prepublishOnly` that hard-fails full-mode packages — while
   // every gate here was green and the phase claimed "an upgrade is an npm version bump".
   {

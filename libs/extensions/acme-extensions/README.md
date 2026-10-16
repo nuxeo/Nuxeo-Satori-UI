@@ -19,7 +19,7 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
-That is the whole integration. **No edits to any `@nuxeo-satori/platform` library**
+That is the whole integration. **No edits to any `@nuxeo/satori-platform` library**
 are required, which is the property this library exists to demonstrate.
 
 ## What it registers

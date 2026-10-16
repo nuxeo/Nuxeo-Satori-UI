@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { TranslateService } from '@ngx-translate/core';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { vi } from 'vitest';
@@ -21,9 +21,9 @@ import {
   CURRENT_USERNAME,
   ADMIN_ACCESS_CHECKS,
   PERMISSION_DENIED_KEY,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { trashSelectedDocumentsConfirmData } from '@nuxeo-satori/platform/ui';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { trashSelectedDocumentsConfirmData } from '@nuxeo/satori-platform/ui';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * Each mock is annotated with the real method's return type.

@@ -1,4 +1,4 @@
-# `@nuxeo-satori/platform`
+# `@nuxeo/satori-platform`
 
 The customer-facing package. Installable via npm (once published), ships the Layer 0/1/2
 extensibility contract, the Nuxeo client, shared UI components, and bootstrap config.
@@ -7,13 +7,13 @@ extensibility contract, the Nuxeo client, shared UI components, and bootstrap co
 
 | Import specifier                           | What it is                                                                            |
 | ------------------------------------------ | ------------------------------------------------------------------------------------- |
-| `@nuxeo-satori/platform`                   | Package metadata and entry point list                                                 |
-| `@nuxeo-satori/platform/extensions`        | Layer 1/2 — slots, rules, actions, component registration                             |
-| `@nuxeo-satori/platform/app-config`        | Layer 0 — bootstrap config and runtime manifest                                       |
-| `@nuxeo-satori/platform/components`        | `nxs-` components, Material-backed, no Satori import                                  |
-| `@nuxeo-satori/platform/components-satori` | The same primitive IDs on Satori; needs the optional `@hylandsoftware/satori-ui` peer |
-| `@nuxeo-satori/platform/nuxeo-client`      | Nuxeo REST services and document models                                               |
-| `@nuxeo-satori/platform/ui`                | Shared components and dialogs                                                         |
+| `@nuxeo/satori-platform`                   | Package metadata and entry point list                                                 |
+| `@nuxeo/satori-platform/extensions`        | Layer 1/2 — slots, rules, actions, component registration                             |
+| `@nuxeo/satori-platform/app-config`        | Layer 0 — bootstrap config and runtime manifest                                       |
+| `@nuxeo/satori-platform/components`        | `nxs-` components, Material-backed, no Satori import                                  |
+| `@nuxeo/satori-platform/components-satori` | The same primitive IDs on Satori; needs the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo/satori-platform/nuxeo-client`      | Nuxeo REST services and document models                                               |
+| `@nuxeo/satori-platform/ui`                | Shared components and dialogs                                                         |
 
 Sub-entry points are deliberate: importing the extension contract does not drag the Nuxeo
 client or Angular Material in with it.
@@ -66,15 +66,15 @@ npm install /tmp/nuxeo-satori-platform-0.2.0.tgz
 Once installed:
 
 ```ts
-import { PLATFORM_ENTRY_POINTS } from '@nuxeo-satori/platform';
+import { PLATFORM_ENTRY_POINTS } from '@nuxeo/satori-platform';
 import {
   provideSatoriExtensions,
   EXTENSION_SLOTS,
   type SatoriExtensionContributions,
-} from '@nuxeo-satori/platform/extensions';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { docTypeIcon } from '@nuxeo-satori/platform/nuxeo-client';
-import { ConfirmDialogComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { docTypeIcon } from '@nuxeo/satori-platform/nuxeo-client';
+import { ConfirmDialogComponent } from '@nuxeo/satori-platform/ui';
 
 const contributions: SatoriExtensionContributions = {
   slots: { [EXTENSION_SLOTS.toolbar]: [{ id: 'acme.export', order: 10 }] },
@@ -97,7 +97,7 @@ English copy, so it renders English rather than raw keys:
 
 ```ts
 import { provideTranslateService } from '@ngx-translate/core';
-import { providePlatformEnglishFallback } from '@nuxeo-satori/platform/ui';
+import { providePlatformEnglishFallback } from '@nuxeo/satori-platform/ui';
 
 provideTranslateService({ missingTranslationHandler: providePlatformEnglishFallback() });
 ```

@@ -7,7 +7,7 @@ import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
@@ -15,7 +15,7 @@ import {
   PACKAGED_ROW_ACTIONS,
   provideSatoriExtensions,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   BrowseContextService,
   BrowseService,
@@ -24,13 +24,13 @@ import {
   DocumentImportService,
   TagService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   NxsFolderPickerDialogComponent,
   NxsRenameDialogComponent,
   NxsToastService,
-} from '@nuxeo-satori/platform/components';
-import { ConfirmDialogComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/components';
+import { ConfirmDialogComponent } from '@nuxeo/satori-platform/ui';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { BrowseComponent } from './browse';

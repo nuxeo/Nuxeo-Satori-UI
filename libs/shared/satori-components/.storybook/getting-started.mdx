@@ -21,7 +21,7 @@ Each component has three kinds of page in the sidebar:
 
 ## Install
 
-<Source language="bash" dark code="npm install @nuxeo-satori/platform" />
+<Source language="bash" dark code="npm install @nuxeo/satori-platform" />
 
 The package needs Angular 20 (`core`, `common`, `forms`, `router` and `platform-browser`), Angular
 Material and CDK 20, ngx-translate 17 and RxJS 7. All of these come from the public npm registry.
@@ -39,7 +39,7 @@ Material and CDK 20, ngx-translate 17 and RxJS 7. All of these come from the pub
   <tbody>
     <tr>
       <td>
-        <code>@nuxeo-satori/platform/components</code>
+        <code>@nuxeo/satori-platform/components</code>
       </td>
       <td>
         Every <code>nxs-</code> component, built on Angular Material
@@ -48,7 +48,7 @@ Material and CDK 20, ngx-translate 17 and RxJS 7. All of these come from the pub
     </tr>
     <tr>
       <td>
-        <code>@nuxeo-satori/platform/components-satori</code>
+        <code>@nuxeo/satori-platform/components-satori</code>
       </td>
       <td>Satori's own avatar, breadcrumbs, tag and rich tooltip, under the same registered IDs</td>
       <td>
@@ -91,8 +91,8 @@ already translated, but some components translate their own labels and buttons.
 export const providersTs = `import { provideHttpClient } from '@angular/common/http';
 import { ApplicationConfig } from '@angular/core';
 import { provideTranslateService } from '@ngx-translate/core';
-import { provideNxsComponents } from '@nuxeo-satori/platform/components';
-import { providePlatformEnglishFallback } from '@nuxeo-satori/platform/ui';
+import { provideNxsComponents } from '@nuxeo/satori-platform/components';
+import { providePlatformEnglishFallback } from '@nuxeo/satori-platform/ui';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -120,8 +120,8 @@ translation loader.
 
 export const providersTs2 = `import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { provideAndConfigureSatoriUITranslations } from '@hylandsoftware/satori-ui/translations';
-import { provideNxsComponents } from '@nuxeo-satori/platform/components';
-import { provideNxsSatoriComponents } from '@nuxeo-satori/platform/components-satori';
+import { provideNxsComponents } from '@nuxeo/satori-platform/components';
+import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -144,7 +144,7 @@ Every component is standalone. Import it where you use it:
 
 export const usingAComponentTs = `import { Component } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
-import { NxsSpinnerComponent } from '@nuxeo-satori/platform/components';
+import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'acme-results',
@@ -226,8 +226,8 @@ The four `nxs.primitives.*` IDs are exported as `NXS_PRIMITIVE_IDS`, and the per
 `NXS_PERMISSIONS_PANEL_ID`. Render an ID with `lib-extension-outlet`, passing the component's inputs:
 
 export const registeringByIdTs = `import { Component } from '@angular/core';
-import { NXS_PRIMITIVE_IDS } from '@nuxeo-satori/platform/components';
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { NXS_PRIMITIVE_IDS } from '@nuxeo/satori-platform/components';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 @Component({
   selector: 'acme-document-type',
@@ -253,7 +253,7 @@ To replace a component, register your own under its ID, after the providers abov
 inputs: for the four primitives, implement the matching interface (`NxsTagInputs` for the tag, and
 so on).
 
-export const registeringByIdTs2 = `import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+export const registeringByIdTs2 = `import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 providers: [
   provideNxsComponents(),

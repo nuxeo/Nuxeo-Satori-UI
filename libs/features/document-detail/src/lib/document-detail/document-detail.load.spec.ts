@@ -29,7 +29,7 @@ import {
   TaskService,
   WorkflowService,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiChatService,
   AiFeatureFlagService,
@@ -40,10 +40,10 @@ import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * The load chain, actually running.

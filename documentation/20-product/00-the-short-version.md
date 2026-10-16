@@ -146,7 +146,7 @@ shows Administration to administrators only:
   but read-only. The edit form is the same standard fields for every type.
 - **Install from a public registry.** The Marketplace package has only been published to Nuxeo's
   pre-production Marketplace. The developer package your own code builds against,
-  `@nuxeo-satori/platform`, is not on any npm registry yet.
+  `@nuxeo/satori-platform`, is not on any npm registry yet.
 - **Run your own code inside the shipped application.** See the next section.
 - **Edit every permission level on the rail's Browse page.** That page is still the adf-hx proof
   of concept, and its Permissions tab handles only Nuxeo's Read, ReadWrite and Everything. On a
@@ -164,7 +164,7 @@ shows Administration to administrators only:
 - changing what a shipped button does;
 - screens specific to your document types, and a form that edits their own fields.
 
-Today a developer writes an Angular library against `@nuxeo-satori/platform`, starting from the
+Today a developer writes an Angular library against `@nuxeo/satori-platform`, starting from the
 code generators that ship with it, and adds it to an application built from our template app,
 `apps/nuxeo-satori-template`. That code does not plug into the shipped application, and because
 the package is not published yet, you build it from this repository. Publishing it is planned.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Asserts that `@nuxeo-satori/platform` installs for someone with **no GitHub Packages access**.
+ * Asserts that `@nuxeo/satori-platform` installs for someone with **no GitHub Packages access**.
  *
  * ## Why this exists
  *
@@ -12,7 +12,7 @@
  * blocked presales on `@alfresco/js-api`, one layer further in.
  *
  * `@hylandsoftware/satori-ui` is therefore an **optional** peer (`peerDependenciesMeta`), and only
- * `@nuxeo-satori/platform/components-satori` imports it (plan section 3).
+ * `@nuxeo/satori-platform/components-satori` imports it (plan section 3).
  *
  * ## What it checks
  *

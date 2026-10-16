@@ -9,8 +9,8 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
-import { NxsTagEditorComponent } from '@nuxeo-satori/platform/components';
-import { TagService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NxsTagEditorComponent } from '@nuxeo/satori-platform/components';
+import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 describe('Tag editor chip remove icon glyph (NXSAT-526)', () => {
   let fixture: ComponentFixture<NxsTagEditorComponent>;

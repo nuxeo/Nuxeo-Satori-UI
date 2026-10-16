@@ -10,7 +10,7 @@ import {
   trustObjectUrl,
   type NuxeoDocument,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   DocumentViewerComponent,
   ExportDialogComponent,
@@ -20,7 +20,7 @@ import {
   type ExportDialogData,
   type ExportType,
   type ShareDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 
 import {
   formatBytes,

@@ -252,7 +252,7 @@ fail _closed_, so an unknown admin rule cannot hand everyone the Administration 
 
 The line that matters for support:
 
-> "Look at the imports. `@nuxeo-satori/platform/nuxeo-client` and `/ui`. **Nothing from our internals.**
+> "Look at the imports. `@nuxeo/satori-platform/nuxeo-client` and `/ui`. **Nothing from our internals.**
 > If we change how the bridge works, this keeps compiling — which is what makes an upgrade a version
 > bump instead of a merge."
 

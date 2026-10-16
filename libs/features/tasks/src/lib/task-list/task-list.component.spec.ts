@@ -4,7 +4,7 @@ import { Router } from '@angular/router';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { TaskService, CURRENT_USERNAME, type NuxeoTask } from '@nuxeo-satori/platform/nuxeo-client';
+import { TaskService, CURRENT_USERNAME, type NuxeoTask } from '@nuxeo/satori-platform/nuxeo-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { TaskListComponent } from './task-list.component';

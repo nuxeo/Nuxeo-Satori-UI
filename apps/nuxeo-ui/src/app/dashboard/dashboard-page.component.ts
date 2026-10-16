@@ -9,7 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkAriaLive } from '@angular/cdk/a11y';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
-import { WidgetContainerComponent, WidgetGridComponent } from '@nuxeo-satori/platform/ui';
+import { WidgetContainerComponent, WidgetGridComponent } from '@nuxeo/satori-platform/ui';
 import type { CreateImportDialogResult } from '@agentic-ui/feature-browse';
 
 import {
@@ -25,7 +25,7 @@ import {
   avatarColor,
   formatRelativeTime,
   type AvatarColor,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { AuthService } from '../auth/auth.service';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import { SatAvatarModule, type SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';

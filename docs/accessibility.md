@@ -587,7 +587,7 @@ renders and an absent host — and to pass with the same loader hidden.
 surfaces and display-modes suites already scan `/#/knowledge-discovery`. `/#/contracts` was
 dropped: it is a component showcase built on mock data (`Contract ABC-123.pdf`), reachable only by
 URL or through a customer manifest's navbar entry, and its findings would belong to the shared
-`@nuxeo-satori/platform/ui` dialogs it demonstrates rather than to a screen anyone owns. See
+`@nuxeo/satori-platform/ui` dialogs it demonstrates rather than to a screen anyone owns. See
 "What nothing covers".
 
 ### The whole journey re-measured 2026-09-22, and most of it is fixed

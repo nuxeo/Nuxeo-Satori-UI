@@ -11,7 +11,7 @@ import { ActivatedRoute, Router, convertToParamMap, provideRouter } from '@angul
 import { BehaviorSubject, of } from 'rxjs';
 
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
-import { NUXEO_API_ORIGIN, SearchAggregationService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN, SearchAggregationService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SearchFiltersDrawerComponent } from '../search-filters-drawer/search-filters-drawer.component';
 import { SearchComponent } from '../search/search';

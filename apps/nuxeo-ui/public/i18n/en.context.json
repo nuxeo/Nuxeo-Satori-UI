@@ -951,7 +951,7 @@
   "confirm.update": "Title of the dialog that edits an existing permission. A VERB, imperative.",
   "contracts.sample-document-title": "A made-up document name used by the contracts showcase. SAMPLE DATA — translate the word \"Contract\" if the example reads better that way, and leave the code and extension alone.",
   "contracts.saved-search-placeholder": "Example text in the saved-search name box on the contracts page. An EXAMPLE, so translate it into something a speaker of the target language would plausibly type — \"Q3\" is a fiscal quarter and \"Contracts Pending Review\" is a state, neither is a product term.",
-  "contracts.showcase-dialog-message": "Explanatory body of the showcase dialog. `@nuxeo-satori/platform/ui` is a PACKAGE NAME and must not be translated.",
+  "contracts.showcase-dialog-message": "Explanatory body of the showcase dialog. `@nuxeo/satori-platform/ui` is a PACKAGE NAME and must not be translated.",
   "contracts.showcase-dialog-title": "Title of a demonstration dialog on the contracts showcase page. DEMO copy, not a product feature.",
   "dashboard.favorite-items": "Rendered from an Angular binding in dashboard-page.component.html — usually one branch of a two-state control, so its opposite is a sibling key. Keep it as short as the English.",
   "dashboard.recently-edited": "Rendered from an Angular binding in dashboard-page.component.html — usually one branch of a two-state control, so its opposite is a sibling key. Keep it as short as the English.",

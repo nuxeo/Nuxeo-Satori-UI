@@ -38,7 +38,7 @@ Hover** and **Opens On Focus** stories in the sidebar show it opened each way.
 <Source
   language="typescript"
   dark
-  code={`import { NxsRichTooltipComponent } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsRichTooltipComponent } from '@nuxeo/satori-platform/components';`}
 />
 
 export const usageHtml = `<nxs-rich-tooltip
@@ -109,7 +109,7 @@ what it explains, not for the icon.
 ## Satori and the built-in rich tooltip
 
 The same ID, `nxs.primitives.richTooltip`, renders **Satori's rich tooltip** when
-`@nuxeo-satori/platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+`@nuxeo/satori-platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
 after `provideNxsComponents()`. Otherwise it renders the **built-in rich tooltip** shown on this page.
 Both take the same four inputs.
 

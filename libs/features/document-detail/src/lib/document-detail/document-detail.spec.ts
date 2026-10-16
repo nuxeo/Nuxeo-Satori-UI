@@ -27,7 +27,7 @@ import {
   TagService,
   TaskService,
   WorkflowService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiChatService,
   AiFeatureFlagService,
@@ -39,7 +39,7 @@ import {
   type KeEnrichmentResult,
 } from '@agentic-ui/shared/ke-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 const STUB_DOC: NuxeoDocument = {
   uid: 'doc-uid-1',

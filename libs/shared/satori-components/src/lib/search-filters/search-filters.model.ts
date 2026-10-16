@@ -1,4 +1,4 @@
-import type { AggregateResult, SearchQueryParams } from '@nuxeo-satori/platform/nuxeo-client';
+import type { AggregateResult, SearchQueryParams } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The values of the search filters: what `nxs-search-filters` edits and a host turns into a query.

@@ -17,7 +17,7 @@ import { MatSlideToggleModule } from '@angular/material/slide-toggle';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { debounceTime, distinctUntilChanged, finalize, Subject, switchMap } from 'rxjs';
 
-import { NuxeoUser, UserService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoUser, UserService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 export interface UserFormDialogData {

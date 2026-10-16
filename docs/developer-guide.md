@@ -111,7 +111,7 @@ All library imports use `@agentic-ui/` aliases defined in `tsconfig.base.json`:
 | Alias                                 | Entry point                                  |
 | ------------------------------------- | -------------------------------------------- |
 | `@agentic-ui/core`                    | `libs/core/src/index.ts`                     |
-| `@nuxeo-satori/platform/ui`           | `libs/shared/ui/src/index.ts`                |
+| `@nuxeo/satori-platform/ui`           | `libs/shared/ui/src/index.ts`                |
 | `@agentic-ui/shared/util`             | `libs/shared/util/src/index.ts`              |
 | `@agentic-ui/feature-browse`          | `libs/features/browse/src/index.ts`          |
 | `@agentic-ui/feature-search`          | `libs/features/search/src/index.ts`          |
@@ -390,7 +390,7 @@ export { MyComponent } from './lib/my-component/my-component.component';
 ### Step 4: Import from consumers
 
 ```typescript
-import { MyComponent } from '@nuxeo-satori/platform/ui';
+import { MyComponent } from '@nuxeo/satori-platform/ui';
 ```
 
 ---
@@ -463,7 +463,7 @@ export class AuthService {
 }
 ```
 
-### Nuxeo client library (`@nuxeo-satori/platform/nuxeo-client`)
+### Nuxeo client library (`@nuxeo/satori-platform/nuxeo-client`)
 
 All Nuxeo REST API services live in `libs/shared/nuxeo-client/`. The library is split by domain:
 
@@ -478,7 +478,7 @@ All Nuxeo REST API services live in `libs/shared/nuxeo-client/`. The library is 
 When adding a new Nuxeo API domain (e.g., workflows, users, audit), create a new service file in `src/lib/services/`, a model file if needed, and re-export from `src/index.ts`. Import in consumers via:
 
 ```typescript
-import { DocumentService, NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentService, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 ```
 
 ### Signal-based state management

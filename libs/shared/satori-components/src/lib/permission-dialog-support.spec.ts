@@ -1,4 +1,4 @@
-import { formatAceDateRange } from '@nuxeo-satori/platform/nuxeo-client';
+import { formatAceDateRange } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { nxsAceTimeFrame, offeredRights } from './permission-dialog-support';
 

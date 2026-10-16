@@ -1,5 +1,5 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
-import { AppConfigService, type AppThemeConfig } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService, type AppThemeConfig } from '@nuxeo/satori-platform/app-config';
 
 import {
   APP_THEME_STORAGE_KEY,

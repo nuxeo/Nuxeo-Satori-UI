@@ -1,13 +1,13 @@
 import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
-import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo-satori/platform/app-config';
+import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
 import {
   L10nDirectoryEntry,
   NuxeoApiBase,
   directoryPickerLabel,
   directoryUsesL10nLabel,
   formatHierarchicalL10nLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   Observable,
   TimeoutError,

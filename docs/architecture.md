@@ -47,7 +47,7 @@ Run `npx nx graph` to view the dependency graph. Common commands:
 | Alias                                 | Entry                                        |
 | ------------------------------------- | -------------------------------------------- |
 | `@agentic-ui/core`                    | `libs/core/src/index.ts`                     |
-| `@nuxeo-satori/platform/ui`           | `libs/shared/ui/src/index.ts`                |
+| `@nuxeo/satori-platform/ui`           | `libs/shared/ui/src/index.ts`                |
 | `@agentic-ui/shared/util`             | `libs/shared/util/src/index.ts`              |
 | `@agentic-ui/feature-browse`          | `libs/features/browse/src/index.ts`          |
 | `@agentic-ui/feature-search`          | `libs/features/search/src/index.ts`          |

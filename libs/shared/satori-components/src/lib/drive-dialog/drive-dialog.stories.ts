@@ -4,7 +4,7 @@ import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular'
 import { NEVER, of, type Observable } from 'rxjs';
 import { action } from 'storybook/actions';
 
-import { NuxeoDriveService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoDriveService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { dialogPreview } from '../../../.storybook/dialog-preview';
 

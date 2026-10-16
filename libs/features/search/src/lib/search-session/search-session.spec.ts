@@ -3,13 +3,13 @@ import { TestBed } from '@angular/core/testing';
 import { Subject, firstValueFrom, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
-import { NXS_EMPTY_SEARCH_FILTERS } from '@nuxeo-satori/platform/components';
+import { NXS_EMPTY_SEARCH_FILTERS } from '@nuxeo/satori-platform/components';
 import {
   SearchAggregationService,
   SearchService,
   type SearchResponse,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SearchSession, type SearchResultsState } from './search-session';
 

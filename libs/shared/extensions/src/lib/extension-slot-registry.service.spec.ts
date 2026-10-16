@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
 import { EMPTY_EXTENSION_RULE_CONTEXT, ExtensionRuleRegistry } from './extension-rules';

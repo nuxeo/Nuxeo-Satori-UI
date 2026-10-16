@@ -12,7 +12,7 @@ const REFERENCE = 'docs/extension-reference.md';
 const COMPARISON = 'docs/satori-components/with-and-without-satori.md';
 
 const PROVIDER_SOURCE = `import type { EnvironmentProviders } from '@angular/core';
-import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsTagComponent } from './tag/tag.component';
 // satori:import:components — \`satori-component\` inserts above this line
@@ -171,7 +171,7 @@ describe('satori-component generator', () => {
         ]),
       );
       expect(overview).toContain('<Canvas of={ClaimSummaryStories.Default} />');
-      expect(overview).toContain("from '@nuxeo-satori/platform/components'");
+      expect(overview).toContain("from '@nuxeo/satori-platform/components'");
       expect(overview).toContain(`registers it as \`nxs.${slot}.claimSummary\``);
       // The manifest example that places it: a route by its path, every other slot by componentId.
       expect(overview).toContain(

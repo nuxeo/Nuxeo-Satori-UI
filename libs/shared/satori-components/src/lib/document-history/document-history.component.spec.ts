@@ -9,7 +9,7 @@ import {
   type AuditEntry,
   type AuditLogList,
   type AuditLogQuery,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { of, Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 

@@ -9,10 +9,10 @@ import { vi } from 'vitest';
 import {
   DocumentDetailService,
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { ShareExternalDialogComponent } from './share-external-dialog';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 describe('ShareExternalDialogComponent (NXSAT-159)', () => {
   let fixture: ComponentFixture<ShareExternalDialogComponent>;

@@ -33,7 +33,7 @@ Type `smi`: Jane Smith, John Smythe and the Claims team come from an in-memory d
 <Source
   language="typescript"
   dark
-  code={`import { NxsUserGroupPickerComponent, type NxsPrincipal } from '@nuxeo-satori/platform/components';`}
+  code={`import { NxsUserGroupPickerComponent, type NxsPrincipal } from '@nuxeo/satori-platform/components';`}
 />
 
 export const usageHtml = `<nxs-user-group-picker [label]="'acme.share.grant-to' | translate" [formControl]="principal" />`;
@@ -50,7 +50,7 @@ user who has one, `email` — or `null`. Pass `id` to operations that take a use
 and `prefixedId` to those that take the prefixed form.
 
 The picker needs `HttpClient` and the platform's `DocumentDetailService` and `UserService`, which an
-application using `@nuxeo-satori/platform/nuxeo-client` already has. Its hints, statuses and the
+application using `@nuxeo/satori-platform/nuxeo-client` already has. Its hints, statuses and the
 clear button's name are translated with ngx-translate, under `satori-components.pickers.*` and
 `satori-components.user-group-picker.*`; `providePlatformEnglishFallback()` supplies the English. It
 has no registered ID: place it in a template by its selector.

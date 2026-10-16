@@ -13,7 +13,7 @@ import {
   AdministrationService,
   type NuxeoDocument,
   DocTypeLabelPipe,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,

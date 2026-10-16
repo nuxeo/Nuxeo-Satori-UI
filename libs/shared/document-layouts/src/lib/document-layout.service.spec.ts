@@ -1,8 +1,8 @@
 import { HttpInterceptorFn, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
-import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo-satori/platform/app-config';
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 import { firstValueFrom } from 'rxjs';
 
 import {

@@ -10,13 +10,13 @@
  *     npx nx g ./tools/satori-generators:extension-library acme-extensions --owner=acme
  *
  * `./tools/satori-generators` is a path in **our** repository. A customer who installs
- * `@nuxeo-satori/platform` has no such directory, so the very first instruction in the
+ * `@nuxeo/satori-platform` has no such directory, so the very first instruction in the
  * guide could not be run by its audience. Layer 3 — "the differentiator", per the plan —
  * was documented and not distributed.
  *
  * With this, the generators ship at the package root and the command becomes
  *
- *     npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
+ *     npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
  *
  * which is what an Nx plugin consumer expects: `generators.json` at the package root,
  * named in `package.json`.
@@ -182,7 +182,7 @@ writeFileSync(
   join(OUT, 'README.md'),
   `${BANNER.replace(/^\/\/ ?/gm, '')}\nRun them with:\n\n` +
     '```bash\n' +
-    'npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme\n' +
+    'npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme\n' +
     '```\n\nSource: `tools/satori-generators` in the platform repository.\n',
 );
 

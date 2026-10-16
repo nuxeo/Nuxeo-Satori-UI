@@ -7,7 +7,7 @@ import {
   DocumentDetailService,
   AssetAggregationService,
   type AssetQueueItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AssetsQueueComponent } from './assets-queue.component';
 

@@ -4,7 +4,7 @@ import { By } from '@angular/platform-browser';
 import { Subject, map, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPermissionsPanelComponent } from './permissions-panel.component';
 

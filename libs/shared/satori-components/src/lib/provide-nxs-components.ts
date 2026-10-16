@@ -1,5 +1,5 @@
 import type { EnvironmentProviders } from '@angular/core';
-import { provideSatoriExtensions } from '@nuxeo-satori/platform/extensions';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
@@ -14,7 +14,7 @@ import { NxsTagComponent } from './tag/tag.component';
  *
  * Registration goes through `provideSatoriExtensions`, so it layers like every other contribution:
  * in provider order, later wins per ID. List it **before** `provideNxsSatoriComponents()` from
- * `@nuxeo-satori/platform/components-satori`, which re-registers four of the `NXS_PRIMITIVE_IDS` on
+ * `@nuxeo/satori-platform/components-satori`, which re-registers four of the `NXS_PRIMITIVE_IDS` on
  * Satori, and before your own `provideSatoriExtensions(...)` calls, so an override of yours wins:
  *
  * ```ts

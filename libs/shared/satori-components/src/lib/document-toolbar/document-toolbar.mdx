@@ -37,12 +37,12 @@ Press a button or open "More actions": the Actions panel records `selected`.
 export const usageTs = `import {
   NxsDocumentToolbarComponent,
   type NxsToolbarAction,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 import {
   EXTENSION_SLOTS,
   descriptorLabel,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 readonly descriptors = computed(() =>
   this.extensions.resolve<ExtensionActionDescriptor>(

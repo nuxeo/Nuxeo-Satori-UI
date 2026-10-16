@@ -8,7 +8,7 @@ import {
   DirectoryService,
   type AuditEntry,
   type DirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,

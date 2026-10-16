@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TranslateService } from '@ngx-translate/core';
 
-import { CLIPBOARD_STORAGE_KEY } from '@nuxeo-satori/platform/nuxeo-client';
+import { CLIPBOARD_STORAGE_KEY } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { appConfig } from '../app.config';
 import { AppShellComponent } from './app-shell.component';

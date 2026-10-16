@@ -1104,7 +1104,7 @@
   "contracts": {
     "sample-document-title": "Contract ABC-123.pdf",
     "saved-search-placeholder": "e.g., \"Q3 Contracts Pending Review\"",
-    "showcase-dialog-message": "This dialog is imported from @nuxeo-satori/platform/ui. Customers can use it for confirmation prompts, warnings, and destructive actions.",
+    "showcase-dialog-message": "This dialog is imported from @nuxeo/satori-platform/ui. Customers can use it for confirmation prompts, warnings, and destructive actions.",
     "showcase-dialog-title": "Component Showcase Demo"
   },
   "dashboard": {

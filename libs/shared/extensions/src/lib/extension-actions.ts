@@ -346,7 +346,7 @@ export class ExtensionActionRegistry {
  * from here leaves a component undefined at module-initialisation time and takes six `AppShellComponent`
  * specs with it. So the honest statement is the one above — the function and the data contract are
  * agnostic, the library's own Angular components are not, and `@ngx-translate/core` is a declared
- * peer dependency of `@nuxeo-satori/platform` for exactly that reason.
+ * peer dependency of `@nuxeo/satori-platform` for exactly that reason.
  *
  * Falls back to the literal when a key does not resolve, because ngx-translate passes an
  * unknown key straight through and a column header reading `column.last-contributor` is worse

@@ -11,7 +11,7 @@ import {
   NXS_EMPTY_SEARCH_FILTERS,
   NxsSearchFiltersComponent,
   NxsToastService,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 import {
   DirectoryService,
   DocumentDetailService,
@@ -19,7 +19,7 @@ import {
   SearchService,
   type SearchResponse,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SearchSession } from '../search-session/search-session';
 import { SearchFiltersDrawerComponent } from './search-filters-drawer.component';

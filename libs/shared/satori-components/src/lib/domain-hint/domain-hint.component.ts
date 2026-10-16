@@ -4,7 +4,7 @@ import {
   DOMAIN_CONTAINER_GUIDANCE_KEY,
   isDomainParentType,
   isRepositoryRootPath,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The note shown where content cannot be created directly: inside a Domain, or at the

@@ -24,7 +24,7 @@ import {
   type LocalPermissionRow,
   type NuxeoGroup,
   type PrincipalPermissionPage,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from '../../auth/auth.service';
 import { ChangePasswordDialogComponent } from './change-password-dialog/change-password-dialog.component';

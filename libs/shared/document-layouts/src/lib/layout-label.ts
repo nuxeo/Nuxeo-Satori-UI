@@ -1,5 +1,5 @@
 import type { TranslateService } from '@ngx-translate/core';
-import type { NxsEditorSection } from '@nuxeo-satori/platform/components';
+import type { NxsEditorSection } from '@nuxeo/satori-platform/components';
 
 import { LayoutLabel, ResolvedLayout } from './layout.model';
 import { humanize } from './resolve-layout';

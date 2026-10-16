@@ -1,5 +1,5 @@
 import { ChangeDetectionStrategy, Component, input, type InputSignal } from '@angular/core';<% if (isDocumentView) { %>
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';<% } %>
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';<% } %>
 
 import type { NxsHeadingLevel } from '../heading-level';
 

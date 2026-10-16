@@ -3,7 +3,7 @@ import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular'
 import { of, throwError, type Observable } from 'rxjs';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 
-import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { BrowseService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsDocumentTreeComponent } from './document-tree.component';
 

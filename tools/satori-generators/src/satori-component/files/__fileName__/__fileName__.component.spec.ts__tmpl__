@@ -10,7 +10,7 @@ import {
   provideSatoriExtensions,<% if (isRoute) { %>
   type ExtensionRouteDescriptor,<% } else { %>
   type ExtensionElement,<% } %>
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { provideNxsComponents } from '../provide-nxs-components';

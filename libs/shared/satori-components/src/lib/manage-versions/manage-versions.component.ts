@@ -20,7 +20,7 @@ import {
   DocumentDetailService,
   formatRelativeTime,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { catchError, map, of, Subject, switchMap, tap, type Observable } from 'rxjs';
 
 import {

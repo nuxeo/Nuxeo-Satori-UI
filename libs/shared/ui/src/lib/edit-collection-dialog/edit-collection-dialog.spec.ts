@@ -13,10 +13,10 @@ import {
   type DirectoryEntry,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { EditCollectionDialogComponent } from './edit-collection-dialog';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 function l10n(id: string, parent: string, labelEn: string): L10nDirectoryEntry {
   return {

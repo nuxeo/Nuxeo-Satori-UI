@@ -47,7 +47,7 @@ export interface AppRuntimeManifest {
    * overrides and `$references` layering — in contribution order.
    *
    * Kept as layers rather than merged here, and held **opaquely**, on purpose. Their schema
-   * and their merge (`mergeExtensionConfigs`) belong to `@nuxeo-satori/platform/extensions`;
+   * and their merge (`mergeExtensionConfigs`) belong to `@nuxeo/satori-platform/extensions`;
    * keeping both out of this library is what stops the configuration loader depending on the
    * registry it configures. Each layer is passed through unvalidated — the registry validates
    * it, and it must tolerate whatever a package contributed.
@@ -156,7 +156,7 @@ export function mergeRuntimeManifest(base: AppRuntimeManifest, patch: unknown): 
     },
     labels: { ...base.labels, ...readStringMap(patch['labels']) },
     // Appended as a layer rather than merged here. The merge of this subtree has its own
-    // semantics, implemented once in `@nuxeo-satori/platform/extensions`; a second, shallower
+    // semantics, implemented once in `@nuxeo/satori-platform/extensions`; a second, shallower
     // merge at this level would silently disagree with it.
     extensionLayers: isRecord(patch['extensions'])
       ? [...base.extensionLayers, patch['extensions']]

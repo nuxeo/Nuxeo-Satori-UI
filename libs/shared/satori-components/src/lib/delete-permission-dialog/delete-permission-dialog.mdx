@@ -37,7 +37,7 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   NxsDeletePermissionDialogComponent,
   type NxsDeletePermissionDialogData,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 private readonly dialog = inject(MatDialog);
 
@@ -60,7 +60,7 @@ protected deletePermission(ace: NuxeoAce, acl: string): void {
 
 It has no inputs or outputs. `acl` defaults to `local`, the ACL the Permissions tab writes. The
 dialog lists its own toast provider; it needs `DocumentDetailService`, which an application using
-`@nuxeo-satori/platform/nuxeo-client` already has. Its labels are translated under
+`@nuxeo/satori-platform/nuxeo-client` already has. Its labels are translated under
 `satori-components.permission-dialogs.*`, with English from `providePlatformEnglishFallback()`.
 
 Offer it only to a user with `WriteSecurity` on the document, as Web UI does. Nuxeo refuses anyone

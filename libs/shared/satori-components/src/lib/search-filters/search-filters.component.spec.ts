@@ -10,7 +10,7 @@ import {
   SearchService,
   type SearchAggregations,
   type SearchCollectionOption,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsSearchFiltersComponent } from './search-filters.component';
 import {

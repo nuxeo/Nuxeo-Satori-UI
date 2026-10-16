@@ -357,7 +357,7 @@ Two traps recorded in the repository, both of which cost real time:
    declares an explicit `lint` target with a comment saying why.
 
 A documented limitation you must know before designing anything around it: tag constraints see
-**projects, not import specifiers**, so they cannot distinguish `@nuxeo-satori/platform/extensions`
+**projects, not import specifiers**, so they cannot distinguish `@nuxeo/satori-platform/extensions`
 from a raw `@agentic-ui/shared-extensions` — both are the same graph edge. That guarantee is
 enforced separately by `libs/platform/guardrails/check-extension-library.mjs`.
 
@@ -989,7 +989,7 @@ Estimated effort: **12 hours**.
 ### 19. Publishing the platform package — **Area**
 
 `libs/platform` is the only publishable library, built with `@nx/angular:package` (ng-packagr
-**20.3.2** underneath), published as `@nuxeo-satori/platform@0.2.0`.
+**20.3.2** underneath), published as `@nuxeo/satori-platform@0.2.0`.
 
 Topics: ng-packagr, the Angular Package Format, **secondary entry points** (five `ng-package.json`
 files: root plus `app-config`, `extensions`, `nuxeo-client`, `ui`), `sideEffects: false`,

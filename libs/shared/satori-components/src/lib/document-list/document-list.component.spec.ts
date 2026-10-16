@@ -7,7 +7,7 @@ import {
   type Provider,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { throwError } from 'rxjs';
 import { vi } from 'vitest';
 

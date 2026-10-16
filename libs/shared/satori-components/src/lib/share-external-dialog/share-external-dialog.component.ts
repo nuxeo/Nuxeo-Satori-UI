@@ -24,7 +24,7 @@ import {
   isMailSendError,
   permissionCreateMailFailureMessage,
   permissionRightLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { failureKey, offeredRights } from '../permission-dialog-support';
 import { toDay } from '../permissions-panel/permissions-model';

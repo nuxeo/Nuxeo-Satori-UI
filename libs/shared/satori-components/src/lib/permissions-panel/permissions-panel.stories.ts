@@ -10,7 +10,7 @@ import {
   type NuxeoAcl,
   type NuxeoDocument,
   type UserGroupSuggestion,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPermissionsPanelComponent } from './permissions-panel.component';
 

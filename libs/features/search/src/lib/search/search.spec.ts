@@ -19,10 +19,10 @@ import {
   SearchAggregationService,
   SearchService,
   SelectionService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 

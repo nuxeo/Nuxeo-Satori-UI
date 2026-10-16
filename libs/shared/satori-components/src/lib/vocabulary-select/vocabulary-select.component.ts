@@ -35,7 +35,7 @@ import {
   filterDirectoryPickerEntries,
   l10nEntryLabel,
   type L10nDirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 

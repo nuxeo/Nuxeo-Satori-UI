@@ -11,7 +11,7 @@ import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { SettingsService } from '@nuxeo-satori/platform/nuxeo-client';
+import { SettingsService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 function passwordsMatch(control: AbstractControl): ValidationErrors | null {

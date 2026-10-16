@@ -14,14 +14,14 @@ import {
 import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
 import { type MockInstance, vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { NxsToastService } from '@nuxeo-satori/platform/components';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   ARenderService,
   BrowseService,
@@ -35,8 +35,8 @@ import {
   WorkflowService,
   type NuxeoDocument,
   type NuxeoWorkflow,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { ConfirmDialogComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { ConfirmDialogComponent } from '@nuxeo/satori-platform/ui';
 import {
   AiChatService,
   AiFeatureFlagService,

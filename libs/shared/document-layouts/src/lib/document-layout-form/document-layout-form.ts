@@ -17,7 +17,7 @@ import {
   NxsSpinnerComponent,
   type NxsEditorValues,
   type NxsHeadingLevel,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 import {
   AppExtensionsService,
   ExtensionComponentRegistry,
@@ -25,8 +25,8 @@ import {
   ExtensionRuleContextService,
   type DocumentLayoutChange,
   type ExtensionDocumentLayoutDescriptor,
-} from '@nuxeo-satori/platform/extensions';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/extensions';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { distinctUntilChanged, map, merge, of, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';

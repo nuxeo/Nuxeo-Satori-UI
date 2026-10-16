@@ -33,7 +33,7 @@ import {
   type NuxeoGroup,
   type NuxeoUser,
   type UserGroupSuggestion,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';

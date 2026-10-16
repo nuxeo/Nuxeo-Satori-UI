@@ -5,7 +5,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { AdministrationService, NuxeoOAuth2Provider } from '@nuxeo-satori/platform/nuxeo-client';
+import { AdministrationService, NuxeoOAuth2Provider } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({

@@ -15,7 +15,7 @@ import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { SearchService, type SavedSearchOption } from '@nuxeo-satori/platform/nuxeo-client';
+import { SearchService, type SavedSearchOption } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** A saved search the user chose: its id and its title. */
 export interface NxsSavedSearchChoice {

@@ -9,7 +9,7 @@ import {
   DocumentDetailService,
   UserService,
   type UserGroupSuggestion,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NXS_SEARCH_DEBOUNCE_MS } from '../pickers/search-as-you-type';
 import {

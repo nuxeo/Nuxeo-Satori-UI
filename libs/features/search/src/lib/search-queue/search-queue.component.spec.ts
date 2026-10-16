@@ -7,7 +7,7 @@ import {
   DocumentDetailService,
   SearchAggregationService,
   type SearchResultItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { SearchQueueComponent } from './search-queue.component';
 

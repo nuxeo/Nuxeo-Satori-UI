@@ -1,6 +1,6 @@
 import { Pipe, PipeTransform, inject } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
-import { renderTrustedHtml } from '@nuxeo-satori/platform/nuxeo-client';
+import { renderTrustedHtml } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * The five tags this pipe generates, and nothing else.

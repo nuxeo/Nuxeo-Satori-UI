@@ -7,7 +7,7 @@
 
 // Angular Material prebuilt theme - required for Material components to render properly.
 // This is imported here (not in app.scss) because it's a global dependency for
-// any page using @nuxeo-satori/platform/ui components, which are built on Material.
+// any page using @nuxeo/satori-platform/ui components, which are built on Material.
 // Using the prebuilt indigo-pink theme for simplicity. Customers can replace this
 // with their own custom Material theme if needed.
 @import '@angular/material/prebuilt-themes/indigo-pink.css';

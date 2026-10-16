@@ -38,7 +38,7 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   NxsUpdatePermissionDialogComponent,
   type NxsUpdatePermissionDialogData,
-} from '@nuxeo-satori/platform/components';
+} from '@nuxeo/satori-platform/components';
 
 private readonly dialog = inject(MatDialog);
 
@@ -63,7 +63,7 @@ protected editPermission(ace: NuxeoAce): void {
 <Source language="typescript" dark code={usageTs} />
 
 It has no inputs or outputs. The dialog lists its own toast and date adapter providers; it needs
-`DocumentDetailService`, which an application using `@nuxeo-satori/platform/nuxeo-client` already
+`DocumentDetailService`, which an application using `@nuxeo/satori-platform/nuxeo-client` already
 has. Its labels are translated under `satori-components.permission-dialogs.*`, with English from
 `providePlatformEnglishFallback()`.
 
