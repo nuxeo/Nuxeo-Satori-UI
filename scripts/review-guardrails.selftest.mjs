@@ -8117,6 +8117,141 @@ expectRed(
   /sat-thing\.component\.ts declares the component `NxsSatoriThingComponent`, and no spec imports it/,
 );
 
+// checkSatoriLibrariesKeepHostDateAdapter (NXSAT-649)
+
+const DATE_FIELD = `${NXS_ROOT}/src/lib/when/when.component.ts`;
+/** A date field component with `head` above it and `metadata` in its decorator. */
+const dateField = (head, metadata) =>
+  `${head}\nimport { Component } from '@angular/core';\n` +
+  `@Component({ selector: 'nxs-when', standalone: true, templateUrl: './when.component.html', ${metadata} })\n` +
+  'export class NxsWhenComponent {}\n';
+const MATERIAL_CORE = "from '@angular/material/core';";
+const NATIVE_RED = (what) =>
+  new RegExp(
+    `when\\.component\\.ts:\\d+ puts Material's native date adapter in an injector \\(\`${what}\`\\)`,
+  );
+
+expectGreen(
+  "a date field providing the library's own adapter, beside an adapter extending the native one",
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField(
+      "import { provideNxsDateAdapter } from '../date-input/locale-date';",
+      'providers: [provideNxsDateAdapter()]',
+    ),
+    [`${NXS_ROOT}/src/lib/date-input/locale-date.ts`]:
+      `import { DateAdapter, NativeDateAdapter, inject } ${MATERIAL_CORE}\n` +
+      'export class NxsLocaleDateAdapter extends NativeDateAdapter {}\n' +
+      'export const host = (adapter: DateAdapter<unknown>) =>\n' +
+      '  adapter instanceof NativeDateAdapter && adapter.parse === NativeDateAdapter.prototype.parse;\n',
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the native adapter named only in a comment, a string and a member',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField(
+      `import { provideNativeDateAdapter } ${MATERIAL_CORE}\n` +
+        '// Unlike provideNativeDateAdapter(), this keeps the host adapter.\n' +
+        "const why = 'MatNativeDateModule reads dates as American';\n" +
+        'const config = { provideNativeDateAdapter: () => [] };\n' +
+        'config.provideNativeDateAdapter();',
+      'providers: []',
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a spec and a story providing it, as a host would',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField('', 'providers: []'),
+    [`${NXS_ROOT}/src/lib/when/when.component.spec.ts`]: `import { provideNativeDateAdapter } ${MATERIAL_CORE}\nconst providers = [provideNativeDateAdapter()];\n`,
+    [`${NXS_ROOT}/src/lib/when/when.stories.ts`]: `import { provideNativeDateAdapter } ${MATERIAL_CORE}\nconst providers = [provideNativeDateAdapter()];\n`,
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "a local function of the same name, which is not Material's",
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField(
+      'function provideNativeDateAdapter() { return []; }',
+      'providers: [provideNativeDateAdapter()]',
+    ),
+  },
+);
+
+for (const [variant, head, metadata, what] of [
+  [
+    'provideNativeDateAdapter() in its providers',
+    `import { provideNativeDateAdapter } ${MATERIAL_CORE}`,
+    'providers: [provideNativeDateAdapter()]',
+    'provideNativeDateAdapter\\(\\)',
+  ],
+  [
+    'MatNativeDateModule in its imports',
+    `import { MatNativeDateModule } ${MATERIAL_CORE}`,
+    'imports: [MatNativeDateModule]',
+    'MatNativeDateModule',
+  ],
+  [
+    'NativeDateAdapter as a provider class',
+    `import { DateAdapter, NativeDateAdapter } ${MATERIAL_CORE}`,
+    'providers: [{ provide: DateAdapter, useClass: NativeDateAdapter }]',
+    'useClass: NativeDateAdapter',
+  ],
+  [
+    'NativeDateAdapter made by a factory',
+    `import { DateAdapter, NativeDateAdapter } ${MATERIAL_CORE}`,
+    'providers: [{ provide: DateAdapter, useFactory: () => new NativeDateAdapter() }]',
+    'new NativeDateAdapter\\(\\)',
+  ],
+  [
+    'provideNativeDateAdapter() imported under another name',
+    `import { provideNativeDateAdapter as nativeDates } ${MATERIAL_CORE}`,
+    'providers: [nativeDates()]',
+    'provideNativeDateAdapter\\(\\)',
+  ],
+  [
+    'provideNativeDateAdapter() through a namespace import',
+    `import * as core ${MATERIAL_CORE}`,
+    'providers: [core.provideNativeDateAdapter()]',
+    'provideNativeDateAdapter\\(\\)',
+  ],
+]) {
+  expectRed(
+    `[native date adapter] ${variant}`,
+    'checkSatoriLibrariesKeepHostDateAdapter',
+    { [DATE_FIELD]: dateField(head, metadata) },
+    null,
+    NATIVE_RED(what),
+  );
+}
+
+expectRed(
+  '[native date adapter] provideNativeDateAdapter() in the Satori entry point',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField('', 'providers: []'),
+    [`${NXS_SAT_ROOT}/src/lib/sat-when.component.ts`]: `import { provideNativeDateAdapter } ${MATERIAL_CORE}\nexport const providers = [provideNativeDateAdapter()];\n`,
+  },
+  null,
+  /sat-when\.component\.ts:2 puts Material's native date adapter in an injector/,
+);
+
+expectRed(
+  '[native date adapter] a tree with no library sources',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  { 'README.md': '# fixture\n' },
+  null,
+  /checkSatoriLibrariesKeepHostDateAdapter asserted nothing/,
+);
+
 // checkPlatformEntryPointsListed (register item 23)
 
 expectGreen('every published entry point listed', 'checkPlatformEntryPointsListed', NXS_LIB());
