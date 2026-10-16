@@ -77,9 +77,25 @@ export class AiFeatureFlagService {
    */
   private readonly state = signal<boolean>(AI_FEATURES_ENABLED ? readStoredAiPreference() : false);
 
-  readonly aiEnabled: Signal<boolean> = AI_FEATURES_ENABLED ? this.state.asReadonly() : ALWAYS_OFF;
+  /**
+   * Declared without an initialiser and installed in the constructor so it can be made
+   * non-writable and non-configurable.
+   *
+   * `readonly` is erased at runtime just as `private` is, so a field initialiser would leave
+   * `service.aiEnabled = () => true` available at a console — replacing the flag wholesale
+   * rather than mutating anything behind it, after which the gateway permits requests. Sealing
+   * the property closes that, and because modules are strict mode the assignment now throws
+   * rather than failing quietly.
+   */
+  declare readonly aiEnabled: Signal<boolean>;
 
   constructor() {
+    Object.defineProperty(this, 'aiEnabled', {
+      value: AI_FEATURES_ENABLED ? this.state.asReadonly() : ALWAYS_OFF,
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    });
     this.purgeStoredPreference();
   }
 

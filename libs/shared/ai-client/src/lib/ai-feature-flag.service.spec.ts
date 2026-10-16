@@ -88,6 +88,25 @@ describe('AiFeatureFlagService', () => {
 
       expect(service.aiEnabled()).toBe(false);
     });
+
+    it('refuses to have the flag property itself replaced', () => {
+      // `readonly` is erased too, so sealing the backing state is not enough on its own: assigning
+      // over `aiEnabled` would swap the flag wholesale rather than mutate anything behind it.
+      const service = createService();
+      const reachable = service as unknown as { aiEnabled: () => boolean };
+
+      // Throws rather than failing quietly because modules are strict mode.
+      expect(() => (reachable.aiEnabled = () => true)).toThrow();
+      expect(service.aiEnabled()).toBe(false);
+    });
+
+    it('refuses to have the flag property redefined', () => {
+      // The other half of sealing it: non-writable alone still leaves `defineProperty` open.
+      const service = createService();
+
+      expect(() => Object.defineProperty(service, 'aiEnabled', { value: () => true })).toThrow();
+      expect(service.aiEnabled()).toBe(false);
+    });
   });
 
   describe('clears an opt-in a browser is already carrying', () => {
