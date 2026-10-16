@@ -665,7 +665,9 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
 
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
-    page.locator('.browse-row, .doc-card-wrapper').first(),
+    page
+      .locator('.browse-row, .doc-card-wrapper, nxs-document-list .nxs-document-list__row')
+      .first(),
     'browse must list at least one document, or this scans an empty table',
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);

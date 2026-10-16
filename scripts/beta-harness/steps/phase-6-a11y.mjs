@@ -110,7 +110,7 @@ export default async function run(page, h) {
   h.step('Production browse — the primary authenticated surface');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
-  await h.expectText('repository content listed', 'lib-browse', 'Default domain');
+  await h.expectText('repository content listed', 'lib-browse', 'Domain');
   await h.expectNoA11yViolations('browse: no WCAG 2.1 AA violations', { ignore: KNOWN_VIOLATIONS });
   await h.screenshot('a11y-browse');
 

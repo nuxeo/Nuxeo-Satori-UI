@@ -202,6 +202,13 @@ const NAV_DRAWER = 'app-nav-drawer';
 const DRAWER_ERROR_SELECTOR = '.tree-empty.error';
 
 /**
+ * A rendered folder-tree node. `.tree-node` is the nav drawer's own tree (personal space). Browse
+ * and document detail use the shared `nxs-document-tree`, whose nodes are `.nxs-document-tree__item`.
+ */
+const TREE_NODE_SELECTOR_CSS = '.tree-node, .nxs-document-tree__item';
+const TREE_NODE_SELECTOR = TREE_NODE_SELECTOR_CSS;
+
+/**
  * The text of a visible drawer error, or `null`.
  *
  * Visibility is load-bearing: a closed `mat-sidenav` is `visibility: hidden`, so a collapsed
@@ -291,11 +298,11 @@ export async function screenUnsettledReason(
   if (treeRequired) {
     try {
       await page
-        .locator('.tree-node')
+        .locator(TREE_NODE_SELECTOR)
         .first()
         .waitFor({ state: 'visible', timeout: Math.max(deadline - Date.now(), 1) });
     } catch {
-      return 'this screen shows the folder tree, and no .tree-node ever rendered';
+      return 'this screen shows the folder tree, and no tree node ever rendered';
     }
   }
 
@@ -324,7 +331,7 @@ export async function screenUnsettledReason(
             images += root.querySelectorAll('img').length;
             elements += root.getElementsByTagName('*').length;
           }
-          const nodes = document.querySelectorAll('.tree-node').length;
+          const nodes = document.querySelectorAll(TREE_NODE_SELECTOR_CSS).length;
           return { loading, shape: `${nodes} tree node(s), ${images} img, ${elements} elements` };
         },
         { roots: host ? [NAV_DRAWER, host] : [NAV_DRAWER], loaders: LOADING_SELECTOR },
