@@ -2,15 +2,16 @@
 title: Testing & Evidence
 parent: Engineering
 order: 12
-last_reviewed: 2026-10-15
-repo_commit: c053e63
+last_reviewed: 2026-10-16
+repo_commit: 250ec9a
 audience: engineering
 ---
 
 # Testing & Evidence
 
-> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
-> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> **Last reviewed:** 2026-10-16 · **Repository:** `250ec9a` (`integration/nxsat-308`)
+> E2E section re-verified for NXSAT-646; other sections retain their earlier review scope.
+> On 2026-10-15 at `c053e63`, only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
 > Before that, last reviewed 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`):
 > Only the repository links were re-verified at that commit: made relative rather than pinned to
 > `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
@@ -24,7 +25,7 @@ audience: engineering
 | --------- | --------------------------- | ----------------------------------- | :-------: |
 | Unit      | Vitest                      | 19 projects with a `test` target    |    ✅     |
 | Typecheck | `ngc` per library           | Every library                       |    ✅     |
-| E2E       | Playwright, 12 specs        | 4 critical paths against live Nuxeo |    ❌     |
+| E2E       | Playwright                  | Core slice + auth/engine checks     |    ❌     |
 | Evidence  | Playwright + `phase-runner` | Per-phase claims against live Nuxeo |    ❌     |
 
 The two that need a live backend cannot run on a PR runner. **That is a real limitation**, not a
@@ -111,55 +112,127 @@ and then silently excluded from every check).
 
 ## 3. E2E
 
+The live suite runs against a served app and its own Nuxeo backend. The core slice is
+`browse.spec.ts`, `search.spec.ts` and `document-detail.spec.ts`: 12 tests per browser at
+`250ec9a6d`. The full suite also includes authentication and cross-engine checks; a core-slice
+pass does not claim those additional tests passed.
+
+### Prepare an isolated backend
+
+Use a ticket-owned Docker Nuxeo and database with disposable data. Point the app's dev proxy at
+that instance. Keep `NUXEO_USER` and `NUXEO_PASS` in the environment; there is no credential fallback.
+
+Search requires a full-text-capable backend. The bundled H2 repository template hardcodes
+`searchDisabled="true"`, so setting `nuxeo.fulltext.search.disabled=false` alone does not enable
+it. For NXSAT-646, a private PostgreSQL 16 database and Nuxeo's bundled `postgresql` template
+provided full-text search. Configure `nuxeo.db.host`, `nuxeo.db.port`, `nuxeo.db.name`,
+`nuxeo.db.user` and `nuxeo.db.password` for that database, retaining other templates required
+by the installed image. Restart only the ticket's container after changing its configuration.
+
+The core suite discovers a direct `WorkspaceRoot` child of `/default-domain` and an indexed,
+untrashed `File`; it does not pin a document UID. Search pagination creates and cleans up its
+own uniquely named workspace and 41 Notes. Before running, verify that an authenticated
+`default_search` request with `ecm_fulltext` returns HTTP 200 and a known seeded match. An
+unfiltered File query can pass preflight even while full-text search is disabled.
+
+NXSAT-643 owns the shared identity guard and committed parity seed/start scripts. Until that
+work is merged, manually seeded runs using the existing fixtures are diagnostic results;
+they do not fulfill NXSAT-646's requirement to use that guard and seed.
+
+### Install and serve
+
+Use Node 20 and install dependencies in an isolated checkout. Do not run `npm install` in a
+checkout whose dependencies are hardlinked to another checkout.
+
 ```bash
-npm install --no-save @playwright/test && npx playwright install chromium
-npm run beta:e2e
+npm ci
+npm install --no-save @playwright/test @axe-core/playwright
+npx playwright install chromium webkit
 ```
 
-12 specs, 4 files, in `apps/nuxeo-ui-e2e/src/`:
+Install both untracked packages in the same command: a later `npm install --no-save` can prune
+an earlier untracked install. Both browser engines must launch for preflight to pass.
 
-| File                      | Asserts                                                                                       |
-| ------------------------- | --------------------------------------------------------------------------------------------- |
-| `browse.spec.ts`          | Repository listing, tree navigation, shell chrome                                             |
-| `search.spec.ts`          | Non-zero results, a zero-result term, **an apostrophe** — the HXQL injection regression guard |
-| `document-detail.spec.ts` | Metadata, the Permissions/History/Publishing tabs, an unknown id                              |
-| `auth.spec.ts`            | A signed-out visitor **is** redirected; Anonymous is **not** granted administration           |
+Create a local `apps/nuxeo-ui/proxy.conf.ticket-nxsat-646.json` pointing at the ticket's Nuxeo
+port, for example port 8096:
 
-### Two design rules
+```json
+{
+  "/nuxeo": {
+    "target": "http://127.0.0.1:8096",
+    "secure": false,
+    "changeOrigin": true,
+    "autoRewrite": true
+  }
+}
+```
 
-**Assert repository data, not that a component rendered.** An unauthenticated XHR draws
-`lib-browse` with no rows — visible, green under `toBeVisible`, and proof of nothing. Hence
-`expectSurfaceWithData`.
+Serve the app from that checkout in a separate terminal:
 
-**Discover the test document; never pin a UID.** A pinned UID passes on one machine and reads as a
-product defect everywhere else. `document-detail.spec.ts` queries through the app's own proxy,
-which also exercises the proxy and auth before the UI is involved.
+```bash
+npx nx serve nuxeo-ui --port 4216 --proxy-config apps/nuxeo-ui/proxy.conf.ticket-nxsat-646.json
+```
 
-### Sensitivity, measured
+Set the credentials through the environment, then name the app's exact host and port before
+sending credentials through its proxy:
 
-With deliberately bogus credentials, **9 of 12 specs fail**. The 3 that pass are the auth specs,
-which are credential-independent by design. That is the evidence the suite reads real data rather
-than just rendering.
+```bash
+export E2E_BASE_URL=http://localhost:4216
+export E2E_ALLOWED_HOSTS=localhost:4216
+npm run beta:e2e-preflight
+npm run beta:e2e -- --project=chromium browse.spec.ts search.spec.ts document-detail.spec.ts --retries=0
+npm run beta:e2e -- --project=webkit browse.spec.ts search.spec.ts document-detail.spec.ts --retries=0
+```
 
-### Authentication in tests — both mechanisms are required
+These examples use Bash. On Windows, use Git Bash for the shell-based negative control, or set
+npm's script shell to Git Bash for that invocation. For concurrent browser runs, use separate
+checkouts and app ports, matching each host/port in its allowlist.
 
-| Mechanism                                                    | Satisfies                              |
-| ------------------------------------------------------------ | -------------------------------------- |
-| A session injected into `sessionStorage` via `addInitScript` | The **route guard**, so pages render   |
-| `httpCredentials` in the Playwright config                   | **XHRs**, so `/nuxeo/api` returns data |
+### Authentication and remaining guard work
 
-With only the first, `/nuxeo/api` intermittently returns 403 and you get screenshots of empty
-states. Note `storageState` does **not** work here: it persists cookies and localStorage, and this
-app keeps its session in `sessionStorage`. A `storageState` fixture would look right, run, and
-leave every spec signed out.
+The `signedIn` fixture injects the app session into `sessionStorage` before page scripts run;
+Playwright's `storageState` does not preserve that storage. The config also supplies
+`httpCredentials`. API fixture discovery uses an explicit Authorization header and checks
+`/nuxeo/api/v1/me` before returning its API context.
 
-### The anonymous-auth fact
+Those existing checks do not implement NXSAT-643's shared guard before and after every
+test/step, browser-session validation or anonymous-cookie-adoption control. Nuxeo can answer
+as Anonymous with HTTP 200, so status codes and nonempty result sets alone cannot establish
+who made the request. A green core suite does not prove those missing identity guarantees.
 
-The local Nuxeo has **anonymous authentication enabled**: `/me` with no credentials returns 200 and
-`{ id: 'Anonymous' }`. `AuthService` then takes its intentional SSO-detection path and adopts that
-session. So **"an unauthenticated visitor is redirected" is not observable here** — the guard is
-sound; the environment makes the assertion untestable. Removing `httpCredentials` does not help,
-because credentials were never what made `/me` succeed. Test the **privilege** boundary instead.
+### Negative control and evidence retention
+
+```bash
+npm run beta:e2e-negative-control
+```
+
+The command first runs preflight with correct credentials, then runs the full Chromium suite
+with a deliberately wrong password. The underlying Playwright run should exit 1. The control
+wrapper exits 0 when at least five tests fail at an assertion of their own; hook, fixture and
+navigation failures do not count. Exit 1 means the sensitivity threshold was not met; exit 2
+means an environment prerequisite was missing. A successful control establishes credential
+sensitivity, not that every assertion read repository data.
+
+Archive `dist/e2e/results.json`, `dist/e2e/assertion-failures.json` and `dist/e2e/artifacts/`
+after each build/browser run and before the negative control: later runs overwrite them.
+The committed config retains screenshots and recordings only on failure. For successful-run
+media, use a local config importing the committed config and changing only retention to
+`screenshot: 'on'` and `video: 'on'`; pass that config with `-c`. Keep local configs, media and
+reports outside the committed change. Review failures before rerunning, and retain the first
+attempt and its diagnosis rather than accepting an unexplained retry pass.
+
+### Before and after the rename
+
+For NXSAT-646, the integration mainline before the rename merge was `de0080f94`, and the
+renamed build was `250ec9a6d`. Each browser passed all 12 core tests on each revision with
+retries disabled. The full Chromium negative control produced six counted assertion failures,
+with three setup failures excluded; its wrapper passed while Playwright exited 1.
+
+The initial H2 runs failed four full-text-dependent tests on each browser. After verifying the
+PostgreSQL repair with an authenticated full-text request, both baseline runs were repeated.
+The original failures and successful comparison are retained in the
+[NXSAT-646 Jira evidence](https://hyland.atlassian.net/browse/NXSAT-646?focusedCommentId=3245128).
+These are provisional diagnostics, not completion of the missing NXSAT-643 guard validation.
 
 ---
 
