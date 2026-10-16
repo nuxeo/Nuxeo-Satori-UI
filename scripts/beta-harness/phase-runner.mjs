@@ -75,6 +75,10 @@ const stepsFile = stepsArg
  * declares about credentials. A failed import is held, not thrown: it is re-raised inside the
  * run below, so it reaches the same verdict path as before — `precondition-not-met` for a
  * `PreconditionError`, `error` for anything else — with a manifest.
+ *
+ * It is also said straight away. Whatever this run reports next — a missing Playwright, the
+ * backend preflight — the reader already knows the steps never loaded, and a mistyped phase id
+ * reads as one.
  */
 let stepsModule = null;
 let stepsImportError = null;
@@ -82,6 +86,11 @@ try {
   stepsModule = await import(pathToFileURL(stepsFile).href);
 } catch (err) {
   stepsImportError = err;
+  const label = err instanceof Error && err.name === 'PreconditionError' ? 'precondition' : 'error';
+  console.error(
+    `\n[${label}] the steps file did not load: ${err instanceof Error ? err.message : String(err)}\n` +
+      `  ${stepsFile}`,
+  );
 }
 
 /**
@@ -97,12 +106,18 @@ try {
  * opt-out `scripts/collect-evidence/story-runner.mjs` already reads — and then runs with no
  * `httpCredentials` at all, set or not, so its result does not depend on the shell. Everything
  * else requires the pair and is refused here, before a browser is launched or an evidence
- * folder created, rather than partway through the run at the first `h.login()`. A held import
- * error leaves the module unknown, so it is treated as needing them.
+ * folder created, rather than partway through the run at the first `h.login()`.
+ *
+ * A steps file that did not load is not refused here. Its steps will never run, so it sends
+ * nothing and goes on to its held error's own verdict. Refusing it reported a mistyped phase id
+ * as `[precondition] NUXEO_USER and NUXEO_PASS must both be set` — exit 2, "not something to
+ * iterate on" — with no word that the file did not exist, which is what review found it doing.
  */
+const stepsLoaded = stepsImportError === null;
 const skipHttpCredentials = stepsModule?.skipHttpCredentials === true;
-const credentials = skipHttpCredentials ? null : readNuxeoCredentials();
-if (!skipHttpCredentials && !credentials) {
+const needsCredentials = stepsLoaded && !skipHttpCredentials;
+const credentials = needsCredentials ? readNuxeoCredentials() : null;
+if (needsCredentials && !credentials) {
   console.error(
     `\n[precondition] ${missingNuxeoCredentialsMessage(`run the ${phaseId} evidence steps`)}\n\n` +
       '  This is NOT a defect and NOT something to iterate on. A steps file that needs no\n' +
@@ -131,7 +146,9 @@ const stamp = startedAt.toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = resolve(EVIDENCE_ROOT, 'beta', phaseId, stamp);
 await mkdir(outDir, { recursive: true });
 
-if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1') {
+// Not for a steps file that did not load: there are no steps to bring a backend up for, and the
+// preflight refusing for credentials would bury the load error under an exit 2.
+if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1' && stepsLoaded) {
   const { spawnSync } = await import('node:child_process');
   console.log('\nEnsuring the Nuxeo backend is up before capturing…');
   const pf = spawnSync('node', [resolve(import.meta.dirname, 'backend-preflight.mjs')], { stdio: 'inherit' });
@@ -141,8 +158,8 @@ if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1') {
         'selector failures that look like component defects; that is worse than no evidence.',
     );
     // The preflight's own exit 2 is a missing NUXEO_USER/NUXEO_PASS — reachable here only for a
-    // `skipHttpCredentials` steps file, since every other one was refused above. Passed through
-    // as a precondition rather than flattened into 1, which would read as a defect.
+    // `skipHttpCredentials` steps file, since every other loaded one was refused above. Passed
+    // through as a precondition rather than flattened into 1, which would read as a defect.
     process.exit(pf.status === EXIT_PRECONDITION ? EXIT_PRECONDITION : EXIT_FAIL);
   }
 }
