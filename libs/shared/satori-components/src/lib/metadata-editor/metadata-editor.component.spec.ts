@@ -1,5 +1,14 @@
-import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  Injectable,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+  signal,
+  viewChild,
+  type Type,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
   DirectoryService,
@@ -615,5 +624,90 @@ describe('NxsMetadataEditorComponent, twice on a page', () => {
     expect(inputs.map(labelsOf)).toEqual([['Codes'], ['Codes']]);
     expect(inputs[0].id).not.toBe(inputs[1].id);
     expect(inputs.every((input) => input.labels?.[0]?.htmlFor === input.id)).toBe(true);
+  });
+});
+
+/** A date library's adapter, as a host might provide one: it writes year first, and reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+
+  override format(date: Date): string {
+    const two = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+  }
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class DatesHostComponent {
+  readonly values: NxsEditorValues = { 'dc:title': 'Report' };
+  readonly editor = viewChild.required(NxsMetadataEditorComponent);
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class DatesHostWithAdapterComponent extends DatesHostComponent {}
+
+describe('NxsMetadataEditorComponent, typed dates', () => {
+  let fixture: ComponentFixture<DatesHostComponent>;
+
+  const expires = (): HTMLInputElement =>
+    (fixture.nativeElement as HTMLElement).querySelector(
+      'input[data-xpath="dc:expired"]',
+    ) as HTMLInputElement;
+
+  async function setup(locale: string, host: Type<DatesHostComponent> = DatesHostComponent) {
+    await TestBed.configureTestingModule({
+      imports: [host],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: LOCALE_ID, useValue: locale },
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(host);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  async function typeDate(text: string): Promise<unknown> {
+    expires().value = text;
+    expires().dispatchEvent(new Event('input'));
+    expires().dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.componentInstance.editor().dirtyProperties()['dc:expired'];
+  }
+
+  it('reads a typed date day first in French, under a day-first hint', async () => {
+    await setup('fr');
+    expect(expires().placeholder).toBe('dd/mm/yyyy');
+    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+  });
+
+  it('reads the same text month first in American English, under a month-first hint', async () => {
+    await setup('en-US');
+    expect(expires().placeholder).toBe('mm/dd/yyyy');
+    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 2, 4).toISOString());
+  });
+
+  it('uses a date adapter the host provides, for the hint and for what is typed', async () => {
+    await setup('fr', DatesHostWithAdapterComponent);
+    expect(expires().placeholder).toBe('yyyy-mm-dd');
+    expect(await typeDate('anything')).toBe(new Date(2030, 0, 1).toISOString());
   });
 });

@@ -13,7 +13,6 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -33,6 +32,7 @@ import {
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import {
   dayToDate,
   instantToDay,
@@ -115,7 +115,7 @@ interface EditorState {
     MatTableModule,
     MatTooltipModule,
   ],
-  providers: [NxsPermissionsService, provideNativeDateAdapter()],
+  providers: [NxsPermissionsService, provideNxsDateAdapter()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-permissions-panel' },
 })

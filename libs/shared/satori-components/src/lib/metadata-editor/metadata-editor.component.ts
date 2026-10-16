@@ -26,11 +26,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
-import {
-  ErrorStateMatcher,
-  MatOptionModule,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { ErrorStateMatcher, MatOptionModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -49,6 +45,8 @@ import {
   l10nEntryLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { NxsDateMaskPipe } from '../date-input/date-mask.pipe';
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import type { NxsHeadingLevel } from '../heading-level';
 import { nxsPropertyText } from '../properties-panel/property-text';
 import { NxsTab, NxsTabBodyDirective } from '../tabs/tab-body.directive';
@@ -189,8 +187,9 @@ let nextId = 0;
     MatSelectModule,
     NxsTabsComponent,
     NxsTabBodyDirective,
+    NxsDateMaskPipe,
   ],
-  providers: [provideNativeDateAdapter()],
+  providers: [provideNxsDateAdapter()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-metadata-editor' },
 })

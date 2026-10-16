@@ -1099,7 +1099,7 @@ In an `edit` or `create` form, the schema type picks the control:
 | `string` bound to a vocabulary     | a searchable select; an `l10n…` vocabulary is grouped under its parent entries              |
 | `string[]` bound to a vocabulary   | the same select, choosing several, each choice a removable chip                             |
 | `string[]` and other scalar lists  | a chip input: type a value, press Enter                                                     |
-| `date`                             | a date field with a picker. Typed dates are read month first, as the `mm/dd/yyyy` hint says |
+| `date`                             | a date field with a picker. A typed date is read in the locale's order, which the hint says |
 | `long`, `integer`                  | a number field accepting whole numbers                                                      |
 | `double`                           | a number field                                                                              |
 | `boolean`                          | a checkbox                                                                                  |

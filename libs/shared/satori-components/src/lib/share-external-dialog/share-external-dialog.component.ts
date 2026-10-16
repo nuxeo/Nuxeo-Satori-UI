@@ -11,7 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, merge } from 'rxjs';
 import { MatButton } from '@angular/material/button';
-import { type ErrorStateMatcher, provideNativeDateAdapter } from '@angular/material/core';
+import { type ErrorStateMatcher } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -26,6 +26,7 @@ import {
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { failureKey, offeredRights } from '../permission-dialog-support';
 import { toDay } from '../permissions-panel/permissions-model';
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
@@ -71,7 +72,7 @@ const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
     NxsSpinnerComponent,
     TranslatePipe,
   ],
-  providers: [provideNativeDateAdapter(), provideNxsToast()],
+  providers: [provideNxsDateAdapter(), provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-share-external-dialog' },
 })

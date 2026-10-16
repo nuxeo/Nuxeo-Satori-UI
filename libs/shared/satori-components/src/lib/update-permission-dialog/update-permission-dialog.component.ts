@@ -9,7 +9,6 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -26,6 +25,7 @@ import {
   type NuxeoAce,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { failureKey, offeredRights, principalLabel } from '../permission-dialog-support';
 import { dateToWrite, dayToDate, toDay } from '../permissions-panel/permissions-model';
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
@@ -73,7 +73,7 @@ let nextId = 0;
     NxsSpinnerComponent,
     TranslatePipe,
   ],
-  providers: [provideNativeDateAdapter(), provideNxsToast()],
+  providers: [provideNxsDateAdapter(), provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-update-permission-dialog' },
 })

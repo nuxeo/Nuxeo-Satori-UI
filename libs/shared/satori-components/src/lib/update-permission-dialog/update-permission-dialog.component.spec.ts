@@ -1,6 +1,11 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import {
+  Injectable,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+  type Provider,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { DateAdapter, MATERIAL_ANIMATIONS, NativeDateAdapter } from '@angular/material/core';
 import { MatDialog, type MatDialogRef } from '@angular/material/dialog';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { type MockInstance } from 'vitest';
@@ -11,6 +16,14 @@ import {
   NxsUpdatePermissionDialogComponent,
   type NxsUpdatePermissionDialogData,
 } from './update-permission-dialog.component';
+
+/** A date library's adapter, as a host might provide one: it reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+}
 
 /** An instant at local midnight, as Nuxeo holds an entry written from the user's own zone. */
 const localMidnight = (year: number, month: number, date: number): string =>
@@ -295,6 +308,35 @@ describe('NxsUpdatePermissionDialogComponent', () => {
         'Requires outbound mail (SMTP) configured on the Nuxeo server.',
         { duration: 7000 },
       );
+    });
+  });
+
+  describe('typed dates', () => {
+    /** The end day sent for the text typed into a dated entry's end date, under the providers. */
+    async function endSentFor(text: string, providers: Provider[]): Promise<unknown> {
+      TestBed.configureTestingModule({ providers });
+      await open(local({ end: localMidnight(2030, 6, 30) }));
+      await type(dateBoxes()[1], text);
+      await save();
+      return sent();
+    }
+
+    it('reads a typed date day first in French', async () => {
+      const written = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'fr' }]);
+      expect(written).toMatchObject({ end: '2030-04-03' });
+    });
+
+    it('reads the same text month first in American English', async () => {
+      const written = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'en-US' }]);
+      expect(written).toMatchObject({ end: '2030-03-04' });
+    });
+
+    it('uses a date adapter the host provides', async () => {
+      const written = await endSentFor('anything', [
+        { provide: LOCALE_ID, useValue: 'fr' },
+        { provide: DateAdapter, useClass: HostLibraryAdapter },
+      ]);
+      expect(written).toMatchObject({ end: '2030-01-01' });
     });
   });
 

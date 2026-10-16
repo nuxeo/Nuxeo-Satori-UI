@@ -225,6 +225,93 @@ export function provideNxsDateAdapter(): Provider[] {
   ];
 }
 
+/**
+ * The English `common.date-mask`. It is the one mask whose letters are known to be in English order
+ * whatever the active language, because it is what answers for a language whose catalogue has no
+ * mask of its own. A spec holds it to the English catalogue, so the two cannot drift apart.
+ */
+export const NXS_ENGLISH_DATE_MASK = 'mm/dd/yyyy';
+
+/** 31 December 2026, as `DateAdapter.createDate` takes it: its day, month and year differ. */
+export const NXS_DATE_MASK_SAMPLE = { year: 2026, month: 11, day: 31 } as const;
+
+type DateField = 'year' | 'month' | 'day';
+type MaskSegment = string | { readonly field: DateField; readonly width: number };
+
+/** Punctuation and spaces: what may sit between, before or after a date's numeric fields. */
+const FIELD_PUNCTUATION = /^[\p{P}\p{Zs}]+$/u;
+
+/**
+ * The fields of the sample date as a field writes it, in order, with the text between them:
+ * `31/12/2026` is day, `/`, month, `/`, year. `null` when it is not three numeric fields with only
+ * punctuation around them, such as a month written as a word or a literal like `年`.
+ */
+function writtenSegments(written: string): MaskSegment[] | null {
+  const text = asciiDigits(written).replace(/[\u200e\u200f\u061c]/g, '');
+  const segments: MaskSegment[] = [];
+  const seen = new Set<DateField>();
+  for (const run of text.match(/\d+|\D+/g) ?? []) {
+    if (!/\d/.test(run)) {
+      if (!FIELD_PUNCTUATION.test(run)) return null;
+      segments.push(run);
+      continue;
+    }
+    const value = Number(run);
+    const field: DateField =
+      value === NXS_DATE_MASK_SAMPLE.day
+        ? 'day'
+        : value === NXS_DATE_MASK_SAMPLE.month + 1
+          ? 'month'
+          : 'year';
+    if (seen.has(field)) return null;
+    seen.add(field);
+    segments.push({ field, width: run.length });
+  }
+  return seen.size === 3 ? segments : null;
+}
+
+/**
+ * The letter runs of a translated mask — `jj/mm/aaaa` is `jj`, `mm`, `aaaa` — or `null` when it is
+ * not three runs, each one letter repeated, with only punctuation between them.
+ */
+function maskLetters(mask: string): string[] | null {
+  const trimmed = mask.trim();
+  if (!/^\p{L}+(?:[\p{P}\p{Zs}]+\p{L}+){2}$/u.test(trimmed)) return null;
+  const runs = trimmed.match(/\p{L}+/gu) ?? [];
+  return runs.every((run) => [...run].every((letter) => letter === run[0])) ? runs : null;
+}
+
+/**
+ * The hint for a date field — `jj/mm/aaaa` — in the order, and with the separators, of `written`:
+ * the sample date (31 December 2026) as the field's own date adapter writes it. The letters are the
+ * translated mask's, read in the order of `maskLanguage`, the language the catalogue answered in;
+ * the English mask is read in English order whatever the language, because it is what answers for a
+ * catalogue without one.
+ *
+ * So the hint follows the parser rather than the catalogue: a French catalogue's `jj/mm/aaaa` reads
+ * `mm/jj/aaaa` where the adapter writes month first, and the English `mm/dd/yyyy` reads
+ * `dd/mm/yyyy` where it writes day first. A year the adapter writes with two digits gets two
+ * letters, one with four gets four. Anything that cannot be lined up — a mask with a literal such
+ * as `年`, an adapter that writes the month as a word — gives `written` itself, which agrees with the
+ * parser by construction, rather than a mask that might not.
+ */
+export function nxsDateMask(written: string, mask: string, maskLanguage: string): string {
+  const target = writtenSegments(written);
+  const letters = maskLetters(mask);
+  if (!target || !letters) return written;
+  const order = nxsDateFieldOrder(mask.trim() === NXS_ENGLISH_DATE_MASK ? 'en' : maskLanguage);
+  const lettersOf = new Map(order.map((field, index) => [field, letters[index]]));
+  return target
+    .map((segment) => {
+      if (typeof segment === 'string') return segment;
+      const word = lettersOf.get(segment.field) ?? '';
+      return segment.field === 'year'
+        ? ([...word][0] ?? '').repeat(segment.width <= 2 ? 2 : 4)
+        : word;
+    })
+    .join('');
+}
+
 type DatepickerLabel = Exclude<
   keyof MatDatepickerIntl,
   'changes' | 'formatYearRange' | 'formatYearRangeLabel'

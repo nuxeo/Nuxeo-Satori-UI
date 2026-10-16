@@ -1,6 +1,11 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import {
+  Injectable,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+  type Provider,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { DateAdapter, MATERIAL_ANIMATIONS, NativeDateAdapter } from '@angular/material/core';
 import { MatDialog, type MatDialogRef } from '@angular/material/dialog';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { type MockInstance } from 'vitest';
@@ -11,6 +16,14 @@ import {
   NxsShareExternalDialogComponent,
   type NxsShareExternalDialogData,
 } from './share-external-dialog.component';
+
+/** A date library's adapter, as a host might provide one: it reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+}
 
 describe('NxsShareExternalDialogComponent', () => {
   let addExternal: ReturnType<typeof vi.fn<(...args: unknown[]) => Observable<unknown>>>;
@@ -220,6 +233,37 @@ describe('NxsShareExternalDialogComponent', () => {
       { duration: 7000 },
     );
     expect(close).toHaveBeenCalledWith(true);
+  });
+
+  describe('typed dates', () => {
+    /** The end day sent for the text typed into the end date, under the given providers. */
+    async function endSentFor(text: string, providers: Provider[]): Promise<unknown> {
+      TestBed.configureTestingModule({ providers });
+      await open();
+      await type(emailBox(), 'ext@example.com');
+      await type(dateBoxes()[1], text);
+      create().click();
+      await settle();
+      return addExternal.mock.calls[0]?.[1];
+    }
+
+    it('reads a typed date day first in French', async () => {
+      const sent = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'fr' }]);
+      expect(sent).toMatchObject({ end: '2030-04-03' });
+    });
+
+    it('reads the same text month first in American English', async () => {
+      const sent = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'en-US' }]);
+      expect(sent).toMatchObject({ end: '2030-03-04' });
+    });
+
+    it('uses a date adapter the host provides', async () => {
+      const sent = await endSentFor('anything', [
+        { provide: LOCALE_ID, useValue: 'fr' },
+        { provide: DateAdapter, useClass: HostLibraryAdapter },
+      ]);
+      expect(sent).toMatchObject({ end: '2030-01-01' });
+    });
   });
 
   it('sends the start day and a trimmed message when given', async () => {

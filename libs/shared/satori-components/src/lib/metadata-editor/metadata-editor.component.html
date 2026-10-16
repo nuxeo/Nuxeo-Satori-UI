@@ -166,7 +166,7 @@
         <input
           matInput
           [matDatepicker]="picker"
-          [placeholder]="'common.date-mask' | translate"
+          [placeholder]="'common.date-mask' | translate | nxsDateMask"
           [formControl]="asControl(control)"
           [required]="isRequired(definition)"
           [errorStateMatcher]="errorMatcher"

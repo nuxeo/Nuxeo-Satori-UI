@@ -1,5 +1,13 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  Injectable,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+  signal,
+  type Type,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
 import { By } from '@angular/platform-browser';
 import { Subject, map, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -1247,5 +1255,93 @@ describe('NxsPermissionsPanelComponent', () => {
     expect(panel()['serverMessage']({ error: { message: '  ' }, status: 0 })).toBe(
       'The server gave no reason.',
     );
+  });
+});
+
+/** A date library's adapter, as a host might provide one: it reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  template: `<nxs-permissions-panel documentId="doc-1" />`,
+})
+class DatesHostComponent {}
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  template: `<nxs-permissions-panel documentId="doc-1" />`,
+})
+class DatesHostWithAdapterComponent {}
+
+describe('NxsPermissionsPanelComponent, typed dates', () => {
+  let fixture: ComponentFixture<unknown>;
+
+  const panel = () =>
+    fixture.debugElement.query(By.directive(NxsPermissionsPanelComponent))
+      .componentInstance as NxsPermissionsPanelComponent;
+  const fromBox = (): HTMLInputElement =>
+    (fixture.nativeElement as HTMLElement).querySelector(
+      '.nxs-permissions-panel__dates input',
+    ) as HTMLInputElement;
+  const day = (date: Date | null | undefined) =>
+    date ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` : null;
+
+  async function render(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  /** The editor open on a dated entry, its From box showing. */
+  async function editDated(locale: string, host: Type<unknown> = DatesHostComponent) {
+    const dated = serverDoc([
+      { username: 'jdoe', permission: 'Read', begin: '2030-01-01T00:00:00.000Z' },
+    ]);
+    await TestBed.configureTestingModule({
+      imports: [host],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: LOCALE_ID, useValue: locale },
+        {
+          provide: DocumentDetailService,
+          useValue: { getDocumentPermissions: () => of(dated), searchUsersGroups: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(host);
+    await render();
+    panel()['openEdit'](panel()['localItems']()[0]);
+    await render();
+  }
+
+  async function typeFrom(text: string): Promise<Date | null> {
+    fromBox().value = text;
+    fromBox().dispatchEvent(new Event('input'));
+    fromBox().dispatchEvent(new Event('change'));
+    await render();
+    return panel()['editorBegin']();
+  }
+
+  it('reads a typed date day first in French', async () => {
+    await editDated('fr');
+    expect(day(await typeFrom('03/04/2026'))).toBe('2026-4-3');
+  });
+
+  it('reads the same text month first in American English', async () => {
+    await editDated('en-US');
+    expect(day(await typeFrom('03/04/2026'))).toBe('2026-3-4');
+  });
+
+  it('uses a date adapter the host provides', async () => {
+    await editDated('fr', DatesHostWithAdapterComponent);
+    expect(day(await typeFrom('anything'))).toBe('2030-1-1');
   });
 });

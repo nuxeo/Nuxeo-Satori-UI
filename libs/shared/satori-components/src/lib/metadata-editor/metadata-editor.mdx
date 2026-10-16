@@ -65,8 +65,12 @@ export const usageTs = `save(editor: NxsMetadataEditorComponent): void {
 <Source language="ts" dark code={usageTs} />
 
 The host owns the buttons and the request. The editor needs `DirectoryService` for vocabulary
-entries, and provides its own date adapter; give the datepicker translated labels with the app's
-datepicker intl. It has no registered ID. Its labels and messages are translated under
+entries, and provides its own date adapter: a typed date is read in the order the user's locale
+writes dates — `03/04/2026` is 3 April in French — unless the host provides a date adapter of its
+own, other than Material's native one, which the editor then uses. A date field's hint is
+`common.date-mask` with its letters put in the order, and between the separators, that adapter
+writes a date, so the hint always says what the field reads. Give the datepicker translated labels
+with the app's datepicker intl. It has no registered ID. Its labels and messages are translated under
 `satori-components.metadata-editor.*`, with English from `providePlatformEnglishFallback()`.
 
 Each section field is `{ xpath, label, definition }`. `definition` is the field's schema type as
