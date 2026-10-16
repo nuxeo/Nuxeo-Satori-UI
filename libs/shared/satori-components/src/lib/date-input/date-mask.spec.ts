@@ -86,10 +86,30 @@ describe('nxsDateMask', () => {
   });
 
   /**
-   * Every row is the hint a field shows and then the parser's reading of a date typed as that
-   * hint says. The second is the property this exists for: a hint that disagrees with the parser
-   * stores a date silently swapped.
+   * The hint a field shows, and then the parser's reading of a date typed as that hint says. The
+   * second is the property this exists for: a hint that disagrees with the parser stores a date
+   * silently swapped.
    */
+  function hintCases(row: {
+    locale: string;
+    mask: string;
+    active: string;
+    language: Language;
+    hint: string;
+  }): void {
+    const { locale, mask, active, language, hint } = row;
+
+    it(`reads ${hint}`, () => {
+      expect(nxsDateMask(writtenBy(adapterFor(locale)), mask, active)).toBe(hint);
+    });
+
+    it('is read by the parser as it tells the user to type', () => {
+      const adapter = adapterFor(locale);
+      const shown = nxsDateMask(writtenBy(adapter), mask, active);
+      expect(ymd(adapter.parse(followed(shown, language)))).toBe('2026-4-3');
+    });
+  }
+
   describe.each([
     // A language's own mask, under its own locale: the translator's letters, in the field's order.
     { locale: 'en-US', language: 'en', hint: 'mm/dd/yyyy' },
@@ -119,18 +139,32 @@ describe('nxsDateMask', () => {
     { locale: 'en-US', language: 'fr', hint: 'mm/jj/aaaa' },
   ] as const)('$language mask under $locale', ({ locale, language, hint, ...rest }) => {
     const english = 'english' in rest;
-    const mask = english ? NXS_ENGLISH_DATE_MASK : CATALOGUE[language].mask;
-    // The English mask arrives under the active language, whichever that is.
-    const active = english ? locale.split('-')[0] : language;
-
-    it(`reads ${hint}`, () => {
-      expect(nxsDateMask(writtenBy(adapterFor(locale)), mask, active)).toBe(hint);
+    hintCases({
+      locale,
+      language,
+      hint,
+      mask: english ? NXS_ENGLISH_DATE_MASK : CATALOGUE[language].mask,
+      // The English mask arrives under the active language, whichever that is.
+      active: english ? locale.split('-')[0] : language,
     });
+  });
 
-    it('is read by the parser as it tells the user to type', () => {
-      const adapter = adapterFor(locale);
-      const shown = nxsDateMask(writtenBy(adapter), mask, active);
-      expect(ymd(adapter.parse(followed(shown, language)))).toBe('2026-4-3');
+  /**
+   * The language as `TranslateService.getCurrentLang()` names it: with an underscore, as
+   * ngx-translate setups and POSIX often write it, and with a region whose catalogue has its own
+   * mask, in the region's order, or its language's, copied.
+   */
+  describe.each([
+    { active: 'fr_FR', locale: 'fr', language: 'fr', hint: 'jj/mm/aaaa' },
+    { active: 'de_DE', locale: 'de', language: 'de', hint: 'tt.mm.jjjj' },
+    { active: 'zh_CN', locale: 'zh', language: 'zh', hint: 'yyyy/mm/dd' },
+    { active: 'en_GB', locale: 'en-GB', language: 'en', hint: 'dd/mm/yyyy', mask: 'dd/mm/yyyy' },
+    { active: 'fr_CA', locale: 'fr-CA', language: 'fr', hint: 'aaaa-mm-jj' },
+  ] as const)('$active catalogue under $locale', ({ language, ...row }) => {
+    hintCases({
+      ...row,
+      language,
+      mask: ('mask' in row ? row.mask : undefined) ?? CATALOGUE[language].mask,
     });
   });
 
@@ -138,6 +172,10 @@ describe('nxsDateMask', () => {
     expect(nxsDateMask(writtenBy(adapterFor('fr')), NXS_ENGLISH_DATE_MASK, 'fr')).not.toBe(
       NXS_ENGLISH_DATE_MASK,
     );
+  });
+
+  it('shows the date as written when no order gives the year its longest run', () => {
+    expect(nxsDateMask('31/12/2026', 'aaaa/mm/jj', 'fr')).toBe('31/12/2026');
   });
 
   it('gives two letters for a year the field writes with two digits', () => {

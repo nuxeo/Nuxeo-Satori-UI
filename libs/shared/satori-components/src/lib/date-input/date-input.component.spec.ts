@@ -53,6 +53,10 @@ describe('nxsParseLocaleDate', () => {
     ['ja', '2026年4月3日', '2026-04-03'],
     ['fr', '  03/04/2026  ', '2026-04-03'],
     ['fr', '29/02/2028', '2028-02-29'],
+    // A locale written as ngx-translate setups and POSIX often write it.
+    ['fr_FR', '03/04/2026', '2026-04-03'],
+    ['fr_FR.UTF-8', '03/04/2026', '2026-04-03'],
+    ['en_US', '03/04/2026', '2026-03-04'],
   ])('reads %s %j as %s', (locale, text, expected) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe(expected);
   });

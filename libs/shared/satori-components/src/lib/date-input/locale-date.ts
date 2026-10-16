@@ -39,13 +39,22 @@ export function nxsLocaleId(locale: unknown, fallback = 'en-US'): string {
  * The locale with the Gregorian calendar. `Intl` gives Thai the Buddhist calendar, 543 years ahead,
  * and every other date in the application is Gregorian; a year the field shows and the parser reads
  * differently would also not survive being typed back.
+ *
+ * ngx-translate setups and POSIX name languages `fr_FR`, which `Intl` rejects; read as `en-US`, a
+ * French field's hint would be lined up month first while its parser reads day first. So an
+ * underscore is read as a hyphen, and a tag `Intl` still rejects, such as `fr_FR.UTF-8`, is read
+ * as its language alone.
  */
 function gregorian(locale: string): string {
-  try {
-    return new Intl.Locale(locale, { calendar: 'gregory' }).toString();
-  } catch {
-    return 'en-US';
+  const tag = locale.trim().replace(/_/g, '-');
+  for (const candidate of [tag, tag.split('-')[0]]) {
+    try {
+      return new Intl.Locale(candidate, { calendar: 'gregory' }).toString();
+    } catch {
+      // Not a tag `Intl` reads: try the next.
+    }
   }
+  return 'en-US';
 }
 
 /** The order the locale writes a date's numeric fields in, such as `['day', 'month', 'year']`. */
@@ -282,10 +291,28 @@ function maskLetters(mask: string): string[] | null {
 }
 
 /**
+ * The fields a translated mask's letter runs stand for, in order: the order `language` writes a
+ * date in, the language the catalogue answered in. A catalogue is named by the whole code, so
+ * `en_GB`'s `dd/mm/yyyy` is read in British order, day first. But a regional catalogue may copy
+ * its language's mask: `fr_CA` with French `jj/mm/aaaa` would give `jj`, written first, to the
+ * year Canadian French writes first. A year's run is never shorter than another field's, so an
+ * order that would give the year a shorter run is the wrong one: then the mask is read in the
+ * language's order, and failing that it is not read at all (`null`).
+ */
+function maskOrder(letters: readonly string[], language: string): DateField[] | null {
+  const longest = Math.max(...letters.map((run) => [...run].length));
+  return (
+    [language, language.trim().split(/[-_]/)[0]]
+      .map(nxsDateFieldOrder)
+      .find((order) => [...letters[order.indexOf('year')]].length === longest) ?? null
+  );
+}
+
+/**
  * The hint for a date field — `jj/mm/aaaa` — in the order, and with the separators, of `written`:
  * the sample date (31 December 2026) as the field's own date adapter writes it. The letters are the
- * translated mask's, read in the order of `maskLanguage`, the language the catalogue answered in;
- * the English mask is read in English order whatever the language, because it is what answers for a
+ * translated mask's, read in the order of `maskLanguage`, the language the catalogue answered in,
+ * as `maskOrder` decides it — `fr_FR` is French; the English mask is read in English order whatever the language, because it is what answers for a
  * catalogue without one.
  *
  * So the hint follows the parser rather than the catalogue: a French catalogue's `jj/mm/aaaa` reads
@@ -299,7 +326,8 @@ export function nxsDateMask(written: string, mask: string, maskLanguage: string)
   const target = writtenSegments(written);
   const letters = maskLetters(mask);
   if (!target || !letters) return written;
-  const order = nxsDateFieldOrder(mask.trim() === NXS_ENGLISH_DATE_MASK ? 'en' : maskLanguage);
+  const order = maskOrder(letters, mask.trim() === NXS_ENGLISH_DATE_MASK ? 'en' : maskLanguage);
+  if (!order) return written;
   const lettersOf = new Map(order.map((field, index) => [field, letters[index]]));
   return target
     .map((segment) => {
