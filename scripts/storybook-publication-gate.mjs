@@ -2,15 +2,15 @@
 /**
  * Refuses a Storybook build that carries Satori. We may consume `@hylandsoftware/*` but not
  * redistribute it, and this repository is public, so its modules, tokens and fonts must never be
- * published from it. Runs on what GitHub Pages publishes and on every CI build of the Material
- * Storybook; controls in `storybook-publication-gate.selftest.mjs`.
+ * published from it. Runs on the directory `storybook-pages.yml` publishes and on the Material
+ * Storybook `ci.yml` builds; controls in `storybook-publication-gate.selftest.mjs`.
  *
  * Usage:  node scripts/storybook-publication-gate.mjs <storybook-dir>
  * Exit 0 nothing found, 1 Satori content or a stale allowance, 2 nothing to inspect.
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
-import { extname, join, relative, resolve } from 'node:path';
+import { extname, join, resolve } from 'node:path';
 
 // Interpolated, so the supply-chain gate does not read these strings as imports of the package.
 const SCOPE = '@hylandsoftware';
@@ -60,7 +60,7 @@ const RULES = {
   font: 'font file not on the allowed list, or a Satori font named in content',
   'satori-module': 'compiled @hylandsoftware module',
   'satori-path': 'file path names a Satori package or font',
-  'satori-mention': '@hylandsoftware outside the allowed strings',
+  'satori-mention': 'hylandsoftware outside the allowed strings',
   'stale-allowance': 'an allowance matches nothing in this build',
 };
 
@@ -75,6 +75,14 @@ if (missing.length > 0) {
   console.error(
     `storybook-publication-gate: ${dirArg} is not a Storybook build (no ${missing.join(', ')}). ` +
       'Nothing was inspected, so this is not a pass.',
+  );
+  process.exit(2);
+}
+const indexEntries = countIndexEntries(join(root, 'index.json'));
+if (indexEntries === 0) {
+  console.error(
+    `storybook-publication-gate: ${dirArg} has no index.json listing a story or docs page, so ` +
+      'it is not a Storybook anyone could read. Nothing was inspected, so this is not a pass.',
   );
   process.exit(2);
 }
@@ -126,6 +134,13 @@ for (const rel of files) {
 }
 
 if (allowed.fonts === 0) report('stale-allowance', '(fonts)', `no file matches ${ALLOWED_FONT}`);
+if (allowed.workspaceMentions === 0) {
+  report(
+    'stale-allowance',
+    '(workspace sources)',
+    'no source map copy of a libs/ or apps/ file names the scope',
+  );
+}
 for (const allowance of ALLOWANCES) {
   if (allowanceFiles.get(allowance.id) === 0) {
     report('stale-allowance', `(${allowance.id})`, `no file matches ${allowance.file}`);
@@ -173,7 +188,16 @@ function scanText(file, text, allowance, { mentionsAllowed = false } = {}) {
   }
   const mentions = count(rest, MENTION);
   if (mentionsAllowed) allowed.workspaceMentions += mentions;
-  else report('satori-mention', file, '@hylandsoftware', mentions);
+  else report('satori-mention', file, 'hylandsoftware', mentions);
+}
+
+/** @param {string} path */
+function countIndexEntries(path) {
+  try {
+    return Object.keys(JSON.parse(readFileSync(path, 'utf8')).entries ?? {}).length;
+  } catch {
+    return 0;
+  }
 }
 
 /** @param {string} file @param {{ sources: unknown[], sourcesContent?: unknown[] }} map */
@@ -203,8 +227,9 @@ function count(text, re) {
 function printReport() {
   console.log(`storybook-publication-gate: ${dirArg}`);
   console.log(
-    `  scanned ${stats.files} files: ${stats.text} read as text, ${stats.maps} source maps ` +
-      `(${stats.sources} sources), ${stats.fonts} fonts, ${stats.binary} other binary`,
+    `  scanned ${stats.files} files of a Storybook indexing ${indexEntries} stories and docs pages: ` +
+      `${stats.text} read as text, ${stats.maps} source maps (${stats.sources} sources), ` +
+      `${stats.fonts} fonts, ${stats.binary} other binary`,
   );
   for (const a of ALLOWANCES) {
     console.log(

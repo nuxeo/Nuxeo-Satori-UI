@@ -50,6 +50,10 @@ const sourceMap = (sources) =>
 const CLEAN = {
   'index.html': '<!doctype html><title>manager</title>',
   'iframe.html': '<!doctype html><title>preview</title>',
+  'index.json': JSON.stringify({
+    v: 5,
+    entries: { 'primitives-avatar--default': { type: 'story' } },
+  }),
   'main.abc123.iframe.bundle.js': 'console.log("material");',
   'main.abc123.css': 'html { font: 14px Roboto, sans-serif; }',
   [GETTING_STARTED]: gettingStarted(),
@@ -140,6 +144,11 @@ const NEGATIVE = [
     'stale-allowance',
   ],
   [
+    'no workspace source that names the scope',
+    { '9644.deadbeef.iframe.bundle.js.map': sourceMap([['libs/x/a.ts', 'export {};']]) },
+    'stale-allowance',
+  ],
+  [
     'a token in a workspace source, where only mentions are allowed',
     { '9.js.map': sourceMap([['libs/x/theme.scss', ':root { --sat-space: 4px; }']]) },
     'satori-token',
@@ -189,6 +198,8 @@ const NOTHING_TO_INSPECT = [
   ['no argument', []],
   ['a directory that does not exist', [join(workspace, 'missing')]],
   ['a directory with no iframe.html', [fixture({ 'iframe.html': null })]],
+  ['a directory with no index.json', [fixture({ 'index.json': null })]],
+  ['an index.json listing nothing', [fixture({ 'index.json': '{"v":5,"entries":{}}' })]],
 ];
 
 for (const [name, args] of NOTHING_TO_INSPECT) {

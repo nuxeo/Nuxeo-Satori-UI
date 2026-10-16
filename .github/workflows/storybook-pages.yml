@@ -2,10 +2,11 @@ name: Storybook on GitHub Pages
 
 # Publishes the Material Storybook of `satori-components` to https://nuxeo.github.io/agentic-ui-poc/.
 #
-# ONLY that build. `satori-components-satori`'s Storybook, and `satori-components:build-storybook:satori`
-# (this library under Satori's theme), bundle compiled `@hylandsoftware/*` code, tokens and fonts that
-# we may consume but not redistribute. This repository is public, so neither may be published here or
-# uploaded as a workflow artifact either. `scripts/storybook-publication-gate.mjs` refuses them.
+# ONLY that build. `satori-components-satori`'s Storybook bundles compiled `@hylandsoftware/*` modules,
+# tokens and fonts, and `satori-components:build-storybook:satori` (this library under Satori's theme)
+# its tokens and fonts: we may consume them but not redistribute them. This repository is public, so
+# neither build may be published, nor uploaded as a workflow artifact by any workflow here.
+# `scripts/storybook-publication-gate.mjs` refuses both before this workflow uploads.
 #
 # A workflow of its own rather than a job in ci.yml: that one runs on pull requests and every feature
 # branch, and its `cancel-in-progress` concurrency would cancel a deployment half-way through.

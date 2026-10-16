@@ -146,15 +146,15 @@ Satori import fails the build rather than compiling. Only the opt-in `:satori` c
 **Publishing.** `.github/workflows/storybook-pages.yml` builds the default configuration the same
 token-free way and deploys it to GitHub Pages on every push to `integration/nxsat-308` (to `main`
 once that merges, NXSAT-649). **Only that build may be published.** `satori-components-satori`'s
-Storybook and the `:satori` configuration bundle compiled `@hylandsoftware/*` modules, `--sat-*`
-tokens and Satori's fonts, which we may consume but not redistribute — and this repository is
-public, so a workflow artifact is published too. `scripts/storybook-publication-gate.mjs` refuses an
-artifact carrying any of them before upload, and CI runs it after every build of this Storybook, so
-a change that would block the deployment is red on its PR. Its allowances are explicit and few: the
-Getting started page's sentences naming the package, the text of our own `libs/` and `apps/` files
-in source maps, and Storybook's Nunito Sans. Anything else fails, as does an allowance that matches
-nothing — so when Getting started gains or loses a mention of `@hylandsoftware`, update
-`ALLOWANCES` in the gate.
+Storybook bundles compiled `@hylandsoftware/*` modules, `--sat-*` tokens and Satori's fonts, and the
+`:satori` configuration the tokens and fonts; we may consume them but not redistribute them. This
+repository is public, so a workflow artifact is published too: neither build may be uploaded as one.
+`scripts/storybook-publication-gate.mjs` refuses an artifact carrying any of them before upload, and
+CI runs it after its own build of this Storybook, so a change to the library that would block the
+deployment fails its pull request first. Its allowances are explicit and few: the Getting started
+page's sentences naming the package, the text of our own `libs/` and `apps/` files in source maps,
+and Storybook's Nunito Sans. Anything else fails, as does an allowance that matches nothing — so
+when Getting started gains or loses a mention of `@hylandsoftware`, update `ALLOWANCES` in the gate.
 
 What each page documents, and where it comes from. All of it is customer-facing, so no ticket,
 branch or change history:

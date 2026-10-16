@@ -203,7 +203,7 @@ jobs:
       # project affects none. A skip says so.
       #
       # Then the publication gate, which storybook-pages.yml runs before publishing this build to
-      # GitHub Pages: here it makes a change that would block that deployment red on its PR.
+      # GitHub Pages: here, whenever this step builds, it fails the pull request instead.
       - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
         shell: bash
         run: |
