@@ -290,6 +290,8 @@ runner, before launching a browser, for a steps file that needs them; `h.login()
 `phase-0-no-backend` and `phase-4-platform` do) and runs with no credentials at all. A steps file
 that fails to load is reported as that load error, not as missing credentials.
 `story-runner.mjs` under `scripts/collect-evidence/` refuses a missing pair with exit 2 too, but
-a scenes file's own `PreconditionError` ends that run with exit 1. Both used to default to `Administrator` (NXSAT-649): a working login
-in the repository, and a capture that silently ran as an administrator whenever the variables
-were unset. The shared reader is `nuxeo-credentials.mjs`.
+a scenes file's own `PreconditionError` ends that run with exit 1.
+
+Both variables used to default to `Administrator` (NXSAT-649): a working login in the
+repository, and a capture that silently ran as an administrator whenever the variables were
+unset. The shared reader is `nuxeo-credentials.mjs`.
