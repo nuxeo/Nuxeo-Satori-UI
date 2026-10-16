@@ -335,8 +335,9 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+/* Measured at 4.24:1 on the card background with the outline token; on-surface-variant clears 4.5:1. */
 .rv-sep {
-  color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .rv-time {
