@@ -142,7 +142,7 @@
           <mat-checkbox
             [checked]="isAllSelected()"
             [indeterminate]="isIndeterminate()"
-            [attr.aria-label]="'trash.trash.select-all' | translate"
+            [aria-label]="'trash.trash.select-all' | translate"
             [disabled]="resultCount() === 0"
             [matTooltip]="'trash.trash.select-all' | translate"
             (change)="toggleAll()"
@@ -180,7 +180,7 @@
             <div class="grid-card-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(doc.uid)"
-                [attr.aria-label]="'common.select-item' | translate: { name: doc.title }"
+                [aria-label]="'common.select-item' | translate: { name: doc.title }"
                 (change)="toggleSelection(doc.uid)"
                 (click)="$event.stopPropagation()"
               ></mat-checkbox>
@@ -253,7 +253,7 @@
             <mat-checkbox
               [checked]="isAllSelected()"
               [indeterminate]="isIndeterminate()"
-              [attr.aria-label]="'trash.trash.select-all' | translate"
+              [aria-label]="'trash.trash.select-all' | translate"
               (change)="toggleAll()"
             ></mat-checkbox>
           </span>
@@ -293,7 +293,7 @@
             <span class="col-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(doc.uid)"
-                [attr.aria-label]="'common.select-item' | translate: { name: doc.title }"
+                [aria-label]="'common.select-item' | translate: { name: doc.title }"
                 (click)="$event.stopPropagation()"
                 (change)="toggleSelection(doc.uid)"
               ></mat-checkbox>
@@ -362,7 +362,7 @@
         <mat-checkbox
           [checked]="isAllSelected()"
           [indeterminate]="isIndeterminate()"
-          [attr.aria-label]="'trash.trash.select-all' | translate"
+          [aria-label]="'trash.trash.select-all' | translate"
           [disabled]="resultCount() === 0"
           [matTooltip]="'trash.trash.select-all' | translate"
           (change)="toggleAll()"
@@ -407,7 +407,7 @@
             <span class="simple-list-checkbox col-hover-select">
               <mat-checkbox
                 [checked]="isSelected(doc.uid)"
-                [attr.aria-label]="'common.select-item' | translate: { name: doc.title }"
+                [aria-label]="'common.select-item' | translate: { name: doc.title }"
                 (click)="$event.stopPropagation()"
                 (change)="toggleSelection(doc.uid)"
               ></mat-checkbox>
