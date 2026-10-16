@@ -149,6 +149,13 @@ export class DashboardPageComponent {
       },
     });
 
+    // The banner is already hidden by the same flag, but hiding it never stopped the request:
+    // an opted-out user still had their dashboard sent to `AI.Insights` on every load.
+    if (!this.featureFlags.aiEnabled()) {
+      this.aiInsightsLoading.set(false);
+      return;
+    }
+
     this.aiGateway.getInsights(userId).subscribe({
       next: (res) => {
         this.aiInsights.set(res.insights);
