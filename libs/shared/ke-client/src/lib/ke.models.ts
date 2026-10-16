@@ -5,6 +5,33 @@ export type KeAction =
   | 'named-entity-recognition-text'
   | 'text-summarization';
 
+/**
+ * Action names the Context API expects on the wire, keyed by our `KeAction`.
+ *
+ * The connector speaks the v2 Context API, where action names are camelCase.
+ * The kebab-case names are v1 and are rejected with
+ * `Unknown action 'text-summarization'. Actions array must contain only known
+ * actions.` — an HTTP 400 that reaches the user as a bare "Bad Request", with
+ * nothing pointing at the action name as the cause.
+ *
+ * The kebab-case form stays as our internal vocabulary: it is what templates,
+ * component state and tests are written against. Translating once, where the
+ * request is serialised, keeps that intact and leaves a single place to change
+ * if the wire contract moves again.
+ */
+export const KE_ACTION_WIRE_NAMES: Record<KeAction, string> = {
+  'image-description': 'imageDescription',
+  'text-classification': 'textClassification',
+  'named-entity-recognition-image': 'namedEntityRecognitionImage',
+  'named-entity-recognition-text': 'namedEntityRecognitionText',
+  'text-summarization': 'textSummarization',
+};
+
+/** Translate one internal action name to the name the Context API expects. */
+export function toKeWireAction(action: KeAction): string {
+  return KE_ACTION_WIRE_NAMES[action] ?? action;
+}
+
 export type KeDocumentClasses = string[];
 export type KeNamedEntityMap = Record<string, string[]>;
 

@@ -5,8 +5,10 @@ import { Observable, catchError, map, throwError } from 'rxjs';
 import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { KE_CIC_OPERATIONS, type KeCicOperations } from './ke.config';
-import type {
-  KeEnrichRequest,
+import {
+  toKeWireAction,
+  type KeAction,
+  type KeEnrichRequest,
   KeEnrichmentResult,
   KeNamedEntityMap,
   KeProcessingError,
@@ -73,8 +75,11 @@ export class KeClientService {
   }
 
   private toAutomationParams(request: KeEnrichRequest): Record<string, unknown> {
+    // The Context API is v2, where action names are camelCase. Translating
+    // here, at the single point the request is serialised, keeps the rest of
+    // the app on the kebab-case names its templates and state use.
     const params: Record<string, unknown> = {
-      actions: request.actions.join(','),
+      actions: request.actions.map(toKeWireAction).join(','),
     };
 
     if (request.sourceId) {
@@ -97,7 +102,14 @@ export class KeClientService {
       params['extraJsonPayloadStr'] = JSON.stringify(extraPayload);
     }
     if (request.v2Actions) {
-      params['instructionsV2JsonStr'] = JSON.stringify(request.v2Actions);
+      // These keys are action names too, so they need the same translation.
+      const wireActions = Object.fromEntries(
+        Object.entries(request.v2Actions).map(([action, config]) => [
+          toKeWireAction(action as KeAction),
+          config,
+        ]),
+      );
+      params['instructionsV2JsonStr'] = JSON.stringify(wireActions);
     }
 
     return params;

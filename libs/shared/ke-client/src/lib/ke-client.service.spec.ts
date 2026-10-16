@@ -11,7 +11,12 @@ import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
 
 import { DEFAULT_KE_CIC_OPERATIONS, KE_CIC_OPERATIONS } from './ke.config';
 import { KeClientService, KeEnrichmentError } from './ke-client.service';
-import type { KeEnrichRequest, KeEnrichmentResult } from './ke.models';
+import {
+  KE_ACTION_WIRE_NAMES,
+  type KeAction,
+  type KeEnrichRequest,
+  type KeEnrichmentResult,
+} from './ke.models';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -213,6 +218,49 @@ describe('KeClientService', () => {
     await expect(result$).rejects.toThrow(/No authentication info/);
   });
 
+  describe('v2 action names', () => {
+    /**
+     * Every `KeAction` must have a camelCase wire name. The Context API is v2
+     * and rejects the kebab-case v1 names with an HTTP 400 that reaches the
+     * user as a bare "Bad Request" — nothing in it points at the action name,
+     * so this is cheap to ship and expensive to diagnose.
+     *
+     * The list is spelled out rather than derived from the map, so adding a
+     * `KeAction` without a mapping fails here instead of at runtime.
+     */
+    const ALL_ACTIONS: KeAction[] = [
+      'image-description',
+      'text-classification',
+      'named-entity-recognition-image',
+      'named-entity-recognition-text',
+      'text-summarization',
+    ];
+
+    it.each(ALL_ACTIONS)('maps %s to a camelCase wire name', (action) => {
+      const wire = KE_ACTION_WIRE_NAMES[action];
+
+      expect(wire).toBeDefined();
+      expect(wire).not.toContain('-');
+      expect(wire).toMatch(/^[a-z][A-Za-z]*$/);
+    });
+
+    it('covers every KeAction, so a new action cannot ship unmapped', () => {
+      expect(Object.keys(KE_ACTION_WIRE_NAMES).sort()).toEqual([...ALL_ACTIONS].sort());
+    });
+
+    it('sends the wire name, not the internal name, for every action', async () => {
+      for (const action of ALL_ACTIONS) {
+        const { result, req } = enrich({ actions: [action] });
+
+        const params = await readAutomationParams(req);
+        expect(params['actions']).toBe(KE_ACTION_WIRE_NAMES[action]);
+
+        req.flush(JSON.stringify({ inProgress: false, results: [] }));
+        await result;
+      }
+    });
+  });
+
   describe('automation parameters', () => {
     it('serialises every optional enrichment parameter into the automation params', async () => {
       const { result, req } = enrich({
@@ -225,8 +273,10 @@ describe('KeClientService', () => {
         v2Actions: { 'text-summarization': { maxWordCount: 50 } },
       });
 
+      // Both `actions` and the `instructionsV2JsonStr` keys carry the v2
+      // camelCase wire names, not the kebab-case ones passed in.
       expect(await readAutomationParams(req)).toEqual({
-        actions: 'text-classification,text-summarization',
+        actions: 'textClassification,textSummarization',
         sourceId: 'doc-1',
         configName: 'contracts-config',
         classes: JSON.stringify(['Invoice', 'Contract']),
@@ -234,7 +284,7 @@ describe('KeClientService', () => {
           maxWordCount: 120,
           instructions: { tone: 'neutral' },
         }),
-        instructionsV2JsonStr: JSON.stringify({ 'text-summarization': { maxWordCount: 50 } }),
+        instructionsV2JsonStr: JSON.stringify({ textSummarization: { maxWordCount: 50 } }),
       });
 
       req.flush(JSON.stringify({ inProgress: false, results: [] }));
@@ -246,7 +296,7 @@ describe('KeClientService', () => {
 
       // Present first: the one parameter that is always sent...
       const params = await readAutomationParams(req);
-      expect(params['actions']).toBe('image-description');
+      expect(params['actions']).toBe('imageDescription');
       // ...then the absence of the rest, so an accidental `undefined` value cannot pass.
       expect(Object.keys(params)).toEqual(['actions']);
 
@@ -258,7 +308,7 @@ describe('KeClientService', () => {
       const { result, req } = enrich({ actions: ['text-classification'], classes: [] });
 
       const params = await readAutomationParams(req);
-      expect(params['actions']).toBe('text-classification');
+      expect(params['actions']).toBe('textClassification');
       expect(params).not.toHaveProperty('classes');
 
       req.flush(JSON.stringify({ inProgress: false, results: [] }));
@@ -272,7 +322,7 @@ describe('KeClientService', () => {
       });
 
       expect(await readAutomationParams(req)).toEqual({
-        actions: 'text-summarization',
+        actions: 'textSummarization',
         extraJsonPayloadStr: JSON.stringify({ instructions: { audience: 'legal' } }),
       });
 
@@ -284,7 +334,7 @@ describe('KeClientService', () => {
       const { result, req } = enrich({ actions: ['text-summarization'], maxWordCount: 0 });
 
       expect(await readAutomationParams(req)).toEqual({
-        actions: 'text-summarization',
+        actions: 'textSummarization',
         extraJsonPayloadStr: JSON.stringify({ maxWordCount: 0 }),
       });
 
