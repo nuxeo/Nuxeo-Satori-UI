@@ -272,8 +272,8 @@ except counting `results` by hand. Only `verdict: "pass"` may be cited for a pha
 | Variable                      | Default                         | Purpose                                              |
 | ----------------------------- | ------------------------------- | ---------------------------------------------------- |
 | `APP_URL`                     | `http://localhost:4200`         | Dev server URL                                       |
-| `NUXEO_USER`                  | `Administrator`                 | Login username                                       |
-| `NUXEO_PASS`                  | `Administrator`                 | Login password                                       |
+| `NUXEO_USER`                  | _(required — no default)_       | Login username                                       |
+| `NUXEO_PASS`                  | _(required — no default)_       | Login password                                       |
 | `NUXEO_DOC_UID`               | _(none)_                        | Document UID for doc-specific steps                  |
 | `AGENTIC_UI_EVIDENCE_DIR`     | `~/Desktop/agentic-ui-evidence` | Evidence root                                        |
 | `EVIDENCE_HEADLESS`           | `0`                             | Set `1` to run without a visible browser             |
@@ -282,3 +282,11 @@ except counting `results` by hand. Only `verdict: "pass"` may be cited for a pha
 | `BETA_GATE_NODE_STRICT`       | `0`                             | Set `1` to fail on any Node major but the pinned one |
 
 Credentials come from the environment only. Never commit real ones.
+
+`NUXEO_USER` and `NUXEO_PASS` have **no default**. The runner, `backend-preflight.mjs` and
+`annotate-showcase.mjs` exit **2** — precondition not met — before launching a browser when
+either is unset, and `h.login()` throws a `PreconditionError`. A steps file that needs no backend
+exports `skipHttpCredentials = true` (as `phase-0-no-backend` and `phase-4-platform` do) and runs
+with no credentials at all. Both used to default to `Administrator` (NXSAT-649): a working login
+in the repository, and a capture that silently ran as an administrator whenever the variables
+were unset. The shared reader is `nuxeo-credentials.mjs`.

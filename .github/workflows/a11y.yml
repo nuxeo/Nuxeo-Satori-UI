@@ -94,5 +94,6 @@ jobs:
   # Until then it is run locally:
   #
   #   npm install --no-save @playwright/test @axe-core/playwright
+  #   export NUXEO_USER=<user> NUXEO_PASS=<password>   # required, no default (NXSAT-649)
   #   npm run beta:backend && npx nx serve nuxeo-ui
   #   npm run beta:evidence -- phase-6-a11y

@@ -124,8 +124,8 @@ From `scripts/beta-harness/helpers.mjs`, plus `shot()` added by the runner.
 | Variable                  | Default                         | Description                                               |
 | ------------------------- | ------------------------------- | --------------------------------------------------------- |
 | `APP_URL`                 | `http://localhost:4200`         | Dev server URL                                            |
-| `NUXEO_USER`              | `Administrator`                 | Login username                                            |
-| `NUXEO_PASS`              | `Administrator`                 | Login password                                            |
+| `NUXEO_USER`              | _(required — no default)_       | Login username; unset, the runner exits 2                 |
+| `NUXEO_PASS`              | _(required — no default)_       | Login password; unset, the runner exits 2                 |
 | `NUXEO_DOC_UID`           | _(none)_                        | Document UID for doc-specific scenes                      |
 | `EVIDENCE_PHASE`          | _(none)_                        | `before` / `after` subfolder and video name               |
 | `EVIDENCE_HEADLESS`       | `0`                             | `1` runs headless (no window to watch)                    |
