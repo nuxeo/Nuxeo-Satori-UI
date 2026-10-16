@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { Observable, throwError } from 'rxjs';
 
 import { AI_BACKEND_URL } from './ai.config';
+import { AiFeatureFlagService } from './ai-feature-flag.service';
 import type {
   NlToNxqlResponse,
   NlToNxqlSuggestionsResponse,
@@ -34,6 +35,7 @@ import type {
 export class AiGatewayService {
   private readonly http = inject(HttpClient);
   private readonly baseUrl = inject(AI_BACKEND_URL);
+  private readonly featureFlag = inject(AiFeatureFlagService);
 
   /** Build the Automation endpoint URL for a given operation ID. */
   private op(operationId: string): string {
@@ -45,82 +47,85 @@ export class AiGatewayService {
     return { params: p };
   }
 
+  /**
+   * The single place every operation goes through, so the feature flag is checked once rather
+   * than at thirteen call sites that each have to remember.
+   *
+   * Components gate their own UI on the flag too, so in practice this never fires. It exists
+   * because "the AI features are disabled" has to be true of the network, not only of what is
+   * rendered: two callers were found issuing AI requests from `ngOnInit` while their templates
+   * were correctly hidden, which is exactly the shape of mistake this catches.
+   *
+   * Errors rather than returning `EMPTY`: an observable that completes without emitting leaves
+   * every caller's `loading` signal set, because their `next` and `error` handlers both go
+   * unrun, and a permanent spinner is worse than a message nothing is rendering.
+   */
+  private call<T>(operationId: string, params: Record<string, unknown>): Observable<T> {
+    if (!this.featureFlag.aiEnabled()) {
+      return throwError(() => new Error(`AI features are disabled; ${operationId} was not sent`));
+    }
+    return this.http.post<T>(this.op(operationId), this.params(params));
+  }
+
   nlToNxql(query: string): Observable<NlToNxqlResponse> {
-    return this.http.post<NlToNxqlResponse>(
-      this.op('AI.NlToNxql'),
-      this.params({ query, suggestions: false }),
-    );
+    return this.call<NlToNxqlResponse>('AI.NlToNxql', { query, suggestions: false });
   }
 
   nlToNxqlSuggestions(query: string): Observable<NlToNxqlSuggestionsResponse> {
-    return this.http.post<NlToNxqlSuggestionsResponse>(
-      this.op('AI.NlToNxql'),
-      this.params({ query, suggestions: true }),
-    );
+    return this.call<NlToNxqlSuggestionsResponse>('AI.NlToNxql', { query, suggestions: true });
   }
 
   summarize(docId: string): Observable<SummarizeResponse> {
-    return this.http.post<SummarizeResponse>(this.op('AI.Summarize'), this.params({ docId }));
+    return this.call<SummarizeResponse>('AI.Summarize', { docId });
   }
 
   suggestTags(docId: string): Observable<SuggestTagsResponse> {
-    return this.http.post<SuggestTagsResponse>(this.op('AI.SuggestTags'), this.params({ docId }));
+    return this.call<SuggestTagsResponse>('AI.SuggestTags', { docId });
   }
 
   classify(docId: string): Observable<ClassifyResponse> {
-    return this.http.post<ClassifyResponse>(this.op('AI.Classify'), this.params({ docId }));
+    return this.call<ClassifyResponse>('AI.Classify', { docId });
   }
 
   findSimilar(docId: string, limit = 5): Observable<SimilarResponse> {
-    return this.http.post<SimilarResponse>(this.op('AI.Similar'), this.params({ docId, limit }));
+    return this.call<SimilarResponse>('AI.Similar', { docId, limit });
   }
 
   chat(request: ChatRequest): Observable<ChatResponse> {
-    return this.http.post<ChatResponse>(
-      this.op('AI.Chat'),
-      this.params({
-        message: request.message,
-        historyJson: JSON.stringify(request.history ?? []),
-        docId: request.context?.docId ?? '',
-        page: request.context?.page ?? '',
-      }),
-    );
+    return this.call<ChatResponse>('AI.Chat', {
+      message: request.message,
+      historyJson: JSON.stringify(request.history ?? []),
+      docId: request.context?.docId ?? '',
+      page: request.context?.page ?? '',
+    });
   }
 
   analyzeSentiment(comments: Array<{ id: string; text: string }>): Observable<SentimentResponse> {
-    return this.http.post<SentimentResponse>(
-      this.op('AI.Sentiment'),
-      this.params({ commentsJson: JSON.stringify(comments) }),
-    );
+    return this.call<SentimentResponse>('AI.Sentiment', {
+      commentsJson: JSON.stringify(comments),
+    });
   }
 
   getInsights(userId: string): Observable<InsightsResponse> {
-    return this.http.post<InsightsResponse>(this.op('AI.Insights'), this.params({ userId }));
+    return this.call<InsightsResponse>('AI.Insights', { userId });
   }
 
   detectAnomalies(timeRange = '24h'): Observable<AnomaliesResponse> {
-    return this.http.post<AnomaliesResponse>(this.op('AI.Anomalies'), this.params({ timeRange }));
+    return this.call<AnomaliesResponse>('AI.Anomalies', { timeRange });
   }
 
   queryPermissions(query: string): Observable<NlPermissionsResponse> {
-    return this.http.post<NlPermissionsResponse>(
-      this.op('AI.NlPermissions'),
-      this.params({ query }),
-    );
+    return this.call<NlPermissionsResponse>('AI.NlPermissions', { query });
   }
 
   auditNlFilter(query: string): Observable<AuditFilterResponse> {
     const today = new Date().toISOString().split('T')[0];
-    return this.http.post<AuditFilterResponse>(
-      this.op('AI.AuditNlFilter'),
-      this.params({ query, today }),
-    );
+    return this.call<AuditFilterResponse>('AI.AuditNlFilter', { query, today });
   }
 
   auditSummarize(entries: unknown[]): Observable<AuditSummaryResponse> {
-    return this.http.post<AuditSummaryResponse>(
-      this.op('AI.AuditSummarize'),
-      this.params({ entriesJson: JSON.stringify(entries) }),
-    );
+    return this.call<AuditSummaryResponse>('AI.AuditSummarize', {
+      entriesJson: JSON.stringify(entries),
+    });
   }
 }

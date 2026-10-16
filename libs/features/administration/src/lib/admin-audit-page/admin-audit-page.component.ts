@@ -25,7 +25,10 @@ import {
   AuditFilterResponse,
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe } from '@ngx-translate/core';
-import { provideSatoriDateAdapter, provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo-satori/platform/ui';
 
 @Component({
   selector: 'lib-admin-audit-page',
@@ -145,6 +148,9 @@ export class AdminAuditPageComponent implements OnInit {
 
   /* --- AI: Anomaly Detection --- */
   loadAnomalies(): void {
+    // `ngOnInit` calls this unconditionally and the banner is gated in the template, so without
+    // this guard an opted-out user still POSTed `AI.Anomalies` on every visit to the audit page.
+    if (!this.featureFlags.aiEnabled()) return;
     this.anomalyLoading.set(true);
     this.aiGateway.detectAnomalies('24h').subscribe({
       next: (res) => {
