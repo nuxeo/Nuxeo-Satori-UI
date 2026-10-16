@@ -42,11 +42,9 @@
  */
 export const ERROR_STATE_CLASSES = [
   // Feature surfaces.
-  'browse-error',
   'detail-error',
   'results-error',
   'task-error',
-  'tab-error',
   'kd-error',
   'kd-banner--error',
   'kd-citation-dialog__state--error',
@@ -55,7 +53,6 @@ export const ERROR_STATE_CLASSES = [
   'ud-error',
   'ug-error',
   'nxql-error',
-  'picker-error',
   'compare-error',
   'cpd-error',
   // App-shell pages, which have no feature library but are scanned the same way.
@@ -63,10 +60,14 @@ export const ERROR_STATE_CLASSES = [
   'personal-space-page__error',
   'authorized-applications-page__state--error',
   'connected-accounts-page__state--error',
-  // Not a panel of its own: every error panel above puts this icon inside itself. Kept as a
-  // second, independent marker so a future panel whose wrapper class is missed here is still
-  // caught by the icon it almost certainly renders.
-  'error-icon',
+  // The shared full-page error panel (`nxs-error-state`), used by browse, search and document
+  // detail when the page's data fails to load. Its four parts are listed separately because the
+  // drift check reads class names: a panel whose wrapper is missed here is still caught by its
+  // heading, icon, message or actions.
+  'nxs-error-state__heading',
+  'nxs-error-state__icon',
+  'nxs-error-state__message',
+  'nxs-error-state__actions',
 ];
 
 export const ERROR_STATE_SELECTOR = ERROR_STATE_CLASSES.map((c) => `.${c}`).join(', ');
@@ -88,6 +89,19 @@ export const NOT_A_SURFACE_ERROR = {
   'ai-chat-error': 'AI: the shell rendered; the chat drawer did not.',
   'ke-status-banner--error': 'Data state: knowledge-enrichment status of this document.',
   'kd-status-chip--error': 'Data state: status of one answer in the KD list.',
+  'edit-document-dialog__error': 'Save error inside the edit dialog; the page rendered.',
+  'nxs-folder-picker-dialog__failure': 'Failure inside the folder-picker dialog; the page rendered.',
+  'nxs-rename-dialog__failure': 'Failure inside the rename dialog; the page rendered.',
+  'nxs-share-external-dialog__error': 'Failure inside the external-share dialog; the page rendered.',
+  'nxs-update-permission-dialog__error': 'Failure inside the update-permission dialog; the page rendered.',
+  'saved-search-error': 'Validation inside the saved-search dialog, not a load failure.',
+  'nxs-metadata-editor__error': 'Field validation inside the metadata editor, not a load failure.',
+  'nxs-permissions-panel__field-error': 'Field validation inside the permissions panel, not a load failure.',
+  'nxs-permissions-panel__error': 'Ancillary: the permissions panel failed; the page rendered.',
+  'nxs-comments__failed': 'Ancillary: the comments panel failed; the page rendered.',
+  'nxs-document-tree__error': 'Ancillary: the document tree failed; the page rendered.',
+  'nxs-document-tree__item--error': 'Ancillary: one document-tree item failed; the page rendered.',
+  'nxs-document-tree__row--error': 'Ancillary: one document-tree row failed; the page rendered.',
   'import-error': 'Validation inside the create-import dialog, not a load failure.',
   'import-error--staged': 'Validation inside the create-import dialog, not a load failure.',
   'types-error': 'Validation inside the create-import dialog, not a load failure.',
