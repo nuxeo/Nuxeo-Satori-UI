@@ -36,14 +36,11 @@ import { join } from 'node:path';
 import { caption, hideCode, showCode } from '../mock-customer/captions.mjs';
 import { serveAppWithNuxeoProxy } from '../mock-customer/serve-app.mjs';
 import { ACME_WORKSPACE_PATH, check } from '../mock-customer/seed-nuxeo.mjs';
+import { requireNuxeoCredentials } from '../../../scripts/beta-harness/nuxeo-credentials.mjs';
 
 const APP_PORT = 4413;
 const CONFIG = 'agentic-ui-config/bootstrap.json';
 const MANIFEST = 'agentic-ui-config/manifest.json';
-
-/** Credentials for the local Docker instance, from the environment. */
-const USER = process.env['NUXEO_USER'] ?? 'Administrator';
-const PASS = process.env['NUXEO_PASS'] ?? 'Administrator';
 
 const CLAIMS_PATH = `${ACME_WORKSPACE_PATH}/claims`;
 
@@ -160,8 +157,12 @@ function mergeThemesById(existing, incoming) {
   return merged;
 }
 
-/** Sign in, on camera, with a credential typed rather than injected. */
-async function signIn(page, hold) {
+/**
+ * Sign in, on camera, with a credential typed rather than injected.
+ *
+ * @param {{ username: string, password: string }} credentials from `run`, which requires them
+ */
+async function signIn(page, hold, { username, password }) {
   await page.waitForSelector('.sign-in', { timeout: 45000 });
   await caption(
     page,
@@ -171,14 +172,19 @@ async function signIn(page, hold) {
   await hold(page, 5000);
 
   await page.click('input[name="username"]');
-  await page.type('input[name="username"]', USER, { delay: 90 });
+  await page.type('input[name="username"]', username, { delay: 90 });
   await page.click('input[name="password"]');
-  await page.type('input[name="password"]', PASS, { delay: 70 });
+  await page.type('input[name="password"]', password, { delay: 70 });
   await hold(page, 1200);
   await page.click('.sign-in__submit');
 }
 
 export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
+  // Credentials for the local Docker instance, from the environment with no default — both used
+  // to fall back to its administrator pair (NXSAT-649). First, because everything below needs
+  // them: `check()` reads the repository and the sign-in types them on camera.
+  const credentials = requireNuxeoCredentials('record the 03-mock-customer scene');
+
   // ---- refuse to record a lie -------------------------------------------------
   await check({ quiet: true });
 
@@ -200,7 +206,7 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
 
   // ---- 1. sign in against Nuxeo ----------------------------------------------
   await page.goto(app.url, { waitUntil: 'load' });
-  await signIn(page, hold);
+  await signIn(page, hold, credentials);
 
   // ---- 2. browse the real repository -----------------------------------------
   await page.waitForSelector('.docs__table', { timeout: 45000 });
