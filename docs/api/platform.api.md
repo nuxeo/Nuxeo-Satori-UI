@@ -690,6 +690,7 @@ class NxsDropzoneComponent {
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly files: _angular_core.OutputEmitterRef<readonly File[]>;
     protected readonly drop: NxsFileDropTracker;
+    protected readonly buttonId: string;
     protected choose(): void;
     protected onPicked(event: Event): void;
     protected onDrop(event: DragEvent): void;
@@ -1309,6 +1310,7 @@ class NxsTagInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly value: _angular_core.ModelSignal<readonly string[]>;
     protected readonly separators: readonly [13, 188];
+    protected readonly inputId: string;
     protected readonly text: _angular_core.WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<string>;
     protected readonly isDisabled: _angular_core.Signal<boolean>;
@@ -1497,6 +1499,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly value: _angular_core.ModelSignal<string | readonly string[] | null>;
+    protected readonly inputId: string;
     protected readonly loaded: _angular_core.WritableSignal<Loaded>;
     protected readonly text: _angular_core.WritableSignal<string>;
     protected readonly chosen: _angular_core.Signal<readonly string[]>;
