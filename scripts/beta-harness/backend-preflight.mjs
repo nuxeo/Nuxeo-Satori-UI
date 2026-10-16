@@ -23,14 +23,23 @@
  *   NUXEO_CONTAINER       default `nuxeo`
  *   OPENSEARCH_CONTAINER  default `nuxeo-opensearch`
  *   NUXEO_URL             default http://localhost:8080
- *   NUXEO_USER/NUXEO_PASS default Administrator
+ *   NUXEO_USER/NUXEO_PASS required — no default (NXSAT-649)
  *   BACKEND_WAIT_SECONDS  default 180
  *
  * Exit 0 when Nuxeo is serving. Exit 1 with a specific, actionable reason
  * otherwise — Docker not running, container absent, or API never came up.
+ * Exit 2 when NUXEO_USER or NUXEO_PASS is unset: a precondition, checked before
+ * Docker is touched, because the probe has nothing to authenticate with and a
+ * guessed pair is the defect this used to have.
  */
 
 import { spawnSync } from 'node:child_process';
+
+import {
+  EXIT_PRECONDITION,
+  missingNuxeoCredentialsMessage,
+  readNuxeoCredentials,
+} from './nuxeo-credentials.mjs';
 
 const argv = process.argv.slice(2);
 const checkOnly = argv.includes('--check');
@@ -39,9 +48,27 @@ const asJson = argv.includes('--json');
 const nuxeoContainer = process.env['NUXEO_CONTAINER'] ?? 'nuxeo';
 const searchContainer = process.env['OPENSEARCH_CONTAINER'] ?? 'nuxeo-opensearch';
 const nuxeoUrl = (process.env['NUXEO_URL'] ?? 'http://localhost:8080').replace(/\/$/, '');
-const user = process.env['NUXEO_USER'] ?? 'Administrator';
-const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
 const waitSeconds = Number(process.env['BACKEND_WAIT_SECONDS'] ?? 180);
+
+/**
+ * Both halves defaulted to the local Docker administrator pair, so with the variables unset this
+ * reported "pass — Nuxeo is serving" on the strength of a credential nobody had supplied, and the
+ * capture after it then ran as an administrator. Now a missing pair stops here, before any
+ * container is started — a `docker start` for a run that cannot authenticate is a side effect
+ * with no purpose. `--json` still emits one object, so a caller parsing stdout is not broken.
+ */
+const credentials = readNuxeoCredentials();
+if (!credentials) {
+  const detail = missingNuxeoCredentialsMessage('probe the Nuxeo REST API');
+  if (asJson) {
+    const report = { ok: false, status: 'credentials-missing', detail, log: [] };
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.error(`\nbackend-preflight: PRECONDITION — ${detail}\n`);
+  }
+  process.exit(EXIT_PRECONDITION);
+}
+const { username: user, password: pass } = credentials;
 
 const log = [];
 /** @param {string} m */
