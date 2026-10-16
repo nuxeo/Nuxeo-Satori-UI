@@ -90,13 +90,17 @@ export const NOT_A_SURFACE_ERROR = {
   'ke-status-banner--error': 'Data state: knowledge-enrichment status of this document.',
   'kd-status-chip--error': 'Data state: status of one answer in the KD list.',
   'edit-document-dialog__error': 'Save error inside the edit dialog; the page rendered.',
-  'nxs-folder-picker-dialog__failure': 'Failure inside the folder-picker dialog; the page rendered.',
+  'nxs-folder-picker-dialog__failure':
+    'Failure inside the folder-picker dialog; the page rendered.',
   'nxs-rename-dialog__failure': 'Failure inside the rename dialog; the page rendered.',
-  'nxs-share-external-dialog__error': 'Failure inside the external-share dialog; the page rendered.',
-  'nxs-update-permission-dialog__error': 'Failure inside the update-permission dialog; the page rendered.',
+  'nxs-share-external-dialog__error':
+    'Failure inside the external-share dialog; the page rendered.',
+  'nxs-update-permission-dialog__error':
+    'Failure inside the update-permission dialog; the page rendered.',
   'saved-search-error': 'Validation inside the saved-search dialog, not a load failure.',
   'nxs-metadata-editor__error': 'Field validation inside the metadata editor, not a load failure.',
-  'nxs-permissions-panel__field-error': 'Field validation inside the permissions panel, not a load failure.',
+  'nxs-permissions-panel__field-error':
+    'Field validation inside the permissions panel, not a load failure.',
   'nxs-permissions-panel__error': 'Ancillary: the permissions panel failed; the page rendered.',
   'nxs-comments__failed': 'Ancillary: the comments panel failed; the page rendered.',
   'nxs-document-tree__error': 'Ancillary: the document tree failed; the page rendered.',
@@ -314,7 +318,7 @@ export async function screenUnsettledReason(
     let state = null;
     try {
       state = await page.evaluate(
-        ({ roots, loaders }) => {
+        ({ roots, loaders, treeNodes }) => {
           // `checkVisibility` rather than a box test: a closed `mat-sidenav` is
           // `visibility: hidden`, which still has boxes, and a spinner nobody can see is
           // not a loader the scan would meet.
@@ -331,10 +335,16 @@ export async function screenUnsettledReason(
             images += root.querySelectorAll('img').length;
             elements += root.getElementsByTagName('*').length;
           }
-          const nodes = document.querySelectorAll(TREE_NODE_SELECTOR_CSS).length;
+          const nodes = document.querySelectorAll(treeNodes).length;
           return { loading, shape: `${nodes} tree node(s), ${images} img, ${elements} elements` };
         },
-        { roots: host ? [NAV_DRAWER, host] : [NAV_DRAWER], loaders: LOADING_SELECTOR },
+        {
+          roots: host ? [NAV_DRAWER, host] : [NAV_DRAWER],
+          loaders: LOADING_SELECTOR,
+          // Passed in, not closed over: the callback runs in the browser, where this module's
+          // constants do not exist.
+          treeNodes: TREE_NODE_SELECTOR_CSS,
+        },
       );
     } catch {
       // A read racing a navigation throws. That is "not settled yet", not a failure.

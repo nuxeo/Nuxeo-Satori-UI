@@ -208,6 +208,15 @@
   align-content: start;
 }
 
+/* Keyboard focus inside a card or a simple-list row reveals its hidden checkbox and actions. */
+.result-card:focus-within .grid-card-checkbox,
+.result-card:focus-within .grid-card-actions,
+.simple-list-item:focus-within .simple-list-checkbox,
+.simple-list-item:focus-within .simple-list-actions {
+  opacity: 1;
+  visibility: visible;
+}
+
 .result-card {
   border: 1px solid #e0e0e0;
   border-radius: 8px;

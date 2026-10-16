@@ -110,7 +110,10 @@ export default async function run(page, h) {
   h.step('Production browse — the primary authenticated surface');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
-  await h.expectText('repository content listed', 'lib-browse', 'Domain');
+  await h.expectVisible(
+    'repository content listed',
+    'lib-browse nxs-document-list .nxs-document-list__row',
+  );
   await h.expectNoA11yViolations('browse: no WCAG 2.1 AA violations', { ignore: KNOWN_VIOLATIONS });
   await h.screenshot('a11y-browse');
 
@@ -499,10 +502,10 @@ async function findFileWithMainBlobUid(page, baseUrl) {
       if (typeof uid !== 'string') {
         continue;
       }
-      const head = await page.request.head(
-        `${baseUrl}/nuxeo/api/v1/id/${uid}/@blob/file:content`,
-        { failOnStatusCode: false, headers: nuxeoApiRequestHeaders() },
-      );
+      const head = await page.request.head(`${baseUrl}/nuxeo/api/v1/id/${uid}/@blob/file:content`, {
+        failOnStatusCode: false,
+        headers: nuxeoApiRequestHeaders(),
+      });
       if (head.ok()) {
         return uid;
       }
