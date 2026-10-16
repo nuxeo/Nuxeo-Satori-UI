@@ -14,8 +14,7 @@ on:
   push:
     # TODO(NXSAT-649): move to `main` once integration/nxsat-308 merges into it. Storybook exists only
     # on the integration branch until then.
-    # TEMPORARY (NXSAT-662 live verification) — reverted before review.
-    branches: ['integration/nxsat-308', 'feature/nxsat-662-storybook-pages']
+    branches: ['integration/nxsat-308']
   workflow_dispatch:
 
 permissions:
@@ -76,8 +75,7 @@ jobs:
   deploy:
     needs: build
     # A dispatch from any other branch builds and gates without publishing.
-    # TEMPORARY (NXSAT-662 live verification) — reverted before review.
-    if: github.ref == 'refs/heads/integration/nxsat-308' || github.ref == 'refs/heads/feature/nxsat-662-storybook-pages'
+    if: github.ref == 'refs/heads/integration/nxsat-308'
     runs-on: ubuntu-latest
     permissions:
       pages: write
