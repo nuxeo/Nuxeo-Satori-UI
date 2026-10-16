@@ -31,7 +31,8 @@
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--mat-sys-outline, #777683);
+  /* The outline token is 4.46:1 on white, under WCAG AA's 4.5:1 for this text; on-surface-variant clears it. */
+  color: var(--mat-sys-on-surface-variant, #474551);
   gap: 0.5rem;
 
   mat-icon {
