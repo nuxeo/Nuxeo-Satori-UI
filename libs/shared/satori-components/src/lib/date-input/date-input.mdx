@@ -14,7 +14,8 @@ it for any date property, such as an expiry date or the start of a permission.
 - **Reads a typed date the way the user writes dates.** `03/04/2026` is 3 April in French and 4 March
   in American English, whatever the separators. A four-digit year can come first, as in `2026-04-03`,
   in every language but Kyrgyz and Uyghur, which write the year and then the day; a month can be
-  written as a word; without a year, this year is meant.
+  written as a word; without a year, this year is meant. In every language `Intl` writes dates in,
+  the field reads back the dates it writes.
 - **The Gregorian calendar throughout,** in Thai too, so a year shown can be typed back. (A host's
   own adapter, below, keeps its own calendar.)
 - **Keeps your date adapter.** A host that provides its own Angular Material date adapter keeps it.

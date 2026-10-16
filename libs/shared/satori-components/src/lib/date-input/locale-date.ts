@@ -11,19 +11,22 @@ import { MatDatepickerIntl } from '@angular/material/datepicker';
 import { TranslateService } from '@ngx-translate/core';
 import { merge } from 'rxjs';
 
-/** The Unicode decimal digit ranges a user may type a date in, by their zero. */
-const DIGIT_ZEROS = [0x0660, 0x06f0, 0x0966, 0x09e6, 0x0e50, 0xff10];
+const DECIMAL_DIGIT = /\p{Nd}/u;
 
-/** Each non-ASCII decimal digit typed, as its ASCII digit: `２０２６` and `٢٠٢٦` read `2026`. */
+/**
+ * Each decimal digit typed in another script, as its ASCII digit: `２０２６`, `٢٠٢٦` and Tibetan
+ * `༢༠༢༦` read `2026`. Unicode encodes every script's decimal digits as runs of ten, zero first, and
+ * never splits one, so a digit is its distance from the start of its run of digits, modulo ten.
+ * Some locales write their dates in their own digits — Dzongkha, Burmese, Chakma, Santali — and a
+ * field reads back what it writes.
+ */
 function asciiDigits(text: string): string {
-  return text.replace(
-    /[\u0660-\u0669\u06f0-\u06f9\u0966-\u096f\u09e6-\u09ef\u0e50-\u0e59\uff10-\uff19]/g,
-    (digit) => {
-      const code = digit.charCodeAt(0);
-      const zero = DIGIT_ZEROS.find((start) => code >= start && code <= start + 9) ?? code;
-      return String(code - zero);
-    },
-  );
+  return text.replace(/(?![0-9])\p{Nd}/gu, (digit) => {
+    const code = digit.codePointAt(0) ?? 0;
+    let start = code;
+    while (DECIMAL_DIGIT.test(String.fromCodePoint(start - 1))) start -= 1;
+    return String((code - start) % 10);
+  });
 }
 
 /** A locale id from what `MAT_DATE_LOCALE` holds: an id, or a date library's locale with a `code`. */
@@ -130,8 +133,8 @@ const fullYear = (year: string): number =>
  * year wherever it is, and a year first is followed by the month, so `2026-04-03` reads the same
  * everywhere but in the two locales that write the year first and then the day. A month may be written as a word in
  * the locale or in English, and a word the locale writes around a date, such as Bulgarian `г.`, is
- * read past. Without a year, the current one is meant. Digits typed in another
- * script — full-width, Arabic-Indic, Devanagari, Bengali, Thai — are read as digits.
+ * read past. Without a year, the current one is meant. Digits typed in any script — full-width,
+ * Arabic-Indic, Devanagari, Thai, Tibetan — are read as digits.
  */
 export function nxsParseLocaleDate(text: string, locale: string, today = new Date()): Date | null {
   const typed = asciiDigits(text).trim();
@@ -352,7 +355,7 @@ function maskOrder(letters: readonly string[], language: string): DateField[] | 
  *
  * Either way the hint is only as good as the adapter reading back what it writes: the field's
  * order comes from what the adapter writes, and the parse from what it reads. `NxsLocaleDateAdapter`
- * does, which its spec checks locale by locale. A host's adapter is trusted to; one that writes
+ * does, which its spec checks in every language `Intl` formats a date in. A host's adapter is trusted to; one that writes
  * with `display.dateInput` and reads with a different `parse.dateInput` may not.
  */
 export function nxsDateMask(written: string, mask: string, maskLanguage: string): string {

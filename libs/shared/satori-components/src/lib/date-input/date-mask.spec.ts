@@ -62,6 +62,16 @@ function followed(hint: string, language: Language): string {
 const ymd = (date: Date | null) =>
   date ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` : null;
 
+/**
+ * Every language `Intl` formats a date in, found by asking it about each two- and three-letter
+ * code rather than read from a list, so a language this suite never names is checked too.
+ */
+const LETTERS = [...'abcdefghijklmnopqrstuvwxyz'];
+const EVERY_LANGUAGE = Intl.DateTimeFormat.supportedLocalesOf(
+  LETTERS.flatMap((a) => LETTERS.flatMap((b) => [a + b, ...LETTERS.map((c) => a + b + c)])),
+  { localeMatcher: 'lookup' },
+);
+
 describe('NxsLocaleDateAdapter', () => {
   // The hint is worked out from what the adapter writes, so it is only as good as the adapter
   // reading back what it wrote. Main's `provideSatoriDateAdapter` spec asserts the same of its own.
@@ -81,6 +91,50 @@ describe('NxsLocaleDateAdapter', () => {
     );
     expect(ymd(adapter.parse(written))).toBe('2026-4-3');
   });
+
+  it('finds the languages it sweeps', () => {
+    // Node's full ICU formats about 250. A build with less data would leave the sweep below
+    // checking a handful, so it says so here instead.
+    expect(EVERY_LANGUAGE.length).toBeGreaterThan(200);
+    expect(EVERY_LANGUAGE).toEqual(
+      expect.arrayContaining(['bg', 'ccp', 'ckb', 'dz', 'ky', 'mt', 'my', 'sat', 'ug']),
+    );
+  });
+
+  it(
+    'reads back the dates it writes, and a date typed as its hint says, in every language',
+    {
+      timeout: 30_000,
+    },
+    () => {
+      const adapter = adapterFor('en-US');
+      const failures: string[] = [];
+      for (const locale of EVERY_LANGUAGE) {
+        adapter.setLocale(locale);
+        for (const [year, month, day] of [
+          [2026, 3, 3],
+          [2026, 11, 31],
+          [2026, 0, 15],
+        ]) {
+          const written = adapter.format(
+            adapter.createDate(year, month, day),
+            MAT_NATIVE_DATE_FORMATS.display.dateInput,
+          );
+          const read = ymd(adapter.parse(written));
+          if (read !== `${year}-${month + 1}-${day}`)
+            failures.push(`${locale}: ${written} is ${read}`);
+        }
+        // The English mask, as a catalogue without one shows it: the hint, or the date as written.
+        const sample = writtenBy(adapter);
+        const hint = nxsDateMask(sample, NXS_ENGLISH_DATE_MASK, locale);
+        const [typed, meant] =
+          hint === sample ? [sample, '2026-12-31'] : [followed(hint, 'en'), '2026-4-3'];
+        const read = ymd(adapter.parse(typed));
+        if (read !== meant) failures.push(`${locale}: shows ${hint}, reads ${typed} as ${read}`);
+      }
+      expect(failures).toEqual([]);
+    },
+  );
 });
 
 describe('nxsDateMask', () => {
@@ -142,6 +196,8 @@ describe('nxsDateMask', () => {
     { locale: 'fr-CA', language: 'en', hint: 'yyyy-mm-dd', english: true },
     { locale: 'mt', language: 'en', hint: 'mm/dd/yyyy', english: true },
     { locale: 'ky', language: 'en', hint: 'yyyy-dd-mm', english: true },
+    // A field that writes its own digits: the hint lines up with them too.
+    { locale: 'dz', language: 'en', hint: 'yyyy-mm-dd', english: true },
     // A language whose dates are formatted in another locale: French letters, American order.
     { locale: 'en-US', language: 'fr', hint: 'mm/jj/aaaa' },
   ] as const)('$language mask under $locale', ({ locale, language, hint, ...rest }) => {

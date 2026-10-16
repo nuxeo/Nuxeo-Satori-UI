@@ -66,6 +66,11 @@ describe('nxsParseLocaleDate', () => {
     // The year first and then the day, as Kyrgyz and Uyghur write; ISO 8601 elsewhere.
     ['ky', '2026-03-04', '2026-04-03'],
     ['ug', '2026-3-4', '2026-04-03'],
+    // Digits in the scripts some locales write dates in: Tibetan, Myanmar, Chakma, Ol Chiki.
+    ['dz', '༢༠༢༦-༤-༣', '2026-04-03'],
+    ['my', '၃/၄/၂၀၂၆', '2026-04-03'],
+    ['ccp', '𑄹/𑄺/𑄸𑄶𑄸𑄼', '2026-04-03'],
+    ['sat', '᱒᱐᱒᱖-᱐᱔-᱐᱓', '2026-04-03'],
   ])('reads %s %j as %s', (locale, text, expected) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe(expected);
   });
