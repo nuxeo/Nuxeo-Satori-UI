@@ -51,6 +51,8 @@
     "evidence:collect": "node scripts/collect-evidence/story-runner.mjs",
     "evidence:story": "node scripts/collect-evidence/story-report.mjs",
     "storybook:interactions": "node scripts/storybook-interactions.mjs",
+    "storybook:publication-gate": "node scripts/storybook-publication-gate.mjs",
+    "storybook:publication-gate-selftest": "node scripts/storybook-publication-gate.selftest.mjs",
     "lint": "nx run-many -t lint",
     "lint:affected": "nx affected -t lint",
     "ng": "ng",

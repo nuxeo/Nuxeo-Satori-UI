@@ -157,6 +157,8 @@ jobs:
           # The gate runner's own counting: a gate that reports NOT RUN is never counted green,
           # and a run containing one is `pass-incomplete`, not `pass`.
           npm run beta:gate-selftest
+          # The Storybook publication gate's controls: each Satori fingerprint must fail it.
+          npm run storybook:publication-gate-selftest
           # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
           # advisory whose review date has expired. Gating on the dev-inclusive total
           # instead would be permanently red (9 high, none shipped) and so bypassed.
@@ -197,17 +199,21 @@ jobs:
       # because with them installed an accidental Satori import compiles and the claim is untested.
       # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
       # proves it. About a minute, so only when the library is affected, or the interaction runner
-      # below or its dialog layout check changed — a script outside every project affects none.
-      # A skip says so.
-      - name: Storybook builds without GitHub Packages (satori-components)
+      # below, its dialog layout check or the publication gate changed — a script outside every
+      # project affects none. A skip says so.
+      #
+      # Then the publication gate, which storybook-pages.yml runs before publishing this build to
+      # GitHub Pages: here it makes a change that would block that deployment red on its PR.
+      - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
         shell: bash
         run: |
           set -euo pipefail
           # Captured first, so a failing query fails the step instead of reading as "not affected".
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
           runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
-          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ]; then
-            echo "satori-components is not affected and the runner is unchanged: Storybook build NOT RUN"
+          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
+          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ] && [ -z "$gate" ]; then
+            echo "satori-components is not affected and the runner and publication gate are unchanged: Storybook build and publication gate NOT RUN"
             exit 0
           fi
           hidden="$RUNNER_TEMP/github-packages-scopes"
@@ -219,6 +225,7 @@ jobs:
             if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
           done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
+          node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
 
       # The stories' play functions, run in Chromium against the Storybook just built (Codex audit
       # F08). Storybook runs a play function only when someone opens the story, so one that started

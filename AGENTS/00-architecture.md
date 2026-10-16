@@ -126,13 +126,14 @@ yet. The base library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 
-**Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library. Each component has
-an Overview, an API page and its stories, after a Getting started page:
+**Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
+<https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
+stories, after a Getting started page:
 
 ```bash
 npx nx run satori-components:storybook              # dev server on :6006
 npx nx run satori-components:build-storybook        # static build, dist/storybook/satori-components
-npx nx run satori-components:build-storybook:satori # the same under Satori's theme; needs the token
+npx nx run satori-components:build-storybook:satori # the same under Satori's theme; needs the token; never published
 ```
 
 The default build needs **no GitHub Packages token**: it themes with plain `mat.theme`
@@ -140,7 +141,20 @@ The default build needs **no GitHub Packages token**: it themes with plain `mat.
 and the default configuration's `styles` as well as `src/`. Whenever the library is affected, CI
 builds it with `@hylandsoftware` and `@alfresco` removed from `node_modules`, so an accidental
 Satori import fails the build rather than compiling. Only the opt-in `:satori` configuration reaches `@hylandsoftware/satori-ui`, for its theme.
-`typecheck` type-checks the stories too. Where the static build is hosted is not decided.
+`typecheck` type-checks the stories too.
+
+**Publishing.** `.github/workflows/storybook-pages.yml` builds the default configuration the same
+token-free way and deploys it to GitHub Pages on every push to `integration/nxsat-308` (to `main`
+once that merges, NXSAT-649). **Only that build may be published.** `satori-components-satori`'s
+Storybook and the `:satori` configuration bundle compiled `@hylandsoftware/*` modules, `--sat-*`
+tokens and Satori's fonts, which we may consume but not redistribute — and this repository is
+public, so a workflow artifact is published too. `scripts/storybook-publication-gate.mjs` refuses an
+artifact carrying any of them before upload, and CI runs it after every build of this Storybook, so
+a change that would block the deployment is red on its PR. Its allowances are explicit and few: the
+Getting started page's sentences naming the package, the text of our own `libs/` and `apps/` files
+in source maps, and Storybook's Nunito Sans. Anything else fails, as does an allowance that matches
+nothing — so when Getting started gains or loses a mention of `@hylandsoftware`, update
+`ALLOWANCES` in the gate.
 
 What each page documents, and where it comes from. All of it is customer-facing, so no ticket,
 branch or change history:
@@ -205,7 +219,7 @@ branch or change history:
   laid out as MatDialog lays it out, at 1280 and 320 px (`scripts/storybook-dialog-layout.mjs`).
 - **The Satori-backed variants are not in this Storybook.** It builds without GitHub Packages, so the
   primitives' Overviews describe what Satori's version changes and do not render it;
-  `satori-components-satori` has its own Storybook, which needs the token.
+  `satori-components-satori` has its own Storybook, which needs the token and is never published.
 - **Actions**: callback inputs and outputs are `fn()` args, and a story's in-memory fake of a
   service logs each call with `action()` — the permissions panel's `DocumentDetailService` and the
   Drive dialog's `NuxeoDriveService` do.
