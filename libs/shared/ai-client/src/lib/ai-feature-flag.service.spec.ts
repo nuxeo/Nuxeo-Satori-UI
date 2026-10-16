@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection } from '@angular/core';
+import { WritableSignal, provideZonelessChangeDetection } from '@angular/core';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
-import { AiFeatureFlagService } from './ai-feature-flag.service';
+import { AiFeatureFlagService, readStoredAiPreference } from './ai-feature-flag.service';
 
 const STORAGE_KEY = 'ai-features-enabled';
 const MIGRATION_KEY = 'ai-features-default-enabled-v1';
@@ -76,6 +76,18 @@ describe('AiFeatureFlagService', () => {
 
       expect(flag.set).toBeUndefined();
     });
+
+    it('ignores a write to the private backing signal', () => {
+      // `private` is a compile-time fiction, so `service.state.set(true)` runs fine at a console.
+      // While AI is off, `aiEnabled` is not a view onto that field, so writing it changes nothing.
+      // The cast is the point of the test: it reproduces exactly what a console session can reach.
+      const service = createService();
+      const reachable = service as unknown as { state: WritableSignal<boolean> };
+
+      reachable.state.set(true);
+
+      expect(service.aiEnabled()).toBe(false);
+    });
   });
 
   describe('clears an opt-in a browser is already carrying', () => {
@@ -98,6 +110,40 @@ describe('AiFeatureFlagService', () => {
       service.toggle();
 
       expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+    });
+  });
+
+  /**
+   * The persisted opt-out is read only while AI is enabled, so none of it runs today. It is
+   * covered here because it is the half of the re-enable path nothing exercises, and an opt-out
+   * that silently stopped being honoured would not be noticed until the feature came back.
+   */
+  describe('the stored preference, honoured again when AI is re-enabled', () => {
+    it('defaults to on for a browser that has never seen the flag, and marks the migration', () => {
+      expect(readStoredAiPreference()).toBe(true);
+      expect(localStorage.getItem(MIGRATION_KEY)).toBe('true');
+      expect(localStorage.getItem(STORAGE_KEY)).toBe('true');
+    });
+
+    it('overrides a pre-migration opt-out, which is the point of the migration', () => {
+      localStorage.setItem(STORAGE_KEY, 'false');
+
+      expect(readStoredAiPreference()).toBe(true);
+    });
+
+    it('honours an opt-out made after the migration', () => {
+      // The discriminating half: once the marker is set, the user's choice is authoritative.
+      localStorage.setItem(MIGRATION_KEY, 'true');
+      localStorage.setItem(STORAGE_KEY, 'false');
+
+      expect(readStoredAiPreference()).toBe(false);
+    });
+
+    it('treats any value other than "true" as off', () => {
+      localStorage.setItem(MIGRATION_KEY, 'true');
+      localStorage.setItem(STORAGE_KEY, 'yes');
+
+      expect(readStoredAiPreference()).toBe(false);
     });
   });
 

@@ -1,4 +1,4 @@
-import { Injectable, Signal, signal } from '@angular/core';
+import { Injectable, Signal, computed, signal } from '@angular/core';
 
 const STORAGE_KEY = 'ai-features-enabled';
 const MIGRATION_KEY = 'ai-features-default-enabled-v1';
@@ -9,23 +9,24 @@ const MIGRATION_KEY = 'ai-features-default-enabled-v1';
  *
  * The feature code is deliberately left in place — components, templates, gateway methods and
  * their tests are all untouched. This service is the single point that decides whether any of
- * it is reachable, so flipping `AI_FEATURES_ENABLED` back to `true` restores the previous
- * behaviour without touching a feature file.
+ * it is reachable, so flipping this to `true` and restoring the commented-out Settings entry in
+ * `app-shell.component.html` is the whole of re-enabling, with the original opt-out semantics
+ * intact.
  *
  * Three things have to hold for "off" to mean off, and each is load-bearing:
  *
- *   1. `aiEnabled` is a CONSTANT, not a read of `localStorage`. Browser storage is user-writable,
- *      so as long as the flag was derived from it, anyone could set `ai-features-enabled` to
- *      `true` in devtools and have the whole AI surface back on the next reload.
- *   2. `aiEnabled` is exposed as a read-only `Signal`, not the `WritableSignal` it used to be.
- *      A public `WritableSignal` is a `.set()` away from being flipped by anything holding the
- *      service, including a console session that reaches it through Angular's debug API.
+ *   1. `aiEnabled` does not read `localStorage` while AI is off. Browser storage is
+ *      user-writable, so as long as the flag was derived from it, anyone could set
+ *      `ai-features-enabled` to `true` in devtools and have the whole AI surface back on the
+ *      next reload.
+ *   2. While AI is off, `aiEnabled` is {@link ALWAYS_OFF} — a module-level `computed` over
+ *      nothing. It is not a view onto an instance field, because `private` is a compile-time
+ *      fiction: a console session holding the service can call `service.state.set(true)`, and
+ *      a read-only *view* of that field would faithfully report `true`. Nothing writable backs
+ *      the signal consumers actually read, so there is no field to reach for.
  *   3. The stored keys are purged on construction, so a browser that opted in before this change
  *      does not keep a stale `true` on disk waiting to take effect if the flag is ever restored.
  *      Purging also means the user-visible state and the stored state cannot disagree.
- *
- * The Settings menu entry that used to call `toggle()` is commented out in
- * `app-shell.component.html` for the same reason: no UI path may contradict this.
  *
  * `AiGatewayService` refuses to issue a request while this is off, so a caller that forgets to
  * check the flag still cannot put AI traffic on the wire. That backstop is what makes "disabled"
@@ -33,14 +34,50 @@ const MIGRATION_KEY = 'ai-features-default-enabled-v1';
  */
 const AI_FEATURES_ENABLED = false;
 
+/**
+ * The flag consumers read while AI is off.
+ *
+ * Module-level and derived from a constant, so there is no per-instance writable signal behind
+ * it — see point 2 above. `computed` rather than `signal(false).asReadonly()` for exactly that
+ * reason: the latter would leave a writable signal in a module closure.
+ */
+const ALWAYS_OFF: Signal<boolean> = computed(() => false);
+
+/**
+ * The user's persisted choice, honoured only while AI is enabled.
+ *
+ * Module-level so it stays testable while the feature is off — it is the half of the re-enable
+ * path that no running code exercises, and therefore the half most likely to rot unnoticed.
+ */
+export function readStoredAiPreference(): boolean {
+  try {
+    const migrated = localStorage.getItem(MIGRATION_KEY) === 'true';
+    const stored = localStorage.getItem(STORAGE_KEY);
+
+    if (!migrated) {
+      // Product decision for the PoC: make AI visible after upgrade even for old local opt-outs.
+      // User choices made after this migration are preserved by the migration marker.
+      localStorage.setItem(MIGRATION_KEY, 'true');
+      localStorage.setItem(STORAGE_KEY, 'true');
+      return true;
+    }
+
+    return stored === null ? true : stored === 'true';
+  } catch {
+    // If storage is unavailable, keep the PoC default-on for the current session.
+    return true;
+  }
+}
+
 @Injectable({ providedIn: 'root' })
 export class AiFeatureFlagService {
-  private readonly state = signal<boolean>(AI_FEATURES_ENABLED);
-
   /**
-   * Read-only on purpose — see point 2 above. Consumers only ever call it.
+   * Backs `aiEnabled` only while AI is enabled, and reads the persisted opt-out when it does —
+   * otherwise restoring the feature would silently ignore every user who had turned it off.
    */
-  readonly aiEnabled: Signal<boolean> = this.state.asReadonly();
+  private readonly state = signal<boolean>(AI_FEATURES_ENABLED ? readStoredAiPreference() : false);
+
+  readonly aiEnabled: Signal<boolean> = AI_FEATURES_ENABLED ? this.state.asReadonly() : ALWAYS_OFF;
 
   constructor() {
     this.purgeStoredPreference();
@@ -82,7 +119,7 @@ export class AiFeatureFlagService {
       localStorage.removeItem(MIGRATION_KEY);
     } catch {
       // Safari private mode and sandboxed embeddings throw on storage access. Nothing to do:
-      // the flag is a constant, so an unpurged key cannot enable anything anyway.
+      // nothing writable backs `aiEnabled`, so an unpurged key cannot enable anything anyway.
     }
   }
 }
