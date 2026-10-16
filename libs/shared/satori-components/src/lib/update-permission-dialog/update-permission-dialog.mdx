@@ -63,8 +63,11 @@ protected editPermission(ace: NuxeoAce): void {
 <Source language="typescript" dark code={usageTs} />
 
 It has no inputs or outputs. The dialog lists its own toast and date adapter providers. Its date fields
-read a typed date in the order the user's locale writes dates — `03/04/2026` is 3 April in French —
-or through a date adapter the host provides, other than Material's native one. It needs
+read a typed date in the order the user's locale writes dates — `03/04/2026` is 3 April in French.
+`MatDialog` is a root service, so a date adapter your page component provides reaches the dialog
+only if `open()` is given the page's `injector` or `viewContainerRef`; one provided at application
+level reaches it either way. Such an adapter is used unless it reads as Material's native one
+does: Material's own, or a subclass that keeps its `Date.parse`. It needs
 `DocumentDetailService`, which an application using `@nuxeo/satori-platform/nuxeo-client` already
 has. Its labels are translated under `satori-components.permission-dialogs.*`, with English from
 `providePlatformEnglishFallback()`.

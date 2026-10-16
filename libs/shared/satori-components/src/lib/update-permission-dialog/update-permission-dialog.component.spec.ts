@@ -1,6 +1,9 @@
 import {
+  Component,
   Injectable,
+  Injector,
   LOCALE_ID,
+  inject,
   provideZonelessChangeDetection,
   type Provider,
 } from '@angular/core';
@@ -23,6 +26,20 @@ class HostLibraryAdapter extends NativeDateAdapter {
   override parse(): Date | null {
     return new Date(2030, 0, 1);
   }
+}
+
+/**
+ * A page that opens the dialog and provides its own date adapter, as main's feature components
+ * provide `provideSatoriDateAdapter()`. `MatDialog` is a root service, so the dialog sees the page's
+ * providers only through the injector `open()` is given.
+ */
+@Component({
+  standalone: true,
+  template: '',
+  providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+})
+class OpeningPageComponent {
+  readonly injector = inject(Injector);
 }
 
 /** An instant at local midnight, as Nuxeo holds an entry written from the user's own zone. */
@@ -78,9 +95,14 @@ describe('NxsUpdatePermissionDialogComponent', () => {
     TestBed.tick();
   }
 
-  async function open(ace: NuxeoAce, data: Partial<NxsUpdatePermissionDialogData> = {}) {
+  async function open(
+    ace: NuxeoAce,
+    data: Partial<NxsUpdatePermissionDialogData> = {},
+    injector?: Injector,
+  ) {
     ref = TestBed.inject(MatDialog).open(NxsUpdatePermissionDialogComponent, {
       data: { documentUid: 'doc-1', ace, ...data },
+      injector,
     });
     close = vi.spyOn(ref, 'close');
     await settle();
@@ -312,10 +334,17 @@ describe('NxsUpdatePermissionDialogComponent', () => {
   });
 
   describe('typed dates', () => {
-    /** The end day sent for the text typed into a dated entry's end date, under the providers. */
-    async function endSentFor(text: string, providers: Provider[]): Promise<unknown> {
+    /**
+     * The end day sent for the text typed into a dated entry's end date, under the providers, with
+     * the dialog opened with the injector `injector` returns, if it returns one.
+     */
+    async function endSentFor(
+      text: string,
+      providers: Provider[],
+      injector?: () => Injector | undefined,
+    ): Promise<unknown> {
       TestBed.configureTestingModule({ providers });
-      await open(local({ end: localMidnight(2030, 6, 30) }));
+      await open(local({ end: localMidnight(2030, 6, 30) }), {}, injector?.());
       await type(dateBoxes()[1], text);
       await save();
       return sent();
@@ -331,11 +360,33 @@ describe('NxsUpdatePermissionDialogComponent', () => {
       expect(written).toMatchObject({ end: '2030-03-04' });
     });
 
-    it('uses a date adapter the host provides', async () => {
+    it('uses a date adapter the application provides', async () => {
       const written = await endSentFor('anything', [
         { provide: LOCALE_ID, useValue: 'fr' },
         { provide: DateAdapter, useClass: HostLibraryAdapter },
       ]);
+      expect(written).toMatchObject({ end: '2030-01-01' });
+    });
+
+    it('reads in the locale, not with an adapter only the opening page provides', async () => {
+      const written = await endSentFor(
+        '03/04/2030',
+        [{ provide: LOCALE_ID, useValue: 'fr' }],
+        () => {
+          // The page is open, but `open()` is not given its injector, as integration's pages do.
+          TestBed.createComponent(OpeningPageComponent);
+          return undefined;
+        },
+      );
+      expect(written).toMatchObject({ end: '2030-04-03' });
+    });
+
+    it('uses the opening page’s date adapter when open() is given the page’s injector', async () => {
+      const written = await endSentFor(
+        '03/04/2030',
+        [{ provide: LOCALE_ID, useValue: 'fr' }],
+        () => TestBed.createComponent(OpeningPageComponent).componentInstance.injector,
+      );
       expect(written).toMatchObject({ end: '2030-01-01' });
     });
   });
