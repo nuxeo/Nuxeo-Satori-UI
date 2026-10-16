@@ -13,8 +13,8 @@ name: Storybook on GitHub Pages
 
 on:
   push:
-    # TODO(NXSAT-649): move to `main` once integration/nxsat-308 merges into it. Storybook exists only
-    # on the integration branch until then.
+    # TODO(NXSAT-649): move this and the deploy job's `if:` to `main` once integration/nxsat-308
+    # merges into it. Storybook exists only on the integration branch until then.
     branches: ['integration/nxsat-308']
   workflow_dispatch:
 
@@ -22,9 +22,11 @@ permissions:
   contents: read
 
 # One deployment at a time. A push during a deployment waits for it rather than cancelling it; a
-# later push replaces a waiting one, so the newest commit is the one that ends up published.
+# later push replaces a waiting one, so the newest commit is the one that ends up published. Keyed
+# by ref, because a group holds one waiting run: a dispatch from another branch, which never
+# deploys, would otherwise replace a waiting deployment and leave the site on an older commit.
 concurrency:
-  group: pages
+  group: pages-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
