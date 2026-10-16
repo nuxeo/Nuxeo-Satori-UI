@@ -57,20 +57,6 @@ function gregorian(locale: string): string {
   return 'en-US';
 }
 
-/** The order the locale writes a date's numeric fields in, such as `['day', 'month', 'year']`. */
-export function nxsDateFieldOrder(locale: string): ('year' | 'month' | 'day')[] {
-  const order = new Intl.DateTimeFormat(gregorian(locale), {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'UTC',
-  })
-    .formatToParts(new Date(Date.UTC(2026, 11, 31)))
-    .map((part) => part.type)
-    .filter((type): type is 'year' | 'month' | 'day' => ['year', 'month', 'day'].includes(type));
-  return order.length === 3 ? order : ['month', 'day', 'year'];
-}
-
 /** The options Material's native adapter, and so `NxsLocaleDateAdapter`, writes a field's date in. */
 const WRITTEN_DATE = MAT_NATIVE_DATE_FORMATS.display.dateInput as Intl.DateTimeFormatOptions;
 
@@ -80,6 +66,19 @@ function writtenParts(locale: string): Intl.DateTimeFormatPart[] {
     ...WRITTEN_DATE,
     timeZone: 'UTC',
   }).formatToParts(new Date(Date.UTC(2026, 11, 31)));
+}
+
+/**
+ * The order the locale writes a date's numeric fields in, such as `['day', 'month', 'year']`: the
+ * order of the date the field itself writes. For some locales `Intl` orders a two-digit day and
+ * month differently from the plain numbers the field shows — Maltese `31/12/2026` but `12/31/2026`
+ * — and a parser reading the first would swap the day and month of every date the field wrote.
+ */
+export function nxsDateFieldOrder(locale: string): ('year' | 'month' | 'day')[] {
+  const order = writtenParts(locale)
+    .map((part) => part.type)
+    .filter((type): type is 'year' | 'month' | 'day' => ['year', 'month', 'day'].includes(type));
+  return order.length === 3 ? order : ['month', 'day', 'year'];
 }
 
 /**
@@ -129,7 +128,7 @@ const fullYear = (year: string): number =>
  * The fields are read in the order the locale writes them, so `03/04/2026` is 3 April in French and
  * 4 March in American English, whatever the separators. A four-digit number, or one above 31, is the
  * year wherever it is, and a year first is followed by the month, so `2026-04-03` reads the same
- * everywhere. A month may be written as a word in
+ * everywhere but in the two locales that write the year first and then the day. A month may be written as a word in
  * the locale or in English, and a word the locale writes around a date, such as Bulgarian `г.`, is
  * read past. Without a year, the current one is meant. Digits typed in another
  * script — full-width, Arabic-Indic, Devanagari, Bengali, Thai — are read as digits.
@@ -182,8 +181,10 @@ export function nxsParseLocaleDate(text: string, locale: string, today = new Dat
     if (yearIndex >= 0) {
       year = fullYear(numbers[yearIndex]);
       const rest = numbers.filter((_, i) => i !== yearIndex);
-      // Year first is year-month-day in every locale that writes it so, and in ISO 8601.
-      const monthFirst = yearIndex === 0 || order.indexOf('month') < order.indexOf('day');
+      // Year first is year-month-day in ISO 8601 and in every locale that writes the year first
+      // but Kyrgyz and Uyghur, which write `2026-31-12`, and are read as they write.
+      const monthFirst =
+        order.indexOf('month') < order.indexOf('day') || (yearIndex === 0 && order[0] !== 'year');
       [month, day] = (monthFirst ? rest : [rest[1], rest[0]]).map(Number);
     } else {
       const fields = Object.fromEntries(order.map((field, i) => [field, numbers[i]]));

@@ -61,6 +61,11 @@ describe('nxsParseLocaleDate', () => {
     ['bg', '03.04.2026 г.', '2026-04-03'],
     ['mk', '3.4.2026 г.', '2026-04-03'],
     ['bg', '03.04.2026 Г.', '2026-04-03'],
+    // The order the field writes in, where `Intl` orders two-digit fields otherwise.
+    ['mt', '4/3/2026', '2026-04-03'],
+    // The year first and then the day, as Kyrgyz and Uyghur write; ISO 8601 elsewhere.
+    ['ky', '2026-03-04', '2026-04-03'],
+    ['ug', '2026-3-4', '2026-04-03'],
   ])('reads %s %j as %s', (locale, text, expected) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe(expected);
   });

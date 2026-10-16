@@ -69,6 +69,10 @@ describe('NxsLocaleDateAdapter', () => {
     ...['en-US', 'fr', 'de', 'nl', 'ja', 'th', 'zh', 'en-GB', 'fr-CA', 'fr-CH', 'nl-BE'],
     // A locale that writes a word after the date: `3.04.2026 г.`.
     ...['bg', 'mk'],
+    // A locale whose plain numbers `Intl` orders unlike its two-digit fields: Maltese `4/3/2026`.
+    ...['mt', 'so', 'sbp', 'jgo', 'ckb', 'nds', 'rw'],
+    // A locale that writes the year first and then the day: Kyrgyz `2026-03-04`.
+    ...['ky', 'ug'],
   ])('reads back the dates it writes in %s', (locale) => {
     const adapter = adapterFor(locale);
     const written = adapter.format(
@@ -136,6 +140,8 @@ describe('nxsDateMask', () => {
     { locale: 'th', language: 'en', hint: 'dd/mm/yyyy', english: true },
     { locale: 'zh', language: 'en', hint: 'yyyy/mm/dd', english: true },
     { locale: 'fr-CA', language: 'en', hint: 'yyyy-mm-dd', english: true },
+    { locale: 'mt', language: 'en', hint: 'mm/dd/yyyy', english: true },
+    { locale: 'ky', language: 'en', hint: 'yyyy-dd-mm', english: true },
     // A language whose dates are formatted in another locale: French letters, American order.
     { locale: 'en-US', language: 'fr', hint: 'mm/jj/aaaa' },
   ] as const)('$language mask under $locale', ({ locale, language, hint, ...rest }) => {
