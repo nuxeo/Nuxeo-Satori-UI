@@ -392,6 +392,16 @@
       visibility: visible;
     }
   }
+  /* A keyboard user's focus lands on a row's checkbox and actions, which are hidden until hover.
+     Reveal them while focus is inside the row, so the focused control is visible. */
+  &:focus-within {
+    .col-hover-actions,
+    .col-hover-select,
+    .col-actions {
+      opacity: 1;
+      visibility: visible;
+    }
+  }
   &.selected {
     background: var(--mat-sys-primary-container, #e8def8);
     .col-hover-select {
