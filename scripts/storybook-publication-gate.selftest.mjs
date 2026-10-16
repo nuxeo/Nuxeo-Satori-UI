@@ -85,11 +85,23 @@ async function gate(...args) {
 }
 
 const NEGATIVE = [
-  ['a --sat- token in CSS', { 'main.abc123.css': ':root { --sat-color-primary: #123; }' }, 'satori-token'],
-  ['Figtree named in an @font-face', { 'main.abc123.css': '@font-face { font-family: Figtree; }' }, 'font'],
+  [
+    'a --sat- token in CSS',
+    { 'main.abc123.css': ':root { --sat-color-primary: #123; }' },
+    'satori-token',
+  ],
+  [
+    'Figtree named in an @font-face',
+    { 'main.abc123.css': '@font-face { font-family: Figtree; }' },
+    'font',
+  ],
   ['a Figtree font file', { 'media/Figtree.woff2': 'wOF2' }, 'satori-path'],
   ['a font file not on the list, whatever its name', { 'NotoSans.woff2': 'wOF2' }, 'font'],
-  ['a compiled module path in a chunk', { '232.js': `/***/ "./${SATORI_MODULE}":` }, 'satori-module'],
+  [
+    'a compiled module path in a chunk',
+    { '232.js': `/***/ "./${SATORI_MODULE}":` },
+    'satori-module',
+  ],
   [
     'a source map whose source is a Satori module',
     { '232.js.map': sourceMap([[SATORI_MODULE, 'export {};']]) },
@@ -101,7 +113,11 @@ const NEGATIVE = [
     'satori-module',
   ],
   ['a Satori asset path', { [`i18n/${SCOPE}/satori-ui/en.json`]: '{}' }, 'satori-path'],
-  ['a mention in an ordinary chunk', { '1.js': `const p = "${SCOPE}/satori-tokens";` }, 'satori-mention'],
+  [
+    'a mention in an ordinary chunk',
+    { '1.js': `const p = "${SCOPE}/satori-tokens";` },
+    'satori-mention',
+  ],
   [
     'an unlisted mention inside the allowed chunk',
     { [GETTING_STARTED]: `${gettingStarted()}\nconst p = "${SCOPE}/satori-tokens";` },
@@ -118,7 +134,11 @@ const NEGATIVE = [
     'stale-allowance',
   ],
   ['no Getting started chunk', { [GETTING_STARTED]: null }, 'stale-allowance'],
-  ['no Storybook font', { 'nunito-sans-regular.woff2': null, 'sb-common-assets/nunito-sans-bold.woff2': null }, 'stale-allowance'],
+  [
+    'no Storybook font',
+    { 'nunito-sans-regular.woff2': null, 'sb-common-assets/nunito-sans-bold.woff2': null },
+    'stale-allowance',
+  ],
   [
     'a token in a workspace source, where only mentions are allowed',
     { '9.js.map': sourceMap([['libs/x/theme.scss', ':root { --sat-space: 4px; }']]) },
@@ -129,7 +149,11 @@ const NEGATIVE = [
     { '9.js.map': sourceMap([[`${NM}/some-lib/index.js`, `// see ${SCOPE}/satori-ui`]]) },
     'satori-mention',
   ],
-  ['a .map that is not a source map', { '9.js.map': `not json ${SCOPE}/satori-ui` }, 'satori-mention'],
+  [
+    'a .map that is not a source map',
+    { '9.js.map': `not json ${SCOPE}/satori-ui` },
+    'satori-mention',
+  ],
 ];
 
 for (const [name, overrides, rule] of NEGATIVE) {
@@ -142,8 +166,14 @@ for (const [name, overrides, rule] of NEGATIVE) {
 
 const POSITIVE = [
   ['the clean fixture', {}],
-  ["Angular's own fesm2022 paths", { '2.js': `/***/ "./${NM}/@angular/material/fesm2022/button.mjs":` }],
-  ['words that start with sat', { 'main.abc123.css': '.x { filter: saturate(2); --saturation: 1; }' }],
+  [
+    "Angular's own fesm2022 paths",
+    { '2.js': `/***/ "./${NM}/@angular/material/fesm2022/button.mjs":` },
+  ],
+  [
+    'words that start with sat',
+    { 'main.abc123.css': '.x { filter: saturate(2); --saturation: 1; }' },
+  ],
   ['an allowed string twice', { [GETTING_STARTED]: `${gettingStarted()}\n${gettingStarted()}` }],
 ];
 

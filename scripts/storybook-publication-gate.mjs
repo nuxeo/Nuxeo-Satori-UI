@@ -36,7 +36,8 @@ const MENTION = /hylandsoftware/gi;
 const WORKSPACE_SOURCE = /^webpack:\/\/[^/]+\/\.\/(?:libs|apps)\//;
 
 // Storybook's own interface font, which its manager serves.
-const ALLOWED_FONT = /^(?:sb-common-assets\/)?nunito-sans-(?:regular|italic|bold|bold-italic)\.woff2$/;
+const ALLOWED_FONT =
+  /^(?:sb-common-assets\/)?nunito-sans-(?:regular|italic|bold|bold-italic)\.woff2$/;
 
 const ALLOWANCES = [
   {
@@ -116,7 +117,11 @@ for (const rel of files) {
   if (map) scanSourceMap(rel, map);
   else {
     stats.text += 1;
-    scanText(rel, text, ALLOWANCES.find((a) => a.file.test(rel)));
+    scanText(
+      rel,
+      text,
+      ALLOWANCES.find((a) => a.file.test(rel)),
+    );
   }
 }
 
