@@ -37,7 +37,7 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
@@ -5551,12 +5551,34 @@ expectGreen(
 // The fixture bodies are strings, so this file is not itself a violation: the guardrail parses
 // JavaScript and a string is not an expression.
 
+/**
+ * The real shared reader, read from this checkout rather than paraphrased.
+ *
+ * The first version of these controls used a stand-in at this path with literal keys
+ * (`process.env['NUXEO_USER']`), while the real file reads `process.env[NUXEO_USER_ENV]` through
+ * a constant — the one shape the guardrail did not see. A `?? 'Administrator'` written back into
+ * the file all thirteen consumers share passed it, and every control here stayed green.
+ */
+const CREDENTIAL_READER_PATH = 'scripts/beta-harness/nuxeo-credentials.mjs';
+const CREDENTIAL_READER = readFileSync(join(ROOT, CREDENTIAL_READER_PATH), 'utf8');
+
+/**
+ * The real reader with one line changed. Throws when `line` is no longer in it, so reshaping the
+ * reader breaks this control loudly instead of leaving it testing a file that no longer exists.
+ */
+function mutateCredentialReader(line, replacement) {
+  if (!CREDENTIAL_READER.includes(line)) {
+    throw new Error(
+      `${CREDENTIAL_READER_PATH} no longer contains \`${line}\`. Update the ` +
+        'checkNoNuxeoCredentialDefaults controls to the shape the reader has now.',
+    );
+  }
+  return CREDENTIAL_READER.replace(line, replacement);
+}
+
 /** A correct harness: the pair is read, refused when missing, and never defaulted. */
 const CREDENTIALS_OK = {
-  'scripts/beta-harness/nuxeo-credentials.mjs':
-    "export function readNuxeoCredentials() {\n  const username = process.env['NUXEO_USER'];\n" +
-    "  const password = process.env['NUXEO_PASS'];\n" +
-    '  return username && password ? { username, password } : null;\n}\n',
+  [CREDENTIAL_READER_PATH]: CREDENTIAL_READER,
   'scripts/check.sh':
     '#!/usr/bin/env bash\n[[ -n "${NUXEO_USER:-}" && -n "${NUXEO_PASS:-}" ]] || exit 2\n' +
     ': "${NUXEO_PASS:?set NUXEO_PASS}"\n',
@@ -5735,6 +5757,193 @@ expectGreen(
   withCredentialFile(
     'scripts/demo.mjs',
     "console.log(process.env.NUXEO_USER ? 'NUXEO_USER is set' : 'NUXEO_USER is missing');\n",
+  ),
+);
+
+// The forms review found escaping the first version (NXSAT-649). Each was a working
+// `?? 'Administrator'` the guardrail passed; the first two are the shared reader itself.
+
+expectRed(
+  "the shared reader's own computed-key read, defaulted with ??",
+  'checkNoNuxeoCredentialDefaults',
+  {
+    ...CREDENTIALS_OK,
+    [CREDENTIAL_READER_PATH]: mutateCredentialReader(
+      'const username = process.env[NUXEO_USER_ENV];',
+      "const username = process.env[NUXEO_USER_ENV] ?? 'Administrator';",
+    ),
+  },
+  null,
+  /scripts\/beta-harness\/nuxeo-credentials\.mjs:\d+ defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  "the shared reader's own computed-key read, defaulted with ||",
+  'checkNoNuxeoCredentialDefaults',
+  {
+    ...CREDENTIALS_OK,
+    [CREDENTIAL_READER_PATH]: mutateCredentialReader(
+      'const password = process.env[NUXEO_PASS_ENV];',
+      "const password = process.env[NUXEO_PASS_ENV] || 'Administrator';",
+    ),
+  },
+  null,
+  /scripts\/beta-harness\/nuxeo-credentials\.mjs:\d+ defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a computed key through a same-file constant',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const KEY = 'NUXEO_USER';\nconst user = process.env[KEY] ?? 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  "a computed key through the reader's exported constant, imported",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'tools/video/scene.mjs',
+    "import { NUXEO_PASS_ENV } from '../../scripts/beta-harness/nuxeo-credentials.mjs';\n" +
+      "export const pass = process.env[NUXEO_PASS_ENV] || 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'an alias defaulted on the next line — the e2e-preflight house style',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const USER = process.env['NUXEO_USER'];\nexport const user = USER ?? 'Administrator';\n",
+  ),
+  null,
+  /scripts\/demo\.mjs:2 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a renamed destructure, defaulted',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const { NUXEO_PASS: pass } = process.env;\nexport const p = pass || 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'a literal assigned when the alias is empty',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "let user = process.env.NUXEO_USER;\nif (!user) user = 'Administrator';\n",
+  ),
+  null,
+  /scripts\/demo\.mjs:2 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a default held in a same-file object literal',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const DEFAULTS = { user: 'Administrator' };\n" +
+      'export const user = process.env.NUXEO_USER ?? DEFAULTS.user;\n',
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'NUXEO_AUTH — a whole user:password pair — defaulted in JavaScript',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "export const auth = process.env.NUXEO_AUTH ?? 'Administrator:Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_AUTH'),
+);
+
+expectRed(
+  'NUXEO_AUTH defaulted in shell — the verify-k*-dev-connectivity.sh line, one edit away',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/verify-kd-dev-connectivity.sh',
+    '#!/usr/bin/env bash\nexport NUXEO_AUTH="${NUXEO_AUTH:-Administrator:Administrator}"\n',
+  ),
+  null,
+  /verify-kd-dev-connectivity\.sh:2 defaults NUXEO_AUTH to a literal/,
+);
+
+expectRed(
+  'a shell literal assigned when a -z test finds the variable empty',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\n[ -z "$NUXEO_PASS" ] && NUXEO_PASS=Administrator\n',
+  ),
+  null,
+  /scripts\/login\.sh:2 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a shell literal exported inside an if block that tested the variable',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nif [ -z "${NUXEO_USER:-}" ]; then\n  export NUXEO_USER=Administrator\nfi\n',
+  ),
+  null,
+  /scripts\/login\.sh:3 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a generator template under tools/, which becomes customer project code',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'tools/satori-generators/src/generators/app/files/src/env.ts__tmpl__',
+    "export const user: string = process.env['NUXEO_USER'] ?? 'Administrator';\n",
+  ),
+  null,
+  /env\.ts__tmpl__:1 defaults NUXEO_USER to a literal/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "a parameter that shadows an alias's name is a different variable",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    'const user = process.env.NUXEO_USER;\n' +
+      "export function label(user) {\n  return user ?? 'guest';\n}\n" +
+      "export const column = row.user ?? 'unknown';\nexport { user };\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an unconditional assignment — the e2e negative control exports a wrong password on purpose',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/e2e-negative-control.sh',
+    '#!/usr/bin/env bash\nexport NUXEO_PASS="wrong"\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell value computed at run time, and an empty NUXEO_AUTH default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nexport NUXEO_AUTH="${NUXEO_AUTH:-}"\n' +
+      'if [ -z "$NUXEO_PASS" ]; then\n  NUXEO_PASS="$(security find-generic-password -w -s nuxeo)"\nfi\n',
   ),
 );
 
