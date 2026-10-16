@@ -739,6 +739,218 @@ function checkHardcodedSecrets() {
   }
 }
 
+/** Where the Node-side harness and tooling live — the code that reads Nuxeo credentials. */
+const NUXEO_CREDENTIAL_ROOTS = ['scripts', 'tools', 'a11y'];
+
+/**
+ * A Nuxeo login read from the environment: `NUXEO_USER`, `NUXEO_PASS`, and the per-account
+ * variants such as `NUXEO_ISOLATED_USER` / `NUXEO_ISOLATED_PASS`.
+ */
+const NUXEO_CREDENTIAL_ENV = /^NUXEO_(?:[A-Z0-9]+_)*(?:USER(?:NAME)?|PASS(?:WORD)?)$/;
+
+/** Shell: `${NUXEO_USER:-x}`, `${NUXEO_PASS=x}`, `${NUXEO_USER:=x}` — a default, not a check. */
+const SHELL_CREDENTIAL_DEFAULT =
+  /\$\{(NUXEO_(?:[A-Z0-9]+_)*(?:USER(?:NAME)?|PASS(?:WORD)?)):?[-=]([^}]*)\}/g;
+
+/**
+ * No Nuxeo credential read from the environment with a literal fallback, anywhere in the harness
+ * or tooling (NXSAT-649).
+ *
+ * `.cursor/rules/security.mdc`: "NEVER use Basic auth with hardcoded fallback defaults". The rule
+ * existed, and `checkHardcodedSecrets` existed, and neither stopped a defaulted Nuxeo login —
+ * mostly `process.env['NUXEO_USER'] ?? 'Administrator'` — from reaching thirteen files: the secret
+ * patterns look for token shapes, and a username that is also a password has none. Four files had
+ * already been fixed one review at a time (`e2e-preflight.mjs`, `story-runner.mjs`,
+ * `phase-3-search.mjs`, `a11y/env.mjs`), and `a11y/docs/authoring.md` asked readers not to
+ * reintroduce it, while the phase runner, the login helper and the preflight kept the pattern for
+ * every capture.
+ *
+ * ## What it reads, and why the whole tree rather than the diff
+ *
+ * Every tracked or untracked-but-not-ignored `.js`/`.mjs`/`.cjs`/`.ts`/`.mts`/`.cts`/`.tsx`/`.jsx`
+ * and `.sh` file under `scripts/`, `tools/` and `a11y/`. The tree, because the defect this exists
+ * for was already on `main` — a diff-scoped check would have been green over every one of them.
+ * There are none left, so any hit is new.
+ *
+ * JavaScript and TypeScript are parsed, not grepped, so a comment or a string quoting the pattern
+ * is not flagged and a fallback Prettier wrapped onto the next line is. The forms caught are:
+ *
+ * - `env.NUXEO_USER ?? 'x'`, `env['NUXEO_PASS'] || "x"`, and `??=` / `||=` — the left side may be
+ *   any expression containing the read (`(env.NUXEO_USER ?? '') || 'x'`, `env.NUXEO_USER?.trim()
+ *   || 'x'`), the right a string or template literal, or an identifier bound in the same file to
+ *   one (`const FALLBACK = 'x'`).
+ * - `env.NUXEO_USER ? env.NUXEO_USER : 'x'`.
+ * - `const { NUXEO_USER = 'x' } = process.env`.
+ *
+ * An empty string is not a default and is not flagged: `env.NUXEO_PASS ?? ''` followed by a
+ * refusal is a legitimate way to write the check.
+ *
+ * ## What it does not claim
+ *
+ * A default reached through a call (`?? defaultUser()`), an import, or a `.ps1` file is not seen.
+ * Nor is a literal login that never touches the environment — `NXSAT-164.mjs` passed
+ * `'Administrator', 'Administrator'` straight to its `loginAs`, and that was found by reading, not
+ * by this check. Nothing outside the three roots is read — `apps/nuxeo-ui-e2e` and
+ * `libs/integration-tests` enforce their own no-default rule in code. Product code that falls back
+ * to `'Administrator'` as a display **user id** (`currentUsername() ?? 'Administrator'`) reads no
+ * credential and is a different question.
+ */
+function checkNoNuxeoCredentialDefaults() {
+  const listed = git([
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '--',
+    ...NUXEO_CREDENTIAL_ROOTS,
+  ])
+    .split('\n')
+    .filter((file) => /\.(?:[cm]?[jt]s|tsx|jsx|sh)$/.test(file));
+
+  const report = (file, line, name, shown) =>
+    fail(
+      `${file}:${line} defaults ${name} to a literal: ${shown}\n` +
+        '    Nuxeo credentials come from the environment with NO fallback. A default is a working ' +
+        'login in the repository, and a run with the variable unset silently measures as that ' +
+        'identity. Refuse instead: `nuxeoCredentialsOrExit` / `requireNuxeoCredentials` in ' +
+        '`scripts/beta-harness/nuxeo-credentials.mjs` (exit 2), `requireStepCredentials` in a ' +
+        'steps file, `requireNuxeoCredentials` from `a11y/env.mjs` under `a11y/`.',
+    );
+
+  let scanned = 0;
+  for (const file of new Set(listed)) {
+    if (!fileExists(file)) continue;
+    scanned += 1;
+    const text = read(file);
+    if (!text.includes('NUXEO_')) continue;
+
+    if (file.endsWith('.sh')) {
+      text.split('\n').forEach((lineText, index) => {
+        if (lineText.trim().startsWith('#')) return;
+        for (const match of lineText.matchAll(SHELL_CREDENTIAL_DEFAULT)) {
+          if (match[2].replace(/["']/g, '').trim() === '') continue;
+          report(file, index + 1, match[1], match[0]);
+        }
+      });
+      continue;
+    }
+
+    const scriptKind = file.endsWith('.tsx')
+      ? ts.ScriptKind.TSX
+      : file.endsWith('.jsx')
+        ? ts.ScriptKind.JSX
+        : /\.[cm]?ts$/.test(file)
+          ? ts.ScriptKind.TS
+          : ts.ScriptKind.JS;
+    const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true, scriptKind);
+    const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const shown = (node) => node.getText(source).replace(/\s+/g, ' ').slice(0, 160);
+
+    const unwrap = (node) => {
+      let current = node;
+      while (
+        ts.isParenthesizedExpression(current) ||
+        ts.isAsExpression(current) ||
+        ts.isSatisfiesExpression(current) ||
+        ts.isNonNullExpression(current) ||
+        ts.isTypeAssertionExpression(current)
+      ) {
+        current = current.expression;
+      }
+      return current;
+    };
+
+    /** The credential variable `node` reads directly: `x.NUXEO_USER` or `x['NUXEO_USER']`. */
+    const credentialRead = (node) => {
+      const n = unwrap(node);
+      if (ts.isPropertyAccessExpression(n) && NUXEO_CREDENTIAL_ENV.test(n.name.text)) {
+        return n.name.text;
+      }
+      if (
+        ts.isElementAccessExpression(n) &&
+        (ts.isStringLiteral(n.argumentExpression) ||
+          ts.isNoSubstitutionTemplateLiteral(n.argumentExpression)) &&
+        NUXEO_CREDENTIAL_ENV.test(n.argumentExpression.text)
+      ) {
+        return n.argumentExpression.text;
+      }
+      return null;
+    };
+
+    /** The first credential read anywhere inside `node`, so `env.NUXEO_USER?.trim()` counts. */
+    const credentialReadWithin = (node) => {
+      const direct = credentialRead(node);
+      if (direct) return direct;
+      return ts.forEachChild(node, credentialReadWithin) ?? null;
+    };
+
+    // `const FALLBACK = 'x'` anywhere in the file, so `?? FALLBACK` is not an escape hatch.
+    const literalConstants = new Set();
+    const collectConstants = (node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        isNonEmptyLiteral(node.initializer)
+      ) {
+        literalConstants.add(node.name.text);
+      }
+      ts.forEachChild(node, collectConstants);
+    };
+
+    function isNonEmptyLiteral(node) {
+      const n = unwrap(node);
+      if (ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n)) return n.text !== '';
+      return ts.isTemplateExpression(n);
+    }
+    const isLiteralDefault = (node) => {
+      const n = unwrap(node);
+      return isNonEmptyLiteral(n) || (ts.isIdentifier(n) && literalConstants.has(n.text));
+    };
+
+    const DEFAULTING_OPERATORS = new Set([
+      ts.SyntaxKind.QuestionQuestionToken,
+      ts.SyntaxKind.BarBarToken,
+      ts.SyntaxKind.QuestionQuestionEqualsToken,
+      ts.SyntaxKind.BarBarEqualsToken,
+    ]);
+
+    const visit = (node) => {
+      if (ts.isBinaryExpression(node) && DEFAULTING_OPERATORS.has(node.operatorToken.kind)) {
+        const name = credentialReadWithin(node.left);
+        if (name && isLiteralDefault(node.right)) report(file, lineOf(node), name, shown(node));
+      } else if (ts.isConditionalExpression(node)) {
+        const name = credentialReadWithin(node.condition);
+        const literalBranch =
+          (credentialRead(node.whenTrue) && isLiteralDefault(node.whenFalse)) ||
+          (credentialRead(node.whenFalse) && isLiteralDefault(node.whenTrue));
+        if (name && literalBranch) report(file, lineOf(node), name, shown(node));
+      } else if (
+        ts.isBindingElement(node) &&
+        ts.isObjectBindingPattern(node.parent) &&
+        node.initializer &&
+        isLiteralDefault(node.initializer)
+      ) {
+        const key = node.propertyName ?? node.name;
+        const name = ts.isIdentifier(key) || ts.isStringLiteral(key) ? key.text : null;
+        if (name && NUXEO_CREDENTIAL_ENV.test(name)) report(file, lineOf(node), name, shown(node));
+      }
+      ts.forEachChild(node, visit);
+    };
+
+    collectConstants(source);
+    visit(source);
+  }
+
+  // The repository's standing rule: a scan that finds nothing must not read as a pass.
+  if (scanned === 0) {
+    fail(
+      `checkNoNuxeoCredentialDefaults scanned no files under ${NUXEO_CREDENTIAL_ROOTS.join(', ')}, ` +
+        'so it asserted nothing. Check the roots and the extension filter before trusting a pass.',
+    );
+  }
+}
+
 /**
  * Every asset glob in the base build options must also be in the `development` configuration.
  *
@@ -6535,6 +6747,7 @@ const GUARDRAILS = [
   checkNoAttrPrefixedLiteralAttributes,
   checkTypeSafetyEscapes,
   checkHardcodedSecrets,
+  checkNoNuxeoCredentialDefaults,
   checkAngularDevAssets,
   checkAdfHxWorkaroundIds,
   checkNoAdfHxInPublicApi,

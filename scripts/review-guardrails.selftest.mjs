@@ -5544,6 +5544,200 @@ expectGreen(
   ),
 );
 
+/* ---------------- checkNoNuxeoCredentialDefaults ---------------- */
+
+// NXSAT-649. The tree is scanned, not the diff, so most violations below are in the COMMITTED
+// baseline — the shape the defect had on `main`, where no diff would ever have added it again.
+// The fixture bodies are strings, so this file is not itself a violation: the guardrail parses
+// JavaScript and a string is not an expression.
+
+/** A correct harness: the pair is read, refused when missing, and never defaulted. */
+const CREDENTIALS_OK = {
+  'scripts/beta-harness/nuxeo-credentials.mjs':
+    "export function readNuxeoCredentials() {\n  const username = process.env['NUXEO_USER'];\n" +
+    "  const password = process.env['NUXEO_PASS'];\n" +
+    '  return username && password ? { username, password } : null;\n}\n',
+  'scripts/check.sh':
+    '#!/usr/bin/env bash\n[[ -n "${NUXEO_USER:-}" && -n "${NUXEO_PASS:-}" ]] || exit 2\n' +
+    ': "${NUXEO_PASS:?set NUXEO_PASS}"\n',
+};
+
+/** The baseline plus one file, committed. */
+const withCredentialFile = (path, body) => ({ ...CREDENTIALS_OK, [path]: body });
+
+const DEFAULT_REASON = (name) => new RegExp(`defaults ${name} to a literal`);
+
+expectGreen(
+  'a harness that reads and refuses, never defaults',
+  'checkNoNuxeoCredentialDefaults',
+  CREDENTIALS_OK,
+);
+
+expectRed(
+  'the phase-6-a11y shape: bracket read, ??, single-quoted literal',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/beta-harness/steps/phase-6-a11y.mjs',
+    "const user = process.env['NUXEO_USER'] ?? 'Administrator';\n",
+  ),
+  null,
+  /scripts\/beta-harness\/steps\/phase-6-a11y\.mjs:1 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'dot read, ||, double-quoted literal, under tools/',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile('tools/video/scene.mjs', 'const pass = process.env.NUXEO_PASS || "secret";\n'),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'a fallback Prettier wrapped onto the next line, in a TypeScript file under a11y/',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'a11y/fixtures.ts',
+    "export const pass: string =\n  process.env['NUXEO_PASS'] ??\n    'Administrator';\n",
+  ),
+  null,
+  /a11y\/fixtures\.ts:2 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a default through a same-file constant',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const FALLBACK = 'Administrator';\nconst user = process.env.NUXEO_USER ?? FALLBACK;\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'a destructuring default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile('scripts/demo.mjs', "const { NUXEO_USER = 'Administrator' } = process.env;\n"),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'a ternary default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const user = process.env.NUXEO_USER ? process.env.NUXEO_USER : 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'a default assigned back into the environment with ??=',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile('scripts/demo.mjs', "process.env['NUXEO_PASS'] ??= 'Administrator';\n"),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'a read wrapped in a call before the fallback',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const user = process.env.NUXEO_USER?.trim() || 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  "a second account's password — the NXSAT-164 shape",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/collect-evidence/NXSAT-164.mjs',
+    "const isolatedPass = process.env['NUXEO_ISOLATED_PASS'] ?? 'not-a-real-password';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_ISOLATED_PASS'),
+);
+
+expectRed(
+  'a shell parameter-expansion default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nUSER="${NUXEO_USER:-Administrator}"\n',
+  ),
+  null,
+  /scripts\/login\.sh:2 defaults NUXEO_USER to a literal/,
+);
+
+// Uncommitted and untracked: what a developer's pre-commit run sees before `git add`.
+expectRed(
+  'an untracked new file carrying a default',
+  'checkNoNuxeoCredentialDefaults',
+  CREDENTIALS_OK,
+  (write) =>
+    write(
+      'tools/i18n/new-audit.mjs',
+      "const pass = process.env['NUXEO_PASS'] ?? 'Administrator';\n",
+    ),
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'nothing under the roots to scan',
+  'checkNoNuxeoCredentialDefaults',
+  { 'README.md': '# fixture\n' },
+  null,
+  /scanned no files under scripts, tools, a11y/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an empty-string fallback followed by a refusal',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const pass = process.env['NUXEO_PASS'] ?? '';\nif (!pass) process.exit(2);\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the pattern quoted in a comment and in a string',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "// This used to read `process.env['NUXEO_USER'] ?? 'Administrator'`.\n" +
+      "/* process.env.NUXEO_PASS || 'Administrator' */\n" +
+      "const hint = \"never write process.env['NUXEO_USER'] ?? 'Administrator'\";\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a default on a Nuxeo variable that is not a credential',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const url = process.env['NUXEO_URL'] ?? 'http://localhost:8080';\n" +
+      "const container = process.env.NUXEO_CONTAINER || 'nuxeo';\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a ternary that reports whether the pair is set',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "console.log(process.env.NUXEO_USER ? 'NUXEO_USER is set' : 'NUXEO_USER is missing');\n",
+  ),
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;
