@@ -361,6 +361,15 @@ const ALL_GATES = [
     // The negative/positive split is the evidence, so surface it on a pass too.
     echoOnPass: true,
   },
+  // The controls of the gate that keeps Satori out of the Storybook published to GitHub Pages. The
+  // gate itself needs a Storybook build, so it runs in CI and in storybook-pages.yml, not here.
+  {
+    id: 'storybook-publication-selftest',
+    label: 'Storybook publication gate controls',
+    cmd: 'node',
+    argv: ['scripts/storybook-publication-gate.selftest.mjs'],
+    echoOnPass: true,
+  },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:

@@ -30,7 +30,7 @@ Every gate in `ALL_GATES`, cheapest first: `node`, `lockfile`, `lockfile-selftes
 `sanitizer-selftest`, `assertions`, then affected `lint`, `test`, `build`, `typecheck`,
 then `spec-types`, `bundle`, `api-surface`, `publishability`, `peer-installability`, `fork-simulation`,
 `upgrade-rehearsal`, `reference-drift`, `nxs-comparison`, `nxs-comparison-selftest`,
-`agent-mirror` and `customer-guardrails`. Stops at
+`storybook-publication-selftest`, `agent-mirror` and `customer-guardrails`. Stops at
 the first failure and prints only its output tail. Reports land in
 `$AGENTIC_UI_EVIDENCE_DIR/beta/gates/`. The count is the verdict line's, not this
 paragraph's — an unknown `--gates` id prints the current list.
