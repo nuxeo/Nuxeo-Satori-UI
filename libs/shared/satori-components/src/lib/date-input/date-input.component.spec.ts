@@ -57,6 +57,10 @@ describe('nxsParseLocaleDate', () => {
     ['fr_FR', '03/04/2026', '2026-04-03'],
     ['fr_FR.UTF-8', '03/04/2026', '2026-04-03'],
     ['en_US', '03/04/2026', '2026-03-04'],
+    // A word the locale writes after a date, as the field writes it.
+    ['bg', '03.04.2026 г.', '2026-04-03'],
+    ['mk', '3.4.2026 г.', '2026-04-03'],
+    ['bg', '03.04.2026 Г.', '2026-04-03'],
   ])('reads %s %j as %s', (locale, text, expected) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe(expected);
   });
@@ -72,6 +76,7 @@ describe('nxsParseLocaleDate', () => {
     ['fr', '1/2/3/4'],
     ['fr', '2026'],
     ['en-US', 'April'],
+    ['fr', '03.04.2026 г.'],
   ])('refuses %s %j', (locale, text) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe('invalid');
   });

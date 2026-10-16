@@ -65,17 +65,18 @@ const ymd = (date: Date | null) =>
 describe('NxsLocaleDateAdapter', () => {
   // The hint is worked out from what the adapter writes, so it is only as good as the adapter
   // reading back what it wrote. Main's `provideSatoriDateAdapter` spec asserts the same of its own.
-  it.each(['en-US', 'fr', 'de', 'nl', 'ja', 'th', 'zh', 'en-GB', 'fr-CA', 'fr-CH', 'nl-BE'])(
-    'reads back the dates it writes in %s',
-    (locale) => {
-      const adapter = adapterFor(locale);
-      const written = adapter.format(
-        adapter.createDate(2026, 3, 3),
-        MAT_NATIVE_DATE_FORMATS.display.dateInput,
-      );
-      expect(ymd(adapter.parse(written))).toBe('2026-4-3');
-    },
-  );
+  it.each([
+    ...['en-US', 'fr', 'de', 'nl', 'ja', 'th', 'zh', 'en-GB', 'fr-CA', 'fr-CH', 'nl-BE'],
+    // A locale that writes a word after the date: `3.04.2026 г.`.
+    ...['bg', 'mk'],
+  ])('reads back the dates it writes in %s', (locale) => {
+    const adapter = adapterFor(locale);
+    const written = adapter.format(
+      adapter.createDate(2026, 3, 3),
+      MAT_NATIVE_DATE_FORMATS.display.dateInput,
+    );
+    expect(ymd(adapter.parse(written))).toBe('2026-4-3');
+  });
 });
 
 describe('nxsDateMask', () => {
@@ -198,6 +199,17 @@ describe('nxsDateMask', () => {
       expect(nxsDateMask('31/12/2026', mask, 'fr')).toBe('31/12/2026');
     });
   });
+
+  it.each(['bg', 'mk'])(
+    'shows the date as written where %s writes a word after it, and the field reads it back',
+    (locale) => {
+      const adapter = adapterFor(locale);
+      const written = writtenBy(adapter);
+      expect(written).toMatch(/\p{L}/u);
+      expect(nxsDateMask(written, NXS_ENGLISH_DATE_MASK, locale)).toBe(written);
+      expect(ymd(adapter.parse(written))).toBe('2026-12-31');
+    },
+  );
 
   it('shows the date as written when the field writes the month as a word', () => {
     expect(nxsDateMask('Dec 31, 2026', CATALOGUE.en.mask, 'en')).toBe('Dec 31, 2026');

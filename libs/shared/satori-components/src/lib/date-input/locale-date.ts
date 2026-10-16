@@ -71,6 +71,31 @@ export function nxsDateFieldOrder(locale: string): ('year' | 'month' | 'day')[] 
   return order.length === 3 ? order : ['month', 'day', 'year'];
 }
 
+/** The options Material's native adapter, and so `NxsLocaleDateAdapter`, writes a field's date in. */
+const WRITTEN_DATE = MAT_NATIVE_DATE_FORMATS.display.dateInput as Intl.DateTimeFormatOptions;
+
+/** 31 December 2026 in parts, as `locale` writes a date into a field. */
+function writtenParts(locale: string): Intl.DateTimeFormatPart[] {
+  return new Intl.DateTimeFormat(gregorian(locale), {
+    ...WRITTEN_DATE,
+    timeZone: 'UTC',
+  }).formatToParts(new Date(Date.UTC(2026, 11, 31)));
+}
+
+/**
+ * The words `locale` itself writes around a date's numeric fields, in lower case: `г`, for
+ * `година`, in Bulgarian and Macedonian `31.12.2026 г.`. The parser reads past them, so a field
+ * reads back the dates it writes.
+ */
+function writtenWords(locale: string): Set<string> {
+  return new Set(
+    writtenParts(locale)
+      .filter((part) => part.type === 'literal')
+      .flatMap((part) => part.value.match(/\p{L}+/gu) ?? [])
+      .map((word) => word.toLowerCase()),
+  );
+}
+
 /** The month a word names, 1 to 12, in the locale or in English, by its first three letters. */
 function monthNamed(word: string, locale: string): number | null {
   const fold = (text: string) =>
@@ -105,7 +130,8 @@ const fullYear = (year: string): number =>
  * 4 March in American English, whatever the separators. A four-digit number, or one above 31, is the
  * year wherever it is, and a year first is followed by the month, so `2026-04-03` reads the same
  * everywhere. A month may be written as a word in
- * the locale or in English. Without a year, the current one is meant. Digits typed in another
+ * the locale or in English, and a word the locale writes around a date, such as Bulgarian `г.`, is
+ * read past. Without a year, the current one is meant. Digits typed in another
  * script — full-width, Arabic-Indic, Devanagari, Bengali, Thai — are read as digits.
  */
 export function nxsParseLocaleDate(text: string, locale: string, today = new Date()): Date | null {
@@ -113,7 +139,8 @@ export function nxsParseLocaleDate(text: string, locale: string, today = new Dat
   if (!typed) return null;
   const invalid = new Date(Number.NaN);
   const numbers = typed.match(/\d+/g) ?? [];
-  const words = typed.match(/\p{L}+/gu) ?? [];
+  const written = writtenWords(locale);
+  const words = (typed.match(/\p{L}+/gu) ?? []).filter((word) => !written.has(word.toLowerCase()));
   const order = nxsDateFieldOrder(locale);
 
   let year: number | undefined;
@@ -319,8 +346,13 @@ function maskOrder(letters: readonly string[], language: string): DateField[] | 
  * `mm/jj/aaaa` where the adapter writes month first, and the English `mm/dd/yyyy` reads
  * `dd/mm/yyyy` where it writes day first. A year the adapter writes with two digits gets two
  * letters, one with four gets four. Anything that cannot be lined up — a mask with a literal such
- * as `年`, an adapter that writes the month as a word — gives `written` itself, which agrees with the
- * parser by construction, rather than a mask that might not.
+ * as `年`, an adapter that writes the month as a word or a word such as Bulgarian `г.` — gives
+ * `written` itself rather than a mask that might not agree with the parser.
+ *
+ * Either way the hint is only as good as the adapter reading back what it writes: the field's
+ * order comes from what the adapter writes, and the parse from what it reads. `NxsLocaleDateAdapter`
+ * does, which its spec checks locale by locale. A host's adapter is trusted to; one that writes
+ * with `display.dateInput` and reads with a different `parse.dateInput` may not.
  */
 export function nxsDateMask(written: string, mask: string, maskLanguage: string): string {
   const target = writtenSegments(written);
