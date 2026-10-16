@@ -184,9 +184,9 @@ npm run beta:e2e -- --project=chromium browse.spec.ts search.spec.ts document-de
 npm run beta:e2e -- --project=webkit browse.spec.ts search.spec.ts document-detail.spec.ts --retries=0
 ```
 
-These examples use Bash. On Windows, use Git Bash for the shell-based negative control, or set
-npm's script shell to Git Bash for that invocation. For concurrent browser runs, use separate
-checkouts and app ports, matching each host/port in its allowlist.
+These examples use Bash. The Windows invocation for the shell-based negative control is shown
+below. For concurrent browser runs, use separate checkouts and app ports, matching each
+host/port in its allowlist.
 
 ### Authentication and remaining guard work
 
@@ -204,6 +204,20 @@ who made the request. A green core suite does not prove those missing identity g
 
 ```bash
 npm run beta:e2e-negative-control
+```
+
+On Windows, opening Git Bash does not change npm's default script shell (`cmd.exe`). From Git
+Bash, invoke the script explicitly:
+
+```bash
+bash scripts/e2e-negative-control.sh
+```
+
+To use the npm entry point instead, set its script shell for that invocation (adjust the path
+if Git is installed elsewhere):
+
+```bash
+npm_config_script_shell='C:/Program Files/Git/bin/bash.exe' npm run beta:e2e-negative-control
 ```
 
 The command first runs preflight with correct credentials, then runs the full Chromium suite
