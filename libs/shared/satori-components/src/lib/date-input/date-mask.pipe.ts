@@ -7,7 +7,7 @@ import { NXS_DATE_MASK_SAMPLE, nxsDateMask } from './locale-date';
 /**
  * `{{ 'common.date-mask' | translate | nxsDateMask }}`: the translated date hint, in the order and
  * with the separators the field's own date adapter writes a date in, so the hint reads what the
- * field parses. See `nxsDateMask`.
+ * field parses wherever the adapter reads back the dates it writes. See `nxsDateMask`.
  *
  * The adapter is the one the component using the pipe injects: `provideNxsDateAdapter()`'s, or the
  * host's own when it has one. The translate pipe upstream owns the words and the language.

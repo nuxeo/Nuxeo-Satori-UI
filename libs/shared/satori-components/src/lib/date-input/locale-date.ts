@@ -238,13 +238,21 @@ export class NxsLocaleDateAdapter extends NativeDateAdapter {
 }
 
 /**
- * The date adapter a host provides, unless it is Material's plain native one, which cannot read a
- * localized date; then this library's. So a host that chose a date library — date-fns, Luxon — keeps
- * it, and its formats with it, and every other host gets typed dates read in its locale.
+ * The date adapter a host provides, unless it reads typed text as Material's native one does, with
+ * `Date.parse`, which cannot read a localized date; then this library's. So a host that chose a date
+ * library — date-fns, Luxon — keeps it, and its formats with it, and every other host gets typed
+ * dates read in its locale.
+ *
+ * Reading as the native one is Material's own class, or a subclass that keeps its `parse`, such as
+ * one that only starts the week on Monday. Kept, it would store `03/04/2026` typed in French as
+ * 4 March under a hint, lined up from the dates it writes, that says day first. Its other changes
+ * then do not reach the field; a host that wants both overrides `parse`.
  */
 function hostDateAdapter(): DateAdapter<unknown> | null {
   const host = inject(DateAdapter, { skipSelf: true, optional: true });
-  return host && host.constructor !== NativeDateAdapter ? host : null;
+  const readsAsNative =
+    host instanceof NativeDateAdapter && host.parse === NativeDateAdapter.prototype.parse;
+  return host && !readsAsNative ? host : null;
 }
 
 /** Providers for a date field: the date adapter and formats `hostDateAdapter` decides on. */

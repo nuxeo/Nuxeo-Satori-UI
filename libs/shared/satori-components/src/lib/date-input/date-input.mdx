@@ -19,7 +19,9 @@ it for any date property, such as an expiry date or the start of a permission.
 - **The Gregorian calendar throughout,** in Thai too, so a year shown can be typed back. (A host's
   own adapter, below, keeps its own calendar.)
 - **Keeps your date adapter.** A host that provides its own Angular Material date adapter keeps it.
-  Material's native adapter, which reads every typed date as American, is replaced.
+  Material's native adapter, which reads every typed date as American, is replaced, and so is a
+  subclass of it that keeps its `Date.parse`; that subclass's other changes, such as the first day
+  of the week, then do not reach the field.
 - **Says what is wrong.** Text that is not a date shows an example in the locale's format, such as
   "Enter a date like 31/12/2026"; a date outside `min` and `max` says the limit.
 - **Translated calendar.** The calendar's buttons and labels follow the application's catalogue.

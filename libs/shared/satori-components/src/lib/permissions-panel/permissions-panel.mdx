@@ -22,8 +22,8 @@ entries, and block or restore inheritance. Use it on a document's or folder's Pe
   the whole save and says which entries and why. Afterwards it reads once more and reports any change
   the server does not show.
 - **Time frames.** An entry can be permanent or limited to a date range. A typed date is read in the
-  order the user's locale writes dates, or through a date adapter the host provides, other than
-  Material's native one.
+  order the user's locale writes dates, or through a date adapter the host provides, unless that
+  reads as Material's native one does: Material's own, or a subclass that keeps its `Date.parse`.
 - **Inheritance.** Blocking inheritance is shown as a state of the document, not as an entry.
 - **Read-only when it should be.** A user who cannot manage permissions sees the same tables with
   nothing offering to change them.

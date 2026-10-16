@@ -658,6 +658,22 @@ class DatesHostComponent {
 })
 class DatesHostWithAdapterComponent extends DatesHostComponent {}
 
+/** A host's change to Material's native adapter that keeps its `Date.parse`. */
+@Injectable()
+class MondayFirstAdapter extends NativeDateAdapter {
+  override getFirstDayOfWeek(): number {
+    return 1;
+  }
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: MondayFirstAdapter }],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class DatesHostWithNativeSubclassComponent extends DatesHostComponent {}
+
 describe('NxsMetadataEditorComponent, typed dates', () => {
   let fixture: ComponentFixture<DatesHostComponent>;
 
@@ -703,6 +719,12 @@ describe('NxsMetadataEditorComponent, typed dates', () => {
     await setup('en-US');
     expect(expires().placeholder).toBe('mm/dd/yyyy');
     expect(await typeDate('03/04/2026')).toBe(new Date(2026, 2, 4).toISOString());
+  });
+
+  it('reads as its hint says over a host’s native subclass that keeps Date.parse', async () => {
+    await setup('fr', DatesHostWithNativeSubclassComponent);
+    expect(expires().placeholder).toBe('dd/mm/yyyy');
+    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
   });
 
   it('uses a date adapter the host provides, for the hint and for what is typed', async () => {

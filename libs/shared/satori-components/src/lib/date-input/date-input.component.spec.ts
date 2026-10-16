@@ -122,6 +122,14 @@ class HostComponent {
   readonly expires = new FormControl<Date | null>(null);
 }
 
+/** A host's change to Material's native adapter that keeps its `Date.parse`. */
+@Injectable()
+class MondayFirstAdapter extends NativeDateAdapter {
+  override getFirstDayOfWeek(): number {
+    return 1;
+  }
+}
+
 /** A date library's adapter, as a host might provide one. */
 @Injectable()
 class HostLibraryAdapter extends NativeDateAdapter {
@@ -194,6 +202,12 @@ describe('NxsDateInputComponent', () => {
 
   it('replaces a host’s native adapter, which reads every date as American', async () => {
     await setup('fr', [provideNativeDateAdapter()]);
+    await type('03/04/2026');
+    expect(day(host.expires.value)).toBe('2026-04-03');
+  });
+
+  it('replaces a host’s subclass of the native adapter that keeps its parse', async () => {
+    await setup('fr', [{ provide: DateAdapter, useClass: MondayFirstAdapter }]);
     await type('03/04/2026');
     expect(day(host.expires.value)).toBe('2026-04-03');
   });
