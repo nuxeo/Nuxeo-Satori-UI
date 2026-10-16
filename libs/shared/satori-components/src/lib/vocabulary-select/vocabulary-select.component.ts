@@ -39,6 +39,8 @@ import {
 
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 
+let nextId = 0;
+
 /** One entry the select offers: its id, what it shows, and the parent it is listed under. */
 interface Entry {
   readonly id: string;
@@ -106,6 +108,8 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
   /** The id chosen, or `null`; with `multiple`, the ids chosen, in order. Two-way. */
   readonly value = model<string | readonly string[] | null>(null);
 
+  /** The input's id, in either mode: the form field's label names the input through it. */
+  protected readonly inputId = `nxs-vocabulary-select-${nextId++}`;
   private readonly directories = inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly input = viewChild(MatInput);

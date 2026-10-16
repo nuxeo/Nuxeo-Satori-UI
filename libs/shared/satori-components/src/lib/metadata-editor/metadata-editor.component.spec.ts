@@ -143,6 +143,26 @@ class HostComponent {
   readonly validity: boolean[] = [];
 }
 
+const CODES_ONLY: NxsEditorSection = {
+  id: 'codes',
+  heading: null,
+  fields: [{ xpath: 'pol:codes', label: 'Codes', definition: { type: 'string[]' } }],
+};
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  template: `<nxs-metadata-editor [sections]="sections" [dublinCore]="false" />
+    <nxs-metadata-editor [sections]="sections" [dublinCore]="false" />`,
+})
+class TwoEditorsComponent {
+  readonly sections = [CODES_ONLY];
+}
+
+/** The text of the labels that name an input, as `getByLabelText` finds it. */
+const labelsOf = (input: HTMLInputElement) =>
+  [...(input.labels ?? [])].map((label) => label.textContent?.trim());
+
 describe('NxsMetadataEditorComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -373,6 +393,12 @@ describe('NxsMetadataEditorComponent', () => {
     expect(host.editor().dirtyProperties()['pol:codes']).toEqual(['x1', 'y2']);
   });
 
+  it('names a list’s typing box by the field’s label, through an id of its own', () => {
+    const input = field('pol:codes');
+    expect(input.id).toMatch(/^nxs-metadata-editor-\d+-pol:codes-input$/);
+    expect(labelsOf(input)).toEqual(['Codes']);
+  });
+
   it('removes a vocabulary value from its chip', async () => {
     const remove = field('dc:subjects').querySelector<HTMLButtonElement>(
       'button[matChipRemove], .mat-mdc-chip-remove',
@@ -561,5 +587,33 @@ describe('NxsMetadataEditorComponent', () => {
     checkbox?.click();
     await settle();
     expect(host.editor().dirtyProperties()).toEqual({ 'pol:active': false });
+  });
+});
+
+describe('NxsMetadataEditorComponent, twice on a page', () => {
+  it('gives the same list field a different id in each editor, each named by its own label', async () => {
+    await TestBed.configureTestingModule({
+      imports: [TwoEditorsComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TwoEditorsComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const inputs = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>(
+        'input[data-xpath="pol:codes"]',
+      ),
+    ];
+    expect(inputs.map(labelsOf)).toEqual([['Codes'], ['Codes']]);
+    expect(inputs[0].id).not.toBe(inputs[1].id);
+    expect(inputs.every((input) => input.labels?.[0]?.htmlFor === input.id)).toBe(true);
   });
 });

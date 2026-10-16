@@ -228,6 +228,7 @@
             </mat-chip-row>
           }
           <input
+            [id]="id + '-' + path + '-input'"
             [type]="inputType(definition)"
             [matChipInputFor]="grid"
             [matChipInputAddOnBlur]="true"

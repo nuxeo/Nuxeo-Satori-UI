@@ -64,6 +64,22 @@ class HostComponent {
   readonly many = new FormControl<readonly string[]>([]);
 }
 
+@Component({
+  standalone: true,
+  imports: [NxsVocabularySelectComponent],
+  template: `<nxs-vocabulary-select label="Nature" directory="nature" />
+    <nxs-vocabulary-select label="Coverage" directory="l10ncoverage" multiple />
+    <nxs-vocabulary-select label="Subjects" directory="l10nsubjects" multiple />`,
+})
+class ThreeFieldsComponent {}
+
+/** Each input with the text of the labels that name it, as `getByLabelText` finds it. */
+const labelledInputs = (root: HTMLElement) =>
+  [...root.querySelectorAll('input')].map((input) => ({
+    id: input.id,
+    labels: [...(input.labels ?? [])].map((label) => label.textContent?.trim()),
+  }));
+
 describe('NxsVocabularySelectComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -112,6 +128,12 @@ describe('NxsVocabularySelectComponent', () => {
     fixture = TestBed.createComponent(HostComponent);
     host = fixture.componentInstance;
     await render();
+  });
+
+  it('is named by its label, through an id of its own', () => {
+    expect(labelledInputs(root())).toEqual([
+      { id: expect.stringMatching(/^nxs-vocabulary-select-\d+$/), labels: ['Nature'] },
+    ]);
   });
 
   it('lists the whole vocabulary on focus, sorted by label', async () => {
@@ -195,6 +217,12 @@ describe('NxsVocabularySelectComponent', () => {
         (chip) => chip.querySelector('.mat-mdc-chip-action-label')?.textContent?.trim() ?? '',
       );
 
+    it('names the chip input by its label, through an id of its own', () => {
+      expect(labelledInputs(root())).toEqual([
+        { id: expect.stringMatching(/^nxs-vocabulary-select-\d+$/), labels: ['Coverage'] },
+      ]);
+    });
+
     it('lists children under their parents, and a parent with no children as itself', async () => {
       await focus();
       expect(directories.getAllL10nEntries).toHaveBeenCalledWith('l10ncoverage');
@@ -262,5 +290,27 @@ describe('NxsVocabularySelectComponent', () => {
       await type('afr');
       expect(options()).toEqual(['Kenya']);
     });
+  });
+});
+
+describe('NxsVocabularySelectComponent, several in a form', () => {
+  it('gives each field its own id, in either mode, so each label names its own input', async () => {
+    await TestBed.configureTestingModule({
+      imports: [ThreeFieldsComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of(NATURE), getAllL10nEntries: () => of(COVERAGE) },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(ThreeFieldsComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const fields = labelledInputs(fixture.nativeElement as HTMLElement);
+    expect(fields.map(({ labels }) => labels)).toEqual([['Nature'], ['Coverage'], ['Subjects']]);
+    expect(new Set(fields.map(({ id }) => id)).size).toBe(3);
   });
 });

@@ -21,6 +21,20 @@ class HostComponent {
   readonly tags = new FormControl<readonly string[]>([], Validators.required);
 }
 
+@Component({
+  standalone: true,
+  imports: [NxsTagInputComponent],
+  template: `<nxs-tag-input label="Tags" /><nxs-tag-input label="Keywords" />`,
+})
+class TwoFieldsComponent {}
+
+/** Each input with the text of the labels that name it, as `getByLabelText` finds it. */
+const labelledInputs = (root: HTMLElement) =>
+  [...root.querySelectorAll('input')].map((input) => ({
+    id: input.id,
+    labels: [...(input.labels ?? [])].map((label) => label.textContent?.trim()),
+  }));
+
 describe('NxsTagInputComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -75,6 +89,12 @@ describe('NxsTagInputComponent', () => {
   });
 
   afterEach(() => vi.useRealTimers());
+
+  it('is named by its label, through an id of its own', () => {
+    expect(labelledInputs(root())).toEqual([
+      { id: expect.stringMatching(/^nxs-tag-input-\d+$/), labels: ['Tags'] },
+    ]);
+  });
 
   it('suggests existing tags from the first character, as Web UI does', async () => {
     await type('c');
@@ -154,5 +174,24 @@ describe('NxsTagInputComponent', () => {
     input().dispatchEvent(new Event('blur'));
     await render();
     expect(root().querySelector('mat-error')?.textContent?.trim()).toBe('Required');
+  });
+});
+
+describe('NxsTagInputComponent, twice in a form', () => {
+  it('gives each field its own id, so each label names its own input', async () => {
+    await TestBed.configureTestingModule({
+      imports: [TwoFieldsComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: TagService, useValue: { suggestTags: () => of([]) } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TwoFieldsComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const fields = labelledInputs(fixture.nativeElement as HTMLElement);
+    expect(fields.map(({ labels }) => labels)).toEqual([['Tags'], ['Keywords']]);
+    expect(new Set(fields.map(({ id }) => id)).size).toBe(2);
   });
 });

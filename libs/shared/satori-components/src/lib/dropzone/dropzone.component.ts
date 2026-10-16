@@ -13,6 +13,8 @@ import { TranslatePipe } from '@ngx-translate/core';
 
 import { NxsFileDropTracker } from '../file-drop';
 
+let nextId = 0;
+
 /**
  * Where files are dropped from the computer, or chosen with a button — the same files either way.
  *
@@ -52,6 +54,12 @@ export class NxsDropzoneComponent {
   readonly files = output<readonly File[]>();
 
   protected readonly drop = new NxsFileDropTracker(() => !this.disabled());
+  /**
+   * The button's id, which also names the file input behind it. That input is hidden from
+   * assistive technology and out of the Tab sequence, so the name is never announced; it states
+   * which control the input stands behind, and gives it a label a template check can see.
+   */
+  protected readonly buttonId = `nxs-dropzone-${nextId++}-button`;
   private readonly input = viewChild.required<ElementRef<HTMLInputElement>>('picker');
 
   protected choose(): void {
