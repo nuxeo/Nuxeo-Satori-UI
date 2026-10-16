@@ -196,6 +196,13 @@ branch or change history:
   (`.storybook/story-router.ts`): hash location, and an empty route for each path the stories link
   to, so following a link stays in the story. Add a path there when a story links somewhere new;
   without a match the router logs NG04002 and resets the iframe's URL.
+- **A dialog's stories show it as MatDialog opens it**: `render: dialogPreview('<selector>',
+{ width, maxWidth })` (`.storybook/dialog-preview.ts`), with the sizes the application's
+  `dialog.open` passes, given as `render:` rather than spread into the meta, which the guardrails
+  cannot read through. It renders MatDialog's own pane, container and surface, and loads Material's
+  dialog stylesheet, which ships only with a `MatDialogContainer`; a hand-drawn surface has no
+  title, content or actions padding. The interaction runner fails a `Dialogs/` story that is not
+  laid out as MatDialog lays it out, at 1280 and 320 px (`scripts/storybook-dialog-layout.mjs`).
 - **The Satori-backed variants are not in this Storybook.** It builds without GitHub Packages, so the
   primitives' Overviews describe what Satori's version changes and do not render it;
   `satori-components-satori` has its own Storybook, which needs the token.

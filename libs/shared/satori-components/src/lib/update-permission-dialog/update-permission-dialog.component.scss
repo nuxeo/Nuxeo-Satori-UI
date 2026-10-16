@@ -29,12 +29,16 @@
   margin-bottom: 8px;
 }
 
+// Side by side while both dates fit, one above the other when they do not, as at 320 px: a field
+// narrower than its basis cut the date off ("2/1/2031" showed as "2/1/2"). The basis is a full date
+// beside the field's padding and its datepicker toggle.
 .nxs-update-permission-dialog__dates {
   display: flex;
-  gap: 16px;
+  flex-wrap: wrap;
+  gap: 0 16px;
 
   mat-form-field {
-    flex: 1;
+    flex: 1 1 11rem;
   }
 }
 

@@ -9,6 +9,7 @@
     "api-page.ts",
     "api-members.ts",
     "compodoc.ts",
-    "story-router.ts"
+    "story-router.ts",
+    "dialog-preview.ts"
   ]
 }

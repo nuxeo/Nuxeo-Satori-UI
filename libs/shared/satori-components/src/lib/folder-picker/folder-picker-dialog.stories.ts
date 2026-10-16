@@ -7,6 +7,8 @@ import { expect, userEvent, within } from 'storybook/test';
 
 import { BrowseService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import {
   NxsFolderPickerDialogComponent,
   type NxsFolderPickerDialogData,
@@ -85,13 +87,7 @@ const meta: Meta<NxsFolderPickerDialogComponent> = {
       },
     },
   },
-  render: () => ({
-    template: `
-      <div style="width: fit-content; margin: 16px auto; padding: 8px 0; border-radius: 28px; background: var(--mat-sys-surface-container-high)">
-        <nxs-folder-picker-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-folder-picker-dialog'),
 };
 
 export default meta;

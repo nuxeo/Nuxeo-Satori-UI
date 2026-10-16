@@ -26,6 +26,8 @@ UI's `nuxeo-document-create-version` dialog.
 
 export const usageTs = `this.dialog
   .open(NxsCreateVersionDialogComponent, {
+    width: '600px',
+    maxWidth: '95vw',
     data: {
       documentUid: doc.uid,
       documentTitle: doc.title,

@@ -8,6 +8,8 @@ import { expect, userEvent, waitFor, within } from 'storybook/test';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import {
   NxsCreateVersionDialogComponent,
   type NxsCreateVersionDialogData,
@@ -63,20 +65,14 @@ const meta: Meta<NxsCreateVersionDialogComponent> = {
       source: {
         language: 'typescript',
         code: `this.dialog.open(NxsCreateVersionDialogComponent, {
+  width: '600px',
+  maxWidth: '95vw',
   data: { documentUid: doc.uid, documentTitle: doc.title, major: 1, minor: 2 },
 });`,
       },
     },
   },
-  render: () => ({
-    template: `
-      <div
-        style="width: 600px; max-width: 95vw; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
-      >
-        <nxs-create-version-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-create-version-dialog', { width: '600px', maxWidth: '95vw' }),
 };
 
 export default meta;

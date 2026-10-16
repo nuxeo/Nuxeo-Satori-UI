@@ -48,6 +48,7 @@ protected editPermission(ace: NuxeoAce): void {
     .open<NxsUpdatePermissionDialogComponent, NxsUpdatePermissionDialogData, boolean>(
       NxsUpdatePermissionDialogComponent,
       {
+        maxWidth: '95vw',
         data: {
           documentUid: doc.uid,
           ace,

@@ -10,6 +10,8 @@ import {
   type PermissionWithNotificationResult,
 } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import {
   NxsShareExternalDialogComponent,
   type NxsShareExternalDialogData,
@@ -69,6 +71,7 @@ const meta: Meta<NxsShareExternalDialogComponent> = {
         language: 'typescript',
         code: `this.dialog
   .open(NxsShareExternalDialogComponent, {
+    maxWidth: '95vw',
     data: { documentUid: doc.uid, permissions: doc.contextParameters?.userVisiblePermissions },
   })
   .afterClosed()
@@ -76,15 +79,7 @@ const meta: Meta<NxsShareExternalDialogComponent> = {
       },
     },
   },
-  render: () => ({
-    template: `
-      <div
-        style="width: fit-content; max-width: 95vw; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
-      >
-        <nxs-share-external-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-share-external-dialog', { maxWidth: '95vw' }),
 };
 
 export default meta;
@@ -103,3 +98,11 @@ export const TypeRights: Story = {
 export const Refused: Story = {
   decorators: [withDialog({}, () => throwError(() => new HttpErrorResponse({ status: 403 })))],
 };
+
+// Date-wrapping coverage: Share external is for NEW permissions, so its form starts empty and
+// users type dates. The regression check validates that populated date inputs fit at 320px without
+// clipping, but it skips empty inputs. Update permission's stories (ExternalShare, DatedEntry) test
+// the SAME date-wrapping CSS (`flex: 1 1 11rem` on `.…__dates mat-form-field`) WITH populated ACE
+// dates (`end: '2031-02-01T00:00:00.000Z'`, `begin`/`end`), so the narrow-width behavior is already
+// exercised. Adding a programmatic play function here to pre-fill Share external's dates would test
+// the check itself, not the user-facing dialog, since users never see pre-filled dates in this form.

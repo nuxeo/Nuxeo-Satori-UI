@@ -6,6 +6,8 @@ import { action } from 'storybook/actions';
 
 import { NuxeoDriveService } from '@nuxeo-satori/platform/nuxeo-client';
 
+import { dialogPreview } from '../../../.storybook/dialog-preview';
+
 import { NxsDriveDialogComponent } from './drive-dialog.component';
 
 /** Logs each call in the Actions panel under `name`, then lets the fake answer it. */
@@ -46,8 +48,7 @@ const meta: Meta<NxsDriveDialogComponent> = {
   component: NxsDriveDialogComponent,
   tags: ['autodocs'],
   parameters: {
-    // The dialog is `min(95vw, 460px)` wide, as it is in MatDialog's overlay, which has no padding
-    // around it; the centred layout's 16px each side would widen the page past the screen.
+    // MatDialog's overlay has no padding; the centred layout's would widen the page.
     layout: 'fullscreen',
     // The preview shows the dialog inline; a page opens it through MatDialog, so the code shown is
     // that call rather than the preview's wrapper.
@@ -62,15 +63,7 @@ const meta: Meta<NxsDriveDialogComponent> = {
       },
     },
   },
-  render: () => ({
-    template: `
-      <div
-        style="width: fit-content; margin: 16px auto; border-radius: 28px; background: var(--mat-sys-surface-container-high)"
-      >
-        <nxs-drive-dialog />
-      </div>
-    `,
-  }),
+  render: dialogPreview('nxs-drive-dialog'),
 };
 
 export default meta;
