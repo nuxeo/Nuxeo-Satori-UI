@@ -30,6 +30,10 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Explicit, so a wider workflow-level grant never reaches the job that holds the registry token
+    # and runs install scripts.
+    permissions:
+      contents: read
     env:
       # The gate and the upload read the same directory, so what is checked is what is published.
       STORYBOOK_DIR: dist/storybook/satori-components
