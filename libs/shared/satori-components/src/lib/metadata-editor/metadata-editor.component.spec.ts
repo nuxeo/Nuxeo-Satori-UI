@@ -1,5 +1,14 @@
-import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  Injectable,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+  signal,
+  viewChild,
+  type Type,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
   DirectoryService,
@@ -9,6 +18,7 @@ import {
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsMetadataEditorComponent } from './metadata-editor.component';
 import type { NxsEditorDisplay, NxsEditorSection, NxsEditorValues } from './metadata-editor.model';
 
@@ -142,6 +152,26 @@ class HostComponent {
   readonly editor = viewChild.required(NxsMetadataEditorComponent);
   readonly validity: boolean[] = [];
 }
+
+const CODES_ONLY: NxsEditorSection = {
+  id: 'codes',
+  heading: null,
+  fields: [{ xpath: 'pol:codes', label: 'Codes', definition: { type: 'string[]' } }],
+};
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  template: `<nxs-metadata-editor [sections]="sections" [dublinCore]="false" />
+    <nxs-metadata-editor [sections]="sections" [dublinCore]="false" />`,
+})
+class TwoEditorsComponent {
+  readonly sections = [CODES_ONLY];
+}
+
+/** The text of the labels that name an input, as `getByLabelText` finds it. */
+const labelsOf = (input: HTMLInputElement) =>
+  [...(input.labels ?? [])].map((label) => label.textContent?.trim());
 
 describe('NxsMetadataEditorComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
@@ -373,6 +403,12 @@ describe('NxsMetadataEditorComponent', () => {
     expect(host.editor().dirtyProperties()['pol:codes']).toEqual(['x1', 'y2']);
   });
 
+  it('names a list’s typing box by the field’s label, through an id of its own', () => {
+    const input = field('pol:codes');
+    expect(input.id).toMatch(/^nxs-metadata-editor-\d+-pol:codes-input$/);
+    expect(labelsOf(input)).toEqual(['Codes']);
+  });
+
   it('removes a vocabulary value from its chip', async () => {
     const remove = field('dc:subjects').querySelector<HTMLButtonElement>(
       'button[matChipRemove], .mat-mdc-chip-remove',
@@ -561,5 +597,231 @@ describe('NxsMetadataEditorComponent', () => {
     checkbox?.click();
     await settle();
     expect(host.editor().dirtyProperties()).toEqual({ 'pol:active': false });
+  });
+});
+
+describe('NxsMetadataEditorComponent, twice on a page', () => {
+  it('gives the same list field a different id in each editor, each named by its own label', async () => {
+    await TestBed.configureTestingModule({
+      imports: [TwoEditorsComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TwoEditorsComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const inputs = [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>(
+        'input[data-xpath="pol:codes"]',
+      ),
+    ];
+    expect(inputs.map(labelsOf)).toEqual([['Codes'], ['Codes']]);
+    expect(inputs[0].id).not.toBe(inputs[1].id);
+    expect(inputs.every((input) => input.labels?.[0]?.htmlFor === input.id)).toBe(true);
+  });
+});
+
+/** A date library's adapter, as a host might provide one: it writes year first, and reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+
+  override format(date: Date): string {
+    const two = (n: number) => String(n).padStart(2, '0');
+    return `${date.getFullYear()}-${two(date.getMonth() + 1)}-${two(date.getDate())}`;
+  }
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class DatesHostComponent {
+  readonly values: NxsEditorValues = { 'dc:title': 'Report' };
+  readonly editor = viewChild.required(NxsMetadataEditorComponent);
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class DatesHostWithAdapterComponent extends DatesHostComponent {}
+
+/** A host's change to Material's native adapter that keeps its `Date.parse`. */
+@Injectable()
+class MondayFirstAdapter extends NativeDateAdapter {
+  override getFirstDayOfWeek(): number {
+    return 1;
+  }
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: MondayFirstAdapter }],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class DatesHostWithNativeSubclassComponent extends DatesHostComponent {}
+
+describe('NxsMetadataEditorComponent, typed dates', () => {
+  let fixture: ComponentFixture<DatesHostComponent>;
+
+  const expires = (): HTMLInputElement =>
+    (fixture.nativeElement as HTMLElement).querySelector(
+      'input[data-xpath="dc:expired"]',
+    ) as HTMLInputElement;
+
+  async function setup(locale: string, host: Type<DatesHostComponent> = DatesHostComponent) {
+    await TestBed.configureTestingModule({
+      imports: [host],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: LOCALE_ID, useValue: locale },
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(host);
+    fixture.detectChanges();
+    await fixture.whenStable();
+  }
+
+  async function typeDate(text: string): Promise<unknown> {
+    expires().value = text;
+    expires().dispatchEvent(new Event('input'));
+    expires().dispatchEvent(new Event('blur'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture.componentInstance.editor().dirtyProperties()['dc:expired'];
+  }
+
+  it('reads a typed date day first in French, under a day-first hint', async () => {
+    await setup('fr');
+    expect(expires().placeholder).toBe('dd/mm/yyyy');
+    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+  });
+
+  it('reads the same text month first in American English, under a month-first hint', async () => {
+    await setup('en-US');
+    expect(expires().placeholder).toBe('mm/dd/yyyy');
+    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 2, 4).toISOString());
+  });
+
+  it('reads as its hint says over a host’s native subclass that keeps Date.parse', async () => {
+    await setup('fr', DatesHostWithNativeSubclassComponent);
+    expect(expires().placeholder).toBe('dd/mm/yyyy');
+    expect(await typeDate('03/04/2026')).toBe(new Date(2026, 3, 3).toISOString());
+  });
+
+  it('uses a date adapter the host provides, for the hint and for what is typed', async () => {
+    await setup('fr', DatesHostWithAdapterComponent);
+    expect(expires().placeholder).toBe('yyyy-mm-dd');
+    expect(await typeDate('anything')).toBe(new Date(2030, 0, 1).toISOString());
+  });
+});
+
+/** A Nuxeo date property: an instant, with a time of day. */
+const EXPIRES = '2026-04-03T10:30:00.000Z';
+
+/** A day as `CalendarDayAdapter` writes it, `yyyy-mm-dd`, from a JS date's local fields. */
+const written = (date: Date) =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((n, i) => String(n).padStart(i === 0 ? 4 : 2, '0'))
+    .join('-');
+
+/** A host whose date adapter holds calendar days, not JS dates, as Luxon's holds `DateTime`s. */
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class CalendarDaysHostComponent {
+  readonly values: NxsEditorValues = { 'dc:title': 'Report', 'dc:expired': EXPIRES };
+  readonly editor = viewChild.required(NxsMetadataEditorComponent);
+}
+
+describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS dates', () => {
+  let fixture: ComponentFixture<CalendarDaysHostComponent>;
+
+  const editor = () => fixture.componentInstance.editor();
+  const expires = (): HTMLInputElement =>
+    (fixture.nativeElement as HTMLElement).querySelector(
+      'input[data-xpath="dc:expired"]',
+    ) as HTMLInputElement;
+
+  async function render(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [CalendarDaysHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(CalendarDaysHostComponent);
+    await render();
+  });
+
+  it('shows the property’s day, valid, and writes back its instant with its time of day', () => {
+    expect(expires().value).toBe(written(new Date(EXPIRES)));
+    expect(editor().validate()).toBe(true);
+    expect(editor().properties()['dc:expired']).toBe(EXPIRES);
+    expect(editor().dirtyProperties()).toEqual({});
+  });
+
+  it('writes a typed date as an ISO instant, under the hint the adapter writes', async () => {
+    expect(expires().placeholder).toBe('yyyy-mm-dd');
+    expires().value = '2027-05-06';
+    expires().dispatchEvent(new Event('input'));
+    expires().dispatchEvent(new Event('blur'));
+    await render();
+    expect(editor().validate()).toBe(true);
+    expect(editor().dirtyProperties()).toEqual({
+      'dc:expired': new Date(2027, 4, 6).toISOString(),
+    });
+  });
+
+  it('writes a day picked from the calendar as an ISO instant', async () => {
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'mat-datepicker-toggle button',
+      ) as HTMLButtonElement
+    ).click();
+    await render();
+    const fifteenth = [...document.querySelectorAll<HTMLElement>('.mat-calendar-body-cell')].find(
+      (cell) => cell.textContent?.trim() === '15',
+    );
+    expect(fifteenth).toBeDefined();
+    fifteenth?.click();
+    await render();
+    const shown = new Date(EXPIRES);
+    const picked = new Date(shown.getFullYear(), shown.getMonth(), 15);
+    expect(expires().value).toBe(written(picked));
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': picked.toISOString() });
   });
 });

@@ -1,11 +1,20 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  Injectable,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+  signal,
+  type Type,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
 import { By } from '@angular/platform-browser';
 import { Subject, map, of, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsPermissionsPanelComponent } from './permissions-panel.component';
 
 /** The permissions a stock server reports to an `Everything` holder (2025.26.16, measured). */
@@ -1247,5 +1256,151 @@ describe('NxsPermissionsPanelComponent', () => {
     expect(panel()['serverMessage']({ error: { message: '  ' }, status: 0 })).toBe(
       'The server gave no reason.',
     );
+  });
+});
+
+/** A date library's adapter, as a host might provide one: it reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+}
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  template: `<nxs-permissions-panel documentId="doc-1" />`,
+})
+class DatesHostComponent {}
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  template: `<nxs-permissions-panel documentId="doc-1" />`,
+})
+class DatesHostWithAdapterComponent {}
+
+/** A host whose date adapter holds calendar days, not JS dates, as Luxon's holds `DateTime`s. */
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  template: `<nxs-permissions-panel documentId="doc-1" />`,
+})
+class CalendarDaysHostComponent {}
+
+describe('NxsPermissionsPanelComponent, typed dates', () => {
+  let fixture: ComponentFixture<unknown>;
+
+  const panel = () =>
+    fixture.debugElement.query(By.directive(NxsPermissionsPanelComponent))
+      .componentInstance as NxsPermissionsPanelComponent;
+  const fromBox = (): HTMLInputElement =>
+    (fixture.nativeElement as HTMLElement).querySelector(
+      '.nxs-permissions-panel__dates input',
+    ) as HTMLInputElement;
+  const day = (date: Date | null | undefined) =>
+    date ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` : null;
+
+  async function render(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  /** The editor open on a dated entry, its From box showing. */
+  async function editDated(locale: string, host: Type<unknown> = DatesHostComponent) {
+    const dated = serverDoc([
+      { username: 'jdoe', permission: 'Read', begin: '2030-01-01T00:00:00.000Z' },
+    ]);
+    await TestBed.configureTestingModule({
+      imports: [host],
+      providers: [
+        provideZonelessChangeDetection(),
+        { provide: LOCALE_ID, useValue: locale },
+        {
+          provide: DocumentDetailService,
+          useValue: { getDocumentPermissions: () => of(dated), searchUsersGroups: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(host);
+    await render();
+    panel()['openEdit'](panel()['localItems']()[0]);
+    await render();
+  }
+
+  async function typeFrom(text: string): Promise<Date | null> {
+    fromBox().value = text;
+    fromBox().dispatchEvent(new Event('input'));
+    fromBox().dispatchEvent(new Event('change'));
+    await render();
+    return panel()['editorBegin']();
+  }
+
+  it('reads a typed date day first in French', async () => {
+    await editDated('fr');
+    expect(day(await typeFrom('03/04/2026'))).toBe('2026-4-3');
+  });
+
+  it('reads the same text month first in American English', async () => {
+    await editDated('en-US');
+    expect(day(await typeFrom('03/04/2026'))).toBe('2026-3-4');
+  });
+
+  it('uses a date adapter the host provides', async () => {
+    await editDated('fr', DatesHostWithAdapterComponent);
+    expect(day(await typeFrom('anything'))).toBe('2030-1-1');
+  });
+
+  describe('with a host adapter that does not hold JS dates', () => {
+    const boxes = (): HTMLInputElement[] => [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>(
+        '.nxs-permissions-panel__dates input',
+      ),
+    ];
+    const rangeError = () =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('.nxs-permissions-panel__field-error')
+        ?.textContent?.trim();
+
+    async function type(box: HTMLInputElement, text: string): Promise<void> {
+      box.value = text;
+      box.dispatchEvent(new Event('input'));
+      box.dispatchEvent(new Event('change'));
+      await render();
+    }
+
+    it('shows the entry’s days in the adapter’s own format', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      expect(boxes().map((box) => box.value)).toEqual(['2030-01-01', '']);
+    });
+
+    it('reads a typed date as the day it names', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      expect(day(await typeFrom('2030-02-03'))).toBe('2030-2-3');
+    });
+
+    it('refuses an end before the start, and stages nothing', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      await type(boxes()[1], '2029-12-31');
+      expect(rangeError()).toBe('The end date is before the start date.');
+      panel()['applyEditor']();
+      expect(panel()['staged']().size).toBe(0);
+    });
+
+    it('stages the days the fields hold', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      await type(boxes()[1], '2030-06-30');
+      expect(rangeError()).toBeUndefined();
+      panel()['applyEditor']();
+      expect(panel()['staged']().get('jdoe:Read:true:Administrator::')).toMatchObject({
+        kind: 'replace',
+        begin: '2030-01-01',
+        end: '2030-06-30',
+      });
+    });
   });
 });

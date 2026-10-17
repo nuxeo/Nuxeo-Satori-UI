@@ -26,11 +26,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
-import {
-  ErrorStateMatcher,
-  MatOptionModule,
-  provideNativeDateAdapter,
-} from '@angular/material/core';
+import { DateAdapter, ErrorStateMatcher, MatOptionModule } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -49,6 +45,8 @@ import {
   l10nEntryLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { NxsDateMaskPipe } from '../date-input/date-mask.pipe';
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import type { NxsHeadingLevel } from '../heading-level';
 import { nxsPropertyText } from '../properties-panel/property-text';
 import { NxsTab, NxsTabBodyDirective } from '../tabs/tab-body.directive';
@@ -189,8 +187,9 @@ let nextId = 0;
     MatSelectModule,
     NxsTabsComponent,
     NxsTabBodyDirective,
+    NxsDateMaskPipe,
   ],
-  providers: [provideNativeDateAdapter()],
+  providers: [provideNxsDateAdapter()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-metadata-editor' },
 })
@@ -218,6 +217,8 @@ export class NxsMetadataEditorComponent {
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** The datepickers' adapter, from `provideNxsDateAdapter()`: date controls hold its dates. */
+  private readonly dateAdapter = inject<DateAdapter<unknown>>(DateAdapter);
 
   protected readonly id = `nxs-metadata-editor-${nextId++}`;
   protected readonly form = new FormGroup<Record<string, AbstractControl>>({});
@@ -484,7 +485,7 @@ export class NxsMetadataEditorComponent {
     depth: number,
   ): void {
     if (!(control instanceof FormArray)) return;
-    control.push(newComplexItem(definition, depth));
+    control.push(newComplexItem(definition, this.dateAdapter, depth));
     control.markAsDirty();
     this.structure.update((value) => value + 1);
   }
@@ -520,7 +521,7 @@ export class NxsMetadataEditorComponent {
     for (const field of fields) {
       directoriesOf(field.definition, directories);
       if (this.form.controls[field.xpath]) continue;
-      const control = buildControl(field.definition, values[field.xpath]);
+      const control = buildControl(field.definition, values[field.xpath], this.dateAdapter);
       control.addValidators(this.heldServerMessage(field.xpath));
       control.updateValueAndValidity({ emitEvent: false });
       this.form.addControl(field.xpath, control, { emitEvent: false });
@@ -615,7 +616,13 @@ export class NxsMetadataEditorComponent {
     for (const field of untracked(this.fields)) {
       const control = this.form.controls[field.xpath];
       if (!control || fieldKind(field.definition) === 'read-only' || !include(control)) continue;
-      out[field.xpath] = propertyValue(field.definition, control, 0, field.multiline === true);
+      out[field.xpath] = propertyValue(
+        field.definition,
+        control,
+        this.dateAdapter,
+        0,
+        field.multiline === true,
+      );
     }
     return out;
   }

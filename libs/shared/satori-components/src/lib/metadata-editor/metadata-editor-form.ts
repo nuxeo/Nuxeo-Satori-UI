@@ -6,6 +6,9 @@ import {
   ValidationErrors,
   ValidatorFn,
 } from '@angular/forms';
+import type { DateAdapter } from '@angular/material/core';
+
+import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
 import { NxsEditorConstraints, NxsEditorFieldType } from './metadata-editor.model';
 
 /** Deeper complex fields are shown read-only: no schema shipped with Nuxeo nests further. */
@@ -119,6 +122,46 @@ function toDate(value: unknown): Date | null {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
+/**
+ * The instant each date control was built from, for a date adapter that does not hold JS dates. A
+ * Nuxeo date property is an instant, and the datepicker edits only its day; an adapter holding JS
+ * dates keeps the instant in the control's value itself, but one holding calendar days does not.
+ * So the instant is written back while the control still names its day, as it is for JS dates.
+ */
+const builtInstants = new WeakMap<AbstractControl, Date>();
+
+/** A date field's control, holding the property's date as `adapter` holds dates. */
+function dateControl(
+  definition: NxsEditorFieldType,
+  value: unknown,
+  adapter: DateAdapter<unknown>,
+): FormControl<unknown> {
+  const instant = toDate(value);
+  const control = new FormControl<unknown>(
+    nxsDateToAdapter(adapter, instant),
+    validatorFor(definition),
+  );
+  if (instant) builtInstants.set(control, instant);
+  return control;
+}
+
+/**
+ * A date field's value as the property takes it, an ISO 8601 instant: the instant it was built
+ * from while it names the same local day, otherwise that day's local midnight — what a JS date
+ * picked in the field is. `null` when it holds no valid date.
+ */
+function dateProperty(control: AbstractControl, adapter: DateAdapter<unknown>): string | null {
+  const day = nxsDateFromAdapter(adapter, control.value);
+  if (!day) return null;
+  const instant = builtInstants.get(control);
+  const sameDay =
+    !!instant &&
+    instant.getFullYear() === day.getFullYear() &&
+    instant.getMonth() === day.getMonth() &&
+    instant.getDate() === day.getDate();
+  return (sameDay ? instant : day).toISOString();
+}
+
 function toNumber(value: unknown): number | null {
   if (typeof value === 'number') return value;
   if (typeof value !== 'string' || value.trim() === '') return null;
@@ -136,40 +179,51 @@ function scalarValue(base: string, value: unknown): unknown {
 function complexGroup(
   definition: NxsEditorFieldType,
   value: unknown,
+  adapter: DateAdapter<unknown>,
   depth: number,
 ): FormGroup<Record<string, AbstractControl>> {
   const record = isRecord(value) ? value : {};
   const fields = definition.fields ?? {};
   const controls: Record<string, AbstractControl> = {};
   for (const name of Object.keys(fields)) {
-    controls[name] = buildControl(fields[name], record[name], depth + 1);
+    controls[name] = buildControl(fields[name], record[name], adapter, depth + 1);
   }
   return new FormGroup(controls);
 }
 
 /** One complex list item, empty, for the "Add" button. */
-export function newComplexItem(definition: NxsEditorFieldType, depth: number): FormGroup {
-  return complexGroup(definition, {}, depth);
+export function newComplexItem(
+  definition: NxsEditorFieldType,
+  adapter: DateAdapter<unknown>,
+  depth: number,
+): FormGroup {
+  return complexGroup(definition, {}, adapter, depth);
 }
 
-/** The control for one field, holding its current value in the shape its form control edits. */
+/**
+ * The control for one field, holding its current value in the shape its form control edits. A
+ * date field's value is a date as `adapter`, the datepicker's, holds dates: a JS `Date` for
+ * Material's native adapter and date-fns, a Luxon `DateTime` for Luxon's.
+ */
 export function buildControl(
   definition: NxsEditorFieldType,
   value: unknown,
+  adapter: DateAdapter<unknown>,
   depth = 0,
 ): AbstractControl {
   const kind = fieldKind(definition, depth);
   if (kind === 'read-only') return new FormControl({ value, disabled: true });
-  if (kind === 'complex') return complexGroup(definition, value, depth);
+  if (kind === 'complex') return complexGroup(definition, value, adapter, depth);
   if (kind === 'complex-list') {
     const items = Array.isArray(value) ? value : [];
     const required: ValidatorFn = (control) =>
       definition.required && (control as FormArray).length === 0 ? { required: true } : null;
     return new FormArray(
-      items.map((item) => complexGroup(definition, item, depth)),
+      items.map((item) => complexGroup(definition, item, adapter, depth)),
       required,
     );
   }
+  if (kind === 'date') return dateControl(definition, value, adapter);
   const base = baseType(definition);
   const initial =
     kind === 'list' || kind === 'vocabulary-list'
@@ -178,10 +232,14 @@ export function buildControl(
   return new FormControl<unknown>(initial, validatorFor(definition));
 }
 
-/** A control's value as the document property takes it. */
+/**
+ * A control's value as the document property takes it. A date is an ISO 8601 instant whatever
+ * `adapter`, the one the control was built with, holds dates as.
+ */
 export function propertyValue(
   definition: NxsEditorFieldType,
   control: AbstractControl,
+  adapter: DateAdapter<unknown>,
   depth = 0,
   multiline = false,
 ): unknown {
@@ -191,17 +249,18 @@ export function propertyValue(
     const out: Record<string, unknown> = {};
     for (const name of Object.keys(fields)) {
       const child = control.controls[name];
-      if (child) out[name] = propertyValue(fields[name], child, depth + 1);
+      if (child) out[name] = propertyValue(fields[name], child, adapter, depth + 1);
     }
     return out;
   }
   if (kind === 'complex-list' && control instanceof FormArray) {
     return control.controls.map((item) =>
-      propertyValue({ ...definition, type: 'complex' }, item, depth),
+      propertyValue({ ...definition, type: 'complex' }, item, adapter, depth),
     );
   }
   const value: unknown = control.value;
   if (value instanceof Date) return value.toISOString();
+  if (kind === 'date') return dateProperty(control, adapter);
   if (typeof value === 'string') {
     if (value.trim() === '') return null;
     return multiline ? value : value.trim();

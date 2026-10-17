@@ -1,16 +1,47 @@
-import { provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component,
+  Injectable,
+  Injector,
+  LOCALE_ID,
+  inject,
+  provideZonelessChangeDetection,
+  type Provider,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { MATERIAL_ANIMATIONS } from '@angular/material/core';
+import { DateAdapter, MATERIAL_ANIMATIONS, NativeDateAdapter } from '@angular/material/core';
 import { MatDialog, type MatDialogRef } from '@angular/material/dialog';
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { type MockInstance } from 'vitest';
 import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsToastService } from '../toast/toast.service';
 import {
   NxsShareExternalDialogComponent,
   type NxsShareExternalDialogData,
 } from './share-external-dialog.component';
+
+/** A date library's adapter, as a host might provide one: it reads any text as 1 January 2030. */
+@Injectable()
+class HostLibraryAdapter extends NativeDateAdapter {
+  override parse(): Date | null {
+    return new Date(2030, 0, 1);
+  }
+}
+
+/**
+ * A page that opens the dialog and provides its own date adapter, as main's feature components
+ * provide `provideSatoriDateAdapter()`. `MatDialog` is a root service, so the dialog sees the page's
+ * providers only through the injector `open()` is given.
+ */
+@Component({
+  standalone: true,
+  template: '',
+  providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+})
+class OpeningPageComponent {
+  readonly injector = inject(Injector);
+}
 
 describe('NxsShareExternalDialogComponent', () => {
   let addExternal: ReturnType<typeof vi.fn<(...args: unknown[]) => Observable<unknown>>>;
@@ -40,9 +71,13 @@ describe('NxsShareExternalDialogComponent', () => {
     TestBed.tick();
   }
 
-  async function open(data: Partial<NxsShareExternalDialogData> = {}): Promise<void> {
+  async function open(
+    data: Partial<NxsShareExternalDialogData> = {},
+    injector?: Injector,
+  ): Promise<void> {
     ref = TestBed.inject(MatDialog).open(NxsShareExternalDialogComponent, {
       data: { documentUid: 'doc-1', ...data },
+      injector,
     });
     close = vi.spyOn(ref, 'close');
     await settle();
@@ -220,6 +255,96 @@ describe('NxsShareExternalDialogComponent', () => {
       { duration: 7000 },
     );
     expect(close).toHaveBeenCalledWith(true);
+  });
+
+  describe('typed dates', () => {
+    /**
+     * The end day sent for the text typed into the end date, under the given providers, with the
+     * dialog opened with the injector `injector` returns, if it returns one.
+     */
+    async function endSentFor(
+      text: string,
+      providers: Provider[],
+      injector?: () => Injector | undefined,
+    ): Promise<unknown> {
+      TestBed.configureTestingModule({ providers });
+      await open({}, injector?.());
+      await type(emailBox(), 'ext@example.com');
+      await type(dateBoxes()[1], text);
+      create().click();
+      await settle();
+      return addExternal.mock.calls[0]?.[1];
+    }
+
+    it('reads a typed date day first in French', async () => {
+      const sent = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'fr' }]);
+      expect(sent).toMatchObject({ end: '2030-04-03' });
+    });
+
+    it('reads the same text month first in American English', async () => {
+      const sent = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'en-US' }]);
+      expect(sent).toMatchObject({ end: '2030-03-04' });
+    });
+
+    it('uses a date adapter the application provides', async () => {
+      const sent = await endSentFor('anything', [
+        { provide: LOCALE_ID, useValue: 'fr' },
+        { provide: DateAdapter, useClass: HostLibraryAdapter },
+      ]);
+      expect(sent).toMatchObject({ end: '2030-01-01' });
+    });
+
+    it('reads in the locale, not with an adapter only the opening page provides', async () => {
+      const sent = await endSentFor('03/04/2030', [{ provide: LOCALE_ID, useValue: 'fr' }], () => {
+        // The page is open, but `open()` is not given its injector, as integration's pages do.
+        TestBed.createComponent(OpeningPageComponent);
+        return undefined;
+      });
+      expect(sent).toMatchObject({ end: '2030-04-03' });
+    });
+
+    it('uses the opening page’s date adapter when open() is given the page’s injector', async () => {
+      const sent = await endSentFor(
+        '03/04/2030',
+        [{ provide: LOCALE_ID, useValue: 'fr' }],
+        () => TestBed.createComponent(OpeningPageComponent).componentInstance.injector,
+      );
+      expect(sent).toMatchObject({ end: '2030-01-01' });
+    });
+  });
+
+  describe('with an application adapter that does not hold JS dates', () => {
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+      });
+    });
+
+    it('sends the days typed, as calendar days', async () => {
+      await open();
+      await type(emailBox(), 'ext@example.com');
+      await type(dateBoxes()[0], '2030-01-02');
+      await type(dateBoxes()[1], '2030-01-31');
+      expect(dateBoxes().map((box) => box.value)).toEqual(['2030-01-02', '2030-01-31']);
+
+      create().click();
+      await settle();
+
+      expect(addExternal.mock.calls[0]?.[1]).toMatchObject({
+        begin: '2030-01-02',
+        end: '2030-01-31',
+      });
+    });
+
+    it('refuses an end date before the start date', async () => {
+      await open();
+      await type(emailBox(), 'ext@example.com');
+      await type(dateBoxes()[1], '2030-01-31');
+      await type(dateBoxes()[0], '2030-02-01');
+
+      expect(alerts()).toEqual(['The end date is before the start date.']);
+      expect(create().disabled).toBe(true);
+    });
   });
 
   it('sends the start day and a trimmed message when given', async () => {

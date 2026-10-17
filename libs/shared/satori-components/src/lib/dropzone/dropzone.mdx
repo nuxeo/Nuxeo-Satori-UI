@@ -61,6 +61,8 @@ and `DocumentImportService`, or to whatever your page uploads with.
 
 - **The button** is a real, named button: **Tab** reaches it and **Enter** or **Space** opens the
   computer's file chooser. The file input behind it is out of the Tab sequence and hidden from
-  assistive technology, so it is not announced twice.
+  assistive technology, so it is not announced twice. It still takes its name from that button
+  through `aria-labelledby`; each dropzone's button has an id of its own, so two on a page do not
+  name each other's input.
 - **The text** says what to do; the icon is decorative.
 - **Dragging** has no keyboard equivalent of its own, which is why the button is always there.

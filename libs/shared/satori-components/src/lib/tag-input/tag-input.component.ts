@@ -34,6 +34,8 @@ import { nxsSearchAsYouType } from '../pickers/search-as-you-type';
 /** Web UI's tag suggestion searches from the first character. */
 const WEB_UI_MIN_CHARS = 1;
 
+let nextId = 0;
+
 /**
  * A field of tags: existing ones suggested as the user types, as Web UI's `nuxeo-tag-suggestion`
  * does, and a new one added with Enter, a comma or its "Add" entry. Each tag is a chip, removed
@@ -68,6 +70,8 @@ export class NxsTagInputComponent implements ControlValueAccessor, Validator, Do
   readonly value = model<readonly string[]>([]);
 
   protected readonly separators = [ENTER, COMMA] as const;
+  /** The input's id: the form field's label names the input through it. One per field. */
+  protected readonly inputId = `nxs-tag-input-${nextId++}`;
   private readonly tags = inject(TagService);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);

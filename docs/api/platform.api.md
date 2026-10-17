@@ -690,6 +690,7 @@ class NxsDropzoneComponent {
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly files: _angular_core.OutputEmitterRef<readonly File[]>;
     protected readonly drop: NxsFileDropTracker;
+    protected readonly buttonId: string;
     protected choose(): void;
     protected onPicked(event: Event): void;
     protected onDrop(event: DragEvent): void;
@@ -967,6 +968,8 @@ class NxsPermissionsPanelComponent {
     protected readonly editorDated: _angular_core.WritableSignal<boolean>;
     protected readonly editorBegin: _angular_core.WritableSignal<Date | null>;
     protected readonly editorEnd: _angular_core.WritableSignal<Date | null>;
+    protected readonly editorBeginField: _angular_core.Signal<unknown>;
+    protected readonly editorEndField: _angular_core.Signal<unknown>;
     protected readonly editorSubmitted: _angular_core.WritableSignal<boolean>;
     protected readonly suggestions: _angular_core.WritableSignal<UserGroupSuggestion[]>;
     protected readonly loadErrorKey: _angular_core.Signal<string>;
@@ -997,6 +1000,7 @@ class NxsPermissionsPanelComponent {
     protected closeEditor(): void;
     protected onPrincipalInput(value: string): void;
     protected onPrincipalSelected(suggestion: UserGroupSuggestion): void;
+    protected fieldDay(value: unknown): Date | null;
     protected displaySuggestion(suggestion: UserGroupSuggestion | string | null): string;
     protected applyEditor(): void;
     protected save(): void;
@@ -1214,6 +1218,8 @@ class NxsShareExternalDialogComponent {
     protected readonly right: _angular_core.WritableSignal<string>;
     protected readonly begin: _angular_core.WritableSignal<Date | null>;
     protected readonly end: _angular_core.WritableSignal<Date | null>;
+    protected readonly beginField: _angular_core.Signal<unknown>;
+    protected readonly endField: _angular_core.Signal<unknown>;
     protected readonly comment: _angular_core.WritableSignal<string>;
     protected readonly saving: _angular_core.WritableSignal<"another" | "create" | null>;
     protected readonly emailValid: _angular_core.Signal<boolean>;
@@ -1222,6 +1228,7 @@ class NxsShareExternalDialogComponent {
     protected readonly valid: _angular_core.Signal<boolean>;
     constructor();
     protected label(permission: string): string;
+    protected fieldDay(value: unknown): Date | null;
     protected cancel(): void;
     protected create(another: boolean): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsShareExternalDialogComponent, never>;
@@ -1309,6 +1316,7 @@ class NxsTagInputComponent implements ControlValueAccessor, Validator, DoCheck {
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly value: _angular_core.ModelSignal<readonly string[]>;
     protected readonly separators: readonly [13, 188];
+    protected readonly inputId: string;
     protected readonly text: _angular_core.WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<string>;
     protected readonly isDisabled: _angular_core.Signal<boolean>;
@@ -1390,12 +1398,15 @@ class NxsUpdatePermissionDialogComponent {
     protected readonly dated: _angular_core.WritableSignal<boolean>;
     protected readonly begin: _angular_core.WritableSignal<Date | null>;
     protected readonly end: _angular_core.WritableSignal<Date | null>;
+    protected readonly beginField: _angular_core.Signal<unknown>;
+    protected readonly endField: _angular_core.Signal<unknown>;
     protected readonly notify: _angular_core.WritableSignal<boolean>;
     protected readonly comment: _angular_core.WritableSignal<string>;
     protected readonly saving: _angular_core.WritableSignal<boolean>;
     protected readonly endBeforeBegin: _angular_core.Signal<boolean>;
     protected readonly valid: _angular_core.Signal<boolean>;
     protected label(permission: string): string;
+    protected fieldDay(value: unknown): Date | null;
     protected update(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUpdatePermissionDialogComponent, "nxs-update-permission-dialog", never, {}, {}, never, never, true, never>;
@@ -1497,6 +1508,7 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly value: _angular_core.ModelSignal<string | readonly string[] | null>;
+    protected readonly inputId: string;
     protected readonly loaded: _angular_core.WritableSignal<Loaded>;
     protected readonly text: _angular_core.WritableSignal<string>;
     protected readonly chosen: _angular_core.Signal<readonly string[]>;

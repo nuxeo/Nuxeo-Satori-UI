@@ -53,6 +53,24 @@ describe('nxsParseLocaleDate', () => {
     ['ja', '2026年4月3日', '2026-04-03'],
     ['fr', '  03/04/2026  ', '2026-04-03'],
     ['fr', '29/02/2028', '2028-02-29'],
+    // A locale written as ngx-translate setups and POSIX often write it.
+    ['fr_FR', '03/04/2026', '2026-04-03'],
+    ['fr_FR.UTF-8', '03/04/2026', '2026-04-03'],
+    ['en_US', '03/04/2026', '2026-03-04'],
+    // A word the locale writes after a date, as the field writes it.
+    ['bg', '03.04.2026 г.', '2026-04-03'],
+    ['mk', '3.4.2026 г.', '2026-04-03'],
+    ['bg', '03.04.2026 Г.', '2026-04-03'],
+    // The order the field writes in, where `Intl` orders two-digit fields otherwise.
+    ['mt', '4/3/2026', '2026-04-03'],
+    // The year first and then the day, as Kyrgyz and Uyghur write; ISO 8601 elsewhere.
+    ['ky', '2026-03-04', '2026-04-03'],
+    ['ug', '2026-3-4', '2026-04-03'],
+    // Digits in the scripts some locales write dates in: Tibetan, Myanmar, Chakma, Ol Chiki.
+    ['dz', '༢༠༢༦-༤-༣', '2026-04-03'],
+    ['my', '၃/၄/၂၀၂၆', '2026-04-03'],
+    ['ccp', '𑄹/𑄺/𑄸𑄶𑄸𑄼', '2026-04-03'],
+    ['sat', '᱒᱐᱒᱖-᱐᱔-᱐᱓', '2026-04-03'],
   ])('reads %s %j as %s', (locale, text, expected) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe(expected);
   });
@@ -68,6 +86,7 @@ describe('nxsParseLocaleDate', () => {
     ['fr', '1/2/3/4'],
     ['fr', '2026'],
     ['en-US', 'April'],
+    ['fr', '03.04.2026 г.'],
   ])('refuses %s %j', (locale, text) => {
     expect(day(nxsParseLocaleDate(text, locale, today))).toBe('invalid');
   });
@@ -101,6 +120,14 @@ class HostComponent {
   readonly min = signal<Date | null>(null);
   readonly max = signal<Date | null>(null);
   readonly expires = new FormControl<Date | null>(null);
+}
+
+/** A host's change to Material's native adapter that keeps its `Date.parse`. */
+@Injectable()
+class MondayFirstAdapter extends NativeDateAdapter {
+  override getFirstDayOfWeek(): number {
+    return 1;
+  }
 }
 
 /** A date library's adapter, as a host might provide one. */
@@ -175,6 +202,12 @@ describe('NxsDateInputComponent', () => {
 
   it('replaces a host’s native adapter, which reads every date as American', async () => {
     await setup('fr', [provideNativeDateAdapter()]);
+    await type('03/04/2026');
+    expect(day(host.expires.value)).toBe('2026-04-03');
+  });
+
+  it('replaces a host’s subclass of the native adapter that keeps its parse', async () => {
+    await setup('fr', [{ provide: DateAdapter, useClass: MondayFirstAdapter }]);
     await type('03/04/2026');
     expect(day(host.expires.value)).toBe('2026-04-03');
   });

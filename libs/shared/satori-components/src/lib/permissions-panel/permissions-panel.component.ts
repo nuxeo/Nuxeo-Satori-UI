@@ -13,7 +13,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
-import { provideNativeDateAdapter } from '@angular/material/core';
+import { DateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
@@ -33,6 +33,8 @@ import {
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import {
   dayToDate,
   instantToDay,
@@ -115,7 +117,7 @@ interface EditorState {
     MatTableModule,
     MatTooltipModule,
   ],
-  providers: [NxsPermissionsService, provideNativeDateAdapter()],
+  providers: [NxsPermissionsService, provideNxsDateAdapter()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-permissions-panel' },
 })
@@ -132,6 +134,8 @@ export class NxsPermissionsPanelComponent {
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);
+  /** The date fields' adapter, from `provideNxsDateAdapter()`: a host's may not hold JS dates. */
+  private readonly dateAdapter = inject<DateAdapter<unknown>>(DateAdapter);
 
   /** Starts every id the template sets, so two panels on one page never share one. */
   protected readonly idPrefix = `nxs-permissions-${nextId++}`;
@@ -165,8 +169,16 @@ export class NxsPermissionsPanelComponent {
   protected readonly editorQuery = signal('');
   protected readonly editorPermission = signal('Read');
   protected readonly editorDated = signal(false);
+  /** The time frame's days, at local midnight. */
   protected readonly editorBegin = signal<Date | null>(null);
   protected readonly editorEnd = signal<Date | null>(null);
+  /** The same days as the date fields hold them, in their adapter's own representation. */
+  protected readonly editorBeginField = computed(() =>
+    nxsDateToAdapter(this.dateAdapter, this.editorBegin()),
+  );
+  protected readonly editorEndField = computed(() =>
+    nxsDateToAdapter(this.dateAdapter, this.editorEnd()),
+  );
   protected readonly editorSubmitted = signal(false);
   protected readonly suggestions = signal<UserGroupSuggestion[]>([]);
 
@@ -449,6 +461,11 @@ export class NxsPermissionsPanelComponent {
   protected onPrincipalSelected(suggestion: UserGroupSuggestion): void {
     this.editorPrincipal.set(suggestion);
     this.editorQuery.set(suggestion.displayLabel);
+  }
+
+  /** The day a date field holds, whatever its adapter holds dates as. */
+  protected fieldDay(value: unknown): Date | null {
+    return nxsDateFromAdapter(this.dateAdapter, value);
   }
 
   protected displaySuggestion(suggestion: UserGroupSuggestion | string | null): string {

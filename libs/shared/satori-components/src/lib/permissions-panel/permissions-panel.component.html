@@ -281,8 +281,8 @@
               <input
                 matInput
                 [matDatepicker]="beginPicker"
-                [value]="editorBegin()"
-                (dateChange)="editorBegin.set($event.value)"
+                [value]="editorBeginField()"
+                (dateChange)="editorBegin.set(fieldDay($event.value))"
               />
               <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
               <mat-datepicker #beginPicker />
@@ -294,8 +294,8 @@
               <input
                 matInput
                 [matDatepicker]="endPicker"
-                [value]="editorEnd()"
-                (dateChange)="editorEnd.set($event.value)"
+                [value]="editorEndField()"
+                (dateChange)="editorEnd.set(fieldDay($event.value))"
               />
               <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
               <mat-datepicker #endPicker />

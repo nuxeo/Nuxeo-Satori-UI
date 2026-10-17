@@ -23,6 +23,14 @@ class HostComponent {
   readonly received: (readonly File[])[] = [];
 }
 
+@Component({
+  standalone: true,
+  imports: [NxsDropzoneComponent],
+  template: `<nxs-dropzone label="Drop invoices here" buttonLabel="Choose invoices" />
+    <nxs-dropzone label="Drop receipts here" buttonLabel="Choose receipts" />`,
+})
+class TwoZonesComponent {}
+
 function drag(type: string, files: File[] = [], kinds = ['Files']): DragEvent {
   const event = new Event(type, { bubbles: true, cancelable: true }) as DragEvent;
   Object.defineProperty(event, 'dataTransfer', {
@@ -58,6 +66,14 @@ describe('NxsDropzoneComponent', () => {
     expect(button().textContent?.trim()).toBe('Choose files');
     expect(input().getAttribute('accept')).toBe('.csv');
     expect(input().multiple).toBe(true);
+    expect(input().tabIndex).toBe(-1);
+  });
+
+  it('names the hidden file input by its button, and keeps it out of reach', () => {
+    const labelledBy = input().getAttribute('aria-labelledby') ?? '';
+    expect(labelledBy).not.toBe('');
+    expect(document.getElementById(labelledBy)).toBe(button());
+    expect(input().getAttribute('aria-hidden')).toBe('true');
     expect(input().tabIndex).toBe(-1);
   });
 
@@ -118,5 +134,36 @@ describe('NxsDropzoneComponent', () => {
     el().dispatchEvent(drop);
     expect(drop.defaultPrevented).toBe(false);
     expect(host.received).toEqual([]);
+  });
+});
+
+describe('NxsDropzoneComponent, twice on a page', () => {
+  it('gives each zone’s button its own id, so each input is named by its own button', async () => {
+    await TestBed.configureTestingModule({
+      imports: [TwoZonesComponent],
+      providers: [provideZonelessChangeDetection()],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(TwoZonesComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const zones = [...(fixture.nativeElement as HTMLElement).querySelectorAll('nxs-dropzone')];
+    const named = zones.map((zone) => {
+      const input = zone.querySelector('input') as HTMLInputElement;
+      const button = zone.querySelector('button') as HTMLButtonElement;
+      const labelledBy = input.getAttribute('aria-labelledby') ?? '';
+      return {
+        id: button.id,
+        labelledBy,
+        name: document.getElementById(labelledBy)?.textContent?.trim(),
+        isOwnButton: document.getElementById(labelledBy) === button,
+      };
+    });
+    expect(named.map(({ name, isOwnButton }) => ({ name, isOwnButton }))).toEqual([
+      { name: 'Choose invoices', isOwnButton: true },
+      { name: 'Choose receipts', isOwnButton: true },
+    ]);
+    expect(named[0].id).not.toBe(named[1].id);
+    expect(named.every(({ id, labelledBy }) => id !== '' && id === labelledBy)).toBe(true);
   });
 });

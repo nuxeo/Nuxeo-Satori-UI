@@ -8303,6 +8303,133 @@ function checkSatoriComponentsHaveSpecs() {
   }
 }
 
+/** What Material exports that puts its native date adapter in an injector, by exported name. */
+const NATIVE_DATE_ADAPTER_PROVIDERS = new Set([
+  'provideNativeDateAdapter',
+  'MatNativeDateModule',
+  'NativeDateModule',
+]);
+
+/**
+ * Where `file` puts Material's native date adapter in an injector, as `{ line, what }`.
+ *
+ * Names are resolved through the file's imports from `@angular/material/core` (or the deprecated
+ * `@angular/material`), so an alias is still caught and a same-named local is not. A use is a call
+ * or reference to one of `NATIVE_DATE_ADAPTER_PROVIDERS`, `new NativeDateAdapter(...)`, or a
+ * provider's `useClass` or `useExisting: NativeDateAdapter`. Extending the class, comparing with it
+ * or reading its prototype is not: that is how a library adapter keeps the native one's formatting
+ * and replaces its parsing. Comments and strings are not code, so they are never read.
+ */
+function nativeDateAdapterUses(file) {
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const imported = new Map();
+  const namespaces = new Set();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    if (!/^@angular\/material(\/core)?$/.test(statement.moduleSpecifier.text)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        imported.set(element.name.text, (element.propertyName ?? element.name).text);
+      }
+    }
+  }
+  /** The Material export `expression` names, or `null`. */
+  const materialName = (expression) => {
+    if (ts.isIdentifier(expression)) return imported.get(expression.text) ?? null;
+    if (
+      ts.isPropertyAccessExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      namespaces.has(expression.expression.text)
+    ) {
+      return expression.name.text;
+    }
+    return null;
+  };
+  /** A property or member name, which names nothing in scope: `x.provideNativeDateAdapter`. */
+  const isMemberName = (node) =>
+    (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) ||
+    ((ts.isPropertyAssignment(node.parent) ||
+      ts.isPropertyDeclaration(node.parent) ||
+      ts.isMethodDeclaration(node.parent)) &&
+      node.parent.name === node);
+
+  const uses = [];
+  const at = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) return;
+    let what = null;
+    if (
+      (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) &&
+      !(ts.isIdentifier(node) && isMemberName(node)) &&
+      NATIVE_DATE_ADAPTER_PROVIDERS.has(materialName(node))
+    ) {
+      what =
+        ts.isCallExpression(node.parent) && node.parent.expression === node
+          ? `${materialName(node)}()`
+          : materialName(node);
+    } else if (ts.isNewExpression(node) && materialName(node.expression) === 'NativeDateAdapter') {
+      what = 'new NativeDateAdapter()';
+    } else if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      ['useClass', 'useExisting'].includes(node.name.text) &&
+      materialName(node.initializer) === 'NativeDateAdapter'
+    ) {
+      what = `${node.name.text}: NativeDateAdapter`;
+    }
+    if (what) {
+      uses.push({ line: at(node), what });
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return uses;
+}
+
+/**
+ * No library in the family puts Material's native date adapter in an injector (NXSAT-649).
+ *
+ * A component that lists `provideNativeDateAdapter()` or `MatNativeDateModule` hides the adapter a
+ * host provides and reads every typed date with `Date.parse`, as American: `03/04/2026` typed in
+ * French was stored as 4 March (NXSAT-629). Four `nxs-` components carried one until NXSAT-649 gave
+ * them `provideNxsDateAdapter()`, which keeps a host's adapter and otherwise reads in the locale,
+ * and only their own specs stopped the next date field from bringing one back.
+ *
+ * Read from each library's sources. Specs and stories are exempt: there the native adapter stands
+ * for a host's, which the library has to cope with, not one it imposes. A tree with no sources to
+ * read fails, rather than passing having read nothing.
+ */
+function checkSatoriLibrariesKeepHostDateAdapter() {
+  const isSource = (path) =>
+    /\.ts$/.test(path) && !/\.(spec|test|stories)\.ts$/.test(path) && !path.endsWith('.d.ts');
+  let scanned = 0;
+  for (const { root } of SATORI_LIBRARIES) {
+    for (const file of walk(`${root}/src`, isSource)) {
+      scanned += 1;
+      for (const { line, what } of nativeDateAdapterUses(file)) {
+        fail(
+          `${file}:${line} puts Material's native date adapter in an injector (\`${what}\`). It ` +
+            "hides the host's date adapter and reads every typed date as American: `03/04/2026` " +
+            'typed in French is stored as 4 March (NXSAT-629). Use `provideNxsDateAdapter()` ' +
+            "from `date-input/locale-date`, which keeps a host's adapter and otherwise reads in " +
+            'the locale.',
+        );
+      }
+    }
+  }
+  if (scanned === 0) {
+    fail(
+      `No sources were found under ${SATORI_LIBRARIES.map(({ root }) => `${root}/src`).join(' or ')}, ` +
+        'so checkSatoriLibrariesKeepHostDateAdapter asserted nothing.',
+    );
+  }
+}
+
 /**
  * `PLATFORM_ENTRY_POINTS` lists exactly the entry points the package publishes (register item 23).
  *
@@ -8648,6 +8775,7 @@ const GUARDRAILS = [
   checkSatoriComponentsHaveStories,
   checkSatoriComponentsHaveOverviews,
   checkSatoriComponentsHaveSpecs,
+  checkSatoriLibrariesKeepHostDateAdapter,
   checkMdxCodeSamplesFormatted,
   checkPlatformEntryPointsListed,
   checkSatoriFallbackDependencies,

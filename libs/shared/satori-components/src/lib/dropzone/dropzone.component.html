@@ -4,6 +4,7 @@
   mat-stroked-button
   type="button"
   class="nxs-dropzone__button"
+  [id]="buttonId"
   [disabled]="disabled()"
   (click)="choose()"
 >
@@ -21,6 +22,7 @@
   class="nxs-dropzone__input"
   tabindex="-1"
   aria-hidden="true"
+  [attr.aria-labelledby]="buttonId"
   [multiple]="multiple()"
   [attr.accept]="accept() || null"
   [disabled]="disabled()"

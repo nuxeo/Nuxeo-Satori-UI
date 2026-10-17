@@ -166,7 +166,7 @@
         <input
           matInput
           [matDatepicker]="picker"
-          [placeholder]="'common.date-mask' | translate"
+          [placeholder]="'common.date-mask' | translate | nxsDateMask"
           [formControl]="asControl(control)"
           [required]="isRequired(definition)"
           [errorStateMatcher]="errorMatcher"
@@ -228,6 +228,7 @@
             </mat-chip-row>
           }
           <input
+            [id]="id + '-' + path + '-input'"
             [type]="inputType(definition)"
             [matChipInputFor]="grid"
             [matChipInputAddOnBlur]="true"

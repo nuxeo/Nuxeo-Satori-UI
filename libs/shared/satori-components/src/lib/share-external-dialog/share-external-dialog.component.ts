@@ -11,7 +11,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, merge } from 'rxjs';
 import { MatButton } from '@angular/material/button';
-import { type ErrorStateMatcher, provideNativeDateAdapter } from '@angular/material/core';
+import { DateAdapter, type ErrorStateMatcher } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -26,6 +26,8 @@ import {
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { failureKey, offeredRights } from '../permission-dialog-support';
 import { toDay } from '../permissions-panel/permissions-model';
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
@@ -71,7 +73,7 @@ const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
     NxsSpinnerComponent,
     TranslatePipe,
   ],
-  providers: [provideNativeDateAdapter(), provideNxsToast()],
+  providers: [provideNxsDateAdapter(), provideNxsToast()],
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-share-external-dialog' },
 })
@@ -83,6 +85,8 @@ export class NxsShareExternalDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
+  /** The date fields' adapter, from `provideNxsDateAdapter()`: a host's may not hold JS dates. */
+  private readonly dateAdapter = inject<DateAdapter<unknown>>(DateAdapter);
 
   protected readonly rights = offeredRights(this.data.permissions);
   protected readonly mailHint = PERMISSION_NOTIFICATION_MAIL_HINT_KEY;
@@ -90,8 +94,12 @@ export class NxsShareExternalDialogComponent {
   protected readonly email = signal('');
   protected readonly emailLeft = signal(false);
   protected readonly right = signal(this.rights[0]);
+  /** The share's days, at local midnight. */
   protected readonly begin = signal<Date | null>(null);
   protected readonly end = signal<Date | null>(null);
+  /** The same days as the date fields hold them, in their adapter's own representation. */
+  protected readonly beginField = computed(() => nxsDateToAdapter(this.dateAdapter, this.begin()));
+  protected readonly endField = computed(() => nxsDateToAdapter(this.dateAdapter, this.end()));
   protected readonly comment = signal('');
   /** Which button is saving, so only that one shows the spinner. */
   protected readonly saving = signal<'create' | 'another' | null>(null);
@@ -135,6 +143,11 @@ export class NxsShareExternalDialogComponent {
 
   protected label(permission: string): string {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
+  }
+
+  /** The day a date field holds, whatever its adapter holds dates as. */
+  protected fieldDay(value: unknown): Date | null {
+    return nxsDateFromAdapter(this.dateAdapter, value);
   }
 
   protected cancel(): void {
