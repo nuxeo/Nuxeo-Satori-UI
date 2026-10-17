@@ -560,7 +560,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     it('blocks the batch from a later file', async () => {
       // Next saves the entry without validating it, so file 1's invalid expiry used to survive
       // to `runImportWithProperties()` and serialize as `dc:expired: null`.
-      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
       component.startImportProperties();
       typeInvalidExpiry();
       expect(component.isExpiresValid()).toBe(false);
@@ -576,7 +576,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
 
     it('sends no request when the batch is run anyway', async () => {
       mockImportService.importFilesWithProperties.mockReturnValue(of([]));
-      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
       component.startImportProperties();
       typeInvalidExpiry();
       component.editImportNext();
@@ -588,7 +588,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     });
 
     it('stops blocking once that file is unchecked', async () => {
-      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
       component.startImportProperties();
       typeInvalidExpiry();
       component.editImportNext();
@@ -600,7 +600,7 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     });
 
     it('still allows a batch whose other entries cleared Expires deliberately', async () => {
-      component.uploadFiles.set([jpegFile('a.png'), jpegFile('b.png')]);
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
       component.startImportProperties();
       component.editImportNext();
 
