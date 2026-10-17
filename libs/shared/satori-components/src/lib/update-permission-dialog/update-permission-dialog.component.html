@@ -40,8 +40,8 @@
         matInput
         [matDatepicker]="beginPicker"
         [disabled]="!dated()"
-        [value]="begin()"
-        (dateChange)="begin.set($event.value)"
+        [value]="beginField()"
+        (dateChange)="begin.set(fieldDay($event.value))"
       />
       <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
       <mat-datepicker #beginPicker />
@@ -53,8 +53,8 @@
         [matDatepicker]="endPicker"
         [required]="external"
         [disabled]="!dated()"
-        [value]="end()"
-        (dateChange)="end.set($event.value)"
+        [value]="endField()"
+        (dateChange)="end.set(fieldDay($event.value))"
       />
       <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
       <mat-datepicker #endPicker />

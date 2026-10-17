@@ -67,7 +67,9 @@ read a typed date in the order the user's locale writes dates — `03/04/2026` i
 `MatDialog` is a root service, so a date adapter your page component provides reaches the dialog
 only if `open()` is given the page's `injector` or `viewContainerRef`; one provided at application
 level reaches it either way. Such an adapter is used unless it reads as Material's native one
-does: Material's own, or a subclass that keeps its `Date.parse`. It needs
+does: Material's own, or a subclass that keeps its `Date.parse`. It need not hold JS `Date`s —
+Luxon's `DateTime` works too — and whatever it holds, a day the user changed is written as a
+calendar day, `YYYY-MM-DD`, and one they kept as the instant Nuxeo holds. It needs
 `DocumentDetailService`, which an application using `@nuxeo/satori-platform/nuxeo-client` already
 has. Its labels are translated under `satori-components.permission-dialogs.*`, with English from
 `providePlatformEnglishFallback()`.

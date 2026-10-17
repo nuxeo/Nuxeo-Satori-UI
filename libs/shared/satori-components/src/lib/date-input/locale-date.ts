@@ -21,7 +21,8 @@ const DECIMAL_DIGIT = /\p{Nd}/u;
  * field reads back what it writes.
  */
 function asciiDigits(text: string): string {
-  return text.replace(/(?![0-9])\p{Nd}/gu, (digit) => {
+  // `\d` is ASCII 0-9 alone, even with the `u` flag: every other script's digits are converted.
+  return text.replace(/(?!\d)\p{Nd}/gu, (digit) => {
     const code = digit.codePointAt(0) ?? 0;
     let start = code;
     while (DECIMAL_DIGIT.test(String.fromCodePoint(start - 1))) start -= 1;
@@ -49,7 +50,7 @@ export function nxsLocaleId(locale: unknown, fallback = 'en-US'): string {
  * as its language alone.
  */
 function gregorian(locale: string): string {
-  const tag = locale.trim().replace(/_/g, '-');
+  const tag = locale.trim().replaceAll('_', '-');
   for (const candidate of [tag, tag.split('-')[0]]) {
     try {
       return new Intl.Locale(candidate, { calendar: 'gregory' }).toString();
@@ -255,7 +256,13 @@ function hostDateAdapter(): DateAdapter<unknown> | null {
   return host && !readsAsNative ? host : null;
 }
 
-/** Providers for a date field: the date adapter and formats `hostDateAdapter` decides on. */
+/**
+ * Providers for a date field: the date adapter and formats `hostDateAdapter` decides on.
+ *
+ * The adapter kept may not hold JS `Date`s — Luxon's holds `DateTime`s — so a component using
+ * these providers gives its fields, and reads from them, the adapter's own dates, crossing to and
+ * from the JS dates it computes with through `nxsDateToAdapter` and `nxsDateFromAdapter`.
+ */
 export function provideNxsDateAdapter(): Provider[] {
   return [
     {
@@ -289,6 +296,13 @@ type MaskSegment = string | { readonly field: DateField; readonly width: number 
 /** Punctuation and spaces: what may sit between, before or after a date's numeric fields. */
 const FIELD_PUNCTUATION = /^[\p{P}\p{Zs}]+$/u;
 
+/** The field a number in the written sample date is: 31 the day, 12 the month, the rest the year. */
+function sampleField(value: number): DateField {
+  if (value === NXS_DATE_MASK_SAMPLE.day) return 'day';
+  if (value === NXS_DATE_MASK_SAMPLE.month + 1) return 'month';
+  return 'year';
+}
+
 /**
  * The fields of the sample date as a field writes it, in order, with the text between them:
  * `31/12/2026` is day, `/`, month, `/`, year. `null` when it is not three numeric fields with only
@@ -304,13 +318,7 @@ function writtenSegments(written: string): MaskSegment[] | null {
       segments.push(run);
       continue;
     }
-    const value = Number(run);
-    const field: DateField =
-      value === NXS_DATE_MASK_SAMPLE.day
-        ? 'day'
-        : value === NXS_DATE_MASK_SAMPLE.month + 1
-          ? 'month'
-          : 'year';
+    const field = sampleField(Number(run));
     if (seen.has(field)) return null;
     seen.add(field);
     segments.push({ field, width: run.length });
@@ -377,9 +385,10 @@ export function nxsDateMask(written: string, mask: string, maskLanguage: string)
     .map((segment) => {
       if (typeof segment === 'string') return segment;
       const word = lettersOf.get(segment.field) ?? '';
-      return segment.field === 'year'
-        ? ([...word][0] ?? '').repeat(segment.width <= 2 ? 2 : 4)
-        : word;
+      if (segment.field !== 'year') return word;
+      // A year written with two digits gets two letters, one written with four gets four.
+      const yearLetters = segment.width <= 2 ? 2 : 4;
+      return ([...word][0] ?? '').repeat(yearLetters);
     })
     .join('');
 }

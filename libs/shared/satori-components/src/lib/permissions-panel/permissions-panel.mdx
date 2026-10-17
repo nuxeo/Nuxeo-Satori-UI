@@ -24,6 +24,8 @@ entries, and block or restore inheritance. Use it on a document's or folder's Pe
 - **Time frames.** An entry can be permanent or limited to a date range. A typed date is read in the
   order the user's locale writes dates, or through a date adapter the host provides, unless that
   reads as Material's native one does: Material's own, or a subclass that keeps its `Date.parse`.
+  The host's adapter need not hold JS `Date`s — Luxon's `DateTime` works too — and an entry's days
+  are written as calendar days, `YYYY-MM-DD`, whatever it holds.
 - **Inheritance.** Blocking inheritance is shown as a state of the document, not as an entry.
 - **Read-only when it should be.** A user who cannot manage permissions sees the same tables with
   nothing offering to change them.

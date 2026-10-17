@@ -14,6 +14,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsPermissionsPanelComponent } from './permissions-panel.component';
 
 /** The permissions a stock server reports to an `Everything` holder (2025.26.16, measured). */
@@ -1281,6 +1282,15 @@ class DatesHostComponent {}
 })
 class DatesHostWithAdapterComponent {}
 
+/** A host whose date adapter holds calendar days, not JS dates, as Luxon's holds `DateTime`s. */
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  template: `<nxs-permissions-panel documentId="doc-1" />`,
+})
+class CalendarDaysHostComponent {}
+
 describe('NxsPermissionsPanelComponent, typed dates', () => {
   let fixture: ComponentFixture<unknown>;
 
@@ -1343,5 +1353,54 @@ describe('NxsPermissionsPanelComponent, typed dates', () => {
   it('uses a date adapter the host provides', async () => {
     await editDated('fr', DatesHostWithAdapterComponent);
     expect(day(await typeFrom('anything'))).toBe('2030-1-1');
+  });
+
+  describe('with a host adapter that does not hold JS dates', () => {
+    const boxes = (): HTMLInputElement[] => [
+      ...(fixture.nativeElement as HTMLElement).querySelectorAll<HTMLInputElement>(
+        '.nxs-permissions-panel__dates input',
+      ),
+    ];
+    const rangeError = () =>
+      (fixture.nativeElement as HTMLElement)
+        .querySelector('.nxs-permissions-panel__field-error')
+        ?.textContent?.trim();
+
+    async function type(box: HTMLInputElement, text: string): Promise<void> {
+      box.value = text;
+      box.dispatchEvent(new Event('input'));
+      box.dispatchEvent(new Event('change'));
+      await render();
+    }
+
+    it('shows the entry’s days in the adapter’s own format', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      expect(boxes().map((box) => box.value)).toEqual(['2030-01-01', '']);
+    });
+
+    it('reads a typed date as the day it names', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      expect(day(await typeFrom('2030-02-03'))).toBe('2030-2-3');
+    });
+
+    it('refuses an end before the start, and stages nothing', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      await type(boxes()[1], '2029-12-31');
+      expect(rangeError()).toBe('The end date is before the start date.');
+      panel()['applyEditor']();
+      expect(panel()['staged']().size).toBe(0);
+    });
+
+    it('stages the days the fields hold', async () => {
+      await editDated('fr', CalendarDaysHostComponent);
+      await type(boxes()[1], '2030-06-30');
+      expect(rangeError()).toBeUndefined();
+      panel()['applyEditor']();
+      expect(panel()['staged']().get('jdoe:Read:true:Administrator::')).toMatchObject({
+        kind: 'replace',
+        begin: '2030-01-01',
+        end: '2030-06-30',
+      });
+    });
   });
 });

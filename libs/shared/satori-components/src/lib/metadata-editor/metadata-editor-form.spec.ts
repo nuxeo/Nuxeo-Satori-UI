@@ -1,5 +1,8 @@
+import { Injector } from '@angular/core';
 import { FormArray, FormControl, FormGroup } from '@angular/forms';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
+import { NxsLocaleDateAdapter } from '../date-input/locale-date';
 import {
   MAX_COMPLEX_DEPTH,
   buildControl,
@@ -10,8 +13,15 @@ import {
 } from './metadata-editor-form';
 import type { NxsEditorFieldType } from './metadata-editor.model';
 
+/** The editor's own adapter, which holds JS dates. */
+const dates = Injector.create({ providers: [{ provide: NxsLocaleDateAdapter }] }).get(
+  NxsLocaleDateAdapter,
+);
+/** A host's adapter that holds calendar days, `{ year, month, day }`, rather than JS dates. */
+const calendarDays = new CalendarDayAdapter();
+
 const errorsOf = (definition: NxsEditorFieldType, value: unknown) =>
-  buildControl(definition, value).errors;
+  buildControl(definition, value, dates).errors;
 
 describe('fieldKind', () => {
   it('chooses a control from the type, the vocabulary and whether it is a list', () => {
@@ -82,7 +92,7 @@ describe('buildControl validation', () => {
   });
 
   it('reads a number sent as text, and refuses what is not a number', () => {
-    expect(buildControl({ type: 'long' }, '42').value).toBe(42);
+    expect(buildControl({ type: 'long' }, '42', dates).value).toBe(42);
     expect(errorsOf({ type: 'long' }, 'abc')).toEqual({ number: true });
     expect(errorsOf({ type: 'integer' }, 1.5)).toEqual({ integer: true });
   });
@@ -99,10 +109,10 @@ describe('buildControl validation', () => {
       required: true,
       fields: { name: { type: 'string' } },
     };
-    const control = buildControl(contacts, []);
+    const control = buildControl(contacts, [], dates);
     expect(control).toBeInstanceOf(FormArray);
     expect(control.errors).toEqual({ required: true });
-    if (control instanceof FormArray) control.push(newComplexItem(contacts, 0));
+    if (control instanceof FormArray) control.push(newComplexItem(contacts, dates, 0));
     control.updateValueAndValidity();
     expect(control.errors).toBeNull();
   });
@@ -110,17 +120,23 @@ describe('buildControl validation', () => {
 
 describe('buildControl values', () => {
   it('starts each control in the shape it edits', () => {
-    expect(buildControl({ type: 'date' }, '2027-01-31T00:00:00.000Z').value).toBeInstanceOf(Date);
-    expect(buildControl({ type: 'date' }, 'nonsense').value).toBeNull();
-    expect(buildControl({ type: 'boolean' }, 'true').value).toBe(true);
-    expect(buildControl({ type: 'string' }, 7).value).toBe('7');
-    expect(buildControl({ type: 'string' }, null).value).toBe('');
-    expect(buildControl({ type: 'string[]' }, 'not a list').value).toEqual([]);
-    expect(buildControl({ type: 'blob' }, { name: 'a' }).disabled).toBe(true);
+    expect(buildControl({ type: 'date' }, '2027-01-31T00:00:00.000Z', dates).value).toBeInstanceOf(
+      Date,
+    );
+    expect(buildControl({ type: 'date' }, 'nonsense', dates).value).toBeNull();
+    expect(buildControl({ type: 'boolean' }, 'true', dates).value).toBe(true);
+    expect(buildControl({ type: 'string' }, 7, dates).value).toBe('7');
+    expect(buildControl({ type: 'string' }, null, dates).value).toBe('');
+    expect(buildControl({ type: 'string[]' }, 'not a list', dates).value).toEqual([]);
+    expect(buildControl({ type: 'blob' }, { name: 'a' }, dates).disabled).toBe(true);
   });
 
   it('builds a complex field as a group of its sub-fields, tolerating a missing value', () => {
-    const control = buildControl({ type: 'complex', fields: { a: { type: 'string' } } }, null);
+    const control = buildControl(
+      { type: 'complex', fields: { a: { type: 'string' } } },
+      null,
+      dates,
+    );
     expect(control).toBeInstanceOf(FormGroup);
     expect(control.value).toEqual({ a: '' });
   });
@@ -129,12 +145,12 @@ describe('buildControl values', () => {
 describe('propertyValue', () => {
   it('sends dates as ISO text, blank text as null and single-line text trimmed', () => {
     expect(
-      propertyValue({ type: 'date' }, new FormControl(new Date('2027-01-31T00:00:00.000Z'))),
+      propertyValue({ type: 'date' }, new FormControl(new Date('2027-01-31T00:00:00.000Z')), dates),
     ).toBe('2027-01-31T00:00:00.000Z');
-    expect(propertyValue({ type: 'string' }, new FormControl('  '))).toBeNull();
-    expect(propertyValue({ type: 'string' }, new FormControl(' a '))).toBe('a');
-    expect(propertyValue({ type: 'string' }, new FormControl(' a '), 0, true)).toBe(' a ');
-    expect(propertyValue({ type: 'long' }, new FormControl(null))).toBeNull();
+    expect(propertyValue({ type: 'string' }, new FormControl('  '), dates)).toBeNull();
+    expect(propertyValue({ type: 'string' }, new FormControl(' a '), dates)).toBe('a');
+    expect(propertyValue({ type: 'string' }, new FormControl(' a '), dates, 0, true)).toBe(' a ');
+    expect(propertyValue({ type: 'long' }, new FormControl(null), dates)).toBeNull();
   });
 
   it('sends a repeatable group as a list of objects', () => {
@@ -142,11 +158,68 @@ describe('propertyValue', () => {
       type: 'complex[]',
       fields: { name: { type: 'string' }, age: { type: 'long' } },
     };
-    const control = buildControl(definition, [{ name: 'Ann', age: '3' }, {}]);
-    expect(propertyValue(definition, control)).toEqual([
+    const control = buildControl(definition, [{ name: 'Ann', age: '3' }, {}], dates);
+    expect(propertyValue(definition, control, dates)).toEqual([
       { name: 'Ann', age: 3 },
       { name: null, age: null },
     ]);
+  });
+});
+
+describe('dates, with an adapter that does not hold JS dates', () => {
+  const instant = '2027-01-31T10:30:00.000Z';
+  /** The local day `instant` names, as the adapter holds it. */
+  const localDay = () => {
+    const date = new Date(instant);
+    return { year: date.getFullYear(), month: date.getMonth(), day: date.getDate() };
+  };
+
+  it('starts a date control on the adapter’s date for the property’s local day', () => {
+    expect(buildControl({ type: 'date' }, instant, calendarDays).value).toEqual(localDay());
+    expect(buildControl({ type: 'date' }, 'nonsense', calendarDays).value).toBeNull();
+    expect(buildControl({ type: 'date' }, null, calendarDays).value).toBeNull();
+  });
+
+  it('writes back the instant it was built from, time of day included, while its day is kept', () => {
+    const control = buildControl({ type: 'date' }, instant, calendarDays);
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe(instant);
+  });
+
+  it('writes a day picked in the field as an ISO instant at its local midnight', () => {
+    const control = buildControl({ type: 'date' }, instant, calendarDays);
+    control.setValue(calendarDays.createDate(2028, 1, 29));
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBe(
+      new Date(2028, 1, 29).toISOString(),
+    );
+    const empty = buildControl({ type: 'date' }, null, calendarDays);
+    empty.setValue(calendarDays.createDate(2028, 0, 2));
+    expect(propertyValue({ type: 'date' }, empty, calendarDays)).toBe(
+      new Date(2028, 0, 2).toISOString(),
+    );
+  });
+
+  it('writes no date for a cleared field or one holding no valid date', () => {
+    const control = buildControl({ type: 'date' }, instant, calendarDays);
+    control.setValue(null);
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBeNull();
+    control.setValue(calendarDays.invalid());
+    expect(propertyValue({ type: 'date' }, control, calendarDays)).toBeNull();
+  });
+
+  it('does the same for a date inside a complex field', () => {
+    const definition: NxsEditorFieldType = {
+      type: 'complex',
+      fields: { due: { type: 'date' }, note: { type: 'string' } },
+    };
+    const control = buildControl(definition, { due: instant, note: 'x' }, calendarDays);
+    expect(control.value).toEqual({ due: localDay(), note: 'x' });
+    expect(propertyValue(definition, control, calendarDays)).toEqual({ due: instant, note: 'x' });
+  });
+
+  it('keeps the JS date itself, time of day included, for an adapter that holds JS dates', () => {
+    const control = buildControl({ type: 'date' }, instant, dates);
+    expect(control.value).toEqual(new Date(instant));
+    expect(propertyValue({ type: 'date' }, control, dates)).toBe(instant);
   });
 });
 

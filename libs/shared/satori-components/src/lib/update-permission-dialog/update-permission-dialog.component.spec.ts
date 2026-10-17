@@ -14,6 +14,7 @@ import { Subject, of, throwError, type Observable } from 'rxjs';
 import { type MockInstance } from 'vitest';
 import { DocumentDetailService, type NuxeoAce } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsToastService } from '../toast/toast.service';
 import {
   NxsUpdatePermissionDialogComponent,
@@ -388,6 +389,65 @@ describe('NxsUpdatePermissionDialogComponent', () => {
         () => TestBed.createComponent(OpeningPageComponent).componentInstance.injector,
       );
       expect(written).toMatchObject({ end: '2030-01-01' });
+    });
+  });
+
+  describe('with an application adapter that does not hold JS dates', () => {
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+      });
+    });
+
+    it('shows the entry’s days, and writes back the instants Nuxeo holds when they are kept', async () => {
+      const begin = localMidnight(2030, 1, 2);
+      const end = localMidnight(2030, 3, 4);
+      await open(local({ begin, end }));
+      expect(dateBoxes().map((box) => box.value)).toEqual(['2030-01-02', '2030-03-04']);
+      await pick('Edit');
+
+      await save();
+
+      expect(sent()).toMatchObject({ permission: 'ReadWrite', begin, end });
+    });
+
+    it('writes a typed date as the day it names', async () => {
+      const begin = localMidnight(2030, 1, 2);
+      await open(local({ begin, end: localMidnight(2030, 3, 4) }));
+
+      await type(dateBoxes()[1], '2030-04-30');
+      await save();
+
+      expect(sent()).toMatchObject({ begin, end: '2030-04-30' });
+    });
+
+    it('writes a day picked from the calendar as that day', async () => {
+      const begin = localMidnight(2030, 1, 2);
+      await open(local({ begin, end: localMidnight(2030, 3, 4) }));
+
+      q<HTMLButtonElement>(
+        '.nxs-update-permission-dialog__dates mat-datepicker-toggle button',
+      ).click();
+      await settle();
+      const fifteenth = [...document.querySelectorAll<HTMLElement>('.mat-calendar-body-cell')].find(
+        (cell) => cell.textContent?.trim() === '15',
+      );
+      expect(fifteenth).toBeDefined();
+      fifteenth?.click();
+      await settle();
+      expect(dateBoxes()[0].value).toBe('2030-01-15');
+      await save();
+
+      expect(sent()).toMatchObject({ begin: '2030-01-15', end: localMidnight(2030, 3, 4) });
+    });
+
+    it('refuses an end date before the start date', async () => {
+      await open(local({ begin: localMidnight(2030, 2, 1) }));
+
+      await type(dateBoxes()[1], '2030-01-01');
+
+      expect(alerts()).toEqual(['The end date is before the start date.']);
+      expect(update().disabled).toBe(true);
     });
   });
 

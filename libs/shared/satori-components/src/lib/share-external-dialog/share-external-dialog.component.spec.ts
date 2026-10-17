@@ -14,6 +14,7 @@ import { Subject, of, throwError, type Observable } from 'rxjs';
 import { type MockInstance } from 'vitest';
 import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsToastService } from '../toast/toast.service';
 import {
   NxsShareExternalDialogComponent,
@@ -309,6 +310,40 @@ describe('NxsShareExternalDialogComponent', () => {
         () => TestBed.createComponent(OpeningPageComponent).componentInstance.injector,
       );
       expect(sent).toMatchObject({ end: '2030-01-01' });
+    });
+  });
+
+  describe('with an application adapter that does not hold JS dates', () => {
+    beforeEach(() => {
+      TestBed.configureTestingModule({
+        providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+      });
+    });
+
+    it('sends the days typed, as calendar days', async () => {
+      await open();
+      await type(emailBox(), 'ext@example.com');
+      await type(dateBoxes()[0], '2030-01-02');
+      await type(dateBoxes()[1], '2030-01-31');
+      expect(dateBoxes().map((box) => box.value)).toEqual(['2030-01-02', '2030-01-31']);
+
+      create().click();
+      await settle();
+
+      expect(addExternal.mock.calls[0]?.[1]).toMatchObject({
+        begin: '2030-01-02',
+        end: '2030-01-31',
+      });
+    });
+
+    it('refuses an end date before the start date', async () => {
+      await open();
+      await type(emailBox(), 'ext@example.com');
+      await type(dateBoxes()[1], '2030-01-31');
+      await type(dateBoxes()[0], '2030-02-01');
+
+      expect(alerts()).toEqual(['The end date is before the start date.']);
+      expect(create().disabled).toBe(true);
     });
   });
 

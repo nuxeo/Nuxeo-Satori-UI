@@ -67,8 +67,12 @@ export const usageTs = `save(editor: NxsMetadataEditorComponent): void {
 The host owns the buttons and the request. The editor needs `DirectoryService` for vocabulary
 entries, and provides its own date adapter: a typed date is read in the order the user's locale
 writes dates — `03/04/2026` is 3 April in French — unless the host provides a date adapter of its
-own, which the editor then uses. Material's native adapter, and a subclass of it that keeps its
-`Date.parse`, read every typed date as American, so the editor replaces them. A date field's hint is
+own, which the editor then uses. That adapter's dates need not be JS `Date`s; a Luxon `DateTime`
+or another library's date works too. `properties()` and `dirtyProperties()` give a date as an ISO
+8601 instant whatever the adapter holds: a date the user left alone as the instant the property
+held, time of day included, and a day the user typed or picked as its local midnight. Material's
+native adapter, and a subclass of it that keeps its `Date.parse`, read every typed date as
+American, so the editor replaces them. A date field's hint is
 `common.date-mask` with its letters put in the order, and between the separators, that adapter
 writes a date. So the hint says what the field reads with the editor's own adapter, and with a
 host's adapter that reads back the dates it writes, such as date-fns with its default formats; a

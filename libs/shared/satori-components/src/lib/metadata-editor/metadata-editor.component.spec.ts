@@ -18,6 +18,7 @@ import {
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
+import { CalendarDayAdapter } from '../date-input/calendar-day-adapter.mock';
 import { NxsMetadataEditorComponent } from './metadata-editor.component';
 import type { NxsEditorDisplay, NxsEditorSection, NxsEditorValues } from './metadata-editor.model';
 
@@ -731,5 +732,96 @@ describe('NxsMetadataEditorComponent, typed dates', () => {
     await setup('fr', DatesHostWithAdapterComponent);
     expect(expires().placeholder).toBe('yyyy-mm-dd');
     expect(await typeDate('anything')).toBe(new Date(2030, 0, 1).toISOString());
+  });
+});
+
+/** A Nuxeo date property: an instant, with a time of day. */
+const EXPIRES = '2026-04-03T10:30:00.000Z';
+
+/** A day as `CalendarDayAdapter` writes it, `yyyy-mm-dd`, from a JS date's local fields. */
+const written = (date: Date) =>
+  [date.getFullYear(), date.getMonth() + 1, date.getDate()]
+    .map((n, i) => String(n).padStart(i === 0 ? 4 : 2, '0'))
+    .join('-');
+
+/** A host whose date adapter holds calendar days, not JS dates, as Luxon's holds `DateTime`s. */
+@Component({
+  standalone: true,
+  imports: [NxsMetadataEditorComponent],
+  providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  template: `<nxs-metadata-editor [values]="values" />`,
+})
+class CalendarDaysHostComponent {
+  readonly values: NxsEditorValues = { 'dc:title': 'Report', 'dc:expired': EXPIRES };
+  readonly editor = viewChild.required(NxsMetadataEditorComponent);
+}
+
+describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS dates', () => {
+  let fixture: ComponentFixture<CalendarDaysHostComponent>;
+
+  const editor = () => fixture.componentInstance.editor();
+  const expires = (): HTMLInputElement =>
+    (fixture.nativeElement as HTMLElement).querySelector(
+      'input[data-xpath="dc:expired"]',
+    ) as HTMLInputElement;
+
+  async function render(): Promise<void> {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  }
+
+  beforeEach(async () => {
+    await TestBed.configureTestingModule({
+      imports: [CalendarDaysHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        {
+          provide: DirectoryService,
+          useValue: { getEntries: () => of([]), getAllL10nEntries: () => of([]) },
+        },
+      ],
+    }).compileComponents();
+    fixture = TestBed.createComponent(CalendarDaysHostComponent);
+    await render();
+  });
+
+  it('shows the property’s day, valid, and writes back its instant with its time of day', () => {
+    expect(expires().value).toBe(written(new Date(EXPIRES)));
+    expect(editor().validate()).toBe(true);
+    expect(editor().properties()['dc:expired']).toBe(EXPIRES);
+    expect(editor().dirtyProperties()).toEqual({});
+  });
+
+  it('writes a typed date as an ISO instant, under the hint the adapter writes', async () => {
+    expect(expires().placeholder).toBe('yyyy-mm-dd');
+    expires().value = '2027-05-06';
+    expires().dispatchEvent(new Event('input'));
+    expires().dispatchEvent(new Event('blur'));
+    await render();
+    expect(editor().validate()).toBe(true);
+    expect(editor().dirtyProperties()).toEqual({
+      'dc:expired': new Date(2027, 4, 6).toISOString(),
+    });
+  });
+
+  it('writes a day picked from the calendar as an ISO instant', async () => {
+    (
+      (fixture.nativeElement as HTMLElement).querySelector(
+        'mat-datepicker-toggle button',
+      ) as HTMLButtonElement
+    ).click();
+    await render();
+    const fifteenth = [...document.querySelectorAll<HTMLElement>('.mat-calendar-body-cell')].find(
+      (cell) => cell.textContent?.trim() === '15',
+    );
+    expect(fifteenth).toBeDefined();
+    fifteenth?.click();
+    await render();
+    const shown = new Date(EXPIRES);
+    const picked = new Date(shown.getFullYear(), shown.getMonth(), 15);
+    expect(expires().value).toBe(written(picked));
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': picked.toISOString() });
   });
 });
