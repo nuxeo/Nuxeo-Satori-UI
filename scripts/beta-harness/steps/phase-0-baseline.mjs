@@ -25,6 +25,8 @@
  *   npm run beta:evidence -- phase-0-baseline
  */
 
+import { requireStepCredentials } from '../helpers.mjs';
+
 /**
  * Errors this environment always produces, unrelated to the browse surfaces.
  * `AI.*` operations come from a marketplace package that is not installed on a
@@ -84,7 +86,16 @@ export default async function run(page, h) {
     const r = await fetch('/nuxeo/api/v1/me', { headers: { Accept: 'application/json' } });
     return r.ok ? (await r.json()).id : `HTTP ${r.status}`;
   });
-  h.check('authenticated as Administrator', me === 'Administrator', `/me returned ${me}`);
+  // The identity the run signed in with, not the one the runner used to default to. This
+  // compared against a literal `Administrator`, which held only while the login defaulted to it
+  // too; with the default gone (NXSAT-649) any other account an operator exports read as an
+  // authentication defect. `h.login()` above has already required the pair.
+  const { username } = requireStepCredentials('check which identity the run signed in as');
+  h.check(
+    'authenticated as NUXEO_USER',
+    me === username,
+    `/me returned ${me}, expected ${username}`,
+  );
   await h.screenshot('app-shell');
 
   h.step('Production browse renders real repository content');

@@ -214,7 +214,7 @@ describe('MatTabListKeydownDirective on Material tab group', () => {
   });
 
   it('marks the tablist after the directive wires on a real mat-tab-group', () => {
-    const tabList = fixture.nativeElement.querySelector<HTMLElement>(
+    const tabList = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>(
       '.mat-mdc-tab-list[role="tablist"]',
     );
 

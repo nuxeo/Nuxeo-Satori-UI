@@ -5,10 +5,39 @@
  * Run with:
  *   npm run evidence:collect -- NXSAT-164 scripts/collect-evidence/NXSAT-164.mjs
  *
- * Requires local Nuxeo with:
- *   - Administrator (sees all top-level domains)
- *   - local-user5 / Local@user5test (sees Domain + Domain-5 only)
+ * Requires local Nuxeo with two accounts, both from the environment and neither defaulted:
+ *   - NUXEO_USER / NUXEO_PASS — an administrator (sees all top-level domains)
+ *   - NUXEO_ISOLATED_USER / NUXEO_ISOLATED_PASS — an ACL-isolated user (on the instance this was
+ *     written against, `local-user5`, which sees Domain + Domain-5 only)
+ *
+ * The administrator pair was a literal `'Administrator', 'Administrator'` and the isolated pair
+ * defaulted to that account's password, so this file carried two working logins (NXSAT-649).
+ *
+ * What a missing pair does depends on which one, because `story-runner.mjs` checks only the
+ * first. A missing `NUXEO_USER` / `NUXEO_PASS` never reaches this file: the runner refuses it
+ * with exit 2 before any scene runs. A missing `NUXEO_ISOLATED_*` pair is a `PreconditionError`
+ * thrown when the capture starts, after the browser and the recording have opened; story-runner
+ * records it as verdict `precondition-not-met`, but exits **1**, as it does for every
+ * `precondition-not-met` capture. Only `phase-runner.mjs` maps a `PreconditionError` to exit 2.
  */
+
+import { PreconditionError, requireStepCredentials } from '../beta-harness/helpers.mjs';
+
+/** The ACL-isolated account, from the environment, or a `PreconditionError`. */
+function requireIsolatedCredentials() {
+  const username = process.env['NUXEO_ISOLATED_USER'];
+  const password = process.env['NUXEO_ISOLATED_PASS'];
+  if (!username || !password) {
+    throw new PreconditionError(
+      'NUXEO_ISOLATED_USER and NUXEO_ISOLATED_PASS must both be set to collect NXSAT-164 ' +
+        'evidence — an ACL-isolated account to compare with the administrator.\n\n' +
+        '    export NUXEO_ISOLATED_USER=<user> NUXEO_ISOLATED_PASS=<password>\n\n' +
+        '  There is deliberately no default: a password in the repository is a credential in the ' +
+        'repository, whichever account it belongs to.',
+    );
+  }
+  return { username, password };
+}
 
 /** @param {import('@playwright/test').Page} page */
 async function loginAs(page, helpers, username, password) {
@@ -73,11 +102,11 @@ async function readDomainLabels(page) {
 
 /** @param {import('@playwright/test').Page} page */
 export default async function collectEvidence(page, helpers, _outDir) {
-  const isolatedUser = process.env['NUXEO_ISOLATED_USER'] ?? 'local-user5';
-  const isolatedPass = process.env['NUXEO_ISOLATED_PASS'] ?? 'Local@user5test';
+  const admin = requireStepCredentials('collect NXSAT-164 evidence as the administrator');
+  const { username: isolatedUser, password: isolatedPass } = requireIsolatedCredentials();
 
   // ── Administrator: all accessible domains ────────────────────────────────
-  await loginAs(page, helpers, 'Administrator', 'Administrator');
+  await loginAs(page, helpers, admin.username, admin.password);
   await openBrowseDrawer(page, helpers);
   const adminDomains = await readDomainLabels(page);
   helpers.step(`Administrator browse tree domains (${adminDomains.length}): ${adminDomains.join(', ')}`);
@@ -93,7 +122,7 @@ export default async function collectEvidence(page, helpers, _outDir) {
   await helpers.screenshot('02-isolated-user-browse-tree', page.locator('app-nav-drawer .folder-tree').first());
 
   // ── User switch simulation: admin tree must not leak after re-login ──────
-  await loginAs(page, helpers, 'Administrator', 'Administrator');
+  await loginAs(page, helpers, admin.username, admin.password);
   await openBrowseDrawer(page, helpers);
   await loginAs(page, helpers, isolatedUser, isolatedPass);
   await openBrowseDrawer(page, helpers);

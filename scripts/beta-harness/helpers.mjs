@@ -14,6 +14,7 @@
  */
 
 import { resolve } from 'node:path';
+import { requireNuxeoCredentials } from './nuxeo-credentials.mjs';
 
 const DEFAULT_BASE_URL = 'http://localhost:4200';
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -40,6 +41,26 @@ export class PreconditionError extends Error {
     super(message);
     this.name = 'PreconditionError';
   }
+}
+
+/**
+ * `NUXEO_USER` / `NUXEO_PASS` for a steps file, or a `PreconditionError` naming what is missing.
+ *
+ * There is no default (NXSAT-649) — see `nuxeo-credentials.mjs`. A `PreconditionError` rather
+ * than a plain `Error`, because both runners key their verdict on it — `precondition-not-met`,
+ * not `error`: a missing pair is the environment, and reporting it as `[error] steps aborted`
+ * invites someone to change working code. Their exit codes differ: `phase-runner.mjs` exits 2,
+ * while `story-runner.mjs` exits 1 for every `precondition-not-met` capture.
+ *
+ * Under either runner this rarely fires for `NUXEO_USER` / `NUXEO_PASS` themselves. Both refuse
+ * a missing pair with exit 2 before any step runs, unless the file exported
+ * `skipHttpCredentials = true`.
+ *
+ * @param {string} purpose completes "must both be set to …"
+ * @returns {import('./nuxeo-credentials.mjs').NuxeoCredentials}
+ */
+export function requireStepCredentials(purpose) {
+  return requireNuxeoCredentials(purpose, { errorClass: PreconditionError });
 }
 
 /**
@@ -305,7 +326,10 @@ export function createHelpers(page, outDir, recorder) {
     /**
      * Authenticate by injecting the session `AuthService` writes after a
      * successful login, avoiding the SSO UI. Credentials come from the
-     * environment and are never hardcoded.
+     * environment, with no default: unset, this throws a `PreconditionError`
+     * rather than signing in as an identity nobody asked for. The comment here
+     * said "never hardcoded" for as long as the two lines below it defaulted to
+     * the local Docker administrator pair (NXSAT-649).
      *
      * This satisfies the **route guard** only. XHRs are authenticated by the
      * browser context's `httpCredentials`, set in the runner — without that,
@@ -313,8 +337,7 @@ export function createHelpers(page, outDir, recorder) {
      * Both mechanisms are required.
      */
     async login() {
-      const user = process.env['NUXEO_USER'] ?? 'Administrator';
-      const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
+      const { username: user, password: pass } = requireStepCredentials('sign the evidence run in');
 
       await page.goto(this.baseUrl, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);

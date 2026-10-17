@@ -739,6 +739,854 @@ function checkHardcodedSecrets() {
   }
 }
 
+/** Where the Node-side harness and tooling live — the code that reads Nuxeo credentials. */
+const NUXEO_CREDENTIAL_ROOTS = ['scripts', 'tools', 'a11y'];
+
+/**
+ * A Nuxeo login read from the environment: `NUXEO_USER`, `NUXEO_PASS`, the per-account variants
+ * such as `NUXEO_ISOLATED_USER` / `NUXEO_ISOLATED_PASS`, and `NUXEO_AUTH`, which
+ * `scripts/verify-k*-dev-connectivity.sh` read as a whole `username:password` pair.
+ */
+const NUXEO_CREDENTIAL_NAME = String.raw`NUXEO_(?:[A-Z0-9]+_)*?(?:USER(?:NAME)?|PASS(?:WORD)?|AUTH)`;
+const NUXEO_CREDENTIAL_ENV = new RegExp(`^${NUXEO_CREDENTIAL_NAME}$`);
+
+/**
+ * An identifier named after a credential variable — `NUXEO_USER_ENV`, the key constant
+ * `scripts/beta-harness/nuxeo-credentials.mjs` exports. Used for `process.env[NUXEO_USER_ENV]`
+ * when the constant is imported, so its value is in another file.
+ */
+const NUXEO_CREDENTIAL_KEY_IDENTIFIER = new RegExp(
+  `^(${NUXEO_CREDENTIAL_NAME})(?:_(?:ENV|VAR|KEY|NAME))?$`,
+);
+
+/** The files read: scripts, and the generator templates under `tools/` that become them. */
+const NUXEO_CREDENTIAL_SCANNED_FILE = /\.(?:[cm]?[jt]s|tsx|jsx|sh)(?:__tmpl__)?$/;
+
+/** Shell: the operators that substitute a fallback — `${V:-x}`, `${V-x}`, `${V:=x}`, `${V=x}`. */
+const SHELL_DEFAULT_OPERATORS = new Set([':-', '-', ':=', '=']);
+
+/** Shell: a `-z` / `-n` test of a credential variable, `[ -z "$NUXEO_PASS" ]`, `[[ -n ${NUXEO_USER:-} ]]`. */
+const SHELL_CREDENTIAL_TEST = new RegExp(
+  String.raw`-[zn]\s+"?\$\{?(${NUXEO_CREDENTIAL_NAME})\b`,
+  'g',
+);
+
+/** Shell: an assignment to a credential variable, optionally exported or declared. */
+const SHELL_CREDENTIAL_ASSIGNMENT = new RegExp(
+  String.raw`(?:^|[\s;&|({!])(?:(?:export|local|readonly|declare(?:\s+-\w+)*)\s+)?(${NUXEO_CREDENTIAL_NAME})=(?!=)`,
+  'dg',
+);
+
+/** Shell: `if` / `fi` at a command position, to know which tests an assignment sits under. */
+const SHELL_IF_OPEN = /(?:^\s*|[;&|]\s*|\b(?:then|else|do)\s+)(if)\s/dg;
+const SHELL_IF_CLOSE = /(?:^\s*|[;&|]\s*|\b(?:then|else|do)\s+)(fi)\b/dg;
+
+/**
+ * A shell value as the credential scan sees it: the literal text it is built from, and whether
+ * any of it comes from the environment or a command instead.
+ *
+ * @typedef {{ text: string, runtime: boolean }} ShellValue
+ */
+
+/** Whether a value is a literal worth reporting: nothing in it is supplied at run time, and it is not blank. */
+function isShellLiteral(value) {
+  return !value.runtime && value.text.trim() !== '';
+}
+
+/**
+ * What a shell file expands and runs — enough of a lexer for the credential scan, not a parser.
+ *
+ * The line-at-a-time regexes this replaced read `${NUXEO_PASS:-fixed}` in single-quoted text and
+ * after a `#` as a default, though the shell expands neither, and read `${NUXEO_PASS:-$SECRET}`
+ * and `${NUXEO_PASS:-$(security …)}` as literal ones, though their values come from the
+ * environment and a command (Copilot, PR #429). So the file is walked once, with the shell's own
+ * rules:
+ *
+ * - a `#` that starts a word starts a comment, to the end of the line;
+ * - `'…'`, `$'…'`, a `\`-escaped `$`, and the body of a heredoc whose delimiter is quoted
+ *   (`<<'EOF'`, `<<"EOF"`, `<<\EOF`) are text: nothing in them expands;
+ * - unquoted text, `"…"`, `$(…)`, backticks, `$((…))` and the body of an unquoted `<<EOF`
+ *   heredoc expand — in a heredoc body quotes are ordinary characters, so `'${V:-x}'` there
+ *   expands too.
+ *
+ * A {@link ShellValue} is runtime when it holds a variable (`$V`, `${V}`), a command
+ * substitution, a backtick or an arithmetic expansion, whatever literal text surrounds it. A
+ * nested default is read as its own fallback when that is a non-empty literal —
+ * `${A:-${B:-x}}` is `x` when neither variable is set — and as a variable otherwise.
+ *
+ * Returns every `${V:-x}`-family expansion the shell would perform, with its fallback, and every
+ * word at command level — outside comments, quotes and heredoc bodies — keyed by its start
+ * offset, so a `-z` test, an assignment or an `if` can be checked to be one the shell runs
+ * rather than text it prints.
+ *
+ * Not modelled, because the scan does not need them: a `case` pattern's `)` inside `$(…)` closes
+ * the substitution early, and a `$((` that is really `$( (`…`) )` written without a space is
+ * read as arithmetic.
+ *
+ * @param {string} text
+ * @returns {{ defaults: { index: number, name: string, shown: string, value: ShellValue }[],
+ *   words: Map<number, ShellValue> }}
+ */
+function lexShell(text) {
+  const { length } = text;
+  const defaults = [];
+  const words = new Map();
+  /** Heredocs opened on the current line; their bodies start after its newline. */
+  const pending = [];
+
+  const NAME_START = /[A-Za-z_]/;
+  const NAME_CHAR = /\w/;
+  const SPECIAL_PARAMETER = /[0-9@*#?$!-]/;
+  const isBlank = (ch) => ch === ' ' || ch === '\t' || ch === '\r';
+  const isMeta = (ch) => ch !== undefined && ';&|()<>'.includes(ch);
+  const empty = () => ({ text: '', runtime: false });
+
+  /** `'…'`. `i` is the opening quote; returns the index after the closing one. */
+  const singleQuoted = (i, into) => {
+    const close = text.indexOf("'", i + 1);
+    const end = close === -1 ? length : close;
+    into.text += text.slice(i + 1, end);
+    return Math.min(end + 1, length);
+  };
+
+  /** `$'…'`: ANSI-C quoting, a literal with backslash escapes. `i` is the `$`. */
+  const ansiC = (i, into) => {
+    let j = i + 2;
+    while (j < length && text[j] !== "'") {
+      if (text[j] === '\\') j += 1;
+      if (j < length) into.text += text[j];
+      j += 1;
+    }
+    return Math.min(j + 1, length);
+  };
+
+  /**
+   * One step through text where `$` and backticks expand and quotes are characters: the inside of
+   * `"…"`, of an unquoted heredoc body, or of `${…}` in either. Inside `${…}` a `"` opens a nested
+   * string, as bash reads `"${V:-"x"}"`.
+   */
+  const expandingStep = (j, into, inParameter) => {
+    const ch = text[j];
+    if (ch === '\\' && j + 1 < length && '$`"\\\n}'.includes(text[j + 1])) {
+      if (text[j + 1] !== '\n') into.text += text[j + 1];
+      return j + 2;
+    }
+    if (ch === '$') return dollar(j, into, false);
+    if (ch === '`') return backtick(j, into);
+    if (ch === '"' && inParameter) return doubleQuoted(j, into);
+    into.text += ch;
+    return j + 1;
+  };
+
+  /** One step through unquoted text, where quotes quote and `\` escapes any character. */
+  const unquotedStep = (j, into) => {
+    const ch = text[j];
+    if (ch === '\\') {
+      if (j + 1 < length && text[j + 1] !== '\n') into.text += text[j + 1];
+      return Math.min(j + 2, length);
+    }
+    if (ch === "'") return singleQuoted(j, into);
+    if (ch === '"') return doubleQuoted(j, into);
+    if (ch === '$') return dollar(j, into, true);
+    if (ch === '`') return backtick(j, into);
+    into.text += ch;
+    return j + 1;
+  };
+
+  /** `"…"`. `i` is the opening quote. */
+  const doubleQuoted = (i, into) => {
+    let j = i + 1;
+    while (j < length && text[j] !== '"') j = expandingStep(j, into, false);
+    return Math.min(j + 1, length);
+  };
+
+  /** A backtick command substitution. Its output is supplied at run time. */
+  const backtick = (i, into) => {
+    into.runtime = true;
+    return commands(i + 1, '`');
+  };
+
+  /** Whatever a `$` starts. `unquoted` is false inside `"…"` and heredoc bodies. */
+  const dollar = (i, into, unquoted) => {
+    const next = text[i + 1] ?? '';
+    if (next === '{') return parameter(i, into, unquoted);
+    if (next === '(' && text[i + 2] === '(') return arithmetic(i + 3, into);
+    if (next === '(') {
+      into.runtime = true;
+      return commands(i + 2, ')');
+    }
+    if (unquoted && next === "'") return ansiC(i, into);
+    if (unquoted && next === '"') return doubleQuoted(i + 1, into);
+    if (NAME_START.test(next)) {
+      let j = i + 2;
+      while (j < length && NAME_CHAR.test(text[j])) j += 1;
+      into.runtime = true;
+      return j;
+    }
+    if (next !== '' && SPECIAL_PARAMETER.test(next)) {
+      into.runtime = true;
+      return i + 2;
+    }
+    into.text += '$';
+    return i + 1;
+  };
+
+  /** `${…}`. `i` is the `$`. Records a default, and gives `into` what the expansion stands for. */
+  const parameter = (i, into, unquoted) => {
+    let j = i + 2;
+    // `${#V}` is a length and `${!V}` an indirection: neither reads V's value with a fallback.
+    const prefixed = text[j] === '#' || text[j] === '!';
+    if (prefixed) j += 1;
+    const nameStart = j;
+    if (NAME_START.test(text[j] ?? '')) {
+      while (j < length && NAME_CHAR.test(text[j])) j += 1;
+    } else if (j < length && SPECIAL_PARAMETER.test(text[j])) {
+      j += 1;
+    }
+    const name = text.slice(nameStart, j);
+    const operator = /^:?[-=?+]/.exec(text.slice(j, j + 2))?.[0] ?? '';
+    j += operator.length;
+    const fallback = empty();
+    let depth = 0;
+    while (j < length && (text[j] !== '}' || depth > 0)) {
+      if (text[j] === '{') depth += 1;
+      else if (text[j] === '}') depth -= 1;
+      j = unquoted ? unquotedStep(j, fallback) : expandingStep(j, fallback, true);
+    }
+    const end = Math.min(j + 1, length);
+    const isDefault = !prefixed && name !== '' && SHELL_DEFAULT_OPERATORS.has(operator);
+    if (isDefault) defaults.push({ index: i, name, shown: text.slice(i, end), value: fallback });
+    if (isDefault && isShellLiteral(fallback)) into.text += fallback.text;
+    else into.runtime = true;
+    return end;
+  };
+
+  /** `$((…))` or `((…))`. `j` is just inside the parentheses. */
+  const arithmetic = (start, into) => {
+    into.runtime = true;
+    let j = start;
+    let depth = 0;
+    while (j < length) {
+      const ch = text[j];
+      if (ch === ')' && depth === 0) return text[j + 1] === ')' ? j + 2 : j + 1;
+      if (ch === '(' || ch === ')') {
+        depth += ch === '(' ? 1 : -1;
+        j += 1;
+      } else {
+        j = expandingStep(j, into, false);
+      }
+    }
+    return length;
+  };
+
+  /** A heredoc operator's delimiter. `start` is just after `<<`; the body is read at the newline. */
+  const heredoc = (start) => {
+    let j = start;
+    const stripTabs = text[j] === '-';
+    if (stripTabs) j += 1;
+    while (j < length && isBlank(text[j])) j += 1;
+    let delimiter = '';
+    let quoted = false;
+    while (j < length && !isBlank(text[j]) && text[j] !== '\n' && !isMeta(text[j])) {
+      const ch = text[j];
+      if (ch === "'" || ch === '"') {
+        quoted = true;
+        const close = text.indexOf(ch, j + 1);
+        const end = close === -1 ? length : close;
+        delimiter += text.slice(j + 1, end);
+        j = Math.min(end + 1, length);
+      } else if (ch === '\\') {
+        quoted = true;
+        delimiter += text[j + 1] ?? '';
+        j += 2;
+      } else {
+        delimiter += ch;
+        j += 1;
+      }
+    }
+    if (delimiter !== '') pending.push({ delimiter, stripTabs, expands: !quoted });
+    return Math.min(j, length);
+  };
+
+  /** The bodies of the heredocs opened on the line that ended just before `start`. */
+  const heredocBodies = (start) => {
+    let j = start;
+    while (pending.length && j < length) {
+      const { delimiter, stripTabs, expands } = pending.shift();
+      while (j < length) {
+        const newline = text.indexOf('\n', j);
+        const lineEnd = newline === -1 ? length : newline;
+        const line = text.slice(j, lineEnd).replace(/\r$/, '');
+        if ((stripTabs ? line.replace(/^\t+/, '') : line) === delimiter) {
+          j = lineEnd + 1;
+          break;
+        }
+        if (expands) {
+          const body = empty();
+          while (j < length && text[j] !== '\n') j = expandingStep(j, body, false);
+        } else {
+          j = lineEnd;
+        }
+        j += 1;
+      }
+    }
+    pending.length = 0;
+    return Math.min(j, length);
+  };
+
+  /**
+   * Command-level text from `start` to the `stop` that closes it — the `)` of `$(`, a closing
+   * backtick — or to the end of the file. Returns the index after `stop`.
+   */
+  const commands = (start, stop) => {
+    let j = start;
+    let depth = 0;
+    let wordStart = -1;
+    let word = null;
+    const endWord = () => {
+      if (word) words.set(wordStart, word);
+      word = null;
+    };
+    while (j < length) {
+      const ch = text[j];
+      if (ch === stop && (stop === '`' || depth === 0)) {
+        endWord();
+        return j + 1;
+      }
+      if (ch === '\n') {
+        endWord();
+        j = heredocBodies(j + 1);
+      } else if (isBlank(ch)) {
+        endWord();
+        j += 1;
+      } else if (ch === '#' && word === null) {
+        const newline = text.indexOf('\n', j);
+        j = newline === -1 ? length : newline;
+      } else if (isMeta(ch)) {
+        endWord();
+        if (text.startsWith('<<<', j)) {
+          j += 3;
+        } else if (text.startsWith('<<', j)) {
+          j = heredoc(j + 2);
+        } else if (text.startsWith('((', j)) {
+          j = arithmetic(j + 2, empty());
+        } else {
+          if (ch === '(') depth += 1;
+          else if (ch === ')') depth -= 1;
+          j += 1;
+        }
+      } else {
+        if (word === null) {
+          wordStart = j;
+          word = empty();
+        }
+        j = unquotedStep(j, word);
+      }
+    }
+    endWord();
+    return length;
+  };
+
+  commands(0, null);
+  return { defaults, words };
+}
+
+/**
+ * `${VAR:-x}`-family defaults, and a literal assigned under a test of the same variable:
+ * `[ -z "$NUXEO_PASS" ] && NUXEO_PASS=x` on one line, or inside an `if` block opened on a line
+ * that tests it.
+ *
+ * Only what the shell runs counts — {@link lexShell} decides that — and only a literal value: a
+ * fallback to another variable or a command is a runtime source, not a default written into the
+ * file. An unconditional assignment is not a default either: `scripts/e2e-negative-control.sh`
+ * exports a deliberately wrong `NUXEO_PASS` to prove the suite fails with it.
+ */
+function scanShellCredentialDefaults(file, text, report) {
+  const { defaults, words } = lexShell(text);
+  const lineOf = (offset) => text.slice(0, offset).split('\n').length;
+
+  for (const { index, name, shown, value } of defaults) {
+    if (NUXEO_CREDENTIAL_ENV.test(name) && isShellLiteral(value)) {
+      report(file, lineOf(index), name, shown.replace(/\s+/g, ' ').slice(0, 160));
+    }
+  }
+
+  /** One Set of tested names per open `if` block. */
+  const blocks = [];
+  let lineStart = 0;
+  for (const [index, line] of text.split('\n').entries()) {
+    const start = lineStart;
+    lineStart += line.length + 1;
+    /** Whether a match's first group starts a word the shell runs, not text it prints. */
+    const isCommand = (match) => words.has(start + match.indices[1][0]);
+
+    const tested = new Set(
+      [...line.matchAll(SHELL_CREDENTIAL_TEST)]
+        .filter((match) => words.has(start + match.index))
+        .map((match) => match[1]),
+    );
+    const guarded = new Set([...tested, ...blocks.flatMap((names) => [...names])]);
+    for (const match of line.matchAll(SHELL_CREDENTIAL_ASSIGNMENT)) {
+      const name = match[1];
+      const word = words.get(start + match.indices[1][0]);
+      if (!word || !guarded.has(name)) continue;
+      const value = { text: word.text.slice(name.length + 1), runtime: word.runtime };
+      if (isShellLiteral(value)) report(file, index + 1, name, line.trim().slice(0, 160));
+    }
+
+    // No command check for `elif`: `tested` holds only tests the shell runs, so text adds nothing.
+    if (/^\s*elif\s/.test(line) && blocks.length) {
+      for (const name of tested) blocks.at(-1).add(name);
+    }
+    const opened = [...line.matchAll(SHELL_IF_OPEN)].filter(isCommand).length;
+    const closed = [...line.matchAll(SHELL_IF_CLOSE)].filter(isCommand).length;
+    for (let i = 0; i < opened; i += 1) blocks.push(new Set(tested));
+    for (let i = 0; i < closed; i += 1) blocks.pop();
+  }
+}
+
+/**
+ * The JavaScript and TypeScript side, parsed and bound as one program.
+ *
+ * Bound, not just parsed, so a name means the declaration it resolves to: an alias in one
+ * function is not confused with a parameter of the same name in another, and `row.user` is not
+ * the variable `user`. The host serves only the files under scan — no lib, no `node_modules`, no
+ * module resolution — so this costs a parse and a bind per file and nothing else.
+ */
+function scanScriptCredentialDefaults(files, report) {
+  /** A virtual name per file that carries a real extension, so a `__tmpl__` parses as its kind. */
+  const sources = new Map();
+  for (const { file, text } of files) {
+    const bare = file.replace(/__tmpl__$/, '');
+    const virtual = bare === file ? file : `${file}${bare.slice(bare.lastIndexOf('.'))}`;
+    sources.set(virtual, {
+      file,
+      source: ts.createSourceFile(virtual, text, ts.ScriptTarget.Latest, true),
+    });
+  }
+  const host = {
+    getSourceFile: (name) => sources.get(name)?.source,
+    getDefaultLibFileName: () => 'lib.d.ts',
+    writeFile: () => undefined,
+    getCurrentDirectory: () => '',
+    getCanonicalFileName: (name) => name,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+    fileExists: (name) => sources.has(name),
+    readFile: () => undefined,
+  };
+  const program = ts.createProgram({
+    rootNames: [...sources.keys()],
+    options: {
+      allowJs: true,
+      noLib: true,
+      noResolve: true,
+      types: [],
+      noEmit: true,
+      target: ts.ScriptTarget.Latest,
+      module: ts.ModuleKind.ESNext,
+      // Every file its own scope, so two scripts declaring `const USER` are not one symbol.
+      moduleDetection: ts.ModuleDetectionKind.Force,
+    },
+    host,
+  });
+  const checker = program.getTypeChecker();
+
+  /** How far an alias or a constant is followed: `const a = env.X; const b = a;` is two. */
+  const MAX_DEPTH = 4;
+
+  const unwrap = (node) => {
+    let current = node;
+    while (
+      ts.isParenthesizedExpression(current) ||
+      ts.isAsExpression(current) ||
+      ts.isSatisfiesExpression(current) ||
+      ts.isNonNullExpression(current) ||
+      ts.isTypeAssertionExpression(current)
+    ) {
+      current = current.expression;
+    }
+    return current;
+  };
+
+  const declarationOf = (identifier) => {
+    const symbol = checker.getSymbolAtLocation(identifier);
+    return symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
+  };
+
+  const isStringLike = (n) => ts.isStringLiteral(n) || ts.isNoSubstitutionTemplateLiteral(n);
+  const isEmptyString = (node) => {
+    const n = unwrap(node);
+    return isStringLike(n) && n.text === '';
+  };
+
+  /** A string the node is, or a `const` it names is bound to; `null` when it is neither. */
+  const stringValueOf = (node, depth = 0) => {
+    const n = unwrap(node);
+    if (isStringLike(n)) return n.text;
+    if (ts.isIdentifier(n) && depth < MAX_DEPTH) {
+      const declaration = declarationOf(n);
+      if (declaration && ts.isVariableDeclaration(declaration) && declaration.initializer) {
+        return stringValueOf(declaration.initializer, depth + 1);
+      }
+    }
+    return null;
+  };
+
+  /**
+   * The text a fallback is when nothing at run time supplies any of it, or `null` when part of it
+   * comes from a runtime source.
+   *
+   * Literal: a string or template literal; a `+` of literals; a template whose substitutions are
+   * all literals; a name bound to one; a property of a same-file object literal holding one
+   * (`DEFAULTS.user`); and `x ?? 'lit'` / `x || 'lit'`, read as its own fallback when that is a
+   * non-empty literal — the value when `x` is unset, as the shell side reads `${A:-${B:-x}}`.
+   *
+   * Runtime: anything else — another environment variable, a call, a parameter, an import — and a
+   * template or `+` with one inside, whatever literal text surrounds it: `` `${env.VAULT_PASS}` ``
+   * is the vault's password, not one written into the file (Copilot, PR #429, on the shell side).
+   */
+  const fallbackText = (node, depth = 0) => {
+    const n = unwrap(node);
+    if (isStringLike(n)) return n.text;
+    if (ts.isTemplateExpression(n)) {
+      let text = n.head.text;
+      for (const span of n.templateSpans) {
+        const part = fallbackText(span.expression, depth);
+        if (part === null) return null;
+        text += part + span.literal.text;
+      }
+      return text;
+    }
+    if (ts.isBinaryExpression(n) && n.operatorToken.kind === ts.SyntaxKind.PlusToken) {
+      const left = fallbackText(n.left, depth);
+      const right = left === null ? null : fallbackText(n.right, depth);
+      return right === null ? null : left + right;
+    }
+    if (ts.isBinaryExpression(n) && DEFAULTING_OPERATORS.has(n.operatorToken.kind)) {
+      return fallbackText(n.right, depth) || null;
+    }
+    if (depth >= MAX_DEPTH) return null;
+    if (ts.isIdentifier(n)) {
+      const declaration = declarationOf(n);
+      return declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+        ? fallbackText(declaration.initializer, depth + 1)
+        : null;
+    }
+    const isProperty = ts.isPropertyAccessExpression(n) || ts.isElementAccessExpression(n);
+    if (isProperty && ts.isIdentifier(unwrap(n.expression))) {
+      const key = ts.isPropertyAccessExpression(n)
+        ? n.name.text
+        : stringValueOf(n.argumentExpression, depth + 1);
+      const declaration = declarationOf(unwrap(n.expression));
+      const object =
+        declaration && ts.isVariableDeclaration(declaration) && declaration.initializer
+          ? unwrap(declaration.initializer)
+          : null;
+      if (key !== null && object && ts.isObjectLiteralExpression(object)) {
+        const property = object.properties.find(
+          (p) =>
+            ts.isPropertyAssignment(p) &&
+            (ts.isIdentifier(p.name) || ts.isStringLiteral(p.name)) &&
+            p.name.text === key,
+        );
+        return property ? fallbackText(property.initializer, depth + 1) : null;
+      }
+    }
+    return null;
+  };
+
+  /** Whether the node is a non-empty literal fallback, as {@link fallbackText} defines one. */
+  const isLiteralDefault = (node) => Boolean(fallbackText(node));
+
+  /**
+   * The credential variable `node` stands for, or `null`:
+   *
+   * - a read — `x.NUXEO_USER`, `x['NUXEO_USER']`, `x[KEY]` with `KEY` bound to `'NUXEO_USER'`, or
+   *   `x[NUXEO_USER_ENV]` with the constant imported;
+   * - an alias of one — a name declared from a read (`const USER = process.env['NUXEO_USER']`,
+   *   `env.NUXEO_USER?.trim()`, `env.NUXEO_USER ?? ''`) or destructured from the environment
+   *   (`const { NUXEO_PASS: pass } = process.env`).
+   */
+  const credentialRead = (node, depth = 0) => {
+    const n = unwrap(node);
+    if (ts.isPropertyAccessExpression(n)) {
+      return NUXEO_CREDENTIAL_ENV.test(n.name.text) ? n.name.text : null;
+    }
+    if (ts.isElementAccessExpression(n)) {
+      const key = stringValueOf(n.argumentExpression);
+      if (key !== null) return NUXEO_CREDENTIAL_ENV.test(key) ? key : null;
+      const argument = unwrap(n.argumentExpression);
+      return ts.isIdentifier(argument)
+        ? (NUXEO_CREDENTIAL_KEY_IDENTIFIER.exec(argument.text)?.[1] ?? null)
+        : null;
+    }
+    if (ts.isIdentifier(n) && depth < MAX_DEPTH) {
+      const declaration = declarationOf(n);
+      if (!declaration) return null;
+      if (
+        ts.isVariableDeclaration(declaration) &&
+        ts.isIdentifier(declaration.name) &&
+        declaration.initializer
+      ) {
+        return credentialValue(declaration.initializer, depth + 1);
+      }
+      if (ts.isBindingElement(declaration) && ts.isObjectBindingPattern(declaration.parent)) {
+        const key = declaration.propertyName ?? declaration.name;
+        const name = ts.isIdentifier(key) || ts.isStringLiteral(key) ? key.text : null;
+        return name && NUXEO_CREDENTIAL_ENV.test(name) ? name : null;
+      }
+    }
+    return null;
+  };
+
+  /** What an alias holds: a read, through `?? ''` and zero-argument methods like `.trim()`. */
+  const credentialValue = (node, depth) => {
+    let n = unwrap(node);
+    for (;;) {
+      if (
+        ts.isBinaryExpression(n) &&
+        DEFAULTING_OPERATORS.has(n.operatorToken.kind) &&
+        isEmptyString(n.right)
+      ) {
+        n = unwrap(n.left);
+      } else if (
+        ts.isCallExpression(n) &&
+        n.arguments.length === 0 &&
+        ts.isPropertyAccessExpression(n.expression)
+      ) {
+        n = unwrap(n.expression.expression);
+      } else {
+        break;
+      }
+    }
+    return credentialRead(n, depth);
+  };
+
+  /** Every credential variable read anywhere inside `node`, so `env.NUXEO_USER?.trim()` counts. */
+  const credentialReadsWithin = (node, found = new Set()) => {
+    const direct = credentialRead(node);
+    if (direct) {
+      found.add(direct);
+    } else if (ts.isPropertyAccessExpression(node)) {
+      // `row.user`: the name after the dot is a property, never a variable.
+      credentialReadsWithin(node.expression, found);
+    } else if (!ts.isFunctionLike(node)) {
+      ts.forEachChild(node, (child) => {
+        credentialReadsWithin(child, found);
+      });
+    }
+    return found;
+  };
+  const firstCredentialReadWithin = (node) => credentialReadsWithin(node).values().next().value;
+
+  const DEFAULTING_OPERATORS = new Set([
+    ts.SyntaxKind.QuestionQuestionToken,
+    ts.SyntaxKind.BarBarToken,
+    ts.SyntaxKind.QuestionQuestionEqualsToken,
+    ts.SyntaxKind.BarBarEqualsToken,
+  ]);
+
+  /**
+   * Whether the assignment at `node` only runs when `name` was tested: inside either branch of an
+   * `if` whose condition reads it, or on the right of `&&` / `||` whose left side does —
+   * `if (!user) user = 'x'`, `!user && (user = 'x')`.
+   */
+  const guardedByTestOf = (node, name) => {
+    for (let child = node, parent = node.parent; parent; child = parent, parent = parent.parent) {
+      if (ts.isFunctionLike(parent)) return false;
+      if (ts.isIfStatement(parent) && child !== parent.expression) {
+        if (credentialReadsWithin(parent.expression).has(name)) return true;
+      }
+      if (
+        ts.isBinaryExpression(parent) &&
+        child === parent.right &&
+        (parent.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+          parent.operatorToken.kind === ts.SyntaxKind.BarBarToken) &&
+        credentialReadsWithin(parent.left).has(name)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  };
+
+  for (const { file, source } of sources.values()) {
+    const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const shown = (node) => node.getText(source).replace(/\s+/g, ' ').slice(0, 160);
+
+    const visit = (node) => {
+      if (ts.isBinaryExpression(node) && DEFAULTING_OPERATORS.has(node.operatorToken.kind)) {
+        const name = firstCredentialReadWithin(node.left);
+        if (name && isLiteralDefault(node.right)) report(file, lineOf(node), name, shown(node));
+      } else if (
+        ts.isBinaryExpression(node) &&
+        node.operatorToken.kind === ts.SyntaxKind.EqualsToken &&
+        isLiteralDefault(node.right)
+      ) {
+        const name = credentialRead(node.left);
+        if (name && guardedByTestOf(node, name)) report(file, lineOf(node), name, shown(node));
+      } else if (ts.isConditionalExpression(node)) {
+        const name = firstCredentialReadWithin(node.condition);
+        const literalBranch =
+          (credentialRead(node.whenTrue) && isLiteralDefault(node.whenFalse)) ||
+          (credentialRead(node.whenFalse) && isLiteralDefault(node.whenTrue));
+        if (name && literalBranch) report(file, lineOf(node), name, shown(node));
+      } else if (
+        ts.isBindingElement(node) &&
+        ts.isObjectBindingPattern(node.parent) &&
+        node.initializer &&
+        isLiteralDefault(node.initializer)
+      ) {
+        const key = node.propertyName ?? node.name;
+        const name = ts.isIdentifier(key) || ts.isStringLiteral(key) ? key.text : null;
+        if (name && NUXEO_CREDENTIAL_ENV.test(name)) report(file, lineOf(node), name, shown(node));
+      }
+      ts.forEachChild(node, visit);
+    };
+
+    visit(source);
+  }
+}
+
+/**
+ * No Nuxeo credential read from the environment with a literal fallback, anywhere in the harness
+ * or tooling (NXSAT-649).
+ *
+ * `.cursor/rules/security.mdc`: "NEVER use Basic auth with hardcoded fallback defaults". The rule
+ * existed, and `checkHardcodedSecrets` existed, and neither stopped a defaulted Nuxeo login —
+ * mostly `process.env['NUXEO_USER'] ?? 'Administrator'` — from reaching thirteen files: the secret
+ * patterns look for token shapes, and a username that is also a password has none. Four files had
+ * already been fixed one review at a time (`e2e-preflight.mjs`, `story-runner.mjs`,
+ * `phase-3-search.mjs`, `a11y/env.mjs`), and `a11y/docs/authoring.md` asked readers not to
+ * reintroduce it, while the phase runner, the login helper and the preflight kept the pattern for
+ * every capture.
+ *
+ * ## What it reads, and why the whole tree rather than the diff
+ *
+ * Every tracked or untracked-but-not-ignored `.js`/`.mjs`/`.cjs`/`.ts`/`.mts`/`.cts`/`.tsx`/`.jsx`
+ * and `.sh` file under `scripts/`, `tools/` and `a11y/`, and the `__tmpl__` generator templates
+ * of those kinds under `tools/`, which become customer project code. The tree, because the defect
+ * this exists for was already on `main` — a diff-scoped check would have been green over every
+ * one of them. There are none left, so any hit is new.
+ *
+ * The variables are `NUXEO_USER`, `NUXEO_PASS`, their per-account variants
+ * (`NUXEO_ISOLATED_PASS`), the `…USERNAME` / `…PASSWORD` spellings, and `NUXEO_AUTH`, a whole
+ * `username:password` pair.
+ *
+ * JavaScript and TypeScript are parsed and bound, not grepped, so a comment or a string quoting
+ * the pattern is not flagged, a fallback Prettier wrapped onto the next line is, and a name means
+ * the declaration it resolves to. A **read** is `env.NUXEO_USER`, `env['NUXEO_PASS']`,
+ * `env[KEY]` with `KEY` a same-file constant naming one, or `env[NUXEO_USER_ENV]` — a key named
+ * after the variable, imported or not, which is how `scripts/beta-harness/nuxeo-credentials.mjs`
+ * reads both. An **alias** is a name declared from a read (`const USER = process.env['NUXEO_USER']`,
+ * the house style of `e2e-preflight.mjs` and `a11y/env.mjs`, also through `?.trim()` or `?? ''`)
+ * or destructured from one (`const { NUXEO_PASS: pass } = process.env`), followed up to four
+ * levels. A **literal** is a fallback with no runtime source in it: a non-empty string or
+ * template literal, a `+` of literals, a template whose substitutions are all literals, a name
+ * bound to one, a property of a same-file object literal holding one (`DEFAULTS.user`), or
+ * `x ?? 'lit'` / `x || 'lit'`, read as its own fallback — the value when `x` is unset. The forms
+ * caught are:
+ *
+ * - a read or alias, or any expression containing one, then `??` / `||` / `??=` / `||=` and a
+ *   literal — `USER ?? 'x'`, `(env.NUXEO_USER ?? '') || 'x'`, `env.NUXEO_USER?.trim() || 'x'`;
+ * - a ternary choosing between a read or alias and a literal;
+ * - `const { NUXEO_USER = 'x' } = process.env`;
+ * - a literal assigned to a read or alias under a test of the same variable —
+ *   `if (!user) user = 'x'`, `!env.NUXEO_PASS && (env.NUXEO_PASS = 'x')`.
+ *
+ * Shell is lexed, not matched line by line (`lexShell`), so only what the shell expands or runs
+ * counts: unquoted text, `"…"`, `$(…)`, backticks and the body of an unquoted `<<EOF` heredoc —
+ * not a `#` comment, `'…'` or `$'…'`, a `\$`, or a heredoc whose delimiter is quoted. There, the
+ * forms caught are `${VAR:-x}`, `${VAR-x}`, `${VAR:=x}` and `${VAR=x}` with a literal `x`, and a
+ * literal assigned on the same line as, or inside an `if` block opened on a line with, a `-z` /
+ * `-n` test of the variable — `[ -z "$NUXEO_PASS" ] && NUXEO_PASS=x`. A shell literal is text
+ * and quotes only, `'x'` and `$'x'` included; a nested `${OTHER:-x}` counts as `x` when `x` is
+ * itself a non-empty literal, the value when neither variable is set.
+ *
+ * Not a default, so not flagged:
+ *
+ * - an empty fallback (in shell, a blank one too): `env.NUXEO_PASS ?? ''` followed by a refusal,
+ *   or `${NUXEO_AUTH:-}`, is a legitimate way to write the check;
+ * - an unconditional assignment — `scripts/e2e-negative-control.sh` exports a deliberately wrong
+ *   `NUXEO_PASS` to prove the suite fails with it;
+ * - a fallback with a runtime source anywhere in it, because then the environment or a command
+ *   supplies the value, not the file (Copilot, PR #429): another variable
+ *   (`${NUXEO_PASS:-$SECRET}`, `env.NUXEO_PASS ?? env.VAULT_PASS`), a command (`$(security …)`,
+ *   backticks), a call, a parameter, an import, or a template or `+` with one inside
+ *   (`` `${env.VAULT_PASS}` ``).
+ *
+ * ## What it does not claim
+ *
+ * Every limit below is a form this does not see; each was decided, not missed.
+ *
+ * - A fallback produced by a call (`?? defaultUser()`) — a call is a runtime source, so one that
+ *   only ever returns a literal is not seen — held in another file (`?? DEFAULTS.user` with
+ *   `DEFAULTS` imported), or reached through an object or a parameter rather than a variable
+ *   (`const cfg = { user: env.NUXEO_USER }; cfg.user ?? 'x'`). An imported key is recognised by
+ *   its name only; one named otherwise (`env[KEY]` with `KEY` imported) is not.
+ * - A literal mixed with a runtime source (`admin$SUFFIX`, `` `admin-${env.SUFFIX}` ``): the
+ *   runtime part makes the whole value runtime.
+ * - An alias more than four declarations from its read.
+ * - Shell defaults written any other way: a test and its assignment on different lines outside
+ *   an `if` (a `[ -z … ] && {` group with its body below, or a line continued with `\`), `case`,
+ *   and `.ps1` files. Text the shell does not expand is not read even when it is written out as
+ *   a script that later will be — a quoted heredoc that generates one — and nor is another
+ *   language run from a heredoc (the Python `verify-k*-dev-connectivity.sh` runs from one).
+ * - A literal login that never touches the environment — `NXSAT-164.mjs` passed
+ *   `'Administrator', 'Administrator'` straight to its `loginAs`, and that was found by reading,
+ *   not by this check.
+ * - Anything outside the three roots — `apps/nuxeo-ui-e2e` and `libs/integration-tests` enforce
+ *   their own no-default rule in code. Product code that falls back to `'Administrator'` as a
+ *   display **user id** (`currentUsername() ?? 'Administrator'`) reads no credential and is a
+ *   different question.
+ */
+function checkNoNuxeoCredentialDefaults() {
+  const listed = git([
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '--',
+    ...NUXEO_CREDENTIAL_ROOTS,
+  ])
+    .split('\n')
+    .filter((file) => NUXEO_CREDENTIAL_SCANNED_FILE.test(file));
+
+  const report = (file, line, name, shown) =>
+    fail(
+      `${file}:${line} defaults ${name} to a literal: ${shown}\n` +
+        '    Nuxeo credentials come from the environment with NO literal fallback. A literal default ' +
+        'is a working login in the repository, and a run with the variable unset silently measures ' +
+        'as that identity. Refuse instead: `nuxeoCredentialsOrExit` / `requireNuxeoCredentials` in ' +
+        '`scripts/beta-harness/nuxeo-credentials.mjs` (exit 2), `requireStepCredentials` in a ' +
+        'steps file, `requireNuxeoCredentials` from `a11y/env.mjs` under `a11y/`.',
+    );
+
+  let scanned = 0;
+  const scripts = [];
+  for (const file of new Set(listed)) {
+    if (!fileExists(file)) continue;
+    scanned += 1;
+    const text = read(file);
+    if (!text.includes('NUXEO_')) continue;
+    if (/\.sh(?:__tmpl__)?$/.test(file)) {
+      scanShellCredentialDefaults(file, text, report);
+    } else {
+      scripts.push({ file, text });
+    }
+  }
+  if (scripts.length) scanScriptCredentialDefaults(scripts, report);
+
+  // The repository's standing rule: a scan that finds nothing must not read as a pass.
+  if (scanned === 0) {
+    fail(
+      `checkNoNuxeoCredentialDefaults scanned no files under ${NUXEO_CREDENTIAL_ROOTS.join(', ')}, ` +
+        'so it asserted nothing. Check the roots and the extension filter before trusting a pass.',
+    );
+  }
+}
+
 /**
  * Every asset glob in the base build options must also be in the `development` configuration.
  *
@@ -6535,6 +7383,7 @@ const GUARDRAILS = [
   checkNoAttrPrefixedLiteralAttributes,
   checkTypeSafetyEscapes,
   checkHardcodedSecrets,
+  checkNoNuxeoCredentialDefaults,
   checkAngularDevAssets,
   checkAdfHxWorkaroundIds,
   checkNoAdfHxInPublicApi,

@@ -19,7 +19,9 @@ audience: engineering
 > double-quoted form — so a stamp naming an earlier commit would have vouched for a gate that did
 > not yet hold.
 > Nothing else on this page was re-read at that revision, so the two entries below still stand
-> for the rest of it.
+> for the rest of it. The `checkNoNuxeoCredentialDefaults` row of §3 was added by NXSAT-649
+> alongside the guardrail itself, and verified against `GUARDRAILS` and its controls in
+> `review-guardrails.selftest.mjs` on that branch; nothing else on the page was re-read for it.
 >
 > §3, §8, the `supply-chain` and `guardrails` rows of §2 and the CI-only rows of §7 were reviewed
 > on 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`), re-verified against
@@ -139,6 +141,7 @@ stopped at the general-purpose checks and every i18n and packaging check was add
 | `checkNoAttrPrefixedLiteralAttributes`        | No `[attr.aria-*]`, `[attr.role]` or `[attr.title]` on a literal attribute — a silent accessible-name miss                                                                              |
 | `checkTypeSafetyEscapes`                      | Warns on `as unknown as` / `as never`                                                                                                                                                   |
 | `checkHardcodedSecrets`                       | Credential-shaped literals                                                                                                                                                              |
+| `checkNoNuxeoCredentialDefaults`              | No `NUXEO_USER` / `NUXEO_PASS` / `NUXEO_AUTH` (or per-account variant) env read with a literal fallback in `scripts/`, `tools/`, `a11y/` or a generator template — the tree, not a diff |
 | `checkAngularDevAssets`                       | Dev-only assets do not ship                                                                                                                                                             |
 | `checkAdfHxWorkaroundIds`                     | A `WORKAROUND(adf-hx): W<n>` marker has a register row **and vice versa**                                                                                                               |
 | `checkNoAdfHxInPublicApi`                     | No adf-hx type reachable through a library barrel, walking the re-export graph                                                                                                          |

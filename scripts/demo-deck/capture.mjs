@@ -36,7 +36,8 @@
  * Usage:
  *   node scripts/demo-deck/capture.mjs [--only=id,id] [--out=DIR]
  *
- * Requires: Nuxeo on :8080, product app on :4200, template app on :4310.
+ * Requires: Nuxeo on :8080, product app on :4200, template app on :4310, and NUXEO_USER /
+ * NUXEO_PASS — no default; exits 2 before launching a browser when either is unset.
  */
 
 import { createHash } from 'node:crypto';
@@ -45,6 +46,11 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { nuxeoCredentialsOrExit } from '../beta-harness/nuxeo-credentials.mjs';
+
+// Both defaulted to the local Docker administrator pair (NXSAT-649). The whoami gate below
+// compares against USER, so a default also made that gate agree with an identity nobody chose.
+const { username: USER, password: PASS } = nuxeoCredentialsOrExit('capture the demo deck');
 
 let chromium;
 try {
@@ -63,8 +69,6 @@ const arg = (name) =>
 
 const APP = process.env['APP_URL'] ?? 'http://localhost:4200';
 const TEMPLATE = process.env['TEMPLATE_URL'] ?? 'http://localhost:4310';
-const USER = process.env['NUXEO_USER'] ?? 'Administrator';
-const PASS = process.env['NUXEO_PASS'] ?? 'Administrator';
 
 /** Gate 6: one viewport, one scale, for every shot. */
 const VIEWPORT = { width: 1440, height: 900 };

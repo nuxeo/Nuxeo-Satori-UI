@@ -24,6 +24,10 @@
  *    reports how many distinct images the run produced; a shot called
  *    `manifest-relabels-nav` that is byte-identical to the default one claims an
  *    observation it cannot support. Change what is on screen, or rename the shot.
+ * 7. The runner requires `NUXEO_USER` / `NUXEO_PASS` — there is no default — and
+ *    exits 2 before launching a browser when either is unset. A file that needs
+ *    no backend (`phase-0-no-backend`, `phase-4-platform`) exports
+ *    `skipHttpCredentials = true` instead, and then runs with no credentials sent.
  *
  * Helper reference: see `scripts/beta-harness/helpers.mjs`.
  *   h.step(label)                        open a named step
@@ -36,6 +40,10 @@
  *   h.expectNoConsoleErrors(name?)       assert a clean browser console
  *   h.goTo(route) / h.goToDoc(uid)       navigate
  *   h.login()                            inject an authenticated session
+ *
+ * And one import, for a file that needs the credentials outside `h.login()`:
+ *   import { requireStepCredentials } from '../helpers.mjs';
+ *   requireStepCredentials(purpose)      the env pair, or a PreconditionError
  */
 
 /**

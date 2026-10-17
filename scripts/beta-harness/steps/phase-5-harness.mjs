@@ -51,6 +51,8 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
+import { requireStepCredentials } from '../helpers.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
 const LIBRARY = join(ROOT, 'libs', 'extensions', 'acme-extensions');
@@ -118,8 +120,11 @@ export default async function run(page, h) {
    */
   const signInForm = page.locator('input[name="username"]');
   if (await signInForm.count()) {
-    await signInForm.fill(process.env['NUXEO_USER'] ?? 'Administrator');
-    await page.locator('input[name="password"]').fill(process.env['NUXEO_PASS'] ?? 'Administrator');
+    // From the environment, no default — both used to fall back to the local Docker
+    // administrator pair (NXSAT-649). The runner refuses this file without them already.
+    const { username, password } = requireStepCredentials('sign in through the template');
+    await signInForm.fill(username);
+    await page.locator('input[name="password"]').fill(password);
     await page.locator('.sign-in__submit').click();
     await page.waitForTimeout(4000);
   }
