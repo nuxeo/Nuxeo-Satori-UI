@@ -25,9 +25,9 @@
  * question about the product.
  *
  * `checkNoNuxeoCredentialDefaults` in `scripts/review-guardrails.mjs` fails the common shapes of
- * a reintroduced fallback under `scripts/`, `tools/` and `a11y/`. That includes this file's own
- * reads through `NUXEO_USER_ENV` / `NUXEO_PASS_ENV`, which its selftest mutates to prove it; the
- * guardrail's docblock lists the shapes it does not see.
+ * a reintroduced literal fallback under `scripts/`, `tools/` and `a11y/`. That includes this
+ * file's own reads through `NUXEO_USER_ENV` / `NUXEO_PASS_ENV`, which its selftest mutates to
+ * prove it; the guardrail's docblock lists the shapes it does not see.
  */
 
 export const NUXEO_USER_ENV = 'NUXEO_USER';
