@@ -22,6 +22,7 @@
       matInput
       name="from"
       [matDatepicker]="fromPicker"
+      [placeholder]="'common.date-mask' | translate | nxsDateMask"
       [ngModel]="filters().from"
       (ngModelChange)="setFilter('from', $event)"
     />
@@ -35,6 +36,7 @@
       matInput
       name="to"
       [matDatepicker]="toPicker"
+      [placeholder]="'common.date-mask' | translate | nxsDateMask"
       [ngModel]="filters().to"
       (ngModelChange)="setFilter('to', $event)"
     />

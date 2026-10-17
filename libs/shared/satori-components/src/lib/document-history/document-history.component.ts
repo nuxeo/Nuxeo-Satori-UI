@@ -31,6 +31,8 @@ import {
 } from 'rxjs';
 
 import { NxsAvatarComponent } from '../avatar/avatar.component';
+import { NxsDateMaskPipe } from '../date-input/date-mask.pipe';
+import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { NxsEmptyStateComponent } from '../empty-state/empty-state.component';
 import { NxsErrorStateComponent } from '../error-state/error-state.component';
 import { nxsErrorStatus, type NxsErrorStatus } from '../error-state/error-status';
@@ -100,14 +102,18 @@ function readable(entry: DirectoryEntry, fallback: (id: string) => string): stri
  * the comment and the lifecycle state, newest first, a page at a time. Action and category read
  * through the `eventTypes` and `eventCategories` vocabularies.
  *
- * It needs a Material `DateAdapter`, as any datepicker does; the host provides it.
+ * The From and To fields read a typed date through `provideNxsDateAdapter()`, so a host that
+ * chose its own non-native adapter keeps it, and the hint beside them is built from the dates
+ * that adapter writes rather than from the catalogue's letter order.
  */
 @Component({
   selector: 'nxs-document-history',
   standalone: true,
   templateUrl: './document-history.component.html',
   styleUrl: './document-history.component.scss',
+  providers: [provideNxsDateAdapter()],
   imports: [
+    NxsDateMaskPipe,
     DatePipe,
     FormsModule,
     MatDatepickerModule,
