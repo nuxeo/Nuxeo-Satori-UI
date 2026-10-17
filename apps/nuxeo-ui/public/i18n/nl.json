@@ -1025,7 +1025,7 @@
       "trashed-document-many": "{{ count }} documenten in prullenbak",
       "trashed-document-one": "{{ count }} document in prullenbak"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "dd-mm-jjjj",
     "dismiss": "Ontsla",
     "email-example": "naam@bedrijf.nl",
     "lock": {

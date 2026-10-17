@@ -62,6 +62,36 @@ the same version is the package it already has.
 The server reads the fragments once, at startup. A change applies after the restart that installing
 the package requires, and a browser picks it up on its next load.
 
+## Publish it to a Nuxeo Cloud environment
+
+`nuxeoctl mp-install` above installs a zip you already have. A hosted environment installs from
+the Marketplace instead, so the package has to be published there first — that is what the
+**Publish Configuration Package** workflow does. Dispatch it with this directory's name:
+
+```bash
+gh workflow run publish-config-package.yml -f package=satori-beta -f publishToPreprod=true
+```
+
+It builds the zip with the same `build.mjs`, so the published bytes are the ones reviewed here,
+and uploads it to preprod Connect (`nos-preprod-connect.nuxeocloud.com`). Leave
+`publishToPreprod` off to get the zip as a run artifact without publishing anything.
+
+Two things it does **not** do, both deliberate:
+
+- **It does not stamp a version.** `nuxeo-agentic-ui` gets a build timestamp because every merge
+  produces a new one; a configuration package's version is a reviewed property of the source,
+  and it is what `nuxeoctl` compares to decide whether an install is an upgrade. Raise it in
+  `package/package.xml` in the same commit as the change.
+- **It does not publish to production Connect.** `connect.nuxeo.com` is a separate decision with
+  a separate credential, not a flag on this run.
+
+`package.xml` declares `<visibility>PRIVATE</visibility>`, as `nuxeo-agentic-ui` does. That does
+**not** hide the listing: on preprod, `nuxeo-agentic-ui` is reachable at
+`/nuxeo/site/marketplace/package/nuxeo-agentic-ui` and is returned by searching the catalogue for
+"satori", both without signing in. What needs credentials is downloading it — the package zip is
+`401` to an anonymous request. So a reviewer can be pointed at the listing URL; installing it is
+what requires a Nuxeo Online Services account.
+
 ## Three things to know
 
 - **Everything in a fragment is public.** The application reads its configuration before anyone
@@ -69,10 +99,14 @@ the package requires, and a browser picks it up on its next load.
   host name in a fragment.
 - **Hiding something is not a security control.** A manifest can hide an action; Nuxeo's
   permissions still decide whether a user may perform it.
-- **Install it on a Nuxeo Satori that has the configuration service.** `package.xml` depends on
-  `nuxeo-agentic-ui` without a minimum version, because no published version yet separates a
-  build with the service from one without it. On an older build Nuxeo refuses to start, because
-  `org.nuxeo.agentic.ui.config.defaults` does not exist there; remove this package to recover.
+- **It will only install on a Nuxeo Satori that has the configuration service.** `package.xml`
+  depends on `nuxeo-agentic-ui:2026.0.2` — a minimum, with no maximum. Below it
+  `org.nuxeo.agentic.ui.config.defaults` does not exist, this package's component `<require>`s a
+  component that is not there, and Nuxeo refuses to start; remove the package to recover. The
+  service landed in `2026.0.2`, so the whole published `2026.0.1` line is that broken install and
+  the floor is what stops the Marketplace offering it. A timestamped build satisfies the floor —
+  Nuxeo sorts `2026.0.2-20261013051939-BUILD-1884` **above** bare `2026.0.2`, not below it as
+  Maven would — so this constrains nothing that is actually published at or after `2026.0.2`.
 
 ## Order, when there is more than one package
 

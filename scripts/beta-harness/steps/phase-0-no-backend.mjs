@@ -21,6 +21,31 @@
  */
 
 /**
+ * This file proves the absence of a backend, so it needs no credentials, and the runner neither
+ * requires `NUXEO_USER` / `NUXEO_PASS` for it nor sends them (NXSAT-649).
+ */
+export const skipHttpCredentials = true;
+
+/**
+ * Did Nuxeo itself answer `/nuxeo/api/v1/me`?
+ *
+ * `200` (an authenticated or anonymous session), `401` and `403` are all Nuxeo's answers, so a
+ * backend is there. No response, a dev-proxy error (`5xx` — Vite answers `500` when the target
+ * refuses) or a `404` from a server with no proxy means it is not.
+ *
+ * Both probes in this file used to test `status !== 200`. That was sound only while the runner
+ * sent a Basic pair on every request — it defaulted one in. Unauthenticated, a live Nuxeo
+ * answers `401`, which `!== 200` reads as "no backend": the precondition would pass and the run
+ * would report a page of reds for one environment mismatch, the 2026-08-20 failure the
+ * precondition exists to stop. It was already wrong with a mistyped password, for the same reason.
+ *
+ * @param {number | undefined} status
+ */
+function nuxeoAnswered(status) {
+  return status === 200 || status === 401 || status === 403;
+}
+
+/**
  * @param {import('@playwright/test').Page} page
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
@@ -34,7 +59,7 @@ export default async function run(page, h) {
   const probe = await page.request.get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false }).catch(() => null);
   h.requirePrecondition(
     'Nuxeo API is unreachable through the dev proxy',
-    probe?.status() !== 200,
+    !nuxeoAnswered(probe?.status()),
     `/nuxeo/api/v1/me returned ${probe?.status() ?? 'no response'} — a backend IS available here, ` +
       'so this steps file does not apply. Run `npm run beta:evidence -- phase-0-baseline` instead.',
   );
@@ -88,7 +113,7 @@ export default async function run(page, h) {
   });
   h.check(
     'Nuxeo API unreachable from browser context too',
-    apiStatus !== 200,
+    !nuxeoAnswered(apiStatus),
     `/nuxeo/api/v1/me returned ${apiStatus} from the page although the precondition probe found no backend`,
   );
   // Deliberately a note, not a check. `check(name, true)` cannot fail, so it

@@ -1025,7 +1025,7 @@
       "trashed-document-many": "{{ count }} Dokumente im Papierkorb",
       "trashed-document-one": "{{ count }} Dokument im Papierkorb"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "tt.mm.jjjj",
     "dismiss": "Verwerfen",
     "email-example": "name@firma.de",
     "lock": {

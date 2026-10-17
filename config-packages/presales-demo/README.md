@@ -58,10 +58,14 @@ the package requires, and a browser picks it up on its next load.
   host name in a fragment.
 - **Hiding something is not a security control.** A manifest can hide an action; Nuxeo's
   permissions still decide whether a user may perform it.
-- **Install it on a Nuxeo Satori that has the configuration service.** `package.xml` depends on
-  `nuxeo-agentic-ui` without a minimum version, because no published version yet separates a
-  build with the service from one without it. On an older build Nuxeo refuses to start, because
-  `org.nuxeo.agentic.ui.config.defaults` does not exist there; remove this package to recover.
+- **It will only install on a Nuxeo Satori that has the configuration service.** `package.xml`
+  depends on `nuxeo-agentic-ui:2026.0.2` — a minimum, with no maximum. Below it
+  `org.nuxeo.agentic.ui.config.defaults` does not exist, this package's component `<require>`s a
+  component that is not there, and Nuxeo refuses to start; remove the package to recover. The
+  service landed in `2026.0.2`, so the whole published `2026.0.1` line is that broken install and
+  the floor is what stops the Marketplace offering it. A timestamped build satisfies the floor —
+  Nuxeo sorts `2026.0.2-20261013051939-BUILD-1884` **above** bare `2026.0.2`, not below it as
+  Maven would — so this constrains nothing that is actually published at or after `2026.0.2`.
 
 ## Order, when there is more than one package
 

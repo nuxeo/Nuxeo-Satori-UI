@@ -153,12 +153,17 @@ than hitting :8080 directly.
 
 Credentials come from the environment only — never hardcoded, never in a URL query string.
 That rule is enforced by `checkHardcodedSecrets` in
-[`scripts/review-guardrails.mjs`](../../scripts/review-guardrails.mjs).
+[`scripts/review-guardrails.mjs`](../../scripts/review-guardrails.mjs). For the Nuxeo pair,
+`checkNoNuxeoCredentialDefaults` fails the common shapes of a read defaulted to a literal under
+`scripts/`, `tools/` and `a11y/` — a fallback to another variable or a command is not one.
+`NUXEO_USER` and `NUXEO_PASS` have **no default**: a harness, preflight or tool that talks to
+Nuxeo refuses to run without them, and a steps or scenes file that needs no backend opts out with
+`skipHttpCredentials = true`.
 
 | Variable                              | Default                         | Used by                                                          |
 | ------------------------------------- | ------------------------------- | ---------------------------------------------------------------- |
-| `NUXEO_USER`                          | `Administrator`                 | Evidence harness, E2E, preflights                                |
-| `NUXEO_PASS`                          | `Administrator`                 | as above                                                         |
+| `NUXEO_USER`                          | — (required)                    | Evidence harness, E2E, preflights                                |
+| `NUXEO_PASS`                          | — (required)                    | as above                                                         |
 | `SATORI_GH_READONLY_TOKEN`            | —                               | `npm ci`, CI package installs                                    |
 | `E2E_BASE_URL`                        | `http://localhost:4200`         | E2E suite                                                        |
 | `AGENTIC_UI_EVIDENCE_DIR`             | `~/Desktop/agentic-ui-evidence` | Where evidence is written                                        |

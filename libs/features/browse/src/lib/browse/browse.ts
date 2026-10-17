@@ -36,7 +36,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -106,6 +105,7 @@ import {
   ShareDialogData,
   trashDocumentConfirmData,
   trashSelectedDocumentsConfirmData,
+  provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 
@@ -215,7 +215,12 @@ const PAGE_SIZE = 50;
 @Component({
   selector: 'lib-browse',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl(), provideNxsToast(), provideNxsThumbnailCache()],
+  providers: [
+    provideSatoriDateAdapter(),
+    provideTranslatedDatepickerIntl(),
+    provideNxsToast(),
+    provideNxsThumbnailCache(),
+  ],
   imports: [
     NxsActionMenuComponent,
     NxsBreadcrumbsComponent,
@@ -246,7 +251,6 @@ const PAGE_SIZE = 50;
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatChipsModule,
     MatAutocompleteModule,
     MatCheckboxModule,

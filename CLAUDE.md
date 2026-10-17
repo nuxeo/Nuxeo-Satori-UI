@@ -123,7 +123,10 @@ Two traps that have each cost a phase:
 - Nuxeo runs locally in Docker (container `nuxeo`, port 8080) with OpenSearch. The dev
   server proxies to it via `apps/nuxeo-ui/proxy.conf.json`.
 - `npx nx serve nuxeo-ui` → `http://localhost:4200`.
-- Credentials from `NUXEO_USER`/`NUXEO_PASS`, default `Administrator`.
+- Credentials from `NUXEO_USER`/`NUXEO_PASS`, **required — there is no default**. Export them
+  yourself; a local Docker Nuxeo uses its documented default administrator account. A steps or
+  scenes file that needs no backend opts out with `skipHttpCredentials = true`. What refuses,
+  and with which exit code, is in `scripts/beta-harness/README.md`.
 - `SATORI_GH_READONLY_TOKEN` is required to install the `@hylandsoftware` packages from
   GitHub Packages. No `@alfresco` package is installed since NXSAT-637.
 - Node is pinned to 20 (`.nvmrc`). On Node 22+ a built-in `localStorage` shadows jsdom's;

@@ -1025,7 +1025,7 @@
       "trashed-document-many": "{{ count }} documents dans la corbeille",
       "trashed-document-one": "{{ count }} document dans la corbeille"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "jj/mm/aaaa",
     "dismiss": "Abandonner",
     "email-example": "nom@entreprise.com",
     "lock": {

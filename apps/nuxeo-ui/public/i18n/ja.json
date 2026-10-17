@@ -1025,7 +1025,7 @@
       "trashed-document-many": "ごみ箱内の文書: {{ count }} 件",
       "trashed-document-one": "ごみ箱内の文書: {{ count }} 件"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "yyyy/mm/dd",
     "dismiss": "破棄",
     "email-example": "name@company.com",
     "lock": {
