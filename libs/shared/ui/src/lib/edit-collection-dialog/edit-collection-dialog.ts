@@ -223,10 +223,11 @@ export class EditCollectionDialogComponent implements OnInit {
   onExpiresInput(event: Event): void {
     this.expiresRawText = (event.target as HTMLInputElement).value;
     // Parse synchronously so validation and the saved payload agree even before ngModel updates.
-    this.expires = this.dateAdapter.parse(
-      this.expiresRawText.trim(),
-      this.dateFormats.parse.dateInput,
+    const parsed = this.dateAdapter.getValidDateOrNull(
+      this.dateAdapter.parse(this.expiresRawText.trim(), this.dateFormats.parse.dateInput),
     );
+    // The datepicker already holds null or this instant; another value makes [ngModel] rewrite the text.
+    if (parsed?.getTime() !== this.expires?.getTime()) this.expires = parsed;
     const ctrl = this.expiresNgModel?.control;
     if (ctrl) {
       ctrl.markAsDirty();

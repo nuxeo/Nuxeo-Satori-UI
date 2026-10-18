@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
@@ -456,5 +457,53 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     expect(updateDocument).not.toHaveBeenCalled();
     expect(component.saving()).toBe(false);
     expect(close).not.toHaveBeenCalled();
+  });
+});
+
+/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
+async function typeKeystrokes(
+  fixture: ComponentFixture<unknown>,
+  input: HTMLInputElement,
+  text: string,
+): Promise<string[]> {
+  const shown: string[] = [];
+  for (let end = 1; end <= text.length; end++) {
+    input.value = text.slice(0, end);
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    shown.push(input.value);
+  }
+  return shown;
+}
+
+const TYPED_EXPIRY = '12/31/2027';
+const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
+const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
+
+// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
+// write back and erase the text mid-entry. Only a real template exercises that write-back.
+describe('EditMetadataDialogComponent Expires typed into the real field', () => {
+  it('keeps every partial entry in the field and holds the finished date', async () => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [testTranslateModule(), EditMetadataDialogComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: { close: vi.fn() } },
+        { provide: MAT_DIALOG_DATA, useValue: dialogData },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: BrowseService, useValue: mockBrowseService },
+        { provide: MatSnackBar, useValue: { open: vi.fn() } },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(EditMetadataDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
   });
 });
