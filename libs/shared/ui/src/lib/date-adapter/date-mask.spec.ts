@@ -132,6 +132,33 @@ describe('dateMaskFor', () => {
     });
   });
 
+  // A host may ship an already-regional catalogue; `d`/`m`/`y` letters name their own fields.
+  describe.each([
+    { locale: 'en-GB', mask: 'dd/mm/yyyy', expected: 'dd/mm/yyyy', why: 'already day-first' },
+    {
+      locale: 'en-US',
+      mask: 'dd/mm/yyyy',
+      expected: 'mm/dd/yyyy',
+      why: 'day-first mask, month-first field',
+    },
+    {
+      locale: 'en-CA',
+      mask: 'dd/mm/yyyy',
+      expected: 'yyyy-mm-dd',
+      why: 'day-first mask, year-first field',
+    },
+    {
+      locale: 'de',
+      mask: 'yyyy-mm-dd',
+      expected: 'dd.mm.yyyy',
+      why: 'year-first mask, German field',
+    },
+  ])('regional catalogue mask $mask under $locale ($why)', ({ locale, mask, expected }) => {
+    it(`composes ${expected}`, () => {
+      expect(dateMaskFor(locale, mask)).toBe(expected);
+    });
+  });
+
   it('falls back to the base language for a region date-fns has no data for', () => {
     expect(dateMaskFor('en-XX', CATALOGUE_MASKS.en)).toBe(CATALOGUE_MASKS.en);
   });
