@@ -615,7 +615,9 @@ const context = await browser.newContext({
   // httpCredentials guarantees Basic on every request to the origin. Seeding the session into
   // sessionStorage alone satisfies the route guard but does not reliably authenticate XHRs, which
   // surfaces as intermittent 403s on /nuxeo/api paths — the Phase 0 harness defect.
-  httpCredentials: { username: USER, password: PASS, origin: APP },
+  // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never challenges, so a
+  // challenge-based credential is never sent and `page.request` runs as Anonymous.
+  httpCredentials: { username: USER, password: PASS, origin: APP, send: 'always' },
 });
 
 /**

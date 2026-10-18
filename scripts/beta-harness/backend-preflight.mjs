@@ -26,8 +26,11 @@
  *   NUXEO_USER/NUXEO_PASS required — no default (NXSAT-649)
  *   BACKEND_WAIT_SECONDS  default 180
  *
- * Exit 0 when Nuxeo is serving. Exit 1 with a specific, actionable reason
- * otherwise — Docker not running, container absent, or API never came up.
+ * Exit 0 when Nuxeo is serving **as NUXEO_USER**. Exit 1 with a specific, actionable reason
+ * otherwise — Docker not running, container absent, the API never came up, or it answered
+ * as someone else. A `200` is not enough: a Nuxeo with guests enabled answers a request whose
+ * credentials did not arrive `200` as `Anonymous`, and this reported that as "pass" while
+ * printing the guest's name (NXSAT-643, `identity-guard.mjs`).
  * Exit 2 when NUXEO_USER or NUXEO_PASS is unset: a precondition, checked before
  * Docker is touched, because the probe has nothing to authenticate with and a
  * guessed pair is the defect this used to have.
@@ -35,6 +38,7 @@
 
 import { spawnSync } from 'node:child_process';
 
+import { judgeMe } from './identity-guard.mjs';
 import {
   EXIT_PRECONDITION,
   missingNuxeoCredentialsMessage,
@@ -86,6 +90,7 @@ async function main() {
   // Fast path first. If the API already answers, nothing else matters — the
   // containers could be named anything, or Nuxeo could be running outside Docker.
   const already = await probeApi();
+  if (already.rejected) return refuseIdentity(already);
   if (already.ok) {
     say(`backend-preflight: pass — Nuxeo is serving at ${nuxeoUrl} (HTTP ${already.status}, user ${already.user}).`);
     return { ok: true, status: 'already-up', apiStatus: already.status };
@@ -152,6 +157,7 @@ async function main() {
   while (Date.now() < deadline) {
     await sleep(3000);
     last = await probeApi();
+    if (last.rejected) return refuseIdentity(last);
     if (last.ok) {
       say(`backend-preflight: pass — Nuxeo came up (HTTP ${last.status}, user ${last.user}).`);
       return { ok: true, status: 'started', apiStatus: last.status };
@@ -171,7 +177,24 @@ async function main() {
 }
 
 /**
- * @returns {Promise<{ ok: boolean, status?: number, user?: string, detail: string }>}
+ * Nuxeo is up and answering, but not as the user this run authenticates as. Not a reason to
+ * wait or to start a container — nothing about deployment will change who the request ran as.
+ *
+ * @param {{ status?: number, detail: string }} probe
+ */
+function refuseIdentity(probe) {
+  say(
+    `backend-preflight: FAIL — ${nuxeoUrl}/nuxeo/api/v1/me answered HTTP ${probe.status}, but ${probe.detail}.\n` +
+      '  The credentials did not authenticate the request. A capture now would run as the wrong\n' +
+      '  user and still look green; fix NUXEO_USER / NUXEO_PASS or whatever strips the header.',
+  );
+  return { ok: false, status: 'wrong-identity', detail: probe.detail };
+}
+
+/**
+ * Up, and answering as `NUXEO_USER` — the status alone cannot say the second half.
+ *
+ * @returns {Promise<{ ok: boolean, rejected?: boolean, status?: number, user?: string, detail: string }>}
  */
 async function probeApi() {
   const auth = Buffer.from(`${user}:${pass}`).toString('base64');
@@ -181,8 +204,12 @@ async function probeApi() {
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return { ok: false, status: res.status, detail: `HTTP ${res.status}` };
-    const body = await res.json().catch(() => ({}));
-    return { ok: true, status: res.status, user: body?.id ?? 'unknown', detail: `HTTP ${res.status}` };
+    const body = await res.json().catch(() => null);
+    const identity = judgeMe({ status: res.status, body }, user);
+    if (identity.problem) {
+      return { ok: false, rejected: true, status: res.status, user: identity.user ?? undefined, detail: identity.problem };
+    }
+    return { ok: true, status: res.status, user: identity.user ?? undefined, detail: `HTTP ${res.status}` };
   } catch (err) {
     return { ok: false, detail: err instanceof Error ? err.message : String(err) };
   }
