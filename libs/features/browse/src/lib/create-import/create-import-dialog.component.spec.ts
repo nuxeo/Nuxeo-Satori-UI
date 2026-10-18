@@ -3,7 +3,7 @@ import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ElementRef, provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { NoopAnimationsModule, provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { vi } from 'vitest';
@@ -2370,5 +2370,75 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
       expect(m.close).toHaveBeenCalledWith({ refreshed: true, path: WS_PATH });
     });
+  });
+});
+
+/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
+async function typeKeystrokes(
+  fixture: ComponentFixture<unknown>,
+  input: HTMLInputElement,
+  text: string,
+): Promise<string[]> {
+  const shown: string[] = [];
+  for (let end = 1; end <= text.length; end++) {
+    input.value = text.slice(0, end);
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    shown.push(input.value);
+  }
+  return shown;
+}
+
+const TYPED_EXPIRY = '12/31/2027';
+const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
+const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
+
+// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
+// write back and erase the text mid-entry. Only a real template exercises that write-back.
+describe('CreateImportDialogComponent Expires typed into the real field', () => {
+  async function render(): Promise<ComponentFixture<CreateImportDialogComponent>> {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [CreateImportDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: mockDialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: { parentPath: PARENT_PATH } },
+        { provide: DocumentImportService, useValue: mockImportService },
+        { provide: BrowseService, useValue: mockBrowseService },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(CreateImportDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  }
+
+  it('keeps every partial entry on the create form', async () => {
+    const fixture = await render();
+    fixture.componentInstance.startCreateFromType(pictureType());
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
+  });
+
+  it('keeps every partial entry on the import form', async () => {
+    const fixture = await render();
+    fixture.componentInstance.uploads.stage([jpegFile('photo.png')]);
+    fixture.componentInstance.startImportProperties();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector(
+      'input[name="importExpires"]',
+    ) as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
   });
 });
