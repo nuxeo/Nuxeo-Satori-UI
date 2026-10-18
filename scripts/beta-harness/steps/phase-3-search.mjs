@@ -170,7 +170,7 @@ const countText = async (page) =>
 
 export default async function run(page, h) {
   // -------------------------------------------------------------------------
-  h.step('Precondition: signed in, and the full-text index has settled on a term');
+  await h.step('Precondition: signed in, and the full-text index has settled on a term');
 
   const signedIn = await signIn(page, h.baseUrl).catch(() => false);
   h.requirePrecondition(
@@ -235,7 +235,7 @@ export default async function run(page, h) {
   await h.screenshot('search-page-initial');
 
   // -------------------------------------------------------------------------
-  h.step('The gap Phase 3 recorded: a full-text term returns real Nuxeo documents');
+  await h.step('The gap Phase 3 recorded: a full-text term returns real Nuxeo documents');
 
   await search(page, term);
   const titles = await resultTitles(page);
@@ -266,7 +266,7 @@ export default async function run(page, h) {
   await h.screenshot('search-results-real-documents');
 
   // -------------------------------------------------------------------------
-  h.step('The same query twice returns the same count (negative check)');
+  await h.step('The same query twice returns the same count (negative check)');
 
   const first = (await countText(page)).trim();
   await search(page, term);
@@ -279,7 +279,7 @@ export default async function run(page, h) {
   );
 
   // -------------------------------------------------------------------------
-  h.step('A term with no matches renders the empty state, not an empty page');
+  await h.step('A term with no matches renders the empty state, not an empty page');
 
   await search(page, 'zzznomatchzzz' + Date.now());
   const emptyTitles = await resultTitles(page);
@@ -297,7 +297,7 @@ export default async function run(page, h) {
   await h.screenshot('search-empty-state');
 
   // -------------------------------------------------------------------------
-  h.step('Paging drives the port, which was only ever unit-tested');
+  await h.step('Paging drives the port, which was only ever unit-tested');
 
   /**
    * Paged against the **unfiltered** result set, not the search term.
@@ -356,7 +356,7 @@ export default async function run(page, h) {
   }
 
   // -------------------------------------------------------------------------
-  h.step('Health');
+  await h.step('Health');
   h.note(
     'Not covered here: the four upstream search filter components (created-date, ' +
       'document-category, file-type, saved searches) remain unadopted, and the HXQL ' +

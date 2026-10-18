@@ -56,7 +56,7 @@ const ENVIRONMENTAL_ERRORS = [
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step('Application loads and authenticates against live Nuxeo');
+  await h.step('Application loads and authenticates against live Nuxeo');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
   const me = await page.evaluate(async () => {
@@ -75,13 +75,13 @@ export default async function run(page, h) {
   );
   await h.screenshot('app-shell');
 
-  h.step('Production browse renders real repository content');
+  await h.step('Production browse renders real repository content');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.expectText('repository content listed', 'lib-browse', 'Default domain');
   await h.screenshot('production-browse');
 
-  h.step('adf-hx POC browse renders real repository content');
+  await h.step('adf-hx POC browse renders real repository content');
   // Entered directly: the page and its hxp components must render on their own.
   await h.goTo('/#/browse-adf-hx');
   await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
@@ -91,11 +91,11 @@ export default async function run(page, h) {
   await h.expectText('Last Contributor column populated', 'hxp-document-list', 'Administrator');
   await h.screenshot('adf-hx-poc-browse');
 
-  h.step('POC tabs render');
+  await h.step('POC tabs render');
   await h.expectVisible('hxp tabs present', 'hxp-browse-tabs');
   await h.screenshot('adf-hx-poc-tabs');
 
-  h.step('Nav drawer and folder tree mount when entered via platform nav');
+  await h.step('Nav drawer and folder tree mount when entered via platform nav');
   await h.goTo('/#/browse');
   const navEntry = page
     .locator('a,button')
@@ -107,6 +107,6 @@ export default async function run(page, h) {
   await h.expectVisible('hxp nav drawer mounted', 'hxp-browse-nav-drawer');
   await h.screenshot('adf-hx-poc-nav-drawer');
 
-  h.step('Baseline health');
+  await h.step('Baseline health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

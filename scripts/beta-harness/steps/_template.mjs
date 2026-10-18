@@ -28,9 +28,16 @@
  *    exits 2 before launching a browser when either is unset. A file that needs
  *    no backend (`phase-0-no-backend`, `phase-4-platform`) exports
  *    `skipHttpCredentials = true` instead, and then runs with no credentials sent.
+ * 8. `await h.step(...)`. Every step boundary is where the identity guard asks Nuxeo
+ *    who the previous step ran as (NXSAT-643, `identity-guard.mjs`); a result
+ *    obtained as `Anonymous` or another user makes the run `precondition-not-met`.
+ *    A step that deliberately signs the browser in as someone else says so with
+ *    `h.signedInAs(user, reason)` first. A second API identity needs its own
+ *    request context or `fetch`: `page.request` always sends the run's own user.
  *
  * Helper reference: see `scripts/beta-harness/helpers.mjs`.
- *   h.step(label)                        open a named step
+ *   await h.step(label)                  open a named step; the guard judges the last
+ *   h.signedInAs(user, reason)           declare a deliberate change of browser identity
  *   h.screenshot(name, locator?)         capture into the phase folder
  *   h.check(name, condition, detail?)    record an arbitrary assertion
  *   h.note(text)                         record what this run does NOT cover
@@ -53,16 +60,16 @@
  */
 // eslint-disable-next-line no-unused-vars
 export default async function run(page, h, outDir) {
-  h.step('Set up');
+  await h.step('Set up');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
 
-  h.step('Describe what this phase delivers');
+  await h.step('Describe what this phase delivers');
   await h.goTo('/#/browse');
   // Replace with assertions specific to the phase.
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.screenshot('phase-outcome');
 
-  h.step('Health');
+  await h.step('Health');
   h.expectNoConsoleErrors();
 }
