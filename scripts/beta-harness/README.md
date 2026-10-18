@@ -116,6 +116,56 @@ red auth-guard checks is to go change the auth guard.
 A precondition mismatch now aborts on the first step with its own verdict and its
 own exit code, and says what to run instead.
 
+### The identity guard
+
+Some Nuxeo servers have anonymous authentication switched on — the shared local one does. They
+answer a request whose credentials did not arrive `200` as `Anonymous` instead of refusing it, so
+a status code, a non-empty result and a rendered page all look the same either way, and a
+permission check can pass because a guest can do nothing. `identity-guard.mjs` asks
+`/nuxeo/api/v1/me` who the request ran as, through the channel the result came from, and rejects
+`Anonymous`, another user, or no answer (NXSAT-643).
+
+In the runner it checks `page.request` before the first step, and `page.request` plus the app in
+the page — its stored session, and `/me` asked with the header that session sends — at every step
+boundary and after the last step. A rejection makes the run `precondition-not-met` (exit 2), marks
+`manifest.identity.valid: false`, and records the failed check on the step whose result is
+invalid. So:
+
+- **`await h.step(...)`.** The boundary check is asynchronous; an un-awaited one is recorded as a
+  failed check on its step.
+- **Say when the browser is meant to be someone else**: `h.signedInAs(user, reason)` before the
+  next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
+- **`page.request` always sends the run's own user.** The context's `httpCredentials` use
+  `send: 'always'`, which replaces an explicit `Authorization` on the request. A second API
+  identity needs its own `request.newContext()` or Node `fetch`.
+- **`h.login()` clears cookies** before it signs in, so a guest session cannot be adopted.
+
+Its controls:
+
+```bash
+npm run beta:identity-guard-selftest     # offline: the judgement and the step wiring, 42 controls
+APP_URL=… npm run beta:identity-guard-controls   # live, needs a guest-enabled Nuxeo
+```
+
+The live controls run `fixtures/identity-guard/control.steps.mjs` through the real runner three
+times: no fault must pass; credentials dropped mid-run, and a guest cookie adopted mid-run, must
+each end `precondition-not-met` while every check of the steps' own passes — without the guard
+both would have been green.
+
+#### What talks to Nuxeo, and how it is guarded
+
+| Harness                                                                                               | Credentials on every request                       | Identity checked                                      |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
+| `phase-runner.mjs` + `steps/*.mjs`                                                                    | `page.request`: `send: 'always'`; app: its session | start, every step boundary, end                       |
+| `steps/nxsat-308-parity/seed-parity-data.mjs`                                                         | explicit header, Node `fetch`                      | before the first write, after verifying               |
+| `backend-preflight.mjs`, `e2e-preflight.mjs`, `a11y/preflight.mjs`                                    | explicit header, Node `fetch`                      | `/me` by name, before any data check                  |
+| `apps/nuxeo-ui-e2e` (`signedIn`, `newNuxeoApiContext`)                                                | `send: 'always'`; API contexts: explicit header    | before and after every `signedIn` test                |
+| `a11y/` suites (`signedIn`) and `a11y/diagnostics/*`                                                  | `send: 'always'`; diagnostics: explicit header     | before and after every test; diagnostics once         |
+| `scripts/collect-evidence/story-runner.mjs`, `annotate-showcase.mjs`, `scripts/demo-deck/capture.mjs` | `send: 'always'`                                   | not by this guard (`capture.mjs` checks `/me` itself) |
+| `libs/integration-tests`, `apps/nuxeo-ui/e2e/*.mjs`, `tools/video`, `tools/i18n`                      | explicit header or the app's session               | not by this guard                                     |
+
+The last two rows are named, not covered: they predate the guard and are follow-ups.
+
 ### Notes are not checks
 
 `h.note(text)` records something a run deliberately does **not** cover. Use it

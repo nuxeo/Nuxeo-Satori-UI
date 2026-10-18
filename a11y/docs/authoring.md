@@ -154,14 +154,17 @@ Skip either and your script will produce confident, meaningless green.
 
 ### 2a. Authenticate with _both_ mechanisms
 
-`httpCredentials` alone lets XHRs through but does not satisfy the app's route guard. The
-sessionStorage session alone renders pages but leaves `/nuxeo/api` calls returning intermittent
-403s. `a11y/playwright.config.ts` documents this and both are required:
+`httpCredentials` with `send: 'always'` authenticates `page.request` but does not satisfy the
+app's route guard; the app's own XHRs carry the header its interceptor builds from the
+sessionStorage session. Without `send: 'always'` the credentials are sent only on a 401
+challenge, and a Nuxeo with guests enabled never sends one — `page.request` then runs as
+`Anonymous` with HTTP 200 (NXSAT-643). `a11y/playwright.config.ts` documents this and both are
+required:
 
 ```js
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  httpCredentials: { username: user, password: pass, origin: baseUrl },
+  httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
 
 // `networkidle`, not a fixed pause, so the app's own session hydration has very likely
@@ -183,7 +186,9 @@ The session shape and key come from `../session.mjs`; do not write the JSON inli
 drop `requireSessionAdopted`. If the app rejects the injected session, it signs in through
 `/me` instead, because `httpCredentials` answers that request. Every route then renders
 normally, so without the check nothing shows that the session copy has drifted from
-`AuthService`. `session.mjs` explains how adoption is proved.
+`AuthService`. `session.mjs` explains how adoption is proved. `requireSessionAdopted` then asks
+`/me`, from inside the page, who the adopted session runs as — the identity guard shared with
+`scripts/beta-harness/identity-guard.mjs` — and exits 2 for `Anonymous` or anyone else.
 
 In a **spec**, do not hand-roll this — the `signedIn` fixture already does it, including the
 adoption check at teardown, and `fixtures.ts` rebases it onto a11y-scout's `test` so both are
@@ -382,7 +387,7 @@ try {
 const browser = await launchChromium(chromium, TOOL);
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  httpCredentials: { username: user, password: pass, origin: baseUrl },
+  httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
 const page = await context.newPage();
 

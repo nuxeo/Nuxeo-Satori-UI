@@ -505,8 +505,10 @@ Configuration facts worth knowing before you write a spec:
 - `workers: 1` — serial, because every spec shares one Nuxeo repository
 - `retries: CI ? 2 : 1`, `timeout: 45_000`, `expect.timeout: 10_000`, `forbidOnly: true`
 - Trace, screenshot and video all `retain-on-failure` / `only-on-failure`
-- **Two auth mechanisms, both required**: `httpCredentials` for Basic on every request, _and_ an
-  `addInitScript` that writes the app's session into `sessionStorage`. `storageState` does not work
+- **Two auth mechanisms, both required**: `httpCredentials` with `send: 'always'` for Basic on every
+  `page.request` call, _and_ an `addInitScript` that writes the app's session into `sessionStorage`,
+  which the app turns into the header on its own XHRs. `signedIn` then checks both against `/me`
+  (NXSAT-643). `storageState` does not work
   because the app uses `sessionStorage`, not `localStorage`.
 
 Accessibility: `@axe-core/playwright` (also untracked), scanning 15 cases across 8 routes against
