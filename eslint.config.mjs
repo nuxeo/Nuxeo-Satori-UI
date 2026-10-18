@@ -19,7 +19,13 @@ export default [
         'error',
         {
           enforceBuildableLibDependency: true,
-          allow: ['^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$'],
+          // The identity guard is one `.mjs` module shared by the Node harnesses and the e2e
+          // fixtures (NXSAT-643), so both sides reject the same answers. `scripts/` is not an Nx
+          // project, so the e2e import is "external"; allowed by exact path, not by directory.
+          allow: [
+            '^.*/eslint(\\.base)?\\.config\\.[cm]?[jt]s$',
+            '^(\\.\\./)+scripts/beta-harness/identity-guard\\.mjs$',
+          ],
           // `sourceTag: '*'` -> `onlyDependOnLibsWithTags: ['*']` — Nx's scaffolded
           // default — was here until 2026-08-24. The rule was `error` the whole time and
           // could not reject a single edge, so CLAUDE.md's "Never cross-feature imports —

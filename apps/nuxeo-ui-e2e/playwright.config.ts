@@ -77,7 +77,12 @@ export default defineConfig({
     //
     // Resolved at config load, which is where Playwright needs the value. An unset pair
     // therefore fails the invocation rather than the first assertion — the intended direction.
-    httpCredentials: { ...nuxeoCredentials(), origin: baseURL },
+    //
+    // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never answers with a 401 challenge, so
+    // challenge-based credentials were never sent and a spec's `page.request` ran as `Anonymous`.
+    // It reaches `page.request` only, and replaces an explicit `Authorization` there — a second
+    // identity needs `request.newContext()`. The browser is signed in by `signedIn`'s session.
+    httpCredentials: { ...nuxeoCredentials(), origin: baseURL, send: 'always' },
     // Diagnostics on failure only, so a green run leaves nothing behind.
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',

@@ -20,8 +20,9 @@
  * broken environment from a failing check, and flattening everything to 1 erases that.
  */
 
-import { hasAdministrationAccess, requireNuxeoCredentials } from '../env.mjs';
-import { sessionAdoptionProblem } from '../session.mjs';
+import { judgeMe } from '../../scripts/beta-harness/identity-guard.mjs';
+import { hasAdministrationAccess, nuxeoBasicAuthHeader, requireNuxeoCredentials } from '../env.mjs';
+import { sessionAdoptionProblem, sessionIdentityProblem } from '../session.mjs';
 
 /**
  * @param {string} tool   the diagnostic's name, so the message says who could not measure
@@ -88,7 +89,12 @@ export async function requireBackend(page, baseUrl, tool) {
   const url = `${baseUrl}/nuxeo/api/v1/me`;
   let res;
   try {
-    res = await page.request.get(url, { failOnStatusCode: false });
+    // The header stated, not left to the context: a guest-enabled Nuxeo never challenges, so
+    // challenge-based `httpCredentials` never went out and this asked who the *guest* was.
+    res = await page.request.get(url, {
+      failOnStatusCode: false,
+      headers: { Authorization: nuxeoBasicAuthHeader() },
+    });
   } catch (err) {
     const first = (err instanceof Error ? err.message : String(err)).split('\n')[0];
     return cannotMeasure(tool, `${url} is not reachable: ${first}`, 'npx nx serve nuxeo-ui');
@@ -100,9 +106,16 @@ export async function requireBackend(page, baseUrl, tool) {
       'Check both the dev server and the Nuxeo container are up.',
     );
   }
+  // A 200 is not an identity: a guest-enabled Nuxeo answers 200 as `Anonymous`, and
+  // `requireAdministrationAccess` grants on the configured *username* alone (NXSAT-643).
+  const me = await res.json().catch(() => null);
+  const { problem } = judgeMe({ status: 200, body: me }, requireNuxeoCredentials().username);
+  if (problem) {
+    return cannotMeasure(tool, `${url}: ${problem}. A scan as the wrong user proves nothing about the right one.`);
+  }
   // Returned so a caller that visits an admin-only route can check the identity with
   // `requireAdministrationAccess` without a second request.
-  return res.json().catch(() => null);
+  return me;
 }
 
 /**
@@ -137,6 +150,8 @@ export function requireAdministrationAccess(me, username, tool) {
 export async function requireSessionAdopted(page, username, tool) {
   const problem = await sessionAdoptionProblem(page, username);
   if (problem) cannotMeasure(tool, `not signed in by the injected session: ${problem}`);
+  const identity = await sessionIdentityProblem(page, username);
+  if (identity) cannotMeasure(tool, identity);
 }
 
 /**

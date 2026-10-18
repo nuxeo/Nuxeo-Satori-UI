@@ -90,7 +90,9 @@ try {
 const browser = await launchChromium(chromium, 'route-render-check');
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  httpCredentials: { username: user, password: pass, origin: baseUrl },
+  // `send: 'always'`: a guest-enabled Nuxeo never challenges, so without it
+  // `page.request` ran as Anonymous (NXSAT-643).
+  httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
 const page = await context.newPage();
 

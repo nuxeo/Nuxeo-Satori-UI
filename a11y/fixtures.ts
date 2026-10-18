@@ -4,10 +4,12 @@ import { expect as expectFn, type Page } from '@playwright/test';
 // `allowJs` in tsconfig.json exists for these two imports; the alternative was a TypeScript
 // copy and a `.mjs` copy of the same list and the same eight-line credential check, which is
 // exactly the drift this folder keeps being reviewed for.
-import { requireNuxeoCredentials } from './env.mjs';
+import { requireNuxeoCredentials, resolveBaseUrl } from './env.mjs';
 import {
+  apiIdentityProblem,
   injectedSession,
   sessionAdoptionProblem,
+  sessionIdentityProblem,
   SESSION_KEY,
   SIGNED_OUT_KEY,
 } from './session.mjs';
@@ -235,18 +237,31 @@ export function aiFindingsNote(state: {
  * because a setup navigation would turn each spec's first `goto` into a same-document one, and
  * the journey specs capture the requests that first navigation makes. Skipped when the test has
  * already failed, so it does not bury the real error.
+ *
+ * The identity guard (NXSAT-643, `scripts/beta-harness/identity-guard.mjs`) runs at both ends.
+ * Before: cookies cleared, so no guest session can be adopted, and `page.request` asked who it
+ * runs as — that needs no navigation. After: Nuxeo asked who the app in the page is, the way the
+ * app asks. A scan obtained as `Anonymous` or as anyone else fails the test.
  */
 export const test = a11yBase.extend<{ signedIn: Page }>({
-  signedIn: async ({ page }, use, testInfo) => {
+  signedIn: async ({ page, baseURL }, use, testInfo) => {
+    const { username } = requireNuxeoCredentials();
+    await page.context().clearCookies();
+    const before = await apiIdentityProblem(page.request, baseURL ?? resolveBaseUrl(), username);
+    if (before) throw new Error(`Refusing to scan: ${before}.`);
     await installSession(page);
     await use(page);
     if (testInfo.status !== testInfo.expectedStatus) return;
-    const problem = await sessionAdoptionProblem(page, requireNuxeoCredentials().username);
+    const problem = await sessionAdoptionProblem(page, username);
     if (problem) {
       throw new Error(
         `This test passed, but not under the session this suite injects: ${problem}. ` +
           'What it measured belongs to whatever identity the fallback produced.',
       );
+    }
+    const identity = await sessionIdentityProblem(page, username);
+    if (identity) {
+      throw new Error(`This test passed, but its result is invalid: ${identity}.`);
     }
   },
 });

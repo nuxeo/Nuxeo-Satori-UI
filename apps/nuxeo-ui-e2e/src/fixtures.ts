@@ -1,5 +1,12 @@
 import { test as base, expect, request, type APIRequestContext, type Page } from '@playwright/test';
 
+import {
+  assertIdentity,
+  checkPageIdentity,
+  checkRequestIdentity,
+  judgeApi,
+  ME_PATH,
+} from '../../../scripts/beta-harness/identity-guard.mjs';
 import { nuxeoCredentials } from './nuxeo-credentials';
 
 /**
@@ -34,14 +41,33 @@ export const test = base.extend<{ signedIn: Page }>({
    * kind of green that is worse than a red. `addInitScript` runs before page scripts on
    * every navigation in the context, which is what makes it survive the reloads these
    * specs perform.
+   *
+   * The identity guard (NXSAT-643, `scripts/beta-harness/identity-guard.mjs`) runs at both
+   * ends. Before: cookies cleared, so a guest session cannot be adopted, and `page.request`
+   * asked who it runs as. After: Nuxeo asked who the app in the page is, the way the app asks.
+   * A test whose result was obtained as `Anonymous` or as anyone else fails, even if every
+   * assertion in it passed — on a guest-enabled Nuxeo, a render assertion passes either way.
    */
-  signedIn: async ({ page }, use) => {
+  signedIn: async ({ page }, use, testInfo) => {
     // Through the same helper as every other caller. These two lines each carried a `??`
     // fallback on the user AND the password — the working default pair, compiled into the
     // repository, which is the exact construction `.cursor/rules/security.mdc` forbids. The
     // docblock on `nuxeoCredentials` already described that fallback as removed while it
     // survived here.
     const { username, password } = nuxeoCredentials();
+
+    await page.context().clearCookies();
+    assertIdentity(
+      [
+        await checkRequestIdentity(
+          page.request,
+          `${E2E_BASE_URL}${ME_PATH}`,
+          username,
+          'page.request',
+        ),
+      ],
+      `before "${testInfo.title}"`,
+    );
 
     await page.addInitScript(
       ({ key, signedOutKey, value }) => {
@@ -56,6 +82,11 @@ export const test = base.extend<{ signedIn: Page }>({
     );
 
     await use(page);
+
+    // A test that already failed keeps its own error; the guard would only bury it.
+    if (testInfo.status !== testInfo.expectedStatus) return;
+    const app = await checkPageIdentity(page, username, new URL(E2E_BASE_URL).origin);
+    assertIdentity([app], `after "${testInfo.title}"`);
   },
 });
 
@@ -147,21 +178,20 @@ export async function expectAuthenticatedAs(
   api: APIRequestContext,
   username: string,
 ): Promise<void> {
-  const response = await api.get('/nuxeo/api/v1/me');
-  if (!response.ok()) {
+  // Through the shared guard (NXSAT-643), so the Playwright side and the `.mjs` harnesses
+  // reject the same answers — this used to be its own copy of the rule.
+  const response = await api.get(ME_PATH, { failOnStatusCode: false });
+  const report = judgeApi(
+    { status: response.status(), body: await response.json().catch(() => null) },
+    username,
+    'the API context',
+  );
+  if (!report.ok) {
     throw new Error(
-      `Could not confirm the API context is authenticated: /nuxeo/api/v1/me answered ` +
-        `${response.status()}. Without this the suite cannot tell an authenticated query from ` +
-        `an anonymous one, because both return 200.`,
-    );
-  }
-  const me = (await response.json()) as { id?: string; isAnonymous?: boolean };
-  if (me.isAnonymous || me.id !== username) {
-    throw new Error(
-      `The API context is NOT authenticated: /nuxeo/api/v1/me reports \`${me.id}\`, expected ` +
-        `\`${username}\`. The Authorization header was not accepted, so every query this ` +
-        `context makes runs with the wrong permissions — and still returns 200, which is why ` +
-        `this is checked rather than inferred from a green result.`,
+      `The API context is NOT authenticated as ${username}: ${report.problem}. The ` +
+        `Authorization header was not accepted, so every query this context makes runs with ` +
+        `the wrong permissions — and still returns 200, which is why this is checked rather ` +
+        `than inferred from a green result.`,
     );
   }
 }
