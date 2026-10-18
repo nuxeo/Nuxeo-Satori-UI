@@ -165,6 +165,28 @@ jobs:
           name: config-package-${{ inputs.package }}
           path: package
 
+      # The zip name, and the name and version inside the zip, come from a build of the dispatched
+      # ref. `nos-publish` writes the path into shell source and the name and version into
+      # $GITHUB_ENV on this credentialed runner, so each is held to a plain character set first.
+      - name: Check the package before the credentialed action reads it
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip-name }}
+        run: |
+          set -euo pipefail
+          plain='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          if [[ ! "$ZIP_NAME" =~ $plain || "$ZIP_NAME" != *.zip || ! -f "package/$ZIP_NAME" ]]; then
+            echo "::error::the built zip name is not a plain file name in package/"
+            exit 1
+          fi
+          for attr in name version; do
+            # The same read `nos-publish` performs, so the value checked is the value it exports.
+            value=$(unzip -p "package/$ZIP_NAME" package.xml | yq -p=xml ".package.+@${attr}")
+            if [[ ! "$value" =~ $plain ]]; then
+              echo "::error::package.xml's ${attr} is not a plain identifier"
+              exit 1
+            fi
+          done
+
       # The version published is the one declared in `package/package.xml`; unlike
       # `build-marketplace.yml` nothing stamps a timestamp over it. A configuration
       # package's version is what `nuxeoctl` compares to decide an upgrade, so it is a
