@@ -240,8 +240,9 @@ export function aiFindingsNote(state: {
  *
  * The identity guard (NXSAT-643, `scripts/beta-harness/identity-guard.mjs`) runs at both ends.
  * Before: cookies cleared, so no guest session can be adopted, and `page.request` asked who it
- * runs as — that needs no navigation. After: Nuxeo asked who the app in the page is, the way the
- * app asks. A scan obtained as `Anonymous` or as anyone else fails the test.
+ * runs as — that needs no navigation. After: `page.request` asked again, and Nuxeo asked who the
+ * app in the page is, the way the app asks and replayed from Node. A scan obtained as `Anonymous`
+ * or as anyone else fails the test.
  */
 export const test = a11yBase.extend<{ signedIn: Page }>({
   signedIn: async ({ page, baseURL }, use, testInfo) => {
@@ -259,7 +260,9 @@ export const test = a11yBase.extend<{ signedIn: Page }>({
           'What it measured belongs to whatever identity the fallback produced.',
       );
     }
-    const identity = await sessionIdentityProblem(page, username);
+    const identity =
+      (await apiIdentityProblem(page.request, baseURL ?? resolveBaseUrl(), username)) ??
+      (await sessionIdentityProblem(page, username));
     if (identity) {
       throw new Error(`This test passed, but its result is invalid: ${identity}.`);
     }

@@ -99,6 +99,9 @@ async function signIn(page, baseUrl) {
     // as Anonymous, which can see a fraction of the repository.
     sessionStorage.setItem('agentic_ui_signed_out', '1');
   });
+  // And no cookie from that boot: a guest session that has answered an API call outranks the
+  // Basic header the sign-in form is about to send (NXSAT-643).
+  await page.context().clearCookies();
 
   /**
    * A real reload, not a hash navigation.

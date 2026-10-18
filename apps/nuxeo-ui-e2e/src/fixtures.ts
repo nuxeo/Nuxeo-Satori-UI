@@ -44,7 +44,8 @@ export const test = base.extend<{ signedIn: Page }>({
    *
    * The identity guard (NXSAT-643, `scripts/beta-harness/identity-guard.mjs`) runs at both
    * ends. Before: cookies cleared, so a guest session cannot be adopted, and `page.request`
-   * asked who it runs as. After: Nuxeo asked who the app in the page is, the way the app asks.
+   * asked who it runs as. After: `page.request` asked again, and Nuxeo asked who the app in the
+   * page is, the way the app asks and replayed from Node.
    * A test whose result was obtained as `Anonymous` or as anyone else fails, even if every
    * assertion in it passed — on a guest-enabled Nuxeo, a render assertion passes either way.
    */
@@ -85,8 +86,20 @@ export const test = base.extend<{ signedIn: Page }>({
 
     // A test that already failed keeps its own error; the guard would only bury it.
     if (testInfo.status !== testInfo.expectedStatus) return;
-    const app = await checkPageIdentity(page, username, new URL(E2E_BASE_URL).origin);
-    assertIdentity([app], `after "${testInfo.title}"`);
+    // Both channels again: `page.request` shares the browser's cookie jar, so a guest cookie the
+    // test picked up can move it as well as the app.
+    assertIdentity(
+      [
+        await checkRequestIdentity(
+          page.request,
+          `${E2E_BASE_URL}${ME_PATH}`,
+          username,
+          'page.request',
+        ),
+        await checkPageIdentity(page, username, new URL(E2E_BASE_URL).origin),
+      ],
+      `after "${testInfo.title}"`,
+    );
   },
 });
 
