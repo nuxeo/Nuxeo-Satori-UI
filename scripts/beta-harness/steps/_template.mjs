@@ -32,12 +32,14 @@
  *    who the previous step ran as (NXSAT-643, `identity-guard.mjs`); a result
  *    obtained as `Anonymous` or another user makes the run `precondition-not-met`.
  *    A step that deliberately signs the browser in as someone else says so with
- *    `h.signedInAs(user, reason)` first. A second API identity needs its own
- *    request context or `fetch`: `page.request` always sends the run's own user.
+ *    `h.signedInAs(user, reason)` first, and one that signs out says
+ *    `h.signedOut(reason)`. A second API identity needs its own request context
+ *    or `fetch`: `page.request` always sends the run's own user.
  *
  * Helper reference: see `scripts/beta-harness/helpers.mjs`.
  *   await h.step(label)                  open a named step; the guard judges the last
  *   h.signedInAs(user, reason)           declare a deliberate change of browser identity
+ *   h.signedOut(reason)                  declare that the app may be signed out from here
  *   h.screenshot(name, locator?)         capture into the phase folder
  *   h.check(name, condition, detail?)    record an arbitrary assertion
  *   h.note(text)                         record what this run does NOT cover

@@ -17,15 +17,14 @@
  * - `send: 'always'` makes `page.request` and `context.request` send it, and nothing else: browser
  *   navigation and in-page `fetch` still ran as `Anonymous`. It also **replaces** an explicit
  *   `Authorization` header on the request, so a request meant to run as another user runs as the
- *   context's user instead. Use a separate `request.newContext()` for a second identity.
+ *   context's user instead. Use a separate `request.newContext()` or `fetch` for a second identity.
  * - A guest `JSESSIONID` that has already answered an API request as the guest **beats a valid
  *   Basic header**: with that cookie, `/me` answers `Anonymous` even with the administrator's
  *   header on the same request. (Fresh from Nuxeo's entry page, before any API call, it does not.)
- *   A Basic-authenticated session does not stick the same way (its cookie alone answers
- *   `Anonymous`). The app adds to it: with no stored session it asks `/me`, gets `Anonymous`, and
- *   stores that as a cookie session (`tryEstablishCookieSessionOnly` in `auth.service.ts`), after
- *   which it sends no `Authorization` header at all. `page.request` shares the browser's cookie
- *   jar, so a guest cookie the browser picked up moves the harness's own API calls too.
+ *   The app adds to it: with no stored session it asks `/me`, gets `Anonymous`, and stores that as
+ *   a cookie session (`tryEstablishCookieSessionOnly` in `auth.service.ts`), after which it sends
+ *   no `Authorization` header at all. `page.request` shares the browser's cookie jar, so a guest
+ *   cookie the browser picked up moves the harness's own API calls too.
  *
  * ## What the guard checks
  *
@@ -35,15 +34,22 @@
  * - `api` — a Playwright `APIRequestContext` (`page.request`, or a context of its own) exactly as
  *   the harness's own requests use it, or Node `fetch` with the header a script sends.
  * - `app` — the browser page. The app's stored session is read from the same storage the app
- *   reads, and `/me` is fetched **from inside the page** with the header the app's interceptor
- *   would add for that session, plus whatever cookies and routes the page has. That is what the
- *   app's own requests get.
+ *   reads, and `/me` is asked twice with the header the app's interceptor adds for that session:
+ *   from inside the page, through whatever routes and cookies the page has — what the app's own
+ *   requests get — and replayed from Node with the same header and the browser's cookies, which no
+ *   `page.route` can intercept, so a stubbed `/me` cannot certify a principal Nuxeo never saw.
  *
- * A result is rejected when the answer is `Anonymous` (`isAnonymous`, or the id itself), another
- * user, or no answer. A page that holds no session is reported as `signed-out` and accepted: the
- * route guard keeps a signed-out app on the sign-in page, so it has obtained nothing from Nuxeo as
- * anyone. A page that holds a guest's cookie session is not signed out — it is `Anonymous`, and is
- * rejected.
+ * A result is rejected when an answer is `Anonymous` (`isAnonymous`, or the id itself), another
+ * user, or no answer, and when the app holds a session for anyone but the expected user. Being
+ * signed out, or off the app, is accepted only before the run has signed the app in, or after the
+ * steps declared a sign-out (`AppPolicy`): a run that loses its session without saying so could be
+ * hiding a result it obtained as someone else.
+ *
+ * ## What it assumes
+ *
+ * The app talks to Nuxeo on its own origin (`/nuxeo` through the dev proxy or same-origin in
+ * production). An app configured with a different `nuxeoApiOrigin` would be asked on the wrong
+ * server; no harness here runs one.
  *
  * Plain ESM with no imports, so `.mjs` harnesses and the Playwright suites (`apps/nuxeo-ui-e2e`,
  * `a11y/`) share this one copy. Nothing here decides what to do about a problem: the callers turn
@@ -95,19 +101,36 @@ export const APP_SESSION_SOURCES = /** @type {const} */ ([
  */
 
 /**
- * Nuxeo user ids compare case-insensitively by default, so `administrator` and `Administrator`
- * are one principal. Anything that is not a non-empty string matches nothing.
+ * What a check requires of the app channel.
+ *
+ * - `{ user }` — the app must hold a session for `user` that Nuxeo answers as `user`. Signed out,
+ *   or off the app, is a rejection.
+ * - `{ unsigned: user }` — the run has not signed the app in yet, or the steps declared a sign-out.
+ *   No session and no app are accepted; a session that is there is still judged against `user`, so
+ *   a guest the app adopted on its own is rejected even then.
+ *
+ * A bare string means `{ user: string }`.
+ *
+ * @typedef {{ user: string } | { unsigned: string } | string} AppPolicy
+ */
+
+/**
+ * Exact comparison. Nuxeo's default user directory ignores case, but not every directory does,
+ * and `alice` and `Alice` can be two principals; a guard for "any Nuxeo server" fails closed.
+ * Spell `NUXEO_USER` the way `/me` names it. Anything that is not a non-empty string matches
+ * nothing.
  *
  * @param {unknown} a
  * @param {unknown} b
  */
 export function sameUser(a, b) {
-  return (
-    typeof a === 'string' &&
-    typeof b === 'string' &&
-    a !== '' &&
-    a.toLowerCase() === b.toLowerCase()
-  );
+  return typeof a === 'string' && typeof b === 'string' && a !== '' && a === b;
+}
+
+/** @param {unknown} id */
+function isAnonymousId(id) {
+  // Case-insensitive here only: failing closed means treating any spelling of the guest as one.
+  return typeof id === 'string' && id.toLowerCase() === 'anonymous';
 }
 
 /**
@@ -119,7 +142,7 @@ export function sameUser(a, b) {
 export function isAnonymousMe(body) {
   if (!body || typeof body !== 'object') return false;
   const me = /** @type {Record<string, unknown>} */ (body);
-  return me['isAnonymous'] === true || sameUser(me['id'], 'Anonymous');
+  return me['isAnonymous'] === true || isAnonymousId(me['id']);
 }
 
 /**
@@ -130,7 +153,7 @@ export function isAnonymousMe(body) {
  * @returns {{ user: string | null, problem: string | null }}
  */
 export function judgeMe(answer, expected) {
-  if (!expected || sameUser(expected, 'Anonymous')) {
+  if (!expected || isAnonymousId(expected)) {
     return {
       user: null,
       problem: `the expected identity is ${JSON.stringify(expected)}, which proves nothing`,
@@ -198,50 +221,63 @@ export function parseStoredSession(key, storage, raw) {
   return { problem: `${storage}[${key}] holds a "${kind}" session the app cannot sign in with` };
 }
 
+/** @param {AppPolicy} policy */
+function normalisePolicy(policy) {
+  if (typeof policy === 'string') return { user: policy, required: true };
+  if ('user' in policy) return { user: policy.user, required: true };
+  return { user: policy.unsigned, required: false };
+}
+
 /**
- * Judge the app channel: the session the page holds, and what `/me` answered when asked the way
- * the app asks.
+ * Judge the app channel: the session the page holds, and what `/me` answered for it — asked from
+ * inside the page, and replayed from Node with the same header and cookies.
  *
- * @param {StoredSession | { problem: string } | null} stored null when the page holds no session
- * @param {MeAnswer | null} answer null when there was no session to ask with
- * @param {string} expected
+ * @param {StoredSession | { problem: string } | null | 'not-on-app'} stored
+ * @param {{ inPage: MeAnswer | null, replayed: MeAnswer | null }} answers null when not asked
+ * @param {AppPolicy} policy
  * @returns {ChannelReport}
  */
-export function judgeApp(stored, answer, expected) {
-  const base = { channel: /** @type {const} */ ('app'), expected };
-  if (stored === null) {
-    return { ...base, ok: true, state: 'signed-out', user: null, session: null, problem: null };
+export function judgeApp(stored, answers, policy) {
+  const { user: expected, required } = normalisePolicy(policy);
+  const base = { channel: /** @type {const} */ ('app'), expected, user: null, session: null };
+  /** @param {string} problem @param {object} [extra] */
+  const reject = (problem, extra = {}) => ({
+    ...base,
+    ok: false,
+    state: 'rejected',
+    problem,
+    ...extra,
+  });
+
+  if (stored === null || stored === 'not-on-app') {
+    const state = stored === null ? 'signed-out' : 'not-on-app';
+    if (!required) return { ...base, ok: true, state, problem: null };
+    return reject(
+      stored === null
+        ? `the app holds no session, but this run signed it in as ${expected} and declared no sign-out`
+        : `the page is not on the app, but this run signed it in as ${expected}; its result cannot be judged`,
+    );
   }
-  if ('problem' in stored) {
-    return {
-      ...base,
-      ok: false,
-      state: 'rejected',
-      user: null,
-      session: null,
-      problem: stored.problem,
-    };
-  }
+  if ('problem' in stored) return reject(stored.problem);
   const session = `${stored.kind} session for ${stored.username ?? '(no user)'}`;
   if (!sameUser(stored.username, expected)) {
-    return {
-      ...base,
-      ok: false,
-      state: 'rejected',
-      user: null,
-      session,
-      problem: `the app holds a ${session}, not for ${expected}`,
-    };
+    return reject(`the app holds a ${session}, not for ${expected}`, { session });
   }
-  const verdict = judgeMe(answer ?? { status: 0, body: null, error: 'not asked' }, expected);
-  return {
-    ...base,
-    ok: verdict.problem === null,
-    state: verdict.problem === null ? 'authenticated' : 'rejected',
-    user: verdict.user,
-    session,
-    problem: verdict.problem && `the app's ${session}: ${verdict.problem}`,
-  };
+  /** @type {[string, MeAnswer | null][]} */
+  const asked = [
+    ['asked from the page', answers.inPage],
+    ['replayed from Node with its header and cookies', answers.replayed],
+  ];
+  for (const [via, answer] of asked) {
+    const verdict = judgeMe(answer ?? { status: 0, body: null, error: 'not asked' }, expected);
+    if (verdict.problem) {
+      return reject(`the app's ${session}, ${via}: ${verdict.problem}`, {
+        session,
+        user: verdict.user,
+      });
+    }
+  }
+  return { ...base, ok: true, state: 'authenticated', user: expected, session, problem: null };
 }
 
 /**
@@ -286,19 +322,22 @@ export async function askThroughRequest(request, url) {
 }
 
 /**
- * Ask `/me` from Node with the exact `Authorization` header a script sends, and no cookies —
- * Node's `fetch` keeps none, so this is the same channel as the script's other requests.
+ * Ask `/me` from Node with the exact headers a script sends — Node's `fetch` keeps no cookies, so
+ * with no `Cookie` this is the same channel as the script's other requests.
  *
  * @param {string} url absolute `/me` URL
- * @param {string} authorization
+ * @param {string | null} authorization
  * @param {typeof fetch} [fetchImpl]
+ * @param {string} [cookie] a `Cookie` header to replay
  * @returns {Promise<MeAnswer>}
  */
-export async function askThroughFetch(url, authorization, fetchImpl = fetch) {
+export async function askThroughFetch(url, authorization, fetchImpl = fetch, cookie) {
   try {
-    const res = await fetchImpl(url, {
-      headers: { Accept: 'application/json', Authorization: authorization },
-    });
+    /** @type {Record<string, string>} */
+    const headers = { Accept: 'application/json' };
+    if (authorization) headers['Authorization'] = authorization;
+    if (cookie) headers['Cookie'] = cookie;
+    const res = await fetchImpl(url, { headers });
     const text = await res.text();
     let body = null;
     try {
@@ -313,13 +352,15 @@ export async function askThroughFetch(url, authorization, fetchImpl = fetch) {
 }
 
 /**
- * Read the page's stored session and, when it holds one, ask `/me` from inside the page the way
- * the app does. Retried, because a page between navigations has no context to evaluate in.
+ * Read the page's stored session and, when it holds one, ask `/me` for it from inside the page and
+ * from Node. Retried, because a page between navigations has no context to evaluate in.
  *
  * @param {import('@playwright/test').Page} page
- * @returns {Promise<{ stored: StoredSession | { problem: string } | null, answer: MeAnswer | null }>}
+ * @param {typeof fetch} [fetchImpl] for the replay
+ * @returns {Promise<{ stored: StoredSession | { problem: string } | null, answers: { inPage: MeAnswer | null, replayed: MeAnswer | null } }>}
  */
-export async function askThroughPage(page) {
+export async function askThroughPage(page, fetchImpl = fetch) {
+  const none = { inPage: null, replayed: null };
   /** @type {unknown} */
   let lastError = null;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -331,10 +372,10 @@ export async function askThroughPage(page) {
         }
         return null;
       }, APP_SESSION_SOURCES);
-      if (!found) return { stored: null, answer: null };
+      if (!found) return { stored: null, answers: none };
       const stored = parseStoredSession(found.key, found.storage, found.raw);
-      if ('problem' in stored) return { stored, answer: null };
-      const answer = await page.evaluate(
+      if ('problem' in stored) return { stored, answers: none };
+      const inPage = await page.evaluate(
         async ({ mePath, authorization }) => {
           try {
             /** @type {Record<string, string>} */
@@ -349,7 +390,11 @@ export async function askThroughPage(page) {
         },
         { mePath: ME_PATH, authorization: stored.authorization },
       );
-      return { stored, answer };
+      const url = `${originOf(safeUrl(page))}${ME_PATH}`;
+      const cookies = await page.context().cookies(url);
+      const cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+      const replayed = await askThroughFetch(url, stored.authorization, fetchImpl, cookie);
+      return { stored, answers: { inPage, replayed } };
     } catch (err) {
       lastError = err;
       await new Promise((r) => setTimeout(r, 300));
@@ -359,7 +404,7 @@ export async function askThroughPage(page) {
     stored: {
       problem: `could not read the page's session on ${safeUrl(page)}: ${firstLine(lastError)}`,
     },
-    answer: null,
+    answers: none,
   };
 }
 
@@ -392,28 +437,20 @@ export async function checkFetchIdentity(meUrl, authorization, expected, fetchIm
 }
 
 /**
- * The `app` channel: who the app in this page is acting as. A page not on `appOrigin` — the
- * initial `about:blank`, or a page outside the app — has no app session to judge.
+ * The `app` channel: who the app in this page is acting as.
  *
  * @param {import('@playwright/test').Page} page
- * @param {string} expected
+ * @param {AppPolicy} policy
  * @param {string} appOrigin
+ * @param {typeof fetch} [fetchImpl] for the replay
  * @returns {Promise<ChannelReport>}
  */
-export async function checkPageIdentity(page, expected, appOrigin) {
+export async function checkPageIdentity(page, policy, appOrigin, fetchImpl) {
   if (originOf(safeUrl(page)) !== originOf(appOrigin)) {
-    return {
-      channel: 'app',
-      expected,
-      ok: true,
-      state: 'not-on-app',
-      user: null,
-      session: null,
-      problem: null,
-    };
+    return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
-  const { stored, answer } = await askThroughPage(page);
-  return judgeApp(stored, answer, expected);
+  const { stored, answers } = await askThroughPage(page, fetchImpl);
+  return judgeApp(stored, answers, policy);
 }
 
 /**
@@ -444,53 +481,89 @@ export function describeReport(r) {
 /**
  * Track the expected identity across a run and check it on demand — the phase runner's half.
  *
- * The `api` identity is the run's own credentials and never changes. The `app` identity starts as
- * the same user, and a steps file that deliberately signs the browser in as someone else says so
- * with `expectApp`, which is recorded, so the switch is in the evidence rather than inferred.
+ * The `api` identity is the run's own credentials and never changes. The `app` channel starts
+ * `unsigned` for the same user; signing in (`expectApp`, which `h.login()` calls), or being seen
+ * signed in as that user, makes a session required from then on. A steps file that deliberately
+ * signs the browser in as someone else, or out, says so (`h.signedInAs`, `h.signedOut`), and the
+ * change is recorded so it is in the evidence rather than inferred.
+ *
+ * Checks are serialised: each starts after the previous one finished, so two never interleave.
  *
  * @param {object} options
  * @param {import('@playwright/test').Page} options.page
  * @param {string} options.baseUrl the app's URL; `/me` is asked through it, as the run's requests are
  * @param {string} options.username the run's credentials
+ * @param {typeof fetch} [options.fetchImpl] for the app channel's replay
  */
-export function createIdentityMonitor({ page, baseUrl, username }) {
+export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
   const appOrigin = originOf(baseUrl);
   const meUrl = `${appOrigin}${ME_PATH}`;
-  let expectedApp = username;
+  /** @type {{ user: string } | { unsigned: string }} */
+  let policy = { unsigned: username };
   /** @type {{ at: string, ok: boolean, reports: ChannelReport[] }[]} */
   const checks = [];
-  /** @type {{ at: string, username: string, reason: string }[]} */
+  /** @type {{ at: string, username: string | null, reason: string }[]} */
   const switches = [];
+  /** @type {Promise<unknown>} */
+  let queue = Promise.resolve();
+
+  const expectedUser = () => ('user' in policy ? policy.user : policy.unsigned);
 
   return {
     expectedApi: username,
     get expectedApp() {
-      return expectedApp;
+      return expectedUser();
+    },
+    get appPolicy() {
+      return policy;
     },
     checks,
     switches,
 
     /**
+     * From here on the app must be signed in as `user`.
+     *
      * @param {string} user
      * @param {string} reason
      * @param {string} at
      */
     expectApp(user, reason, at) {
-      if (!sameUser(user, expectedApp)) switches.push({ at, username: user, reason });
-      expectedApp = user;
+      if (!sameUser(user, expectedUser())) switches.push({ at, username: user, reason });
+      policy = { user };
     },
 
     /**
-     * @param {string} at where in the run, e.g. `start` or `after step 3`
+     * From here on the app may be signed out; a session it still holds must be the run's own.
+     *
+     * @param {string} reason
+     * @param {string} at
+     */
+    expectSignedOut(reason, at) {
+      switches.push({ at, username: null, reason });
+      policy = { unsigned: username };
+    },
+
+    /**
+     * @param {string} at where in the run, e.g. `at the start` or `after step 3`
      * @param {{ app?: boolean }} [options] `app: false` before the page has loaded the app
      */
-    async verify(at, { app = true } = {}) {
-      const reports = [await checkRequestIdentity(page.request, meUrl, username, 'page.request')];
-      if (app) reports.push(await checkPageIdentity(page, expectedApp, appOrigin));
-      const entry = { at, ok: reports.every((r) => r.ok), reports };
-      checks.push(entry);
-      console.log(`  [identity ${at}] ${reports.map(describeReport).join(' · ')}`);
-      return entry;
+    verify(at, { app = true } = {}) {
+      const run = async () => {
+        const reports = [await checkRequestIdentity(page.request, meUrl, username, 'page.request')];
+        if (app) reports.push(await checkPageIdentity(page, policy, appOrigin, fetchImpl));
+        const appReport = reports[1];
+        // Seen signed in as the run's user without `h.login()` (a form sign-in): required from now.
+        if (appReport?.ok && appReport.state === 'authenticated' && 'unsigned' in policy) {
+          policy = { user: username };
+        }
+        const entry = { at, ok: reports.every((r) => r.ok), reports };
+        checks.push(entry);
+        console.log(`  [identity ${at}] ${reports.map(describeReport).join(' · ')}`);
+        return entry;
+      };
+      const result = queue.then(run, run);
+      queue = result.catch(() => undefined);
+      return result;
     },
   };
 }

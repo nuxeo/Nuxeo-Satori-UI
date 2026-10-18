@@ -5,10 +5,10 @@
  *
  * The live half — a real guest-enabled Nuxeo rejecting a dropped credential and an adopted guest
  * cookie — is `identity-guard.controls.mjs`. This half pins every rule those runs depend on, so a
- * guard edited into one that accepts `Anonymous`, ignores the stored session, or lets a step
- * boundary go unchecked turns this red without a server. Each negative control names the rule it
- * protects; the positives prove the guard does not reject good results, which would make it an
- * always-red gate that gets bypassed.
+ * guard edited into one that accepts `Anonymous`, ignores the stored session, trusts a stubbed
+ * `/me`, or lets a step boundary go unchecked turns this red without a server. Each negative
+ * control names the rule it protects; the positives prove the guard does not reject good results,
+ * which would make it an always-red gate that gets bypassed.
  *
  *   node scripts/beta-harness/identity-guard.selftest.mjs
  */
@@ -42,38 +42,41 @@ const GUEST = { 'entity-type': 'user', id: 'Anonymous', isAnonymous: true };
 const b64 = (s) => Buffer.from(s).toString('base64');
 const basicSession = (username, basic = b64(`${username}:pw`)) =>
   JSON.stringify({ kind: 'basic', username, basic, isAdministrator: true, groups: [] });
+const ok200 = (body) => ({ status: 200, body });
+const both = (body) => ({ inPage: ok200(body), replayed: ok200(body) });
 
 // ── judgeMe ──────────────────────────────────────────────────────────────────────────────────────
 control(
   'positive',
   'the expected user is accepted',
-  judgeMe({ status: 200, body: ADMIN }, 'Administrator').problem === null,
+  judgeMe(ok200(ADMIN), 'Administrator').problem === null,
 );
 control(
-  'positive',
-  'ids compare case-insensitively, as Nuxeo does',
-  judgeMe({ status: 200, body: ADMIN }, 'administrator').problem === null,
+  'negative',
+  'a differently cased id is rejected: not every directory ignores case, so the guard fails closed',
+  judgeMe(ok200(ADMIN), 'administrator').problem !== null &&
+    judgeMe(ok200({ id: 'alice' }), 'Alice').problem !== null,
 );
 control(
   'negative',
   'the guest is rejected by its flag',
-  judgeMe({ status: 200, body: GUEST }, 'Administrator').problem !== null,
+  judgeMe(ok200(GUEST), 'Administrator').problem !== null,
 );
 control(
   'negative',
-  'the guest is rejected by its id when the flag is missing',
-  judgeMe({ status: 200, body: { id: 'Anonymous' } }, 'Administrator').problem !== null,
+  'the guest is rejected by its id when the flag is missing, in any case',
+  judgeMe(ok200({ id: 'Anonymous' }), 'Administrator').problem !== null &&
+    judgeMe(ok200({ id: 'ANONYMOUS' }), 'Administrator').problem !== null,
 );
 control(
   'negative',
   'a flagged guest is rejected under any id',
-  judgeMe({ status: 200, body: { id: 'Administrator', isAnonymous: true } }, 'Administrator')
-    .problem !== null,
+  judgeMe(ok200({ id: 'Administrator', isAnonymous: true }), 'Administrator').problem !== null,
 );
 control(
   'negative',
   'another user is rejected',
-  judgeMe({ status: 200, body: { id: 'jdoe' } }, 'Administrator').problem !== null,
+  judgeMe(ok200({ id: 'jdoe' }), 'Administrator').problem !== null,
 );
 control(
   'negative',
@@ -93,23 +96,20 @@ control(
 control(
   'negative',
   'a 200 with no id is rejected',
-  judgeMe({ status: 200, body: {} }, 'Administrator').problem !== null,
+  judgeMe(ok200({}), 'Administrator').problem !== null,
 );
 control(
   'negative',
   'a 200 that is not JSON is rejected',
-  judgeMe({ status: 200, body: null }, 'Administrator').problem !== null,
+  judgeMe(ok200(null), 'Administrator').problem !== null,
 );
 control(
   'negative',
-  'expecting Anonymous proves nothing',
-  judgeMe({ status: 200, body: GUEST }, 'Anonymous').problem !== null,
+  'expecting Anonymous, in any case, proves nothing',
+  judgeMe(ok200(GUEST), 'Anonymous').problem !== null &&
+    judgeMe(ok200(GUEST), 'anonymous').problem !== null,
 );
-control(
-  'negative',
-  'expecting nobody proves nothing',
-  judgeMe({ status: 200, body: ADMIN }, '').problem !== null,
-);
+control('negative', 'expecting nobody proves nothing', judgeMe(ok200(ADMIN), '').problem !== null);
 control(
   'negative',
   'sameUser matches nothing for a non-string',
@@ -117,7 +117,7 @@ control(
 );
 control('positive', 'isAnonymousMe is false for a real user', !isAnonymousMe(ADMIN));
 
-// ── stored sessions and the app channel ─────────────────────────────────────────────────────────
+// ── stored sessions ─────────────────────────────────────────────────────────────────────────────
 const parsed = parseStoredSession(
   'agentic_ui_nuxeo_session',
   'sessionStorage',
@@ -176,66 +176,108 @@ control(
     parseStoredSession('k', 'sessionStorage', JSON.stringify({ kind: 'basic', username: 'x' })),
 );
 
+// ── the app channel's policy ────────────────────────────────────────────────────────────────────
+const NONE = { inPage: null, replayed: null };
 control(
   'positive',
-  'no stored session is signed-out, and accepted',
-  judgeApp(null, null, 'Administrator').state === 'signed-out',
+  'before the run signs in, no session is accepted as signed-out',
+  judgeApp(null, NONE, { unsigned: 'Administrator' }).ok,
 );
 control(
   'positive',
-  'a basic session for the user, confirmed by /me, is accepted',
-  judgeApp(parsed, { status: 200, body: ADMIN }, 'Administrator').ok,
+  'before the run signs in, a page off the app is accepted',
+  judgeApp('not-on-app', NONE, { unsigned: 'Administrator' }).ok,
+);
+control(
+  'negative',
+  'after the run signed in, losing the session is rejected (it can hide a guest result)',
+  !judgeApp(null, NONE, 'Administrator').ok && !judgeApp(null, NONE, { user: 'Administrator' }).ok,
+);
+control(
+  'negative',
+  'after the run signed in, leaving the app is rejected',
+  !judgeApp('not-on-app', NONE, 'Administrator').ok,
+);
+control(
+  'negative',
+  'even before signing in, a guest session the app adopted on its own is rejected',
+  !judgeApp(cookie, NONE, { unsigned: 'Administrator' }).ok,
+);
+control(
+  'positive',
+  'a basic session for the user, confirmed both ways, is accepted',
+  judgeApp(parsed, both(ADMIN), 'Administrator').ok,
 );
 control(
   'negative',
   "a guest's cookie session is rejected before /me is asked",
-  !judgeApp(cookie, null, 'Administrator').ok,
+  !judgeApp(cookie, NONE, 'Administrator').ok,
 );
 control(
   'negative',
-  'a basic session for the user that /me answers as the guest is rejected',
-  !judgeApp(parsed, { status: 200, body: GUEST }, 'Administrator').ok,
+  'a session the server answers as the guest is rejected',
+  !judgeApp(parsed, both(GUEST), 'Administrator').ok,
+);
+control(
+  'negative',
+  'a stubbed /me in the page cannot certify a session the server answers as someone else',
+  !judgeApp(parsed, { inPage: ok200(ADMIN), replayed: ok200(GUEST) }, 'Administrator').ok,
+);
+control(
+  'negative',
+  'what the page sees counts too: a route stripping the header is rejected',
+  !judgeApp(parsed, { inPage: ok200(GUEST), replayed: ok200(ADMIN) }, 'Administrator').ok,
 );
 control(
   'negative',
   'a session stored for another user is rejected even when /me agrees with the run',
   !judgeApp(
     parseStoredSession('agentic_ui_nuxeo_session', 'sessionStorage', basicSession('jdoe')),
-    { status: 200, body: ADMIN },
+    both(ADMIN),
     'Administrator',
   ).ok,
 );
 control(
   'negative',
   'an unreadable session is rejected',
-  !judgeApp({ problem: 'x' }, null, 'Administrator').ok,
+  !judgeApp({ problem: 'x' }, NONE, 'Administrator').ok,
 );
 control(
   'negative',
   'the api channel rejects the guest',
-  !judgeApi({ status: 200, body: GUEST }, 'Administrator').ok,
+  !judgeApi(ok200(GUEST), 'Administrator').ok,
 );
 
 // ── a fake page, for the probes and the step boundaries ─────────────────────────────────────────
 /**
- * Just enough of a Playwright `Page`: `url()`, `evaluate()` over a storage map and a `/me` answer
- * keyed on the header sent, `request.get()`, and `context().clearCookies()`.
+ * Just enough of a Playwright `Page`: `url()`, `evaluate()` that runs the real browser-side code
+ * against stand-ins for storage and `fetch`, `request.get()`, `context().cookies()` and
+ * `clearCookies()`, plus a `fetch` for the Node-side replay. `meFor` answers the page's `/me` by
+ * the header sent; `replayFor` answers the replay (default: the same).
  */
 function fakePage({
   url = 'http://app.test/#/browse',
   storage = {},
   meFor = () => ADMIN,
+  replayFor,
   apiMe = ADMIN,
 } = {}) {
-  const state = { url, storage: { ...storage }, apiMe, meFor, evaluations: 0, headersSeen: [] };
+  const state = {
+    url,
+    storage: { ...storage },
+    apiMe,
+    meFor,
+    replayFor,
+    apiGate: null,
+    apiScript: null,
+    evaluations: 0,
+    headersSeen: [],
+    replayHeaders: [],
+    cookies: [{ name: 'JSESSIONID', value: 'S1' }],
+  };
   const page = {
     state,
     url: () => state.url,
-    /**
-     * Runs the real browser-side function against stand-ins for the globals it touches, so a
-     * probe that stopped reading storage the way the app does, or stopped sending the session's
-     * header, is caught here rather than only against a live server.
-     */
     async evaluate(fn, arg) {
       state.evaluations++;
       const store = (area) => ({ getItem: (k) => state.storage[`${area}:${k}`] ?? null });
@@ -262,10 +304,24 @@ function fakePage({
     },
     request: {
       async get() {
+        // `apiScript`, when set, answers the calls in order: [gate or null, body] per call.
+        const scripted = state.apiScript?.shift();
+        if (scripted) {
+          if (scripted[0]) await scripted[0];
+          return { status: () => 200, json: async () => scripted[1] };
+        }
+        if (state.apiGate) await state.apiGate;
         return { status: () => 200, json: async () => state.apiMe };
       },
     },
-    context: () => ({ clearCookies: async () => undefined }),
+    context: () => ({ clearCookies: async () => undefined, cookies: async () => state.cookies }),
+    /** The Node-side replay's `fetch`. */
+    fetch: async (_url, init) => {
+      const auth = init?.headers?.['Authorization'] ?? null;
+      state.replayHeaders.push({ auth, cookie: init?.headers?.['Cookie'] ?? null });
+      const body = (state.replayFor ?? state.meFor)(auth);
+      return { status: 200, text: async () => JSON.stringify(body) };
+    },
   };
   return page;
 }
@@ -278,27 +334,41 @@ const signedIn = {
     storage: signedIn,
     meFor: (auth) => (auth === 'Basic QUJD' ? ADMIN : GUEST),
   });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test');
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
   control(
     'positive',
-    'the page probe sends the stored session header and accepts the user',
-    r.ok && page.state.headersSeen[0] === 'Basic QUJD',
-    r,
+    'the page probe sends the stored header, and the replay sends it with the browser cookies',
+    r.ok &&
+      page.state.headersSeen[0] === 'Basic QUJD' &&
+      page.state.replayHeaders[0]?.auth === 'Basic QUJD' &&
+      page.state.replayHeaders[0]?.cookie === 'JSESSIONID=S1',
+    { r, seen: page.state.headersSeen, replay: page.state.replayHeaders },
   );
 }
 {
   const page = fakePage({ storage: signedIn, meFor: () => GUEST });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test');
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
   control('negative', 'the page probe rejects a session the server answers as the guest', !r.ok, r);
 }
 {
+  const page = fakePage({ storage: signedIn, meFor: () => ADMIN, replayFor: () => GUEST });
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  control('negative', 'the replay overrules a page whose /me was stubbed', !r.ok, r);
+}
+{
   const page = fakePage({ url: 'about:blank', storage: signedIn, meFor: () => GUEST });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test');
+  const unsigned = await checkPageIdentity(
+    page,
+    { unsigned: 'Administrator' },
+    'http://app.test',
+    page.fetch,
+  );
+  const required = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
   control(
     'positive',
-    'a page off the app origin is not judged',
-    r.ok && r.state === 'not-on-app' && page.state.evaluations === 0,
-    r,
+    'a page off the app is not probed, and is accepted only before the run signed in',
+    unsigned.ok && unsigned.state === 'not-on-app' && !required.ok && page.state.evaluations === 0,
+    { unsigned, required },
   );
 }
 {
@@ -306,7 +376,7 @@ const signedIn = {
     storage: { 'localStorage:agentic_ui_nuxeo_session': basicSession('Administrator', 'QUJD') },
     meFor: (auth) => (auth === 'Basic QUJD' ? ADMIN : GUEST),
   });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test');
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
   control(
     'positive',
     "a remembered (localStorage) session is read, as the app's fallback",
@@ -324,7 +394,7 @@ const signedIn = {
       'localStorage:agentic_ui_nuxeo_session': basicSession('Administrator', 'QUJD'),
     },
   });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test');
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
   control('negative', 'sessionStorage is read before localStorage, as the app reads it', !r.ok, r);
 }
 
@@ -347,8 +417,20 @@ function harness(page) {
     page,
     baseUrl: 'http://app.test',
     username: 'Administrator',
+    fetchImpl: page.fetch,
   });
+  identity.expectApp('Administrator', 'selftest sign-in', 'step 0');
   return { recorder, identity, h: createHelpers(page, '/tmp', recorder, { identity }) };
+}
+
+/** @param {() => Promise<unknown>} fn */
+async function thrownBy(fn) {
+  try {
+    await fn();
+    return null;
+  } catch (err) {
+    return err;
+  }
 }
 
 await silently(async () => {
@@ -374,12 +456,7 @@ await silently(async () => {
     const { h } = harness(page);
     await h.step('one');
     page.state.meFor = () => GUEST;
-    let thrown = null;
-    try {
-      await h.step('two');
-    } catch (err) {
-      thrown = err;
-    }
+    const thrown = await thrownBy(() => h.step('two'));
     control(
       'negative',
       'a step that ended as the guest throws a PreconditionError at the next boundary',
@@ -392,12 +469,7 @@ await silently(async () => {
     const { h, recorder } = harness(page);
     await h.step('one');
     page.state.meFor = () => GUEST;
-    let thrown = null;
-    try {
-      await h.finish();
-    } catch (err) {
-      thrown = err;
-    }
+    const thrown = await thrownBy(() => h.finish());
     control(
       'negative',
       'the last step is judged too, by finish()',
@@ -408,10 +480,44 @@ await silently(async () => {
   }
   {
     const page = fakePage({ storage: signedIn });
-    const { h, recorder } = harness(page);
+    const { h } = harness(page);
     await h.step('one');
-    h.step('two'); // not awaited, on purpose
-    await h.step('three');
+    page.state.storage = {};
+    const thrown = await thrownBy(() => h.step('two'));
+    control(
+      'negative',
+      'a step that signed in and ended with no session is rejected',
+      thrown instanceof PreconditionError,
+      String(thrown),
+    );
+  }
+  {
+    const page = fakePage({ storage: signedIn });
+    const { h, identity } = harness(page);
+    await h.step('one');
+    h.signedOut('selftest: driving the sign-in form');
+    page.state.storage = {};
+    await h.step('two');
+    await h.finish();
+    control(
+      'positive',
+      'a declared sign-out is accepted and recorded',
+      identity.checks.every((c) => c.ok) && identity.switches.some((s) => s.username === null),
+      { checks: identity.checks, switches: identity.switches },
+    );
+  }
+  {
+    const page = fakePage({ storage: signedIn });
+    const { h, recorder } = harness(page);
+    // Held open, so this boundary is still running when the next step opens.
+    let release = () => undefined;
+    await h.step('one');
+    page.state.apiGate = new Promise((r) => (release = r));
+    const two = h.step('two'); // not awaited, on purpose
+    const three = h.step('three');
+    release();
+    page.state.apiGate = null;
+    await Promise.allSettled([two, three]);
     await h.finish();
     control(
       'negative',
@@ -429,17 +535,67 @@ await silently(async () => {
     await new Promise((r) => setTimeout(r, 20));
     // Healed before the next boundary, so only the held failure can make it throw.
     page.state.meFor = () => ADMIN;
-    let thrown = null;
-    try {
-      await h.step('three');
-    } catch (err) {
-      thrown = err;
-    }
+    const thrown = await thrownBy(() => h.step('three'));
     control(
       'negative',
       'a boundary that failed while nobody awaited it is thrown at the next one',
       thrown instanceof PreconditionError,
       String(thrown),
+    );
+  }
+  {
+    // The review's case: `.then()` attached but not awaited, and a slow earlier boundary.
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    let release = () => undefined;
+    page.state.apiGate = new Promise((r) => (release = r));
+    page.state.apiMe = GUEST;
+    h.step('two').then(
+      () => undefined,
+      () => undefined,
+    );
+    const finished = h.finish().then(
+      () => 'returned',
+      (err) => err,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    page.state.apiGate = null;
+    const outcome = await finished;
+    control(
+      'negative',
+      'finish() waits for every pending boundary, not only the latest, and throws its failure',
+      outcome instanceof PreconditionError,
+      String(outcome),
+    );
+  }
+  {
+    // An earlier boundary slow and failing, a later one quick and passing: draining only the
+    // latest, with checks not serialised, would let finish() return clean.
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    let release = () => undefined;
+    page.state.apiScript = [
+      [new Promise((r) => (release = r)), GUEST],
+      [null, ADMIN],
+      [null, ADMIN],
+    ];
+    h.step('two').catch(() => undefined);
+    h.step('three').catch(() => undefined);
+    const finished = h.finish().then(
+      () => 'returned',
+      (err) => err,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    release();
+    const outcome = await finished;
+    control(
+      'negative',
+      'finish() is not satisfied by a later boundary while an earlier one is still failing',
+      outcome instanceof PreconditionError,
+      String(outcome),
     );
   }
   {
@@ -474,12 +630,7 @@ await silently(async () => {
       'UFU=',
     );
     page.state.meFor = (auth) => (auth === 'Basic UFU=' ? { id: 'parity-user' } : ADMIN);
-    let thrown = null;
-    try {
-      await h.step('two');
-    } catch (err) {
-      thrown = err;
-    }
+    const thrown = await thrownBy(() => h.step('two'));
     control(
       'negative',
       'an undeclared switch of browser identity is rejected',
@@ -491,17 +642,37 @@ await silently(async () => {
     const page = fakePage({ storage: signedIn, apiMe: GUEST });
     const { h } = harness(page);
     await h.step('one');
-    let thrown = null;
-    try {
-      await h.step('two');
-    } catch (err) {
-      thrown = err;
-    }
+    const thrown = await thrownBy(() => h.step('two'));
     control(
       'negative',
       'page.request running as the guest is rejected',
       thrown instanceof PreconditionError,
       String(thrown),
+    );
+  }
+  {
+    // Before any sign-in: a form sign-in seen at a boundary makes the session required after it.
+    const page = fakePage({ url: 'about:blank' });
+    const recorder = { steps: [], consoleErrors: [] };
+    const identity = createIdentityMonitor({
+      page,
+      baseUrl: 'http://app.test',
+      username: 'Administrator',
+      fetchImpl: page.fetch,
+    });
+    const h = createHelpers(page, '/tmp', recorder, { identity });
+    await h.step('one');
+    await h.step('two');
+    page.state.url = 'http://app.test/#/';
+    page.state.storage = { ...signedIn };
+    await h.step('three');
+    page.state.storage = {};
+    const thrown = await thrownBy(() => h.step('four'));
+    control(
+      'negative',
+      'once seen signed in, an unannounced loss of the session is rejected even without h.login()',
+      identity.checks[0].ok && identity.checks[1].ok && thrown instanceof PreconditionError,
+      { checks: identity.checks.map((c) => [c.at, c.ok]), thrown: String(thrown) },
     );
   }
   {

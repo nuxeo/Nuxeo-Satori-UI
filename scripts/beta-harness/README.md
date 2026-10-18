@@ -126,8 +126,9 @@ permission check can pass because a guest can do nothing. `identity-guard.mjs` a
 `Anonymous`, another user, or no answer (NXSAT-643).
 
 In the runner it checks `page.request` before the first step, and `page.request` plus the app in
-the page — its stored session, and `/me` asked with the header that session sends — at every step
-boundary and after the last step. A rejection makes the run `precondition-not-met` (exit 2), marks
+the page — its stored session, and `/me` asked with the header that session sends, from inside the
+page and replayed from Node with the browser's cookies so a stubbed `/me` cannot vouch for it — at
+every step boundary and after the last step. User ids compare exactly. A rejection makes the run `precondition-not-met` (exit 2), marks
 `manifest.identity.valid: false`, and records the failed check on the step whose result is
 invalid. So:
 
@@ -135,6 +136,9 @@ invalid. So:
   failed check on its step.
 - **Say when the browser is meant to be someone else**: `h.signedInAs(user, reason)` before the
   next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
+- **Say when it is meant to be signed out**: `h.signedOut(reason)`. Once a run has signed in, a
+  boundary that finds no session, or a page off the app, is rejected — losing the session is one
+  way to hide a result obtained as someone else. Before the first sign-in both are accepted.
 - **`page.request` always sends the run's own user.** The context's `httpCredentials` use
   `send: 'always'`, which replaces an explicit `Authorization` on the request. A second API
   identity needs its own `request.newContext()` or Node `fetch`.
@@ -143,7 +147,7 @@ invalid. So:
 Its controls:
 
 ```bash
-npm run beta:identity-guard-selftest     # offline: the judgement and the step wiring, 42 controls
+npm run beta:identity-guard-selftest     # offline: the judgement and the step wiring
 APP_URL=… npm run beta:identity-guard-controls   # live, needs a guest-enabled Nuxeo
 ```
 

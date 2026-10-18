@@ -79,10 +79,11 @@ export function requireStepCredentials(purpose) {
 export function createHelpers(page, outDir, recorder, { identity = null } = {}) {
   let current = null;
   /**
-   * The identity check on the step boundary most recently crossed, until the next one.
-   * @type {{ step: StepRecord, promise: Promise<void>, awaited: boolean } | null}
+   * Every step boundary's identity check, in order, so `finish` can drain them all — not only the
+   * latest. `settled` is how an un-awaited one is recognised at the next `step` call.
+   * @type {{ step: StepRecord, promise: Promise<void>, settled: boolean, reported: boolean }[]}
    */
-  let boundary = null;
+  const boundaries = [];
   /** A boundary that failed while nobody was awaiting it; thrown at the next step or at `finish`. */
   let identityFailure = null;
 
@@ -118,19 +119,21 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
   }
 
   /**
-   * Close the boundary left open by the previous `step` call. An un-awaited boundary is a
-   * steps-file defect: its check ran concurrently with the next step instead of between them.
+   * Before a step opens: throw a boundary failure nobody awaited, and record any boundary still
+   * running as un-awaited — a steps-file defect, because its check then runs concurrently with the
+   * next step instead of between the two. An awaited boundary has always settled by now.
    */
-  function closeBoundary() {
+  function closeBoundaries() {
     if (identityFailure) throw identityFailure;
-    if (boundary && !boundary.awaited) {
-      boundary.step.checks.push({
+    for (const b of boundaries) {
+      if (b.settled || b.reported) continue;
+      b.reported = true;
+      b.step.checks.push({
         name: 'the identity guard ran between this step and the next',
         passed: false,
         detail: 'h.step(...) was not awaited, so the check ran concurrently with the next step — write `await h.step(...)`',
       });
     }
-    boundary = null;
   }
 
   return {
@@ -143,31 +146,34 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      * Under the identity guard, opening a step is also where the previous one is judged: Nuxeo is
      * asked who it ran as before this step does anything (NXSAT-643). That check is asynchronous,
      * so a steps file must `await h.step(...)`. Not awaited, the step still opens, the check runs
-     * concurrently, and the previous step records a failed check saying so.
+     * concurrently, and the previous step records a failed check saying so if it is still running
+     * when the next step opens; its verdict counts either way, and `finish` waits for all of them.
      *
      * @param {string} msg
-     * @returns {PromiseLike<void>}
+     * @returns {Promise<void>}
      */
     step(msg) {
-      closeBoundary();
+      closeBoundaries();
       const previous = current;
       current = { index: recorder.steps.length + 1, label: msg, screenshots: [], checks: [], notes: [] };
       recorder.steps.push(current);
       console.log(`\n[step ${current.index}] ${msg}`);
       if (!identity || !previous) return Promise.resolve();
       const promise = verifyIdentity(previous, `after step ${previous.index}`);
-      // Held, not left unhandled: a failure nobody awaited is thrown at the next boundary instead.
-      promise.catch((err) => {
-        identityFailure = err;
-      });
-      const open = { step: previous, promise, awaited: false };
-      boundary = open;
-      return {
-        then(onFulfilled, onRejected) {
-          open.awaited = true;
-          return promise.then(onFulfilled, onRejected);
+      const entry = { step: previous, promise, settled: false, reported: false };
+      boundaries.push(entry);
+      // Held, so it is never an unhandled rejection: a failure nobody awaited is thrown at the next
+      // boundary, or by `finish`. The same promise is returned, so an `await` still receives it.
+      promise.then(
+        () => {
+          entry.settled = true;
         },
-      };
+        (err) => {
+          entry.settled = true;
+          identityFailure ??= err;
+        },
+      );
+      return promise;
     },
 
     /**
@@ -176,8 +182,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      * steps file does not need to.
      */
     async finish() {
-      if (boundary) await boundary.promise.catch(() => undefined);
-      closeBoundary();
+      closeBoundaries();
+      await Promise.allSettled(boundaries.map((b) => b.promise));
+      if (identityFailure) throw identityFailure;
       if (identity && current) await verifyIdentity(current, `after step ${current.index}`);
     },
 
@@ -195,6 +202,19 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     signedInAs(username, reason) {
       identity?.expectApp(username, reason, `step ${ensureStep().index}`);
       this.note(`identity: the browser is signed in as ${username} from here — ${reason}`);
+    },
+
+    /**
+     * Declare that from here on the app may be signed out — a steps file that signs out to drive
+     * the sign-in form. Recorded like `signedInAs`. Without it, a run that signed in and is found
+     * signed out at a boundary is rejected: losing the session is one way to hide a result that was
+     * obtained as someone else. A session the app still holds must be the run's own user.
+     *
+     * @param {string} reason
+     */
+    signedOut(reason) {
+      identity?.expectSignedOut(reason, `step ${ensureStep().index}`);
+      this.note(`identity: the app may be signed out from here — ${reason}`);
     },
 
     /**
