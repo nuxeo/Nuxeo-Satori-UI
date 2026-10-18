@@ -48,14 +48,16 @@ import { dateFnsLocaleFor } from './satori-date-adapter';
 export function dateMaskFor(localeId: string, translatedMask: string): string {
   const language = (localeId ?? '').toLowerCase().replaceAll('_', '-').split('-')[0];
   const target = shortDatePattern(localeId);
-  const source = sourcePattern(translatedMask, language);
-
-  // The mask's letters are already in the order this field parses: every language we ship a
-  // catalogue for, and every region whose order and separators match it. Leave it exactly as is.
-  if (target === source) return translatedMask;
-
-  const sourceFields = patternFields(source);
   const letters = maskLetters(translatedMask);
+  let sourceFields = letters && fieldsNamedByLetters(letters);
+  if (!sourceFields) {
+    const source = sourcePattern(translatedMask, language);
+
+    // The mask's letters are already in the order this field parses: every language we ship a
+    // catalogue for, and every region whose order and separators match it. Leave it exactly as is.
+    if (target === source) return translatedMask;
+    sourceFields = patternFields(source);
+  }
   if (!letters || letters.length !== sourceFields.length) return translatedMask;
 
   const lettersByField = new Map<DateField, string>();
@@ -114,6 +116,19 @@ type PatternSegment = string | { field: DateField; width: number };
  */
 function shortDatePattern(localeId: string): string {
   return dateFnsLocaleFor(localeId).formatLong?.date({ width: 'short' }) ?? '';
+}
+
+const FIELD_FOR_MASK_LETTER: Readonly<Record<string, DateField>> = {
+  d: 'day',
+  m: 'month',
+  y: 'year',
+};
+
+/** A mask spelled `d`/`m`/`y` names its own fields, so a regional catalogue keeps its order. */
+function fieldsNamedByLetters(letters: string[]): DateField[] | null {
+  const fields = letters.map((run) => FIELD_FOR_MASK_LETTER[run[0]]);
+  const named = fields.filter((field): field is DateField => field !== undefined);
+  return named.length === letters.length && new Set(named).size === named.length ? named : null;
 }
 
 const FIELD_FOR_PATTERN_LETTER: Readonly<Record<string, DateField>> = {
