@@ -656,8 +656,8 @@ await silently(async () => {
       [null, ADMIN],
       [null, ADMIN],
     ];
-    h.step('two').catch(() => undefined);
-    h.step('three').catch(() => undefined);
+    h.step('two').catch(() => undefined); // its failure is what finish() must surface
+    h.step('three').catch(() => undefined); // judged through finish(), not here
     const finished = h.finish().then(
       () => 'returned',
       (err) => err,
@@ -685,6 +685,7 @@ await silently(async () => {
     await h
       .step('two')
       .then(() => h.finish())
+      // The control reads identity.checks below; a throw here would be a failure it reports.
       .catch(() => undefined);
     control(
       'positive',
@@ -773,9 +774,9 @@ await silently(async () => {
       [null, GUEST],
       [new Promise((r) => (release = r)), ADMIN],
     ];
-    h.step('two').catch(() => undefined);
+    h.step('two').catch(() => undefined); // its failure is what finish() must surface
     const three = h.step('three');
-    three.catch(() => undefined);
+    three.catch(() => undefined); // its settling is observed through `settled` above
     await new Promise((r) => setTimeout(r, 20)); // two has failed and latched; three is held
     three.then(
       () => (settled = true),

@@ -316,6 +316,7 @@ export async function askThroughRequest(request, url) {
       headers: { Accept: 'application/json' },
       failOnStatusCode: false,
     });
+    // A body that is not JSON is no identity: `judgeMe` rejects a null body, so nothing is lost.
     return { status: res.status(), body: await res.json().catch(() => null) };
   } catch (err) {
     return { status: 0, body: null, error: firstLine(err) };
@@ -397,6 +398,7 @@ export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
       const nonce = `identityGuard=${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
       const seen = page
         .waitForResponse((r) => r.url().includes(nonce), { timeout: 15_000 })
+        // No response seen is itself a verdict: the in-page answer is refused below.
         .catch(() => null);
       /** @type {MeAnswer} */
       let inPage = await page.evaluate(
@@ -406,6 +408,7 @@ export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
             const headers = { Accept: 'application/json' };
             if (authorization) headers['Authorization'] = authorization;
             const res = await fetch(url, { headers, credentials: 'same-origin' });
+            // Not JSON means no identity, which `judgeMe` rejects.
             const body = await res.json().catch(() => null);
             return { status: res.status, body };
           } catch (err) {
@@ -415,6 +418,7 @@ export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
         { url: `${origin}${ME_PATH}?${nonce}`, authorization: stored.authorization },
       );
       const response = await seen;
+      // No address, for whatever reason, is treated as a stub and refused below.
       const server = response ? await response.serverAddr().catch(() => null) : null;
       if (!server) {
         inPage = {
@@ -645,6 +649,7 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
         return entry;
       };
       const result = queue.then(run, run);
+      // The queue only orders checks; the caller receives `result` and its failure.
       queue = result.catch(() => undefined);
       return result;
     },
