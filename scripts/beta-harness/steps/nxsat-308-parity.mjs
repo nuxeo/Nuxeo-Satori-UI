@@ -39,13 +39,14 @@
  *
  * ## Data
  *
- * Seeded by `seed-parity-data.mjs`, kept with the evidence in
- * `~/Desktop/agentic-ui-evidence/NXSAT-308/parity-before/seed/`. The first step verifies the
- * fixture over REST and aborts with `precondition-not-met` (exit 2) when it does not match.
+ * Seeded by `nxsat-308-parity/seed-parity-data.mjs`, next to this file (committed by NXSAT-643;
+ * it had been kept only with the 2026-10-08 evidence). The first step verifies the fixture over
+ * REST and aborts with `precondition-not-met` (exit 2) when it does not match. Team runs use a
+ * Nuxeo of their own, started and seeded from that folder — see its `README.md`.
  *
  * ## Run
  *
- *   # throwaway Nuxeo seeded, app served against it (see the evidence README)
+ *   # your own Nuxeo seeded, app served against it (nxsat-308-parity/README.md)
  *   export NUXEO_USER=… NUXEO_PASS=… PARITY_USER_PASS=…   # the same PARITY_USER_PASS the seed used
  *   APP_URL=http://localhost:4216 PARITY_SURFACE=adf-hx npm run beta:evidence -- nxsat-308-parity
  *
