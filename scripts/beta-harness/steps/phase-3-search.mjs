@@ -43,8 +43,14 @@
  */
 
 import { PreconditionError } from '../helpers.mjs';
+import { checkFetchIdentity, ME_PATH } from '../identity-guard.mjs';
 
-const NUXEO = 'http://localhost:8080/nuxeo';
+/**
+ * The independent answer is asked of Nuxeo directly, not through the app's proxy. `NUXEO_URL`
+ * names it, as for `backend-preflight.mjs`, so a run against a Nuxeo of your own does not compare
+ * the app with a different server; and its identity is checked before its answer is used.
+ */
+const NUXEO = `${(process.env['NUXEO_URL'] ?? 'http://localhost:8080').replace(/\/+$/, '')}/nuxeo`;
 
 /**
  * Credentials from the environment, with **no** fallback.
@@ -182,6 +188,15 @@ export default async function run(page, h) {
     'The login form did not complete. This Nuxeo allows anonymous access, so an ' +
       'unauthenticated run would search a fraction of the repository and report a ' +
       'smaller count as though it were the answer.',
+  );
+
+  // The reference channel: a guest-enabled Nuxeo answers a lost header as `Anonymous` with real,
+  // smaller results, which would then read as the right count (NXSAT-643).
+  const reference = await checkFetchIdentity(`${NUXEO.replace(/\/nuxeo$/, '')}${ME_PATH}`, AUTH, USER);
+  h.requirePrecondition(
+    `the REST reference at ${NUXEO} answers as ${USER}`,
+    reference.ok,
+    `${reference.problem}. Set NUXEO_URL to the Nuxeo the app is served against.`,
   );
 
   // Pick a term the index already knows about, rather than creating content and
