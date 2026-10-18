@@ -23,6 +23,10 @@
  * `beta-phase` skill can treat a phase as incomplete and retry.
  *
  * Environment:
+ *   NUXEO_USER / NUXEO_PASS        required, with no default, by every steps file
+ *                                  that does not export `skipHttpCredentials = true`.
+ *                                  Missing, the run stops before launching a browser
+ *                                  and exits 2 (precondition not met).
  *   EVIDENCE_STRICT_SCREENSHOTS=1  fail the run if any two screenshots are
  *                                  byte-identical, not just if they all are
  *   EVIDENCE_ENSURE_BACKEND=1      bring the Nuxeo Docker stack up first and wait
@@ -39,6 +43,7 @@ import { resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
 import { createHelpers } from './helpers.mjs';
+import { missingNuxeoCredentialsMessage, readNuxeoCredentials } from './nuxeo-credentials.mjs';
 
 /**
  * Exit codes, because the three outcomes need three different responses:
@@ -51,19 +56,6 @@ import { createHelpers } from './helpers.mjs';
 const EXIT_PASS = 0;
 const EXIT_FAIL = 1;
 const EXIT_PRECONDITION = 2;
-
-let chromium;
-try {
-  ({ chromium } = await import('@playwright/test'));
-} catch {
-  console.error(
-    '\nPlaywright is required to capture evidence but is not installed.\n' +
-      'It is intentionally not a tracked dependency, so CI installs stay unaffected.\n\n' +
-      '  npm install --no-save @playwright/test\n' +
-      '  npx playwright install chromium\n',
-  );
-  process.exit(1);
-}
 
 const [, , phaseId, stepsArg] = process.argv;
 
@@ -78,12 +70,85 @@ const stepsFile = stepsArg
     : resolve(process.cwd(), stepsArg)
   : resolve(import.meta.dirname, 'steps', `${phaseId}.mjs`);
 
+/**
+ * The steps module is loaded before anything is launched, so the runner can read what it
+ * declares about credentials. A failed import is held, not thrown: it is re-raised inside the
+ * run below, so it reaches the same verdict path as before — `precondition-not-met` for a
+ * `PreconditionError`, `error` for anything else — with a manifest.
+ *
+ * It is also said straight away. Whatever this run reports next — a missing Playwright, the
+ * backend preflight — the reader already knows the steps never loaded, and a mistyped phase id
+ * reads as one.
+ */
+let stepsModule = null;
+let stepsImportError = null;
+try {
+  stepsModule = await import(pathToFileURL(stepsFile).href);
+} catch (err) {
+  stepsImportError = err;
+  const label = err instanceof Error && err.name === 'PreconditionError' ? 'precondition' : 'error';
+  console.error(
+    `\n[${label}] the steps file did not load: ${err instanceof Error ? err.message : String(err)}\n` +
+      `  ${stepsFile}`,
+  );
+}
+
+/**
+ * Nuxeo credentials, from the environment with **no** default (NXSAT-649).
+ *
+ * This read `process.env['NUXEO_USER'] ?? 'Administrator'` for both halves, which
+ * `.cursor/rules/security.mdc` forbids: a working Basic pair in the repository, and a run that
+ * silently captured as an administrator whenever the variables were unset.
+ *
+ * Not every steps file needs a backend. `phase-0-no-backend` asserts there is none and
+ * `phase-4-platform` runs against a static build; neither should be refused for lacking a pair
+ * it never sends. A steps file says so with `export const skipHttpCredentials = true` — the
+ * opt-out `scripts/collect-evidence/story-runner.mjs` already reads — and then runs with no
+ * `httpCredentials` at all, set or not, so its result does not depend on the shell. Everything
+ * else requires the pair and is refused here, before a browser is launched or an evidence
+ * folder created, rather than partway through the run at the first `h.login()`.
+ *
+ * A steps file that did not load is not refused here. Its steps will never run, so it sends
+ * nothing and goes on to its held error's own verdict. Refusing it reported a mistyped phase id
+ * as `[precondition] NUXEO_USER and NUXEO_PASS must both be set` — exit 2, "not something to
+ * iterate on" — with no word that the file did not exist, which is what review found it doing.
+ */
+const stepsLoaded = stepsImportError === null;
+const skipHttpCredentials = stepsModule?.skipHttpCredentials === true;
+const needsCredentials = stepsLoaded && !skipHttpCredentials;
+const credentials = needsCredentials ? readNuxeoCredentials() : null;
+if (needsCredentials && !credentials) {
+  console.error(
+    `\n[precondition] ${missingNuxeoCredentialsMessage(`run the ${phaseId} evidence steps`)}\n\n` +
+      '  This is NOT a defect and NOT something to iterate on. A steps file that needs no\n' +
+      '  backend may export `skipHttpCredentials = true` and run without them.\n',
+  );
+  process.exit(EXIT_PRECONDITION);
+}
+
+// After the credentials, not before: both are environment checks, and that one needs no
+// dependency, so it is reached — and reported as exit 2 — on a machine without Playwright too.
+let chromium;
+try {
+  ({ chromium } = await import('@playwright/test'));
+} catch {
+  console.error(
+    '\nPlaywright is required to capture evidence but is not installed.\n' +
+      'It is intentionally not a tracked dependency, so CI installs stay unaffected.\n\n' +
+      '  npm install --no-save @playwright/test\n' +
+      '  npx playwright install chromium\n',
+  );
+  process.exit(1);
+}
+
 const startedAt = new Date();
 const stamp = startedAt.toISOString().replace(/[:.]/g, '-').slice(0, 19);
 const outDir = resolve(EVIDENCE_ROOT, 'beta', phaseId, stamp);
 await mkdir(outDir, { recursive: true });
 
-if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1') {
+// Not for a steps file that did not load: there are no steps to bring a backend up for, and the
+// preflight refusing for credentials would bury the load error under an exit 2.
+if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1' && stepsLoaded) {
   const { spawnSync } = await import('node:child_process');
   console.log('\nEnsuring the Nuxeo backend is up before capturing…');
   const pf = spawnSync('node', [resolve(import.meta.dirname, 'backend-preflight.mjs')], { stdio: 'inherit' });
@@ -92,7 +157,10 @@ if (process.env['EVIDENCE_ENSURE_BACKEND'] === '1') {
       '\nAborting before the capture. A run against a dead backend produces a page of\n' +
         'selector failures that look like component defects; that is worse than no evidence.',
     );
-    process.exit(1);
+    // The preflight's own exit 2 is a missing NUXEO_USER/NUXEO_PASS — reachable here only for a
+    // `skipHttpCredentials` steps file, since every other loaded one was refused above. Passed
+    // through as a precondition rather than flattened into 1, which would read as a defect.
+    process.exit(pf.status === EXIT_PRECONDITION ? EXIT_PRECONDITION : EXIT_FAIL);
   }
 }
 
@@ -114,14 +182,19 @@ const browser = await chromium.launch({
 // Injecting a session into sessionStorage (see helpers.login) satisfies the route
 // guard so pages render, but does not reliably authenticate XHRs — that surfaces as
 // intermittent 403s on /nuxeo/api paths and screenshots of empty or error states.
+// Omitted only for a `skipHttpCredentials` steps file; see the credentials block above.
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
   recordVideo: { dir: outDir, size: { width: 1440, height: 900 } },
-  httpCredentials: {
-    username: process.env['NUXEO_USER'] ?? 'Administrator',
-    password: process.env['NUXEO_PASS'] ?? 'Administrator',
-    origin: baseUrl,
-  },
+  ...(credentials
+    ? {
+        httpCredentials: {
+          username: credentials.username,
+          password: credentials.password,
+          origin: baseUrl,
+        },
+      }
+    : {}),
 });
 
 const page = await context.newPage();
@@ -154,7 +227,8 @@ const helpers = createHelpers(page, outDir, recorder);
 let runError = null;
 let preconditionFailure = null;
 try {
-  const { default: runSteps } = await import(pathToFileURL(stepsFile).href);
+  if (stepsImportError) throw stepsImportError;
+  const runSteps = stepsModule?.default;
   if (typeof runSteps !== 'function') {
     throw new Error(`${stepsFile} must export a default async function(page, helpers, outDir)`);
   }
@@ -198,7 +272,10 @@ const manifest = {
   finishedAt: new Date().toISOString(),
   environment: {
     appUrl: baseUrl,
-    nuxeoUser: process.env['NUXEO_USER'] ?? 'Administrator',
+    // The identity the run actually used, or null when it sent none. This recorded
+    // `Administrator` for a run with the variables unset, which was true only because the
+    // runner had invented the pair.
+    nuxeoUser: credentials?.username ?? null,
     node: process.version,
     stepsFile,
   },

@@ -28,15 +28,22 @@
  *   node tools/video/mock-customer/seed-nuxeo.mjs
  *   node tools/video/mock-customer/seed-nuxeo.mjs --check   # verify only
  *
- * Credentials come from `NUXEO_USER` / `NUXEO_PASS`, which default to the local
- * Docker instance's `Administrator` as documented in CLAUDE.md. Nothing here is
+ * Credentials come from `NUXEO_USER` / `NUXEO_PASS`, with no default. They used to
+ * fall back to the local Docker instance's administrator pair, citing CLAUDE.md,
+ * which said the same; both were corrected by NXSAT-649. Run directly, a missing
+ * pair exits 2 before anything is written; imported (scene 3 calls `check()`),
+ * the first request throws instead, so the caller decides. Nothing here is
  * ever pointed at a deployed server: `NUXEO_BASE` defaults to localhost:8080 and
  * the script refuses a non-loopback host unless `--allow-remote` is passed.
  */
 
+import {
+  basicAuthorization,
+  nuxeoCredentialsOrExit,
+  requireNuxeoCredentials,
+} from '../../../scripts/beta-harness/nuxeo-credentials.mjs';
+
 const BASE = (process.env['NUXEO_BASE'] ?? 'http://localhost:8080').replace(/\/$/, '');
-const USER = process.env['NUXEO_USER'] ?? 'Administrator';
-const PASS = process.env['NUXEO_PASS'] ?? 'Administrator';
 
 const ARGS = new Set(process.argv.slice(2));
 
@@ -53,7 +60,10 @@ function assertLocal() {
   }
 }
 
-const authHeader = () => `Basic ${Buffer.from(`${USER}:${PASS}`).toString('base64')}`;
+// Read per request, not at import: scene 3 imports this module for `check()`, and an import that
+// exits would take the recording with it.
+const authHeader = () =>
+  basicAuthorization(requireNuxeoCredentials('seed or check the mock-customer content'));
 
 async function api(path, { method = 'GET', body, headers = {}, raw = false } = {}) {
   const res = await fetch(`${BASE}/nuxeo/api/v1${path}`, {
@@ -425,6 +435,7 @@ export async function check({ quiet = false } = {}) {
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
+  nuxeoCredentialsOrExit('seed or check the mock-customer content');
   if (ARGS.has('--check')) {
     console.log(`\nChecking ${BASE}${ACME_WORKSPACE_PATH}`);
     await check();

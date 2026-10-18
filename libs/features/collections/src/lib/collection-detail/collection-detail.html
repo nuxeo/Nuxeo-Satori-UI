@@ -356,7 +356,7 @@
                 <input
                   matInput
                   [matDatepicker]="fromPicker"
-                  [placeholder]="'common.date-mask' | translate"
+                  [placeholder]="'common.date-mask' | translate | dateMask"
                   [ngModel]="filterDateFrom()"
                   (ngModelChange)="filterDateFrom.set($event)"
                 />
@@ -369,7 +369,7 @@
                 <input
                   matInput
                   [matDatepicker]="toPicker"
-                  [placeholder]="'common.date-mask' | translate"
+                  [placeholder]="'common.date-mask' | translate | dateMask"
                   [ngModel]="filterDateTo()"
                   (ngModelChange)="filterDateTo.set($event)"
                 />

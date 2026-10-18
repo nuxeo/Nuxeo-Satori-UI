@@ -5,9 +5,10 @@
  * Run with:
  *   npm run evidence:collect -- NXSAT-151 scripts/collect-evidence/NXSAT-151.mjs
  *
- * Optional env:
- *   NUXEO_USER / NUXEO_PASS — admin credentials (default Administrator)
- *   NUXEO_GROUP_ID — group to edit for member autocomplete (default administrators)
+ * Env:
+ *   NUXEO_USER / NUXEO_PASS — admin credentials, required: no default, and the runner refuses
+ *                             without them
+ *   NUXEO_GROUP_ID — group to edit for member autocomplete (optional, default administrators)
  */
 
 /** @param {import('@playwright/test').Page} page */

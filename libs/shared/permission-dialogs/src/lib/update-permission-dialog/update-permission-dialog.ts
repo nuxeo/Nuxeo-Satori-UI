@@ -10,7 +10,6 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { switchMap } from 'rxjs';
@@ -22,7 +21,10 @@ import {
   permissionUpdateMailFailureMessage,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo/satori-platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo/satori-platform/ui';
 import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface UpdatePermissionDialogData {
@@ -55,7 +57,7 @@ const PERMISSION_OPTIONS = [
     MatDatepickerModule,
     MatProgressSpinnerModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './update-permission-dialog.html',
   styles: [
     `

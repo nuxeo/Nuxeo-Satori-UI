@@ -15,19 +15,24 @@ describe('expires-date.utils', () => {
     expect(isExpiresFieldValid('skdfjlksd', null)).toBe(false);
   });
 
-  it('allows in-progress mm/dd/yyyy input', () => {
-    expect(isExpiresFieldValid('01/15/', null)).toBe(true);
+  it('blocks incomplete input rather than treating it as an intentional clear', () => {
+    expect(isExpiresFieldValid('01/15/', null)).toBe(false);
   });
 
-  it('validates complete mm/dd/yyyy dates deterministically', () => {
-    expect(isExpiresFieldValid('02/29/2024', null)).toBe(true);
+  it('requires a valid adapter result for non-empty input', () => {
+    expect(isExpiresFieldValid('02/29/2024', new Date(2024, 1, 29))).toBe(true);
     expect(isExpiresFieldValid('02/29/2023', null)).toBe(false);
   });
 
   it('shouldShowExpiresFieldError is true only for non-empty invalid input', () => {
     expect(shouldShowExpiresFieldError('', null)).toBe(false);
     expect(shouldShowExpiresFieldError('skdfjlksd', null)).toBe(true);
-    expect(shouldShowExpiresFieldError('02/29/2024', null)).toBe(false);
+    expect(shouldShowExpiresFieldError('02/29/2024', new Date(2024, 1, 29))).toBe(false);
+  });
+
+  it('rejects invalid model values even without raw text', () => {
+    expect(isExpiresFieldValid('', new Date(Number.NaN))).toBe(false);
+    expect(shouldShowExpiresFieldError('', new Date(Number.NaN))).toBe(true);
   });
 
   it('createExpiresErrorStateMatcher reflects live invalid state', () => {

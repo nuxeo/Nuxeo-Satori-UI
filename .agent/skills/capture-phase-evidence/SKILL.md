@@ -19,9 +19,16 @@ node -e "require.resolve('@playwright/test')" 2>/dev/null && echo available || e
 # if missing (deliberately untracked, so CI installs stay unaffected):
 npm install --no-save @playwright/test && npx playwright install chromium
 
+export NUXEO_USER=<user> NUXEO_PASS=<password>   # required — there is no default
 npm run beta:backend     # start nuxeo + nuxeo-opensearch, wait for the REST API
 npx nx serve nuxeo-ui    # separate terminal, must be running
 ```
+
+**The credentials have no default.** Unset, `beta:backend` exits **2** (precondition not met),
+and so does `beta:evidence` for any steps file that needs them, before a browser opens — fix the
+environment, not the code. A steps file that needs no backend says so with
+`export const skipHttpCredentials = true` and runs without them;
+`git grep -l skipHttpCredentials scripts/beta-harness/steps` lists which do.
 
 **Check the backend before diagnosing selector failures.** A stopped container
 produces a dozen scattered "selector not visible" reds that read exactly like
@@ -131,6 +138,7 @@ files. Quote the verdict line verbatim.
 | Symptom                                   | Cause                                                                                                     |
 | ----------------------------------------- | --------------------------------------------------------------------------------------------------------- |
 | `ERR_CONNECTION_REFUSED`                  | Dev server not running.                                                                                   |
+| Exit 2, "NUXEO_USER and NUXEO_PASS must…" | The credentials are not exported. There is no default; export them.                                       |
 | Many scattered "selector not visible"     | Backend down before you suspect a component. `npm run beta:backend -- --check`.                           |
 | Login appears to work but pages are empty | Nuxeo unreachable through the proxy; check `proxy.conf` and that Nuxeo is up.                             |
 | Every check fails on selectors            | Component selectors changed. Verify with `grep -rh "selector: '" libs/shared/satori-components/src/lib/`. |

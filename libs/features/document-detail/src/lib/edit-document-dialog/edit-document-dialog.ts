@@ -19,7 +19,10 @@ import {
   readValidationFailure,
 } from '@agentic-ui/shared/document-layouts';
 import { BrowseService, NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
-import { provideTranslatedDatepickerIntl } from '@nuxeo/satori-platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo/satori-platform/ui';
 
 export interface EditDocumentDialogData {
   document: NuxeoDocument;
@@ -44,7 +47,7 @@ export interface EditDocumentDialogData {
     MatProgressSpinnerModule,
     TranslatePipe,
   ],
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './edit-document-dialog.html',
   styleUrl: './edit-document-dialog.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

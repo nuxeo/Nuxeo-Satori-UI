@@ -8382,6 +8382,632 @@ for (const [variant, body, reason] of [
   expectRed(`[mdx] ${variant}`, 'checkMdxCodeSamplesFormatted', mdx(body), null, reason);
 }
 
+/* ---------------- checkNoNuxeoCredentialDefaults ---------------- */
+
+// NXSAT-649. The tree is scanned, not the diff, so most violations below are in the COMMITTED
+// baseline — the shape the defect had on `main`, where no diff would ever have added it again.
+// The fixture bodies are strings, so this file is not itself a violation: the guardrail parses
+// JavaScript and a string is not an expression.
+
+/**
+ * The real shared reader, read from this checkout rather than paraphrased.
+ *
+ * The first version of these controls used a stand-in at this path with literal keys
+ * (`process.env['NUXEO_USER']`), while the real file reads `process.env[NUXEO_USER_ENV]` through
+ * a constant — the one shape the guardrail did not see. A `?? 'Administrator'` written back into
+ * the file all thirteen consumers share passed it, and every control here stayed green.
+ */
+const CREDENTIAL_READER_PATH = 'scripts/beta-harness/nuxeo-credentials.mjs';
+const CREDENTIAL_READER = readFileSync(join(ROOT, CREDENTIAL_READER_PATH), 'utf8');
+
+/**
+ * The real reader with one line changed. Throws when `line` is no longer in it, so reshaping the
+ * reader breaks this control loudly instead of leaving it testing a file that no longer exists.
+ */
+function mutateCredentialReader(line, replacement) {
+  if (!CREDENTIAL_READER.includes(line)) {
+    throw new Error(
+      `${CREDENTIAL_READER_PATH} no longer contains \`${line}\`. Update the ` +
+        'checkNoNuxeoCredentialDefaults controls to the shape the reader has now.',
+    );
+  }
+  return CREDENTIAL_READER.replace(line, replacement);
+}
+
+/** A correct harness: the pair is read, refused when missing, and never defaulted. */
+const CREDENTIALS_OK = {
+  [CREDENTIAL_READER_PATH]: CREDENTIAL_READER,
+  'scripts/check.sh':
+    '#!/usr/bin/env bash\n[[ -n "${NUXEO_USER:-}" && -n "${NUXEO_PASS:-}" ]] || exit 2\n' +
+    ': "${NUXEO_PASS:?set NUXEO_PASS}"\n',
+};
+
+/** The baseline plus one file, committed. */
+const withCredentialFile = (path, body) => ({ ...CREDENTIALS_OK, [path]: body });
+
+const DEFAULT_REASON = (name) => new RegExp(`defaults ${name} to a literal`);
+
+expectGreen(
+  'a harness that reads and refuses, never defaults',
+  'checkNoNuxeoCredentialDefaults',
+  CREDENTIALS_OK,
+);
+
+expectRed(
+  'the phase-6-a11y shape: bracket read, ??, single-quoted literal',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/beta-harness/steps/phase-6-a11y.mjs',
+    "const user = process.env['NUXEO_USER'] ?? 'Administrator';\n",
+  ),
+  null,
+  /scripts\/beta-harness\/steps\/phase-6-a11y\.mjs:1 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'dot read, ||, double-quoted literal, under tools/',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile('tools/video/scene.mjs', 'const pass = process.env.NUXEO_PASS || "secret";\n'),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'a fallback Prettier wrapped onto the next line, in a TypeScript file under a11y/',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'a11y/fixtures.ts',
+    "export const pass: string =\n  process.env['NUXEO_PASS'] ??\n    'Administrator';\n",
+  ),
+  null,
+  /a11y\/fixtures\.ts:2 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a default through a same-file constant',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const FALLBACK = 'Administrator';\nconst user = process.env.NUXEO_USER ?? FALLBACK;\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'a destructuring default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile('scripts/demo.mjs', "const { NUXEO_USER = 'Administrator' } = process.env;\n"),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'a ternary default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const user = process.env.NUXEO_USER ? process.env.NUXEO_USER : 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'a default assigned back into the environment with ??=',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile('scripts/demo.mjs', "process.env['NUXEO_PASS'] ??= 'Administrator';\n"),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'a read wrapped in a call before the fallback',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const user = process.env.NUXEO_USER?.trim() || 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  "a second account's password — the NXSAT-164 shape",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/collect-evidence/NXSAT-164.mjs',
+    "const isolatedPass = process.env['NUXEO_ISOLATED_PASS'] ?? 'not-a-real-password';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_ISOLATED_PASS'),
+);
+
+expectRed(
+  'a shell parameter-expansion default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nUSER="${NUXEO_USER:-Administrator}"\n',
+  ),
+  null,
+  /scripts\/login\.sh:2 defaults NUXEO_USER to a literal/,
+);
+
+// Uncommitted and untracked: what a developer's pre-commit run sees before `git add`.
+expectRed(
+  'an untracked new file carrying a default',
+  'checkNoNuxeoCredentialDefaults',
+  CREDENTIALS_OK,
+  (write) =>
+    write(
+      'tools/i18n/new-audit.mjs',
+      "const pass = process.env['NUXEO_PASS'] ?? 'Administrator';\n",
+    ),
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'nothing under the roots to scan',
+  'checkNoNuxeoCredentialDefaults',
+  { 'README.md': '# fixture\n' },
+  null,
+  /scanned no files under scripts, tools, a11y/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an empty-string fallback followed by a refusal',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const pass = process.env['NUXEO_PASS'] ?? '';\nif (!pass) process.exit(2);\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the pattern quoted in a comment and in a string',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "// This used to read `process.env['NUXEO_USER'] ?? 'Administrator'`.\n" +
+      "/* process.env.NUXEO_PASS || 'Administrator' */\n" +
+      "const hint = \"never write process.env['NUXEO_USER'] ?? 'Administrator'\";\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a default on a Nuxeo variable that is not a credential',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const url = process.env['NUXEO_URL'] ?? 'http://localhost:8080';\n" +
+      "const container = process.env.NUXEO_CONTAINER || 'nuxeo';\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a ternary that reports whether the pair is set',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "console.log(process.env.NUXEO_USER ? 'NUXEO_USER is set' : 'NUXEO_USER is missing');\n",
+  ),
+);
+
+// The forms review found escaping the first version (NXSAT-649). Each was a working
+// `?? 'Administrator'` the guardrail passed; the first two are the shared reader itself.
+
+expectRed(
+  "the shared reader's own computed-key read, defaulted with ??",
+  'checkNoNuxeoCredentialDefaults',
+  {
+    ...CREDENTIALS_OK,
+    [CREDENTIAL_READER_PATH]: mutateCredentialReader(
+      'const username = process.env[NUXEO_USER_ENV];',
+      "const username = process.env[NUXEO_USER_ENV] ?? 'Administrator';",
+    ),
+  },
+  null,
+  /scripts\/beta-harness\/nuxeo-credentials\.mjs:\d+ defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  "the shared reader's own computed-key read, defaulted with ||",
+  'checkNoNuxeoCredentialDefaults',
+  {
+    ...CREDENTIALS_OK,
+    [CREDENTIAL_READER_PATH]: mutateCredentialReader(
+      'const password = process.env[NUXEO_PASS_ENV];',
+      "const password = process.env[NUXEO_PASS_ENV] || 'Administrator';",
+    ),
+  },
+  null,
+  /scripts\/beta-harness\/nuxeo-credentials\.mjs:\d+ defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a computed key through a same-file constant',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const KEY = 'NUXEO_USER';\nconst user = process.env[KEY] ?? 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  "a computed key through the reader's exported constant, imported",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'tools/video/scene.mjs',
+    "import { NUXEO_PASS_ENV } from '../../scripts/beta-harness/nuxeo-credentials.mjs';\n" +
+      "export const pass = process.env[NUXEO_PASS_ENV] || 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'an alias defaulted on the next line — the e2e-preflight house style',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const USER = process.env['NUXEO_USER'];\nexport const user = USER ?? 'Administrator';\n",
+  ),
+  null,
+  /scripts\/demo\.mjs:2 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a renamed destructure, defaulted',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const { NUXEO_PASS: pass } = process.env;\nexport const p = pass || 'Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_PASS'),
+);
+
+expectRed(
+  'a literal assigned when the alias is empty',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "let user = process.env.NUXEO_USER;\nif (!user) user = 'Administrator';\n",
+  ),
+  null,
+  /scripts\/demo\.mjs:2 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a default held in a same-file object literal',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const DEFAULTS = { user: 'Administrator' };\n" +
+      'export const user = process.env.NUXEO_USER ?? DEFAULTS.user;\n',
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_USER'),
+);
+
+expectRed(
+  'NUXEO_AUTH — a whole user:password pair — defaulted in JavaScript',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "export const auth = process.env.NUXEO_AUTH ?? 'Administrator:Administrator';\n",
+  ),
+  null,
+  DEFAULT_REASON('NUXEO_AUTH'),
+);
+
+expectRed(
+  'NUXEO_AUTH defaulted in shell — the verify-k*-dev-connectivity.sh line, one edit away',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/verify-kd-dev-connectivity.sh',
+    '#!/usr/bin/env bash\nexport NUXEO_AUTH="${NUXEO_AUTH:-Administrator:Administrator}"\n',
+  ),
+  null,
+  /verify-kd-dev-connectivity\.sh:2 defaults NUXEO_AUTH to a literal/,
+);
+
+expectRed(
+  'a shell literal assigned when a -z test finds the variable empty',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\n[ -z "$NUXEO_PASS" ] && NUXEO_PASS=Administrator\n',
+  ),
+  null,
+  /scripts\/login\.sh:2 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a shell literal exported inside an if block that tested the variable',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nif [ -z "${NUXEO_USER:-}" ]; then\n  export NUXEO_USER=Administrator\nfi\n',
+  ),
+  null,
+  /scripts\/login\.sh:3 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a generator template under tools/, which becomes customer project code',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'tools/satori-generators/src/generators/app/files/src/env.ts__tmpl__',
+    "export const user: string = process.env['NUXEO_USER'] ?? 'Administrator';\n",
+  ),
+  null,
+  /env\.ts__tmpl__:1 defaults NUXEO_USER to a literal/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "a parameter that shadows an alias's name is a different variable",
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    'const user = process.env.NUXEO_USER;\n' +
+      "export function label(user) {\n  return user ?? 'guest';\n}\n" +
+      "export const column = row.user ?? 'unknown';\nexport { user };\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'an unconditional assignment — the e2e negative control exports a wrong password on purpose',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/e2e-negative-control.sh',
+    '#!/usr/bin/env bash\nexport NUXEO_PASS="wrong"\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell value computed at run time, and an empty NUXEO_AUTH default',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nexport NUXEO_AUTH="${NUXEO_AUTH:-}"\n' +
+      'if [ -z "$NUXEO_PASS" ]; then\n  NUXEO_PASS="$(security find-generic-password -w -s nuxeo)"\nfi\n',
+  ),
+);
+
+// Copilot on PR #429: the shell side read every non-empty `${VAR:-x}` as a literal default. A
+// fallback to another variable or to a command, and the pattern quoted in single-quoted text or a
+// comment, each failed the whole-tree gate. Every green control below was red before the shell
+// side was lexed rather than matched line by line. Each red one keeps a real default next to the
+// thing now skipped, so a fix that blinds the scan fails it.
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell fallback to another environment variable',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nNUXEO_PASS="${NUXEO_PASS:-$SECRET_FROM_ENV}"\n' +
+      'NUXEO_USER=${NUXEO_USER:-${CI_NUXEO_USER}}\nexport NUXEO_PASS NUXEO_USER\n' +
+      // With literal text beside the variable, so the value is not merely empty once the
+      // variable is dropped: only knowing that `$V` is a runtime source keeps these green.
+      'NUXEO_ISOLATED_USER="${NUXEO_ISOLATED_USER:-ci-$GITHUB_ACTOR}"\n' +
+      'NUXEO_ISOLATED_PASS=${NUXEO_ISOLATED_PASS:-${VAULT_PREFIX}-isolated}\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell fallback to a command substitution, in $(…) and in backticks',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\n' +
+      'NUXEO_PASS="${NUXEO_PASS:-$(security find-generic-password -w -s nuxeo)}"\n' +
+      'NUXEO_USER=${NUXEO_USER:-`id -un`}\n' +
+      // As above: literal text beside each substitution, one form per line.
+      'NUXEO_ISOLATED_PASS="${NUXEO_ISOLATED_PASS:-pw-$(cat ~/.nuxeo-pass)}"\n' +
+      'NUXEO_ISOLATED_USER=${NUXEO_ISOLATED_USER:-ci-`id -un`}\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell default quoted in single-quoted text, which the shell never expands',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    "#!/usr/bin/env bash\necho 'Do not write ${NUXEO_PASS:-fixed}; export NUXEO_PASS.' >&2\n" +
+      "echo 'Usage:\n  NUXEO_USER=${NUXEO_USER:-you} ./login.sh' >&2\n",
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell default and a guarded assignment quoted in comments',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\n# This used to read ${NUXEO_PASS:-fixed}.\n' +
+      ': "${NUXEO_PASS:?set NUXEO_PASS}" # never ${NUXEO_PASS:-fixed}\n' +
+      '[ -z "$NUXEO_USER" ] && exit 2 # not: NUXEO_USER=Administrator\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell default in a heredoc with a quoted delimiter, which is not expanded',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    "#!/usr/bin/env bash\ncat <<'EOF'\nNUXEO_PASS=${NUXEO_PASS:-fixed}\nEOF\n" +
+      'cat <<"EOF"\n${NUXEO_USER:-fixed}\nEOF\ncat <<\\EOF\n${NUXEO_AUTH:-fixed}\nEOF\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shell default with its $ escaped, which prints rather than expands',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\necho "Writing \\${NUXEO_PASS:-fixed} fails review." >&2\n' +
+      'echo \\${NUXEO_USER:-fixed} >&2\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a value computed at run time, assigned under a -z test, with literal text around it',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\n[ -z "$NUXEO_PASS" ] && NUXEO_PASS="pw-$(cat ~/.nuxeo-pass)"\n' +
+      'if [ -z "$NUXEO_USER" ]; then\n  NUXEO_USER="ci-${GITHUB_ACTOR}"\nfi\n',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a -z test, an assignment and an if that are text the shell prints, not commands it runs',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\n[ -z "$NUXEO_USER" ] && echo "NUXEO_USER=Administrator is not set" >&2\n' +
+      'echo \'[ -z "$NUXEO_AUTH" ]\' && NUXEO_AUTH=x\n' +
+      // `-n` of the single-quoted text `$NUXEO_AUTH` is always true: the assignment always runs.
+      "[ -n '$NUXEO_AUTH' ] && NUXEO_AUTH=x\n" +
+      '[ -z "$NUXEO_PASS" ] && echo "export NUXEO_PASS; if unsure, ask" >&2\n' +
+      'cat <<\'EOF\'\nif [ -z "$NUXEO_PASS" ]; then\nEOF\nNUXEO_PASS=wrong\n',
+  ),
+);
+
+expectRed(
+  'an if block whose body prints a "; fi" still guards the assignment after it',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nif [ -z "$NUXEO_PASS" ]; then\n' +
+      '  echo "Expected: if [ -z \\"\\$NUXEO_PASS\\" ]; then exit 2; fi" >&2\n' +
+      '  NUXEO_PASS=Administrator\nfi\n',
+  ),
+  null,
+  /login\.sh:4 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'shell literal defaults, unquoted, with each of the four operators',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nUSER=${NUXEO_USER:-Administrator}\n: ${NUXEO_PASS:=Administrator}\n' +
+      'echo ${NUXEO_ISOLATED_USER-Administrator}\n: ${NUXEO_ISOLATED_PASS=Administrator}\n',
+  ),
+  null,
+  /login\.sh:2 defaults NUXEO_USER [\s\S]*login\.sh:3 defaults NUXEO_PASS [\s\S]*login\.sh:4 defaults NUXEO_ISOLATED_USER [\s\S]*login\.sh:5 defaults NUXEO_ISOLATED_PASS /,
+);
+
+expectRed(
+  'a shell literal written with quotes, which the shell removes',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    "#!/usr/bin/env bash\nP=${NUXEO_PASS:-'Administrator'}\nU=${NUXEO_USER:-$'Administrator'}\n" +
+      '[ -z "$NUXEO_AUTH" ] && NUXEO_AUTH=\'Administrator:Administrator\'\n',
+  ),
+  null,
+  /login\.sh:2 defaults NUXEO_PASS [\s\S]*login\.sh:3 defaults NUXEO_USER [\s\S]*login\.sh:4 defaults NUXEO_AUTH /,
+);
+
+expectRed(
+  'a shell literal default in an unquoted heredoc, where quotes are only characters',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    "#!/usr/bin/env bash\ncat > creds.env <<EOF\nNUXEO_USER='${NUXEO_USER:-Administrator}'\nEOF\n",
+  ),
+  null,
+  /login\.sh:3 defaults NUXEO_USER to a literal/,
+);
+
+expectRed(
+  'a real default after a quoted heredoc and a comment end, so the scan resumes as code',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    "#!/usr/bin/env bash\ncat <<'EOF'\n${NUXEO_PASS:-fixed}\nEOF\n# don't default it\n" +
+      'P="${NUXEO_PASS:-Administrator}" # it does anyway\n',
+  ),
+  null,
+  /login\.sh:6 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a nested default whose own fallback is a literal, the value when neither variable is set',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nP="${NUXEO_PASS:-${LEGACY_PASS:-Administrator}}"\n',
+  ),
+  null,
+  /login\.sh:2 defaults NUXEO_PASS to a literal/,
+);
+
+expectRed(
+  'a shell literal default inside a command substitution',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/login.sh',
+    '#!/usr/bin/env bash\nTOKEN=$(curl -su "${NUXEO_USER:-Administrator}:$NUXEO_PASS" "$URL")\n',
+  ),
+  null,
+  /login\.sh:2 defaults NUXEO_USER to a literal/,
+);
+
+// The JavaScript side had the same false positive: a template literal counted as a literal
+// whatever it substituted, so `` `${process.env.VAULT_PASS}` `` was reported as a default.
+
+falsePositiveControls += 1;
+expectGreen(
+  'a JavaScript fallback to a runtime source: another variable, a call, a template of one',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "import { execSync } from 'node:child_process';\n" +
+      'const VAULT = process.env.VAULT_PASS;\n' +
+      'export const a = process.env.NUXEO_PASS ?? process.env.VAULT_PASS;\n' +
+      'export const b = process.env.NUXEO_PASS || VAULT;\n' +
+      "export const c = process.env.NUXEO_PASS ?? execSync('security find-generic-password -w');\n" +
+      'export const d = process.env.NUXEO_PASS ?? `${process.env.VAULT_PASS}`;\n' +
+      'export const e = process.env.NUXEO_USER ?? `ci-${process.env.GITHUB_ACTOR}`;\n',
+  ),
+);
+
+expectRed(
+  'a JavaScript literal assembled from literals: a template of constants, a +, a nested ??',
+  'checkNoNuxeoCredentialDefaults',
+  withCredentialFile(
+    'scripts/demo.mjs',
+    "const ADMIN = 'Administrator';\n" +
+      'export const a = process.env.NUXEO_USER ?? `${ADMIN}`;\n' +
+      "export const b = process.env.NUXEO_PASS ?? 'Admin' + 'istrator';\n" +
+      'export const c =\n' +
+      "  process.env.NUXEO_AUTH ?? (process.env.LEGACY_AUTH ?? 'Administrator:Administrator');\n",
+  ),
+  null,
+  /demo\.mjs:2 defaults NUXEO_USER [\s\S]*demo\.mjs:3 defaults NUXEO_PASS [\s\S]*demo\.mjs:5 defaults NUXEO_AUTH /,
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

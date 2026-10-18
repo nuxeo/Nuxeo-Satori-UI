@@ -65,6 +65,9 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { requireStepCredentials } from '../helpers.mjs';
+import { basicAuthorization } from '../nuxeo-credentials.mjs';
+
 /**
  * Empty on purpose. Every rule this capture once tolerated is fixed; see the table above.
  *
@@ -402,19 +405,23 @@ const PICTURE_WITH_METADATA_NXQL =
  * Explicit Basic auth for `page.request` calls to `/nuxeo/api/*`.
  *
  * Context `httpCredentials` cover same-origin UI navigation; absolute API URLs through the dev
- * proxy (especially hosted beta) still need an `Authorization` header — see
- * `phase-runner.mjs` (defaults) and `apps/nuxeo-ui-e2e/src/fixtures.ts` (Nuxeo does not
- * challenge unauthenticated API calls).
+ * proxy (especially hosted beta) still need an `Authorization` header — see `phase-runner.mjs`,
+ * which sets `httpCredentials` from the same two variables, and
+ * `apps/nuxeo-ui-e2e/src/fixtures.ts` (Nuxeo does not challenge unauthenticated API calls).
+ *
+ * From the environment, with no default. Both halves defaulted to the local Docker administrator
+ * pair here, which is the fallback NXSAT-649 named as its precondition: a working credential in
+ * the repository, and an accessibility scan that would silently run as an administrator. The
+ * runner already refuses this file without the pair; this throws a `PreconditionError` too, so
+ * the function cannot be lifted somewhere that does not.
  *
  * @param {Record<string, string>} [extra]
  * @returns {Record<string, string>}
  */
 function nuxeoApiRequestHeaders(extra = {}) {
-  const user = process.env['NUXEO_USER'] ?? 'Administrator';
-  const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
   return {
     ...extra,
-    Authorization: `Basic ${Buffer.from(`${user}:${pass}`).toString('base64')}`,
+    Authorization: basicAuthorization(requireStepCredentials('scan the phase-6-a11y surfaces')),
   };
 }
 

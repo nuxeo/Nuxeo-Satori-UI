@@ -16,6 +16,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { requireNuxeoCredentials } from '../../scripts/beta-harness/nuxeo-credentials.mjs';
+
 /** The Layer 0 config request the application makes at startup. */
 export const BOOTSTRAP_ROUTE = '**/agentic-ui-config/bootstrap.json';
 
@@ -160,10 +162,15 @@ export function routeReached(page, requested) {
  * second way of constructing a session is a second thing to keep in step. The page is reloaded
  * afterwards: `withHashLocation()` makes a `goto('/#/x')` same-document, so `APP_INITIALIZER` would
  * not otherwise re-run and the session would not be picked up.
+ *
+ * Credentials from `NUXEO_USER` / `NUXEO_PASS`, with no default: unset, this throws rather than
+ * signing in as the local Docker administrator, which both halves used to fall back to
+ * (NXSAT-649). Both audits check first and exit 2, so this is the backstop, not the message.
  */
 export async function signIn(page, baseUrl) {
-  const user = process.env['NUXEO_USER'] ?? 'Administrator';
-  const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
+  const { username: user, password: pass } = requireNuxeoCredentials(
+    'sign the pseudo-locale audit in',
+  );
 
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(800);

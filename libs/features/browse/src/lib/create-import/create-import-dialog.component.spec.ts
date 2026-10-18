@@ -1,7 +1,9 @@
+import { DateAdapter } from '@angular/material/core';
+import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ElementRef, provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NoopAnimationsModule } from '@angular/platform-browser/animations';
+import { NoopAnimationsModule, provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, timer } from 'rxjs';
 import { map } from 'rxjs/operators';
 import { vi } from 'vitest';
@@ -142,20 +144,57 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
     expect(component.coverage).toBeNull();
   });
 
+  it.each([
+    { locale: enUS, input: '12/31/2026' },
+    { locale: fr, input: '31/12/2026' },
+    { locale: de, input: '31.12.2026' },
+    { locale: nl, input: '31-12-2026' },
+    { locale: ja, input: '2026/12/31' },
+    { locale: th, input: '31/12/2026' },
+    { locale: zhCN, input: '26-12-31' },
+  ])(
+    'accepts Expires "$input" using $locale.code and retains the parsed date',
+    ({ locale, input }) => {
+      fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(locale);
+      component.onExpiresInput({ target: { value: input } } as unknown as Event);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.showExpiresError()).toBe(false);
+      expect(component.expiresErrorMatcher.isErrorState()).toBe(false);
+      expect([
+        component.expires?.getFullYear(),
+        component.expires?.getMonth(),
+        component.expires?.getDate(),
+      ]).toEqual([2026, 11, 31]);
+    },
+  );
+
+  it('shows and blocks locale-invalid Expires text even when the model previously held a valid date', () => {
+    fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(de);
+    component.expires = new Date(2026, 3, 3);
+    component.onExpiresInput({ target: { value: '03/04/2026' } } as unknown as Event);
+    expect(component.isExpiresValid()).toBe(false);
+    expect(component.showExpiresError()).toBe(true);
+    expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
+    // Material's ngModel turns an invalid adapter date into null. Non-empty raw text must
+    // still block submission rather than clearing the stored expiry.
+    component.onExpiresChange(null);
+    expect(component.isExpiresValid()).toBe(false);
+  });
+
   it('rejects invalid expiry input while typing', () => {
     component.onExpiresInput({ target: { value: '99/99/9999' } } as unknown as Event);
 
     expect(component.isExpiresValid()).toBe(false);
   });
 
-  it('allows empty expiry and in-progress mm/dd/yyyy input', () => {
+  it('allows empty expiry but blocks incomplete input', () => {
     expect(component.isExpiresValid()).toBe(true);
 
     component.onExpiresInput({ target: { value: '01/15/' } } as unknown as Event);
-    expect(component.isExpiresValid()).toBe(true);
+    expect(component.isExpiresValid()).toBe(false);
   });
 
-  it('allows partial expiry input even when datepicker parse would fail', () => {
+  it('blocks partial expiry input when datepicker parsing fails', () => {
     component.onExpiresInput({ target: { value: '01/15/' } } as unknown as Event);
     component.expiresNgModel = {
       errors: { matDatepickerParse: { text: '01/15/' } },
@@ -163,7 +202,7 @@ describe('CreateImportDialogComponent (NXSAT-173)', () => {
       control: { markAsDirty: vi.fn(), updateValueAndValidity: vi.fn() },
     } as unknown as typeof component.expiresNgModel;
 
-    expect(component.isExpiresValid()).toBe(true);
+    expect(component.isExpiresValid()).toBe(false);
   });
 
   it('validates complete mm/dd/yyyy dates deterministically', () => {
@@ -511,6 +550,63 @@ describe('CreateImportDialogComponent import with properties (NXSAT-185)', () =>
     component.startImportProperties();
 
     expect(component.canApplyImportToAll()).toBe(false);
+  });
+
+  describe('an invalid expiry on a file the user has navigated away from', () => {
+    /** Type an unparseable expiry into the file on screen, as the input handler would. */
+    const typeInvalidExpiry = () =>
+      component.onExpiresInput({ target: { value: '99/99/9999' } } as unknown as Event);
+
+    it('blocks the batch from a later file', async () => {
+      // Next saves the entry without validating it, so file 1's invalid expiry used to survive
+      // to `runImportWithProperties()` and serialize as `dc:expired: null`.
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      expect(component.isExpiresValid()).toBe(false);
+
+      component.editImportNext();
+
+      expect(component.importFileIndex()).toBe(1);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.isImportFormComplete()).toBe(true);
+      expect(component.isImportBatchReadyToCreate()).toBe(false);
+      expect(component.canCreateImportWithProperties()).toBe(false);
+    });
+
+    it('sends no request when the batch is run anyway', async () => {
+      mockImportService.importFilesWithProperties.mockReturnValue(of([]));
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      component.editImportNext();
+
+      component.runImportWithProperties();
+      await flushAsync();
+
+      expect(mockImportService.importFilesWithProperties).not.toHaveBeenCalled();
+    });
+
+    it('stops blocking once that file is unchecked', async () => {
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      typeInvalidExpiry();
+      component.editImportNext();
+      expect(component.isImportBatchReadyToCreate()).toBe(false);
+
+      component.toggleImportFileChecked(0, false);
+
+      expect(component.isImportBatchReadyToCreate()).toBe(true);
+    });
+
+    it('still allows a batch whose other entries cleared Expires deliberately', async () => {
+      component.uploads.stage([jpegFile('a.png'), jpegFile('b.png')]);
+      component.startImportProperties();
+      component.editImportNext();
+
+      expect(component.importEntries()[0].state.expiresRawText).toBe('');
+      expect(component.isImportBatchReadyToCreate()).toBe(true);
+    });
   });
 
   it('runImportWithProperties sends per-file titles after applyImportToAll', async () => {
@@ -2274,5 +2370,75 @@ describe('CreateImportDialogComponent location, vocabularies and file handling',
 
       expect(m.close).toHaveBeenCalledWith({ refreshed: true, path: WS_PATH });
     });
+  });
+});
+
+/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
+async function typeKeystrokes(
+  fixture: ComponentFixture<unknown>,
+  input: HTMLInputElement,
+  text: string,
+): Promise<string[]> {
+  const shown: string[] = [];
+  for (let end = 1; end <= text.length; end++) {
+    input.value = text.slice(0, end);
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    shown.push(input.value);
+  }
+  return shown;
+}
+
+const TYPED_EXPIRY = '12/31/2027';
+const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
+const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
+
+// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
+// write back and erase the text mid-entry. Only a real template exercises that write-back.
+describe('CreateImportDialogComponent Expires typed into the real field', () => {
+  async function render(): Promise<ComponentFixture<CreateImportDialogComponent>> {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [CreateImportDialogComponent, testTranslateModule()],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: mockDialogRef },
+        { provide: MAT_DIALOG_DATA, useValue: { parentPath: PARENT_PATH } },
+        { provide: DocumentImportService, useValue: mockImportService },
+        { provide: BrowseService, useValue: mockBrowseService },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(CreateImportDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    return fixture;
+  }
+
+  it('keeps every partial entry on the create form', async () => {
+    const fixture = await render();
+    fixture.componentInstance.startCreateFromType(pictureType());
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
+  });
+
+  it('keeps every partial entry on the import form', async () => {
+    const fixture = await render();
+    fixture.componentInstance.uploads.stage([jpegFile('photo.png')]);
+    fixture.componentInstance.startImportProperties();
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector(
+      'input[name="importExpires"]',
+    ) as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
   });
 });

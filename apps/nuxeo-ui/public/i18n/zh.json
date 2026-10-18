@@ -1025,7 +1025,7 @@
       "trashed-document-many": "回收站中的 {{ count }} 个文档",
       "trashed-document-one": "回收站中的 {{ count }} 个文档"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "yy-mm-dd",
     "dismiss": "解除",
     "email-example": "name@company.com",
     "lock": {

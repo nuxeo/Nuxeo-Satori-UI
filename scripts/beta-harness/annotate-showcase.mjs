@@ -9,7 +9,8 @@
  * Usage:
  *   node scripts/beta-harness/annotate-showcase.mjs [outDir]
  *
- * Requires the dev server and a reachable Nuxeo:
+ * Requires the dev server, a reachable Nuxeo, and NUXEO_USER / NUXEO_PASS (no default):
+ *   export NUXEO_USER=<user> NUXEO_PASS=<password>
  *   npx nx serve nuxeo-ui
  */
 
@@ -17,6 +18,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { nuxeoCredentialsOrExit } from './nuxeo-credentials.mjs';
 
 /**
  * Angular version for the generated footer, read from the installed package.
@@ -35,6 +37,10 @@ const ANGULAR_VERSION = (() => {
     return 'unknown';
   }
 })();
+
+// From the environment, no default — both used to fall back to the local Docker administrator
+// pair (NXSAT-649). Checked before the browser is launched; exits 2 when either is unset.
+const { username: user, password: pass } = nuxeoCredentialsOrExit('capture the annotated showcase');
 
 let chromium;
 try {
@@ -143,9 +149,6 @@ const COMPARISON = [
   ['Paging', 'Server paged', 'Fixed 50, first page only, no pager'],
   ['Search', 'NXQL via SearchService', 'None — toolbar filters loaded rows in memory'],
 ];
-
-const user = process.env['NUXEO_USER'] ?? 'Administrator';
-const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
 
 const browser = await chromium.launch({ headless: true });
 // `httpCredentials` guarantees Basic on every request to the origin. Injecting the

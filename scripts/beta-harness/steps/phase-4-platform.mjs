@@ -117,6 +117,13 @@ function luminance(rgb) {
 const readNav = (page) =>
   page.$$eval('.shell__nav-link', (els) => els.map((e) => e.textContent.trim()));
 
+/**
+ * No Nuxeo, so no credentials: the runner neither requires `NUXEO_USER` / `NUXEO_PASS` for this
+ * file nor sends them. The static server never challenges, so Basic auth was never part of what
+ * this phase observes.
+ */
+export const skipHttpCredentials = true;
+
 export default async function run(page, h) {
   const consoleErrors = [];
   page.on('console', (msg) => {

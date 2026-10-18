@@ -1,0 +1,202 @@
+name: Publish Configuration Package
+
+on:
+  # Dispatch only, and deliberately no `pull_request` trigger: `ci.yml` already runs
+  # `nx affected -t build`, and every package under `config-packages/` declares a `build`
+  # target, so a change to one is checked on its own pull request. Adding a second lane
+  # that builds the same zip would duplicate the check without strengthening it. What is
+  # missing is the publish, and publishing is always someone asking for it.
+  workflow_dispatch:
+    inputs:
+      package:
+        description: 'Directory name under config-packages/, e.g. satori-beta'
+        required: true
+        type: string
+      publishToPreprod:
+        description: 'Publish the built package to Nuxeo Marketplace preprod'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+# There is deliberately no workflow-level `concurrency` block. What needs serialising is
+# the Marketplace upload, and the only key that identifies it is the package *name* in
+# `package.xml` — which `build.mjs` is free to let differ from the input directory, and
+# which cannot be known before a step has read the file. Workflow-level `concurrency` may
+# only use the `github`, `inputs` and `vars` contexts, so it cannot see a parsed value;
+# job-level `concurrency` may also use `needs`. The group therefore lives on the `publish`
+# job below, where the real name is available. Building needs no serialisation at all.
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      package-name: ${{ steps.build.outputs.name }}
+      zip-name: ${{ steps.build.outputs.zip-name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Resolve the package
+        id: resolve
+        env:
+          PACKAGE: ${{ inputs.package }}
+        run: |
+          set -euo pipefail
+          # The input is interpolated into a path, so it has to be a single directory name
+          # and nothing more — a slash or a dot would reach outside `config-packages/` and
+          # package bytes from somewhere nobody reviewed.
+          if [[ ! "$PACKAGE" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
+            echo "::error::'$PACKAGE' is not a configuration package directory name"
+            exit 1
+          fi
+          if [[ ! -f "config-packages/$PACKAGE/build.mjs" ]]; then
+            echo "::error::config-packages/$PACKAGE/build.mjs does not exist"
+            exit 1
+          fi
+          echo "dir=config-packages/$PACKAGE" >> "$GITHUB_OUTPUT"
+          echo "out=dist/config-packages/$PACKAGE" >> "$GITHUB_OUTPUT"
+
+      - name: Build the package
+        id: build
+        env:
+          DIR: ${{ steps.resolve.outputs.dir }}
+          OUT: ${{ steps.resolve.outputs.out }}
+        run: |
+          set -euo pipefail
+          # `build.mjs` has no dependencies by design, so there is no `npm ci` here and no
+          # registry token: it runs anywhere Node 20 does. It applies the checks the server
+          # applies and exits non-zero rather than writing a zip Nuxeo would install and
+          # then silently ignore.
+          node "$DIR/build.mjs" --out "$OUT"
+
+          # The zip is named from `package.xml` — `<name>-<version>.zip` — which need not
+          # match the directory, so it is discovered rather than reconstructed here. The
+          # output directory is fresh on a runner, so anything other than exactly one zip
+          # means the build did something unexpected and should not be published.
+          shopt -s nullglob
+          ZIPS=("$OUT"/*.zip)
+          if [[ ${#ZIPS[@]} -ne 1 ]]; then
+            echo "::error::expected exactly one zip in $OUT, found ${#ZIPS[@]}"
+            exit 1
+          fi
+          ZIP="${ZIPS[0]}"
+
+          # The Marketplace package name, read from the same `package.xml` the zip was
+          # named from. The `publish` job keys its concurrency on this and not on the input
+          # directory: two directories may legitimately declare the same package name, and
+          # it is the name — not the directory — that two uploads collide on.
+          NAME=$(node -e '
+            const { readFileSync } = require("node:fs");
+            const xml = readFileSync(process.argv[1], "utf8");
+            const tag = xml.match(/<package\s[^>]*>/);
+            const name = tag && tag[0].match(/\bname\s*=\s*"([^"]+)"/);
+            if (!name) { console.error("no name attribute in " + process.argv[1]); process.exit(1); }
+            process.stdout.write(name[1]);
+          ' "$DIR/package/package.xml")
+
+          # Cross-checked rather than trusted. `build.mjs` names the zip from the same
+          # attribute, so a basename that does not start with the name just parsed means
+          # this step and the build disagree about which package this is — and the
+          # concurrency key downstream would then serialise the wrong thing silently.
+          if [[ "$(basename "$ZIP")" != "$NAME"-*.zip ]]; then
+            echo "::error::parsed package name '$NAME' does not match built zip $(basename "$ZIP")"
+            exit 1
+          fi
+
+          echo "zip=$ZIP" >> "$GITHUB_OUTPUT"
+          echo "zip-name=$(basename "$ZIP")" >> "$GITHUB_OUTPUT"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+
+      # Uploaded whatever the run was for. On a build-only run this is how you get the
+      # reviewed bytes out — to inspect them, or to upload them by hand through the
+      # Marketplace web UI if that is the route taken. On a publishing run it is also the
+      # handoff to the `publish` job, which never checks the repository out.
+      - name: Upload package artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: config-package-${{ inputs.package }}
+          path: ${{ steps.build.outputs.zip }}
+          retention-days: 30
+          if-no-files-found: error
+
+  # Split from `build` so that the preprod credentials never share a runner with
+  # `build.mjs`. A dispatch can target any ref, so that script is branch-controlled code:
+  # run in the same job, it could outlive its step and read the secrets out of the publish
+  # step's environment. This job checks nothing out and runs only `download-artifact` and
+  # the pinned `nos-publish`, so there is no repository code on the credentialed runner at
+  # all. `build-marketplace.yml` separates its `push-to-preprod` job for the same reason.
+  #
+  # The split bounds credential exposure, not what gets published: the artifact is still
+  # built from the dispatched ref, so a reviewed ref remains the thing that makes a
+  # publish trustworthy. Restricting *which* refs may publish is a deployment policy on a
+  # GitHub Environment, which is a repository-settings decision and not made here.
+  publish:
+    needs: build
+    # Compares against the string: `github.event.inputs` stringifies booleans, so
+    # `== true` would never match, whether dispatched from the UI or `gh workflow run`.
+    if: github.event.inputs.publishToPreprod == 'true'
+    runs-on: ubuntu-latest
+    concurrency:
+      # Keyed on the package name `package.xml` actually declares, resolved by the `build`
+      # job. The Marketplace is global state rather than per-ref, so the same package
+      # dispatched from `main` and from a branch must serialise: both upload the version
+      # declared in `package.xml`, and nothing here stamps a run identifier over it, so
+      # the two uploads carry the same `<name>-<version>` and race. `build-marketplace.yml`
+      # can key on `github.ref` because its version already carries a unique run number;
+      # this workflow has no such tiebreak, so it cannot borrow that key.
+      group: publish-config-package-${{ needs.build.outputs.package-name }}
+      # Cancelling an in-flight publish would leave the Marketplace in a state nobody
+      # chose. `queue: max` extends that to runs that have not started: the default
+      # (`single`) cancels an already-pending run when a newer one joins the group, and a
+      # publish silently dropped while it waited is the same surprise as one cancelled
+      # midway. Build-only runs never reach this job, so they never queue behind a publish.
+      cancel-in-progress: false
+      queue: max
+    steps:
+      - name: Download the built package
+        uses: actions/download-artifact@v4
+        with:
+          name: config-package-${{ inputs.package }}
+          path: package
+
+      # The zip name, and the name and version inside the zip, come from a build of the dispatched
+      # ref. `nos-publish` writes the path into shell source and the name and version into
+      # $GITHUB_ENV on this credentialed runner, so each is held to a plain character set first.
+      - name: Check the package before the credentialed action reads it
+        env:
+          ZIP_NAME: ${{ needs.build.outputs.zip-name }}
+        run: |
+          set -euo pipefail
+          plain='^[A-Za-z0-9][A-Za-z0-9._-]*$'
+          if [[ ! "$ZIP_NAME" =~ $plain || "$ZIP_NAME" != *.zip || ! -f "package/$ZIP_NAME" ]]; then
+            echo "::error::the built zip name is not a plain file name in package/"
+            exit 1
+          fi
+          for attr in name version; do
+            # The same read `nos-publish` performs, so the value checked is the value it exports.
+            value=$(unzip -p "package/$ZIP_NAME" package.xml | yq -p=xml ".package.+@${attr}")
+            if [[ ! "$value" =~ $plain ]]; then
+              echo "::error::package.xml's ${attr} is not a plain identifier"
+              exit 1
+            fi
+          done
+
+      # The version published is the one declared in `package/package.xml`; unlike
+      # `build-marketplace.yml` nothing stamps a timestamp over it. A configuration
+      # package's version is what `nuxeoctl` compares to decide an upgrade, so it is a
+      # reviewed property of the source, not of the run that shipped it. Raise it in the
+      # same commit as the change, as the package README says.
+      - name: Publish to Nuxeo Marketplace (Preprod)
+        uses: Alfresco/alfresco-build-tools/.github/actions/nuxeo/nos-publish@v12.10.3
+        with:
+          nos-env: staging
+          nos-username: ${{ secrets.CONNECT_PREPROD_USERNAME }}
+          nos-token: ${{ secrets.CONNECT_PREPROD_PASSWORD }}
+          skip-verify: 'false'
+          package-path: package/${{ needs.build.outputs.zip-name }}

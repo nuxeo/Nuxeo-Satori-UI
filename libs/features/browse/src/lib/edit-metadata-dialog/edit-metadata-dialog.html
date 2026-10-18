@@ -173,7 +173,7 @@
       (ngModelChange)="onExpiresChange($event)"
       (input)="onExpiresInput($event)"
       #expiresInput="ngModel"
-      [placeholder]="'common.date-mask' | translate"
+      [placeholder]="'common.date-mask' | translate | dateMask"
     />
     <mat-datepicker-toggle matIconSuffix [for]="picker" />
     <mat-datepicker #picker />

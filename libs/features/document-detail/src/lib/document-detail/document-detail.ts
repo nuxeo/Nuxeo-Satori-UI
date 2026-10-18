@@ -41,7 +41,6 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { provideNativeDateAdapter } from '@angular/material/core';
 
 import {
   NuxeoDocument,
@@ -162,6 +161,7 @@ import {
   type StoryboardItem,
   type VideoInfo,
   type VideoSource,
+  provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { AddToCollectionDialogComponent } from '../add-to-collection-dialog/add-to-collection-dialog';
@@ -344,7 +344,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     SatBreadcrumbsComponent,
     SatTagModule,
   ],
-  providers: [provideTranslatedDatepickerIntl(), provideNativeDateAdapter(), provideNxsToast()],
+  providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
   templateUrl: './document-detail.html',
   styleUrls: [
     './document-detail.scss',
