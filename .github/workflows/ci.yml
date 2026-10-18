@@ -141,6 +141,10 @@ jobs:
           # line above verifies the audit runs; this one verifies it can still report — and
           # that the constants it deliberately does NOT decide are still printed as such.
           npm run beta:audit-selftest
+          # The identity guard's offline controls (NXSAT-643): a guard that accepts Anonymous, or a
+          # step boundary that goes unchecked, is green on every capture it is supposed to reject.
+          # The live half (`beta:identity-guard-controls`) needs a guest-enabled Nuxeo CI lacks.
+          npm run beta:identity-guard-selftest
           # The only customer-facing document nothing checked. When first measured it was
           # wrong in both directions.
           npm run beta:reference
