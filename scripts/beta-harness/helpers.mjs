@@ -123,8 +123,8 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * running as un-awaited — a steps-file defect, because its check then runs concurrently with the
    * next step instead of between the two. An awaited boundary has always settled by now.
    */
-  function closeBoundaries() {
-    if (identityFailure) throw identityFailure;
+  function closeBoundaries({ throwHeld = true } = {}) {
+    if (throwHeld && identityFailure) throw identityFailure;
     for (const b of boundaries) {
       if (b.settled || b.reported) continue;
       b.reported = true;
@@ -182,7 +182,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      * steps file does not need to.
      */
     async finish() {
-      closeBoundaries();
+      // Every boundary drained before any failure is rethrown, so none is still running when the
+      // runner closes the browser and writes the manifest.
+      closeBoundaries({ throwHeld: false });
       await Promise.allSettled(boundaries.map((b) => b.promise));
       if (identityFailure) throw identityFailure;
       if (identity && current) await verifyIdentity(current, `after step ${current.index}`);

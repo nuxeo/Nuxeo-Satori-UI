@@ -274,6 +274,12 @@ function fakePage({
     headersSeen: [],
     replayHeaders: [],
     cookies: [{ name: 'JSESSIONID', value: 'S1' }],
+    /** The page's `/me` is fulfilled by a route: its response has no server address. */
+    stubbedMe: false,
+    /** Navigate the page here as soon as the in-page probe runs. */
+    navigateDuringProbe: null,
+    waiters: [],
+    listeners: [],
   };
   const page = {
     state,
@@ -285,9 +291,15 @@ function fakePage({
       const stand = {
         sessionStorage: store('sessionStorage'),
         localStorage: store('localStorage'),
-        fetch: async (_url, init) => {
+        fetch: async (url, init) => {
           const auth = init?.headers?.['Authorization'] ?? null;
           state.headersSeen.push(auth);
+          const response = {
+            url: () => String(url),
+            serverAddr: async () => (state.stubbedMe ? null : { ipAddress: '::1', port: 4200 }),
+          };
+          for (const w of state.waiters.splice(0)) if (w.pred(response)) w.resolve(response);
+          if (state.navigateDuringProbe) state.url = state.navigateDuringProbe;
           return { status: 200, json: async () => state.meFor(auth) };
         },
       };
@@ -315,10 +327,22 @@ function fakePage({
       },
     },
     context: () => ({ clearCookies: async () => undefined, cookies: async () => state.cookies }),
+    waitForResponse: (pred) => new Promise((resolve) => state.waiters.push({ pred, resolve })),
+    on: (event, fn) => {
+      if (event === 'request') state.listeners.push(fn);
+    },
+    /** Make the page send a request, as the app would. */
+    emitRequest: (url) => {
+      for (const fn of state.listeners) fn({ url: () => url });
+    },
     /** The Node-side replay's `fetch`. */
-    fetch: async (_url, init) => {
+    fetch: async (url, init) => {
       const auth = init?.headers?.['Authorization'] ?? null;
-      state.replayHeaders.push({ auth, cookie: init?.headers?.['Cookie'] ?? null });
+      state.replayHeaders.push({
+        url: String(url),
+        auth,
+        cookie: init?.headers?.['Cookie'] ?? null,
+      });
       const body = (state.replayFor ?? state.meFor)(auth);
       return { status: 200, text: async () => JSON.stringify(body) };
     },
@@ -334,7 +358,9 @@ const signedIn = {
     storage: signedIn,
     meFor: (auth) => (auth === 'Basic QUJD' ? ADMIN : GUEST),
   });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
   control(
     'positive',
     'the page probe sends the stored header, and the replay sends it with the browser cookies',
@@ -347,12 +373,16 @@ const signedIn = {
 }
 {
   const page = fakePage({ storage: signedIn, meFor: () => GUEST });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
   control('negative', 'the page probe rejects a session the server answers as the guest', !r.ok, r);
 }
 {
   const page = fakePage({ storage: signedIn, meFor: () => ADMIN, replayFor: () => GUEST });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
   control('negative', 'the replay overrules a page whose /me was stubbed', !r.ok, r);
 }
 {
@@ -363,7 +393,9 @@ const signedIn = {
     'http://app.test',
     page.fetch,
   );
-  const required = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  const required = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
   control(
     'positive',
     'a page off the app is not probed, and is accepted only before the run signed in',
@@ -376,7 +408,9 @@ const signedIn = {
     storage: { 'localStorage:agentic_ui_nuxeo_session': basicSession('Administrator', 'QUJD') },
     meFor: (auth) => (auth === 'Basic QUJD' ? ADMIN : GUEST),
   });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
   control(
     'positive',
     "a remembered (localStorage) session is read, as the app's fallback",
@@ -394,8 +428,48 @@ const signedIn = {
       'localStorage:agentic_ui_nuxeo_session': basicSession('Administrator', 'QUJD'),
     },
   });
-  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', page.fetch);
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
   control('negative', 'sessionStorage is read before localStorage, as the app reads it', !r.ok, r);
+}
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.stubbedMe = true;
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
+  control(
+    'negative',
+    'an in-page /me fulfilled by a page.route stub is refused, even when it names the user',
+    !r.ok && /stub/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.navigateDuringProbe = 'https://unintended.test/#/';
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
+  control(
+    'negative',
+    "a page that navigates away during the probe is refused, and the session's header goes nowhere else",
+    !r.ok && page.state.replayHeaders.every((h) => h.url.startsWith('http://app.test/')),
+    { r, replay: page.state.replayHeaders },
+  );
+}
+{
+  const page = fakePage({ storage: signedIn });
+  const r0 = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
+  control(
+    'positive',
+    "the replay goes to the validated app origin, not to the page's later URL",
+    r0.ok && page.state.replayHeaders[0]?.url === 'http://app.test/nuxeo/api/v1/me',
+    page.state.replayHeaders,
+  );
 }
 
 // ── step boundaries ─────────────────────────────────────────────────────────────────────────────
@@ -673,6 +747,53 @@ await silently(async () => {
       'once seen signed in, an unannounced loss of the session is rejected even without h.login()',
       identity.checks[0].ok && identity.checks[1].ok && thrown instanceof PreconditionError,
       { checks: identity.checks.map((c) => [c.at, c.ok]), thrown: String(thrown) },
+    );
+  }
+  {
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    page.emitRequest('https://elsewhere.test/nuxeo/api/v1/search/lang/NXQL/execute');
+    const thrown = await thrownBy(() => h.step('two'));
+    control(
+      'negative',
+      'an app that sends Nuxeo API requests to another origin is refused, not judged on the wrong server',
+      thrown instanceof PreconditionError && /elsewhere\.test/.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
+    // One boundary already failed and latched, another still running: finish() must still wait.
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    let release = () => undefined;
+    let settled = false;
+    page.state.apiScript = [
+      [null, GUEST],
+      [new Promise((r) => (release = r)), ADMIN],
+    ];
+    h.step('two').catch(() => undefined);
+    const three = h.step('three');
+    three.catch(() => undefined);
+    await new Promise((r) => setTimeout(r, 20)); // two has failed and latched; three is held
+    three.then(
+      () => (settled = true),
+      () => (settled = true),
+    );
+    const finished = h.finish().then(
+      () => 'returned',
+      (err) => err,
+    );
+    await new Promise((r) => setTimeout(r, 20));
+    const earlyOutcome = settled;
+    release();
+    const outcome = await finished;
+    control(
+      'negative',
+      'finish() drains a pending boundary before rethrowing an earlier failure',
+      outcome instanceof PreconditionError && settled,
+      { outcome: String(outcome), settledBeforeRelease: earlyOutcome, settled },
     );
   }
   {

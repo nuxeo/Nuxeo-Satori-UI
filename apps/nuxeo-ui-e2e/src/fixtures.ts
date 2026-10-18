@@ -6,6 +6,7 @@ import {
   checkRequestIdentity,
   judgeApi,
   ME_PATH,
+  watchNuxeoApiOrigins,
 } from '../../../scripts/beta-harness/identity-guard.mjs';
 import { nuxeoCredentials } from './nuxeo-credentials';
 
@@ -70,6 +71,8 @@ export const test = base.extend<{ signedIn: Page }>({
       `before "${testInfo.title}"`,
     );
 
+    const foreignApiOrigins = watchNuxeoApiOrigins(page, E2E_BASE_URL);
+
     await page.addInitScript(
       ({ key, signedOutKey, value }) => {
         sessionStorage.setItem(key, value);
@@ -96,7 +99,9 @@ export const test = base.extend<{ signedIn: Page }>({
           username,
           'page.request',
         ),
-        await checkPageIdentity(page, username, new URL(E2E_BASE_URL).origin),
+        await checkPageIdentity(page, username, new URL(E2E_BASE_URL).origin, {
+          foreignApiOrigins,
+        }),
       ],
       `after "${testInfo.title}"`,
     );

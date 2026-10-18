@@ -127,8 +127,12 @@ permission check can pass because a guest can do nothing. `identity-guard.mjs` a
 
 In the runner it checks `page.request` before the first step, and `page.request` plus the app in
 the page — its stored session, and `/me` asked with the header that session sends, from inside the
-page and replayed from Node with the browser's cookies so a stubbed `/me` cannot vouch for it — at
-every step boundary and after the last step. User ids compare exactly. A rejection makes the run `precondition-not-met` (exit 2), marks
+page and replayed from Node with the browser's cookies — at every step boundary and after the
+last step. An in-page answer must come from a server (a `page.route` that fulfils `/me` is
+refused), every probe goes to the app's own origin, and an app that sends Nuxeo API requests to
+another origin is refused rather than judged on the wrong server. User ids compare exactly.
+
+A rejection makes the run `precondition-not-met` (exit 2), marks
 `manifest.identity.valid: false`, and records the failed check on the step whose result is
 invalid. So:
 
@@ -158,15 +162,15 @@ both would have been green.
 
 #### What talks to Nuxeo, and how it is guarded
 
-| Harness                                                                                               | Credentials on every request                       | Identity checked                                      |
-| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ----------------------------------------------------- |
-| `phase-runner.mjs` + `steps/*.mjs`                                                                    | `page.request`: `send: 'always'`; app: its session | start, every step boundary, end                       |
-| `steps/nxsat-308-parity/seed-parity-data.mjs`                                                         | explicit header, Node `fetch`                      | before the first write, after verifying               |
-| `backend-preflight.mjs`, `e2e-preflight.mjs`, `a11y/preflight.mjs`                                    | explicit header, Node `fetch`                      | `/me` by name, before any data check                  |
-| `apps/nuxeo-ui-e2e` (`signedIn`, `newNuxeoApiContext`)                                                | `send: 'always'`; API contexts: explicit header    | before and after every `signedIn` test                |
-| `a11y/` suites (`signedIn`) and `a11y/diagnostics/*`                                                  | `send: 'always'`; diagnostics: explicit header     | before and after every test; diagnostics once         |
-| `scripts/collect-evidence/story-runner.mjs`, `annotate-showcase.mjs`, `scripts/demo-deck/capture.mjs` | `send: 'always'`                                   | not by this guard (`capture.mjs` checks `/me` itself) |
-| `libs/integration-tests`, `apps/nuxeo-ui/e2e/*.mjs`, `tools/video`, `tools/i18n`                      | explicit header or the app's session               | not by this guard                                     |
+| Harness                                                                                               | Credentials on every request                       | Identity checked                                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `phase-runner.mjs` + `steps/*.mjs`                                                                    | `page.request`: `send: 'always'`; app: its session | start, every step boundary, end                                                          |
+| `steps/nxsat-308-parity/seed-parity-data.mjs`                                                         | explicit header, Node `fetch`                      | before the first write, after verifying                                                  |
+| `backend-preflight.mjs`, `e2e-preflight.mjs`, `a11y/preflight.mjs`                                    | explicit header, Node `fetch`                      | `/me` by name, before any data check                                                     |
+| `apps/nuxeo-ui-e2e` (`signedIn`, `newNuxeoApiContext`)                                                | `send: 'always'`; API contexts: explicit header    | `signedIn`: both channels before and after every test; an API context once, when created |
+| `a11y/` suites (`signedIn`) and `a11y/diagnostics/*`                                                  | `send: 'always'`; diagnostics: explicit header     | both channels before and after every test; diagnostics once, after sign-in               |
+| `scripts/collect-evidence/story-runner.mjs`, `annotate-showcase.mjs`, `scripts/demo-deck/capture.mjs` | `send: 'always'`                                   | not by this guard (`capture.mjs` checks `/me` itself)                                    |
+| `libs/integration-tests`, `apps/nuxeo-ui/e2e/*.mjs`, `tools/video`, `tools/i18n`                      | explicit header or the app's session               | not by this guard                                                                        |
 
 The last two rows are named, not covered: they predate the guard and are follow-ups.
 

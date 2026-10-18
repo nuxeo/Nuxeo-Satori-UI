@@ -45,11 +45,12 @@
  * steps declared a sign-out (`AppPolicy`): a run that loses its session without saying so could be
  * hiding a result it obtained as someone else.
  *
- * ## What it assumes
+ * ## What it assumes, and checks
  *
  * The app talks to Nuxeo on its own origin (`/nuxeo` through the dev proxy or same-origin in
- * production). An app configured with a different `nuxeoApiOrigin` would be asked on the wrong
- * server; no harness here runs one.
+ * production), which is where the guard asks. It does not assume it: `watchNuxeoApiOrigins`
+ * records any Nuxeo API request to another origin — an app configured with a different
+ * `nuxeoApiOrigin` — and the app channel is then refused rather than judged on the wrong server.
  *
  * Plain ESM with no imports, so `.mjs` harnesses and the Playwright suites (`apps/nuxeo-ui-e2e`,
  * `a11y/`) share this one copy. Nothing here decides what to do about a problem: the callers turn
@@ -355,12 +356,28 @@ export async function askThroughFetch(url, authorization, fetchImpl = fetch, coo
  * Read the page's stored session and, when it holds one, ask `/me` for it from inside the page and
  * from Node. Retried, because a page between navigations has no context to evaluate in.
  *
+ * Every request goes to `appOrigin`, the origin the caller validated — never to wherever the page
+ * has navigated since — and a page that leaves it during the probe is reported, not followed, so
+ * the session's header cannot be sent to another host.
+ *
+ * The in-page answer must come from a server. A `page.route` that fulfils `/me` itself would
+ * otherwise vouch for the session while other routes strip the header from every data request;
+ * Playwright reports no server address for a fulfilled response, so such an answer is refused.
+ * (Measured on Chromium and WebKit: a real response has one, a fulfilled one has `null`.)
+ *
  * @param {import('@playwright/test').Page} page
+ * @param {string} appOrigin
  * @param {typeof fetch} [fetchImpl] for the replay
  * @returns {Promise<{ stored: StoredSession | { problem: string } | null, answers: { inPage: MeAnswer | null, replayed: MeAnswer | null } }>}
  */
-export async function askThroughPage(page, fetchImpl = fetch) {
+export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
   const none = { inPage: null, replayed: null };
+  const origin = originOf(appOrigin);
+  const stillOnApp = () => originOf(safeUrl(page)) === origin;
+  const left = () => ({
+    stored: { problem: `the page left ${origin} during the identity check (now ${safeUrl(page)})` },
+    answers: none,
+  });
   /** @type {unknown} */
   let lastError = null;
   for (let attempt = 0; attempt < 4; attempt++) {
@@ -372,25 +389,45 @@ export async function askThroughPage(page, fetchImpl = fetch) {
         }
         return null;
       }, APP_SESSION_SOURCES);
+      if (!stillOnApp()) return left();
       if (!found) return { stored: null, answers: none };
       const stored = parseStoredSession(found.key, found.storage, found.raw);
       if ('problem' in stored) return { stored, answers: none };
-      const inPage = await page.evaluate(
-        async ({ mePath, authorization }) => {
+
+      const nonce = `identityGuard=${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+      const seen = page
+        .waitForResponse((r) => r.url().includes(nonce), { timeout: 15_000 })
+        .catch(() => null);
+      /** @type {MeAnswer} */
+      let inPage = await page.evaluate(
+        async ({ url, authorization }) => {
           try {
             /** @type {Record<string, string>} */
             const headers = { Accept: 'application/json' };
             if (authorization) headers['Authorization'] = authorization;
-            const res = await fetch(mePath, { headers, credentials: 'same-origin' });
+            const res = await fetch(url, { headers, credentials: 'same-origin' });
             const body = await res.json().catch(() => null);
             return { status: res.status, body };
           } catch (err) {
             return { status: 0, body: null, error: String(err) };
           }
         },
-        { mePath: ME_PATH, authorization: stored.authorization },
+        { url: `${origin}${ME_PATH}?${nonce}`, authorization: stored.authorization },
       );
-      const url = `${originOf(safeUrl(page))}${ME_PATH}`;
+      const response = await seen;
+      const server = response ? await response.serverAddr().catch(() => null) : null;
+      if (!server) {
+        inPage = {
+          status: 0,
+          body: null,
+          error: response
+            ? 'answered by a page.route stub, not by a server'
+            : 'no response to the probe was seen',
+        };
+      }
+      if (!stillOnApp()) return left();
+
+      const url = `${origin}${ME_PATH}`;
       const cookies = await page.context().cookies(url);
       const cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
       const replayed = await askThroughFetch(url, stored.authorization, fetchImpl, cookie);
@@ -406,6 +443,30 @@ export async function askThroughPage(page, fetchImpl = fetch) {
     },
     answers: none,
   };
+}
+
+/**
+ * Record every origin the page sends a Nuxeo API request to, other than `appOrigin`. The guard asks
+ * `/me` on the app's origin; an app configured with another `nuxeoApiOrigin` would be judged on the
+ * wrong server, so any request elsewhere makes `checkPageIdentity` refuse instead of assuming.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} appOrigin
+ * @returns {Set<string>} filled as requests are made
+ */
+export function watchNuxeoApiOrigins(page, appOrigin) {
+  const origin = originOf(appOrigin);
+  /** @type {Set<string>} */
+  const foreign = new Set();
+  page.on('request', (request) => {
+    try {
+      const url = new URL(request.url());
+      if (url.pathname.startsWith('/nuxeo/') && url.origin !== origin) foreign.add(url.origin);
+    } catch {
+      /* not a URL worth judging */
+    }
+  });
+  return foreign;
 }
 
 // ── Checks ──────────────────────────────────────────────────────────────────────────────────────
@@ -442,14 +503,31 @@ export async function checkFetchIdentity(meUrl, authorization, expected, fetchIm
  * @param {import('@playwright/test').Page} page
  * @param {AppPolicy} policy
  * @param {string} appOrigin
- * @param {typeof fetch} [fetchImpl] for the replay
+ * @param {{ fetchImpl?: typeof fetch, foreignApiOrigins?: Set<string> }} [options]
+ *   `foreignApiOrigins` from `watchNuxeoApiOrigins`: any entry is a refusal
  * @returns {Promise<ChannelReport>}
  */
-export async function checkPageIdentity(page, policy, appOrigin, fetchImpl) {
+export async function checkPageIdentity(
+  page,
+  policy,
+  appOrigin,
+  { fetchImpl, foreignApiOrigins } = {},
+) {
+  if (foreignApiOrigins?.size) {
+    return judgeApp(
+      {
+        problem:
+          `the app sent Nuxeo API requests to ${[...foreignApiOrigins].join(', ')}, not to ` +
+          `${originOf(appOrigin)} where this guard asks who they ran as`,
+      },
+      { inPage: null, replayed: null },
+      policy,
+    );
+  }
   if (originOf(safeUrl(page)) !== originOf(appOrigin)) {
     return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
-  const { stored, answers } = await askThroughPage(page, fetchImpl);
+  const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl);
   return judgeApp(stored, answers, policy);
 }
 
@@ -498,6 +576,7 @@ export function describeReport(r) {
 export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
   const appOrigin = originOf(baseUrl);
   const meUrl = `${appOrigin}${ME_PATH}`;
+  const foreignApiOrigins = watchNuxeoApiOrigins(page, appOrigin);
   /** @type {{ user: string } | { unsigned: string }} */
   let policy = { unsigned: username };
   /** @type {{ at: string, ok: boolean, reports: ChannelReport[] }[]} */
@@ -550,7 +629,11 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     verify(at, { app = true } = {}) {
       const run = async () => {
         const reports = [await checkRequestIdentity(page.request, meUrl, username, 'page.request')];
-        if (app) reports.push(await checkPageIdentity(page, policy, appOrigin, fetchImpl));
+        if (app) {
+          reports.push(
+            await checkPageIdentity(page, policy, appOrigin, { fetchImpl, foreignApiOrigins }),
+          );
+        }
         const appReport = reports[1];
         // Seen signed in as the run's user without `h.login()` (a form sign-in): required from now.
         if (appReport?.ok && appReport.state === 'authenticated' && 'unsigned' in policy) {

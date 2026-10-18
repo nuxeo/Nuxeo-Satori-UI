@@ -36,7 +36,10 @@ import {
   checkPageIdentity,
   checkRequestIdentity,
   ME_PATH,
+  watchNuxeoApiOrigins,
 } from '../scripts/beta-harness/identity-guard.mjs';
+
+export { watchNuxeoApiOrigins };
 
 /** Mirrors `STORAGE_KEY` in `apps/nuxeo-ui/src/app/auth/auth.service.ts`. */
 export const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -142,10 +145,13 @@ async function readProblem(page, username) {
  *
  * @param {import('@playwright/test').Page} page an app page; its origin is the app's
  * @param {string} username
+ * @param {Set<string>} [foreignApiOrigins] from `watchNuxeoApiOrigins`, started before the test
  * @returns {Promise<string | null>}
  */
-export async function sessionIdentityProblem(page, username) {
-  const report = await checkPageIdentity(page, username, new URL(page.url()).origin);
+export async function sessionIdentityProblem(page, username, foreignApiOrigins) {
+  const report = await checkPageIdentity(page, username, new URL(page.url()).origin, {
+    foreignApiOrigins,
+  });
   if (!report.ok) return `identity guard: ${report.problem}`;
   if (report.state !== 'authenticated') {
     return `identity guard: the page holds no session for ${username} (${report.state})`;

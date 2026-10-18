@@ -11,6 +11,7 @@ import {
   sessionAdoptionProblem,
   sessionIdentityProblem,
   SESSION_KEY,
+  watchNuxeoApiOrigins,
   SIGNED_OUT_KEY,
 } from './session.mjs';
 import { ERROR_STATE_SELECTOR, screenUnsettledReason } from './surface.mjs';
@@ -248,8 +249,10 @@ export const test = a11yBase.extend<{ signedIn: Page }>({
   signedIn: async ({ page, baseURL }, use, testInfo) => {
     const { username } = requireNuxeoCredentials();
     await page.context().clearCookies();
-    const before = await apiIdentityProblem(page.request, baseURL ?? resolveBaseUrl(), username);
+    const base = baseURL ?? resolveBaseUrl();
+    const before = await apiIdentityProblem(page.request, base, username);
     if (before) throw new Error(`Refusing to scan: ${before}.`);
+    const foreignApiOrigins = watchNuxeoApiOrigins(page, base);
     await installSession(page);
     await use(page);
     if (testInfo.status !== testInfo.expectedStatus) return;
@@ -261,8 +264,8 @@ export const test = a11yBase.extend<{ signedIn: Page }>({
       );
     }
     const identity =
-      (await apiIdentityProblem(page.request, baseURL ?? resolveBaseUrl(), username)) ??
-      (await sessionIdentityProblem(page, username));
+      (await apiIdentityProblem(page.request, base, username)) ??
+      (await sessionIdentityProblem(page, username, foreignApiOrigins));
     if (identity) {
       throw new Error(`This test passed, but its result is invalid: ${identity}.`);
     }
