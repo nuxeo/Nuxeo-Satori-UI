@@ -48,11 +48,13 @@ runner's identity guard, which checks every step boundary the same way. Both use
 ## Exercising the seed without a Nuxeo of your own
 
 `--workspace` and `--user` put the same fixture under other names, so the script can be proved
-on a shared server without touching anyone's data:
+on a shared server. Another workspace gets its own user, `<workspace>-user`. The seed replaces and
+deletes only what it created — a workspace or user that exists without its marker is refused —
+so it cannot reset someone else's:
 
 ```zsh
-node seed-parity-data.mjs --workspace nxsat-643-parity --user nxsat-643-parity-user
-node seed-parity-data.mjs --workspace nxsat-643-parity --user nxsat-643-parity-user --remove
+node seed-parity-data.mjs --workspace nxsat-643-parity        # its user: nxsat-643-parity-user
+node seed-parity-data.mjs --workspace nxsat-643-parity --remove
 ```
 
 The parity steps read the default names, so a fixture seeded under other names is not one they

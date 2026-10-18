@@ -34,6 +34,10 @@
  * The parity steps read the defaults — workspace `parity`, user `parity-user`. `--workspace` and
  * `--user` exist so the script can be exercised on a server whose `parity` workspace is not yours
  * to replace; a fixture seeded under other names is not one the parity steps can run against.
+ * Another workspace gets its own user, `<workspace>-user`, unless `--user` names one.
+ *
+ * It replaces and deletes only what it created: the workspace's description and the user's
+ * `company` carry a marker, and a workspace or user that exists without it is refused (exit 2).
  *
  * Usage (Node 20+, no dependencies):
  *
@@ -43,7 +47,7 @@
  *   node seed-parity-data.mjs                        # delete and recreate the fixture, then verify it
  *   node seed-parity-data.mjs --check                # verify only, change nothing
  *   node seed-parity-data.mjs --remove               # delete the workspace and the user
- *   node seed-parity-data.mjs --workspace nxsat-643-parity --user nxsat-643-parity-user
+ *   node seed-parity-data.mjs --workspace nxsat-643-parity   # user nxsat-643-parity-user
  *
  * Every request carries the Authorization header, and before the first write Nuxeo is asked who
  * it is talking to (`identity-guard.mjs`). A guest-enabled Nuxeo answers a request whose header
@@ -82,7 +86,9 @@ const { values: opts } = parseArgs({
     check: { type: 'boolean', default: false },
     remove: { type: 'boolean', default: false },
     workspace: { type: 'string', default: 'parity' },
-    user: { type: 'string', default: 'parity-user' },
+    // Default: `parity-user` for the default workspace, `<workspace>-user` for any other, so two
+    // fixtures under different names never share — and reset each other's — restricted user.
+    user: { type: 'string' },
     manifest: { type: 'string' },
   },
 });
@@ -100,6 +106,8 @@ function required(name) {
     refuse(`${name} must be set (no default). See the usage block at the top of this file.`);
   return /** @type {string} */ (value);
 }
+
+opts.user ??= opts.workspace === 'parity' ? 'parity-user' : `${opts.workspace}-user`;
 
 const NUXEO_URL = required('NUXEO_URL').replace(/\/+$/, '');
 const { username: USER, password: PASS } = nuxeoCredentialsOrExit('seed the parity fixture');
@@ -428,17 +436,56 @@ function shuffled(n, seed = 308) {
 
 // ── Seed ──────────────────────────────────────────────────────────────────────────────────────────
 
+/**
+ * What this script writes into everything it creates, and checks before it replaces or deletes
+ * anything: a workspace or user without it is someone else's, and is refused, not reset.
+ */
+const WORKSPACE_MARKER = 'NXSAT-308 parity fixture — recreated by seed-parity-data.mjs';
+const USER_MARKER = 'nxsat-308-parity-fixture';
+
+/** Refuse unless the workspace is absent or this script's. @returns {Promise<boolean>} present */
+async function requireOwnWorkspace() {
+  const ws = await call('GET', `/path${enc(FIXTURE.root)}`, {
+    headers: { properties: 'dublincore' },
+    ok: null,
+  });
+  if (ws.status === 404) return false;
+  if (ws.status !== 200) refuse(`${FIXTURE.root} answered ${ws.status}; not touching it.`);
+  if (ws.data?.properties?.['dc:description'] !== WORKSPACE_MARKER) {
+    refuse(
+      `${FIXTURE.root} exists and was not created by this script (its description is not the ` +
+        'fixture marker). Not replacing or deleting it; pass --workspace <another-name>.',
+    );
+  }
+  return true;
+}
+
+/** Refuse unless the user is absent or this script's. @returns {Promise<boolean>} present */
+async function requireOwnUser() {
+  const id = FIXTURE.restrictedUser;
+  const existing = await call('GET', `/user/${id}`, { ok: null });
+  if (existing.status === 404) return false;
+  if (existing.status !== 200) refuse(`user ${id} answered ${existing.status}; not touching it.`);
+  if (existing.data?.properties?.company !== USER_MARKER) {
+    refuse(
+      `user ${id} exists and was not created by this script (company is not "${USER_MARKER}"). ` +
+        'Not resetting or deleting it; pass --user <another-id>.',
+    );
+  }
+  return true;
+}
+
 async function ensureUser() {
   const id = FIXTURE.restrictedUser;
   const properties = {
     username: id,
     firstName: 'Parity',
     lastName: 'User',
+    company: USER_MARKER,
     password: PARITY_USER_PASS,
     groups: ['members'],
   };
-  const existing = await call('GET', `/user/${id}`, { ok: null });
-  if (existing.status === 200) {
+  if (await requireOwnUser()) {
     await call('PUT', `/user/${id}`, { json: { 'entity-type': 'user', id, properties } });
   } else {
     await call('POST', '/user', { json: { 'entity-type': 'user', id, properties } });
@@ -446,6 +493,9 @@ async function ensureUser() {
 }
 
 async function remove() {
+  // Both checked before either is deleted, so a refusal leaves everything as it was.
+  await requireOwnWorkspace();
+  await requireOwnUser();
   const gone = await call('DELETE', `/path${enc(FIXTURE.root)}`, { ok: [200, 204, 404] });
   console.log(gone.status === 404 ? `${FIXTURE.root} was not there` : `deleted ${FIXTURE.root}`);
   const user = await call('DELETE', `/user/${FIXTURE.restrictedUser}`, { ok: [200, 204, 404] });
@@ -458,13 +508,15 @@ async function remove() {
 
 async function seed() {
   const root = FIXTURE.root;
+  await requireOwnWorkspace();
+  await requireOwnUser();
   const gone = await call('DELETE', `/path${enc(root)}`, { ok: [200, 204, 404] });
   if (gone.status !== 404) console.log(`deleted the previous ${root}`);
 
   await ensureUser();
   const rootDoc = await create('/default-domain/workspaces', 'Workspace', opts.workspace, {
     'dc:title': FIXTURE.rootTitle,
-    'dc:description': 'NXSAT-308 parity fixture — recreated by seed-parity-data.mjs',
+    'dc:description': WORKSPACE_MARKER,
   });
   await addPermission(rootDoc.uid, [FIXTURE.restrictedUser], 'ReadWrite');
 

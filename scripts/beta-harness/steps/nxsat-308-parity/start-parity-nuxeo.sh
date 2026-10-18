@@ -16,6 +16,7 @@
 #   zsh scripts/beta-harness/steps/nxsat-308-parity/start-parity-nuxeo.sh
 #
 # The administrator is the image's stock account; set NUXEO_USER / NUXEO_PASS to it for the seed.
+# Published on 127.0.0.1 only, so that stock account is not reachable from the network.
 # Tear down:  docker rm -f nxsat308-parity nxsat308-parity-pg && docker network rm nxsat308-parity-net \
 #               && rm -f /tmp/nxsat308-parity-postgresql.conf
 set -euo pipefail
@@ -57,7 +58,7 @@ PG_CONF=/tmp/nxsat308-parity-postgresql.conf
 sed "s/@PGPASS@/$PGPASS/" $HERE/10-parity-postgresql.conf.template > $PG_CONF
 chmod 644 $PG_CONF
 unset PGPASS
-docker run -d --name nxsat308-parity --label $LABEL --network $NET --memory=3g -p $PORT:8080 \
+docker run -d --name nxsat308-parity --label $LABEL --network $NET --memory=3g -p 127.0.0.1:$PORT:8080 \
   -v $PG_CONF:/etc/nuxeo/conf.d/10-parity-postgresql.conf:ro \
   --env-file $WORK/clid.env "$NUXEO_IMAGE" >/dev/null
 
