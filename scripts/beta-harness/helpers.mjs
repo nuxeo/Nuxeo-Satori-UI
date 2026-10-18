@@ -71,9 +71,20 @@ export function requireStepCredentials(purpose) {
  * @param {object} recorder
  * @param {StepRecord[]} recorder.steps accumulating step records
  * @param {string[]} recorder.consoleErrors captured browser console errors
+ * @param {object} [options]
+ * @param {ReturnType<import('./identity-guard.mjs').createIdentityMonitor> | null} [options.identity]
+ *   the identity guard (`phase-runner.mjs` passes one whenever the run sends credentials). With
+ *   it, every step boundary asks Nuxeo who the previous step ran as; see `step`.
  */
-export function createHelpers(page, outDir, recorder) {
+export function createHelpers(page, outDir, recorder, { identity = null } = {}) {
   let current = null;
+  /**
+   * The identity check on the step boundary most recently crossed, until the next one.
+   * @type {{ step: StepRecord, promise: Promise<void>, awaited: boolean } | null}
+   */
+  let boundary = null;
+  /** A boundary that failed while nobody was awaiting it; thrown at the next step or at `finish`. */
+  let identityFailure = null;
 
   function ensureStep() {
     if (!current) {
@@ -83,18 +94,107 @@ export function createHelpers(page, outDir, recorder) {
     return current;
   }
 
+  /**
+   * Ask Nuxeo who `step`'s results were obtained as. A rejection is recorded on that step as a
+   * failed precondition and thrown as a `PreconditionError`: the result is invalid, and the cause
+   * is the environment or the harness, not the product.
+   *
+   * @param {StepRecord} step
+   * @param {string} at
+   */
+  async function verifyIdentity(step, at) {
+    if (!identity) return;
+    const entry = await identity.verify(at);
+    if (entry.ok) return;
+    const detail = entry.reports
+      .filter((r) => !r.ok)
+      .map((r) => `[${r.channel}] ${r.problem}`)
+      .join('; ');
+    step.checks.push({ name: `precondition: identity guard ${at}`, passed: false, detail });
+    console.log(`  [FAIL] precondition: identity guard ${at} - ${detail}`);
+    throw new PreconditionError(
+      `identity guard ${at}: the results were not obtained as the expected user, so they are invalid — ${detail}`,
+    );
+  }
+
+  /**
+   * Close the boundary left open by the previous `step` call. An un-awaited boundary is a
+   * steps-file defect: its check ran concurrently with the next step instead of between them.
+   */
+  function closeBoundary() {
+    if (identityFailure) throw identityFailure;
+    if (boundary && !boundary.awaited) {
+      boundary.step.checks.push({
+        name: 'the identity guard ran between this step and the next',
+        passed: false,
+        detail: 'h.step(...) was not awaited, so the check ran concurrently with the next step — write `await h.step(...)`',
+      });
+    }
+    boundary = null;
+  }
+
   return {
     baseUrl: process.env['APP_URL'] ?? DEFAULT_BASE_URL,
 
     /**
      * Open a new named step. Everything captured or asserted afterwards is
      * attributed to it, so the manifest reads as a narrative.
+     *
+     * Under the identity guard, opening a step is also where the previous one is judged: Nuxeo is
+     * asked who it ran as before this step does anything (NXSAT-643). That check is asynchronous,
+     * so a steps file must `await h.step(...)`. Not awaited, the step still opens, the check runs
+     * concurrently, and the previous step records a failed check saying so.
+     *
      * @param {string} msg
+     * @returns {PromiseLike<void>}
      */
     step(msg) {
+      closeBoundary();
+      const previous = current;
       current = { index: recorder.steps.length + 1, label: msg, screenshots: [], checks: [], notes: [] };
       recorder.steps.push(current);
       console.log(`\n[step ${current.index}] ${msg}`);
+      if (!identity || !previous) return Promise.resolve();
+      const promise = verifyIdentity(previous, `after step ${previous.index}`);
+      // Held, not left unhandled: a failure nobody awaited is thrown at the next boundary instead.
+      promise.catch((err) => {
+        identityFailure = err;
+      });
+      const open = { step: previous, promise, awaited: false };
+      boundary = open;
+      return {
+        then(onFulfilled, onRejected) {
+          open.awaited = true;
+          return promise.then(onFulfilled, onRejected);
+        },
+      };
+    },
+
+    /**
+     * The guard's last word on a run whose steps all returned: the final step is judged the way
+     * every earlier one was at its successor's `step` call. `phase-runner.mjs` calls this; a
+     * steps file does not need to.
+     */
+    async finish() {
+      if (boundary) await boundary.promise.catch(() => undefined);
+      closeBoundary();
+      if (identity && current) await verifyIdentity(current, `after step ${current.index}`);
+    },
+
+    /**
+     * Declare that from here on the browser is deliberately signed in as `username` — the
+     * permission-denied steps sign in as a restricted user. Recorded in the manifest, so the
+     * switch is part of the evidence. Without it the guard rejects the next boundary, which is
+     * the point: an unannounced change of identity is exactly what it exists to catch.
+     *
+     * Only the app channel moves. `page.request` keeps the run's own credentials.
+     *
+     * @param {string} username
+     * @param {string} reason
+     */
+    signedInAs(username, reason) {
+      identity?.expectApp(username, reason, `step ${ensureStep().index}`);
+      this.note(`identity: the browser is signed in as ${username} from here — ${reason}`);
     },
 
     /**
@@ -332,10 +432,18 @@ export function createHelpers(page, outDir, recorder) {
      * said "never hardcoded" for as long as the two lines below it defaulted to
      * the local Docker administrator pair (NXSAT-649).
      *
-     * This satisfies the **route guard** only. XHRs are authenticated by the
-     * browser context's `httpCredentials`, set in the runner — without that,
-     * `/nuxeo/api` calls intermittently return 403 even though pages render.
-     * Both mechanisms are required.
+     * The injected session is what the app's interceptor reads to put a Basic
+     * header on its `/nuxeo` requests, so it authenticates the app's XHRs, not
+     * only the route guard. The runner's `httpCredentials` reach `page.request`
+     * and nothing in the browser: Nuxeo never challenges, so a challenge-based
+     * credential is never sent (NXSAT-643; measured in `identity-guard.mjs`).
+     *
+     * The first navigation boots the app with no session, and on a server that
+     * allows guests the app then stores `Anonymous` as a cookie session and
+     * picks up a guest `JSESSIONID`. So the cookies are cleared, and the
+     * storage overwritten, before the reload that signs in — a guest session
+     * cannot be adopted. The identity guard checks the outcome at the next step
+     * boundary.
      */
     async login() {
       const { username: user, password: pass } = requireStepCredentials('sign the evidence run in');
@@ -351,13 +459,16 @@ export function createHelpers(page, outDir, recorder) {
         groups: [],
       };
 
+      await page.context().clearCookies();
       await page.evaluate(
         ({ key, value, signedOutKey }) => {
+          localStorage.removeItem(key);
           sessionStorage.setItem(key, value);
           sessionStorage.removeItem(signedOutKey);
         },
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
+      identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
 
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(1200);
