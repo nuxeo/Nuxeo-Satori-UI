@@ -1192,6 +1192,22 @@ await silently(async () => {
     );
   }
   {
+    // Discarded Promise.all: should NOT count as awaited.
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    page.state.meFor = () => GUEST;
+    Promise.all([h.step('two')]).catch(() => undefined); // not awaited
+    await new Promise((r) => setTimeout(r, 50)); // let the check run
+    const thrown = await thrownBy(() => h.finish());
+    control(
+      'negative',
+      'a discarded Promise.all([h.step(...)]) does not count as awaiting: the boundary fails for not being awaited',
+      thrown instanceof PreconditionError && /not awaited/.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
     const page = fakePage({ storage: signedIn, meFor: () => GUEST });
     const recorder = { steps: [], consoleErrors: [] };
     const h = createHelpers(page, '/tmp', recorder);

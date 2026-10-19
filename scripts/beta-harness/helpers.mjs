@@ -163,7 +163,12 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     return {
       then(onFulfilled, onRejected) {
         if (!sync.now && !sync.late) boundary.awaited = true;
-        return tracked(promise.then(onFulfilled, onRejected), boundary, sync);
+        const derived = promise.then(onFulfilled, onRejected);
+        // Derived promises need rejection observers too: a discarded `.then()` chain still produces
+        // unhandled rejections if verification fails while the chain is pending. The observer does
+        // not swallow the error — `tracked` propagates it for awaited callers.
+        derived.catch(() => undefined);
+        return tracked(derived, boundary, sync);
       },
       catch(onRejected) {
         return this.then(undefined, onRejected);
@@ -209,6 +214,14 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       promise.catch((err) => {
         identityFailure ??= err;
       });
+      // Timing-based await detection: `.then()` called before the microtask runs means a synchronous
+      // chain (h.step().then(...)), which doesn't count unless the chain is awaited. `.then()` called
+      // after the microtask but before setImmediate means a genuine await.
+      //
+      // Known edge case: a discarded `Promise.all([h.step('...')])` might invoke `.then()` after the
+      // microtask runs (Promise.all schedules its own microtask), incorrectly marking the boundary
+      // awaited. Fixing this reliably requires API changes to enforce sequencing explicitly rather
+      // than inferring it from timing. The current detection works for the actual steps files.
       const sync = { now: true, late: false };
       queueMicrotask(() => {
         sync.now = false;
