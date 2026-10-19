@@ -8,15 +8,17 @@
       [required]="required()"
       [errorStateMatcher]="errorState"
     >
-      @for (id of chosen(); track id) {
-        <mat-chip-row [attr.data-document]="id" (removed)="remove(id)">
-          {{ labelOf(id) }}
+      @for (item of chosenItems(); track item.key) {
+        <mat-chip-row
+          [attr.data-principal]="pickerKind === 'principal' ? item.key : null"
+          [attr.data-document]="pickerKind === 'document' ? item.key : null"
+          (removed)="remove(item.value)"
+        >
+          {{ item.label }}
           <button
             matChipRemove
             type="button"
-            [attr.aria-label]="
-              'satori-components.pickers.remove' | translate: { name: labelOf(id) }
-            "
+            [attr.aria-label]="'satori-components.pickers.remove' | translate: { name: item.label }"
           >
             <mat-icon aria-hidden="true">cancel</mat-icon>
           </button>
@@ -47,7 +49,7 @@
       (input)="onInput($event)"
       (blur)="blurred()"
     />
-    @if (chosen().length && !isDisabled()) {
+    @if (chosenItems().length && !isDisabled()) {
       <button
         matIconSuffix
         mat-icon-button
@@ -67,13 +69,17 @@
   }
   @if (finder.state().status === 'short') {
     <mat-hint>{{
-      'satori-components.pickers.min-chars-many' | translate: { count: minChars }
+      (minimumCharacters() === 1
+        ? 'satori-components.pickers.min-chars-one'
+        : 'satori-components.pickers.min-chars-many'
+      ) | translate: { count: minimumCharacters() }
     }}</mat-hint>
   } @else if (hint()) {
     <mat-hint>{{ hint() }}</mat-hint>
   }
   <mat-autocomplete
     #auto="matAutocomplete"
+    [class]="pickerKind === 'principal' ? 'nxs-picker__panel' : ''"
     [displayWith]="displayWith"
     (optionSelected)="choose($event.option.value)"
   >
@@ -94,13 +100,27 @@
         }}</mat-option>
       }
       @case ('found') {
-        @for (document of options(); track document.uid) {
-          <mat-option [value]="document" [attr.data-uid]="document.uid">
-            <nxs-doc-type-icon class="nxs-document-reference-input__icon" [type]="document.type" />
+        @for (option of optionItems(); track option.key) {
+          <mat-option
+            [value]="option.value"
+            [attr.data-principal]="pickerKind === 'principal' ? option.key : null"
+            [attr.data-uid]="pickerKind === 'document' ? option.key : null"
+          >
+            @if (pickerKind === 'document') {
+              <nxs-doc-type-icon
+                class="nxs-document-reference-input__icon"
+                [type]="option.documentType ?? ''"
+              />
+            } @else {
+              <mat-icon aria-hidden="true">{{ option.icon }}</mat-icon>
+            }
             <span class="nxs-picker__option">
-              <span class="nxs-picker__option-label">{{ document.title }}</span
+              <span class="nxs-picker__option-label">{{ option.label }}</span
               >&ngsp;
-              <span class="nxs-picker__option-detail">{{ document.path }}</span>
+              <span class="nxs-picker__option-detail"
+                >{{ option.detailKey ? (option.detailKey | translate) : ''
+                }}{{ option.detail }}</span
+              >
             </span>
           </mat-option>
         }

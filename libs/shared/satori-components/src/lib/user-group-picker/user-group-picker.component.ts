@@ -36,8 +36,10 @@ import {
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { NxsDocTypeIconComponent } from '../doc-type-icon/doc-type-icon.component';
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';
+import type { NxsPickerItem, NxsPickerOption } from '../pickers/suggestion-view';
 
 /** A user or a group, as the picker offers and returns it. */
 export interface NxsPrincipal {
@@ -71,7 +73,7 @@ let nextId = 0;
 @Component({
   selector: 'nxs-user-group-picker',
   standalone: true,
-  templateUrl: './user-group-picker.component.html',
+  templateUrl: '../pickers/suggestion-picker.html',
   styleUrl: './user-group-picker.component.scss',
   imports: [
     MatAutocompleteModule,
@@ -79,6 +81,7 @@ let nextId = 0;
     MatChipsModule,
     MatIconModule,
     MatInputModule,
+    NxsDocTypeIconComponent,
     TranslatePipe,
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -142,6 +145,26 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   };
   protected readonly displayWith = (principal: NxsPrincipal | string | null): string =>
     typeof principal === 'string' ? principal : (principal?.label ?? '');
+
+  protected readonly pickerKind: 'principal' | 'document' = 'principal';
+  protected readonly minimumCharacters = this.minChars;
+  protected readonly chosenItems = computed<readonly NxsPickerItem<NxsPrincipal>[]>(() =>
+    this.chosen().map((principal) => ({
+      value: principal,
+      key: principal.prefixedId,
+      label: principal.label,
+    })),
+  );
+  protected readonly optionItems = computed<readonly NxsPickerOption<NxsPrincipal>[]>(() =>
+    this.options().map((principal) => ({
+      value: principal,
+      key: principal.prefixedId,
+      label: principal.label,
+      icon: principal.kind === 'group' ? 'group' : 'person',
+      detailKey: `satori-components.user-group-picker.${principal.kind}`,
+      detail: principal.email ? ' · ' + principal.email : '',
+    })),
+  );
 
   constructor() {
     effect(() => {

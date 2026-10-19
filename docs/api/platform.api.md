@@ -608,6 +608,10 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     isErrorState: () => boolean;
     };
     protected readonly displayWith: (document: NxsDocumentReference | string | null) => string;
+    protected readonly pickerKind: 'document' | 'principal';
+    protected readonly minimumCharacters: () => number;
+    protected readonly chosenItems: _angular_core.Signal<readonly NxsPickerItem<string>[]>;
+    protected readonly optionItems: _angular_core.Signal<readonly NxsPickerOption<NxsDocumentReference>[]>;
     constructor();
     ngDoCheck(): void;
     writeValue(value: string | readonly string[] | null): void;
@@ -1493,6 +1497,10 @@ class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, Do
     isErrorState: () => boolean;
     };
     protected readonly displayWith: (principal: NxsPrincipal | string | null) => string;
+    protected readonly pickerKind: 'document' | 'principal';
+    protected readonly minimumCharacters: _angular_core.InputSignalWithTransform<number, unknown>;
+    protected readonly chosenItems: _angular_core.Signal<readonly NxsPickerItem<NxsPrincipal>[]>;
+    protected readonly optionItems: _angular_core.Signal<readonly NxsPickerOption<NxsPrincipal>[]>;
     constructor();
     ngDoCheck(): void;
     validate(control: AbstractControl): ValidationErrors | null;

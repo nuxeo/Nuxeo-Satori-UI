@@ -38,6 +38,7 @@ import {
 import { NxsDocTypeIconComponent } from '../doc-type-icon/doc-type-icon.component';
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
 import { nxsSearchAsYouType } from '../pickers/search-as-you-type';
+import type { NxsPickerItem, NxsPickerOption } from '../pickers/suggestion-view';
 
 /** A document the input offered: what it shows, and what `documentChange` reports. */
 export interface NxsDocumentReference {
@@ -89,7 +90,7 @@ function lookupQuery(id: string, idProperty: 'uid' | 'path'): string {
 @Component({
   selector: 'nxs-document-reference-input',
   standalone: true,
-  templateUrl: './document-reference-input.component.html',
+  templateUrl: '../pickers/suggestion-picker.html',
   styleUrl: './document-reference-input.component.scss',
   imports: [
     MatAutocompleteModule,
@@ -166,6 +167,21 @@ export class NxsDocumentReferenceInputComponent
   };
   protected readonly displayWith = (document: NxsDocumentReference | string | null): string =>
     typeof document === 'string' ? document : (document?.title ?? '');
+
+  protected readonly pickerKind: 'principal' | 'document' = 'document';
+  protected readonly minimumCharacters = () => this.minChars;
+  protected readonly chosenItems = computed<readonly NxsPickerItem<string>[]>(() =>
+    this.chosen().map((id) => ({ value: id, key: id, label: this.labelOf(id) })),
+  );
+  protected readonly optionItems = computed<readonly NxsPickerOption<NxsDocumentReference>[]>(() =>
+    this.options().map((document) => ({
+      value: document,
+      key: document.uid,
+      label: document.title,
+      detail: document.path,
+      documentType: document.type,
+    })),
+  );
 
   constructor() {
     this.lookups
