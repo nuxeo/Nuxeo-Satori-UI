@@ -10,14 +10,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { Subject, debounceTime, distinctUntilChanged, switchMap, of } from 'rxjs';
 
 import {
   DocumentDetailService,
-  UserGroupSuggestion,
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
   isMailSendError,
   permissionCreateMailFailureMessage,
@@ -27,7 +23,12 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
+import {
+  NxsToastService,
+  provideNxsToast,
+  NxsUserGroupPickerComponent,
+  type NxsPrincipal,
+} from '@nuxeo/satori-platform/components';
 
 export interface AddPermissionDialogData {
   documentUid: string;
@@ -55,9 +56,8 @@ const PERMISSION_OPTIONS = [
     MatRadioModule,
     MatCheckboxModule,
     MatDatepickerModule,
-    MatIconModule,
     MatProgressSpinnerModule,
-    MatAutocompleteModule,
+    NxsUserGroupPickerComponent,
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './add-permission-dialog.html',
@@ -77,21 +77,6 @@ const PERMISSION_OPTIONS = [
 
       .full-width {
         width: 100%;
-      }
-
-      .suggestion-icon {
-        font-size: 18px;
-        width: 18px;
-        height: 18px;
-        margin-right: 8px;
-        vertical-align: middle;
-        color: #666;
-      }
-
-      .suggestion-id {
-        color: #999;
-        font-size: 12px;
-        margin-left: 4px;
       }
 
       .field-label {
@@ -159,16 +144,12 @@ export class AddPermissionDialogComponent {
   private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
 
-  private readonly searchSubject = new Subject<string>();
-
-  readonly suggestions = signal<UserGroupSuggestion[]>([]);
+  readonly selectedUser = signal<NxsPrincipal | null>(null);
   readonly saving = signal(false);
 
   readonly permissionOptions = PERMISSION_OPTIONS;
   readonly mailHintKey = PERMISSION_NOTIFICATION_MAIL_HINT_KEY;
 
-  searchText = '';
-  selectedUser: UserGroupSuggestion | null = null;
   permission = 'Read';
   timeFrame: 'permanent' | 'date-based' = 'permanent';
   beginDate: Date | null = null;
@@ -177,44 +158,15 @@ export class AddPermissionDialogComponent {
   notifyComment = '';
   addAnother = false;
 
-  constructor() {
-    this.searchSubject
-      .pipe(
-        debounceTime(300),
-        distinctUntilChanged(),
-        switchMap((term) =>
-          term.length >= 1 ? this.detailService.searchUsersGroups(term) : of([]),
-        ),
-        takeUntilDestroyed(),
-      )
-      .subscribe((results) => this.suggestions.set(results));
-  }
-
-  onSearchChange(value: string): void {
-    this.searchText = value;
-    this.selectedUser = null;
-    this.searchSubject.next(value);
-  }
-
-  onUserSelected(suggestion: UserGroupSuggestion): void {
-    this.selectedUser = suggestion;
-    this.searchText = suggestion.displayLabel;
-  }
-
-  displayUser(suggestion: UserGroupSuggestion | string): string {
-    if (!suggestion) return '';
-    if (typeof suggestion === 'string') return suggestion;
-    return suggestion.displayLabel;
-  }
-
   create(andAddAnother: boolean): void {
-    if (!this.selectedUser || this.saving()) return;
+    const principal = this.selectedUser();
+    if (!principal || this.saving()) return;
     this.addAnother = andAddAnother;
     this.saving.set(true);
 
     this.detailService
       .addPermissionWithNotification(this.data.documentUid, {
-        username: this.selectedUser.id,
+        username: principal.id,
         permission: this.permission,
         notify: this.sendNotify,
         comment: this.sendNotify && this.notifyComment.trim() ? this.notifyComment.trim() : '',
@@ -264,14 +216,12 @@ export class AddPermissionDialogComponent {
   }
 
   private resetForm(): void {
-    this.searchText = '';
-    this.selectedUser = null;
+    this.selectedUser.set(null);
     this.permission = 'Read';
     this.timeFrame = 'permanent';
     this.beginDate = null;
     this.endDate = null;
     this.notifyComment = '';
-    this.suggestions.set([]);
   }
 
   private formatDate(d: Date): string {

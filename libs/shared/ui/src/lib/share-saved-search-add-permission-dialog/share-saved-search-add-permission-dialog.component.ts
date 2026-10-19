@@ -9,14 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatIconModule } from '@angular/material/icon';
-import { Subject, debounceTime, distinctUntilChanged, of, switchMap } from 'rxjs';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import {
-  DocumentDetailService,
-  type UserGroupSuggestion,
-} from '@nuxeo/satori-platform/nuxeo-client';
+import { NxsUserGroupPickerComponent, type NxsPrincipal } from '@nuxeo/satori-platform/components';
 import { TranslatePipe } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
@@ -60,8 +53,7 @@ const RIGHT_OPTIONS = [
     MatRadioModule,
     MatCheckboxModule,
     MatDatepickerModule,
-    MatAutocompleteModule,
-    MatIconModule,
+    NxsUserGroupPickerComponent,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './share-saved-search-add-permission-dialog.component.html',
@@ -77,15 +69,10 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   readonly data =
     inject<ShareSavedSearchAddPermissionDialogData>(MAT_DIALOG_DATA, { optional: true }) ?? {};
 
-  private readonly detailService = inject(DocumentDetailService);
-  private readonly searchSubject = new Subject<string>();
-
-  readonly suggestions = signal<UserGroupSuggestion[]>([]);
+  readonly selectedPrincipal = signal<NxsPrincipal | null>(null);
   readonly saving = signal(false);
   readonly rightOptions = RIGHT_OPTIONS;
 
-  searchText = '';
-  selectedPrincipal: UserGroupSuggestion | null = null;
   right = 'Read';
   timeFrameMode: 'permanent' | 'date-based' = 'permanent';
   beginDate: Date | null = null;
@@ -96,33 +83,19 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   readonly isEditMode = !!this.data.initialData;
 
   constructor() {
-    this.searchSubject
-      .pipe(
-        debounceTime(300),
-        distinctUntilChanged(),
-        switchMap((term) =>
-          term.trim().length >= 3 ? this.detailService.searchUsersGroups(term.trim()) : of([]),
-        ),
-        takeUntilDestroyed(),
-      )
-      .subscribe((results) => this.suggestions.set(results));
-
     if (this.isEditMode && this.data.initialData) {
       this.initializeFormWithData(this.data.initialData);
     }
   }
 
   private initializeFormWithData(data: NonNullable<typeof this.data.initialData>): void {
-    this.searchText = data.userGroup;
-    // Create a mock UserGroupSuggestion from the stored data
-    this.selectedPrincipal = {
+    const kind = data.grantedBy === 'Group' ? 'group' : 'user';
+    this.selectedPrincipal.set({
       id: data.userGroup,
-      displayLabel: data.userGroup,
-      type: data.grantedBy === 'Group' ? 'GROUP_TYPE' : 'USER_TYPE',
-      email: undefined,
-      username: undefined,
-      groupname: undefined,
-    } as UserGroupSuggestion;
+      label: data.userGroup,
+      kind,
+      prefixedId: `${kind}:${data.userGroup}`,
+    });
 
     // Normalize the right value to match options
     this.right = this.normalizeRightValue(data.right);
@@ -188,24 +161,8 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     }
   }
 
-  onSearchChange(value: string): void {
-    this.searchText = value;
-    this.selectedPrincipal = null;
-    this.searchSubject.next(value);
-  }
-
-  onSuggestionSelected(suggestion: UserGroupSuggestion): void {
-    this.selectedPrincipal = suggestion;
-    this.searchText = suggestion.displayLabel;
-  }
-
-  displaySuggestion(suggestion: UserGroupSuggestion | string | null): string {
-    if (!suggestion) return '';
-    return typeof suggestion === 'string' ? suggestion : suggestion.displayLabel;
-  }
-
   create(andAddAnother: boolean): void {
-    if (!this.selectedPrincipal || this.saving()) return;
+    if (!this.selectedPrincipal() || this.saving()) return;
 
     this.saving.set(true);
 
@@ -228,16 +185,16 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   }
 
   isSubmitDisabled(): boolean {
-    return !this.selectedPrincipal || this.saving();
+    return !this.selectedPrincipal() || this.saving();
   }
 
   private buildResultEntry(): ShareSavedSearchAddPermissionResult {
-    const principal = this.selectedPrincipal;
-    const userGroup = principal?.displayLabel || this.searchText.trim();
+    const principal = this.selectedPrincipal();
+    const userGroup = principal?.label ?? '';
     const grantedBy =
       this.isEditMode && this.data.initialData?.grantedBy
         ? this.data.initialData.grantedBy
-        : principal?.type === 'GROUP_TYPE'
+        : principal?.kind === 'group'
           ? 'Group'
           : 'User';
 
@@ -271,15 +228,13 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   }
 
   private resetForm(): void {
-    this.searchText = '';
-    this.selectedPrincipal = null;
+    this.selectedPrincipal.set(null);
     this.right = 'Read';
     this.timeFrameMode = 'permanent';
     this.beginDate = null;
     this.endDate = null;
     this.sendNotify = true;
     this.notifyComment = '';
-    this.suggestions.set([]);
   }
 
   private formatDate(date: Date): string {

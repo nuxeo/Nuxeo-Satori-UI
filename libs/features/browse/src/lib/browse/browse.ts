@@ -13,14 +13,7 @@ import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { forkJoin, of, Subject, timer, EMPTY } from 'rxjs';
-import {
-  catchError,
-  debounceTime,
-  distinctUntilChanged,
-  filter,
-  map,
-  switchMap,
-} from 'rxjs/operators';
+import { catchError, distinctUntilChanged, filter, map, switchMap } from 'rxjs/operators';
 
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -37,7 +30,6 @@ import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatChipsModule } from '@angular/material/chips';
-import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 
 import {
@@ -57,7 +49,6 @@ import {
   DirectoryService,
   DocumentImportService,
   SelectionService,
-  TagService,
   docTypeIcon,
   avatarColor,
   isFolderishDocument,
@@ -65,6 +56,7 @@ import {
   canManageDocumentPermissions,
   mergeDocumentPermissionsContext,
   canWriteDocument,
+  canTagDocument,
   canRemoveDocument,
   canShowRemoveDocumentAction,
   canShowWriteDocumentAction,
@@ -158,6 +150,7 @@ import {
   NxsPagerComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
+  NxsTagEditorComponent,
   NxsThumbnailComponent,
   NxsUploadQueue,
   NxsUploadQueueComponent,
@@ -231,6 +224,7 @@ const PAGE_SIZE = 50;
     NxsFolderHeaderComponent,
     NxsPagerComponent,
     NxsSpinnerComponent,
+    NxsTagEditorComponent,
     NxsThumbnailComponent,
     NxsUploadQueueComponent,
     DocTypeLabelPipe,
@@ -252,7 +246,6 @@ const PAGE_SIZE = 50;
     MatSelectModule,
     MatDatepickerModule,
     MatChipsModule,
-    MatAutocompleteModule,
     MatCheckboxModule,
     SatAvatarModule,
     SatTagModule,
@@ -273,7 +266,6 @@ export class BrowseComponent {
   private readonly clipboardTargetService = inject(ClipboardTargetService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly directoryService = inject(DirectoryService);
-  private readonly tagService = inject(TagService);
   readonly selectionService = inject(SelectionService);
   private readonly extensions = inject(AppExtensionsService);
   private readonly ruleContext = inject(ExtensionRuleContextService);
@@ -329,11 +321,7 @@ export class BrowseComponent {
   readonly activityEntries = signal<AuditEntry[]>([]);
   readonly activityLoading = signal(false);
 
-  // Tag autocomplete
-  tagInput = '';
-  readonly tagSearchResults = signal<string[]>([]);
-  readonly showCreateOption = signal(false);
-  private readonly tagSearch$ = new Subject<string>();
+  readonly canTag = computed(() => canTagDocument(this.currentDoc()));
 
   // Tabs
   readonly activeTabIndex = signal(0);
@@ -916,25 +904,6 @@ export class BrowseComponent {
     this.destroyRef.onDestroy(() => {
       this.clipboardTargetService.clear();
     });
-
-    this.tagSearch$
-      .pipe(
-        debounceTime(250),
-        distinctUntilChanged(),
-        switchMap((term) =>
-          term.length > 0
-            ? this.tagService.searchTags(term).pipe(catchError(() => of([])))
-            : of([]),
-        ),
-        takeUntilDestroyed(),
-      )
-      .subscribe((results) => {
-        const existing = this.tags();
-        const filtered = results.filter((r) => !existing.includes(r));
-        this.tagSearchResults.set(filtered);
-        const exactMatch = results.some((r) => r.toLowerCase() === this.tagInput.toLowerCase());
-        this.showCreateOption.set(this.tagInput.trim().length > 0 && !exactMatch);
-      });
   }
 
   // ── Content loading ──
@@ -1329,47 +1298,15 @@ export class BrowseComponent {
       });
   }
 
-  onTagSearch(term: string): void {
-    this.tagSearch$.next(term);
-  }
-
-  selectTag(label: string): void {
-    this.applyTag(label);
-  }
-
-  createTag(): void {
-    const label = this.tagInput.trim();
-    if (label) this.applyTag(label);
-  }
-
-  private applyTag(label: string): void {
-    const doc = this.currentDoc();
-    if (!doc) return;
-    this.tagService.addTag(doc.uid, label).subscribe({
-      next: () => {
-        this.tagInput = '';
-        this.tagSearchResults.set([]);
-        this.showCreateOption.set(false);
-        this.browseService.getByPath(this.currentNuxeoPath).subscribe({
-          next: (d) => this.currentDoc.set(d),
-        });
-        this.toast.show(this.translate.instant('common.tag-added', { name: label }));
-      },
-      error: () => this.toast.error(this.translate.instant('browse.message.failed-to-add-tag')),
-    });
-  }
-
-  removeTag(label: string): void {
-    const doc = this.currentDoc();
-    if (!doc) return;
-    this.tagService.removeTag(doc.uid, label).subscribe({
-      next: () => {
-        this.browseService.getByPath(this.currentNuxeoPath).subscribe({
-          next: (d) => this.currentDoc.set(d),
-        });
-      },
-      error: () => this.toast.error(this.translate.instant('browse.message.failed-to-remove-tag')),
-    });
+  onTagsChange(uid: string, tags: readonly string[]): void {
+    this.currentDoc.update((doc) =>
+      doc?.uid === uid
+        ? {
+            ...doc,
+            properties: { ...doc.properties, 'nxtag:tags': tags.map((label) => ({ label })) },
+          }
+        : doc,
+    );
   }
 
   // ── Tab changes ──

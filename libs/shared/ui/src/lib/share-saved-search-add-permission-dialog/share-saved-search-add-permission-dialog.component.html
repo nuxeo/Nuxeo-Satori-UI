@@ -2,54 +2,19 @@
 
 <mat-dialog-content>
   @if (!isEditMode) {
-    <label class="field-label" for="principal-input">{{
-      'shared-ui.share-saved-search-add-permission-dialog.user-group' | translate
-    }}</label>
-    <mat-form-field appearance="outline" class="full-width">
-      <input
-        id="principal-input"
-        matInput
-        [placeholder]="
-          'shared-ui.share-saved-search-add-permission-dialog.search-for-users-and-groups'
-            | translate
-        "
-        [ngModel]="searchText"
-        (ngModelChange)="onSearchChange($event)"
-        [matAutocomplete]="principalAuto"
-        required
-      />
-      <mat-autocomplete
-        #principalAuto="matAutocomplete"
-        (optionSelected)="onSuggestionSelected($event.option.value)"
-        [displayWith]="displaySuggestion"
-      >
-        @if (searchText.trim().length < 3) {
-          <mat-option disabled>{{
-            'shared-ui.share-saved-search-add-permission-dialog.please-enter-3-or-more-characters'
-              | translate
-          }}</mat-option>
-        } @else {
-          @for (suggestion of suggestions(); track suggestion.id) {
-            <mat-option [value]="suggestion">
-              <mat-icon class="suggestion-icon">{{
-                suggestion.type === 'USER_TYPE' ? 'person' : 'groups'
-              }}</mat-icon>
-              <span>{{ suggestion.displayLabel }}</span>
-              <span class="suggestion-id">{{ suggestion.id }}</span>
-            </mat-option>
-          } @empty {
-            <mat-option disabled>{{
-              'shared-ui.share-saved-search-add-permission-dialog.no-users-groups-found' | translate
-            }}</mat-option>
-          }
-        }
-      </mat-autocomplete>
-    </mat-form-field>
+    <nxs-user-group-picker
+      class="full-width"
+      [label]="'shared-ui.share-saved-search-add-permission-dialog.user-group' | translate"
+      [ngModel]="selectedPrincipal()"
+      (ngModelChange)="selectedPrincipal.set($event)"
+      [disabled]="saving()"
+      required
+    />
   } @else {
     <div class="field-label">
       {{ 'shared-ui.share-saved-search-add-permission-dialog.user-group-2' | translate }}
     </div>
-    <div class="user-group-display">{{ searchText }}</div>
+    <div class="user-group-display">{{ selectedPrincipal()?.label }}</div>
   }
 
   <mat-form-field appearance="outline" class="full-width">

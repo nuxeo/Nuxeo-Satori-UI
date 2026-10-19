@@ -1,32 +1,13 @@
 <h2 mat-dialog-title>{{ 'permissions.add-permission-dialog.add-a-permission' | translate }}</h2>
 
 <mat-dialog-content>
-  <mat-form-field appearance="outline" class="full-width">
-    <mat-label>{{ 'permissions.add-permission-dialog.user-group' | translate }}</mat-label>
-    <input
-      matInput
-      [placeholder]="'permissions.add-permission-dialog.search-for-users-and-groups' | translate"
-      [ngModel]="searchText"
-      (ngModelChange)="onSearchChange($event)"
-      [matAutocomplete]="userAuto"
-      required
-    />
-    <mat-autocomplete
-      #userAuto="matAutocomplete"
-      (optionSelected)="onUserSelected($event.option.value)"
-      [displayWith]="displayUser"
-    >
-      @for (suggestion of suggestions(); track suggestion.id) {
-        <mat-option [value]="suggestion">
-          <mat-icon class="suggestion-icon">
-            {{ suggestion.type === 'USER_TYPE' ? 'person' : 'group' }}
-          </mat-icon>
-          {{ suggestion.displayLabel }}
-          <span class="suggestion-id">({{ suggestion.id }})</span>
-        </mat-option>
-      }
-    </mat-autocomplete>
-  </mat-form-field>
+  <nxs-user-group-picker
+    [label]="'permissions.add-permission-dialog.user-group' | translate"
+    [ngModel]="selectedUser()"
+    (ngModelChange)="selectedUser.set($event)"
+    [disabled]="saving()"
+    required
+  />
 
   <mat-form-field appearance="outline" class="full-width">
     <mat-label>{{ 'permissions.add-permission-dialog.right' | translate }}</mat-label>
@@ -115,7 +96,7 @@
     mat-flat-button
     color="primary"
     class="create-another-btn"
-    [disabled]="!selectedUser || saving()"
+    [disabled]="!selectedUser() || saving()"
     (click)="create(true)"
   >
     @if (saving() && addAnother) {
@@ -127,7 +108,7 @@
   <button
     mat-flat-button
     color="primary"
-    [disabled]="!selectedUser || saving()"
+    [disabled]="!selectedUser() || saving()"
     (click)="create(false)"
   >
     @if (saving() && !addAnother) {

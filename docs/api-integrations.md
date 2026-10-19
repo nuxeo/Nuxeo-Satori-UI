@@ -1650,13 +1650,17 @@ same way.
 `404 Directory label_tag_entry was not found` (measured 2026-10-13), so it never suggests anything.
 `suggestTags` uses the operation Web UI uses, which answered the same server, and is the one place
 that sends it: the search filters' tags reach it through `SearchService.getTagSuggestions`, and
-document detail's `nxs-tag-editor` calls it directly. Browse's tag field still calls `searchTags`,
-so it suggests nothing on Nuxeo 2025 until it moves onto `suggestTags`.
+document detail and Browse's `nxs-tag-editor` call it directly. Both editors save every add and
+remove immediately and apply the returned tags to their document state.
 
 `nxs-date-input` makes no request.
 
-**Usage:** none yet. The pickers are in `@nuxeo/satori-platform/components`, documented in its
-Storybook; screens move onto them in a later change.
+**Usage:** Add permission and saved-search sharing use `nxs-user-group-picker`, with its default
+three-character minimum. A selected `NxsPrincipal` supplies the raw username or group id for
+document permission writes, and its label and kind for saved-search permission entries. Editing
+the text clears the selection; failed searches remain retryable in the picker. Browse and document
+detail use `nxs-tag-editor` for immediate saves, with `canTagDocument` controlling read-only state.
+`nxs-tag-input` remains a form control for labels that are saved with a form.
 
 ---
 

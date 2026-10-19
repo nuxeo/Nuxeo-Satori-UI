@@ -97,6 +97,12 @@ const detail = {
   unsubscribe: vi.fn((): DetailReturn<'unsubscribe'> => EMPTY),
 };
 
+const tag = {
+  suggestTags: vi.fn(() => of(['legal'])),
+  addTag: vi.fn(() => of(['legal'])),
+  removeTag: vi.fn(() => of([] as string[])),
+};
+
 const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
 
 /**
@@ -129,6 +135,9 @@ describe('BrowseComponent — rendered document list', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    tag.suggestTags.mockReturnValue(of(['legal']));
+    tag.addTag.mockReturnValue(of(['legal']));
+    tag.removeTag.mockReturnValue(of([]));
     localStorage.removeItem('browse_column_settings');
     browse.getByPath.mockReturnValue(of(folder));
     browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries: [], totalSize: 0 }));
@@ -188,7 +197,7 @@ describe('BrowseComponent — rendered document list', () => {
             getAllL10nEntries: vi.fn(() => of([])),
           },
         },
-        { provide: TagService, useValue: { searchTags: vi.fn(() => of([])) } },
+        { provide: TagService, useValue: tag },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) },
@@ -214,6 +223,80 @@ describe('BrowseComponent — rendered document list', () => {
     await new Promise((resolve) => setTimeout(resolve));
     await settle();
   }
+
+  it('uses the shared tag editor to suggest and save tags in the Browse panel', async () => {
+    const component = await render([provideNoopAnimations()]);
+    component.panelOpen.set(true);
+    component.panelSubTab.set('tags');
+    await settle();
+    const box = query('nxs-tag-editor input') as HTMLInputElement;
+    expect(box).not.toBeNull();
+    box.focus();
+    box.value = 'leg';
+    box.dispatchEvent(new Event('input'));
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    await settle();
+    expect(tag.suggestTags).toHaveBeenCalledWith('leg');
+    const option = [
+      ...document.querySelectorAll<HTMLElement>('.mat-mdc-autocomplete-panel mat-option'),
+    ].find((entry) => entry.textContent?.trim() === 'legal');
+    expect(option).not.toBeUndefined();
+    option?.click();
+    await settle();
+    expect(tag.addTag).toHaveBeenCalledWith('ws-1', 'legal');
+    expect(component.tags()).toEqual(['legal']);
+    const remove = query('nxs-tag-editor button[aria-label="Remove tag legal"]');
+    expect(remove).not.toBeNull();
+    remove?.click();
+    await settle();
+    expect(tag.removeTag).toHaveBeenCalledWith('ws-1', 'legal');
+    expect(component.tags()).toEqual([]);
+  });
+
+  it('keeps existing tags after a failed write and permits another attempt', async () => {
+    const component = await render([provideNoopAnimations()]);
+    component.currentDoc.set({ ...folder, properties: { 'nxtag:tags': ['retained'] } });
+    component.panelOpen.set(true);
+    component.panelSubTab.set('tags');
+    await settle();
+    tag.addTag.mockReturnValueOnce(throwError(() => ({ status: 500 })));
+    const box = query('nxs-tag-editor input') as HTMLInputElement;
+    const choose = async (): Promise<void> => {
+      box.focus();
+      box.value = 'leg';
+      box.dispatchEvent(new Event('input'));
+      await new Promise((resolve) => setTimeout(resolve, 300));
+      await settle();
+      const option = [
+        ...document.querySelectorAll<HTMLElement>('.mat-mdc-autocomplete-panel mat-option'),
+      ].find((entry) => entry.textContent?.trim() === 'legal');
+      expect(option).not.toBeUndefined();
+      option?.click();
+      await settle();
+    };
+    await choose();
+    expect(component.tags()).toEqual(['retained']);
+    tag.addTag.mockReturnValue(of(['retained', 'legal']));
+    await choose();
+    expect(tag.addTag).toHaveBeenCalledTimes(2);
+    expect(component.tags()).toEqual(['retained', 'legal']);
+  });
+
+  it('renders tags without editing controls when the browsed document is read-only', async () => {
+    const component = await render();
+    component.currentDoc.set({
+      ...folder,
+      properties: { 'nxtag:tags': ['legal'] },
+      contextParameters: { permissions: ['Read'] },
+    });
+    component.panelOpen.set(true);
+    component.panelSubTab.set('tags');
+    await settle();
+    expect(query('nxs-tag-editor')?.textContent).toContain('legal');
+    expect(query('nxs-tag-editor input')).toBeNull();
+    expect(query('nxs-tag-editor button')).toBeNull();
+    expect(tag.suggestTags).not.toHaveBeenCalled();
+  });
 
   function query(selector: string): HTMLElement | null {
     return fixture.nativeElement.querySelector(selector) as HTMLElement | null;
