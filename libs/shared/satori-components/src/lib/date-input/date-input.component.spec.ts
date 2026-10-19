@@ -291,6 +291,22 @@ describe('NxsDateInputComponent', () => {
     expect(day(host.expires.value)).toBe('2026-12-31');
   });
 
+  it('keeps the first partial keystroke when an initial null write has not rendered yet', async () => {
+    await setup('fr');
+    const picker = fixture.debugElement.children[0].componentInstance as NxsDateInputComponent;
+    picker.writeValue(null);
+    input().value = '1';
+    input().dispatchEvent(new Event('input'));
+    await render();
+    expect(input().value).toBe('1');
+    expect(host.expires.value).toBeNull();
+    expect(host.expires.hasError('nxsDateParse')).toBe(true);
+    host.expires.reset(null);
+    await render();
+    expect(input().value).toBe('');
+    expect(host.expires.valid).toBe(true);
+  });
+
   it('clears invalid text when the form resets an already null value', async () => {
     await setup('fr');
     await type('not-a-date');

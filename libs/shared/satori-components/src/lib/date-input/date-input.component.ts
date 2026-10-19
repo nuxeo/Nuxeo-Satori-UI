@@ -78,11 +78,9 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   private readonly adapter = inject<DateAdapter<unknown>>(DateAdapter);
   private readonly formats = inject(MAT_DATE_FORMATS);
   private readonly input = viewChild.required(MatInput);
-  private readonly dateInput = viewChild.required<MatDatepickerInput<unknown>>(MatDatepickerInput);
+  private readonly dateInput = viewChild<MatDatepickerInput<unknown>>(MatDatepickerInput);
   /** The date the field last set itself, so its own changes are not mistaken for a host's. */
   private committed: Date | null = null;
-  private readonly writes = signal(0);
-  private appliedWrite = 0;
   private readonly control = new NxsPickerControl<Date | null>();
 
   /** What the user typed, while it is not a date the field holds. */
@@ -134,13 +132,13 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
     // `null` while the user types text that is not a date yet would erase what they typed.
     effect(() => {
       const value = this.value();
-      const write = this.writes();
+      const field = this.dateInput();
+      if (!field) return;
       untracked(() => {
-        if (value === this.committed && write === this.appliedWrite) return;
-        this.appliedWrite = write;
+        if (value === this.committed) return;
         this.committed = value;
         this.typed.set('');
-        this.dateInput().value = nxsDateToAdapter(this.adapter, value);
+        field.value = nxsDateToAdapter(this.adapter, value);
       });
     });
   }
@@ -151,8 +149,16 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   }
 
   writeValue(value: unknown): void {
-    this.value.set(nxsDateFromAdapter(this.adapter, value));
-    this.writes.update((write) => write + 1);
+    const date = nxsDateFromAdapter(this.adapter, value);
+    this.typed.set('');
+    this.value.set(date);
+    // A form reset is explicit even when the value is already null. Write it now: deferring an
+    // initial ngModel write until a later render can erase the user's first partial keystroke.
+    const field = this.dateInput();
+    if (field) {
+      this.committed = date;
+      field.value = nxsDateToAdapter(this.adapter, date);
+    }
   }
 
   registerOnChange(fn: (value: Date | null) => void): void {
