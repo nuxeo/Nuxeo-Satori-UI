@@ -46,6 +46,8 @@ jobs:
           cache: npm
       - name: Install the locked dependency tree
         run: npm ci
+      - name: Generate the documentation imported by spec typechecks
+        run: npx nx run satori-components:compodoc
       - name: Full Beta gate on Windows
         run: npm run beta:gate -- --phase windows-ci
       - name: Preserve gate verdict and diagnostics
