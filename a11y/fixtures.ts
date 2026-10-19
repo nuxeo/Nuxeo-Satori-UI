@@ -265,7 +265,7 @@ export const test = a11yBase.extend<{ signedIn: Page }>({
     }
     const identity =
       (await apiIdentityProblem(page.request, base, username)) ??
-      (await sessionIdentityProblem(page, username, foreignApiOrigins));
+      (await sessionIdentityProblem(page, username, { baseUrl: base, foreignApiOrigins }));
     if (identity) {
       throw new Error(`This test passed, but its result is invalid: ${identity}.`);
     }

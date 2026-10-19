@@ -179,7 +179,7 @@ await page.evaluate(
   { key: SESSION_KEY, signedOutKey: SIGNED_OUT_KEY, value: injectedSession(user, pass) },
 );
 await page.reload({ waitUntil: 'networkidle' });
-await requireSessionAdopted(page, user, TOOL);
+await requireSessionAdopted(page, user, TOOL, { baseUrl, foreignApiOrigins });
 ```
 
 The session shape and key come from `../session.mjs`; do not write the JSON inline. And do not

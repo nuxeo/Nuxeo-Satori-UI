@@ -143,13 +143,18 @@ async function readProblem(page, username) {
  * `null` when Nuxeo answers the app in this page as `username`, otherwise why not — the app's
  * stored session read the way the app reads it, and `/me` asked with the header it sends.
  *
- * @param {import('@playwright/test').Page} page an app page; its origin is the app's
+ * @param {import('@playwright/test').Page} page
  * @param {string} username
- * @param {Set<string>} [foreignApiOrigins] from `watchNuxeoApiOrigins`, started before the test
+ * @param {object} options
+ * @param {string} options.baseUrl the app's configured URL. Not `page.url()`: the trusted origin
+ *   must come from the configuration, or a page redirected to another deployment would be
+ *   judged by that deployment's `/me`
+ * @param {Set<string>} [options.foreignApiOrigins] from `watchNuxeoApiOrigins`, started before
+ *   the first navigation
  * @returns {Promise<string | null>}
  */
-export async function sessionIdentityProblem(page, username, foreignApiOrigins) {
-  const report = await checkPageIdentity(page, username, new URL(page.url()).origin, {
+export async function sessionIdentityProblem(page, username, { baseUrl, foreignApiOrigins }) {
+  const report = await checkPageIdentity(page, username, new URL(baseUrl).origin, {
     foreignApiOrigins,
   });
   if (!report.ok) return `identity guard: ${report.problem}`;

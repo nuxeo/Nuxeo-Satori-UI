@@ -278,6 +278,12 @@ function fakePage({
     stubbedMe: false,
     /** Navigate the page here as soon as the in-page probe runs. */
     navigateDuringProbe: null,
+    /** Navigate the page here while the Node replay is in flight. */
+    navigateDuringReplay: null,
+    /** Never answer the in-page probe; only an abort ends it. */
+    inPageHangs: false,
+    /** Never answer the Node replay; only an abort ends it. */
+    replayHangs: false,
     waiters: [],
     listeners: [],
   };
@@ -300,6 +306,7 @@ function fakePage({
           };
           for (const w of state.waiters.splice(0)) if (w.pred(response)) w.resolve(response);
           if (state.navigateDuringProbe) state.url = state.navigateDuringProbe;
+          if (state.inPageHangs) return hangUntilAborted(init?.signal);
           return { status: 200, json: async () => state.meFor(auth) };
         },
       };
@@ -343,11 +350,20 @@ function fakePage({
         auth,
         cookie: init?.headers?.['Cookie'] ?? null,
       });
+      if (state.navigateDuringReplay) state.url = state.navigateDuringReplay;
+      if (state.replayHangs) return hangUntilAborted(init?.signal);
       const body = (state.replayFor ?? state.meFor)(auth);
       return { status: 200, text: async () => JSON.stringify(body) };
     },
   };
   return page;
+}
+
+/** A response that never arrives: only the caller's abort signal can end the wait. */
+function hangUntilAborted(signal) {
+  return new Promise((_, reject) => {
+    signal?.addEventListener('abort', () => reject(new Error('aborted by the probe deadline')));
+  });
 }
 
 const signedIn = {
@@ -457,6 +473,52 @@ const signedIn = {
     "a page that navigates away during the probe is refused, and the session's header goes nowhere else",
     !r.ok && page.state.replayHeaders.every((h) => h.url.startsWith('http://app.test/')),
     { r, replay: page.state.replayHeaders },
+  );
+}
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.navigateDuringReplay = 'https://elsewhere.test/#/';
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
+  control(
+    'negative',
+    'a page that navigates away while the Node replay is in flight is refused',
+    !r.ok,
+    r,
+  );
+}
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.replayHangs = true;
+  // `AbortSignal.timeout` does not hold the event loop open; a real socket would, this fake does not.
+  const keepAlive = setTimeout(() => undefined, 5_000);
+  const t0 = Date.now();
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+    timeoutMs: 50,
+  });
+  control(
+    'negative',
+    'a Node replay that never answers ends at the deadline as a rejected identity',
+    !r.ok && Date.now() - t0 < 5_000,
+    { r, ms: Date.now() - t0 },
+  );
+  clearTimeout(keepAlive);
+}
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.inPageHangs = true;
+  const t0 = Date.now();
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+    timeoutMs: 50,
+  });
+  control(
+    'negative',
+    'an in-page probe that never answers ends at the deadline as a rejected identity',
+    !r.ok && Date.now() - t0 < 5_000,
+    { r, ms: Date.now() - t0 },
   );
 }
 {

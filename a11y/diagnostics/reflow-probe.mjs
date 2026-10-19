@@ -51,6 +51,7 @@ import {
   launchChromium,
   requireAdministrationAccess,
   requireSessionAdopted,
+  watchNuxeoApiOrigins,
 } from './preconditions.mjs';
 
 const NEGATIVE_CONTROL = parseCliOrExit('reflow-probe', {
@@ -418,8 +419,9 @@ const page = await context.newPage();
 const rows = [];
 let couldNotMeasure = 0;
 
+const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
 await gotoOrExit(page, baseUrl, 'reflow-probe', { waitUntil: 'networkidle', timeout: 45_000 });
-await requireSessionAdopted(page, user, 'reflow-probe');
+await requireSessionAdopted(page, user, 'reflow-probe', { baseUrl, foreignApiOrigins });
 
 for (const [label, route, host] of ROUTES) {
   try {
@@ -601,11 +603,15 @@ if (NEGATIVE_CONTROL) {
   // `gotoOrExit`, not a bare `goto`: the control cannot treat a navigation failure as a
   // result. If browse will not load, the detection path was not exercised either way, and
   // reporting that as a failed control would say the probe is broken when the app is absent.
+  const foreignApiOrigins2 = watchNuxeoApiOrigins(p2, baseUrl);
   await gotoOrExit(p2, `${baseUrl}/#/browse`, 'reflow-probe (negative control)', {
     waitUntil: 'networkidle',
     timeout: 45_000,
   });
-  await requireSessionAdopted(p2, user, 'reflow-probe (negative control)');
+  await requireSessionAdopted(p2, user, 'reflow-probe (negative control)', {
+    baseUrl,
+    foreignApiOrigins: foreignApiOrigins2,
+  });
 
   // Same check as the measurement loop. A control run against an error panel would still
   // "prove" the detection path works, but it would prove it on a page nobody is measuring.

@@ -143,16 +143,23 @@ export function requireAdministrationAccess(me, username, tool) {
  * Call it once the page has loaded an app route. Without it a drifted session copy is
  * invisible: the app signs in through `httpCredentials` instead and everything still renders.
  *
+ * Then asks Nuxeo who the adopted session runs as (`sessionIdentityProblem`), on the configured
+ * app origin, and refuses an app that sent API requests elsewhere — pass the watcher started
+ * before the diagnostic's first navigation.
+ *
  * @param {import('@playwright/test').Page} page
  * @param {string} username
  * @param {string} tool
+ * @param {{ baseUrl: string, foreignApiOrigins: Set<string> }} identity
  */
-export async function requireSessionAdopted(page, username, tool) {
+export async function requireSessionAdopted(page, username, tool, { baseUrl, foreignApiOrigins }) {
   const problem = await sessionAdoptionProblem(page, username);
   if (problem) cannotMeasure(tool, `not signed in by the injected session: ${problem}`);
-  const identity = await sessionIdentityProblem(page, username);
+  const identity = await sessionIdentityProblem(page, username, { baseUrl, foreignApiOrigins });
   if (identity) cannotMeasure(tool, identity);
 }
+
+export { watchNuxeoApiOrigins } from '../session.mjs';
 
 /**
  * Navigate, or exit 2.

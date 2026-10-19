@@ -62,6 +62,12 @@
 export const ME_PATH = '/nuxeo/api/v1/me';
 
 /**
+ * How long one `/me` probe may take, headers and body together. A probe that never finishes must
+ * end as a rejected identity, not hang the run before it can report or clean up.
+ */
+export const PROBE_TIMEOUT_MS = 15_000;
+
+/**
  * The storage keys a browser session can live under, in the order they are read.
  *
  * Mirrors `STORAGE_KEY` in `apps/nuxeo-ui/src/app/auth/auth.service.ts`, which reads
@@ -315,6 +321,8 @@ export async function askThroughRequest(request, url) {
     const res = await request.get(url, {
       headers: { Accept: 'application/json' },
       failOnStatusCode: false,
+      // Playwright reads the whole body before resolving, so this bounds it too.
+      timeout: PROBE_TIMEOUT_MS,
     });
     // A body that is not JSON is no identity: `judgeMe` rejects a null body, so nothing is lost.
     return { status: res.status(), body: await res.json().catch(() => null) };
@@ -331,15 +339,23 @@ export async function askThroughRequest(request, url) {
  * @param {string | null} authorization
  * @param {typeof fetch} [fetchImpl]
  * @param {string} [cookie] a `Cookie` header to replay
+ * @param {number} [timeoutMs]
  * @returns {Promise<MeAnswer>}
  */
-export async function askThroughFetch(url, authorization, fetchImpl = fetch, cookie) {
+export async function askThroughFetch(
+  url,
+  authorization,
+  fetchImpl = fetch,
+  cookie,
+  timeoutMs = PROBE_TIMEOUT_MS,
+) {
   try {
     /** @type {Record<string, string>} */
     const headers = { Accept: 'application/json' };
     if (authorization) headers['Authorization'] = authorization;
     if (cookie) headers['Cookie'] = cookie;
-    const res = await fetchImpl(url, { headers });
+    // The signal bounds the body read too: an abort rejects `text()` as well as `fetch()`.
+    const res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
     const text = await res.text();
     let body = null;
     try {
@@ -369,9 +385,15 @@ export async function askThroughFetch(url, authorization, fetchImpl = fetch, coo
  * @param {import('@playwright/test').Page} page
  * @param {string} appOrigin
  * @param {typeof fetch} [fetchImpl] for the replay
+ * @param {number} [timeoutMs] per probe, body included
  * @returns {Promise<{ stored: StoredSession | { problem: string } | null, answers: { inPage: MeAnswer | null, replayed: MeAnswer | null } }>}
  */
-export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
+export async function askThroughPage(
+  page,
+  appOrigin,
+  fetchImpl = fetch,
+  timeoutMs = PROBE_TIMEOUT_MS,
+) {
   const none = { inPage: null, replayed: null };
   const origin = originOf(appOrigin);
   const stillOnApp = () => originOf(safeUrl(page)) === origin;
@@ -397,25 +419,41 @@ export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
 
       const nonce = `identityGuard=${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
       const seen = page
-        .waitForResponse((r) => r.url().includes(nonce), { timeout: 15_000 })
+        .waitForResponse((r) => r.url().includes(nonce), { timeout: timeoutMs + 1_000 })
         // No response seen is itself a verdict: the in-page answer is refused below.
         .catch(() => null);
       /** @type {MeAnswer} */
       let inPage = await page.evaluate(
-        async ({ url, authorization }) => {
+        async ({ url, authorization, timeoutMs }) => {
+          // Bounds the request and its body: aborting rejects a pending `json()` as well.
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), timeoutMs);
           try {
             /** @type {Record<string, string>} */
             const headers = { Accept: 'application/json' };
             if (authorization) headers['Authorization'] = authorization;
-            const res = await fetch(url, { headers, credentials: 'same-origin' });
-            // Not JSON means no identity, which `judgeMe` rejects.
-            const body = await res.json().catch(() => null);
+            const res = await fetch(url, {
+              headers,
+              credentials: 'same-origin',
+              signal: controller.signal,
+            });
+            // Not JSON means no identity, which `judgeMe` rejects; an abort lands in the catch.
+            const body = await res.json().catch((err) => {
+              if (controller.signal.aborted) throw err;
+              return null;
+            });
             return { status: res.status, body };
           } catch (err) {
             return { status: 0, body: null, error: String(err) };
+          } finally {
+            clearTimeout(timer);
           }
         },
-        { url: `${origin}${ME_PATH}?${nonce}`, authorization: stored.authorization },
+        {
+          url: `${origin}${ME_PATH}?${nonce}`,
+          authorization: stored.authorization,
+          timeoutMs,
+        },
       );
       const response = await seen;
       // No address, for whatever reason, is treated as a stub and refused below.
@@ -434,7 +472,16 @@ export async function askThroughPage(page, appOrigin, fetchImpl = fetch) {
       const url = `${origin}${ME_PATH}`;
       const cookies = await page.context().cookies(url);
       const cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
-      const replayed = await askThroughFetch(url, stored.authorization, fetchImpl, cookie);
+      const replayed = await askThroughFetch(
+        url,
+        stored.authorization,
+        fetchImpl,
+        cookie,
+        timeoutMs,
+      );
+      // And after the replay: a page that navigated during `cookies()` or the request is no
+      // longer the page these answers describe.
+      if (!stillOnApp()) return left();
       return { stored, answers: { inPage, replayed } };
     } catch (err) {
       lastError = err;
@@ -507,7 +554,7 @@ export async function checkFetchIdentity(meUrl, authorization, expected, fetchIm
  * @param {import('@playwright/test').Page} page
  * @param {AppPolicy} policy
  * @param {string} appOrigin
- * @param {{ fetchImpl?: typeof fetch, foreignApiOrigins?: Set<string> }} [options]
+ * @param {{ fetchImpl?: typeof fetch, foreignApiOrigins?: Set<string>, timeoutMs?: number }} [options]
  *   `foreignApiOrigins` from `watchNuxeoApiOrigins`: any entry is a refusal
  * @returns {Promise<ChannelReport>}
  */
@@ -515,7 +562,7 @@ export async function checkPageIdentity(
   page,
   policy,
   appOrigin,
-  { fetchImpl, foreignApiOrigins } = {},
+  { fetchImpl, foreignApiOrigins, timeoutMs } = {},
 ) {
   if (foreignApiOrigins?.size) {
     return judgeApp(
@@ -531,7 +578,7 @@ export async function checkPageIdentity(
   if (originOf(safeUrl(page)) !== originOf(appOrigin)) {
     return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
-  const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl);
+  const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
   return judgeApp(stored, answers, policy);
 }
 

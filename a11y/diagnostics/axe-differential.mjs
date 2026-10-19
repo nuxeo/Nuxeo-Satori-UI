@@ -63,6 +63,7 @@ import {
   requireAdministrationAccess,
   requireBackend,
   requireSessionAdopted,
+  watchNuxeoApiOrigins,
 } from './preconditions.mjs';
 
 /**
@@ -305,6 +306,7 @@ try {
   // `networkidle` rather than a fixed pause, so the app's own session hydration has very
   // likely finished before the session below is written. The reload after it is what makes
   // the written session the one the app starts from.
+  const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
   await gotoOrExit(page, baseUrl, 'axe-differential', { waitUntil: 'networkidle' });
   await page.evaluate(
     ({ key, value, signedOutKey }) => {
@@ -321,7 +323,7 @@ try {
   // `Anonymous` and can leave a guest cookie that outranks the Basic header (NXSAT-643).
   await context.clearCookies();
   await page.reload({ waitUntil: 'networkidle' });
-  await requireSessionAdopted(page, user, 'axe-differential');
+  await requireSessionAdopted(page, user, 'axe-differential', { baseUrl, foreignApiOrigins });
 
   for (const [surface, route, host] of SURFACES) {
     process.stdout.write(`scanning ${surface} `);
