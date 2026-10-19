@@ -59,20 +59,7 @@ export default async function run(page, h) {
   await h.step('Application loads and authenticates against live Nuxeo');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
-  const me = await page.evaluate(async () => {
-    const r = await fetch('/nuxeo/api/v1/me', { headers: { Accept: 'application/json' } });
-    return r.ok ? (await r.json()).id : `HTTP ${r.status}`;
-  });
-  // The identity the run signed in with, not the one the runner used to default to. This
-  // compared against a literal `Administrator`, which held only while the login defaulted to it
-  // too; with the default gone (NXSAT-649) any other account an operator exports read as an
-  // authentication defect. `h.login()` above has already required the pair.
-  const { username } = requireStepCredentials('check which identity the run signed in as');
-  h.check(
-    'authenticated as NUXEO_USER',
-    me === username,
-    `/me returned ${me}, expected ${username}`,
-  );
+  // Who the run signed in as is checked by the identity guard at the next boundary (NXSAT-643).
   await h.screenshot('app-shell');
 
   await h.step('Production browse renders real repository content');

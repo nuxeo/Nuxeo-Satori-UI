@@ -1155,6 +1155,43 @@ await silently(async () => {
     );
   }
   {
+    // Violation accumulation across reload: a guest request followed by reload should still fail.
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    page.emitRequest('http://app.test/nuxeo/api/v1/search', { authorization: null });
+    page.state.document++;
+    const thrown = await thrownBy(() => h.step('two'));
+    control(
+      'negative',
+      'violations accumulate across reload: a headerless request before reload is rejected after',
+      thrown instanceof PreconditionError && /authorization.*differ/i.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
+    // Cleared on identity switch: h.signedInAs clears baseDocument.
+    const page = fakePage({ storage: signedIn });
+    const { h, identity } = harness(page);
+    await h.step('one');
+    page.emitRequest('http://app.test/nuxeo/api/v1/search', { authorization: null });
+    page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
+      'parity-user',
+      'UFU=',
+    );
+    page.state.meFor = (auth) => (auth === 'Basic UFU=' ? { id: 'parity-user' } : ADMIN);
+    h.signedInAs('parity-user', 'selftest');
+    page.state.document++;
+    await h.step('two');
+    await h.finish();
+    control(
+      'positive',
+      'h.signedInAs clears violation history: headerless request under old identity is not held against new',
+      identity.checks.every((c) => c.ok),
+      { checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
     const page = fakePage({ storage: signedIn, meFor: () => GUEST });
     const recorder = { steps: [], consoleErrors: [] };
     const h = createHelpers(page, '/tmp', recorder);

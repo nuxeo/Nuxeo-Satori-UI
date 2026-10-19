@@ -562,6 +562,20 @@ class NuxeoApiTraffic extends Set {
   sent = [];
   /** The main frame's current document; bumped by each navigation that loads a new one. */
   document = 0;
+  /**
+   * Violations accumulate from this document onward. Reset by the monitor when identity changes
+   * (`h.signedInAs`, `h.signedOut`), so violations before a declared switch are not held against
+   * the next identity. A reload (`h.login()`) keeps the same base and accumulates violations.
+   */
+  baseDocument = 0;
+
+  /**
+   * Clear violations accumulated so far: from here on, judge only later documents. Called by the
+   * monitor when the app identity changes.
+   */
+  clearViolations() {
+    this.baseDocument = this.document;
+  }
 }
 
 /**
@@ -624,13 +638,13 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
 }
 
 /**
- * The requests the current document sent to Nuxeo without `stored`'s header, counted from the
- * first one that carried it.
+ * The requests the page sent to Nuxeo without `stored`'s header, from `baseDocument` onward and
+ * counted from the first that carried it.
  *
- * A document acts on the session it holds, so requests a replaced document sent are not this
- * session's. Nor are those before the session was in use: the app booting signed out before
- * `h.login()` reloads it, or before its sign-in form sends the header. A document that never
- * sent the header sent every request without it.
+ * Violations accumulate across reloads — `h.login()` continues the same identity, so a headerless
+ * request before the reload is held against the session after it. The monitor clears `baseDocument`
+ * when identity changes (`h.signedInAs`, `h.signedOut`), so violations before a declared switch
+ * are not held against the next identity.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @param {StoredSession} stored
@@ -639,11 +653,11 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
 export function strayRequests(traffic, stored) {
   // By shape, not `instanceof`: a second copy of this module, as a loader can make, would
   // otherwise switch the check off without a word.
-  const { sent, document } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
-  if (!Array.isArray(sent) || typeof document !== 'number') return [];
-  const current = sent.filter((r) => r.finished && r.document === document);
-  const first = current.findIndex((r) => r.authorization === stored.authorization);
-  return current.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
+  const { sent, baseDocument } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
+  if (!Array.isArray(sent) || typeof baseDocument !== 'number') return [];
+  const inScope = sent.filter((r) => r.finished && r.document >= baseDocument);
+  const first = inScope.findIndex((r) => r.authorization === stored.authorization);
+  return inScope.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
 }
 
 // ── Checks ──────────────────────────────────────────────────────────────────────────────────────
@@ -786,7 +800,10 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
      * @param {string} at
      */
     expectApp(user, reason, at) {
-      if (!sameUser(user, expectedUser())) switches.push({ at, username: user, reason });
+      if (!sameUser(user, expectedUser())) {
+        switches.push({ at, username: user, reason });
+        if (foreignApiOrigins instanceof NuxeoApiTraffic) foreignApiOrigins.clearViolations();
+      }
       policy = { user };
     },
 
@@ -799,6 +816,7 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     expectSignedOut(reason, at) {
       switches.push({ at, username: null, reason });
       policy = { unsigned: username };
+      if (foreignApiOrigins instanceof NuxeoApiTraffic) foreignApiOrigins.clearViolations();
     },
 
     /**
