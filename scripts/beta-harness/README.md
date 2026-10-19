@@ -129,15 +129,26 @@ In the runner it checks `page.request` before the first step, and `page.request`
 the page — its stored session, and `/me` asked with the header that session sends, from inside the
 page and replayed from Node with the browser's cookies — at every step boundary and after the
 last step. An in-page answer must come from a server (a `page.route` that fulfils `/me` is
-refused), every probe goes to the app's own origin, and an app that sends Nuxeo API requests to
-another origin is refused rather than judged on the wrong server. User ids compare exactly.
+refused), every probe goes to the app's own origin, no probe follows a redirect, and an app that
+sends Nuxeo API requests to another origin is refused rather than judged on the wrong server. User
+ids compare exactly.
+
+`/me` vouches only for the header it was asked with, so the requests the page itself sent are
+judged too. Every `fetch` or XHR the current page sent to `/nuxeo/`, from the first that carried
+the session's header, must have gone out with that header, read after any `page.route` rewrite.
+One without it, or with another user's, is rejected.
 
 A rejection makes the run `precondition-not-met` (exit 2), marks
 `manifest.identity.valid: false`, and records the failed check on the step whose result is
 invalid. So:
 
-- **`await h.step(...)`.** The boundary check is asynchronous; an un-awaited one is recorded as a
-  failed check on its step.
+- **`await h.step(...)`.** The boundary check is asynchronous. Not awaited, it runs alongside the
+  next step and cannot speak for its own, even if it finished first. So it is recorded as a failed
+  check on its step and the run ends `precondition-not-met`. A `.then()` chained on it counts only
+  if the chain is awaited.
+- **A steps file's own in-page `fetch` to `/nuxeo/` sends the session's header**, as the app's
+  interceptor does. The guard cannot tell it from the app's requests, and one without the header
+  ran as whoever the cookies say.
 - **Say when the browser is meant to be someone else**: `h.signedInAs(user, reason)` before the
   next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
 - **Say when it is meant to be signed out**: `h.signedOut(reason)`. Once a run has signed in, a

@@ -38,6 +38,11 @@
  *   from inside the page, through whatever routes and cookies the page has — what the app's own
  *   requests get — and replayed from Node with the same header and the browser's cookies, which no
  *   `page.route` can intercept, so a stubbed `/me` cannot certify a principal Nuxeo never saw.
+ *   `/me` vouches only for the header it was asked with, so the requests the page actually sent
+ *   to Nuxeo are judged too (`watchNuxeoApiOrigins`): each must have gone out with that header.
+ *
+ * No probe follows a redirect. Whoever answers at the destination is not the server the result
+ * came from, and could name any user; a `/me` that redirects is no answer.
  *
  * A result is rejected when an answer is `Anonymous` (`isAnonymous`, or the id itself), another
  * user, or no answer, and when the app holds a session for anyone but the expected user. Being
@@ -66,6 +71,12 @@ export const ME_PATH = '/nuxeo/api/v1/me';
  * end as a rejected identity, not hang the run before it can report or clean up.
  */
 export const PROBE_TIMEOUT_MS = 15_000;
+
+/** Marks the guard's own in-page `/me`, so it is not counted among the requests the page sent. */
+const PROBE_MARK = 'identityGuard=';
+
+/** The request types the app's HTTP client sends, and so the ones its interceptor authenticates. */
+const APP_REQUEST_TYPES = new Set(['fetch', 'xhr']);
 
 /**
  * The storage keys a browser session can live under, in the order they are read.
@@ -97,8 +108,20 @@ export const APP_SESSION_SOURCES = /** @type {const} */ ([
  */
 
 /**
+ * A request the page's main frame sent to Nuxeo on the app origin.
+ *
+ * @typedef {object} SentRequest
+ * @property {number} document which main-frame document sent it, counted from 0
+ * @property {string} method
+ * @property {string} path
+ * @property {boolean} finished
+ * @property {string | null} authorization the header it went out with, after any `page.route`
+ *   rewrite; read when it finished
+ */
+
+/**
  * @typedef {object} ChannelReport
- * @property {'api' | 'app'} channel
+ * @property {'api' | 'app' | 'step'} channel `step` when a step boundary could not be judged
  * @property {boolean} ok
  * @property {string} state `authenticated`, `signed-out`, `not-on-app`, or `rejected`
  * @property {string | null} expected
@@ -236,15 +259,17 @@ function normalisePolicy(policy) {
 }
 
 /**
- * Judge the app channel: the session the page holds, and what `/me` answered for it — asked from
- * inside the page, and replayed from Node with the same header and cookies.
+ * Judge the app channel: the session the page holds, what `/me` answered for it — asked from
+ * inside the page, and replayed from Node with the same header and cookies — and whether the
+ * page's own requests went out with that session's header (`strayRequests`).
  *
  * @param {StoredSession | { problem: string } | null | 'not-on-app'} stored
  * @param {{ inPage: MeAnswer | null, replayed: MeAnswer | null }} answers null when not asked
  * @param {AppPolicy} policy
+ * @param {SentRequest[]} [stray] requests the page sent without the session's header
  * @returns {ChannelReport}
  */
-export function judgeApp(stored, answers, policy) {
+export function judgeApp(stored, answers, policy, stray = []) {
   const { user: expected, required } = normalisePolicy(policy);
   const base = { channel: /** @type {const} */ ('app'), expected, user: null, session: null };
   /** @param {string} problem @param {object} [extra] */
@@ -284,6 +309,21 @@ export function judgeApp(stored, answers, policy) {
       });
     }
   }
+  if (stray.length) {
+    const shown = stray
+      .slice(0, 3)
+      .map(
+        (r) =>
+          `${r.method} ${r.path} ${r.authorization === null ? 'with no Authorization' : 'with another Authorization'}`,
+      )
+      .join('; ');
+    return reject(
+      `the page sent ${stray.length} Nuxeo request(s) without the header of the app's ${session} ` +
+        `(${shown}${stray.length > 3 ? '; …' : ''}), so their results were not obtained as ` +
+        `${expected}; /me, asked with that header, does not speak for them`,
+      { session },
+    );
+  }
   return { ...base, ok: true, state: 'authenticated', user: expected, session, problem: null };
 }
 
@@ -321,9 +361,11 @@ export async function askThroughRequest(request, url) {
     const res = await request.get(url, {
       headers: { Accept: 'application/json' },
       failOnStatusCode: false,
+      maxRedirects: 0,
       // Playwright reads the whole body before resolving, so this bounds it too.
       timeout: PROBE_TIMEOUT_MS,
     });
+    if (isRedirect(res.status())) return redirected(res.status(), res.headers()['location']);
     // A body that is not JSON is no identity: `judgeMe` rejects a null body, so nothing is lost.
     return { status: res.status(), body: await res.json().catch(() => null) };
   } catch (err) {
@@ -355,7 +397,12 @@ export async function askThroughFetch(
     if (authorization) headers['Authorization'] = authorization;
     if (cookie) headers['Cookie'] = cookie;
     // The signal bounds the body read too: an abort rejects `text()` as well as `fetch()`.
-    const res = await fetchImpl(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    const res = await fetchImpl(url, {
+      headers,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (isRedirect(res.status)) return redirected(res.status, res.headers.get('location'));
     const text = await res.text();
     let body = null;
     try {
@@ -417,7 +464,7 @@ export async function askThroughPage(
       const stored = parseStoredSession(found.key, found.storage, found.raw);
       if ('problem' in stored) return { stored, answers: none };
 
-      const nonce = `identityGuard=${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+      const nonce = `${PROBE_MARK}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
       const seen = page
         .waitForResponse((r) => r.url().includes(nonce), { timeout: timeoutMs + 1_000 })
         // No response seen is itself a verdict: the in-page answer is refused below.
@@ -435,8 +482,16 @@ export async function askThroughPage(
             const res = await fetch(url, {
               headers,
               credentials: 'same-origin',
+              redirect: 'manual',
               signal: controller.signal,
             });
+            if (res.type === 'opaqueredirect') {
+              return {
+                status: 0,
+                body: null,
+                error: 'redirected, and a redirected /me is refused',
+              };
+            }
             // Not JSON means no identity, which `judgeMe` rejects; an abort lands in the catch.
             const body = await res.json().catch((err) => {
               if (controller.signal.aborted) throw err;
@@ -456,9 +511,11 @@ export async function askThroughPage(
         },
       );
       const response = await seen;
-      // No address, for whatever reason, is treated as a stub and refused below.
+      // No address, for whatever reason, is treated as a stub and refused below. An answer that
+      // is already refused keeps its own reason: Playwright reports no response for a manual
+      // redirect (measured on Chromium, 1.63), and "no response seen" would hide why.
       const server = response ? await response.serverAddr().catch(() => null) : null;
-      if (!server) {
+      if (!server && !inPage.error) {
         inPage = {
           status: 0,
           body: null,
@@ -497,27 +554,96 @@ export async function askThroughPage(
 }
 
 /**
- * Record every origin the page sends a Nuxeo API request to, other than `appOrigin`. The guard asks
- * `/me` on the app's origin; an app configured with another `nuxeoApiOrigin` would be judged on the
- * wrong server, so any request elsewhere makes `checkPageIdentity` refuse instead of assuming.
+ * What `watchNuxeoApiOrigins` records. It is the set of foreign origins, so a caller that only
+ * passes it on needs no change, and it also keeps the requests sent on the app's own origin.
+ */
+class NuxeoApiTraffic extends Set {
+  /** @type {SentRequest[]} */
+  sent = [];
+  /** The main frame's current document; bumped by each navigation that loads a new one. */
+  document = 0;
+}
+
+/**
+ * Record what the page sends to Nuxeo, from before its first navigation:
+ *
+ * - every origin other than `appOrigin` it sends a Nuxeo API request to. The guard asks `/me` on
+ *   the app's origin; an app configured with another `nuxeoApiOrigin` would be judged on the
+ *   wrong server, so any request elsewhere makes `checkPageIdentity` refuse instead of assuming.
+ * - every request the main frame's HTTP client sends to `/nuxeo/` on the app origin, the ones the
+ *   app's interceptor authenticates, with the `Authorization` it went out with. It is read when
+ *   the request finishes, because that is after any `page.route` rewrite: the `request` event
+ *   reports the header the page set, not the one sent (measured on Chromium, Playwright 1.63).
  *
  * @param {import('@playwright/test').Page} page
  * @param {string} appOrigin
- * @returns {Set<string>} filled as requests are made
+ * @returns {NuxeoApiTraffic} filled as requests are made
  */
 export function watchNuxeoApiOrigins(page, appOrigin) {
   const origin = originOf(appOrigin);
-  /** @type {Set<string>} */
-  const foreign = new Set();
+  const traffic = new NuxeoApiTraffic();
+  /** @type {WeakMap<object, SentRequest>} */
+  const pending = new WeakMap();
   page.on('request', (request) => {
-    try {
-      const url = new URL(request.url());
-      if (url.pathname.startsWith('/nuxeo/') && url.origin !== origin) foreign.add(url.origin);
-    } catch {
-      /* not a URL worth judging */
+    if (fromMainFrame(page, request) && request.isNavigationRequest()) {
+      traffic.document++;
+      return;
     }
+    /** @type {URL} */
+    let url;
+    try {
+      url = new URL(request.url());
+    } catch {
+      return;
+    }
+    if (!url.pathname.startsWith('/nuxeo/')) return;
+    if (url.origin !== origin) {
+      traffic.add(url.origin);
+      return;
+    }
+    if (url.search.includes(PROBE_MARK)) return;
+    if (!APP_REQUEST_TYPES.has(request.resourceType()) || !fromMainFrame(page, request)) return;
+    /** @type {SentRequest} */
+    const record = {
+      document: traffic.document,
+      method: request.method(),
+      path: url.pathname,
+      finished: false,
+      authorization: null,
+    };
+    traffic.sent.push(record);
+    pending.set(request, record);
   });
-  return foreign;
+  page.on('requestfinished', (request) => {
+    const record = pending.get(request);
+    if (!record) return;
+    record.authorization = request.headers()['authorization'] ?? null;
+    record.finished = true;
+  });
+  return traffic;
+}
+
+/**
+ * The requests the current document sent to Nuxeo without `stored`'s header, counted from the
+ * first one that carried it.
+ *
+ * A document acts on the session it holds, so requests a replaced document sent are not this
+ * session's. Nor are those before the session was in use: the app booting signed out before
+ * `h.login()` reloads it, or before its sign-in form sends the header. A document that never
+ * sent the header sent every request without it.
+ *
+ * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
+ * @param {StoredSession} stored
+ * @returns {SentRequest[]}
+ */
+export function strayRequests(traffic, stored) {
+  // By shape, not `instanceof`: a second copy of this module, as a loader can make, would
+  // otherwise switch the check off without a word.
+  const { sent, document } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
+  if (!Array.isArray(sent) || typeof document !== 'number') return [];
+  const current = sent.filter((r) => r.finished && r.document === document);
+  const first = current.findIndex((r) => r.authorization === stored.authorization);
+  return current.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
 }
 
 // ── Checks ──────────────────────────────────────────────────────────────────────────────────────
@@ -555,7 +681,8 @@ export async function checkFetchIdentity(meUrl, authorization, expected, fetchIm
  * @param {AppPolicy} policy
  * @param {string} appOrigin
  * @param {{ fetchImpl?: typeof fetch, foreignApiOrigins?: Set<string>, timeoutMs?: number }} [options]
- *   `foreignApiOrigins` from `watchNuxeoApiOrigins`: any entry is a refusal
+ *   `foreignApiOrigins` from `watchNuxeoApiOrigins`: any entry is a refusal, and so is a request
+ *   it saw leave without the session's header. Without it, only `/me` is asked.
  * @returns {Promise<ChannelReport>}
  */
 export async function checkPageIdentity(
@@ -579,7 +706,8 @@ export async function checkPageIdentity(
     return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
   const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
-  return judgeApp(stored, answers, policy);
+  const stray = stored && !('problem' in stored) ? strayRequests(foreignApiOrigins, stored) : [];
+  return judgeApp(stored, answers, policy, stray);
 }
 
 /**
@@ -674,6 +802,26 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     },
 
     /**
+     * Record a check that could not judge what it was for, so the run's identity is unproven.
+     *
+     * @param {string} at
+     * @param {string} problem
+     */
+    reject(at, problem) {
+      /** @type {ChannelReport} */
+      const report = {
+        channel: 'step',
+        ok: false,
+        state: 'rejected',
+        expected: expectedUser(),
+        user: null,
+        problem,
+      };
+      checks.push({ at, ok: false, reports: [report] });
+      console.log(`  [identity ${at}] ${describeReport(report)}`);
+    },
+
+    /**
      * @param {string} at where in the run, e.g. `at the start` or `after step 3`
      * @param {{ app?: boolean }} [options] `app: false` before the page has loaded the app
      */
@@ -701,6 +849,37 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
       return result;
     },
   };
+}
+
+/** @param {number} status */
+function isRedirect(status) {
+  return status >= 300 && status < 400;
+}
+
+/**
+ * @param {number} status
+ * @param {string | null | undefined} location
+ * @returns {MeAnswer}
+ */
+function redirected(status, location) {
+  return {
+    status,
+    body: null,
+    error: `redirected to ${location || 'nowhere stated'}, and a redirected /me is refused`,
+  };
+}
+
+/**
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Request} request
+ */
+function fromMainFrame(page, request) {
+  try {
+    return request.frame() === page.mainFrame();
+  } catch {
+    // A service worker's request has no frame.
+    return false;
+  }
 }
 
 /** @param {unknown} err */

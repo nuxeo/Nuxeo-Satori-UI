@@ -94,6 +94,8 @@ export async function requireBackend(page, baseUrl, tool) {
     res = await page.request.get(url, {
       failOnStatusCode: false,
       headers: { Authorization: nuxeoBasicAuthHeader() },
+      // Not followed: another server at the destination could name any user.
+      maxRedirects: 0,
     });
   } catch (err) {
     const first = (err instanceof Error ? err.message : String(err)).split('\n')[0];

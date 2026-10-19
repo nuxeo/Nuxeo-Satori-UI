@@ -4,7 +4,6 @@ import {
   assertIdentity,
   checkPageIdentity,
   checkRequestIdentity,
-  judgeApi,
   ME_PATH,
   watchNuxeoApiOrigins,
 } from '../../../scripts/beta-harness/identity-guard.mjs';
@@ -196,14 +195,9 @@ export async function expectAuthenticatedAs(
   api: APIRequestContext,
   username: string,
 ): Promise<void> {
-  // Through the shared guard (NXSAT-643), so the Playwright side and the `.mjs` harnesses
-  // reject the same answers — this used to be its own copy of the rule.
-  const response = await api.get(ME_PATH, { failOnStatusCode: false });
-  const report = judgeApi(
-    { status: response.status(), body: await response.json().catch(() => null) },
-    username,
-    'the API context',
-  );
+  // Through the shared guard's own probe (NXSAT-643), so the Playwright side and the `.mjs`
+  // harnesses reject the same answers, a redirected `/me` included — this used to be its own copy.
+  const report = await checkRequestIdentity(api, ME_PATH, username, 'the API context');
   if (!report.ok) {
     throw new Error(
       `The API context is NOT authenticated as ${username}: ${report.problem}. The ` +

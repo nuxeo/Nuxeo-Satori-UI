@@ -80,12 +80,14 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
   let current = null;
   /**
    * Every step boundary's identity check, in order, so `finish` can drain them all — not only the
-   * latest. `settled` is how an un-awaited one is recognised at the next `step` call.
-   * @type {{ step: StepRecord, promise: Promise<void>, settled: boolean, reported: boolean }[]}
+   * latest. `awaited` is set when an `await` reads the boundary in time (see `step`).
+   * @type {{ step: StepRecord, promise: Promise<void>, awaited: boolean, reported: boolean }[]}
    */
   const boundaries = [];
   /** A boundary that failed while nobody was awaiting it; thrown at the next step or at `finish`. */
   let identityFailure = null;
+  /** A boundary that was not awaited, so it proves nothing about its step; thrown by `finish`. */
+  let unawaitedFailure = null;
 
   function ensureStep() {
     if (!current) {
@@ -119,21 +121,60 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
   }
 
   /**
-   * Before a step opens: throw a boundary failure nobody awaited, and record any boundary still
-   * running as un-awaited — a steps-file defect, because its check then runs concurrently with the
-   * next step instead of between the two. An awaited boundary has always settled by now.
+   * Before a step opens, and in `finish`: record every boundary that was not awaited, then throw
+   * a boundary failure nobody awaited.
+   *
+   * Not awaited, a boundary's check ran alongside the next step's work, so it may have judged
+   * that work's identity instead of its own step's. Whether it has finished by now says nothing:
+   * one that finished quickly ran alongside the next step just the same. So the step records a
+   * failed check, the run's identity is rejected (`manifest.identity.valid: false`), and `finish`
+   * makes the run `precondition-not-met`.
    */
   function closeBoundaries({ throwHeld = true } = {}) {
-    if (throwHeld && identityFailure) throw identityFailure;
     for (const b of boundaries) {
-      if (b.settled || b.reported) continue;
+      if (b.awaited || b.reported) continue;
       b.reported = true;
-      b.step.checks.push({
-        name: 'the identity guard ran between this step and the next',
-        passed: false,
-        detail: 'h.step(...) was not awaited, so the check ran concurrently with the next step — write `await h.step(...)`',
-      });
+      const at = `after step ${b.step.index}`;
+      const detail =
+        `h.step(...) was not awaited, so the identity check ${at} ran alongside the next step and ` +
+        'may have judged that step instead — write `await h.step(...)`';
+      b.step.checks.push({ name: 'the identity guard ran between this step and the next', passed: false, detail });
+      identity?.reject(at, detail);
+      unawaitedFailure ??= new PreconditionError(`identity guard ${at}: ${detail}`);
     }
+    if (throwHeld && identityFailure) throw identityFailure;
+  }
+
+  /**
+   * `promise` as a thenable that marks `boundary` awaited when an `await` reads it in time.
+   *
+   * `await` reads `then` from a job of its own, after the caller's statement and before any timer
+   * or I/O callback. So a read that comes while `sync.now` is set is a chained `.then()` /
+   * `.catch()` — the boundary stays unawaited unless the chain itself is awaited, which is why
+   * the chain is tracked too — and one after `sync.late` is set came after the next step's work
+   * could start.
+   *
+   * @param {Promise<void>} promise
+   * @param {{ awaited: boolean }} boundary
+   * @param {{ now: boolean, late: boolean }} sync
+   * @returns {PromiseLike<void> & Pick<Promise<void>, 'catch' | 'finally'>}
+   */
+  function tracked(promise, boundary, sync) {
+    return {
+      then(onFulfilled, onRejected) {
+        if (!sync.now && !sync.late) boundary.awaited = true;
+        return tracked(promise.then(onFulfilled, onRejected), boundary, sync);
+      },
+      catch(onRejected) {
+        return this.then(undefined, onRejected);
+      },
+      finally(onFinally) {
+        return this.then(
+          (value) => Promise.resolve(onFinally?.()).then(() => value),
+          (err) => Promise.resolve(onFinally?.()).then(() => Promise.reject(err)),
+        );
+      },
+    };
   }
 
   return {
@@ -145,12 +186,13 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      *
      * Under the identity guard, opening a step is also where the previous one is judged: Nuxeo is
      * asked who it ran as before this step does anything (NXSAT-643). That check is asynchronous,
-     * so a steps file must `await h.step(...)`. Not awaited, the step still opens, the check runs
-     * concurrently, and the previous step records a failed check saying so if it is still running
-     * when the next step opens; its verdict counts either way, and `finish` waits for all of them.
+     * so a steps file must `await h.step(...)` — directly, or by awaiting a `.then()` chained on
+     * it. Not awaited, the step still opens and the check runs alongside it, so it cannot speak
+     * for the previous step: that step records a failed check, and the run ends
+     * `precondition-not-met`. `finish` waits for every check either way.
      *
      * @param {string} msg
-     * @returns {Promise<void>}
+     * @returns {PromiseLike<void> & Pick<Promise<void>, 'catch' | 'finally'>}
      */
     step(msg) {
       closeBoundaries();
@@ -160,20 +202,21 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       console.log(`\n[step ${current.index}] ${msg}`);
       if (!identity || !previous) return Promise.resolve();
       const promise = verifyIdentity(previous, `after step ${previous.index}`);
-      const entry = { step: previous, promise, settled: false, reported: false };
+      const entry = { step: previous, promise, awaited: false, reported: false };
       boundaries.push(entry);
       // Held, so it is never an unhandled rejection: a failure nobody awaited is thrown at the next
-      // boundary, or by `finish`. The same promise is returned, so an `await` still receives it.
-      promise.then(
-        () => {
-          entry.settled = true;
-        },
-        (err) => {
-          entry.settled = true;
-          identityFailure ??= err;
-        },
-      );
-      return promise;
+      // boundary, or by `finish`. An `await` still receives it, through `tracked`.
+      promise.catch((err) => {
+        identityFailure ??= err;
+      });
+      const sync = { now: true, late: false };
+      queueMicrotask(() => {
+        sync.now = false;
+      });
+      setImmediate(() => {
+        sync.late = true;
+      });
+      return tracked(promise, entry, sync);
     },
 
     /**
@@ -187,6 +230,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       closeBoundaries({ throwHeld: false });
       await Promise.allSettled(boundaries.map((b) => b.promise));
       if (identityFailure) throw identityFailure;
+      if (unawaitedFailure) throw unawaitedFailure;
       if (identity && current) await verifyIdentity(current, `after step ${current.index}`);
     },
 

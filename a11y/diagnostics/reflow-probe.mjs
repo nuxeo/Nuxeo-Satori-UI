@@ -91,6 +91,8 @@ async function requireBackend() {
   try {
     const res = await fetch(url, {
       headers: { Authorization: nuxeoBasicAuthHeader() },
+      // Not followed: another server at the destination could name any user.
+      redirect: 'manual',
       signal: AbortSignal.timeout(10_000),
     });
     if (res.status !== 200) {

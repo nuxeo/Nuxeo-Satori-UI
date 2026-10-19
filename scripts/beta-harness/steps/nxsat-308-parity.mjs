@@ -766,6 +766,8 @@ export default async function run(page, h, outDir) {
   // was and the invariant could never hold (NXSAT-643).
   const parityMe = await fetch(`${api}/me`, {
     headers: { Accept: 'application/json', Authorization: `Basic ${parityBasic}` },
+    // A redirect has no JSON body, so it answers null below rather than another server's user.
+    redirect: 'manual',
   })
     .then((r) => r.json())
     .catch(noAnswer);
@@ -2089,7 +2091,8 @@ export default async function run(page, h, outDir) {
   await page.reload({ waitUntil: 'load' });
   await waitForList(page, A);
   const me = await page.evaluate(() =>
-    fetch('/nuxeo/api/v1/me')
+    // Not following a redirect: an opaque redirect has no JSON, so it answers null below.
+    fetch('/nuxeo/api/v1/me', { redirect: 'manual' })
       .then((r) => r.json())
       .then((j) => j.id)
       // Runs in the browser, where this module's helpers do not exist; null fails the check below.

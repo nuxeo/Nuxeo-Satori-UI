@@ -30,7 +30,10 @@
  *    `skipHttpCredentials = true` instead, and then runs with no credentials sent.
  * 8. `await h.step(...)`. Every step boundary is where the identity guard asks Nuxeo
  *    who the previous step ran as (NXSAT-643, `identity-guard.mjs`); a result
- *    obtained as `Anonymous` or another user makes the run `precondition-not-met`.
+ *    obtained as `Anonymous` or another user makes the run `precondition-not-met`,
+ *    and so does a boundary that was not awaited, which cannot speak for its step.
+ *    An in-page `fetch` of your own to `/nuxeo/` sends the session's header, as the
+ *    app does: the guard judges every request the page sends to Nuxeo.
  *    A step that deliberately signs the browser in as someone else says so with
  *    `h.signedInAs(user, reason)` first, and one that signs out says
  *    `h.signedOut(reason)`. A second API identity needs its own request context

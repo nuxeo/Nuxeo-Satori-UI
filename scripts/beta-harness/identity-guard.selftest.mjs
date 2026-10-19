@@ -5,8 +5,9 @@
  *
  * The live half — a real guest-enabled Nuxeo rejecting a dropped credential and an adopted guest
  * cookie — is `identity-guard.controls.mjs`. This half pins every rule those runs depend on, so a
- * guard edited into one that accepts `Anonymous`, ignores the stored session, trusts a stubbed
- * `/me`, or lets a step boundary go unchecked turns this red without a server. Each negative
+ * guard edited into one that accepts `Anonymous`, ignores the stored session, trusts a stubbed or
+ * redirected `/me`, ignores what the page's own requests carried, or lets a step boundary go
+ * unchecked or unawaited turns this red without a server. Each negative
  * control names the rule it protects; the positives prove the guard does not reject good results,
  * which would make it an always-red gate that gets bypassed.
  *
@@ -15,7 +16,9 @@
 
 import { createHelpers, PreconditionError } from './helpers.mjs';
 import {
+  checkFetchIdentity,
   checkPageIdentity,
+  checkRequestIdentity,
   createIdentityMonitor,
   isAnonymousMe,
   judgeApi,
@@ -23,6 +26,7 @@ import {
   judgeMe,
   parseStoredSession,
   sameUser,
+  watchNuxeoApiOrigins,
 } from './identity-guard.mjs';
 
 /** @type {{ name: string, kind: 'negative' | 'positive', ok: boolean, detail?: string }[]} */
@@ -253,7 +257,11 @@ control(
  * Just enough of a Playwright `Page`: `url()`, `evaluate()` that runs the real browser-side code
  * against stand-ins for storage and `fetch`, `request.get()`, `context().cookies()` and
  * `clearCookies()`, plus a `fetch` for the Node-side replay. `meFor` answers the page's `/me` by
- * the header sent; `replayFor` answers the replay (default: the same).
+ * the header sent; `replayFor` answers the replay (default: the same). `send()` makes the page
+ * send a request to Nuxeo and finish it, as the app's HTTP client would.
+ *
+ * A redirected `/me` (`redirect*`) behaves as measured on Chromium: followed, the destination
+ * answers as the administrator; not followed, the page sees an opaque redirect, Node a 302.
  */
 function fakePage({
   url = 'http://app.test/#/browse',
@@ -284,12 +292,22 @@ function fakePage({
     inPageHangs: false,
     /** Never answer the Node replay; only an abort ends it. */
     replayHangs: false,
+    /** The in-page `/me` redirects to another origin. */
+    redirectInPage: false,
+    /** The Node replay's `/me` redirects to another origin. */
+    redirectReplay: false,
+    /** `page.request`'s `/me` redirects to another origin. */
+    redirectApi: false,
     waiters: [],
-    listeners: [],
+    /** @type {Record<string, ((request: object) => void)[]>} */
+    listeners: {},
   };
+  const mainFrame = {};
+  const ELSEWHERE = 'https://elsewhere.test/identity';
   const page = {
     state,
     url: () => state.url,
+    mainFrame: () => mainFrame,
     async evaluate(fn, arg) {
       state.evaluations++;
       const store = (area) => ({ getItem: (k) => state.storage[`${area}:${k}`] ?? null });
@@ -307,6 +325,16 @@ function fakePage({
           for (const w of state.waiters.splice(0)) if (w.pred(response)) w.resolve(response);
           if (state.navigateDuringProbe) state.url = state.navigateDuringProbe;
           if (state.inPageHangs) return hangUntilAborted(init?.signal);
+          if (state.redirectInPage) {
+            if (init?.redirect === 'manual') {
+              return {
+                status: 0,
+                type: 'opaqueredirect',
+                json: async () => Promise.reject(new Error('opaque')),
+              };
+            }
+            return { status: 200, type: 'cors', json: async () => ADMIN };
+          }
           return { status: 200, json: async () => state.meFor(auth) };
         },
       };
@@ -322,7 +350,17 @@ function fakePage({
       }
     },
     request: {
-      async get() {
+      async get(_url, options) {
+        if (state.redirectApi) {
+          if (options?.maxRedirects === 0) {
+            return {
+              status: () => 302,
+              headers: () => ({ location: ELSEWHERE }),
+              json: async () => null,
+            };
+          }
+          return { status: () => 200, json: async () => ADMIN };
+        }
         // `apiScript`, when set, answers the calls in order: [gate or null, body] per call.
         const scripted = state.apiScript?.shift();
         if (scripted) {
@@ -336,12 +374,29 @@ function fakePage({
     context: () => ({ clearCookies: async () => undefined, cookies: async () => state.cookies }),
     waitForResponse: (pred) => new Promise((resolve) => state.waiters.push({ pred, resolve })),
     on: (event, fn) => {
-      if (event === 'request') state.listeners.push(fn);
+      (state.listeners[event] ??= []).push(fn);
+    },
+    /**
+     * Make the page send a request and finish it, as the app would. `authorization` is the header
+     * it went out with; `navigation` loads a new main-frame document.
+     *
+     * @param {string} url
+     * @param {{ authorization?: string | null, type?: string, navigation?: boolean }} [options]
+     */
+    send: (url, { authorization = null, type = 'xhr', navigation = false } = {}) => {
+      const request = {
+        url: () => url,
+        method: () => 'GET',
+        resourceType: () => (navigation ? 'document' : type),
+        isNavigationRequest: () => navigation,
+        frame: () => mainFrame,
+        headers: () => (authorization ? { authorization } : {}),
+      };
+      for (const fn of state.listeners['request'] ?? []) fn(request);
+      for (const fn of state.listeners['requestfinished'] ?? []) fn(request);
     },
     /** Make the page send a request, as the app would. */
-    emitRequest: (url) => {
-      for (const fn of state.listeners) fn({ url: () => url });
-    },
+    emitRequest: (url) => page.send(url),
     /** The Node-side replay's `fetch`. */
     fetch: async (url, init) => {
       const auth = init?.headers?.['Authorization'] ?? null;
@@ -352,6 +407,16 @@ function fakePage({
       });
       if (state.navigateDuringReplay) state.url = state.navigateDuringReplay;
       if (state.replayHangs) return hangUntilAborted(init?.signal);
+      if (state.redirectReplay) {
+        if (init?.redirect === 'manual') {
+          return {
+            status: 302,
+            headers: new Headers({ location: ELSEWHERE }),
+            text: async () => '',
+          };
+        }
+        return { status: 200, text: async () => JSON.stringify(ADMIN) };
+      }
       const body = (state.replayFor ?? state.meFor)(auth);
       return { status: 200, text: async () => JSON.stringify(body) };
     },
@@ -534,6 +599,155 @@ const signedIn = {
   );
 }
 
+// ── redirects: another server's answer is no answer ─────────────────────────────────────────────
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.redirectInPage = true;
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
+  control(
+    'negative',
+    'an in-page /me that redirects to another origin is refused, though the destination names the user',
+    !r.ok && /redirect/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const page = fakePage({ storage: signedIn });
+  page.state.redirectReplay = true;
+  const r = await checkPageIdentity(page, 'Administrator', 'http://app.test', {
+    fetchImpl: page.fetch,
+  });
+  control(
+    'negative',
+    'a Node replay whose /me redirects to another origin is refused',
+    !r.ok && /redirect/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const page = fakePage();
+  page.state.redirectApi = true;
+  const r = await checkRequestIdentity(
+    page.request,
+    'http://app.test/nuxeo/api/v1/me',
+    'Administrator',
+  );
+  control(
+    'negative',
+    "page.request's /me that redirects to another origin is refused",
+    !r.ok && /302/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const page = fakePage();
+  page.state.redirectReplay = true;
+  const r = await checkFetchIdentity(
+    'http://app.test/nuxeo/api/v1/me',
+    'Basic QUJD',
+    'Administrator',
+    page.fetch,
+  );
+  control(
+    'negative',
+    "a script's /me (the preflights' channel) that redirects is refused",
+    !r.ok && /302/.test(r.problem ?? ''),
+    r,
+  );
+}
+
+// ── what the page actually sent ─────────────────────────────────────────────────────────────────
+const APP = 'http://app.test';
+const H = 'Basic QUJD';
+/** @param {Parameters<typeof fakePage>[0]} [options] */
+function watchedPage(options) {
+  const page = fakePage({
+    storage: signedIn,
+    meFor: (auth) => (auth === H ? ADMIN : GUEST),
+    ...options,
+  });
+  return { page, traffic: watchNuxeoApiOrigins(page, APP) };
+}
+{
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    "the page's data requests that went without the session's header are refused, though /me answers as the user",
+    !r.ok && /without the header/.test(r.problem ?? '') && /search/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: 'Basic UFU=' });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    "the page's data requests sent with another user's header are refused",
+    !r.ok && /another Authorization/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: null });
+  page.send(`${APP}/nuxeo/site/automation/Document.Query`, { authorization: null });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    "a document that never sent the session's header has every request judged, not none",
+    !r.ok && /2 Nuxeo request/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  // h.login(): the app boots signed out, then the reload starts the document that holds the session.
+  const { page: reloaded, traffic: t1 } = watchedPage();
+  reloaded.send(`${APP}/nuxeo/api/v1/me`, { authorization: null });
+  reloaded.send(`${APP}/`, { navigation: true });
+  reloaded.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  reloaded.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+  const r1 = await checkPageIdentity(reloaded, 'Administrator', APP, {
+    fetchImpl: reloaded.fetch,
+    foreignApiOrigins: t1,
+  });
+  // A sign-in form: the same document, signed out until its own request sends the header.
+  const { page: form, traffic: t2 } = watchedPage();
+  form.send(`${APP}/nuxeo/api/v1/me`, { authorization: null });
+  form.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  form.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+  // Thumbnails load as images, which no interceptor authenticates.
+  form.send(`${APP}/nuxeo/api/v1/id/1/@rendition/thumbnail`, {
+    authorization: null,
+    type: 'image',
+  });
+  const r2 = await checkPageIdentity(form, 'Administrator', APP, {
+    fetchImpl: form.fetch,
+    foreignApiOrigins: t2,
+  });
+  control(
+    'positive',
+    "requests before the session was in use (a boot before h.login()'s reload, or before a sign-in form) are not held against it",
+    r1.ok && r2.ok,
+    { r1, r2 },
+  );
+}
+
 // ── step boundaries ─────────────────────────────────────────────────────────────────────────────
 const quiet = console.log;
 /** @param {() => Promise<void>} fn */
@@ -654,12 +868,92 @@ await silently(async () => {
     release();
     page.state.apiGate = null;
     await Promise.allSettled([two, three]);
-    await h.finish();
+    const thrown = await thrownBy(() => h.finish());
     control(
       'negative',
-      'an un-awaited step boundary is recorded as a failed check on its step',
-      recorder.steps[0].checks.some((c) => !c.passed && /not awaited/.test(c.detail ?? '')),
-      recorder.steps[0].checks,
+      'an un-awaited step boundary is recorded as a failed check on its step, and the run is refused',
+      recorder.steps[0].checks.some((c) => !c.passed && /not awaited/.test(c.detail ?? '')) &&
+        thrown instanceof PreconditionError &&
+        /not awaited/.test(thrown.message),
+      { checks: recorder.steps[0].checks, thrown: String(thrown) },
+    );
+  }
+  {
+    // The review's case: not awaited, and the check finishes during the next step's own work.
+    const page = fakePage({ storage: signedIn });
+    const { h, identity, recorder } = harness(page);
+    await h.step('one');
+    h.step('two'); // not awaited, on purpose
+    await new Promise((r) => setTimeout(r, 20)); // the next step's work; the check settles meanwhile
+    await h.step('three');
+    const thrown = await thrownBy(() => h.finish());
+    control(
+      'negative',
+      "an un-awaited boundary that settled during the next step's work is still refused",
+      thrown instanceof PreconditionError &&
+        /not awaited/.test(thrown.message) &&
+        recorder.steps[0].checks.some((c) => !c.passed && /not awaited/.test(c.detail ?? '')) &&
+        identity.checks.some((c) => !c.ok && c.reports.some((r) => r.channel === 'step')),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    const late = h.step('two');
+    await new Promise((r) => setTimeout(r, 20)); // work done before the boundary is awaited
+    await late;
+    await h.step('three');
+    const thrown = await thrownBy(() => h.finish());
+    control(
+      'negative',
+      'a boundary awaited only after the next step has started work is refused',
+      thrown instanceof PreconditionError && /not awaited/.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
+    const page = fakePage({ storage: signedIn });
+    const { h } = harness(page);
+    await h.step('one');
+    h.step('two').then(() => undefined); // chained, and the chain not awaited
+    await h.step('three');
+    const thrown = await thrownBy(() => h.finish());
+    control(
+      'negative',
+      'a .then() chained on a boundary does not count as awaiting it unless the chain is awaited',
+      thrown instanceof PreconditionError && /not awaited/.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
+    const page = fakePage({ storage: signedIn });
+    const { h, recorder } = harness(page);
+    await h.step('one');
+    await h.step('two').then(() => undefined);
+    await Promise.all([h.step('three')]);
+    await h.finish();
+    control(
+      'positive',
+      'an awaited .then() chain, or Promise.all, on a boundary counts as awaiting it',
+      recorder.steps.every((s) => s.checks.every((c) => c.passed)),
+      recorder.steps,
+    );
+  }
+  {
+    // Through the runner's path: the monitor watches the page's requests from its creation.
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const { h } = harness(page);
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+    page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+    const thrown = await thrownBy(() => h.step('two'));
+    control(
+      'negative',
+      "a step whose data requests went without the session's header is refused at the next boundary",
+      thrown instanceof PreconditionError && /without the header/.test(thrown.message),
+      String(thrown),
     );
   }
   {
@@ -675,7 +969,7 @@ await silently(async () => {
     control(
       'negative',
       'a boundary that failed while nobody awaited it is thrown at the next one',
-      thrown instanceof PreconditionError,
+      thrown instanceof PreconditionError && /Anonymous/.test(thrown.message),
       String(thrown),
     );
   }
@@ -699,10 +993,11 @@ await silently(async () => {
     release();
     page.state.apiGate = null;
     const outcome = await finished;
+    // Its failure, not only "not awaited": that one is thrown whether finish() waited or not.
     control(
       'negative',
       'finish() waits for every pending boundary, not only the latest, and throws its failure',
-      outcome instanceof PreconditionError,
+      outcome instanceof PreconditionError && /Anonymous/.test(outcome.message),
       String(outcome),
     );
   }
@@ -730,7 +1025,7 @@ await silently(async () => {
     control(
       'negative',
       'finish() is not satisfied by a later boundary while an earlier one is still failing',
-      outcome instanceof PreconditionError,
+      outcome instanceof PreconditionError && /Anonymous/.test(outcome.message),
       String(outcome),
     );
   }
@@ -855,7 +1150,7 @@ await silently(async () => {
     control(
       'negative',
       'finish() drains a pending boundary before rethrowing an earlier failure',
-      outcome instanceof PreconditionError && settled,
+      outcome instanceof PreconditionError && /Anonymous/.test(outcome.message) && settled,
       { outcome: String(outcome), settledBeforeRelease: earlyOutcome, settled },
     );
   }

@@ -201,6 +201,8 @@ async function probeApi() {
   try {
     const res = await fetch(`${nuxeoUrl}/nuxeo/api/v1/me`, {
       headers: { Accept: 'application/json', Authorization: `Basic ${auth}` },
+      // Not followed: another server at the destination could name any user.
+      redirect: 'manual',
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return { ok: false, status: res.status, detail: `HTTP ${res.status}` };
