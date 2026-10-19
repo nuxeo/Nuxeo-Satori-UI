@@ -42,7 +42,7 @@ export interface EditMetadataDialogData {
   providers: [provideNxsToast()],
   templateUrl: './edit-metadata-dialog.html',
   styles: [
-    ':host { display: block; } mat-dialog-content { display: flex; flex-direction: column; gap: 8px; } .full-width { width: 100%; }',
+    ':host { display: block; min-width: min(480px, 80vw); } mat-dialog-content { display: flex; flex-direction: column; gap: 8px; } .full-width { width: 100%; }',
   ],
 })
 export class EditMetadataDialogComponent {

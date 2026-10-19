@@ -1,6 +1,6 @@
 :host {
   display: block;
-  min-width: 480px;
+  min-width: min(480px, 80vw);
 }
 
 mat-dialog-content {
