@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync, execToolSync } from './package-command.mjs';
+
 /**
  * Asserts that `@nuxeo/satori-platform` installs for someone with **no GitHub Packages access**.
  *
@@ -41,7 +43,7 @@
  * Usage: node scripts/beta-harness/peer-installability.mjs   (after `npx nx build platform`)
  */
 
-import { execFileSync, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   cpSync,
   existsSync,
@@ -108,7 +110,7 @@ function pack(label, mutate) {
   writeFileSync(join(copy, 'package.json'), `${JSON.stringify(manifest, null, 2)}\n`);
   const out = join(work, `${label}-tarball`);
   mkdirSync(out);
-  execFileSync('npm', ['pack', copy, '--pack-destination', out, '--ignore-scripts', '--silent'], {
+  execToolSync('npm', ['pack', copy, '--pack-destination', out, '--ignore-scripts', '--silent'], {
     env: anonymousEnv(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -127,7 +129,7 @@ function install(label, tarball) {
     `${JSON.stringify({ name: `scratch-${label}`, private: true, version: '0.0.0' }, null, 2)}\n`,
   );
   writeFileSync(join(project, '.npmrc'), 'registry=https://registry.npmjs.org/\n');
-  const result = spawnSync(
+  const result = spawnToolSync(
     'npm',
     ['install', tarball, '--ignore-scripts', '--no-audit', '--no-fund'],
     {

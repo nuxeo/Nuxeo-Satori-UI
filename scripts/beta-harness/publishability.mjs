@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { execToolSync } from './package-command.mjs';
+
 /**
  * Asserts that `@nuxeo/satori-platform` **can actually be published**.
  *
@@ -68,7 +70,6 @@
  * in `dist/` is still refused by npm.
  */
 
-import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -381,7 +382,7 @@ try {
   writeFileSync(join(copy, 'package.json'), JSON.stringify(copied, null, 2));
 
   try {
-    execFileSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
+    execToolSync('npm', ['publish', '--dry-run', '--registry=https://registry.npmjs.org'], {
       cwd: copy,
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -589,7 +590,7 @@ try {
 
       var diagnostics = '';
       try {
-        execFileSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
+        execToolSync('npx', ['tsc', '-p', join(stage, 'tsconfig.json')], {
           cwd: process.cwd(),
           encoding: 'utf8',
           stdio: ['ignore', 'pipe', 'pipe'],

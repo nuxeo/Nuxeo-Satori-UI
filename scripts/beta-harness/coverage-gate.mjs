@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Coverage ratchet gate.
  *
@@ -43,7 +45,6 @@
  * `FLOORS` is not met, or if --update-baseline is needed and has not been given.
  */
 
-import { spawnSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
@@ -172,7 +173,7 @@ if (runTests) {
   console.log('');
   // `--coverage.enabled=true`, not `--coverage`: Nx sees the latter twice and errors
   // with `Expected a single value for option "--coverage "`.
-  const r = spawnSync(
+  const r = spawnToolSync(
     'npx',
     [
       'nx',

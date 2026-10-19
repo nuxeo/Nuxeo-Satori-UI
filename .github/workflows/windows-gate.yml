@@ -1,0 +1,57 @@
+name: Cross-platform Beta tooling
+
+on:
+  pull_request:
+    branches: [main, 'integration/**']
+  push:
+    branches: [main, 'feature/**', 'fix/**', 'integration/**']
+
+permissions:
+  contents: read
+  packages: read
+  security-events: read
+
+jobs:
+  arguments:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Argument transport and negative-control tests
+        run: node --test scripts/beta-harness/package-command.selftest.mjs scripts/e2e-negative-control.selftest.mjs
+
+  windows-gate:
+    runs-on: windows-latest
+    timeout-minutes: 90
+    env:
+      NX_DAEMON: 'false'
+      NX_ISOLATE_PLUGINS: 'false'
+      GH_TOKEN: ${{ github.token }}
+      SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+      AGENTIC_UI_EVIDENCE_DIR: ${{ github.workspace }}/gate-evidence
+      NX_BASE: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+      SANITIZER_AUDIT_BASE_REF: ${{ github.event.pull_request.base.sha || (github.event.before != '0000000000000000000000000000000000000000' && github.event.before) || 'origin/main' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - name: Install the locked dependency tree
+        run: npm ci
+      - name: Full Beta gate on Windows
+        run: npm run beta:gate -- --phase windows-ci
+      - name: Preserve gate verdict and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-beta-gate
+          path: gate-evidence/beta/gates/
+          if-no-files-found: warn

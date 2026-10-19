@@ -689,6 +689,20 @@ Beyond the standing rules in `AGENTS.md`:
 
 ## 8. Where things live
 
+### Running the harness on Windows
+
+Use the same `npm run beta:gate -- --base origin/integration/nxsat-308` command in
+PowerShell as on macOS/Linux. Package-tool subprocesses go through
+`scripts/beta-harness/package-command.mjs`, using Node's executable and the tool's
+JavaScript entry script without shell interpolation. Use `spawnToolSync`,
+`execToolSync` or `spawnTool`; gate descriptors use `tool: 'npm'` or `tool: 'npx'`.
+`checkPackageToolLaunches` rejects direct launches, including `cmd: 'npm'` entries.
+`.gitattributes` keeps text LF on checkout. The dependency-tree symlink controls need
+Windows Developer Mode or administrator privileges; an EPERM there is an environment
+failure, not a passing control. `beta:e2e-negative-control` is a Node script too.
+The `Cross-platform Beta tooling` workflow exercises arguments on Windows, Linux and
+macOS and runs the full gate on Windows, retaining the gate report on failure.
+
 | Artifact                | Location                                                    |
 | ----------------------- | ----------------------------------------------------------- |
 | Phase evidence runner   | `scripts/beta-harness/phase-runner.mjs`                     |

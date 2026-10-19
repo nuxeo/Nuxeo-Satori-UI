@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Public API surface gate for `@nuxeo/satori-platform`.
  *
@@ -38,7 +40,6 @@
  *   node scripts/beta-harness/api-surface.mjs --update   # rewrite the snapshot
  */
 
-import { spawnSync } from 'node:child_process';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -98,10 +99,9 @@ const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
  * uncleanable red, which is the right trade for something that already refuses to read source.
  */
 function ensureFreshDist() {
-  const built = spawnSync('npx', ['nx', 'build', 'platform'], {
+  const built = spawnToolSync('npx', ['nx', 'build', 'platform'], {
     cwd: ROOT,
     encoding: 'utf8',
-    shell: process.platform === 'win32',
     maxBuffer: 10 * 1024 * 1024, // 10MB buffer to handle large build output
   });
 

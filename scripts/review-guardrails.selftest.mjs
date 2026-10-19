@@ -9008,6 +9008,31 @@ expectRed(
   /demo\.mjs:2 defaults NUXEO_USER [\s\S]*demo\.mjs:3 defaults NUXEO_PASS [\s\S]*demo\.mjs:5 defaults NUXEO_AUTH /,
 );
 
+for (const [label, body] of [
+  ['spawn', "import { spawnSync } from 'node:child_process'; spawnSync('npm', ['ls']);"],
+  ['gate entry', "const gate = { cmd: 'npm', argv: ['ls'] };"],
+  [
+    'npx shim',
+    "import { execFileSync as run } from 'node:child_process'; run('npx.cmd', ['tsc']);",
+  ],
+  ['nx namespace', "import * as cp from 'node:child_process'; cp.spawn('nx', ['build']);"],
+]) {
+  expectRed(
+    `direct package tool ${label}`,
+    'checkPackageToolLaunches',
+    { 'scripts/direct.mjs': body },
+    null,
+    /direct\.mjs:\d+ starts a package tool directly/,
+  );
+}
+expectGreen(
+  'helper calls, comments and fixture strings remain allowed',
+  'checkPackageToolLaunches',
+  {
+    'scripts/good.mjs': `// spawnSync('npm', []);\nconst fixture = "spawnSync('npx', [])";\nspawnToolSync('npm', ['ls']);\nconst gate = { tool: 'npx', argv: ['nx'] };`,
+  },
+);
+
 /* ---------------- report ---------------- */
 
 const total = negative + positive;

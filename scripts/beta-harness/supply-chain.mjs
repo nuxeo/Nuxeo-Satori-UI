@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Supply-chain gate — SCA with teeth, and a dependency-surface check.
  *
@@ -45,7 +47,6 @@
  * whose cited mitigation no longer exists in the code it names.
  */
 
-import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from 'typescript';
@@ -78,7 +79,7 @@ const fail = (msg) => problems.push(msg);
 
 /** @param {string[]} args */
 function audit(args) {
-  const res = spawnSync('npm', ['audit', '--json', ...args], {
+  const res = spawnToolSync('npm', ['audit', '--json', ...args], {
     cwd: repoRoot,
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,

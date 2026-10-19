@@ -9587,7 +9587,55 @@ function checkSatoriPrimitivesRegisteredInOrder() {
   }
 }
 
+/** Package-tool shims cannot be executed directly on Windows. Inspect syntax, not comments. */
+function checkPackageToolLaunches() {
+  const files = ['scripts', 'tools'].flatMap((dir) =>
+    walk(dir, (file) => /\.[cm]?[jt]s$/.test(file)),
+  );
+  const methods = new Set(['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'execFileSync']);
+  const isTool = (node) =>
+    node && ts.isStringLiteralLike(node) && /^(?:npm|npx|nx)(?:\.cmd)?(?:\s|$)/i.test(node.text);
+  for (const file of files) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    const aliases = new Set(methods);
+    for (const statement of source.statements) {
+      if (
+        !ts.isImportDeclaration(statement) ||
+        !/^(node:)?child_process$/.test(statement.moduleSpecifier.text)
+      )
+        continue;
+      for (const binding of statement.importClause?.namedBindings?.elements ?? []) {
+        if (methods.has(binding.propertyName?.text ?? binding.name.text))
+          aliases.add(binding.name.text);
+      }
+    }
+    const visit = (node) => {
+      const name =
+        ts.isCallExpression(node) &&
+        (ts.isIdentifier(node.expression)
+          ? node.expression.text
+          : ts.isPropertyAccessExpression(node.expression)
+            ? node.expression.name.text
+            : '');
+      const launch = name && aliases.has(name) && isTool(node.arguments[0]);
+      const entry =
+        ts.isPropertyAssignment(node) &&
+        (node.name.text === 'cmd' || node.name.text === 'command') &&
+        isTool(node.initializer);
+      if (launch || entry) {
+        const line = source.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+        fail(
+          `${file}:${line} starts a package tool directly; use scripts/beta-harness/package-command.mjs.`,
+        );
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
 const GUARDRAILS = [
+  checkPackageToolLaunches,
   checkThemeTokens,
   checkDocsNumbering,
   checkNoReviewCorpusChurn,

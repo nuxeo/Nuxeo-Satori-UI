@@ -1,4 +1,6 @@
 #!/usr/bin/env node
+import { spawnToolSync } from './package-command.mjs';
+
 /**
  * Beta phase verification gate.
  *
@@ -172,7 +174,7 @@ const ALL_GATES = [
     // Both suites behind one gate, via the npm script, so adding the status report did not add a
     // gate. The count in the verdict line is quoted in docs and in CLAUDE.md; a second entry here
     // would have made all of those wrong for a diagnostic that cannot break the application.
-    cmd: 'npm',
+    tool: 'npm',
     argv: ['run', '--silent', 'review:crowdin-selftest'],
     // The negative/positive split is the evidence, so surface it on a pass too.
     echoOnPass: true,
@@ -222,19 +224,19 @@ const ALL_GATES = [
   {
     id: 'lint',
     label: 'Affected lint',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'lint', `--base=${base}`],
   },
   {
     id: 'test',
     label: 'Affected tests',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'test', `--base=${base}`],
   },
   {
     id: 'build',
     label: 'Affected build',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'build', `--base=${base}`],
   },
   // Libraries have no `build` target — Nx's module-boundary rule forbids a
@@ -245,7 +247,7 @@ const ALL_GATES = [
   {
     id: 'typecheck',
     label: 'Affected typecheck',
-    cmd: 'npx',
+    tool: 'npx',
     argv: ['nx', 'affected', '-t', 'typecheck', `--base=${base}`],
   },
   // `typecheck` above covers library sources only: it runs the per-project targets, which
@@ -403,7 +405,7 @@ const ALL_GATES = [
     label: 'Customer extension guardrails',
     // The npm script, so the gate and CI run the same two things: the guardrail against our
     // reference library, which proves it passes, and its selftest, which proves it can fail.
-    cmd: 'npm',
+    tool: 'npm',
     argv: ['run', '--silent', 'beta:customer-guardrails'],
     echoOnPass: true,
   },
@@ -442,7 +444,7 @@ const results = [];
 for (const gate of selected) {
   process.stdout.write(`[run ] ${gate.label} ... `);
   const started = Date.now();
-  const proc = spawnSync(gate.cmd, gate.argv, {
+  const proc = spawnToolSync(gate.tool ?? gate.cmd, gate.argv, {
     encoding: 'utf8',
     maxBuffer: 64 * 1024 * 1024,
     env: {
@@ -473,7 +475,7 @@ for (const gate of selected) {
     passed,
     exitCode: proc.status,
     durationMs: ms,
-    command: `${gate.cmd} ${gate.argv.join(' ')}`,
+    command: `${gate.tool ?? gate.cmd} ${gate.argv.join(' ')}`,
     outputTail: lastLines(output, tail),
   });
 

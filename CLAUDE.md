@@ -61,13 +61,23 @@ ports and components they describe were removed with adf-hx (NXSAT-635, NXSAT-63
 `nxs-` component starts from the `satori-component` generator — `AGENTS/00-architecture.md`,
 "Adding a component".
 
-## The gate — six, not three
+## The gate
 
 ```bash
 npm run beta:gate -- --phase <id>     # lockfile, guardrails, lint, test, build, typecheck
 npm run beta:gate -- --gates lockfile,guardrails,lint   # fast inner loop
 npm run beta:evidence -- <phase-id>   # exits non-zero if any check fails
 ```
+
+The same commands run in PowerShell on Windows and in macOS/Linux terminals. Scripts
+start npm, npx and nx through `scripts/beta-harness/package-command.mjs`, which invokes
+their JavaScript entry points with Node without a shell. Keep arguments as arrays;
+direct package-tool launches are rejected by `checkPackageToolLaunches`. The
+`Cross-platform Beta tooling` workflow tests argument transport on all three systems
+and runs the full gate on Windows. Its first real failure still stops the runner.
+Windows needs permission to create symbolic links for the dependency-tree controls
+(Developer Mode or an administrator terminal). `.gitattributes` keeps text LF on checkout.
+`npm run beta:e2e-negative-control` also runs through Node on all three systems.
 
 Two traps that have each cost a phase:
 

@@ -29,7 +29,7 @@
  */
 
 import { execFile } from 'node:child_process';
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
 import { delimiter, dirname, join, resolve } from 'node:path';
 import { promisify } from 'node:util';
@@ -143,10 +143,12 @@ function lockWith(entries) {
  */
 function withFakeNpm(name, output) {
   const dir = fixture(name, { 'fake-bin/ls.json': output });
-  const npm = join(dir, 'fake-bin', 'npm');
-  writeFileSync(npm, '#!/bin/sh\ncat "$(dirname "$0")/ls.json"\n');
-  chmodSync(npm, 0o755);
-  return { dir, env: { ...process.env, PATH: `${dirname(npm)}${delimiter}${process.env.PATH}` } };
+  const npm = join(dir, 'fake-bin', 'npm-cli.js');
+  writeFileSync(
+    npm,
+    `process.stdout.write(require('node:fs').readFileSync(require('node:path').join(__dirname, 'ls.json'), 'utf8'));`,
+  );
+  return { dir, env: { ...process.env, npm_execpath: npm } };
 }
 
 // -------------------------------------------------------------------------------- harness ----
