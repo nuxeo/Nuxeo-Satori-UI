@@ -10,6 +10,9 @@ The user and group picker is a field that finds a user or a group as the user ty
 one chosen. It is the field behind adding a permission, sharing a saved search and assigning a task,
 as Web UI's `nuxeo-user-suggestion` is. Use it wherever a screen needs one principal that Nuxeo knows.
 
+With `multiple`, choose several users and groups as chips. Each selection
+stays while searching for the next; already selected entries are excluded from the suggestions.
+
 ## Key features
 
 - **Searches as you type, as Web UI does.** From three characters, 300 milliseconds after the last
@@ -55,6 +58,19 @@ clear button's name are translated with ngx-translate, under `satori-components.
 `satori-components.user-group-picker.*`; `providePlatformEnglishFallback()` supplies the English. It
 has no registered ID: place it in a template by its selector.
 
+### Multiple values
+
+Set `multiple` and bind an array: `readonly NxsPrincipal[]` through
+`value` or the form control. Selection order is preserved, duplicates are excluded, and removing
+the last chip emits `[]`. Without `multiple`, the value remains one principal or
+`null`. Typing an unselected term is an `nxsChooseFromList` error in either mode, even when
+other chips are selected. Resetting the form replaces all chips and clears the pending query.
+
+
+<Canvas of={PickerStories.Multiple} />
+
+<Canvas of={PickerStories.MultipleDisabled} />
+
 ## Where its data comes from
 
 For users and groups together the picker runs Nuxeo's `UserGroup.Suggestion` operation, as Web UI
@@ -97,4 +113,8 @@ carries the application's sign-in, so the server decides whom the user may see.
   politely. The hint for too few characters is the field's description.
 - **Errors.** Once the field is left, an empty required field and text that was not chosen show an
   error under it, linked to the input.
+- **Multiple chips.** The field label names the text input. **Left/Right** move between chips,
+  **Backspace** on an empty input focuses the last chip; **Backspace/Delete** removes a focused
+  chip. Each remove button is named "Remove" followed by the entry label. Disabling the form also
+  disables the input and chip removal.
 - **Clear.** The x button that removes the choice is named "Clear".

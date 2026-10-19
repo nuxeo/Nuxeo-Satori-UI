@@ -1,8 +1,8 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { FormControl, ReactiveFormsModule } from '@angular/forms';
-import { of, throwError } from 'rxjs';
+import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Subject, of, throwError } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { NuxeoApiBase, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
@@ -51,15 +51,29 @@ describe('nxsDocumentSuggestionQuery', () => {
 @Component({
   standalone: true,
   imports: [NxsDocumentReferenceInputComponent, ReactiveFormsModule],
-  template: `<nxs-document-reference-input
-    label="Related contract"
-    [documentTypes]="types()"
-    [idProperty]="idProperty()"
-    [formControl]="reference"
-    (documentChange)="chosen.push($event)"
-  />`,
+  template: `@if (multiple()) {
+      <nxs-document-reference-input
+        label="Related contract"
+        multiple
+        [formControl]="many"
+        [idProperty]="idProperty()"
+      />
+    } @else {
+      <nxs-document-reference-input
+        label="Related contract"
+        [documentTypes]="types()"
+        [idProperty]="idProperty()"
+        [formControl]="reference"
+        (documentChange)="chosen.push($event)"
+      />
+    }`,
 })
 class HostComponent {
+  readonly multiple = signal(false);
+  readonly many = new FormControl<readonly string[]>([], {
+    nonNullable: true,
+    validators: Validators.required,
+  });
   readonly types = signal<readonly string[]>([]);
   readonly idProperty = signal<'uid' | 'path'>('uid');
   readonly reference = new FormControl<string | null>(null);
@@ -172,6 +186,17 @@ describe('NxsDocumentReferenceInputComponent', () => {
     expect(host.reference.hasError('nxsChooseFromList')).toBe(true);
   });
 
+  it('clears pending text and validation when a single-value form resets to null', async () => {
+    await type('contract');
+    expect(host.reference.hasError('nxsChooseFromList')).toBe(true);
+    host.reference.reset();
+    await render();
+    expect(input().value).toBe('');
+    expect(host.reference.value).toBeNull();
+    expect(host.reference.valid).toBe(true);
+    expect(options()).toHaveLength(0);
+  });
+
   it('says the search failed rather than throwing', async () => {
     nxqlSearch.mockReturnValue(throwError(() => ({ status: 400 })));
     await type('a -b "c');
@@ -214,5 +239,114 @@ describe('NxsDocumentReferenceInputComponent', () => {
       "SELECT * FROM Document WHERE ecm:uuid = 'x\\' OR 1=1 OR \\'y'",
       1,
     );
+  });
+  async function multiple(): Promise<void> {
+    host.multiple.set(true);
+    await render();
+  }
+  const chips = (): HTMLElement[] => [...root().querySelectorAll<HTMLElement>('mat-chip-row')];
+
+  it('collects distinct documents in order and keeps them during the next search', async () => {
+    await multiple();
+    await type('contract');
+    options()[0].click();
+    await render();
+    expect(host.many.value).toEqual(['c1']);
+    expect(input().value).toBe('');
+    await type('contract');
+    expect(host.many.hasError('nxsChooseFromList')).toBe(true);
+    expect(options().map((option) => option.getAttribute('data-uid'))).toEqual(['n1']);
+    options()[0].click();
+    await render();
+    expect(host.many.value).toEqual(['c1', 'n1']);
+    expect(host.many.valid).toBe(true);
+    expect(chips()).toHaveLength(2);
+  });
+
+  it('looks up stored document titles while keeping unreadable ids', async () => {
+    await multiple();
+    host.many.setValue(['c1', 'gone']);
+    await render();
+    expect(chips()[0].textContent).toContain('Supplier contract');
+    expect(chips()[1].textContent).toContain('gone');
+    expect(host.many.value).toEqual(['c1', 'gone']);
+    expect(input().labels?.[0].textContent).toContain('Related contract');
+    root()
+      .querySelector<HTMLButtonElement>('button[aria-label="Remove Supplier contract"]')
+      ?.click();
+    await render();
+    expect(host.many.value).toEqual(['gone']);
+  });
+
+  it('stores paths and excludes a selected path from subsequent results', async () => {
+    host.idProperty.set('path');
+    await multiple();
+    await type('contract');
+    options()[0].click();
+    await render();
+    expect(host.many.value).toEqual(['/default-domain/workspaces/Supplier contract']);
+    await type('contract');
+    expect(options().map((option) => option.getAttribute('data-uid'))).toEqual(['n1']);
+  });
+
+  it('shows each stored title as it arrives while another lookup is still pending', async () => {
+    await multiple();
+    const slow = new Subject<{ entries: NuxeoDocument[] }>();
+    nxqlSearch
+      .mockReturnValueOnce(slow)
+      .mockReturnValueOnce(of({ entries: [doc('n1', 'Contract notes', 'Note')] }));
+    host.many.setValue(['c1', 'n1']);
+    await render();
+    expect(chips()[0].textContent).toContain('c1');
+    expect(chips()[1].textContent).toContain('Contract notes');
+    slow.next({ entries: [doc('c1', 'Supplier contract')] });
+    await render();
+    expect(chips()[0].textContent).toContain('Supplier contract');
+    slow.complete();
+  });
+
+  it('keeps successful titles when another lookup fails and ignores replaced values', async () => {
+    await multiple();
+    const delayed = new Subject<{ entries: NuxeoDocument[] }>();
+    nxqlSearch.mockReturnValueOnce(delayed);
+    host.many.setValue(['c1']);
+    await render();
+    host.many.setValue(['n1', 'secret']);
+    nxqlSearch
+      .mockReturnValueOnce(of({ entries: [doc('n1', 'Contract notes', 'Note')] }))
+      .mockReturnValueOnce(throwError(() => ({ status: 403 })));
+    await render();
+    delayed.next({ entries: [doc('c1', 'Old title')] });
+    delayed.complete();
+    await render();
+    expect(chips().map((chip) => chip.textContent?.trim())).toEqual([
+      'Contract notes cancel',
+      'secret cancel',
+    ]);
+    expect(host.many.value).toEqual(['n1', 'secret']);
+  });
+
+  it('removes with Delete, validates an empty list and disables chip removal', async () => {
+    await multiple();
+    host.many.setValue(['c1']);
+    await render();
+    host.many.disable();
+    await render();
+    expect(input().disabled).toBe(true);
+    expect(root().querySelector<HTMLButtonElement>('button[matChipRemove]')?.disabled).toBe(true);
+    host.many.enable();
+    await render();
+    const cell = chips()[0].querySelector<HTMLElement>('[role="gridcell"]') as HTMLElement;
+    cell.focus();
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', keyCode: 46, bubbles: true }));
+    await render();
+    expect(host.many.value).toEqual([]);
+    expect(host.many.hasError('required')).toBe(true);
+    host.many.setValue(['n1']);
+    await render();
+    host.many.reset();
+    await render();
+    expect(chips()).toHaveLength(0);
+    expect(input().value).toBe('');
   });
 });

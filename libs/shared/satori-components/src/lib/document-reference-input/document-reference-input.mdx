@@ -10,6 +10,9 @@ The document reference input finds a document as the user types and returns the 
 chosen, as Web UI's `nuxeo-document-suggestion` does. Use it for a property that points at another
 document: a related contract, a parent case, a template.
 
+With `multiple`, choose several documents as chips. Each selection
+stays while searching for the next; already selected entries are excluded from the suggestions.
+
 ## Key features
 
 - **Searches the repository's full text** from three characters, twenty results at a time, 300
@@ -62,6 +65,19 @@ Its statuses and the clear button's name are translated under `satori-components
 `providePlatformEnglishFallback()` supplies the English. It has no registered ID: place it in a
 template by its selector.
 
+### Multiple values
+
+Set `multiple` and bind an array: `readonly string[]` through
+`value` or the form control. Selection order is preserved, duplicates are excluded, and removing
+the last chip emits `[]`. Without `multiple`, the value remains one uid or path or
+`null`. Typing an unselected term is an `nxsChooseFromList` error in either mode, even when
+other chips are selected. Resetting the form replaces all chips and clears the pending query.
+Stored ids are resolved independently; missing or unreadable documents remain as chips labelled by their id. `idProperty="path"` applies to every reference. `documentChange` keeps reporting the individual document selected, or `null` on removal; the ordered array is available from `valueChange`.
+
+<Canvas of={ReferenceStories.Multiple} />
+
+<Canvas of={ReferenceStories.MultipleDisabled} />
+
 ## Where its data comes from
 
 The input runs the NXQL query of Web UI's `default_document_suggestion` page provider through
@@ -96,4 +112,8 @@ looks them up by uid.
   technology; the title and the path are read as separate words.
 - **Statuses are announced.** The number of results, "No results" and a failed search are announced
   politely, and the hint for too few characters is the field's description.
+- **Multiple chips.** The field label names the text input. **Left/Right** move between chips,
+  **Backspace** on an empty input focuses the last chip; **Backspace/Delete** removes a focused
+  chip. Each remove button is named "Remove" followed by the entry label. Disabling the form also
+  disables the input and chip removal.
 - **Clear.** The x button that removes the choice is named "Clear".

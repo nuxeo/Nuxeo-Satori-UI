@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of, throwError, type Observable } from 'rxjs';
-import { expect, userEvent, waitFor, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 
 import {
   DocumentDetailService,
@@ -11,7 +11,7 @@ import {
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { NxsUserGroupPickerComponent } from './user-group-picker.component';
+import { NxsUserGroupPickerComponent, type NxsPrincipal } from './user-group-picker.component';
 
 const PEOPLE: readonly UserGroupSuggestion[] = [
   {
@@ -89,6 +89,7 @@ const meta: Meta<NxsUserGroupPickerComponent> = {
     hint: '',
     required: false,
     disabled: false,
+    multiple: false,
     value: null,
   },
   argTypes: {
@@ -105,13 +106,24 @@ const meta: Meta<NxsUserGroupPickerComponent> = {
     hint: { control: 'text', description: 'Help under the field, already translated.' },
     required: { control: 'boolean' },
     disabled: { control: 'boolean' },
+    multiple: {
+      control: 'boolean',
+      description: 'Choose several entries as removable chips; value is an ordered array.',
+    },
     value: { control: false, description: 'The principal chosen, or null. Two-way.' },
   },
   decorators: [applicationConfig({ providers: directory() })],
   render: (args) => ({
-    props: args,
+    props: {
+      ...args,
+      showValue: (value: NxsPrincipal | readonly NxsPrincipal[] | null) =>
+        Array.isArray(value)
+          ? value.map((entry) => entry.prefixedId).join(', ')
+          : ((value as NxsPrincipal | null)?.prefixedId ?? '—'),
+    },
     template: `<nxs-user-group-picker
   [label]="label"
+  [multiple]="multiple"
   [search]="search"
   [minChars]="minChars"
   [hint]="hint"
@@ -119,7 +131,7 @@ const meta: Meta<NxsUserGroupPickerComponent> = {
   [disabled]="disabled"
   [(value)]="value"
 />
-<output class="story-value">{{ value?.prefixedId ?? '—' }}</output>`,
+<output class="story-value">{{ showValue(value) }}</output>`,
   }),
 };
 
@@ -182,5 +194,44 @@ export const Disabled: Story = {
   args: {
     disabled: true,
     value: { id: 'jsmith', label: 'Jane Smith', kind: 'user', prefixedId: 'user:jsmith' },
+  },
+};
+
+/** Pick several principals, remove one by its name, then use the keyboard to remove the last. */
+export const Multiple: Story = {
+  args: { multiple: true, value: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const field = canvas.getByRole('combobox', { name: 'Grant to' });
+    await userEvent.type(field, 'smi');
+    await userEvent.click(await within(document.body).findByRole('option', { name: /Jane Smith/ }));
+    await expect(field).toHaveValue('');
+    await userEvent.type(field, 'cla');
+    await userEvent.click(
+      await within(document.body).findByRole('option', { name: /Claims team/ }),
+    );
+    await expect(canvasElement.querySelector('output')).toHaveTextContent(
+      'user:jsmith, group:claims-team',
+    );
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove Jane Smith' }));
+    await expect(canvasElement.querySelector('output')).toHaveTextContent('group:claims-team');
+    await userEvent.click(field);
+    // Material 20 reads keyCode; userEvent.keyboard supplies zero for synthetic events.
+    fireEvent.keyDown(field, { key: 'Backspace', code: 'Backspace', keyCode: 8 });
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('role', 'gridcell'));
+    fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: 'Backspace',
+      code: 'Backspace',
+      keyCode: 8,
+    });
+    await waitFor(() => expect(canvasElement.querySelectorAll('mat-chip-row')).toHaveLength(0));
+  },
+};
+
+export const MultipleDisabled: Story = {
+  args: {
+    multiple: true,
+    disabled: true,
+    value: [{ id: 'jsmith', label: 'Jane Smith', kind: 'user', prefixedId: 'user:jsmith' }],
   },
 };

@@ -35,14 +35,23 @@ const ADMINS: UserGroupSuggestion = {
 @Component({
   standalone: true,
   imports: [NxsUserGroupPickerComponent, ReactiveFormsModule],
-  template: `<nxs-user-group-picker
-    label="Grant to"
-    [search]="search()"
-    [minChars]="minChars()"
-    [formControl]="principal"
-  />`,
+  template: `@if (multiple()) {
+      <nxs-user-group-picker label="Grant to" multiple [formControl]="many" [search]="search()" />
+    } @else {
+      <nxs-user-group-picker
+        label="Grant to"
+        [search]="search()"
+        [minChars]="minChars()"
+        [formControl]="principal"
+      />
+    }`,
 })
 class HostComponent {
+  readonly multiple = signal(false);
+  readonly many = new FormControl<readonly NxsPrincipal[]>([], {
+    nonNullable: true,
+    validators: Validators.required,
+  });
   readonly search = signal<NxsPrincipalSearch>('users-and-groups');
   readonly minChars = signal(3);
   readonly principal = new FormControl<NxsPrincipal | null>(null, Validators.required);
@@ -281,5 +290,82 @@ describe('NxsUserGroupPickerComponent', () => {
     host.principal.disable();
     await render();
     expect(input().disabled).toBe(true);
+  });
+  async function multiple(): Promise<void> {
+    host.multiple.set(true);
+    await render();
+  }
+  const chips = (): HTMLElement[] => [...root().querySelectorAll<HTMLElement>('mat-chip-row')];
+
+  it('collects distinct principals in order and keeps them when typing the next search', async () => {
+    await multiple();
+    await type('adm');
+    await settle();
+    options()[0].click();
+    await render();
+    expect(input().value).toBe('');
+    expect(host.many.value.map((p) => p.prefixedId)).toEqual(['user:Administrator']);
+    await type('adm');
+    await settle();
+    expect(host.many.hasError('nxsChooseFromList')).toBe(true);
+    expect(options().map((option) => option.getAttribute('data-principal'))).toEqual([
+      'group:administrators',
+    ]);
+    options()[0].click();
+    await render();
+    expect(host.many.value.map((p) => p.prefixedId)).toEqual([
+      'user:Administrator',
+      'group:administrators',
+    ]);
+    expect(host.many.valid).toBe(true);
+    expect(chips()).toHaveLength(2);
+  });
+
+  it('removes just the named principal and validates the empty required list', async () => {
+    await multiple();
+    host.many.setValue([
+      { id: 'same', label: 'Same user', kind: 'user', prefixedId: 'user:same' },
+      { id: 'same', label: 'Same group', kind: 'group', prefixedId: 'group:same' },
+    ]);
+    await render();
+    expect(input().labels?.[0].textContent).toContain('Grant to');
+    root().querySelector<HTMLButtonElement>('button[aria-label="Remove Same user"]')?.click();
+    await render();
+    expect(host.many.value.map((p) => p.prefixedId)).toEqual(['group:same']);
+    root().querySelector<HTMLButtonElement>('button[aria-label="Remove Same group"]')?.click();
+    input().dispatchEvent(new Event('blur'));
+    await render();
+    expect(host.many.value).toEqual([]);
+    expect(host.many.hasError('required')).toBe(true);
+    expect(text('mat-error')).toBe('Required');
+  });
+
+  it('removes the focused chip with Delete and keeps typed text out of the value', async () => {
+    await multiple();
+    host.many.setValue([{ id: 'jdoe', label: 'Jane Doe', kind: 'user', prefixedId: 'user:jdoe' }]);
+    await render();
+    const cell = chips()[0].querySelector<HTMLElement>('[role="gridcell"]') as HTMLElement;
+    cell.focus();
+    cell.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete', keyCode: 46, bubbles: true }));
+    await render();
+    expect(host.many.value).toEqual([]);
+    await type('Jane');
+    expect(host.many.value).toEqual([]);
+    expect(host.many.hasError('nxsChooseFromList')).toBe(true);
+  });
+
+  it('disables input and chip removal through the form and resets from outside', async () => {
+    await multiple();
+    host.many.setValue([{ id: 'jdoe', label: 'Jane Doe', kind: 'user', prefixedId: 'user:jdoe' }]);
+    await render();
+    host.many.disable();
+    await render();
+    expect(input().disabled).toBe(true);
+    expect(root().querySelector<HTMLButtonElement>('button[matChipRemove]')?.disabled).toBe(true);
+    host.many.enable();
+    host.many.reset();
+    await render();
+    expect(chips()).toHaveLength(0);
+    expect(input().value).toBe('');
   });
 });

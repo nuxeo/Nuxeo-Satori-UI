@@ -1,28 +1,64 @@
 <mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
   <mat-label>{{ label() }}</mat-label>
-  <input
-    matInput
-    type="text"
-    autocomplete="off"
-    [matAutocomplete]="auto"
-    [value]="text()"
-    [required]="required()"
-    [disabled]="isDisabled()"
-    [errorStateMatcher]="errorState"
-    (input)="onInput($event)"
-    (blur)="blurred()"
-  />
-  @if (value() && !isDisabled()) {
-    <button
-      matIconSuffix
-      mat-icon-button
-      type="button"
-      class="nxs-picker__clear"
-      [attr.aria-label]="'satori-components.pickers.clear' | translate"
-      (click)="clear()"
+  @if (multiple()) {
+    <mat-chip-grid
+      #grid
+      [attr.aria-label]="label()"
+      [disabled]="isDisabled()"
+      [required]="required()"
+      [errorStateMatcher]="errorState"
     >
-      <mat-icon aria-hidden="true">close</mat-icon>
-    </button>
+      @for (principal of chosen(); track principal.prefixedId) {
+        <mat-chip-row [attr.data-principal]="principal.prefixedId" (removed)="remove(principal)">
+          {{ principal.label }}
+          <button
+            matChipRemove
+            type="button"
+            [attr.aria-label]="
+              'satori-components.pickers.remove' | translate: { name: principal.label }
+            "
+          >
+            <mat-icon aria-hidden="true">cancel</mat-icon>
+          </button>
+        </mat-chip-row>
+      }
+    </mat-chip-grid>
+    <!-- A combobox is a sibling of the grid so its children remain chip rows. -->
+    <input
+      autocomplete="off"
+      [id]="inputId"
+      [matChipInputFor]="grid"
+      [matAutocomplete]="auto"
+      [value]="text()"
+      (input)="onInput($event)"
+      (blur)="blurred()"
+    />
+  } @else {
+    <input
+      matInput
+      type="text"
+      autocomplete="off"
+      [id]="inputId"
+      [matAutocomplete]="auto"
+      [value]="text()"
+      [required]="required()"
+      [disabled]="isDisabled()"
+      [errorStateMatcher]="errorState"
+      (input)="onInput($event)"
+      (blur)="blurred()"
+    />
+    @if (chosen().length && !isDisabled()) {
+      <button
+        matIconSuffix
+        mat-icon-button
+        type="button"
+        class="nxs-picker__clear"
+        [attr.aria-label]="'satori-components.pickers.clear' | translate"
+        (click)="clear()"
+      >
+        <mat-icon aria-hidden="true">close</mat-icon>
+      </button>
+    }
   }
   @if (unmatched()) {
     <mat-error>{{ 'satori-components.pickers.choose-from-list' | translate }}</mat-error>
@@ -62,7 +98,7 @@
         }}</mat-option>
       }
       @case ('found') {
-        @for (principal of finder.state().results; track principal.prefixedId) {
+        @for (principal of options(); track principal.prefixedId) {
           <mat-option [value]="principal" [attr.data-principal]="principal.prefixedId">
             <mat-icon aria-hidden="true">{{
               principal.kind === 'group' ? 'group' : 'person'

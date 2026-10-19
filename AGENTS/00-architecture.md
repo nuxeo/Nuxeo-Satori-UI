@@ -127,6 +127,15 @@ yet. The base library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 
+**Picker selection modes (NXSAT-656).** `nxs-user-group-picker` and
+`nxs-document-reference-input` accept `multiple`, matching `nxs-vocabulary-select`: the same
+`value` model and form accessor carry ordered arrays in multiple mode and scalar/null values in
+single mode. Material chip grids own keyboard focus and removal; pending text remains a
+`nxsChooseFromList` error even alongside selected chips. Principal identity is `prefixedId`;
+document identity follows `idProperty`. Unreadable stored document references remain selected.
+`documentChange` continues to report an individual selection or null; use `valueChange` for
+all ids. The picker stories exercise addition and keyboard removal.
+
 **Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:

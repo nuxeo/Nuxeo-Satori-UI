@@ -1,7 +1,7 @@
 import type { Provider } from '@angular/core';
 import { applicationConfig, type Meta, type StoryObj } from '@storybook/angular';
 import { delay, of } from 'rxjs';
-import { expect, userEvent, within } from 'storybook/test';
+import { expect, fireEvent, userEvent, waitFor, within } from 'storybook/test';
 
 import { NuxeoApiBase, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -59,6 +59,7 @@ const meta: Meta<NxsDocumentReferenceInputComponent> = {
     hint: '',
     required: false,
     disabled: false,
+    multiple: false,
     value: null,
   },
   argTypes: {
@@ -75,6 +76,10 @@ const meta: Meta<NxsDocumentReferenceInputComponent> = {
     hint: { control: 'text', description: 'Help under the field, already translated.' },
     required: { control: 'boolean' },
     disabled: { control: 'boolean' },
+    multiple: {
+      control: 'boolean',
+      description: 'Choose several entries as removable chips; value is an ordered array.',
+    },
     value: { control: false, description: 'The uid (or path) of the document chosen. Two-way.' },
     documentChange: { control: false, description: 'The document chosen, or null when cleared.' },
   },
@@ -83,6 +88,7 @@ const meta: Meta<NxsDocumentReferenceInputComponent> = {
     props: args,
     template: `<nxs-document-reference-input
   [label]="label"
+  [multiple]="multiple"
   [documentTypes]="documentTypes"
   [idProperty]="idProperty"
   [hint]="hint"
@@ -121,3 +127,42 @@ export const WithAValue: Story = { args: { value: 'c2' } };
 export const AnUnknownDocument: Story = { args: { value: 'a1b2c3d4-gone' } };
 
 export const Disabled: Story = { args: { disabled: true, value: 'p1' } };
+
+/** Multiple references keep their ids in order; each choice is a removable chip. */
+export const Multiple: Story = {
+  args: { multiple: true, value: [] },
+  play: async ({ canvasElement }) => {
+    const canvas = within(canvasElement);
+    const field = canvas.getByRole('combobox', { name: 'Related contract' });
+    await userEvent.type(field, 'supp');
+    await userEvent.click(
+      await within(document.body).findByRole('option', { name: /Supplier contract 2026/ }),
+    );
+    await expect(field).toHaveValue('');
+    await userEvent.type(field, 'renew');
+    await userEvent.click(
+      await within(document.body).findByRole('option', { name: /Contract renewal notes/ }),
+    );
+    await expect(canvasElement.querySelector('output')).toHaveTextContent('c1,c2');
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove Supplier contract 2026' }));
+    await expect(canvasElement.querySelector('output')).toHaveTextContent('c2');
+    await userEvent.click(field);
+    // Material 20 reads keyCode; userEvent.keyboard supplies zero for synthetic events.
+    fireEvent.keyDown(field, { key: 'Backspace', code: 'Backspace', keyCode: 8 });
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('role', 'gridcell'));
+    fireEvent.keyDown(document.activeElement as HTMLElement, {
+      key: 'Backspace',
+      code: 'Backspace',
+      keyCode: 8,
+    });
+    await waitFor(() => expect(canvasElement.querySelectorAll('mat-chip-row')).toHaveLength(0));
+  },
+};
+
+export const MultipleStoredReferences: Story = {
+  args: { multiple: true, value: ['c1', 'a1b2c3d4-gone'] },
+};
+export const MultiplePaths: Story = { args: { multiple: true, idProperty: 'path', value: [] } };
+export const MultipleDisabled: Story = {
+  args: { multiple: true, disabled: true, value: ['c1', 'c2'] },
+};
