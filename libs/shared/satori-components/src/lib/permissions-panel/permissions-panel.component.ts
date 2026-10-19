@@ -1,4 +1,7 @@
+import { FormsModule, NgModel } from '@angular/forms';
+import { NxsDateInputComponent } from '../date-input/date-input.component';
 import {
+  viewChild,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
@@ -13,8 +16,6 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
-import { DateAdapter } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -33,7 +34,6 @@ import {
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
 import { provideNxsDateAdapter } from '../date-input/locale-date';
 import {
   dayToDate,
@@ -104,10 +104,11 @@ interface EditorState {
   templateUrl: './permissions-panel.component.html',
   styleUrl: './permissions-panel.component.scss',
   imports: [
+    FormsModule,
+    NxsDateInputComponent,
     TranslatePipe,
     MatAutocompleteModule,
     MatButtonModule,
-    MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
@@ -122,6 +123,12 @@ interface EditorState {
   host: { class: 'nxs-permissions-panel' },
 })
 export class NxsPermissionsPanelComponent {
+  private readonly beginDateControl = viewChild<NgModel>('beginDateControl');
+  private readonly endDateControl = viewChild<NgModel>('endDateControl');
+  protected datesValid(): boolean {
+    return !this.beginDateControl()?.invalid && !this.endDateControl()?.invalid;
+  }
+
   /** The uid of the document whose permissions to show. */
   readonly documentId = input.required<string>();
   /**
@@ -134,9 +141,6 @@ export class NxsPermissionsPanelComponent {
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);
-  /** The date fields' adapter, from `provideNxsDateAdapter()`: a host's may not hold JS dates. */
-  private readonly dateAdapter = inject<DateAdapter<unknown>>(DateAdapter);
-
   /** Starts every id the template sets, so two panels on one page never share one. */
   protected readonly idPrefix = `nxs-permissions-${nextId++}`;
 
@@ -172,13 +176,6 @@ export class NxsPermissionsPanelComponent {
   /** The time frame's days, at local midnight. */
   protected readonly editorBegin = signal<Date | null>(null);
   protected readonly editorEnd = signal<Date | null>(null);
-  /** The same days as the date fields hold them, in their adapter's own representation. */
-  protected readonly editorBeginField = computed(() =>
-    nxsDateToAdapter(this.dateAdapter, this.editorBegin()),
-  );
-  protected readonly editorEndField = computed(() =>
-    nxsDateToAdapter(this.dateAdapter, this.editorEnd()),
-  );
   protected readonly editorSubmitted = signal(false);
   protected readonly suggestions = signal<UserGroupSuggestion[]>([]);
 
@@ -463,17 +460,13 @@ export class NxsPermissionsPanelComponent {
     this.editorQuery.set(suggestion.displayLabel);
   }
 
-  /** The day a date field holds, whatever its adapter holds dates as. */
-  protected fieldDay(value: unknown): Date | null {
-    return nxsDateFromAdapter(this.dateAdapter, value);
-  }
-
   protected displaySuggestion(suggestion: UserGroupSuggestion | string | null): string {
     if (!suggestion) return '';
     return typeof suggestion === 'string' ? suggestion : suggestion.displayLabel;
   }
 
   protected applyEditor(): void {
+    if (!this.datesValid()) return;
     const editor = this.editor();
     if (!editor || !this.editable()) return;
     this.editorSubmitted.set(true);
@@ -502,6 +495,7 @@ export class NxsPermissionsPanelComponent {
   // ── Writes ──────────────────────────────────────────────────────────────────────────────────
 
   protected save(): void {
+    if (!this.datesValid()) return;
     const entries = [...this.staged().entries()];
     const changes = entries.map(([, change]) => change);
     if (changes.length === 0 || this.saving()) return;

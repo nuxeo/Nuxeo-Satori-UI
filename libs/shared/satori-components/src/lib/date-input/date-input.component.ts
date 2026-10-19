@@ -1,3 +1,5 @@
+import { NxsDateMaskPipe } from './date-mask.pipe';
+import { nxsDateFromAdapter, nxsDateToAdapter } from './adapter-date';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -29,7 +31,8 @@ import { MatInput, MatInputModule } from '@angular/material/input';
 import { TranslatePipe } from '@ngx-translate/core';
 
 import { NxsPickerControl, nxsPickerProviders } from '../pickers/picker-control';
-import { NxsDatepickerIntl, provideNxsDateAdapter } from './locale-date';
+import { provideNxsDateAdapter } from './locale-date';
+import { TranslatedDatepickerIntl } from './translated-datepicker-intl';
 
 /**
  * A date field: typed, or chosen from Material's calendar — the thin wrapper over the Material
@@ -47,12 +50,12 @@ import { NxsDatepickerIntl, provideNxsDateAdapter } from './locale-date';
   standalone: true,
   templateUrl: './date-input.component.html',
   styleUrl: './date-input.component.scss',
-  imports: [MatDatepickerModule, MatInputModule, TranslatePipe],
+  imports: [NxsDateMaskPipe, MatDatepickerModule, MatInputModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: [
     nxsPickerProviders(() => NxsDateInputComponent),
     provideNxsDateAdapter(),
-    { provide: MatDatepickerIntl, useClass: NxsDatepickerIntl },
+    { provide: MatDatepickerIntl, useClass: TranslatedDatepickerIntl },
   ],
   host: { class: 'nxs-date-input' },
 })
@@ -78,10 +81,14 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   private readonly dateInput = viewChild.required<MatDatepickerInput<unknown>>(MatDatepickerInput);
   /** The date the field last set itself, so its own changes are not mistaken for a host's. */
   private committed: Date | null = null;
+  private readonly writes = signal(0);
+  private appliedWrite = 0;
   private readonly control = new NxsPickerControl<Date | null>();
 
   /** What the user typed, while it is not a date the field holds. */
   private readonly typed = signal('');
+  protected readonly adapterMin = computed(() => nxsDateToAdapter(this.adapter, this.min()));
+  protected readonly adapterMax = computed(() => nxsDateToAdapter(this.adapter, this.max()));
   protected readonly isDisabled = computed(() => this.disabled() || this.control.formDisabled());
   /** Why the typed text or the date is refused, if it is. */
   protected readonly problem = computed<'parse' | 'min' | 'max' | null>(() => {
@@ -90,8 +97,22 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
     if (!value) return null;
     const min = this.min();
     const max = this.max();
-    if (min && this.adapter.compareDate(value, min) < 0) return 'min';
-    if (max && this.adapter.compareDate(value, max) > 0) return 'max';
+    if (
+      min &&
+      this.adapter.compareDate(
+        nxsDateToAdapter(this.adapter, value),
+        nxsDateToAdapter(this.adapter, min),
+      ) < 0
+    )
+      return 'min';
+    if (
+      max &&
+      this.adapter.compareDate(
+        nxsDateToAdapter(this.adapter, value),
+        nxsDateToAdapter(this.adapter, max),
+      ) > 0
+    )
+      return 'max';
     return null;
   });
   /** A date written the way the locale writes dates, with a day above 12 so the order shows. */
@@ -113,11 +134,13 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
     // `null` while the user types text that is not a date yet would erase what they typed.
     effect(() => {
       const value = this.value();
+      const write = this.writes();
       untracked(() => {
-        if (value === this.committed) return;
+        if (value === this.committed && write === this.appliedWrite) return;
+        this.appliedWrite = write;
         this.committed = value;
         this.typed.set('');
-        this.dateInput().value = value;
+        this.dateInput().value = nxsDateToAdapter(this.adapter, value);
       });
     });
   }
@@ -127,8 +150,9 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
     this.input().updateErrorState();
   }
 
-  writeValue(value: Date | null): void {
-    this.value.set(value && this.adapter.isValid(value) ? value : null);
+  writeValue(value: unknown): void {
+    this.value.set(nxsDateFromAdapter(this.adapter, value));
+    this.writes.update((write) => write + 1);
   }
 
   registerOnChange(fn: (value: Date | null) => void): void {
@@ -165,6 +189,7 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
   }
 
   protected formatted(date: unknown): string {
+    if (date instanceof Date) date = nxsDateToAdapter(this.adapter, date);
     return date && this.adapter.isValid(date)
       ? this.adapter.format(date, this.formats.display.dateInput)
       : '';
@@ -175,13 +200,15 @@ export class NxsDateInputComponent implements ControlValueAccessor, Validator, D
    * that is not a date, typed into an empty field, reaches the picker only here.
    */
   protected typing(event: Event): void {
+    const before = this.problem();
     this.typed.set((event.target as HTMLInputElement).value);
+    if (before !== this.problem()) this.control.revalidate();
   }
 
   /** Each key typed, and a date chosen from the calendar: the datepicker has parsed the text. */
   protected changed(event: MatDatepickerInputEvent<unknown>): void {
     const text = event.targetElement instanceof HTMLInputElement ? event.targetElement.value : '';
-    const date = event.value && this.adapter.isValid(event.value) ? (event.value as Date) : null;
+    const date = nxsDateFromAdapter(this.adapter, event.value);
     this.typed.set(date ? '' : text);
     this.committed = date;
     this.value.set(date);

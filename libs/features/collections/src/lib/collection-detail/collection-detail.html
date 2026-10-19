@@ -351,31 +351,19 @@
             </div>
 
             <div class="filter-row">
-              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-field">
-                <mat-label>{{ 'collections.collection-detail.from' | translate }}</mat-label>
-                <input
-                  matInput
-                  [matDatepicker]="fromPicker"
-                  [placeholder]="'common.date-mask' | translate | dateMask"
-                  [ngModel]="filterDateFrom()"
-                  (ngModelChange)="filterDateFrom.set($event)"
-                />
-                <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-                <mat-datepicker #fromPicker />
-              </mat-form-field>
+              <nxs-date-input
+                class="filter-field"
+                [label]="'collections.collection-detail.from' | translate"
+                [ngModel]="filterDateFrom()"
+                (ngModelChange)="filterDateFrom.set($event)"
+              />
 
-              <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-field">
-                <mat-label>{{ 'collections.collection-detail.to' | translate }}</mat-label>
-                <input
-                  matInput
-                  [matDatepicker]="toPicker"
-                  [placeholder]="'common.date-mask' | translate | dateMask"
-                  [ngModel]="filterDateTo()"
-                  (ngModelChange)="filterDateTo.set($event)"
-                />
-                <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-                <mat-datepicker #toPicker />
-              </mat-form-field>
+              <nxs-date-input
+                class="filter-field"
+                [label]="'collections.collection-detail.to' | translate"
+                [ngModel]="filterDateTo()"
+                (ngModelChange)="filterDateTo.set($event)"
+              />
             </div>
 
             <div class="filter-row">

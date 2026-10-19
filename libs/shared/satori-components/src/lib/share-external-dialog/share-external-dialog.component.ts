@@ -1,4 +1,7 @@
+import { FormsModule, NgModel } from '@angular/forms';
+import { NxsDateInputComponent } from '../date-input/date-input.component';
 import {
+  viewChild,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
@@ -6,13 +9,11 @@ import {
   effect,
   inject,
   signal,
-  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { filter, merge } from 'rxjs';
 import { MatButton } from '@angular/material/button';
-import { DateAdapter, type ErrorStateMatcher } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
+import { type ErrorStateMatcher } from '@angular/material/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInput, MatInputModule } from '@angular/material/input';
@@ -26,7 +27,6 @@ import {
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
 import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { failureKey, offeredRights } from '../permission-dialog-support';
 import { toDay } from '../permissions-panel/permissions-model';
@@ -64,8 +64,9 @@ const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
   templateUrl: './share-external-dialog.component.html',
   styleUrl: './share-external-dialog.component.scss',
   imports: [
+    FormsModule,
+    NxsDateInputComponent,
     MatButton,
-    MatDatepickerModule,
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
@@ -78,6 +79,12 @@ const EMAIL = /^[^\s@]+@[^\s@.]+(?:\.[^\s@.]+)+$/;
   host: { class: 'nxs-share-external-dialog' },
 })
 export class NxsShareExternalDialogComponent {
+  private readonly beginDateControl = viewChild<NgModel>('beginDateControl');
+  private readonly endDateControl = viewChild<NgModel>('endDateControl');
+  protected datesValid(): boolean {
+    return !this.beginDateControl()?.invalid && !this.endDateControl()?.invalid;
+  }
+
   private readonly dialogRef =
     inject<MatDialogRef<NxsShareExternalDialogComponent, boolean>>(MatDialogRef);
   private readonly data = inject<NxsShareExternalDialogData>(MAT_DIALOG_DATA);
@@ -85,9 +92,6 @@ export class NxsShareExternalDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
-  /** The date fields' adapter, from `provideNxsDateAdapter()`: a host's may not hold JS dates. */
-  private readonly dateAdapter = inject<DateAdapter<unknown>>(DateAdapter);
-
   protected readonly rights = offeredRights(this.data.permissions);
   protected readonly mailHint = PERMISSION_NOTIFICATION_MAIL_HINT_KEY;
 
@@ -97,9 +101,6 @@ export class NxsShareExternalDialogComponent {
   /** The share's days, at local midnight. */
   protected readonly begin = signal<Date | null>(null);
   protected readonly end = signal<Date | null>(null);
-  /** The same days as the date fields hold them, in their adapter's own representation. */
-  protected readonly beginField = computed(() => nxsDateToAdapter(this.dateAdapter, this.begin()));
-  protected readonly endField = computed(() => nxsDateToAdapter(this.dateAdapter, this.end()));
   protected readonly comment = signal('');
   /** Which button is saving, so only that one shows the spinner. */
   protected readonly saving = signal<'create' | 'another' | null>(null);
@@ -145,16 +146,12 @@ export class NxsShareExternalDialogComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
-  /** The day a date field holds, whatever its adapter holds dates as. */
-  protected fieldDay(value: unknown): Date | null {
-    return nxsDateFromAdapter(this.dateAdapter, value);
-  }
-
   protected cancel(): void {
     this.dialogRef.close(this.shared);
   }
 
   protected create(another: boolean): void {
+    if (!this.datesValid()) return;
     if (!this.valid() || this.saving()) return;
     this.saving.set(another ? 'another' : 'create');
     const email = this.email().trim();

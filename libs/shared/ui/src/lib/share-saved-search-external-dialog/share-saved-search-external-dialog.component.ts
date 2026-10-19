@@ -1,12 +1,12 @@
-import { Component, inject, signal } from '@angular/core';
+import { NxsDateInputComponent } from '@nuxeo/satori-platform/components';
+import { viewChild, Component, inject, signal } from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
-import { FormsModule } from '@angular/forms';
+import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { catchError, of } from 'rxjs';
 
 import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
@@ -36,6 +36,7 @@ const RIGHT_OPTIONS = [
   selector: 'lib-share-saved-search-external-dialog',
   standalone: true,
   imports: [
+    NxsDateInputComponent,
     DescriptorLabelPipe,
     TranslatePipe,
     FormsModule,
@@ -44,13 +45,18 @@ const RIGHT_OPTIONS = [
     MatInputModule,
     MatSelectModule,
     MatButtonModule,
-    MatDatepickerModule,
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   templateUrl: './share-saved-search-external-dialog.component.html',
   styleUrl: './share-saved-search-external-dialog.component.scss',
 })
 export class ShareSavedSearchExternalDialogComponent {
+  private readonly beginDateControl = viewChild<NgModel>('beginDateControl');
+  private readonly endDateControl = viewChild<NgModel>('endDateControl');
+  protected datesValid(): boolean {
+    return !this.beginDateControl()?.invalid && !this.endDateControl()?.invalid;
+  }
+
   private readonly dialogRef = inject(
     MatDialogRef<ShareSavedSearchExternalDialogComponent, boolean>,
   );
@@ -83,6 +89,7 @@ export class ShareSavedSearchExternalDialogComponent {
   }
 
   create(andAddAnother: boolean): void {
+    if (!this.datesValid()) return;
     if (!this.isValid() || this.saving()) return;
 
     this.saving.set(true);

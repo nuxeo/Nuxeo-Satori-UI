@@ -175,3 +175,5 @@ export {
 } from './lib/saved-search-select/saved-search-select.component';
 export { NxsSavedSearchActionsComponent } from './lib/saved-search-actions/saved-search-actions.component';
 // satori:export:components — `satori-component` inserts above this line
+
+export { TranslatedDatepickerIntl } from './lib/date-input/translated-datepicker-intl';

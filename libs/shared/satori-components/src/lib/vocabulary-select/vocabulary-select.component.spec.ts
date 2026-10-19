@@ -184,6 +184,16 @@ describe('NxsVocabularySelectComponent', () => {
     );
   });
 
+  it('clears unmatched text when the form resets an already null value', async () => {
+    await type('unlisted');
+    expect(host.one.value).toBeNull();
+    expect(host.one.hasError('nxsChooseFromList')).toBe(true);
+    host.one.reset(null);
+    await render();
+    expect(input().value).toBe('');
+    expect(host.one.hasError('nxsChooseFromList')).toBe(false);
+  });
+
   it('says it could not load the list, and tries again each time the field is focused', async () => {
     const failure = () => throwError(() => ({ status: 500 }));
     directories.getEntries.mockReturnValueOnce(failure()).mockReturnValueOnce(failure());

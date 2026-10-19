@@ -1,507 +1,221 @@
-import { DateAdapter } from '@angular/material/core';
-import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
-import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { Subject, of, throwError } from 'rxjs';
-import { vi } from 'vitest';
-
+import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import {
   BrowseService,
   DirectoryService,
-  type DirectoryEntry,
-  type L10nDirectoryEntry,
   type NuxeoDocument,
+  type L10nDirectoryEntry,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
+import { Subject, of, throwError } from 'rxjs';
+import { vi } from 'vitest';
+import { EditMetadataDialogComponent } from './edit-metadata-dialog';
 
-import { EditMetadataDialogComponent, type EditMetadataDialogData } from './edit-metadata-dialog';
-
-function l10n(id: string, parent: string, labelEn: string): L10nDirectoryEntry {
-  return {
-    id,
-    directoryName: 'l10ncoverage',
-    properties: { id, parent, ordering: 0, obsolete: 0, label_en: labelEn },
-  };
-}
-
-const coverageEntries: L10nDirectoryEntry[] = [
-  l10n('africa', '', 'Africa'),
-  l10n('tanzania', 'africa', 'Tanzania'),
-];
-
-const subjectEntries: L10nDirectoryEntry[] = [
-  l10n('art', '', 'Art'),
-  l10n('cinema', 'art', 'Cinema'),
-];
-
-const mockDialogRef = { close: vi.fn() };
-
-const mockDirectoryService = {
-  getEntries: vi.fn(() => of([])),
-  getAllL10nEntries: vi.fn((name: string) =>
-    of(name === 'l10nsubjects' ? subjectEntries : coverageEntries),
-  ),
-};
-
-const mockBrowseService = { updateDocument: vi.fn(() => of({} as NuxeoDocument)) };
-
-const dialogData: EditMetadataDialogData = {
+const entry = (id: string, label: string, parent = ''): L10nDirectoryEntry => ({
+  id,
+  directoryName: 'l10ncoverage',
+  properties: { id, parent, label_en: label, ordering: 0, obsolete: 0 },
+});
+const subjects = ['art/cinema'];
+const data = {
   uid: 'doc-1',
-  title: 'Doc',
-  description: '',
+  title: 'Report',
+  description: 'Figures',
   nature: '',
-  subjects: [],
-  coverage: '',
+  subjects,
+  coverage: 'africa/tanzania',
   expires: null,
 };
 
-async function flushAsync(): Promise<void> {
-  await Promise.resolve();
-  await Promise.resolve();
-}
-
-// NXSAT-192: hierarchical Coverage/Subjects must expose child entries grouped by parent.
-describe('EditMetadataDialogComponent (NXSAT-192)', () => {
-  let component: EditMetadataDialogComponent;
+describe('EditMetadataDialogComponent shared pickers', () => {
   let fixture: ComponentFixture<EditMetadataDialogComponent>;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    await TestBed.configureTestingModule({
-      imports: [testTranslateModule(), testTranslateModule(), EditMetadataDialogComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: MatDialogRef, useValue: mockDialogRef },
-        { provide: MAT_DIALOG_DATA, useValue: dialogData },
-        { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: BrowseService, useValue: mockBrowseService },
-      ],
-    })
-      .overrideComponent(EditMetadataDialogComponent, {
-        set: { imports: [], template: '<div></div>' },
-      })
-      .compileComponents();
-
-    fixture = TestBed.createComponent(EditMetadataDialogComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
-    await flushAsync();
-  });
-
-  it('loads all l10n entries (including children), not just top-level parents', () => {
-    expect(mockDirectoryService.getAllL10nEntries).toHaveBeenCalledWith('l10nsubjects');
-    expect(mockDirectoryService.getAllL10nEntries).toHaveBeenCalledWith('l10ncoverage');
-    expect(component.coverageOptions().map((e) => e.id)).toContain('tanzania');
-    expect(component.subjectOptions().map((e) => e.id)).toContain('cinema');
-  });
-
-  it('groups subject children under their parent label for the dropdown', () => {
-    const groups = component.groupedSubjectOptions();
-    expect(groups).toHaveLength(1);
-    expect(groups[0].parentLabel).toBe('Art');
-    expect(groups[0].entries.map((e) => e.id)).toEqual(['cinema']);
-  });
-
-  it('renders the selected child coverage as Parent/Child', () => {
-    component.coverage = 'tanzania';
-    expect(component.coveragePillLabel('tanzania')).toBe('Africa/Tanzania');
-  });
-});
-
-function expiresInputEvent(value: string): Event {
-  const input = document.createElement('input');
-  input.value = value;
-  const event = new Event('input');
-  Object.defineProperty(event, 'target', { value: input });
-  return event;
-}
-
-const natureEntries: DirectoryEntry[] = [
-  {
-    id: 'application-form',
-    label: 'Application Form',
-    displayLabel: 'Application Form',
-    ordering: 1,
-    obsolete: 0,
-    directoryName: 'nature',
-  },
-  {
-    id: 'contract',
-    label: 'Contract',
-    displayLabel: 'Contract',
-    ordering: 2,
-    obsolete: 0,
-    directoryName: 'nature',
-  },
-];
-
-describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
   let component: EditMetadataDialogComponent;
-  let fixture: ComponentFixture<EditMetadataDialogComponent>;
-  let getEntries: ReturnType<typeof vi.fn<DirectoryService['getEntries']>>;
-  let getAllL10nEntries: ReturnType<typeof vi.fn<DirectoryService['getAllL10nEntries']>>;
-  let updateDocument: ReturnType<typeof vi.fn<BrowseService['updateDocument']>>;
-  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
-  let close: ReturnType<typeof vi.fn>;
-
-  async function setup(data: EditMetadataDialogData = dialogData): Promise<void> {
-    TestBed.resetTestingModule();
-    getEntries = vi.fn<DirectoryService['getEntries']>(() => of(natureEntries));
-    getAllL10nEntries = vi.fn<DirectoryService['getAllL10nEntries']>((name: string) =>
-      of(name === 'l10nsubjects' ? subjectEntries : coverageEntries),
-    );
-    updateDocument = vi.fn<BrowseService['updateDocument']>(() =>
-      of({ uid: 'doc-1', title: 'Saved' } as NuxeoDocument),
-    );
-    toast = { show: vi.fn(), error: vi.fn() };
-    TestBed.overrideProvider(NxsToastService, { useValue: toast });
-    close = vi.fn();
-
-    await TestBed.configureTestingModule({
-      imports: [testTranslateModule(), EditMetadataDialogComponent],
-      providers: [
-        provideZonelessChangeDetection(),
-        { provide: MatDialogRef, useValue: { close } },
-        { provide: MAT_DIALOG_DATA, useValue: data },
-        { provide: DirectoryService, useValue: { getEntries, getAllL10nEntries } },
-        { provide: BrowseService, useValue: { updateDocument } },
-      ],
-    })
-      .overrideComponent(EditMetadataDialogComponent, {
-        set: { imports: [], template: '<div></div>' },
-      })
-      .compileComponents();
-
-    fixture = TestBed.createComponent(EditMetadataDialogComponent);
-    component = fixture.componentInstance;
-    fixture.detectChanges();
-    await flushAsync();
-  }
-
-  it('seeds the form from the dialog data, copying the subjects array', async () => {
-    const subjects = ['cinema'];
-    await setup({
-      uid: 'doc-9',
-      title: 'Invoice',
-      description: 'Q1',
-      nature: 'contract',
-      subjects,
-      coverage: 'tanzania',
-      expires: '2027-03-04T00:00:00.000Z',
-    });
-
-    expect(component.title).toBe('Invoice');
-    expect(component.description).toBe('Q1');
-    expect(component.nature).toBe('contract');
-    expect(component.coverage).toBe('tanzania');
-    expect(component.expires?.toISOString()).toBe('2027-03-04T00:00:00.000Z');
-
-    component.removeSubject('cinema');
-    expect(component.subjects).toEqual([]);
-    expect(subjects).toEqual(['cinema']);
-  });
-
-  it('leaves expires null when the document has no expiry', async () => {
-    await setup();
-    expect(component.expires).toBeNull();
-  });
-
-  it('resolves a nature pill to its label, and falls back to the raw id', async () => {
-    await setup();
-
-    expect(component.naturePillLabel('application-form')).toBe('Application Form');
-    expect(component.naturePillLabel('not-in-vocabulary')).toBe('not-in-vocabulary');
-  });
-
-  it('renders a subject pill as Parent/Child', async () => {
-    await setup();
-    expect(component.subjectPillLabel('cinema')).toBe('Art/Cinema');
-  });
-
-  it('clearNature and clearCoverage empty the bound values', async () => {
-    await setup();
-    component.nature = 'contract';
-    component.coverage = 'tanzania';
-
-    component.clearNature();
-    component.clearCoverage();
-
-    expect(component.nature).toBe('');
-    expect(component.coverage).toBe('');
-  });
-
-  it('filters the nature options by the panel search text', async () => {
-    await setup();
-    component.naturePanelSearch = 'contra';
-
-    expect(component.filteredNatureOptions().map((e) => e.id)).toEqual(['contract']);
-  });
-
-  it('refetches nature entries when the panel opens and clears the search when it closes', async () => {
-    await setup();
-    const callsAfterInit = getEntries.mock.calls.length;
-    component.naturePanelSearch = 'stale';
-
-    component.onNaturePanelOpen(true);
-    expect(getEntries.mock.calls.length).toBe(callsAfterInit + 1);
-    expect(component.natureOptions().map((e) => e.id)).toEqual(['application-form', 'contract']);
-
-    component.onNaturePanelOpen(false);
-    expect(component.naturePanelSearch).toBe('');
-    expect(getEntries.mock.calls.length).toBe(callsAfterInit + 1);
-  });
-
-  it('refetches subjects and coverage on open, and clears their searches on close', async () => {
-    await setup();
-    const before = getAllL10nEntries.mock.calls.length;
-
-    component.onSubjectsPanelOpen(true);
-    component.onCoveragePanelOpen(true);
-
-    expect(getAllL10nEntries.mock.calls.slice(before).map(([name]) => name)).toEqual([
-      'l10nsubjects',
-      'l10ncoverage',
-    ]);
-    expect(component.subjectOptions().map((e) => e.id)).toContain('cinema');
-    expect(component.coverageOptions().map((e) => e.id)).toContain('tanzania');
-
-    component.subjectsPanelSearch = 'x';
-    component.coveragePanelSearch = 'y';
-    component.onSubjectsPanelOpen(false);
-    component.onCoveragePanelOpen(false);
-
-    expect(component.subjectsPanelSearch).toBe('');
-    expect(component.coveragePanelSearch).toBe('');
-    expect(getAllL10nEntries.mock.calls.length).toBe(before + 2);
-  });
-
-  it('groups coverage children under their parent label', async () => {
-    await setup();
-    const groups = component.groupedCoverageOptions();
-
-    expect(groups.map((g) => g.parentLabel)).toEqual(['Africa']);
-    expect(groups[0].entries.map((e) => e.id)).toEqual(['tanzania']);
-  });
-
-  it('flags a malformed expiry typed into the field and clears the flag on a valid pick', async () => {
-    await setup();
-
-    component.onExpiresInput(expiresInputEvent('99/99/9999'));
-
-    expect(component.isExpiresValid()).toBe(false);
-    expect(component.showExpiresError()).toBe(true);
-    expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
-
-    component.onExpiresChange(new Date('2027-01-02T00:00:00.000Z'));
-
-    expect(component.expiresRawText).toBe('');
-    expect(component.isExpiresValid()).toBe(true);
-    expect(component.showExpiresError()).toBe(false);
-  });
-
-  it.each([
-    { locale: enUS, input: '12/31/2026' },
-    { locale: fr, input: '31/12/2026' },
-    { locale: de, input: '31.12.2026' },
-    { locale: nl, input: '31-12-2026' },
-    { locale: ja, input: '2026/12/31' },
-    { locale: th, input: '31/12/2026' },
-    { locale: zhCN, input: '26-12-31' },
-  ])(
-    'accepts Expires "$input" using $locale.code and retains the parsed date',
-    async ({ locale, input }) => {
-      await setup();
-      fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(locale);
-      component.onExpiresInput({ target: { value: input } } as unknown as Event);
-      expect(component.isExpiresValid()).toBe(true);
-      expect(component.showExpiresError()).toBe(false);
-      expect(component.expiresErrorMatcher.isErrorState()).toBe(false);
-      expect([
-        component.expires?.getFullYear(),
-        component.expires?.getMonth(),
-        component.expires?.getDate(),
-      ]).toEqual([2026, 11, 31]);
-      component.save();
-      expect(updateDocument).toHaveBeenCalledWith(
-        expect.any(String),
-        expect.objectContaining({ 'dc:expired': new Date(2026, 11, 31).toISOString() }),
-      );
-    },
-  );
-
-  it('shows and blocks locale-invalid Expires text even when the model previously held a valid date', async () => {
-    await setup();
-    fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(de);
-    component.expires = new Date(2026, 3, 3);
-    component.onExpiresInput({ target: { value: '03/04/2026' } } as unknown as Event);
-    expect(component.isExpiresValid()).toBe(false);
-    expect(component.showExpiresError()).toBe(true);
-    expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
-    // Material's ngModel turns an invalid adapter date into null. Non-empty raw text must
-    // still block submission rather than clearing the stored expiry.
-    component.onExpiresChange(null);
-    expect(component.isExpiresValid()).toBe(false);
-    component.save();
-    expect(updateDocument).not.toHaveBeenCalled();
-  });
-
-  it('blocks a half-typed date and shows an error', async () => {
-    await setup();
-
-    component.onExpiresInput(expiresInputEvent('12/0'));
-
-    expect(component.isExpiresValid()).toBe(false);
-    expect(component.showExpiresError()).toBe(true);
-  });
-
-  it('keeps the raw text when the datepicker reports an unparseable date', async () => {
-    await setup();
-    component.onExpiresInput(expiresInputEvent('13/45/2027'));
-
-    component.onExpiresChange(new Date(Number.NaN));
-
-    expect(component.expiresRawText).toBe('13/45/2027');
-    expect(component.isExpiresValid()).toBe(false);
-  });
-
-  it('saves trimmed title, nulls for empty vocabulary values, and an ISO expiry', async () => {
-    await setup();
-    component.title = '  Renamed  ';
-    component.description = 'A note';
-    component.nature = '';
-    component.subjects = ['cinema'];
-    component.coverage = 'tanzania';
-    component.expires = new Date('2027-05-06T00:00:00.000Z');
-
-    component.save();
-    await flushAsync();
-
-    expect(updateDocument).toHaveBeenCalledTimes(1);
-    const [uid, properties] = updateDocument.mock.calls[0];
-    expect(uid).toBe('doc-1');
-    expect(properties).toEqual({
-      'dc:title': 'Renamed',
-      'dc:description': 'A note',
-      'dc:nature': null,
-      'dc:subjects': ['cinema'],
-      'dc:coverage': 'tanzania',
-      'dc:expired': '2027-05-06T00:00:00.000Z',
-    });
-    expect(component.saving()).toBe(false);
-    expect(toast.show).toHaveBeenCalledWith('Document updated');
-    expect(close).toHaveBeenCalledWith({ uid: 'doc-1', title: 'Saved' });
-  });
-
-  it('sends a null expiry when the date was cleared', async () => {
-    await setup();
-    component.expires = null;
-
-    component.save();
-    await flushAsync();
-
-    expect(updateDocument.mock.calls[0][1]).toMatchObject({ 'dc:expired': null });
-  });
-
-  it('refuses to save when the datepicker parsed a half-typed date to Invalid Date', async () => {
-    await setup();
-    component.onExpiresInput(expiresInputEvent('12/'));
-    component.onExpiresChange(new Date(Number.NaN));
-
-    component.save();
-    await flushAsync();
-
-    expect(updateDocument).not.toHaveBeenCalled();
-  });
-
-  it('resets saving and keeps the dialog open when the update fails', async () => {
-    await setup();
-    updateDocument.mockReturnValue(throwError(() => new Error('500')));
-
-    component.save();
-    await flushAsync();
-
-    expect(component.saving()).toBe(false);
-    expect(toast.error).toHaveBeenCalledWith('Failed to update document');
-    expect(close).not.toHaveBeenCalled();
-  });
-
-  it('does not send a second request while a save is in flight', async () => {
-    await setup();
-    const inFlight = new Subject<NuxeoDocument>();
-    updateDocument.mockReturnValue(inFlight.asObservable());
-
-    component.save();
-    component.save();
-
-    expect(updateDocument).toHaveBeenCalledTimes(1);
-    expect(component.saving()).toBe(true);
-
-    inFlight.next({ uid: 'doc-1', title: 'Saved' } as NuxeoDocument);
-    inFlight.complete();
-    await flushAsync();
-
-    expect(component.saving()).toBe(false);
-  });
-
-  it('refuses to save while the expiry field holds an invalid date', async () => {
-    await setup();
-    component.onExpiresInput(expiresInputEvent('99/99/9999'));
-
-    component.save();
-    await flushAsync();
-
-    expect(updateDocument).not.toHaveBeenCalled();
-    expect(component.saving()).toBe(false);
-    expect(close).not.toHaveBeenCalled();
-  });
-});
-
-/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
-async function typeKeystrokes(
-  fixture: ComponentFixture<unknown>,
-  input: HTMLInputElement,
-  text: string,
-): Promise<string[]> {
-  const shown: string[] = [];
-  for (let end = 1; end <= text.length; end++) {
-    input.value = text.slice(0, end);
-    input.dispatchEvent(new Event('input'));
+  const close = vi.fn();
+  const update = vi.fn();
+  const toast = { show: vi.fn(), error: vi.fn() };
+  const directories = {
+    getEntries: vi.fn(() => of([])),
+    getAllL10nEntries: vi.fn((directory: string) =>
+      of(
+        directory === 'l10nsubjects'
+          ? [entry('art', 'Art'), entry('cinema', 'Cinema', 'art')]
+          : [
+              entry('africa', 'Africa'),
+              entry('tanzania', 'Tanzania', 'africa'),
+              entry('antarctica', 'Antarctica'),
+            ],
+      ),
+    ),
+  };
+  const root = () => fixture.nativeElement as HTMLElement;
+  const settle = async () => {
     fixture.detectChanges();
     await fixture.whenStable();
-    shown.push(input.value);
-  }
-  return shown;
-}
-
-const TYPED_EXPIRY = '12/31/2027';
-const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
-const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
-
-// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
-// write back and erase the text mid-entry. Only a real template exercises that write-back.
-describe('EditMetadataDialogComponent Expires typed into the real field', () => {
-  it('keeps every partial entry in the field and holds the finished date', async () => {
-    TestBed.resetTestingModule();
+    fixture.detectChanges();
+  };
+  const type = async (selector: string, text: string) => {
+    const input = root().querySelector<HTMLInputElement>(selector)!;
+    input.value = text;
+    input.dispatchEvent(new Event('input'));
+    input.dispatchEvent(new Event('blur'));
+    await settle();
+  };
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    update.mockReturnValue(of({ uid: 'doc-1' }));
     await TestBed.configureTestingModule({
-      imports: [testTranslateModule(), EditMetadataDialogComponent],
+      imports: [EditMetadataDialogComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
-        { provide: MatDialogRef, useValue: { close: vi.fn() } },
-        { provide: MAT_DIALOG_DATA, useValue: dialogData },
-        { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: BrowseService, useValue: mockBrowseService },
+        { provide: MAT_DIALOG_DATA, useValue: data },
+        { provide: MatDialogRef, useValue: { close } },
+        { provide: BrowseService, useValue: { updateDocument: update } },
+        { provide: DirectoryService, useValue: directories },
       ],
     }).compileComponents();
-    const fixture = TestBed.createComponent(EditMetadataDialogComponent);
-    fixture.detectChanges();
-    await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
-
-    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
-    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+    fixture = TestBed.createComponent(EditMetadataDialogComponent);
+    component = fixture.componentInstance;
+    await settle();
+  });
+  afterEach(() =>
+    document.querySelectorAll('.cdk-overlay-container').forEach((node) => node.remove()),
+  );
+  it('seeds the document values without sharing its subjects array', () => {
+    expect(component.title).toBe('Report');
+    expect(component.subjects).toEqual(subjects);
+    expect(component.subjects).not.toBe(subjects);
+    expect(
+      root().querySelector<HTMLInputElement>(
+        'nxs-vocabulary-select[directory="l10ncoverage"] input',
+      )?.value,
+    ).toBe('Africa/Tanzania');
+    expect(
+      [...root().querySelectorAll('mat-label')].map((n) => n.textContent?.trim()),
+    ).toHaveLength(6);
+  });
+  it('stores a selected child as parent/child and sends the same value to Nuxeo', async () => {
+    await type('nxs-vocabulary-select[directory="l10ncoverage"] input', '');
+    const input = root().querySelector<HTMLInputElement>(
+      'nxs-vocabulary-select[directory="l10ncoverage"] input',
+    )!;
+    input.focus();
+    await settle();
+    const option = [...document.querySelectorAll<HTMLElement>('mat-option')].find(
+      (n) => n.textContent?.trim() === 'Tanzania',
+    );
+    expect(option).toBeDefined();
+    option!.click();
+    await settle();
+    expect(component.coverage).toBe('africa/tanzania');
+    component.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:coverage': 'africa/tanzania', 'dc:subjects': ['art/cinema'] }),
+    );
+  });
+  it('allows a parent that has no children', async () => {
+    root()
+      .querySelector<HTMLInputElement>('nxs-vocabulary-select[directory="l10ncoverage"] input')!
+      .focus();
+    await settle();
+    [...document.querySelectorAll<HTMLElement>('mat-option')]
+      .find((n) => n.textContent?.trim() === 'Antarctica')!
+      .click();
+    await settle();
+    component.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:coverage': 'antarctica' }),
+    );
+  });
+  it('blocks saving text that was not chosen from a vocabulary', async () => {
+    await type('nxs-vocabulary-select[directory="nature"] input', 'unlisted');
+    component.save();
+    expect(update).not.toHaveBeenCalled();
+  });
+  it('blocks malformed and partial dates while preserving the typed text', async () => {
+    await type('nxs-date-input input', '31/');
+    component.save();
+    expect(update).not.toHaveBeenCalled();
+    expect(root().querySelector<HTMLInputElement>('nxs-date-input input')!.value).toBe('31/');
+    expect(root().querySelector('mat-error')).not.toBeNull();
+  });
+  it('saves a cleared expiry as null and closes after success', () => {
+    component.title = ' Report ';
+    component.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:title': 'Report', 'dc:expired': null }),
+    );
+    expect(close).toHaveBeenCalledWith({ uid: 'doc-1' });
+    expect(component.saving()).toBe(false);
+  });
+  it('keeps the dialog and entered values after a failed update', () => {
+    update.mockReturnValue(throwError(() => ({ status: 500 })));
+    component.save();
+    expect(component.saving()).toBe(false);
+    expect(close).not.toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalled();
+    expect(component.coverage).toBe('africa/tanzania');
+  });
+  it('stores a newly chosen subject with its parent id', async () => {
+    root()
+      .querySelector<HTMLButtonElement>(
+        'nxs-vocabulary-select[directory="l10nsubjects"] button[matChipRemove]',
+      )
+      ?.click();
+    await settle();
+    const input = root().querySelector<HTMLInputElement>(
+      'nxs-vocabulary-select[directory="l10nsubjects"] input',
+    );
+    input?.focus();
+    await settle();
+    const cinema = [...document.querySelectorAll<HTMLElement>('mat-option')].find(
+      (n) => n.textContent?.trim() === 'Cinema',
+    );
+    expect(cinema).toBeDefined();
+    cinema?.click();
+    await settle();
+    component.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:subjects': ['art/cinema'] }),
+    );
+  });
+  it('keeps a vocabulary id the current directory no longer contains', async () => {
+    component.coverage = 'legacy/retired';
+    component.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:coverage': 'legacy/retired' }),
+    );
+  });
+  it('writes a valid typed expiry as an ISO instant', async () => {
+    await type('nxs-date-input input', '12/31/2027');
+    component.save();
+    expect(update).toHaveBeenCalledWith(
+      'doc-1',
+      expect.objectContaining({ 'dc:expired': new Date(2027, 11, 31).toISOString() }),
+    );
+  });
+  it('blocks an invalid stored date and an empty title', () => {
+    component.expires = new Date('invalid');
+    component.save();
+    component.expires = null;
+    component.title = '   ';
+    component.save();
+    expect(update).not.toHaveBeenCalled();
+  });
+  it('does not submit twice while the first request is in flight', () => {
+    update.mockReturnValue(new Subject<NuxeoDocument>());
+    component.save();
+    component.save();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(component.saving()).toBe(true);
   });
 });

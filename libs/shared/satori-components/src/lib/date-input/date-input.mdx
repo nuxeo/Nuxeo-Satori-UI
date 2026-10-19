@@ -95,3 +95,8 @@ format, from the browser's `Intl` data, and passes Angular Material's calendar t
 - **Errors.** Once the field is left, text that is not a date, a date outside the limits and an
   empty required field show an error under it, linked to the input. The example date in the error
   has a day above 12, so the order of the fields is clear.
+
+The core browse, document, collection and permission screens share this field. Its calendar labels
+come from `TranslatedDatepickerIntl`, also re-exported by the UI entry point for older screens.
+The form value is a JavaScript `Date`; a host adapter using another date representation is converted
+only at the calendar boundary, keeping its parsing, formatting and calendar-day semantics.

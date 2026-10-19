@@ -198,6 +198,7 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
   }
 
   writeValue(value: string | readonly string[] | null): void {
+    this.text.set(!this.multiple() && typeof value === 'string' ? this.labelOf(value) : '');
     this.value.set(
       this.multiple() ? (Array.isArray(value) ? value : value ? [value] : []) : (value ?? null),
     );
@@ -236,6 +237,7 @@ export class NxsVocabularySelectComponent implements ControlValueAccessor, Valid
   protected onInput(event: Event): void {
     const typed = (event.target as HTMLInputElement).value;
     this.text.set(typed);
+    this.control.revalidate();
     if (!this.multiple() && this.chosen().length && typed !== this.labelOf(this.chosen()[0])) {
       this.commit(null);
     }

@@ -605,32 +605,15 @@
                 </mat-select>
               </mat-form-field>
 
-              <mat-form-field
-                appearance="outline"
-                subscriptSizing="dynamic"
+              <nxs-date-input
                 class="full-width"
-                [class.expires-field-invalid]="showExpiresError()"
-              >
-                <mat-label>{{ 'browse.create-import-dialog.expires' | translate }}</mat-label>
-                <input
-                  matInput
-                  name="expires"
-                  [matDatepicker]="expiresPicker"
-                  [ngModel]="expires"
-                  [errorStateMatcher]="expiresErrorMatcher"
-                  (ngModelChange)="onExpiresChange($event)"
-                  (input)="onExpiresInput($event)"
-                  #expiresInput="ngModel"
-                  [placeholder]="'common.date-mask' | translate | dateMask"
-                />
-                <mat-datepicker-toggle matIconSuffix [for]="expiresPicker" />
-                <mat-datepicker #expiresPicker />
-                @if (showExpiresError()) {
-                  <mat-error>{{
-                    'browse.create-import-dialog.enter-a-valid-date' | translate
-                  }}</mat-error>
-                }
-              </mat-form-field>
+                [label]="'browse.create-import-dialog.expires' | translate"
+                name="expires"
+                [ngModel]="expires"
+                (ngModelChange)="onExpiresChange($event)"
+                (input)="onExpiresInput($event)"
+                #expiresInput="ngModel"
+              />
             </div>
           }
         }
@@ -854,31 +837,14 @@
                     </mat-select>
                   </mat-form-field>
 
-                  <mat-form-field
-                    appearance="outline"
-                    subscriptSizing="dynamic"
+                  <nxs-date-input
                     class="full-width"
-                    [class.expires-field-invalid]="showExpiresError()"
-                  >
-                    <mat-label>{{ 'browse.create-import-dialog.expires' | translate }}</mat-label>
-                    <input
-                      matInput
-                      name="importExpires"
-                      [matDatepicker]="importExpiresPicker"
-                      [ngModel]="expires"
-                      [errorStateMatcher]="expiresErrorMatcher"
-                      (ngModelChange)="onExpiresChange($event)"
-                      (input)="onExpiresInput($event)"
-                      [placeholder]="'common.date-mask' | translate | dateMask"
-                    />
-                    <mat-datepicker-toggle matIconSuffix [for]="importExpiresPicker" />
-                    <mat-datepicker #importExpiresPicker />
-                    @if (showExpiresError()) {
-                      <mat-error>{{
-                        'browse.create-import-dialog.enter-a-valid-date' | translate
-                      }}</mat-error>
-                    }
-                  </mat-form-field>
+                    [label]="'browse.create-import-dialog.expires' | translate"
+                    name="importExpires"
+                    [ngModel]="expires"
+                    (ngModelChange)="onExpiresChange($event)"
+                    (input)="onExpiresInput($event)"
+                  />
                 </div>
               }
 

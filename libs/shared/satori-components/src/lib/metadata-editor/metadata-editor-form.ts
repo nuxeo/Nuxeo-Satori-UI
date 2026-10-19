@@ -281,7 +281,7 @@ export function firstError(control: AbstractControl): FieldError | null {
   if (typeof errors['server'] === 'string')
     return { key: 'server', params: { message: errors['server'] } };
   if (errors['required']) return { key: 'required', params: {} };
-  if (errors['matDatepickerParse']) return { key: 'date', params: {} };
+  if (errors['nxsDateParse']) return { key: 'date', params: {} };
   for (const key of ['number', 'integer', 'pattern', 'item']) {
     if (errors[key]) return { key, params: {} };
   }

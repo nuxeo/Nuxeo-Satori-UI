@@ -1,3 +1,4 @@
+import { CalendarDayAdapter } from './calendar-day-adapter.mock';
 import {
   Component,
   Injectable,
@@ -272,6 +273,35 @@ describe('NxsDateInputComponent', () => {
     expect(root().querySelector('mat-datepicker-toggle button')?.getAttribute('aria-label')).toBe(
       'Choose a day',
     );
+  });
+
+  it('converts values and bounds at a custom calendar adapter boundary', async () => {
+    await setup('fr', [{ provide: DateAdapter, useClass: CalendarDayAdapter }]);
+    host.min.set(new Date(2026, 0, 1));
+    host.max.set(new Date(2026, 11, 31));
+    host.expires.setValue(new Date(2026, 3, 3));
+    await render();
+    expect(input().value).toBe('2026-04-03');
+    await type('2025-12-31');
+    await leave();
+    expect(host.expires.hasError('nxsDateMin')).toBe(true);
+    expect(error()).toBe('Enter 2026-01-01 or later');
+    await type('2026-12-31');
+    expect(host.expires.valid).toBe(true);
+    expect(day(host.expires.value)).toBe('2026-12-31');
+  });
+
+  it('clears invalid text when the form resets an already null value', async () => {
+    await setup('fr');
+    await type('not-a-date');
+    await leave();
+    expect(host.expires.value).toBeNull();
+    expect(host.expires.hasError('nxsDateParse')).toBe(true);
+    host.expires.reset(null);
+    await render();
+    expect(input().value).toBe('');
+    expect(host.expires.valid).toBe(true);
+    expect(error()).toBeUndefined();
   });
 
   it('is disabled when the form disables it', async () => {

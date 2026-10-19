@@ -1,3 +1,5 @@
+import { NxsVocabularySelectComponent } from '../vocabulary-select/vocabulary-select.component';
+import { NxsDateInputComponent } from '../date-input/date-input.component';
 import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
@@ -27,25 +29,10 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatChipInputEvent, MatChipsModule } from '@angular/material/chips';
 import { DateAdapter, ErrorStateMatcher, MatOptionModule } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
-import { MatSelectModule } from '@angular/material/select';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import {
-  DirectoryEntry,
-  DirectoryService,
-  L10nDirectoryEntry,
-  directoryPickerLabel,
-  directoryUsesL10nLabel,
-  filterDirectoryPickerEntries,
-  formatHierarchicalL10nLabel,
-  groupL10nChildrenByParent,
-  l10nEntryLabel,
-} from '@nuxeo/satori-platform/nuxeo-client';
-
-import { NxsDateMaskPipe } from '../date-input/date-mask.pipe';
 import { provideNxsDateAdapter } from '../date-input/locale-date';
 import type { NxsHeadingLevel } from '../heading-level';
 import { nxsPropertyText } from '../properties-panel/property-text';
@@ -73,10 +60,6 @@ import {
 interface EditorField extends NxsEditorField {
   readonly labelKey?: string;
 }
-
-type Vocabulary =
-  | { readonly l10n: false; readonly entries: readonly DirectoryEntry[] }
-  | { readonly l10n: true; readonly entries: readonly L10nDirectoryEntry[] };
 
 /** Web UI's `nuxeo-dublincore-edit-layout`, the fields every editable document has. */
 const DUBLIN_CORE: readonly EditorField[] = [
@@ -147,11 +130,6 @@ function humanize(name: string): string {
   return words.charAt(0).toUpperCase() + words.slice(1);
 }
 
-function directoriesOf(definition: NxsEditorFieldType, into: Set<string>): void {
-  if (definition.directory) into.add(definition.directory);
-  for (const child of Object.values(definition.fields ?? {})) directoriesOf(child, into);
-}
-
 let nextId = 0;
 
 /**
@@ -173,21 +151,20 @@ let nextId = 0;
   templateUrl: './metadata-editor.component.html',
   styleUrl: './metadata-editor.component.scss',
   imports: [
+    NxsDateInputComponent,
+    NxsVocabularySelectComponent,
     NgTemplateOutlet,
     ReactiveFormsModule,
     TranslatePipe,
     MatButtonModule,
     MatCheckboxModule,
     MatChipsModule,
-    MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
     MatInputModule,
     MatOptionModule,
-    MatSelectModule,
     NxsTabsComponent,
     NxsTabBodyDirective,
-    NxsDateMaskPipe,
   ],
   providers: [provideNxsDateAdapter()],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -212,7 +189,6 @@ export class NxsMetadataEditorComponent {
   /** Every value passes its field's constraints, or not. Emitted when that changes. */
   readonly validChange = output<boolean>();
 
-  private readonly directories = inject(DirectoryService);
   private readonly translate = inject(TranslateService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly injector = inject(Injector);
@@ -227,9 +203,6 @@ export class NxsMetadataEditorComponent {
   protected readonly submitted = signal(false);
   protected readonly invalidCount = signal(0);
   protected readonly selectedTab = signal(0);
-  protected readonly panelSearch = signal('');
-  private readonly vocabularies = signal<ReadonlyMap<string, Vocabulary>>(new Map());
-  private readonly requested = new Set<string>();
   private builtFrom: NxsEditorValues | null = null;
   /** Never shown: stands in for a control of an unexpected shape so a binding never throws. */
   private readonly detached = new FormControl();
@@ -274,9 +247,6 @@ export class NxsMetadataEditorComponent {
     isErrorState: (control) =>
       !!control && control.invalid && (control.touched || this.submitted()),
   };
-
-  protected readonly l10nEntryLabel = l10nEntryLabel;
-  protected readonly directoryPickerLabel = directoryPickerLabel;
 
   constructor() {
     effect(() => {
@@ -389,10 +359,6 @@ export class NxsMetadataEditorComponent {
     return this.translate.instant(key, { ...error.params, label });
   }
 
-  protected search(event: Event): void {
-    if (event.target instanceof HTMLInputElement) this.panelSearch.set(event.target.value);
-  }
-
   protected isRequired(definition: NxsEditorFieldType): boolean {
     return definition.required === true;
   }
@@ -418,45 +384,8 @@ export class NxsMetadataEditorComponent {
       .join(', ');
   }
 
-  protected flatOptions(directory: string): readonly DirectoryEntry[] {
-    const vocabulary = this.vocabularies().get(directory);
-    if (!vocabulary || vocabulary.l10n) return [];
-    return filterDirectoryPickerEntries([...vocabulary.entries], this.panelSearch());
-  }
-
-  protected groupedOptions(directory: string): ReturnType<typeof groupL10nChildrenByParent> {
-    const vocabulary = this.vocabularies().get(directory);
-    if (!vocabulary?.l10n) return [];
-    return groupL10nChildrenByParent([...vocabulary.entries], this.panelSearch());
-  }
-
-  protected usesL10n(directory: string): boolean {
-    return directoryUsesL10nLabel(directory);
-  }
-
-  /** A vocabulary value's label, `Parent/Child` for a hierarchical one. The stored ID until loaded. */
-  protected vocabularyLabel(directory: string, id: unknown): string {
-    if (typeof id !== 'string') return '';
-    const vocabulary = this.vocabularies().get(directory);
-    if (!vocabulary) return id;
-    if (vocabulary.l10n) return formatHierarchicalL10nLabel(id, [...vocabulary.entries]);
-    const entry = vocabulary.entries.find((candidate) => candidate.id === id);
-    return entry ? directoryPickerLabel(entry) : id;
-  }
-
   protected listValue(control: AbstractControl): readonly unknown[] {
     return Array.isArray(control.value) ? control.value : [];
-  }
-
-  /** Each vocabulary panel opens with an empty search. */
-  protected panelToggled(): void {
-    this.panelSearch.set('');
-  }
-
-  protected clearValue(control: AbstractControl, multiple: boolean): void {
-    control.setValue(multiple ? [] : null);
-    control.markAsDirty();
-    control.markAsTouched();
   }
 
   protected removeItem(control: AbstractControl, index: number): void {
@@ -517,9 +446,7 @@ export class NxsMetadataEditorComponent {
       this.form.removeControl(xpath, { emitEvent: false });
       this.serverMessages.delete(xpath);
     }
-    const directories = new Set<string>();
     for (const field of fields) {
-      directoriesOf(field.definition, directories);
       if (this.form.controls[field.xpath]) continue;
       const control = buildControl(field.definition, values[field.xpath], this.dateAdapter);
       control.addValidators(this.heldServerMessage(field.xpath));
@@ -527,7 +454,6 @@ export class NxsMetadataEditorComponent {
       this.form.addControl(field.xpath, control, { emitEvent: false });
     }
     this.applyDisabled(untracked(this.disabled));
-    this.loadVocabularies(directories);
     this.structure.update((value) => value + 1);
     this.statusChanged();
   }
@@ -581,32 +507,6 @@ export class NxsMetadataEditorComponent {
       for (const [name, child] of Object.entries(children)) {
         const sub = group.controls[name];
         if (sub) this.lockReadOnly(child, sub, depth + 1);
-      }
-    }
-  }
-
-  private loadVocabularies(directories: ReadonlySet<string>): void {
-    for (const directory of directories) {
-      if (this.requested.has(directory)) continue;
-      this.requested.add(directory);
-      const store = (vocabulary: Vocabulary) =>
-        this.vocabularies.update((current) => new Map(current).set(directory, vocabulary));
-      if (directoryUsesL10nLabel(directory)) {
-        this.directories
-          .getAllL10nEntries(directory)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: (entries) => store({ l10n: true, entries }),
-            error: () => this.requested.delete(directory),
-          });
-      } else {
-        this.directories
-          .getEntries(directory)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: (entries) => store({ l10n: false, entries }),
-            error: () => this.requested.delete(directory),
-          });
       }
     }
   }
@@ -667,7 +567,8 @@ export class NxsMetadataEditorComponent {
         const target = this.host.nativeElement.querySelector<HTMLElement>(
           '[data-nxs-invalid="true"]',
         );
-        if (target) target.focus();
+        if (target)
+          (target.querySelector<HTMLElement>('input, textarea, button') ?? target).focus();
         else if (attempts > 1) this.focusFirstInvalid(attempts - 1);
       },
       { injector: this.injector },

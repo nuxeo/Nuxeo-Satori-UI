@@ -51,7 +51,7 @@ describe('providePlatformEnglishFallback', () => {
 
   it('interpolates parameters into the English, as a catalogue value would be', () => {
     const translate = host();
-    expect(translate.instant('shared.remove-item', { name: 'Budget.xlsx' })).toBe(
+    expect(translate.instant('satori-components.pickers.remove', { name: 'Budget.xlsx' })).toBe(
       'Remove Budget.xlsx',
     );
   });

@@ -3,9 +3,10 @@
   <input
     matInput
     autocomplete="off"
+    [placeholder]="'common.date-mask' | translate | nxsDateMask"
     [matDatepicker]="picker"
-    [min]="min()"
-    [max]="max()"
+    [min]="adapterMin()"
+    [max]="adapterMax()"
     [required]="required()"
     [disabled]="isDisabled()"
     [errorStateMatcher]="errorState"

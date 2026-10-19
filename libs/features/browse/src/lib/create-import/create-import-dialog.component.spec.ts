@@ -2422,7 +2422,9 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
     fixture.componentInstance.startCreateFromType(pictureType());
     fixture.detectChanges();
     await fixture.whenStable();
-    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+    const input = fixture.nativeElement.querySelector(
+      'nxs-date-input[name="expires"] input',
+    ) as HTMLInputElement;
 
     expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
     expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
@@ -2435,7 +2437,7 @@ describe('CreateImportDialogComponent Expires typed into the real field', () => 
     fixture.detectChanges();
     await fixture.whenStable();
     const input = fixture.nativeElement.querySelector(
-      'input[name="importExpires"]',
+      'nxs-date-input[name="importExpires"] input',
     ) as HTMLInputElement;
 
     expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);

@@ -274,32 +274,20 @@
         </mat-radio-group>
         @if (editorDated()) {
           <div class="nxs-permissions-panel__dates">
-            <mat-form-field appearance="outline">
-              <mat-label>{{
-                'satori-components.permissions-panel.editor.from' | translate
-              }}</mat-label>
-              <input
-                matInput
-                [matDatepicker]="beginPicker"
-                [value]="editorBeginField()"
-                (dateChange)="editorBegin.set(fieldDay($event.value))"
-              />
-              <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
-              <mat-datepicker #beginPicker />
-            </mat-form-field>
-            <mat-form-field appearance="outline">
-              <mat-label>{{
-                'satori-components.permissions-panel.editor.to' | translate
-              }}</mat-label>
-              <input
-                matInput
-                [matDatepicker]="endPicker"
-                [value]="editorEndField()"
-                (dateChange)="editorEnd.set(fieldDay($event.value))"
-              />
-              <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
-              <mat-datepicker #endPicker />
-            </mat-form-field>
+            <nxs-date-input
+              #beginDateControl="ngModel"
+              name="beginDate"
+              [label]="'satori-components.permissions-panel.editor.from' | translate"
+              [ngModel]="editorBegin()"
+              (ngModelChange)="editorBegin.set($event)"
+            />
+            <nxs-date-input
+              #endDateControl="ngModel"
+              name="endDate"
+              [label]="'satori-components.permissions-panel.editor.to' | translate"
+              [ngModel]="editorEnd()"
+              (ngModelChange)="editorEnd.set($event)"
+            />
           </div>
           @if (editorInvalidRange()) {
             <p class="nxs-permissions-panel__field-error" role="alert">
@@ -311,7 +299,12 @@
           <button mat-button type="button" (click)="closeEditor()">
             {{ 'satori-components.permissions-panel.editor.cancel' | translate }}
           </button>
-          <button mat-flat-button color="primary" type="submit" [disabled]="!editable()">
+          <button
+            mat-flat-button
+            color="primary"
+            type="submit"
+            [disabled]="!datesValid() || !editable()"
+          >
             {{
               (edit.mode === 'add'
                 ? 'satori-components.permissions-panel.editor.add'
@@ -533,7 +526,7 @@
           mat-flat-button
           color="primary"
           type="button"
-          [disabled]="saving()"
+          [disabled]="!datesValid() || saving()"
           (click)="save()"
         >
           {{ 'satori-components.permissions-panel.save' | translate }}

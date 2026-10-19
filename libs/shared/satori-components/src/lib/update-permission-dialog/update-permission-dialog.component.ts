@@ -1,4 +1,7 @@
+import { FormsModule, NgModel } from '@angular/forms';
+import { NxsDateInputComponent } from '../date-input/date-input.component';
 import {
+  viewChild,
   ChangeDetectionStrategy,
   Component,
   DestroyRef,
@@ -9,8 +12,6 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
-import { DateAdapter } from '@angular/material/core';
-import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
@@ -26,7 +27,6 @@ import {
   type NuxeoAce,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { nxsDateFromAdapter, nxsDateToAdapter } from '../date-input/adapter-date';
 import { provideNxsDateAdapter } from '../date-input/locale-date';
 import { failureKey, offeredRights, principalLabel } from '../permission-dialog-support';
 import { dateToWrite, dayToDate, toDay } from '../permissions-panel/permissions-model';
@@ -63,9 +63,10 @@ let nextId = 0;
   templateUrl: './update-permission-dialog.component.html',
   styleUrl: './update-permission-dialog.component.scss',
   imports: [
+    FormsModule,
+    NxsDateInputComponent,
     MatButton,
     MatCheckbox,
-    MatDatepickerModule,
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
@@ -80,6 +81,12 @@ let nextId = 0;
   host: { class: 'nxs-update-permission-dialog' },
 })
 export class NxsUpdatePermissionDialogComponent {
+  private readonly beginDateControl = viewChild<NgModel>('beginDateControl');
+  private readonly endDateControl = viewChild<NgModel>('endDateControl');
+  protected datesValid(): boolean {
+    return !this.beginDateControl()?.invalid && !this.endDateControl()?.invalid;
+  }
+
   private readonly dialogRef =
     inject<MatDialogRef<NxsUpdatePermissionDialogComponent, boolean>>(MatDialogRef);
   private readonly data = inject<NxsUpdatePermissionDialogData>(MAT_DIALOG_DATA);
@@ -87,9 +94,6 @@ export class NxsUpdatePermissionDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
-  /** The date fields' adapter, from `provideNxsDateAdapter()`: a host's may not hold JS dates. */
-  private readonly dateAdapter = inject<DateAdapter<unknown>>(DateAdapter);
-
   private readonly ace = this.data.ace;
   protected readonly id = `nxs-update-permission-dialog-${nextId++}`;
   protected readonly external = this.ace.externalUser;
@@ -102,9 +106,6 @@ export class NxsUpdatePermissionDialogComponent {
   /** The entry's days, at local midnight. */
   protected readonly begin = signal<Date | null>(dayToDate(this.ace.begin));
   protected readonly end = signal<Date | null>(dayToDate(this.ace.end));
-  /** The same days as the date fields hold them, in their adapter's own representation. */
-  protected readonly beginField = computed(() => nxsDateToAdapter(this.dateAdapter, this.begin()));
-  protected readonly endField = computed(() => nxsDateToAdapter(this.dateAdapter, this.end()));
   protected readonly notify = signal(this.external);
   protected readonly comment = signal('');
   protected readonly saving = signal(false);
@@ -123,12 +124,8 @@ export class NxsUpdatePermissionDialogComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
-  /** The day a date field holds, whatever its adapter holds dates as. */
-  protected fieldDay(value: unknown): Date | null {
-    return nxsDateFromAdapter(this.dateAdapter, value);
-  }
-
   protected update(): void {
+    if (!this.datesValid()) return;
     if (!this.valid() || this.saving()) return;
     this.saving.set(true);
     const notify = this.notify();

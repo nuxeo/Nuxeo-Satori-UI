@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-126 exported symbol(s).
+127 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -370,6 +370,8 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
     readonly value: _angular_core.ModelSignal<Date | null>;
+    protected readonly adapterMin: _angular_core.Signal<unknown>;
+    protected readonly adapterMax: _angular_core.Signal<unknown>;
     protected readonly isDisabled: _angular_core.Signal<boolean>;
     protected readonly problem: _angular_core.Signal<"max" | "min" | "parse" | null>;
     protected readonly example: _angular_core.Signal<string>;
@@ -378,7 +380,7 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     };
     constructor();
     ngDoCheck(): void;
-    writeValue(value: Date | null): void;
+    writeValue(value: unknown): void;
     registerOnChange(fn: (value: Date | null) => void): void;
     registerOnTouched(fn: () => void): void;
     setDisabledState(disabled: boolean): void;
@@ -882,13 +884,10 @@ class NxsMetadataEditorComponent {
     protected readonly submitted: _angular_core.WritableSignal<boolean>;
     protected readonly invalidCount: _angular_core.WritableSignal<number>;
     protected readonly selectedTab: _angular_core.WritableSignal<number>;
-    protected readonly panelSearch: _angular_core.WritableSignal<string>;
     protected readonly standardFields: _angular_core.Signal<readonly EditorField[]>;
     protected readonly typeSections: _angular_core.Signal<readonly NxsEditorSection[]>;
     protected readonly tabs: _angular_core.Signal<readonly NxsTab[]>;
     protected readonly errorMatcher: ErrorStateMatcher;
-    protected readonly l10nEntryLabel: typeof l10nEntryLabel;
-    protected readonly directoryPickerLabel: typeof directoryPickerLabel;
     constructor();
     validate(): boolean;
     dirtyProperties(): Record<string, unknown>;
@@ -903,18 +902,11 @@ class NxsMetadataEditorComponent {
     protected showError(control: AbstractControl): boolean;
     protected errorOf(control: AbstractControl): FieldError | null;
     protected errorText(error: FieldError, label: string): string;
-    protected search(event: Event): void;
     protected isRequired(definition: NxsEditorFieldType): boolean;
     protected inputType(definition: NxsEditorFieldType): 'number' | 'text';
     protected step(definition: NxsEditorFieldType): string | null;
     protected readOnlyText(control: AbstractControl): string;
-    protected flatOptions(directory: string): readonly DirectoryEntry[];
-    protected groupedOptions(directory: string): ReturnType<typeof groupL10nChildrenByParent>;
-    protected usesL10n(directory: string): boolean;
-    protected vocabularyLabel(directory: string, id: unknown): string;
     protected listValue(control: AbstractControl): readonly unknown[];
-    protected panelToggled(): void;
-    protected clearValue(control: AbstractControl, multiple: boolean): void;
     protected removeItem(control: AbstractControl, index: number): void;
     protected addItem(control: AbstractControl, definition: NxsEditorFieldType, event: MatChipInputEvent): void;
     protected addComplexItem(control: AbstractControl, definition: NxsEditorFieldType, depth: number): void;
@@ -947,6 +939,7 @@ class NxsPagerComponent {
     }
 }
 class NxsPermissionsPanelComponent {
+    protected datesValid(): boolean;
     readonly documentId: _angular_core.InputSignal<string>;
     readonly permissionsChanged: _angular_core.InputSignal<(() => void) | null>;
     protected readonly idPrefix: string;
@@ -968,8 +961,6 @@ class NxsPermissionsPanelComponent {
     protected readonly editorDated: _angular_core.WritableSignal<boolean>;
     protected readonly editorBegin: _angular_core.WritableSignal<Date | null>;
     protected readonly editorEnd: _angular_core.WritableSignal<Date | null>;
-    protected readonly editorBeginField: _angular_core.Signal<unknown>;
-    protected readonly editorEndField: _angular_core.Signal<unknown>;
     protected readonly editorSubmitted: _angular_core.WritableSignal<boolean>;
     protected readonly suggestions: _angular_core.WritableSignal<UserGroupSuggestion[]>;
     protected readonly loadErrorKey: _angular_core.Signal<string>;
@@ -1000,7 +991,6 @@ class NxsPermissionsPanelComponent {
     protected closeEditor(): void;
     protected onPrincipalInput(value: string): void;
     protected onPrincipalSelected(suggestion: UserGroupSuggestion): void;
-    protected fieldDay(value: unknown): Date | null;
     protected displaySuggestion(suggestion: UserGroupSuggestion | string | null): string;
     protected applyEditor(): void;
     protected save(): void;
@@ -1211,6 +1201,7 @@ class NxsSearchFiltersComponent {
     }
 }
 class NxsShareExternalDialogComponent {
+    protected datesValid(): boolean;
     protected readonly rights: readonly string[];
     protected readonly mailHint = "permissions.notification.mail-hint";
     protected readonly email: _angular_core.WritableSignal<string>;
@@ -1218,8 +1209,6 @@ class NxsShareExternalDialogComponent {
     protected readonly right: _angular_core.WritableSignal<string>;
     protected readonly begin: _angular_core.WritableSignal<Date | null>;
     protected readonly end: _angular_core.WritableSignal<Date | null>;
-    protected readonly beginField: _angular_core.Signal<unknown>;
-    protected readonly endField: _angular_core.Signal<unknown>;
     protected readonly comment: _angular_core.WritableSignal<string>;
     protected readonly saving: _angular_core.WritableSignal<"another" | "create" | null>;
     protected readonly emailValid: _angular_core.Signal<boolean>;
@@ -1228,7 +1217,6 @@ class NxsShareExternalDialogComponent {
     protected readonly valid: _angular_core.Signal<boolean>;
     constructor();
     protected label(permission: string): string;
-    protected fieldDay(value: unknown): Date | null;
     protected cancel(): void;
     protected create(another: boolean): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsShareExternalDialogComponent, never>;
@@ -1389,6 +1377,7 @@ interface NxsToolbarAction {
     }
 }
 class NxsUpdatePermissionDialogComponent {
+    protected datesValid(): boolean;
     protected readonly id: string;
     protected readonly external: boolean;
     protected readonly principal: string;
@@ -1398,15 +1387,12 @@ class NxsUpdatePermissionDialogComponent {
     protected readonly dated: _angular_core.WritableSignal<boolean>;
     protected readonly begin: _angular_core.WritableSignal<Date | null>;
     protected readonly end: _angular_core.WritableSignal<Date | null>;
-    protected readonly beginField: _angular_core.Signal<unknown>;
-    protected readonly endField: _angular_core.Signal<unknown>;
     protected readonly notify: _angular_core.WritableSignal<boolean>;
     protected readonly comment: _angular_core.WritableSignal<string>;
     protected readonly saving: _angular_core.WritableSignal<boolean>;
     protected readonly endBeforeBegin: _angular_core.Signal<boolean>;
     protected readonly valid: _angular_core.Signal<boolean>;
     protected label(permission: string): string;
-    protected fieldDay(value: unknown): Date | null;
     protected update(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUpdatePermissionDialogComponent, "nxs-update-permission-dialog", never, {}, {}, never, never, true, never>;
@@ -1536,6 +1522,14 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     protected blurred(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsVocabularySelectComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsVocabularySelectComponent, "nxs-vocabulary-select", never, { "directory": { "alias": "directory"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "multiple": { "alias": "multiple"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; }, never, never, true, never>;
+    }
+}
+class TranslatedDatepickerIntl extends MatDatepickerIntl {
+    constructor();
+    formatYearRange(start: string, end: string): string;
+    formatYearRangeLabel(start: string, end: string): string;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
+    static ɵprov: _angular_core.ɵɵInjectableDeclaration<TranslatedDatepickerIntl>;
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
@@ -3486,44 +3480,17 @@ class DocumentViewerComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<DocumentViewerComponent, "lib-document-viewer", never, { "blobUrl": { "alias": "blobUrl"; "required": false; "isSignal": true; }; "rawBlobUrl": { "alias": "rawBlobUrl"; "required": true; "isSignal": true; }; "blobType": { "alias": "blobType"; "required": true; "isSignal": true; }; "mimeType": { "alias": "mimeType"; "required": false; "isSignal": true; }; "fileName": { "alias": "fileName"; "required": false; "isSignal": true; }; "fileSize": { "alias": "fileSize"; "required": false; "isSignal": true; }; "loading": { "alias": "loading"; "required": false; "isSignal": true; }; "noteContent": { "alias": "noteContent"; "required": false; "isSignal": true; }; "noteHtml": { "alias": "noteHtml"; "required": false; "isSignal": true; }; "videoSources": { "alias": "videoSources"; "required": false; "isSignal": true; }; "storyboard": { "alias": "storyboard"; "required": false; "isSignal": true; }; "posterUrl": { "alias": "posterUrl"; "required": false; "isSignal": true; }; "hasPdfRendition": { "alias": "hasPdfRendition"; "required": false; "isSignal": true; }; "previewUrl": { "alias": "previewUrl"; "required": false; "isSignal": true; }; "pictureInfo": { "alias": "pictureInfo"; "required": false; "isSignal": true; }; "pictureViews": { "alias": "pictureViews"; "required": false; "isSignal": true; }; "exifData": { "alias": "exifData"; "required": false; "isSignal": true; }; "iptcData": { "alias": "iptcData"; "required": false; "isSignal": true; }; "videoInfo": { "alias": "videoInfo"; "required": false; "isSignal": true; }; "arenderUrl": { "alias": "arenderUrl"; "required": false; "isSignal": true; }; "arenderReloadId": { "alias": "arenderReloadId"; "required": false; "isSignal": true; }; "viewerDocUid": { "alias": "viewerDocUid"; "required": false; "isSignal": true; }; "annotationsTab": { "alias": "annotationsTab"; "required": false; "isSignal": true; }; "showMainFileControls": { "alias": "showMainFileControls"; "required": false; "isSignal": true; }; "mainFileActionInProgress": { "alias": "mainFileActionInProgress"; "required": false; "isSignal": true; }; }, { "downloadClicked": "downloadClicked"; "openWithDriveClicked": "openWithDriveClicked"; "previewClicked": "previewClicked"; "replaceMainFileClicked": "replaceMainFileClicked"; "removeMainFileClicked": "removeMainFileClicked"; "storyboardSeek": "storyboardSeek"; "formatDownload": "formatDownload"; }, never, never, true, never>;
     }
 }
-class EditCollectionDialogComponent implements OnInit {
-    readonly l10nEntryLabel: typeof l10nEntryLabel;
-    protected readonly directoryPickerLabel: typeof directoryPickerLabel;
-    expiresNgModel?: NgModel;
-    readonly natureEntries: _angular_core.WritableSignal<DirectoryEntry[]>;
-    readonly subjectEntries: _angular_core.WritableSignal<L10nDirectoryEntry[]>;
-    readonly coverageEntries: _angular_core.WritableSignal<L10nDirectoryEntry[]>;
+class EditCollectionDialogComponent {
+    protected form?: NgForm;
     readonly saving: _angular_core.WritableSignal<boolean>;
-    naturePanelSearch: string;
-    subjectsPanelSearch: string;
-    coveragePanelSearch: string;
-    filteredNatureOptions(): DirectoryEntry[];
-    groupedSubjectOptions(): ReturnType<typeof groupL10nChildrenByParent>;
-    groupedCoverageOptions(): ReturnType<typeof groupL10nChildrenByParent>;
     title: string;
     description: string;
     nature: string | null;
     subjects: string[];
     coverage: string | null;
     expires: Date | null;
-    expiresRawText: string;
-    readonly expiresErrorMatcher: {
-    isErrorState: () => boolean;
-    };
-    ngOnInit(): void;
-    onNaturePanelOpen(open: boolean): void;
-    naturePillLabel(id: string): string;
-    subjectPillLabel(id: string): string;
-    coveragePillLabel(id: string): string;
-    clearNature(): void;
-    clearCoverage(): void;
-    removeSubject(id: string): void;
-    onSubjectsPanelOpen(open: boolean): void;
-    onCoveragePanelOpen(open: boolean): void;
+    constructor();
     isExpiresValid(): boolean;
-    showExpiresError(): boolean;
-    onExpiresInput(event: Event): void;
-    onExpiresChange(value: Date | null): void;
     save(): void;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<EditCollectionDialogComponent, never>;
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<EditCollectionDialogComponent, "lib-edit-collection-dialog", never, {}, {}, never, never, true, never>;
@@ -3694,10 +3661,7 @@ interface StoryboardItem {
     }
 }
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
-class TranslatedDatepickerIntl extends MatDatepickerIntl {
-    constructor();
-    formatYearRange(start: string, end: string): string;
-    formatYearRangeLabel(start: string, end: string): string;
+class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
     static ɵprov: _angular_core.ɵɵInjectableDeclaration<TranslatedDatepickerIntl>;
     }
