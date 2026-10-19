@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -27,10 +27,18 @@ test('npm and npx preserve argv, cwd, env and exit status without a shell', asyn
     mkdirSync(bin);
     const source = `process.stdout.write(JSON.stringify({args:process.argv.slice(2),cwd:process.cwd(),marker:process.env.TOOL_TEST}));process.exitCode=Number(process.env.TOOL_EXIT ?? 0);`;
     for (const tool of ['npm', 'npx']) writeFileSync(join(bin, `${tool}-cli.js`), source);
+    // Platforms can spell the same cwd differently (macOS /var resolves to /private/var,
+    // while Windows can preserve a junction). Compare directory identity on every OS.
+    const cwdAlias = join(dir, 'cwd alias');
+    symlinkSync(bin, cwdAlias, process.platform === 'win32' ? 'junction' : 'dir');
     const options = {
-      cwd: dir,
+      cwd: cwdAlias,
       encoding: 'utf8',
       env: { ...process.env, npm_execpath: join(bin, 'npm-cli.js'), TOOL_TEST: 'kept' },
+    };
+    const parseOutput = (output) => {
+      const actual = JSON.parse(output);
+      return { ...actual, cwd: realpathSync(actual.cwd) };
     };
     for (const tool of ['npm', 'npx']) {
       const invocation = packageCommand(tool, args, options);
@@ -38,9 +46,9 @@ test('npm and npx preserve argv, cwd, env and exit status without a shell', asyn
       assert.deepEqual(invocation.args.slice(1), args);
       const spawned = spawnToolSync(tool, args, options);
       assert.equal(spawned.status, 0, spawned.error?.message ?? spawned.stderr);
-      const expected = { args, cwd: dir, marker: 'kept' };
-      assert.deepEqual(JSON.parse(spawned.stdout), expected);
-      assert.deepEqual(JSON.parse(execToolSync(tool, args, options)), expected);
+      const expected = { args, cwd: realpathSync(cwdAlias), marker: 'kept' };
+      assert.deepEqual(parseOutput(spawned.stdout), expected);
+      assert.deepEqual(parseOutput(execToolSync(tool, args, options)), expected);
       const child = spawnTool(tool, args, options);
       let output = '';
       child.stdout.on('data', (data) => {
@@ -48,7 +56,7 @@ test('npm and npx preserve argv, cwd, env and exit status without a shell', asyn
       });
       const [code] = await once(child, 'close');
       assert.equal(code, 0);
-      assert.deepEqual(JSON.parse(output), expected);
+      assert.deepEqual(parseOutput(output), expected);
       assert.equal(
         spawnToolSync(tool, args, { ...options, env: { ...options.env, TOOL_EXIT: '7' } }).status,
         7,

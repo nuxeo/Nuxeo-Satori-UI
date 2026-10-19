@@ -31,7 +31,7 @@
 import { execFile } from 'node:child_process';
 import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { availableParallelism, tmpdir } from 'node:os';
-import { delimiter, dirname, join, resolve } from 'node:path';
+import { delimiter, dirname, join, resolve, sep } from 'node:path';
 import { promisify } from 'node:util';
 import {
   CONTROL_COUNT as SCAN_CONTROL_COUNT,
@@ -42,6 +42,9 @@ const run = promisify(execFile);
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const GATE = join(ROOT, 'scripts', 'beta-harness', 'dependency-tree.mjs');
 const NM = 'node_modules';
+// The gate walks source files with native filesystem paths. Lockfile keys and package
+// specifiers still use '/', so adapt only the source-path portion of expected messages.
+const sourcePath = (path) => path.split('/').join(sep);
 
 const HX = '@alfresco/adf-hx-content-services';
 const CORE = '@alfresco/adf-core';
@@ -373,7 +376,7 @@ control(
 control(
   'manifest: a libs/ peerDependenciesMeta entry is reported',
   'fail',
-  `[manifest] libs/platform/package.json peerDependenciesMeta.${EXT}`,
+  `[manifest] ${sourcePath('libs/platform/package.json')} peerDependenciesMeta.${EXT}`,
   fixture('manifest-libs-peer-meta', {
     'libs/platform/package.json': {
       name: '@fixture/platform',
@@ -385,7 +388,7 @@ control(
 control(
   'manifest: a libs/ bundleDependencies entry is reported',
   'fail',
-  `[manifest] libs/ui/package.json bundleDependencies[] ${JS_API}`,
+  `[manifest] ${sourcePath('libs/ui/package.json')} bundleDependencies[] ${JS_API}`,
   fixture('manifest-libs-bundle', {
     'libs/ui/package.json': { name: '@fixture/ui', version: '0.0.0', bundleDependencies: [JS_API] },
   }),
@@ -416,7 +419,7 @@ control(
 control(
   'manifest: a libs/*/package.json peer is reported',
   'fail',
-  `[manifest] libs/platform/package.json peerDependencies.${EXT} = ^9.0.0`,
+  `[manifest] ${sourcePath('libs/platform/package.json')} peerDependencies.${EXT} = ^9.0.0`,
   fixture('manifest-libs-peer', {
     'libs/platform/package.json': {
       name: '@fixture/platform',
@@ -430,7 +433,7 @@ control(
 control(
   'manifest: a deep libs/**/package.json npm: alias is reported',
   'fail',
-  `[manifest] libs/shared/deep/package.json dependencies.hxcs = npm:${HXCS}@2.0.111`,
+  `[manifest] ${sourcePath('libs/shared/deep/package.json')} dependencies.hxcs = npm:${HXCS}@2.0.111`,
   fixture('manifest-libs-deep-alias', {
     'libs/shared/deep/package.json': {
       name: '@fixture/deep',
@@ -500,7 +503,7 @@ control(
 control(
   'import: a named import in libs/ is reported',
   'fail',
-  `[import] libs/ui/src/columns.ts ${CORE}`,
+  `[import] ${sourcePath('libs/ui/src/columns.ts')} ${CORE}`,
   fixture('import-named', {
     'libs/ui/src/columns.ts': `import type { DataColumn } ${'from'} '${CORE}';\nexport type C = DataColumn;\n`,
   }),
@@ -508,7 +511,7 @@ control(
 control(
   'import: a subpath re-export in apps/ is reported',
   'fail',
-  `[import] apps/web/src/barrel.ts ${HX}/ui`,
+  `[import] ${sourcePath('apps/web/src/barrel.ts')} ${HX}/ui`,
   fixture('import-reexport', {
     'apps/web/src/barrel.ts': `export * ${'from'} '${HX}/ui';\n`,
   }),
@@ -516,7 +519,7 @@ control(
 control(
   'import: a dynamic import() in a spec is reported',
   'fail',
-  `[import] libs/ui/src/lazy.spec.ts ${EXT} (spec)`,
+  `[import] ${sourcePath('libs/ui/src/lazy.spec.ts')} ${EXT} (spec)`,
   fixture('import-dynamic', {
     'libs/ui/src/lazy.spec.ts': `const m = await ${'import'}('${EXT}');\nexport default m;\n`,
   }),
@@ -525,7 +528,7 @@ control(
 control(
   'import: a lazy-route import() after executable code is reported',
   'fail',
-  `[import] libs/ui/src/routes.ts ${CORE}/columns`,
+  `[import] ${sourcePath('libs/ui/src/routes.ts')} ${CORE}/columns`,
   fixture('import-dynamic-mid-file', {
     'libs/ui/src/routes.ts':
       `import { Routes } ${'from'} '@angular/router';\n` +
@@ -539,7 +542,7 @@ control(
 control(
   'import: a file under a source directory named tmp is reported',
   'fail',
-  `[import] libs/ui/src/tmp/legacy.ts ${HXCS}`,
+  `[import] ${sourcePath('libs/ui/src/tmp/legacy.ts')} ${HXCS}`,
   fixture('import-under-tmp', {
     'libs/ui/src/tmp/legacy.ts': `import type { Document } ${'from'} '${HXCS}';\nexport type D = Document;\n`,
   }),
@@ -547,7 +550,7 @@ control(
 control(
   'import: a require() in a .cjs file is reported',
   'fail',
-  `[import] libs/ui/tools/load.cjs ${HXCS}`,
+  `[import] ${sourcePath('libs/ui/tools/load.cjs')} ${HXCS}`,
   fixture('import-require', {
     'libs/ui/tools/load.cjs': `module.exports = ${'require'}('${HXCS}');\n`,
   }),
@@ -555,7 +558,7 @@ control(
 control(
   'import: a stylesheet @use is reported',
   'fail',
-  `[import] libs/ui/src/styles.scss ${CORE}/theming`,
+  `[import] ${sourcePath('libs/ui/src/styles.scss')} ${CORE}/theming`,
   fixture('import-scss', { 'libs/ui/src/styles.scss': `@use '${CORE}/theming' as adf;\n` }),
 );
 
@@ -563,7 +566,7 @@ control(
 control(
   'import: the second target of a comma-separated Sass @import is reported',
   'fail',
-  `[import] libs/ui/src/multi.scss ${CORE}/theming`,
+  `[import] ${sourcePath('libs/ui/src/multi.scss')} ${CORE}/theming`,
   fixture('import-scss-multi', {
     'libs/ui/src/multi.scss': `@import 'local',\n  '${CORE}/theming';\n`,
   }),
@@ -571,7 +574,7 @@ control(
 control(
   'import: an unquoted CSS url() target is reported',
   'fail',
-  `[import] libs/ui/src/legacy.css ${HX}/ui/assets/theme.css`,
+  `[import] ${sourcePath('libs/ui/src/legacy.css')} ${HX}/ui/assets/theme.css`,
   fixture('import-css-url', {
     'libs/ui/src/legacy.css': `@import url(${HX}/ui/assets/theme.css);\n`,
   }),
@@ -582,7 +585,7 @@ control(
 control(
   'import: an @use after a "//" inside a string is reported',
   'fail',
-  `[import] libs/ui/src/marker.scss ${CORE}/theming`,
+  `[import] ${sourcePath('libs/ui/src/marker.scss')} ${CORE}/theming`,
   fixture('import-scss-slashes-in-string', {
     'libs/ui/src/marker.scss': `$marker: "//"; @use '${CORE}/theming';\n`,
   }),
@@ -590,7 +593,7 @@ control(
 control(
   'import: a target after a url(//…) is reported',
   'fail',
-  `[import] libs/ui/src/cdn.scss ${EXT}/styles`,
+  `[import] ${sourcePath('libs/ui/src/cdn.scss')} ${EXT}/styles`,
   fixture('import-scss-after-protocol-relative-url', {
     'libs/ui/src/cdn.scss': `@import url(//cdn.example/x.css), '${EXT}/styles';\n`,
   }),
@@ -653,8 +656,9 @@ control(
 //
 // Two controls for one branch, because only one of them runs everywhere. A scan root that is not a
 // directory fails `readdirSync` with ENOTDIR for any user. A mode-000 directory is the realistic
-// case, but root reads straight through it, so that control is not registered under UID 0 — and
-// says so, rather than passing or failing for a reason that has nothing to do with the gate.
+// case on POSIX, but root reads straight through it, and Windows chmod does not deny directory
+// listing. Those environments explicitly leave this control unregistered rather than passing or
+// failing for a reason that has nothing to do with the gate.
 /** Directories made unreadable for a control; restored before the workspace is removed. */
 const lockedDirs = [];
 /** Controls not registered on this run, and why. Printed with the verdict, never counted. */
@@ -671,7 +675,11 @@ control(
     libs: 'a file where the libs/ directory should be\n',
   }),
 );
-if (process.getuid?.() === 0) {
+if (process.platform === 'win32') {
+  notRun.push(
+    'an unlistable directory under libs/ — Windows chmod does not deny directory listing; the scan-root control above covers the same branch',
+  );
+} else if (process.getuid?.() === 0) {
   notRun.push(
     'an unlistable directory under libs/ — running as root, which reads through mode 000; the scan-root control above covers the same branch',
   );
@@ -685,7 +693,7 @@ if (process.getuid?.() === 0) {
   control(
     'an unlistable directory under libs/ is a gap, not a clean subtree',
     'gap',
-    ['CANNOT INSPECT', 'libs/locked/: cannot list'],
+    ['CANNOT INSPECT', `${sourcePath('libs/locked')}/: cannot list`],
     dir,
   );
 }
@@ -729,7 +737,7 @@ control(
   control(
     'a link that leaves the repository is a gap, not followed or skipped',
     'gap',
-    ['CANNOT INSPECT', 'libs/escape: links outside the repository'],
+    ['CANNOT INSPECT', `${sourcePath('libs/escape')}: links outside the repository`],
     dir,
   );
 }
@@ -742,7 +750,7 @@ control(
 control(
   'a manifest that is valid JSON but not an object is a gap',
   'gap',
-  ['CANNOT INSPECT', 'libs/ui/package.json: is an array, not a JSON object'],
+  ['CANNOT INSPECT', `${sourcePath('libs/ui/package.json')}: is an array, not a JSON object`],
   fixture('gap-manifest-array', { 'libs/ui/package.json': '[]\n' }),
 );
 {
@@ -785,7 +793,7 @@ control(
   control(
     'a link that cannot be resolved is a gap, not a skipped file',
     'gap',
-    ['CANNOT INSPECT', 'apps/web/src/gone.ts: cannot resolve link'],
+    ['CANNOT INSPECT', `${sourcePath('apps/web/src/gone.ts')}: cannot resolve link`],
     dir,
   );
 }
@@ -798,7 +806,7 @@ control(
   control(
     'import: a file reached through a symlinked directory is reported',
     'fail',
-    `[import] libs/linked/columns.ts ${CORE}`,
+    `[import] ${sourcePath('libs/linked/columns.ts')} ${CORE}`,
     dir,
   );
 }
@@ -841,9 +849,9 @@ control(
   [
     /dependency-tree: REPORT-ONLY — \d+ finding\(s\) across 5 of the 5 packages/,
     `[lockfile] ${CORE}@9.0.0 at ${NM}/${CORE}`,
-    `[manifest] libs/platform/package.json peerDependencies.${EXT} = ^9.0.0`,
+    `[manifest] ${sourcePath('libs/platform/package.json')} peerDependencies.${EXT} = ^9.0.0`,
     '[npmrc] .npmrc:5 @alfresco:registry=',
-    '[import] libs/ui — 1 file(s), 1 non-spec',
+    `[import] ${sourcePath('libs/ui')} — 1 file(s), 1 non-spec`,
   ],
   fixture('report-only-findings', {
     'package-lock.json': lockWith(
