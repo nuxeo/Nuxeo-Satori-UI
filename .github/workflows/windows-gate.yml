@@ -4,9 +4,11 @@ on:
   pull_request:
     branches: [main, 'integration/**']
   push:
-    branches: [main, 'feature/**', 'fix/**', 'integration/**']
+    # Match CodeQL's triggers: a new feature branch has no analysis until its PR opens.
+    branches: [main, 'integration/**']
 
 permissions:
+  actions: read
   contents: read
   packages: read
   security-events: read
@@ -48,6 +50,42 @@ jobs:
         run: npm ci
       - name: Generate the documentation imported by spec typechecks
         run: npx nx run satori-components:compodoc
+      - name: CodeQL wait controls
+        run: node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs
+      - name: Wait for CodeQL on this revision
+        id: wait-codeql
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const headSha = context.payload.pull_request?.head.sha ?? context.sha;
+            const prNumber = context.payload.pull_request?.number;
+            const deadline = Date.now() + 15 * 60_000;
+            while (Date.now() < deadline) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                ...context.repo, workflow_id: 'codeql.yml', head_sha: headSha,
+                event: context.eventName, per_page: 100,
+              });
+              const run = data.workflow_runs.find((candidate) => candidate.head_sha === headSha && (
+                prNumber ? candidate.pull_requests.some((pr) => pr.number === prNumber)
+                  : candidate.head_branch === context.ref.replace('refs/heads/', '')
+              ));
+              if (run?.status === 'completed') {
+                if (run.conclusion !== 'success') {
+                  throw new Error(`CodeQL ended with ${run.conclusion}: ${run.html_url}`);
+                }
+                const { data: analyses } = await github.rest.codeScanning.listRecentAnalyses({
+                  ...context.repo, ref: context.ref, per_page: 100,
+                });
+                if (analyses.some((analysis) => analysis.ref === context.ref &&
+                  analysis.commit_sha === context.sha && analysis.tool.name === 'CodeQL')) {
+                  core.info(`CodeQL completed for ${context.ref} at ${context.sha}`);
+                  return;
+                }
+              }
+              core.info(`Waiting for CodeQL and its analysis of ${context.ref} at ${context.sha}`);
+              await new Promise((resolve) => setTimeout(resolve, 15_000));
+            }
+            throw new Error(`No completed CodeQL analysis of ${context.ref} at ${context.sha} within 15 minutes`);
       - name: Full Beta gate on Windows
         run: npm run beta:gate -- --phase windows-ci
       - name: Preserve gate verdict and diagnostics
