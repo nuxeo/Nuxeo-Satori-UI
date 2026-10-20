@@ -92,9 +92,9 @@ Estimated effort: **6 hours** if you have used Node; **20 hours** if not.
 
 ---
 
-### 2. TypeScript 5.8 — **Must**
+### 2. TypeScript 5.9 — **Must**
 
-Resolved version: **5.8.3** (`~5.8.0`).
+Resolved version: **5.9.3** (`~5.9.0`).
 
 This repository runs TypeScript at close to maximum strictness, and the settings are not decorative
 — they are why the published API surface can be gated. From `tsconfig.json`:
@@ -183,13 +183,13 @@ Estimated effort: **10 hours**.
 
 ## Part II — The framework
 
-### 5. Angular 20.3 — **Must** (the largest single module)
+### 5. Angular 21.2 — **Must** (the largest single module)
 
-Resolved: **20.3.33** across `@angular/core`, `common`, `router`, `forms`, `compiler`,
-`animations`, `platform-browser`, `platform-browser-dynamic` (`~20.3.33`). CLI and build tooling
-also 20.3.x. `zone.js` **0.15.1**.
+Resolved: **21.2.25** across `@angular/core`, `common`, `router`, `forms`, `compiler`,
+`animations`, `platform-browser`, `platform-browser-dynamic` (`~21.2.25`). CLI and build tooling
+21.2.x. `zone.js` **0.15.1**.
 
-Angular 20 is a genuinely different framework from Angular 8–14. If your Angular knowledge predates
+Angular 21 is a genuinely different framework from Angular 8–14. If your Angular knowledge predates
 standalone components and signals, treat this as learning a new framework, not an upgrade.
 
 #### 5.1 What this repo uses — and what it deliberately does not
@@ -257,9 +257,9 @@ Estimated effort: **70 hours** if you know Angular 15+; **120 hours** otherwise.
 
 ---
 
-### 6. Angular Material 20 and the CDK — **Must**
+### 6. Angular Material 21 and the CDK — **Must**
 
-Resolved: `@angular/material` **20.2.14**, `@angular/cdk` **20.2.14**, plus
+Resolved: `@angular/material` **21.2.14**, `@angular/cdk` **21.2.14**, plus
 `@angular/material-date-fns-adapter` **20.2.14** and `@mat-datetimepicker/core` **16.0.1**.
 
 Material is not a choice here — adf-core imports it at 48 sites, so it is unavoidable in

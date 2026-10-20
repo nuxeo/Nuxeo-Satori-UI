@@ -83,7 +83,7 @@ function assess() {
     lines.push(
       `node-version: FAIL — Node ${running} is older than the pinned ${pin}.`,
       '',
-      'The Angular 20 / Nx 22 toolchain in this repo is not expected to work here, and any',
+      'The Angular 21 / Nx 22 toolchain in this repo is not expected to work here, and any',
       'failure the later gates report would be uninterpretable. Switch runtime, then re-run:',
       '',
       `  nvm install ${pinned} && nvm use ${pinned}`,
@@ -117,8 +117,8 @@ function assess() {
     lines.push(
       `node-version: PASS WITH WARNING — Node ${running} is newer than the pinned ${pin}.`,
       '',
-      "  Hazard: this Node defines a global `localStorage` that throws unless",
-      '          --localstorage-file is given, and it shadows jsdom\'s. Specs that touch',
+      '  Hazard: this Node defines a global `localStorage` that throws unless',
+      "          --localstorage-file is given, and it shadows jsdom's. Specs that touch",
       '          localStorage fail with SecurityError on correct code.',
       '  Status: the gate works around it by passing --no-experimental-webstorage to every',
       '          child, so the results below are trustworthy.',

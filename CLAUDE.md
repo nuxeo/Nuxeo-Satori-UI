@@ -1,6 +1,6 @@
 # CLAUDE.md — Nuxeo Agentic UI
 
-Angular 20 + Nx monorepo. A Nuxeo content management UI being converted into a
+Angular 21 + Nx monorepo. A Nuxeo content management UI being converted into a
 customer-shippable Beta ("Nuxeo Satori") on our own `nxs-` components
 (`libs/shared/satori-components`), with a four-layer customisation contract. It began on
 `adf-hx`; NXSAT-308 removed adf-hx and ADF.
