@@ -78,6 +78,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { entryTypes } from '../package-types.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
 
@@ -302,7 +304,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   h.step('The published declarations carry nullable types');
 
-  const extensionsDts = readFileSync(join(DIST, 'extensions', 'index.d.ts'), 'utf8');
+  const extensionsDts = readFileSync(entryTypes(DIST, './extensions'), 'utf8');
   h.check(
     'ExtensionRuleContextService.username is WritableSignal<string | null>',
     /readonly username: [\w.]*WritableSignal<string \| null>/.test(extensionsDts),
