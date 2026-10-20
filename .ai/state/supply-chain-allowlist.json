@@ -94,7 +94,6 @@
   "unreferencedDependencies": {
     "tslib": "Emitted helper library. The TypeScript compiler generates imports of it into the build output; no source file names it.",
     "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source.",
-    "@mat-datetimepicker/core": "Version pin left over from ADF: an @alfresco/adf-core peer, and one of the two pins that deliberately differed from adf-core's suggestion, because its major track is offset from Angular's (16.0.1 for Angular 20). adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
     "pdfjs-dist": "Version pin left over from ADF: an @alfresco/adf-core peer, and the second deliberate deviation, because 4.x downgrades a shared native package (6.2.108). adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
     "minimatch": "Version pin left over from ADF: @alfresco/adf-core declared it as a `>=10.0.0` peer. adf-core left the tree in NXSAT-637, but the pin still decides the copy hoisted to the root, which the dev tooling asking for `^10` resolves to (@typescript-eslint/typescript-estree, test-exclude and ignore-walk among them), so NXSAT-672 re-decides it rather than just deleting it.",
     "angular-oauth2-oidc": "Version pin left over from ADF: a direct dependency of @alfresco/adf-core, pinned so a clean install could not float it. adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
