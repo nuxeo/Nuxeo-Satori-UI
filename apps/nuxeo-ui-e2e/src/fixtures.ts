@@ -62,7 +62,7 @@ export const test = base.extend<{ signedIn: Page }>({
       [
         await checkRequestIdentity(
           page.request,
-          `${E2E_BASE_URL}${ME_PATH}`,
+          new URL(ME_PATH, E2E_BASE_URL).href,
           username,
           'page.request',
         ),
@@ -94,7 +94,7 @@ export const test = base.extend<{ signedIn: Page }>({
       [
         await checkRequestIdentity(
           page.request,
-          `${E2E_BASE_URL}${ME_PATH}`,
+          new URL(ME_PATH, E2E_BASE_URL).href,
           username,
           'page.request',
         ),

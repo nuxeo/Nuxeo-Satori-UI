@@ -162,15 +162,22 @@ challenge, and a Nuxeo with guests enabled never sends one — `page.request` th
 required:
 
 ```js
+import { injectedSession, SESSION_KEY, SIGNED_OUT_KEY } from '../session.mjs';
+import { gotoOrExit, requireSessionAdopted, watchNuxeoApiOrigins } from './preconditions.mjs';
+
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
   httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
+const page = await context.newPage();
 
+// Before the first navigation, so every Nuxeo request the page sends is seen: one to another
+// origin means the guard below would judge the wrong server, and it refuses instead.
+const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
 // `networkidle`, not a fixed pause, so the app's own session hydration has very likely
 // finished before the session below is written; the reload that follows is what makes the
 // written session the one the app starts from.
-await page.goto(baseUrl, { waitUntil: 'networkidle' });
+await gotoOrExit(page, baseUrl, TOOL, { waitUntil: 'networkidle' });
 await page.evaluate(
   ({ key, value, signedOutKey }) => {
     sessionStorage.setItem(key, value);
@@ -178,6 +185,9 @@ await page.evaluate(
   },
   { key: SESSION_KEY, signedOutKey: SIGNED_OUT_KEY, value: injectedSession(user, pass) },
 );
+// The first navigation booted the app with no session, which on a guest-enabled Nuxeo adopts
+// `Anonymous` and can leave a guest cookie that outranks the Basic header (NXSAT-643).
+await context.clearCookies();
 await page.reload({ waitUntil: 'networkidle' });
 await requireSessionAdopted(page, user, TOOL, { baseUrl, foreignApiOrigins });
 ```
@@ -354,6 +364,7 @@ import {
   launchChromium,
   requireBackend,
   requireSessionAdopted,
+  watchNuxeoApiOrigins,
 } from './preconditions.mjs';
 
 const TOOL = '<question>';
@@ -394,9 +405,22 @@ const page = await context.newPage();
 try {
   // Backend precondition FIRST — an empty screen scans clean and proves nothing.
   await requireBackend(page, baseUrl, TOOL);
-  await gotoOrExit(page, baseUrl, TOOL);
-  // ... sign in (§2a), then for each route: navigate inside try/catch and record a failure
-  // as unmeasured (not a crash), assert the host (§2b), measure ...
+  // Sign in (§2a). The watcher starts before the first navigation, so it sees every request.
+  const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
+  await gotoOrExit(page, baseUrl, TOOL, { waitUntil: 'networkidle' });
+  await page.evaluate(
+    ({ key, value, signedOutKey }) => {
+      sessionStorage.setItem(key, value);
+      sessionStorage.removeItem(signedOutKey);
+    },
+    { key: SESSION_KEY, signedOutKey: SIGNED_OUT_KEY, value: injectedSession(user, pass) },
+  );
+  // The signed-out boot can leave a guest cookie that outranks the Basic header (NXSAT-643).
+  await context.clearCookies();
+  await page.reload({ waitUntil: 'networkidle' });
+  await requireSessionAdopted(page, user, TOOL, { baseUrl, foreignApiOrigins });
+  // ... then for each route: navigate inside try/catch and record a failure as unmeasured
+  // (not a crash), assert the host (§2b), measure ...
 } finally {
   await context.close();
   await browser.close();
