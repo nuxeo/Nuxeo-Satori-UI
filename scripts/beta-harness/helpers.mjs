@@ -154,6 +154,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * the chain is tracked too — and one after `sync.late` is set came after the next step's work
    * could start.
    *
+   * Timing cannot tell an `await` from a discarded `Promise.all([h.step(...)])`, which reads `then`
+   * from a job too. That is why the assertion audit requires every call to be `await h.step(...);`.
+   *
    * @param {Promise<void>} promise
    * @param {{ awaited: boolean }} boundary
    * @param {{ now: boolean, late: boolean }} sync
@@ -164,9 +167,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       then(onFulfilled, onRejected) {
         if (!sync.now && !sync.late) boundary.awaited = true;
         const derived = promise.then(onFulfilled, onRejected);
-        // Derived promises need rejection observers too: a discarded `.then()` chain still produces
-        // unhandled rejections if verification fails while the chain is pending. The observer does
-        // not swallow the error — `tracked` propagates it for awaited callers.
+        // Observed, not swallowed: an awaited chain still receives the rejection.
         derived.catch(() => undefined);
         return tracked(derived, boundary, sync);
       },
@@ -214,14 +215,6 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       promise.catch((err) => {
         identityFailure ??= err;
       });
-      // Timing-based await detection: `.then()` called before the microtask runs means a synchronous
-      // chain (h.step().then(...)), which doesn't count unless the chain is awaited. `.then()` called
-      // after the microtask but before setImmediate means a genuine await.
-      //
-      // Known edge case: a discarded `Promise.all([h.step('...')])` might invoke `.then()` after the
-      // microtask runs (Promise.all schedules its own microtask), incorrectly marking the boundary
-      // awaited. Fixing this reliably requires API changes to enforce sequencing explicitly rather
-      // than inferring it from timing. The current detection works for the actual steps files.
       const sync = { now: true, late: false };
       queueMicrotask(() => {
         sync.now = false;

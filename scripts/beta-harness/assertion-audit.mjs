@@ -213,6 +213,42 @@ function auditFile(rel, src, ast) {
 
   const parents = parentMap(ast);
 
+  // The identity guard judges the previous step at `h.step(...)`, and `.then()` timing cannot tell
+  // an `await` from a discarded `Promise.all([h.step(...)])`. So the one accepted form is a
+  // statement that awaits the call itself; any other reference, alias or destructuring is refused.
+  // Not in `scripts/collect-evidence/`: the story runner opens steps without the identity guard.
+  const guarded = !rel.startsWith('scripts/collect-evidence/');
+  walk(ast, (node) => {
+    if (!guarded) return;
+    const isMember = node.type === 'MemberExpression' && memberName(node) === 'step';
+    const isPattern =
+      node.type === 'Property' &&
+      parents.get(node)?.type === 'ObjectPattern' &&
+      memberName({ ...node, property: node.key }) === 'step';
+    if (!isMember && !isPattern) return;
+    const call = parents.get(node);
+    const awaited = call && parents.get(call);
+    if (
+      isMember &&
+      call?.type === 'CallExpression' &&
+      call.callee === node &&
+      awaited?.type === 'AwaitExpression' &&
+      parents.get(awaited)?.type === 'ExpressionStatement'
+    ) {
+      return;
+    }
+    const shown = text(src, isMember && call?.type === 'CallExpression' ? call : node).replace(/\s+/g, ' ');
+    findings.push({
+      file: rel,
+      line: node.loc?.start.line ?? 0,
+      kind: 'unawaited-step',
+      severity: 'fail',
+      message:
+        `\`${shown.length > 60 ? `${shown.slice(0, 57)}...` : shown}\` is not \`await h.step(...);\`. ` +
+        'The identity guard judges the previous step there, and only awaiting the call itself waits for it.',
+    });
+  });
+
   walk(ast, (node) => {
     if (node.type !== 'CallExpression') return;
     const name = calleeName(node);
@@ -710,6 +746,12 @@ function walk(node, visit) {
     if (key === 'loc' || key === 'range') continue;
     walk(node[key], visit);
   }
+}
+
+/** `h.step` / `h['step']` -> "step"; a computed name that is not a literal -> null */
+function memberName(member) {
+  if (!member.computed) return member.property?.type === 'Identifier' ? member.property.name : null;
+  return member.property?.type === 'Literal' ? String(member.property.value) : null;
 }
 
 /** `h.check(...)` / `check(...)` / `this.check(...)` -> "check" */

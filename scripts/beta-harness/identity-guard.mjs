@@ -111,7 +111,6 @@ export const APP_SESSION_SOURCES = /** @type {const} */ ([
  * A request the page's main frame sent to Nuxeo on the app origin.
  *
  * @typedef {object} SentRequest
- * @property {number} document which main-frame document sent it, counted from 0
  * @property {string} method
  * @property {string} path
  * @property {boolean} finished
@@ -560,21 +559,12 @@ export async function askThroughPage(
 class NuxeoApiTraffic extends Set {
   /** @type {SentRequest[]} */
   sent = [];
-  /** The main frame's current document; bumped by each navigation that loads a new one. */
-  document = 0;
-  /**
-   * Violations accumulate from this document onward. Reset by the monitor when identity changes
-   * (`h.signedInAs`, `h.signedOut`), so violations before a declared switch are not held against
-   * the next identity. A reload (`h.login()`) keeps the same base and accumulates violations.
-   */
-  baseDocument = 0;
+  /** Where the current identity's requests start in `sent`. */
+  since = 0;
 
-  /**
-   * Clear violations accumulated so far: from here on, judge only later documents. Called by the
-   * monitor when the app identity changes.
-   */
-  clearViolations() {
-    this.baseDocument = this.document;
+  /** A declared change of identity: what the page sent before it is not the new identity's. */
+  restart() {
+    this.since = this.sent.length;
   }
 }
 
@@ -599,10 +589,7 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
   /** @type {WeakMap<object, SentRequest>} */
   const pending = new WeakMap();
   page.on('request', (request) => {
-    if (fromMainFrame(page, request) && request.isNavigationRequest()) {
-      traffic.document++;
-      return;
-    }
+    if (fromMainFrame(page, request) && request.isNavigationRequest()) return;
     /** @type {URL} */
     let url;
     try {
@@ -619,7 +606,6 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
     if (!APP_REQUEST_TYPES.has(request.resourceType()) || !fromMainFrame(page, request)) return;
     /** @type {SentRequest} */
     const record = {
-      document: traffic.document,
       method: request.method(),
       path: url.pathname,
       finished: false,
@@ -638,13 +624,12 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
 }
 
 /**
- * The requests the page sent to Nuxeo without `stored`'s header, from `baseDocument` onward and
- * counted from the first that carried it.
+ * The requests the page sent to Nuxeo without `stored`'s header since the last declared change of
+ * identity, counted from the first that carried it.
  *
- * Violations accumulate across reloads — `h.login()` continues the same identity, so a headerless
- * request before the reload is held against the session after it. The monitor clears `baseDocument`
- * when identity changes (`h.signedInAs`, `h.signedOut`), so violations before a declared switch
- * are not held against the next identity.
+ * A reload does not start a new count: a step could otherwise read as the guest, assert what it
+ * read, then reload with the session restored. Requests before the session was first used, such
+ * as the signed-out boot `h.login()` reloads away, are not held against it.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @param {StoredSession} stored
@@ -653,11 +638,11 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
 export function strayRequests(traffic, stored) {
   // By shape, not `instanceof`: a second copy of this module, as a loader can make, would
   // otherwise switch the check off without a word.
-  const { sent, baseDocument } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
-  if (!Array.isArray(sent) || typeof baseDocument !== 'number') return [];
-  const inScope = sent.filter((r) => r.finished && r.document >= baseDocument);
-  const first = inScope.findIndex((r) => r.authorization === stored.authorization);
-  return inScope.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
+  const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
+  if (!Array.isArray(sent) || typeof since !== 'number') return [];
+  const judged = sent.slice(since).filter((r) => r.finished);
+  const first = judged.findIndex((r) => r.authorization === stored.authorization);
+  return judged.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
 }
 
 // ── Checks ──────────────────────────────────────────────────────────────────────────────────────
@@ -802,7 +787,7 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     expectApp(user, reason, at) {
       if (!sameUser(user, expectedUser())) {
         switches.push({ at, username: user, reason });
-        if (foreignApiOrigins instanceof NuxeoApiTraffic) foreignApiOrigins.clearViolations();
+        foreignApiOrigins.restart();
       }
       policy = { user };
     },
@@ -816,7 +801,7 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     expectSignedOut(reason, at) {
       switches.push({ at, username: null, reason });
       policy = { unsigned: username };
-      if (foreignApiOrigins instanceof NuxeoApiTraffic) foreignApiOrigins.clearViolations();
+      foreignApiOrigins.restart();
     },
 
     /**

@@ -123,6 +123,37 @@ red(
   'asserts a literal falsy value',
 );
 
+// ---- step boundaries: the identity guard judges the previous step at `await h.step(...)` -----
+
+red(
+  'a step boundary that is not awaited is reported',
+  `export async function run(h) {\n  h.step('two');\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-step',
+);
+
+red(
+  'a discarded Promise.all around a step boundary is reported, though the runtime reads it as awaited',
+  `export async function run(h) {\n  Promise.all([h.step('two')]);\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-step',
+);
+
+red(
+  'a step boundary awaited through a .then() chain is reported',
+  `export async function run(h) {\n  await h.step('two').then(() => undefined);\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-step',
+);
+
+red(
+  'an alias of h.step is reported, so the rule cannot be stepped around',
+  `export async function run(h) {\n  const { step } = h;\n  const s = h['step'];\n  await step('two');\n  await s('three');\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-step',
+);
+
+green(
+  'an awaited step boundary is not reported, inside a block or split over lines',
+  `export async function run(h, recorder) {\n  await h.step('one');\n  if (recorder.steps.length) {\n    await h.step(\n      'two',\n    );\n  }\n  h.check('c', recorder.steps.length > 0);\n}\n`,
+);
+
 // ---- the guard exemption, which is where this audit has been wrong twice ---------------------
 //
 // Each fixture below is `if (<always truthy>) check(name, false)` — an unconditional failure
@@ -262,7 +293,7 @@ green(
 // unfalsifiable, which is the worse direction of the two errors available.
 green(
   'a name declared twice does not let one declaration classify the other',
-  `export async function run(h, scene) {\n  const guard = {};\n  if (guard) h.step('s');\n  const inner = () => { const guard = scene.criterion; if (!guard) h.check('real', false, 'why'); };\n  inner();\n}\n`,
+  `export async function run(h, scene) {\n  const guard = {};\n  if (guard) await h.step('s');\n  const inner = () => { const guard = scene.criterion; if (!guard) h.check('real', false, 'why'); };\n  inner();\n}\n`,
   'reached only when: !guard',
 );
 

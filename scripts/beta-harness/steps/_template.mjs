@@ -28,10 +28,11 @@
  *    exits 2 before launching a browser when either is unset. A file that needs
  *    no backend (`phase-0-no-backend`, `phase-4-platform`) exports
  *    `skipHttpCredentials = true` instead, and then runs with no credentials sent.
- * 8. `await h.step(...)`. Every step boundary is where the identity guard asks Nuxeo
- *    who the previous step ran as (NXSAT-643, `identity-guard.mjs`); a result
- *    obtained as `Anonymous` or another user makes the run `precondition-not-met`,
- *    and so does a boundary that was not awaited, which cannot speak for its step.
+ * 8. `await h.step(...);`, as a statement. Every step boundary is where the identity
+ *    guard asks Nuxeo who the previous step ran as (NXSAT-643, `identity-guard.mjs`);
+ *    a result obtained as `Anonymous` or another user makes the run
+ *    `precondition-not-met`, and so does a boundary that was not awaited, which cannot
+ *    speak for its step. `npm run beta:audit` refuses any other form of the call.
  *    An in-page `fetch` of your own to `/nuxeo/` sends the session's header, as the
  *    app does: the guard judges every request the page sends to Nuxeo.
  *    A step that deliberately signs the browser in as someone else says so with

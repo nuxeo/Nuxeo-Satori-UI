@@ -748,6 +748,26 @@ function watchedPage(options) {
   );
 }
 
+{
+  // The request Copilot described: read as the guest, then reload with the session restored.
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+  page.send(`${APP}/`, { navigation: true });
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    'a headerless data request is still refused after a reload restores the session',
+    !r.ok && /without the header/.test(r.problem ?? '') && /search/.test(r.problem ?? ''),
+    r,
+  );
+}
+
 // ── step boundaries ─────────────────────────────────────────────────────────────────────────────
 const quiet = console.log;
 /** @param {() => Promise<void>} fn */
@@ -1155,55 +1175,52 @@ await silently(async () => {
     );
   }
   {
-    // Violation accumulation across reload: a guest request followed by reload should still fail.
-    const page = fakePage({ storage: signedIn });
-    const { h } = harness(page);
-    await h.step('one');
-    page.emitRequest('http://app.test/nuxeo/api/v1/search', { authorization: null });
-    page.state.document++;
-    const thrown = await thrownBy(() => h.step('two'));
-    control(
-      'negative',
-      'violations accumulate across reload: a headerless request before reload is rejected after',
-      thrown instanceof PreconditionError && /authorization.*differ/i.test(thrown.message),
-      String(thrown),
-    );
-  }
-  {
-    // Cleared on identity switch: h.signedInAs clears baseDocument.
-    const page = fakePage({ storage: signedIn });
+    // Administrator, then parity-user, then back, in one document as a header rewrite allows.
+    // Without a restart at each declared switch, parity-user's request is judged as Administrator's.
+    const UFU = 'Basic UFU=';
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
     const { h, identity } = harness(page);
     await h.step('one');
-    page.emitRequest('http://app.test/nuxeo/api/v1/search', { authorization: null });
+    page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+    await h.step('two');
     page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
       'parity-user',
       'UFU=',
     );
-    page.state.meFor = (auth) => (auth === 'Basic UFU=' ? { id: 'parity-user' } : ADMIN);
+    page.state.meFor = (auth) => (auth === UFU ? { id: 'parity-user' } : GUEST);
     h.signedInAs('parity-user', 'selftest');
-    page.state.document++;
-    await h.step('two');
-    await h.finish();
+    page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: UFU });
+    await h.step('three');
+    page.state.storage = { ...signedIn };
+    page.state.meFor = (auth) => (auth === H ? ADMIN : GUEST);
+    h.signedInAs('Administrator', 'selftest');
+    page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+    const thrown = await thrownBy(() => h.finish());
     control(
       'positive',
-      'h.signedInAs clears violation history: headerless request under old identity is not held against new',
-      identity.checks.every((c) => c.ok),
-      { checks: identity.checks.map((c) => [c.at, c.ok]) },
+      "a declared switch, and a switch back, does not hold one identity's requests against the other",
+      thrown === null && identity.checks.length === 3 && identity.checks.every((c) => c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
     );
   }
   {
-    // Discarded Promise.all: should NOT count as awaited.
-    const page = fakePage({ storage: signedIn });
+    const UFU = 'Basic UFU=';
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
     const { h } = harness(page);
     await h.step('one');
-    page.state.meFor = () => GUEST;
-    Promise.all([h.step('two')]).catch(() => undefined); // not awaited
-    await new Promise((r) => setTimeout(r, 50)); // let the check run
-    const thrown = await thrownBy(() => h.finish());
+    page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
+      'parity-user',
+      'UFU=',
+    );
+    page.state.meFor = (auth) => (auth === UFU ? { id: 'parity-user' } : GUEST);
+    h.signedInAs('parity-user', 'selftest');
+    page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: UFU });
+    page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+    const thrown = await thrownBy(() => h.step('two'));
     control(
       'negative',
-      'a discarded Promise.all([h.step(...)]) does not count as awaiting: the boundary fails for not being awaited',
-      thrown instanceof PreconditionError && /not awaited/.test(thrown.message),
+      "after a declared switch, the new identity's headerless request is still refused",
+      thrown instanceof PreconditionError && /without the header/.test(thrown.message),
       String(thrown),
     );
   }

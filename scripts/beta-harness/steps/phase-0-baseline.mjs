@@ -25,8 +25,6 @@
  *   npm run beta:evidence -- phase-0-baseline
  */
 
-import { requireStepCredentials } from '../helpers.mjs';
-
 /**
  * Errors this environment always produces, unrelated to the browse surfaces.
  * `AI.*` operations come from a marketplace package that is not installed on a

@@ -134,18 +134,21 @@ sends Nuxeo API requests to another origin is refused rather than judged on the 
 ids compare exactly.
 
 `/me` vouches only for the header it was asked with, so the requests the page itself sent are
-judged too. Every `fetch` or XHR the current page sent to `/nuxeo/`, from the first that carried
-the session's header, must have gone out with that header, read after any `page.route` rewrite.
-One without it, or with another user's, is rejected.
+judged too. Every `fetch` or XHR the page sent to `/nuxeo/` since the last declared change of
+identity, from the first that carried the session's header, must have gone out with that header,
+read after any `page.route` rewrite. One without it, or with another user's, is rejected. A reload
+does not reset this, so a step cannot read as the guest and then reload with the session restored.
 
 A rejection makes the run `precondition-not-met` (exit 2), marks
 `manifest.identity.valid: false`, and records the failed check on the step whose result is
 invalid. So:
 
-- **`await h.step(...)`.** The boundary check is asynchronous. Not awaited, it runs alongside the
-  next step and cannot speak for its own, even if it finished first. So it is recorded as a failed
-  check on its step and the run ends `precondition-not-met`. A `.then()` chained on it counts only
-  if the chain is awaited.
+- **`await h.step(...);`, as a statement of its own.** The boundary check is asynchronous; not
+  awaited, it runs alongside the next step and cannot speak for its own. `npm run beta:audit`
+  refuses any other form in `steps/` — a `.then()` chain, `Promise.all`, an alias — because a
+  discarded `Promise.all([h.step(...)])` looks to the runtime exactly like an `await`. At run time
+  a boundary nothing awaited in time is still recorded as a failed check on its step, and the run
+  ends `precondition-not-met`.
 - **A steps file's own in-page `fetch` to `/nuxeo/` sends the session's header**, as the app's
   interceptor does. The guard cannot tell it from the app's requests, and one without the header
   ran as whoever the cookies say.
