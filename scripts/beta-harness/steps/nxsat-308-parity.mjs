@@ -56,6 +56,8 @@
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
+import { askThroughFetch, PROBE_TIMEOUT_MS } from '../identity-guard.mjs';
+
 const LB = '[load-bearing]';
 const NEG = '[negative]';
 const CTX = '[context]';
@@ -763,14 +765,9 @@ export default async function run(page, h, outDir) {
   );
   // Node's `fetch`, not `page.request`: the runner's `httpCredentials` use `send: 'always'`, which
   // replaces an explicit `Authorization` on `page.request`, so this asked who the *administrator*
-  // was and the invariant could never hold (NXSAT-643).
-  const parityMe = await fetch(`${api}/me`, {
-    headers: { Accept: 'application/json', Authorization: `Basic ${parityBasic}` },
-    // A redirect has no JSON body, so it answers null below rather than another server's user.
-    redirect: 'manual',
-  })
-    .then((r) => r.json())
-    .catch(noAnswer);
+  // was and the invariant could never hold (NXSAT-643). The guard's probe refuses a redirect and
+  // bounds headers and body together, so a `/me` that never finishes fails this precondition.
+  const parityMe = (await askThroughFetch(`${api}/me`, `Basic ${parityBasic}`)).body;
   // Every fixture a later step reads, so drift aborts here as precondition-not-met instead of
   // surfacing later as what would look like a component defect.
   const fixture = {
@@ -2090,13 +2087,16 @@ export default async function run(page, h, outDir) {
   // to time the reload out, and the list wait below is what the next checks depend on.
   await page.reload({ waitUntil: 'load' });
   await waitForList(page, A);
-  const me = await page.evaluate(() =>
-    // Not following a redirect: an opaque redirect has no JSON, so it answers null below.
-    fetch('/nuxeo/api/v1/me', { redirect: 'manual' })
-      .then((r) => r.json())
-      .then((j) => j.id)
-      // Runs in the browser, where this module's helpers do not exist; null fails the check below.
-      .catch(() => null),
+  const me = await page.evaluate(
+    (timeoutMs) =>
+      // Not following a redirect: an opaque redirect has no JSON, so it answers null below. The
+      // signal also aborts the body read, so a `/me` that never finishes answers null too.
+      fetch('/nuxeo/api/v1/me', { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
+        .then((r) => r.json())
+        .then((j) => j.id)
+        // Runs in the browser, where this module's helpers do not exist; null fails the check below.
+        .catch(() => null),
+    PROBE_TIMEOUT_MS,
   );
   h.check(
     `${CTX} the browser is now signed in to Nuxeo as parity-user`,

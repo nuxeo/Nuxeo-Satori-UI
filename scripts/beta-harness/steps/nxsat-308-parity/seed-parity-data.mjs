@@ -99,6 +99,11 @@ function refuse(message) {
   process.exit(EXIT_PRECONDITION);
 }
 
+// Before anything else: `--check` lifts the `:8080` refusal below, and `--remove` deletes.
+if (opts.check && opts.remove) {
+  refuse('--check and --remove cannot be combined: --check changes nothing, --remove deletes.');
+}
+
 /** @param {string} name */
 function required(name) {
   const value = process.env[name];
@@ -276,6 +281,18 @@ async function uploadBytes(fileName, bytes, mime) {
 }
 
 const upload = (file, mime) => uploadBytes(file, readFileSync(join(ASSETS, file)), mime);
+
+/** The SHA-256 of a document's stored `file:content`, read as raw bytes (`call` reads text). */
+async function storedSha256(uid) {
+  const res = await fetch(`${API}/id/${uid}/@blob/file:content`, {
+    headers: { Authorization: AUTH },
+  });
+  const bytes = Buffer.from(await res.arrayBuffer());
+  return {
+    status: res.status,
+    sha256: res.status === 200 ? createHash('sha256').update(bytes).digest('hex') : null,
+  };
+}
 
 async function op(uid, operation, params = {}) {
   return call('POST', `/id/${uid}/@op/${operation}`, { json: { params, context: {} } });
@@ -789,6 +806,15 @@ async function verify(assets) {
       d.data?.type === m.type && blob?.name === m.file && blob?.['mime-type'] === m.mime,
       `${d.data?.type} ${blob?.name} ${blob?.['mime-type']}`,
     );
+    // The bytes too: metadata alone passes a blob replaced under the same name and type, while
+    // `manifest.assets` records the local file's digest as if the server held it.
+    const stored = d.data?.uid ? await storedSha256(d.data.uid) : { status: 0, sha256: null };
+    const want = assets[m.file].sha256;
+    expect(
+      `${key} fixture's stored bytes are ${m.file}'s (sha256)`,
+      stored.status === 200 && stored.sha256 === want,
+      `HTTP ${stored.status}, sha256 ${stored.sha256} where ${m.file} is ${want}`,
+    );
     manifest.docs[`media-${key}`] = {
       uid: d.data?.uid,
       path: p,
@@ -796,6 +822,7 @@ async function verify(assets) {
       blob: blob?.name,
       mime: blob?.['mime-type'],
       digest: blob?.digest,
+      sha256: stored.sha256,
     };
   }
 
