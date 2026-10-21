@@ -122,6 +122,8 @@ try {
   // The first navigation booted the app with no session, which on a guest-enabled Nuxeo adopts
   // `Anonymous` and can leave a guest cookie that outranks the Basic header (NXSAT-643).
   await context.clearCookies();
+  // The boot above ran signed out; the session's requests start at this reload.
+  foreignApiOrigins.restartAtNextLoad();
   await page.reload({ waitUntil: 'networkidle' });
   await requireSessionAdopted(page, user, 'route-render-check', { baseUrl, foreignApiOrigins });
 

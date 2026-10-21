@@ -299,6 +299,8 @@ function fakePage({
     /** `page.request`'s `/me` redirects to another origin. */
     redirectApi: false,
     waiters: [],
+    /** What a document `goto` loads sends before anything else, signed out. */
+    bootRequests: [],
     /** @type {Record<string, ((request: object) => void)[]>} */
     listeners: {},
   };
@@ -310,7 +312,15 @@ function fakePage({
     mainFrame: () => mainFrame,
     async evaluate(fn, arg) {
       state.evaluations++;
-      const store = (area) => ({ getItem: (k) => state.storage[`${area}:${k}`] ?? null });
+      const store = (area) => ({
+        getItem: (k) => state.storage[`${area}:${k}`] ?? null,
+        setItem: (k, v) => {
+          state.storage[`${area}:${k}`] = String(v);
+        },
+        removeItem: (k) => {
+          delete state.storage[`${area}:${k}`];
+        },
+      });
       const saved = ['sessionStorage', 'localStorage', 'fetch'].map((k) => [k, globalThis[k]]);
       const stand = {
         sessionStorage: store('sessionStorage'),
@@ -397,6 +407,13 @@ function fakePage({
     },
     /** Make the page send a request, as the app would. */
     emitRequest: (url) => page.send(url),
+    goto: async (url) => {
+      state.url = url;
+      page.send(url, { navigation: true });
+      for (const u of state.bootRequests) page.send(u, { authorization: null });
+    },
+    reload: async () => page.send(state.url, { navigation: true }),
+    waitForTimeout: async () => undefined,
     /** The Node-side replay's `fetch`. */
     fetch: async (url, init) => {
       const auth = init?.headers?.['Authorization'] ?? null;
@@ -716,9 +733,10 @@ function watchedPage(options) {
   );
 }
 {
-  // h.login(): the app boots signed out, then the reload starts the document that holds the session.
+  // A sign-in reload: the app boots signed out, the session is written, the marked reload uses it.
   const { page: reloaded, traffic: t1 } = watchedPage();
   reloaded.send(`${APP}/nuxeo/api/v1/me`, { authorization: null });
+  t1.restartAtNextLoad();
   reloaded.send(`${APP}/`, { navigation: true });
   reloaded.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
   reloaded.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
@@ -736,7 +754,7 @@ function watchedPage(options) {
     authorization: null,
     type: 'image',
   });
-  const r2 = await checkPageIdentity(form, 'Administrator', APP, {
+  const r2 = await checkPageIdentity(form, { unsigned: 'Administrator' }, APP, {
     fetchImpl: form.fetch,
     foreignApiOrigins: t2,
   });
@@ -764,6 +782,64 @@ function watchedPage(options) {
     'negative',
     'a headerless data request is still refused after a reload restores the session',
     !r.ok && /without the header/.test(r.problem ?? '') && /search/.test(r.problem ?? ''),
+    r,
+  );
+}
+
+{
+  // A data read that lost its header, then a request that recovered it (Copilot, on dff50ace6).
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    'a data read that lost its header is refused, though a later request recovered it',
+    !r.ok && /without the header/.test(r.problem ?? '') && /search/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null });
+  page.send(`${APP}/`, { navigation: true });
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    'a signed-out boot is excused only when the reload that installs the session is marked',
+    !r.ok && /without the header/.test(r.problem ?? ''),
+    r,
+  );
+}
+{
+  // `AppConfigService` and `DocumentLayoutService` read these through `HttpBackend` on every load.
+  const { page, traffic } = watchedPage();
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+  page.send(`${APP}/`, { navigation: true });
+  for (const file of [
+    'bootstrap.json',
+    'manifest.json',
+    'layouts.json',
+    'layouts/File/view.layout.json',
+  ]) {
+    page.send(`${APP}/nuxeo/agentic-ui-config/${file}`, { authorization: null });
+  }
+  page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'positive',
+    "the configuration service's files, read without the header by design, are not held against the session",
+    r.ok,
     r,
   );
 }
@@ -1222,6 +1298,74 @@ await silently(async () => {
       "after a declared switch, the new identity's headerless request is still refused",
       thrown instanceof PreconditionError && /without the header/.test(thrown.message),
       String(thrown),
+    );
+  }
+  {
+    // h.login() itself: the page boots signed out, then the session is written and the page reloaded.
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.login();
+      page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: LOGIN });
+      const thrown = await thrownBy(() => h.step('two'));
+      control(
+        'positive',
+        "h.login()'s signed-out boot is not held against the session it installs",
+        thrown === null && identity.checks.length === 1 && identity.checks[0].ok,
+        { thrown: String(thrown), checks: identity.checks },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
+    // A form sign-in, seen at a boundary rather than declared.
+    const page = fakePage({ url: `${APP}/#/`, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const recorder = { steps: [], consoleErrors: [] };
+    const identity = createIdentityMonitor({
+      page,
+      baseUrl: APP,
+      username: 'Administrator',
+      fetchImpl: page.fetch,
+    });
+    const h = createHelpers(page, '/tmp', recorder, { identity });
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null });
+    page.state.storage = { ...signedIn };
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+    const atSignIn = await thrownBy(() => h.step('two'));
+    page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
+    const after = await thrownBy(() => h.step('three'));
+    page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+    const thrown = await thrownBy(() => h.step('four'));
+    control(
+      'negative',
+      'after a form sign-in, the signed-out requests before it stay excused and a headerless one after it is refused',
+      atSignIn === null &&
+        after === null &&
+        thrown instanceof PreconditionError &&
+        /without the header/.test(thrown.message),
+      { atSignIn: String(atSignIn), after: String(after), thrown: String(thrown) },
     );
   }
   {

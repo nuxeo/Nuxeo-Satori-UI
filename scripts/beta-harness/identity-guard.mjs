@@ -559,13 +559,41 @@ export async function askThroughPage(
 class NuxeoApiTraffic extends Set {
   /** @type {SentRequest[]} */
   sent = [];
-  /** Where the current identity's requests start in `sent`. */
+  /** Where the current session's requests start in `sent`. */
   since = 0;
+  /** Set by `restartAtNextLoad`: the next main-frame load moves `since`. */
+  armed = false;
 
-  /** A declared change of identity: what the page sent before it is not the new identity's. */
-  restart() {
-    this.since = this.sent.length;
+  /**
+   * From here on, every request must carry the session's header: a declared change of identity,
+   * or a sign-in seen at a boundary. What the page sent before it is not the session's.
+   *
+   * @param {number} [at] a position in `sent`; by default, now
+   */
+  restart(at = this.sent.length) {
+    this.since = at;
+    this.armed = false;
   }
+
+  /**
+   * A session was just written into a page that booted signed out, and the reload about to happen
+   * is where its requests start. What the signed-out document sent is not held against it.
+   */
+  restartAtNextLoad() {
+    this.armed = true;
+  }
+}
+
+/**
+ * Same-origin reads the app makes without `Authorization` by design. `AppConfigService` and
+ * `DocumentLayoutService` fetch the configuration service's files through `HttpBackend`, which
+ * skips every interceptor; under the production base href `/nuxeo/agentic-ui/` that directory is
+ * `/nuxeo/agentic-ui-config/`.
+ *
+ * @param {SentRequest} r
+ */
+function anonymousByDesign(r) {
+  return r.method === 'GET' && r.path.startsWith('/nuxeo/agentic-ui-config/');
 }
 
 /**
@@ -589,7 +617,10 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
   /** @type {WeakMap<object, SentRequest>} */
   const pending = new WeakMap();
   page.on('request', (request) => {
-    if (fromMainFrame(page, request) && request.isNavigationRequest()) return;
+    if (fromMainFrame(page, request) && request.isNavigationRequest()) {
+      if (traffic.armed) traffic.restart();
+      return;
+    }
     /** @type {URL} */
     let url;
     try {
@@ -624,24 +655,27 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
 }
 
 /**
- * The requests the page sent to Nuxeo without `stored`'s header since the last declared change of
- * identity, counted from the first that carried it.
+ * The requests the page sent to Nuxeo without `stored`'s header since its session's requests
+ * began: the start of the page, or where the session was installed (`restart`,
+ * `restartAtNextLoad`).
  *
- * A reload does not start a new count: a step could otherwise read as the guest, assert what it
- * read, then reload with the session restored. Requests before the session was first used, such
- * as the signed-out boot `h.login()` reloads away, are not held against it.
+ * Neither a reload nor a later request that carried the header excuses one sent without it: a
+ * step could otherwise read as the guest, assert what it read, then recover the session. Only
+ * while the app may still be signed out (`signingIn`) are the requests before the first that
+ * carried the header excused; those are the signed-out page before a form sign-in.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @param {StoredSession} stored
+ * @param {{ signingIn?: boolean }} [options]
  * @returns {SentRequest[]}
  */
-export function strayRequests(traffic, stored) {
+export function strayRequests(traffic, stored, { signingIn = false } = {}) {
   // By shape, not `instanceof`: a second copy of this module, as a loader can make, would
   // otherwise switch the check off without a word.
   const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
   if (!Array.isArray(sent) || typeof since !== 'number') return [];
-  const judged = sent.slice(since).filter((r) => r.finished);
-  const first = judged.findIndex((r) => r.authorization === stored.authorization);
+  const judged = sent.slice(since).filter((r) => r.finished && !anonymousByDesign(r));
+  const first = signingIn ? judged.findIndex((r) => r.authorization === stored.authorization) : 0;
   return judged.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
 }
 
@@ -705,7 +739,9 @@ export async function checkPageIdentity(
     return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
   const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
-  const stray = stored && !('problem' in stored) ? strayRequests(foreignApiOrigins, stored) : [];
+  const signingIn = !normalisePolicy(policy).required;
+  const stray =
+    stored && !('problem' in stored) ? strayRequests(foreignApiOrigins, stored, { signingIn }) : [];
   return judgeApp(stored, answers, policy, stray);
 }
 
@@ -792,6 +828,11 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
       policy = { user };
     },
 
+    /** A session was just written into a page that booted signed out; it starts at the next load. */
+    sessionInstalled() {
+      foreignApiOrigins.restartAtNextLoad();
+    },
+
     /**
      * From here on the app may be signed out; a session it still holds must be the run's own.
      *
@@ -830,6 +871,7 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
      */
     verify(at, { app = true } = {}) {
       const run = async () => {
+        const mark = foreignApiOrigins.sent.length;
         const reports = [await checkRequestIdentity(page.request, meUrl, username, 'page.request')];
         if (app) {
           reports.push(
@@ -840,6 +882,8 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
         // Seen signed in as the run's user without `h.login()` (a form sign-in): required from now.
         if (appReport?.ok && appReport.state === 'authenticated' && 'unsigned' in policy) {
           policy = { user: username };
+          // What the page sent before this check was judged as signing in; after it, strictly.
+          foreignApiOrigins.restart(mark);
         }
         const entry = { at, ok: reports.every((r) => r.ok), reports };
         checks.push(entry);

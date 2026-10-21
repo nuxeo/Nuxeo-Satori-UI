@@ -134,10 +134,21 @@ sends Nuxeo API requests to another origin is refused rather than judged on the 
 ids compare exactly.
 
 `/me` vouches only for the header it was asked with, so the requests the page itself sent are
-judged too. Every `fetch` or XHR the page sent to `/nuxeo/` since the last declared change of
-identity, from the first that carried the session's header, must have gone out with that header,
-read after any `page.route` rewrite. One without it, or with another user's, is rejected. A reload
-does not reset this, so a step cannot read as the guest and then reload with the session restored.
+judged too. Every `fetch` or XHR the page sent to `/nuxeo/` since its session was installed must
+have gone out with the session's header, read after any `page.route` rewrite. One without it, or
+with another user's, is rejected. Neither a reload nor a later request that carried the header
+excuses it.
+
+The session counts as installed at one of three points:
+
+- the start of the page, for a session injected before the page loads;
+- the reload `h.login()` makes, so the signed-out boot before it is not judged. A script that signs
+  in by reload outside the runner calls `restartAtNextLoad()` on its watcher first;
+- a declared switch.
+
+Before a form sign-in has been seen, and only then, the requests before the first that carried the
+header are excused. The configuration service's files under `/nuxeo/agentic-ui-config/` are read
+without the header by design, so they are not judged.
 
 A rejection makes the run `precondition-not-met` (exit 2), marks
 `manifest.identity.valid: false`, and records the failed check on the step whose result is

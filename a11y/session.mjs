@@ -150,7 +150,7 @@ async function readProblem(page, username) {
  *   must come from the configuration, or a page redirected to another deployment would be
  *   judged by that deployment's `/me`
  * @param {Set<string>} [options.foreignApiOrigins] from `watchNuxeoApiOrigins`, started before
- *   the first navigation
+ *   the first navigation, and told `restartAtNextLoad()` before a reload that signs in
  * @returns {Promise<string | null>}
  */
 export async function sessionIdentityProblem(page, username, { baseUrl, foreignApiOrigins }) {

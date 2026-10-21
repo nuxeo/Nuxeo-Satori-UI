@@ -541,6 +541,8 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
       identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
+      // The boot above ran signed out; the session's requests start at the reload.
+      identity?.sessionInstalled();
 
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(1200);
