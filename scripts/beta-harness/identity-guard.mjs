@@ -679,8 +679,7 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
  * asserted on, and certified. Refusing is noisy and correct. A bounded wait would need a deadline
  * *and* a policy for its expiry, and buys the possibility of a harness that hangs instead of
  * reporting — its own failure mode. Refusing is blunt: a legitimately slow request fails a run
- * that was not compromised. That trade-off is tracked as a follow-up to NXSAT-643, not settled
- * here.
+ * that was not compromised. That trade-off is NXSAT-703, not settled here.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @returns {SentRequest[]}

@@ -152,7 +152,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * evidence rather than a missing check. Refusing is noisy and correct. A bounded wait needs a
    * deadline *and* an expiry policy, and admits a harness that hangs instead of reporting — its
    * own failure mode. See `pendingRequests` in `identity-guard.mjs` for the full trade-off; the
-   * design question is tracked as a follow-up to NXSAT-643 rather than settled here.
+   * design question is NXSAT-703, not settled here.
    *
    * @param {string} what names the transition, e.g. `h.signedOut()`
    */
