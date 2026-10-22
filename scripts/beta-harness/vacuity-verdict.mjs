@@ -74,6 +74,7 @@
  */
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 /**
  * Every spec in a Playwright `results.json`, flattened out of the suite tree.
@@ -297,9 +298,27 @@ export function report(result, minExpected) {
   return { text: out.join('\n'), ok };
 }
 
-/** Node 20 has no `import.meta.main`; this is the documented equivalent. */
+/**
+ * Node 20 has no `import.meta.main`; this is the documented equivalent.
+ *
+ * `pathToFileURL`, not `` `file://${process.argv[1]}` ``. In a path containing `#` or `?`,
+ * string concatenation lets the URL parser read the rest as a fragment or a query, so the
+ * href no longer matches `import.meta.url`, `invokedDirectly` is false, and the CLI block
+ * never runs — the script exits **0** having done nothing, which the caller reads as success.
+ *
+ * Measured, running `--check-threshold 0` (which must exit 2) from three directories:
+ *
+ * | path contains | before | after |
+ * | ------------- | ------ | ----- |
+ * | a space       | 2      | 2     |
+ * | `#`           | **0**  | 2     |
+ * | `?`           | **0**  | 2     |
+ *
+ * So a space is not affected — `new URL` percent-encodes it — and the first version of this
+ * comment claimed it was. `#` and `?` are the two that silently disable the file.
+ */
 const invokedDirectly =
-  process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
 
 if (invokedDirectly) {
   const argv = process.argv.slice(2);
