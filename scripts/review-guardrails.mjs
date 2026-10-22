@@ -314,6 +314,29 @@ function checkThemeTokens() {
  * itself, with `non-text` in a comment, which a reviewer reads next to the code and
  * a later edit cannot silently inherit.
  *
+ * ## Why this reads whole declarations rather than lines
+ *
+ * Caught on review of this very change: a line-scoped check is bypassed by ordinary
+ * formatting, because a CSS declaration is not required to live on one line.
+ *
+ * ```scss
+ * color: var(
+ *   --mat-sys-outline,
+ *   #777683
+ * );
+ * ```
+ *
+ * was accepted by the first version of this rule, which is a gate that reports on
+ * code style rather than on the defect. So the match runs over the file text with
+ * comments masked out, bounded by `;{}` so it cannot run past the declaration it is
+ * in, and a finding is reported when **any** line the declaration spans is one the
+ * diff added.
+ *
+ * Masking comments rather than skipping comment-looking lines also fixes the
+ * neighbouring bug: `checkThemeTokens` skips a line that *starts* with `/*`, so the
+ * continuation lines of a block comment are read as code — which is how a measurement
+ * written into a comment here was first reported as a hardcoded colour.
+ *
  * Scoped to added lines, like every check here: this forbids writing a new one, and
  * does not demand a sweep of what is already there.
  */
@@ -321,7 +344,12 @@ function checkOutlineTokenIsNotTextColour() {
   // `(?<![-\w])` so `border-color`, `background-color`, `outline-color` and
   // `text-decoration-color` are not matched — each of those IS a non-text use and is
   // exactly what the token is for. Only the bare `color` property sets text colour.
-  const textColourFromOutline = /(?<![-\w])color\s*:\s*var\(\s*--mat-sys-outline\s*[,)]/;
+  //
+  // `[^;{}]*?` spans newlines (a newline is neither `;`, `{` nor `}`) which is what makes
+  // the multiline form above match, while the excluded characters stop the match escaping
+  // into the next declaration or rule.
+  const textColourFromOutline =
+    /(?<![-\w])color\s*:\s*[^;{}]*?var\(\s*--mat-sys-outline\s*[,)]/g;
 
   for (const [file, lines] of addedLinesByFile) {
     let inlineBlock = null;
@@ -330,23 +358,68 @@ function checkOutlineTokenIsNotTextColour() {
       inlineBlock = inlineStyleBlockLines(read(file));
       if (inlineBlock.size === 0) continue;
     }
-    for (const { line, text } of lines) {
-      if (inlineBlock && !inlineBlock.has(line)) continue;
-      const trimmed = text.trim();
-      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) continue;
-      if (!textColourFromOutline.test(trimmed)) continue;
-      // The deliberate non-text use declares itself on the line.
-      if (/non-text/.test(trimmed)) continue;
+    if (!fileExists(file)) continue;
+
+    const text = read(file);
+    const masked = maskCommentsPreservingOffsets(text);
+    const addedLineNumbers = new Set(lines.map(({ line }) => line));
+    // Cumulative newline count per character index, so a match offset becomes a line number
+    // without re-scanning the file for every match.
+    const lineAt = (index) => {
+      let line = 1;
+      for (let i = 0; i < index; i += 1) if (text[i] === '\n') line += 1;
+      return line;
+    };
+
+    for (const match of masked.matchAll(textColourFromOutline)) {
+      const startLine = lineAt(match.index);
+      const endLine = startLine + (match[0].match(/\n/g)?.length ?? 0);
+      const spanned = [];
+      for (let line = startLine; line <= endLine; line += 1) spanned.push(line);
+
+      // Only a declaration the diff actually touched, and for a `.ts` file only one inside an
+      // inline template/styles block.
+      const touched = spanned.some(
+        (line) => addedLineNumbers.has(line) && (!inlineBlock || inlineBlock.has(line)),
+      );
+      if (!touched) continue;
+
+      // The deliberate non-text use declares itself, anywhere on the lines the declaration
+      // spans — read from the ORIGINAL text, because the marker lives in a comment and the
+      // matched copy has had its comments masked away.
+      const sourceLines = text.split('\n');
+      const declarationText = spanned.map((line) => sourceLines[line - 1] ?? '').join('\n');
+      if (/non-text/.test(declarationText)) continue;
+
       fail(
-        `${file}:${line} sets a text colour from --mat-sys-outline, which is a non-text ` +
+        `${file}:${startLine} sets a text colour from --mat-sys-outline, which is a non-text ` +
           `token (borders and dividers, WCAG 1.4.11 at 3:1). It measures 4.25:1 on ` +
           `--mat-sys-surface, so it fails 1.4.3's 4.5:1 for text. ` +
           `Use --mat-sys-on-surface-variant (8.93:1 on that background). ` +
           `If this really is non-text — an icon or a divider — say so with \`non-text\` in a ` +
-          `comment on the line, naming what it is.`,
+          `comment on one of the declaration's lines, naming what it is.`,
       );
     }
   }
+}
+
+/**
+ * Replace every comment with spaces, keeping each remaining character at its original
+ * index and every newline where it was.
+ *
+ * Offsets have to survive because the caller turns a match index back into a line number.
+ * `' '.repeat(m.length)` would do that for a `//` comment but not a block comment, whose
+ * newlines must be kept or every line number after it shifts up.
+ *
+ * Known limitation, stated rather than hidden: a `//` inside a string or a `url(https://…)`
+ * is masked as if it began a comment. That can only lose a finding on a line that puts such
+ * a URL before a `color:` declaration, which does not occur here, and it fails toward
+ * silence rather than toward a false accusation.
+ */
+function maskCommentsPreservingOffsets(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
+    .replace(/\/\/[^\n]*/g, (comment) => ' '.repeat(comment.length));
 }
 
 function checkDocsNumbering() {

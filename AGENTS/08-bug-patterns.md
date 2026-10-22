@@ -771,4 +771,4 @@ Fix proactively to avoid a review cycle:
 - "SVG has no accessible name" → if the link around it is already named, mark the graphic decorative with `aria-hidden="true"` on the wrapper; an `aria-label` on the host element does not reach the `<svg>`
 - "Focus indicator may not be visible" → set the vendor's focus-outline custom property to its own foreground token; left unset it falls back to a low-emphasis divider colour and misses 3:1
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
-- "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token at 3:1; use `var(--mat-sys-on-surface-variant)` for text, or declare the non-text use with `non-text` in a comment on the line
+- "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token at 3:1; use `var(--mat-sys-on-surface-variant)` for text, or declare the non-text use with `non-text` in a comment on one of the declaration's lines

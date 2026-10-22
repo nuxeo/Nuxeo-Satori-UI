@@ -429,6 +429,47 @@ expectGreenAfterEdit(
     ),
 );
 
+/**
+ * The bypass a reviewer found on PR #448, when the rule was line-scoped: a CSS declaration
+ * may be written across several lines, so matching a single line reports on formatting
+ * rather than on the defect. Verified against the real stylesheet before being fixed — the
+ * gate passed on it.
+ */
+expectRed(
+  'the outline token as a text colour, split across lines',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__hint {\n  font-size: 12px;\n  color: var(\n    --mat-sys-outline,\n' +
+        '    #777683\n  );\n}\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
+/**
+ * A block comment's continuation lines must not be read as code. This is the neighbouring
+ * bug in `checkThemeTokens`, which skips a line that *starts* with `/*` — a measurement
+ * written into a multi-line comment in `nav-drawer.component.scss` was reported by it as a
+ * hardcoded colour, which is what sent this rule to comment masking instead.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'the token named inside a block comment, on a continuation line',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '/* Prose about this rule that happens to name a declaration:\n' +
+        '   color: var(--mat-sys-outline) is what NOT to write here.\n */\n' +
+        '.probe__hint {\n  font-size: 12px;\n  color: var(--mat-sys-on-surface-variant);\n}\n',
+    ),
+);
+
 expectWarn(
   'locale missing a key the reference has — warns, because English is the fallback',
   'checkTranslationCatalogues',

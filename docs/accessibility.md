@@ -160,7 +160,8 @@ hardcoded colour literal: a **token-usage** rule, enforced on the diff, and not 
 verdict. It computes no ratio and claims no conformance; the WCAG 2.1 AA number still comes from
 axe and nowhere else. `border-color`, `background-color`, `outline-color` and
 `text-decoration-color` are explicitly not matched — those are what the token is for — and a
-genuine non-text use opts out by saying `non-text` in a comment on the line, which the three
+genuine non-text use opts out by saying `non-text` in a comment on one of the declaration's
+lines, which the three
 icon uses in the repository now do.
 
 It is justified on the rule stated just above, and the justification is **not** that axe cannot
