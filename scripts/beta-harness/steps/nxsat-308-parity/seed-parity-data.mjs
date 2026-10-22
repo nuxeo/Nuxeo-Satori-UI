@@ -631,13 +631,18 @@ async function seed() {
 
   await create(root, 'Folder', FIXTURE.empty.name, { 'dc:title': FIXTURE.empty.title });
 
-  // Collection for error state testing.
-  const collectionResp = await call('POST', '/automation/Collection.Create', {
+  // Collection for error state testing. Create it in the fixture workspace so it is cleaned up
+  // with the workspace. Collection.Create with no input stores it in the user's personal Collections
+  // folder outside the workspace, which survives reseeding and --remove. By passing the workspace as
+  // the input document, the collection belongs to the workspace's path.
+  const rootDoc = await call('GET', `/path${enc(root)}`);
+  const collectionResp = await call('POST', `/id/${rootDoc.data.uid}/@op/Collection.Create`, {
     json: {
       params: {
         name: FIXTURE.collection.title,
         description: FIXTURE.collection.description,
       },
+      input: rootDoc.data.uid,
       context: {},
     },
   });
@@ -858,17 +863,16 @@ async function verify(assets) {
   );
   manifest.docs.empty = { path: emptyPath, uid: (await byPath(emptyPath)).data?.uid };
 
-  // Collection verification.
-  // Find the collection by title through User.GetCollections
-  const userColls = await call('POST', '/automation/User.GetCollections', {
-    json: { params: { searchTerm: '' }, context: {} },
-    ok: null,
-  });
-  const coll = (userColls.data?.entries ?? []).find((e) => e.title === FIXTURE.collection.title);
+  // Collection verification. Look for it by title in the workspace's children to confirm
+  // it's owned by the workspace (not in the user's personal Collections folder).
+  const wsChildren = await get(`/path${enc(FIXTURE.root)}/@children?pageSize=500`, {});
+  const coll = (wsChildren.data?.entries ?? []).find(
+    (e) => e.type === 'Collection' && e.title === FIXTURE.collection.title,
+  );
   expect(
-    'collection was created',
-    userColls.status === 200 && Boolean(coll),
-    `HTTP ${userColls.status}, found: ${Boolean(coll)}`,
+    'collection exists as a child of the workspace',
+    wsChildren.status === 200 && Boolean(coll),
+    `HTTP ${wsChildren.status}, found in workspace: ${Boolean(coll)}`,
   );
   if (coll?.uid) {
     // Get members using GET with queryParams as the app does
@@ -891,6 +895,7 @@ async function verify(assets) {
     );
     manifest.docs.collection = {
       uid: coll.uid,
+      path: coll.path,
       title: FIXTURE.collection.title,
       memberCount: collEntries.length,
       firstMember: collDoc?.title,

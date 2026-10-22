@@ -1828,12 +1828,23 @@ export default async function run(page, h, outDir) {
     );
     // Check that permission entries (rows) are visible - data rows start after header row
     const dataRows = await page.locator(`${A.permissions.rows}:not(:first-child)`).first().isVisible().catch(() => false);
+    // Stage a reversible edit to make Save visible: nxs-permissions-panel only shows Save when pendingCount() > 0
+    await A.permissions.showTab(page, 'Groups');
+    await page.waitForTimeout(800);
+    const membersRow = await page.locator(A.permissions.rows).filter({ hasText: 'members' }).first();
+    if (await membersRow.count()) {
+      await membersRow.locator(A.permissions.accessControl).first().click();
+      await page.waitForTimeout(600);
+      await page.locator(A.permissions.options).filter({ hasText: /^\s*Read\s*$/ }).first().click();
+      await page.waitForTimeout(600);
+    }
     const saveButton = await page.locator(`${A.permissions.save}`).filter({ hasText: /save/i }).first().isVisible().catch(() => false);
     h.check(
       `${LB} permission entries and controls remain visible at 320 px`,
       dataRows && saveButton,
       `data rows visible=${dataRows}, save button visible=${saveButton}`,
     );
+    // Discard the staged change without saving so the fixture remains unchanged
     await h.screenshot('permissions-panel-320px');
   }
   // Reset viewport to default before the viewer steps, which assume the wider width
@@ -2105,22 +2116,17 @@ export default async function run(page, h, outDir) {
 
   // ── 14b. Failure: collection member listing answers 500 ──────────────────────────────────────
   await h.step('Failure — the collection member listing answers 500');
-  // Find the collection by title through the user's collections list
-  const collectionsResp = await page.evaluate(
-    async ({ title }) => {
-      const resp = await fetch('/nuxeo/api/v1/automation/User.GetCollections', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params: { searchTerm: '' }, context: {} }),
-      });
-      if (!resp.ok) return null;
-      const json = await resp.json();
-      const entries = json.entries ?? [];
-      return entries.find((e) => e.title === title) ?? null;
-    },
-    { title: COLLECTION.title },
+  // Find the collection in the workspace's children (it's owned by the workspace, not in the user's
+  // personal Collections folder). This avoids ambiguity from multiple collections with the same title.
+  const wsChildrenResp = await page.request.get(
+    `/nuxeo/api/v1/path${encodeURIComponent(ROOT)}/@children?pageSize=500`,
   );
-  const collectionUid = collectionsResp?.uid ?? null;
+  const wsChildren = wsChildrenResp.ok() ? await wsChildrenResp.json() : null;
+  const collection =
+    (wsChildren?.entries ?? []).find(
+      (e) => e.type === 'Collection' && e.title === COLLECTION.title,
+    ) ?? null;
+  const collectionUid = collection?.uid ?? null;
   h.check(
     `${CTX} the parity collection was seeded and is findable`,
     Boolean(collectionUid),
