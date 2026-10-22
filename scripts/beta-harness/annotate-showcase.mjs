@@ -157,7 +157,9 @@ const browser = await chromium.launch({ headless: true });
 const context = await browser.newContext({
   viewport: VIEWPORT,
   deviceScaleFactor: SCALE,
-  httpCredentials: { username: user, password: pass, origin: BASE },
+  // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never challenges, so a
+  // challenge-based credential is never sent and `page.request` runs as Anonymous.
+  httpCredentials: { username: user, password: pass, origin: BASE, send: 'always' },
 });
 const page = await context.newPage();
 

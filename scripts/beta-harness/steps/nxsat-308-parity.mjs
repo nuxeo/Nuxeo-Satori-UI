@@ -19,9 +19,9 @@
  *   a local, uncommitted revert of 0b7b44b15's three POC files. Only those two steps differ.
  * - `adf-hx-as-target` — negative control: `adf-hx` with no known gaps, so every gap check is
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
- * - `nxs` — the replacements. The adapter is provisional: its selectors follow the table-primitive
- *   decision (`docs/satori-components/decision-table-primitive.md`) and must be confirmed against
- *   the built components. Change the adapter only; never the steps or the expected values.
+ * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
+ *   renders it, not from the table-primitive decision it was first drafted from. Change the
+ *   adapter only; never the steps or the expected values.
  *
  * ## Reading the checks
  *
@@ -39,13 +39,14 @@
  *
  * ## Data
  *
- * Seeded by `seed-parity-data.mjs`, kept with the evidence in
- * `~/Desktop/agentic-ui-evidence/NXSAT-308/parity-before/seed/`. The first step verifies the
- * fixture over REST and aborts with `precondition-not-met` (exit 2) when it does not match.
+ * Seeded by `nxsat-308-parity/seed-parity-data.mjs`, next to this file (committed by NXSAT-643;
+ * it had been kept only with the 2026-10-08 evidence). The first step verifies the fixture over
+ * REST and aborts with `precondition-not-met` (exit 2) when it does not match. Team runs use a
+ * Nuxeo of their own, started and seeded from that folder — see its `README.md`.
  *
  * ## Run
  *
- *   # throwaway Nuxeo seeded, app served against it (see the evidence README)
+ *   # your own Nuxeo seeded, app served against it (nxsat-308-parity/README.md)
  *   export NUXEO_USER=… NUXEO_PASS=… PARITY_USER_PASS=…   # the same PARITY_USER_PASS the seed used
  *   APP_URL=http://localhost:4216 PARITY_SURFACE=adf-hx npm run beta:evidence -- nxsat-308-parity
  *
@@ -54,6 +55,8 @@
 
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+
+import { askThroughFetch, PROBE_TIMEOUT_MS } from '../identity-guard.mjs';
 
 const LB = '[load-bearing]';
 const NEG = '[negative]';
@@ -98,6 +101,7 @@ const MEDIA = {
   pdfText: 'Parity PDF fixture',
 };
 const EMPTY = { path: `${ROOT}/empty` };
+const COLLECTION = { title: 'Parity collection', memberTitle: 'Paged item 001' };
 const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secret' };
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
@@ -428,8 +432,8 @@ const ADF_HX_REMOUNT = {
 };
 
 /**
- * Provisional. Selectors follow the table-primitive decision (mat-table + MatSort) and ARIA roles;
- * confirm each against the built nxs- components and change only this object.
+ * Each group names the template its selectors were read from. An expectation no selector can
+ * reach is left to fail rather than worked around here. Change only this object.
  */
 const NXS = {
   id: 'nxs',
@@ -442,10 +446,15 @@ const NXS = {
     await h.goTo(`/#/browse${ROOT}`);
     return (await page.locator('nxs-document-list').count()) > 0;
   },
+  // document-list/document-list.component.html (mat-table: CdkRow and CdkHeaderCell set the roles,
+  // MatSortHeader's container is the role="button"), pager/pager.component.html,
+  // empty-state and error-state; scoped to the list so the tree's error state is never read.
   list: {
     rows: 'nxs-document-list tbody tr[role="row"]',
-    title: 'td:nth-of-type(2) a, td:nth-of-type(2)',
-    headers: 'nxs-document-list th[role="columnheader"]',
+    // The title cell also holds the type icon, whose ligature is text; the open button is the title.
+    title: '.nxs-document-list__open',
+    headers:
+      'nxs-document-list th[role="columnheader"]:not(.nxs-document-list__select):not(.nxs-document-list__actions)',
     headerControl: (label) =>
       `nxs-document-list th[role="columnheader"]:has-text("${label}") [role="button"]`,
     checkbox: 'mat-checkbox',
@@ -453,20 +462,29 @@ const NXS = {
     next: 'nxs-document-list [aria-label="Next page"], nxs-pager [aria-label="Next page"]',
     previous:
       'nxs-document-list [aria-label="Previous page"], nxs-pager [aria-label="Previous page"]',
-    range: 'nxs-pager [role="status"]',
-    empty: 'nxs-empty-state',
-    error: 'nxs-error-state',
-    retry: 'nxs-error-state button',
+    range: 'nxs-pager .nxs-pager__range',
+    empty: 'nxs-document-list nxs-empty-state',
+    error: 'nxs-document-list nxs-error-state',
+    retry: 'nxs-document-list nxs-error-state button',
     failPattern: '**/@children**',
   },
+  // document-tree/document-tree.component.html, mounted by nav-drawer.component.html. Only the
+  // chevron toggles; the rest of a row opens the folder. A failed level is reported in a treeitem
+  // row of its own, which is not a document, so it is not a node.
   tree: {
-    node: 'nxs-document-tree [role="treeitem"]',
-    label: '[data-nxs-tree-label]',
-    toggle: (label) => `nxs-document-tree button[aria-label*="${label}"]`,
+    node: 'nxs-document-tree [role="treeitem"]:not(.nxs-document-tree__item--error)',
+    label: '.nxs-document-tree__label',
+    toggle: (label) =>
+      `nxs-document-tree .nxs-document-tree__row:has(> .nxs-document-tree__label:text-is("${label}")) .nxs-document-tree__arrow`,
     region: 'nxs-document-tree',
-    failPattern: '**/@children**',
+    // An ordinary folder's level comes from the tree_children page provider; BrowseService turns
+    // to @children only when that answers no entries, and a 500 there reaches the tree as an error.
+    failPattern: '**/search/pp/tree_children/execute**',
   },
-  breadcrumb: { items: 'nxs-breadcrumb nav li', nav: 'nxs-breadcrumb nav' },
+  // breadcrumbs/breadcrumbs.component.ts: the selector is plural.
+  breadcrumb: { items: 'nxs-breadcrumbs nav li', nav: 'nxs-breadcrumbs nav' },
+  // permissions-panel/permissions-panel.component.html: one table row per entry, no tabs, and its
+  // save outcome is reported inside the panel rather than in a snack bar.
   permissions: {
     root: 'nxs-permissions-panel',
     async open(page, h, path) {
@@ -483,16 +501,22 @@ const NXS = {
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
     save: 'nxs-permissions-panel button',
-    feedback: 'mat-snack-bar-container, nxs-toast',
+    // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
+    // clicks the first status or alert button: the status text after a save, and after a refusal
+    // the alert's Reload, which re-reads the panel once every check on the save has run.
+    feedback:
+      'nxs-permissions-panel .nxs-permissions-panel__status, nxs-permissions-panel .nxs-permissions-panel__alert',
   },
+  // libs/shared/ui/src/lib/document-viewer/document-viewer.component.ts: there is no nxs- viewer;
+  // the document page renders lib-document-viewer, reached from the row's open button.
   viewer: {
-    root: 'nxs-viewer',
+    root: 'lib-document-viewer',
     async open(page, A, title) {
       await page
         .locator(A.list.rows)
         .filter({ hasText: title })
         .first()
-        .locator('a')
+        .locator('.nxs-document-list__open')
         .first()
         .click();
       await page.waitForTimeout(5000);
@@ -502,6 +526,7 @@ const NXS = {
       await page.waitForTimeout(1500);
     },
   },
+  // properties-panel/properties-panel.component.html, on the document page's details panel.
   properties: {
     provenance: 'nxs-properties-panel',
     root: 'nxs-properties-panel',
@@ -510,34 +535,68 @@ const NXS = {
       await page.waitForTimeout(2500);
     },
   },
+  // manage-versions/manage-versions.component.html: the versions are a mat-menu, rendered in the
+  // overlay only once the trigger is pressed. A document without versions has no trigger.
   versions: {
     provenance: 'nxs-manage-versions',
     root: 'nxs-manage-versions',
     async open(page, h, uid) {
+      // The previous read leaves its menu open for the screenshot; a stale menu must not be read.
+      if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
       await h.goToDoc(uid);
       await page.waitForTimeout(2500);
+      const trigger = page.locator('nxs-manage-versions .nxs-manage-versions__trigger');
+      if (await trigger.count()) {
+        await trigger.first().click().catch(leaveItToTheNextCheck);
+        await page.waitForTimeout(1500);
+      }
     },
     async read(page) {
       const root = page.locator('nxs-manage-versions').first();
-      const text = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
+      const hasMenu =
+        (await root.locator('.nxs-manage-versions__trigger').count()) > 0 &&
+        (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) > 0;
+      const menu = page.locator('.cdk-overlay-container .nxs-manage-versions__menu').first();
+      const scope = hasMenu ? menu : root;
+      const rootText = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
+      // A version item is a menuitemradio; a restore could be any of the three roles.
+      let restore = 0;
+      for (const role of ['menuitem', 'menuitemradio', 'button']) {
+        restore += await scope.getByRole(role, { name: /restore/i }).count();
+      }
+      const text = hasMenu
+        ? (await menu.innerText().catch(() => '')).replace(/\s+/g, ' ')
+        : rootText;
       return {
-        labels: [...new Set([...text.matchAll(/(?:^|\s)(\d+\.\d+)(?=\s|$)/g)].map((m) => m[1]))],
-        live: text.match(/1\.0\+|current version/i)?.[0] ?? '',
-        restore: await root.getByRole('button', { name: /restore/i }).count(),
-        create: await root.getByRole('button', { name: /create|new version/i }).count(),
+        labels: hasMenu
+          ? (
+              await menu
+                .locator('.nxs-manage-versions__version .nxs-manage-versions__number')
+                .allInnerTexts()
+                .catch(() => [])
+            ).map((t) => t.trim())
+          : [],
+        live: rootText.match(/1\.0\+|current version/i)?.[0] ?? '',
+        restore,
+        create: await scope.locator('.nxs-manage-versions__create:not([disabled])').count(),
         empty: /no (previous )?versions/i.test(text) ? text.slice(0, 120) : '',
         text: text.slice(0, 300),
       };
     },
   },
+  // search/search.html (table view: a CSS-grid div.result-list, not nxs-document-list) and the
+  // filters drawer's search-filters.component.html, which the nav drawer mounts outside lib-search.
   search: {
     route: '/#/search',
-    input: 'lib-search input[type="search"], lib-search input',
-    rows: 'lib-search nxs-document-list tbody tr[role="row"]',
-    title: 'td:nth-of-type(2)',
+    input: 'nxs-search-filters input[type="search"]',
+    rows: 'lib-search .result-list .list-row',
+    title: '.row-name-text',
     next: 'lib-search [aria-label="Next page"]',
-    count: 'lib-search [role="status"]',
-    none: 'lib-search nxs-empty-state',
+    count: 'lib-search .results-count',
+    none: 'lib-search .results-empty',
     error: 'lib-search nxs-error-state',
     failPattern: '**/search/**',
   },
@@ -704,7 +763,7 @@ export default async function run(page, h, outDir) {
   };
 
   // ── 1. Preconditions ──────────────────────────────────────────────────────────────────────────
-  h.step(`Preconditions — surface "${surfaceId}" and the seeded parity fixture`);
+  await h.step(`Preconditions — surface "${surfaceId}" and the seeded parity fixture`);
   h.requirePrecondition(
     'PARITY_SURFACE names a known surface',
     Boolean(A),
@@ -760,13 +819,11 @@ export default async function run(page, h, outDir) {
   const parityBasic = Buffer.from(`${ACL.user}:${process.env['PARITY_USER_PASS']}`).toString(
     'base64',
   );
-  const parityMe = await page.request
-    .get(`${api}/me`, {
-      headers: { Authorization: `Basic ${parityBasic}` },
-      failOnStatusCode: false,
-    })
-    .then((r) => r.json())
-    .catch(noAnswer);
+  // Node's `fetch`, not `page.request`: the runner's `httpCredentials` use `send: 'always'`, which
+  // replaces an explicit `Authorization` on `page.request`, so this asked who the *administrator*
+  // was and the invariant could never hold (NXSAT-643). The guard's probe refuses a redirect and
+  // bounds headers and body together, so a `/me` that never finishes fails this precondition.
+  const parityMe = (await askThroughFetch(`${api}/me`, `Basic ${parityBasic}`)).body;
   // Every fixture a later step reads, so drift aborts here as precondition-not-met instead of
   // surfacing later as what would look like a component defect.
   const fixture = {
@@ -852,7 +909,7 @@ export default async function run(page, h, outDir) {
   h.note(`surface: ${A.label}`);
 
   // ── 2. DocumentList: columns and default order ────────────────────────────────────────────────
-  h.step('DocumentList — columns and default order on a folder of 125 mixed children');
+  await h.step('DocumentList — columns and default order on a folder of 125 mixed children');
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
   const headers0 = await readHeaders(page, A);
@@ -889,7 +946,9 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-default-columns');
 
   // ── 3. DocumentList: server sort ──────────────────────────────────────────────────────────────
-  h.step('DocumentList — sort by Title descending reaches the server, and the header says so');
+  await h.step(
+    'DocumentList — sort by Title descending reaches the server, and the header says so',
+  );
   const titleControl = page.locator(A.list.headerControl('Title')).first();
   /** Clicks the Title header until the first row is `first`; the header cycles, so at most three. */
   const sortTitleUntilFirst = async (first) => {
@@ -946,7 +1005,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('list-sorted-title-desc');
 
-  h.step('DocumentList — a sort header is reachable and operable by keyboard');
+  await h.step('DocumentList — a sort header is reachable and operable by keyboard');
   h.check(
     `${LB} each of the three sortable headers holds exactly one keyboard-focusable sort control`,
     headersDesc.length === 3 && headersDesc.every((x) => x.focusable === 1),
@@ -997,7 +1056,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-sorted-modified-by-keyboard');
 
   // ── 4. DocumentList: server paging ───────────────────────────────────────────────────────────
-  h.step('DocumentList — server paging to page 2 and to page 3, beyond the first two');
+  await h.step('DocumentList — server paging to page 2 and to page 3, beyond the first two');
   await h.goTo(A.browse(EMPTY.path));
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
@@ -1066,7 +1125,7 @@ export default async function run(page, h, outDir) {
   );
 
   // ── 5. DocumentList: selection ───────────────────────────────────────────────────────────────
-  h.step('DocumentList — single, multiple and range selection by pointer');
+  await h.step('DocumentList — single, multiple and range selection by pointer');
   await h.goTo(A.browse(EMPTY.path));
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
@@ -1114,7 +1173,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('list-selection-multi-and-shift');
 
-  h.step('DocumentList — select all on the page, then clear');
+  await h.step('DocumentList — select all on the page, then clear');
   await page.locator(A.list.selectAll).first().click();
   await page.waitForTimeout(600);
   const all = await selectedTitles();
@@ -1133,7 +1192,7 @@ export default async function run(page, h, outDir) {
     `${cleared.length} still selected`,
   );
 
-  h.step('DocumentList — keyboard: Space selects, arrows move, every row has a name');
+  await h.step('DocumentList — keyboard: Space selects, arrows move, every row has a name');
   const rowsK = await readRows(page, A.list.rows, A.list.title);
   // The computed name, from the accessibility tree: an absent or empty aria-label says nothing about
   // it, because a row can take its name from its cells. Read before any row is selected, since
@@ -1193,7 +1252,7 @@ export default async function run(page, h, outDir) {
   await page.waitForTimeout(300);
 
   // ── 6. DocumentList: empty state ─────────────────────────────────────────────────────────────
-  h.step('DocumentList — empty folder shows an empty state, not a blank table');
+  await h.step('DocumentList — empty folder shows an empty state, not a blank table');
   await h.goTo(A.browse(EMPTY.path));
   await waitForList(page, A);
   const emptyText = await visibleText(A.list.empty);
@@ -1211,7 +1270,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-empty-folder');
 
   // ── 7. DocumentTree ──────────────────────────────────────────────────────────────────────────
-  h.step('DocumentTree — expand by hand to six levels below the workspace (aria-level 10)');
+  await h.step('DocumentTree — expand by hand to six levels below the workspace (aria-level 10)');
   mark('tree', 'start');
   await h.goTo(A.browse(ROOT));
   await page.reload({ waitUntil: 'networkidle' });
@@ -1282,7 +1341,7 @@ export default async function run(page, h, outDir) {
   }
   await h.screenshot('tree-expanded-to-depth');
 
-  h.step('DocumentTree — a fresh load deep-linked six levels down opens the whole branch');
+  await h.step('DocumentTree — a fresh load deep-linked six levels down opens the whole branch');
   await h.goTo(A.browse(deepPath(DEEP_LEVELS)));
   await page.reload({ waitUntil: 'networkidle' });
   await page
@@ -1353,7 +1412,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('tree-deep-link-fresh-load');
 
-  h.step('DocumentTree — a server error while expanding a node');
+  await h.step('DocumentTree — a server error while expanding a node');
   await h.goTo(A.browse(ROOT));
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(2500);
@@ -1392,7 +1451,7 @@ export default async function run(page, h, outDir) {
   mark('tree', 'end');
 
   // ── 8. Breadcrumb ────────────────────────────────────────────────────────────────────────────
-  h.step('Breadcrumb — a ten-crumb path with an 80-character title');
+  await h.step('Breadcrumb — a ten-crumb path with an 80-character title');
   await h.goTo(A.browse(deepPath(DEEP_LEVELS)));
   await waitForList(page, A);
   const crumbs = await page
@@ -1500,7 +1559,7 @@ export default async function run(page, h, outDir) {
   );
 
   // ── 9. PropertiesPanel ───────────────────────────────────────────────────────────────────────
-  h.step(`PropertiesPanel — ${A.properties.provenance}`);
+  await h.step(`PropertiesPanel — ${A.properties.provenance}`);
   await A.properties.open(page, h, contract.data?.uid);
   // Text plus form-control values: a read-only panel may render each value inside an input.
   const props = await page
@@ -1557,7 +1616,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('properties-panel');
 
   // ── 10. ManageVersions ───────────────────────────────────────────────────────────────────────
-  h.step(`ManageVersions — ${A.versions.provenance}`);
+  await h.step(`ManageVersions — ${A.versions.provenance}`);
   await A.versions.open(page, h, contract.data?.uid);
   const v = await A.versions.read(page);
   h.check(
@@ -1609,7 +1668,9 @@ export default async function run(page, h, outDir) {
   await h.screenshot('versions-none');
 
   // ── 11. PermissionsPanel ─────────────────────────────────────────────────────────────────────
-  h.step('PermissionsPanel — an ACL holding AddChildren, outside Read / ReadWrite / Everything');
+  await h.step(
+    'PermissionsPanel — an ACL holding AddChildren, outside Read / ReadWrite / Everything',
+  );
   mark('permissions', 'start');
   await A.permissions.open(page, h, ACL.path);
   const permText = (
@@ -1682,7 +1743,7 @@ export default async function run(page, h, outDir) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
 
-  h.step('PermissionsPanel — saving a change to another row of that ACL');
+  await h.step('PermissionsPanel — saving a change to another row of that ACL');
   await A.permissions.showTab(page, 'User Groups');
   const beforeSave = wire.length;
   await page
@@ -1763,7 +1824,7 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(600);
   }
 
-  h.step('PermissionsPanel — a document whose ACL grants WriteVersion');
+  await h.step('PermissionsPanel — a document whose ACL grants WriteVersion');
   await A.permissions.open(page, h, ACL.doc);
   const docPanel = (
     await page
@@ -1795,8 +1856,64 @@ export default async function run(page, h, outDir) {
   }
   mark('permissions', 'end');
 
+  // ── 11b. PermissionsPanel at 320 px ──────────────────────────────────────────────────────────────
+  await h.step('PermissionsPanel — fits and is usable at 320 px');
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.waitForTimeout(800);
+  await A.permissions.open(page, h, ACL.path);
+  const narrowPanel = page.locator(A.permissions.root).first();
+  const narrowVisible = await narrowPanel.isVisible().catch(() => false);
+  h.check(
+    `${LB} the permissions panel renders at 320 px`,
+    narrowVisible,
+    `panel visible=${narrowVisible}`,
+  );
+  if (narrowVisible) {
+    const panelBox = await narrowPanel.boundingBox();
+    const docScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const innerWidth = await page.evaluate(() => window.innerWidth);
+    const horizontalScroll = docScrollWidth > innerWidth;
+    const panelScrollWidth = await narrowPanel.evaluate((el) => el.scrollWidth);
+    const panelClientWidth = await narrowPanel.evaluate((el) => el.clientWidth);
+    const panelOverflows = panelScrollWidth > panelClientWidth;
+    h.check(
+      `${LB} the permissions panel at 320 px fits without causing page or panel horizontal scroll`,
+      !horizontalScroll && !panelOverflows && (panelBox?.width ?? 0) <= 320,
+      `page scrollWidth=${docScrollWidth}, innerWidth=${innerWidth}, panel scrollWidth=${panelScrollWidth}, clientWidth=${panelClientWidth}, box width=${panelBox?.width ?? 'not measured'}`,
+    );
+    // Check that permission entries (rows) are visible - data rows start after header row
+    const dataRows = await page.locator(`${A.permissions.rows}:not(:first-child)`).first().isVisible().catch(() => false);
+    // Stage a reversible edit to make Save visible: nxs-permissions-panel only shows Save when pendingCount() > 0
+    await A.permissions.showTab(page, 'Groups');
+    await page.waitForTimeout(800);
+    const membersRow = await page.locator(A.permissions.rows).filter({ hasText: 'members' }).first();
+    if (await membersRow.count()) {
+      await membersRow.locator(A.permissions.accessControl).first().click();
+      await page.waitForTimeout(600);
+      await page.locator(A.permissions.options).filter({ hasText: /^\s*Read\s*$/ }).first().click();
+      await page.waitForTimeout(600);
+    }
+    const saveButton = await page.locator(`${A.permissions.save}`).filter({ hasText: /save/i }).first().isVisible().catch(() => false);
+    h.check(
+      `${LB} permission entries and controls remain visible at 320 px`,
+      dataRows && saveButton,
+      `data rows visible=${dataRows}, save button visible=${saveButton}`,
+    );
+    // Discard the staged change without saving so the fixture remains unchanged
+    await h.screenshot('permissions-panel-320px');
+  }
+  // Reset viewport to default before the viewer steps, which assume the wider width
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(600);
+  const resetWidth = await page.evaluate(() => window.innerWidth);
+  h.check(
+    `${CTX} viewport reset to 1440 px before the viewer steps`,
+    resetWidth === 1440,
+    `window.innerWidth=${resetWidth}`,
+  );
+
   // ── 12. Viewer ───────────────────────────────────────────────────────────────────────────────
-  h.step('Viewer — PDF');
+  await h.step('Viewer — PDF');
   await h.goTo(A.browse(MEDIA.path));
   await waitForList(page, A);
   const viewerState = async () => {
@@ -1866,7 +1983,7 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.pdf);
   h.check(`${LB} the viewer closes again`, (await page.locator(A.viewer.root).count()) === 0);
 
-  h.step('Viewer — image');
+  await h.step('Viewer — image');
   await A.viewer.open(page, A, MEDIA.image);
   const img = await viewerState();
   h.check(
@@ -1886,7 +2003,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('viewer-image');
   await A.viewer.close(page, A, MEDIA.image);
 
-  h.step('Viewer — video (WebM)');
+  await h.step('Viewer — video (WebM)');
   await A.viewer.open(page, A, MEDIA.video);
   const vid = await viewerState();
   h.check(
@@ -1903,7 +2020,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('viewer-video');
   await A.viewer.close(page, A, MEDIA.video);
 
-  h.step('Viewer — fallback for a format no viewer handles');
+  await h.step('Viewer — fallback for a format no viewer handles');
   await A.viewer.open(page, A, MEDIA.unknown);
   const unk = await viewerState();
   h.check(
@@ -1923,7 +2040,7 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.unknown);
 
   // ── 13. Search listing ───────────────────────────────────────────────────────────────────────
-  h.step('Search listing — 125 hits paged 50 / 50 / 25');
+  await h.step('Search listing — 125 hits paged 50 / 50 / 25');
   await h.goTo(A.search.route);
   const searchFor = async (term) => {
     await page.locator(A.search.input).first().fill(term);
@@ -1977,7 +2094,7 @@ export default async function run(page, h, outDir) {
   );
   await h.screenshot('search-results-page-3');
 
-  h.step('Search listing — no results, and a match the administrator can see');
+  await h.step('Search listing — no results, and a match the administrator can see');
   await searchFor(SEARCH.none);
   const noneText = await visibleText(A.search.none);
   h.check(
@@ -2000,7 +2117,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('search-admin-sees-secret-memo');
 
   // ── 14. Failure: a 500 from Nuxeo on each listing ────────────────────────────────────────────
-  h.step('Failure — the folder listing answers 500');
+  await h.step('Failure — the folder listing answers 500');
   await fail500(A.list.failPattern);
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
@@ -2026,7 +2143,7 @@ export default async function run(page, h, outDir) {
     (await readRows(page, A.list.rows, A.list.title)).length === 50,
   );
 
-  h.step('Failure — the search listing answers 500');
+  await h.step('Failure — the search listing answers 500');
   await h.goTo(A.search.route);
   await fail500(A.search.failPattern);
   await searchFor(`${SEARCH.token}x`);
@@ -2052,9 +2169,93 @@ export default async function run(page, h, outDir) {
   await h.screenshot('failure-search-500');
   await page.unroute(A.search.failPattern);
 
+  // ── 14b. Failure: collection member listing answers 500 ──────────────────────────────────────
+  await h.step('Failure — the collection member listing answers 500');
+  // Find the collection in the workspace's children (it's owned by the workspace, not in the user's
+  // personal Collections folder). This avoids ambiguity from multiple collections with the same title.
+  const wsChildren = (await getJson(`/path${enc(ROOT)}/@children?pageSize=500`)).data;
+  const collection =
+    (wsChildren?.entries ?? []).find(
+      (e) => e.type === 'Collection' && e.title === COLLECTION.title,
+    ) ?? null;
+  const collectionUid = collection?.uid ?? null;
+  h.check(
+    `${CTX} the parity collection was seeded and is findable`,
+    Boolean(collectionUid),
+    `collection uid: ${JSON.stringify(collectionUid)}`,
+  );
+  if (collectionUid) {
+    await fail500('**/search/pp/default_content_collection/execute**');
+    await h.goTo(`/#/collections/${collectionUid}`);
+    await page.waitForTimeout(3000);
+    const collectionError = (
+      await page
+        .locator('lib-collection-detail nxs-document-list nxs-error-state')
+        .first()
+        .allInnerTexts()
+        .catch(() => [])
+    )
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    const collectionRows = (
+      await page.locator('lib-collection-detail nxs-document-list table tbody tr').count()
+    );
+    h.check(
+      `${LB} the collection shows an error state with a message`,
+      collectionError.trim().length > 0,
+      JSON.stringify(collectionError.slice(0, 160)),
+    );
+    h.check(
+      `${LB} the error state offers a retry`,
+      (await page
+        .locator('lib-collection-detail nxs-document-list nxs-error-state button')
+        .filter({ hasText: /try again|retry/i })
+        .count()) > 0,
+    );
+    h.check(
+      `${NEG} no stale member rows are shown`,
+      collectionError.trim().length > 0 && collectionRows === 0,
+      `${collectionRows} rows`,
+    );
+    await h.screenshot('failure-collection-500');
+    await page.unroute('**/search/pp/default_content_collection/execute**');
+    await page
+      .locator('lib-collection-detail nxs-document-list nxs-error-state button')
+      .filter({ hasText: /try again|retry/i })
+      .first()
+      .click()
+      .catch(leaveItToTheNextCheck);
+    await page.waitForTimeout(3000);
+    const recoveredMember = (
+      await page
+        .locator('lib-collection-detail nxs-document-list table tbody tr')
+        .first()
+        .allInnerTexts()
+        .catch(() => [])
+    )
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    h.check(
+      `${LB} retry recovers and shows the collection member`,
+      recoveredMember.includes(COLLECTION.memberTitle),
+      JSON.stringify(recoveredMember.slice(0, 120)),
+    );
+  } else {
+    h.note('collection was not found, so error state tests were skipped');
+  }
+
   // ── 15. Failure: a permission-denied folder, as parity-user ──────────────────────────────────
-  h.step('Failure — parity-user opens a folder they cannot read');
+  await h.step('Failure — parity-user opens a folder they cannot read');
   const basic = parityBasic;
+  // Declared before the header and the session move, and awaited: the switch judges the
+  // administrator session it is leaving before restarting the request window, so anything this
+  // run read headerless up to here is refused rather than discarded with the window. The
+  // restricted session must not be installed yet, or it is what the switch reads — and it would
+  // be judged against the user it is replacing.
+  await h.signedInAs(
+    ACL.user,
+    'the permission-denied steps read the fixture as the restricted user',
+  );
   // Basic auth decides identity on every Nuxeo REST call (the API keeps no session), so forcing
   // the header switches the browser to parity-user for everything the app requests from here on.
   await page.route('**/nuxeo/**', (route) =>
@@ -2081,12 +2282,16 @@ export default async function run(page, h, outDir) {
   // to time the reload out, and the list wait below is what the next checks depend on.
   await page.reload({ waitUntil: 'load' });
   await waitForList(page, A);
-  const me = await page.evaluate(() =>
-    fetch('/nuxeo/api/v1/me')
-      .then((r) => r.json())
-      .then((j) => j.id)
-      // Runs in the browser, where this module's helpers do not exist; null fails the check below.
-      .catch(() => null),
+  const me = await page.evaluate(
+    (timeoutMs) =>
+      // Not following a redirect: an opaque redirect has no JSON, so it answers null below. The
+      // signal also aborts the body read, so a `/me` that never finishes answers null too.
+      fetch('/nuxeo/api/v1/me', { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
+        .then((r) => r.json())
+        .then((j) => j.id)
+        // Runs in the browser, where this module's helpers do not exist; null fails the check below.
+        .catch(() => null),
+    PROBE_TIMEOUT_MS,
   );
   h.check(
     `${CTX} the browser is now signed in to Nuxeo as parity-user`,
@@ -2095,10 +2300,10 @@ export default async function run(page, h, outDir) {
   );
   const asUser = await readRows(page, A.list.rows, A.list.title);
   h.check(
-    `${LB} parity-user sees the workspace's six other folders`,
+    `${LB} parity-user sees the workspace's seven folders (including the collection)`,
     sameSet(
       asUser.map((r) => r.title),
-      [ACL.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
+      [ACL.title, COLLECTION.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
     ),
     JSON.stringify(asUser.map((r) => r.title)),
   );
@@ -2166,7 +2371,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('failure-permission-denied-folder');
 
-  h.step('Failure — parity-user searching cannot find the restricted document');
+  await h.step('Failure — parity-user searching cannot find the restricted document');
   await h.goTo(A.search.route);
   await searchFor(SEARCH.secret);
   const userSecret = await readRows(page, A.search.rows, A.search.title);
@@ -2186,7 +2391,7 @@ export default async function run(page, h, outDir) {
   await page.unroute('**/nuxeo/**');
 
   // ── 16. Health ───────────────────────────────────────────────────────────────────────────────
-  h.step('Health');
+  await h.step('Health');
   await writeFile(
     resolve(outDir, 'video-marks.json'),
     `${JSON.stringify({ surface: surfaceId, marks }, null, 2)}\n`,

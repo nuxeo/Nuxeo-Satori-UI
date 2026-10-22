@@ -39,6 +39,7 @@
  * Run:  node a11y/diagnostics/reflow-probe.mjs [--negative-control]
  */
 
+import { judgeMe } from '../../scripts/beta-harness/identity-guard.mjs';
 import { parseCliOrExit } from '../cli.mjs';
 import { nuxeoBasicAuthHeader, resolveBaseUrl } from '../env.mjs';
 import { injectedSession, SESSION_KEY, SIGNED_OUT_KEY } from '../session.mjs';
@@ -50,6 +51,7 @@ import {
   launchChromium,
   requireAdministrationAccess,
   requireSessionAdopted,
+  watchNuxeoApiOrigins,
 } from './preconditions.mjs';
 
 const NEGATIVE_CONTROL = parseCliOrExit('reflow-probe', {
@@ -89,6 +91,8 @@ async function requireBackend() {
   try {
     const res = await fetch(url, {
       headers: { Authorization: nuxeoBasicAuthHeader() },
+      // Not followed: another server at the destination could name any user.
+      redirect: 'manual',
       signal: AbortSignal.timeout(10_000),
     });
     if (res.status !== 200) {
@@ -100,7 +104,14 @@ async function requireBackend() {
       process.exit(2);
     }
     // A body that is not JSON is no identity, which requireAdministrationAccess refuses with exit 2.
-    requireAdministrationAccess(await res.json().catch(() => null), user, 'reflow-probe');
+    const me = await res.json().catch(() => null);
+    // Nor is a 200: a guest-enabled Nuxeo answers 200 as `Anonymous` (NXSAT-643).
+    const { problem } = judgeMe({ status: res.status, body: me }, user);
+    if (problem) {
+      console.error(`reflow-probe: ${url}: ${problem}. A layout measured as the guest is not the user's.\n`);
+      process.exit(2);
+    }
+    requireAdministrationAccess(me, user, 'reflow-probe');
   } catch (error) {
     console.error(
       `reflow-probe: could not reach Nuxeo through ${baseUrl}: ` +
@@ -154,7 +165,9 @@ try {
 async function newSignedInContext(width, height) {
   const ctx = await browser.newContext({
     viewport: { width, height },
-    httpCredentials: { username: user, password: pass, origin: baseUrl },
+    // `send: 'always'`: a guest-enabled Nuxeo never challenges, so without it
+    // `page.request` ran as Anonymous (NXSAT-643).
+    httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
   });
   await ctx.addInitScript(
     ({ key, signedOutKey, value }) => {
@@ -408,8 +421,9 @@ const page = await context.newPage();
 const rows = [];
 let couldNotMeasure = 0;
 
+const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
 await gotoOrExit(page, baseUrl, 'reflow-probe', { waitUntil: 'networkidle', timeout: 45_000 });
-await requireSessionAdopted(page, user, 'reflow-probe');
+await requireSessionAdopted(page, user, 'reflow-probe', { baseUrl, foreignApiOrigins });
 
 for (const [label, route, host] of ROUTES) {
   try {
@@ -591,11 +605,15 @@ if (NEGATIVE_CONTROL) {
   // `gotoOrExit`, not a bare `goto`: the control cannot treat a navigation failure as a
   // result. If browse will not load, the detection path was not exercised either way, and
   // reporting that as a failed control would say the probe is broken when the app is absent.
+  const foreignApiOrigins2 = watchNuxeoApiOrigins(p2, baseUrl);
   await gotoOrExit(p2, `${baseUrl}/#/browse`, 'reflow-probe (negative control)', {
     waitUntil: 'networkidle',
     timeout: 45_000,
   });
-  await requireSessionAdopted(p2, user, 'reflow-probe (negative control)');
+  await requireSessionAdopted(p2, user, 'reflow-probe (negative control)', {
+    baseUrl,
+    foreignApiOrigins: foreignApiOrigins2,
+  });
 
   // Same check as the measurement loop. A control run against an error panel would still
   // "prove" the detection path works, but it would prove it on a page nobody is measuring.

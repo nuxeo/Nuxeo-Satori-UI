@@ -135,9 +135,9 @@ own uniquely named workspace and 41 Notes. Before running, verify that an authen
 `default_search` request with `ecm_fulltext` returns HTTP 200 and a known seeded match. An
 unfiltered File query can pass preflight even while full-text search is disabled.
 
-NXSAT-643 owns the shared identity guard and committed parity seed/start scripts. Until that
-work is merged, manually seeded runs using the existing fixtures are diagnostic results;
-they do not fulfill NXSAT-646's requirement to use that guard and seed.
+NXSAT-643 added the shared identity guard (`scripts/beta-harness/identity-guard.mjs`) and committed
+the parity seed and start scripts (`scripts/beta-harness/steps/nxsat-308-parity/`). Runs made
+before it are diagnostic results; they did not use that guard or that seed.
 
 ### Install and serve
 
@@ -192,13 +192,18 @@ host/port in its allowlist.
 
 The `signedIn` fixture injects the app session into `sessionStorage` before page scripts run;
 Playwright's `storageState` does not preserve that storage. The config also supplies
-`httpCredentials`. API fixture discovery uses an explicit Authorization header and checks
-`/nuxeo/api/v1/me` before returning its API context.
+`httpCredentials` with `send: 'always'`, which reaches `page.request` only. API fixture discovery
+uses an explicit Authorization header and checks `/nuxeo/api/v1/me` before returning its API
+context.
 
-Those existing checks do not implement NXSAT-643's shared guard before and after every
-test/step, browser-session validation or anonymous-cookie-adoption control. Nuxeo can answer
-as Anonymous with HTTP 200, so status codes and nonempty result sets alone cannot establish
-who made the request. A green core suite does not prove those missing identity guarantees.
+Nuxeo can answer as Anonymous with HTTP 200, so status codes and non-empty result sets alone
+cannot establish who made the request. The `signedIn` fixture therefore runs the shared identity
+guard (NXSAT-643) on both sides of every test: it clears cookies and asks who `page.request` runs
+as before, and asks who the app in the page is after. A test whose result was obtained as
+Anonymous or another user fails even when its assertions passed. The guard's negative controls
+are `npm run beta:identity-guard-selftest` and, against a guest-enabled Nuxeo,
+`npm run beta:identity-guard-controls`. Specs that do not use `signedIn` (`auth.spec.ts`) test
+signed-out behaviour on purpose and are not guarded.
 
 ### Negative control and evidence retention
 
@@ -246,7 +251,7 @@ The initial H2 runs failed four full-text-dependent tests on each browser. After
 PostgreSQL repair with an authenticated full-text request, both baseline runs were repeated.
 The original failures and successful comparison are retained in the
 [NXSAT-646 Jira evidence](https://hyland.atlassian.net/browse/NXSAT-646?focusedCommentId=3245128).
-These are provisional diagnostics, not completion of the missing NXSAT-643 guard validation.
+These are provisional diagnostics: they predate the NXSAT-643 identity guard.
 
 ---
 
@@ -314,8 +319,9 @@ The single exclusion is scoped to the **adf-hx step alone**, not to `KNOWN_VIOLA
 rule failing on a surface we own still fails the capture.
 
 **Not covered:** dialogs, the upload flow, dark mode, and the pre-auth login surface. The last is a
-harness limitation — the runner sets `httpCredentials`, so the app authenticates before login can
-render.
+harness limitation — the capture signs in before its first scan, and on a guest-enabled Nuxeo an
+unsigned app does not show the login page either: it signs itself in as Anonymous, which the
+identity guard rejects (NXSAT-643).
 
 ---
 
