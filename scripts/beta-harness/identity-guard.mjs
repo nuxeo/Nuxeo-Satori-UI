@@ -745,8 +745,11 @@ export async function checkPageIdentity(
       // Find what authorization the session used by looking at any authenticated request in the log.
       // Recent requests (since) may all be headerless, so look at the entire history to find what
       // the correct authorization was before the violation.
-      const { sent, since } = foreignApiOrigins;
-      const expectedAuth = sent.find((r) => r.authorization)?.authorization;
+      // By shape, not `instanceof`: the imports may bring a Set<string> instead of NuxeoApiTraffic.
+      const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (foreignApiOrigins ?? {});
+      const expectedAuth = Array.isArray(sent)
+        ? sent.find((r) => r.authorization)?.authorization
+        : null;
       if (expectedAuth) {
         // Use a minimal stored session just for checking stray requests. The real session can't be
         // read because the page is off-app, but the traffic log has the authorization each request

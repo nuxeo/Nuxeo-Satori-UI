@@ -549,6 +549,10 @@ export default async function run(page, h) {
   // API omits the flag. So the session is injected under a different username
   // and `/me` is intercepted to answer as an ordinary member.
   manifestBody = null;
+  // Save the genuine session before overwriting it with the synthetic one.
+  const genuineSession = await page.evaluate(() =>
+    sessionStorage.getItem('agentic_ui_nuxeo_session'),
+  );
   await page.route('**/api/v1/me', (route) =>
     route.fulfill({
       status: 200,
@@ -600,10 +604,13 @@ export default async function run(page, h) {
   );
   await h.screenshot('non-admin-has-no-administration-entry');
 
-  // Back to the configured user for the remaining steps. Remove the synthetic session so the
-  // identity guard does not see a username mismatch before h.login() restores the real one.
+  // Back to the configured user for the remaining steps. Restore the genuine session that was
+  // saved before the synthetic block, so h.login()'s pre-restoration verification sees it.
   await page.unroute('**/api/v1/me');
-  await page.evaluate(() => sessionStorage.removeItem('agentic_ui_nuxeo_session'));
+  await page.evaluate((saved) => {
+    if (saved) sessionStorage.setItem('agentic_ui_nuxeo_session', saved);
+    else sessionStorage.removeItem('agentic_ui_nuxeo_session');
+  }, genuineSession);
   await h.login();
   await page.waitForTimeout(500);
 

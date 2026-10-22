@@ -1426,6 +1426,50 @@ await silently(async () => {
     }
   }
   {
+    // Session restoration: save synthetic session, replace with genuine, call h.login().
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      page.state.storage = { ...signedIn };
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.login();
+      // Simulate the synthetic-user block: save genuine, replace with synthetic.
+      const genuine = page.state.storage['sessionStorage:agentic_ui_nuxeo_session'];
+      page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession('jdoe', 'UFU=');
+      // Restore genuine before h.login() so pre-restoration verification sees it.
+      page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = genuine;
+      await h.login();
+      const thrown = await thrownBy(() => h.step('two'));
+      control(
+        'positive',
+        'restoring genuine session before h.login() lets the pre-restoration check pass',
+        thrown === null && identity.checks.every((c) => c.ok),
+        { thrown: String(thrown), checks: identity.checks },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
     // A form sign-in, seen at a boundary rather than declared.
     const page = fakePage({ url: `${APP}/#/`, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
     const recorder = { steps: [], consoleErrors: [] };
