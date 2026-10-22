@@ -1595,10 +1595,12 @@ for again by the next document that shows it.
 extension point: `Read`, `ReadWrite`, `Everything` on a stock workspace, plus `CanAskForPublishing`
 on a section root. `permissions` lists every permission the server defines **that the caller
 holds** — 33 on 2025.26.16 for a holder of `Everything`, 9 for a manager holding only
-`WriteSecurity`. The panel offers the first list, then the standard grants (`Write`, `ReadVersion`,
-`WriteVersion`, `AddChildren`, `RemoveChildren`, `Remove`, `Version`, `WriteSecurity`, `Unlock`,
-`SetRetention`, `UnsetRetention`), then the rest of the second. It filters the standard grants by the
-second list only when that list includes `Everything`, since only then is it the full set.
+`WriteSecurity`. By default the panel offers only the first list, as Web UI does. The checkbox
+**All permissions** adds the standard grants (`Write`, `ReadVersion`, `WriteVersion`, `AddChildren`,
+`RemoveChildren`, `Remove`, `Version`, `WriteSecurity`, `Unlock`, `SetRetention`, `UnsetRetention`),
+then the rest of the second list. It filters the standard grants by the second list only when that
+list includes `Everything`, since only then is it the full set. A type that suggests nothing offers
+the whole set, so no select is left empty.
 
 **Behaviour measured on 2025.26.16, which the panel is built around:**
 
