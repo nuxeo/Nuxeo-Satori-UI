@@ -259,10 +259,19 @@ const ADF_HX = {
   // The collections page is the app's own feature on both surfaces; the POC replaced the browse
   // and search routes, not this one. Its listing is still the surface's list, so the error, retry
   // and row selectors come from `list` and nothing is duplicated here.
+  // The collections page is the app's own feature on both surfaces: the POC replaced the browse
+  // and search routes, not this one, and `collection-detail.html:185` mounts the app's own
+  // `nxs-document-list` regardless of surface. So its error, retry and row selectors are named
+  // here rather than taken from `list` — reusing `list` put `.hxp-poc-error` and
+  // `hxp-document-list` in front of a component that is neither, on every adf-hx surface, and the
+  // collection case could then observe none of its error, its retry or its recovered member.
   collection: {
     root: 'lib-collection-detail',
     route: (uid) => `/#/collections/${uid}`,
     failPattern: '**/search/pp/default_content_collection/execute**',
+    error: 'lib-collection-detail nxs-document-list nxs-error-state',
+    retry: 'lib-collection-detail nxs-document-list nxs-error-state button',
+    rows: 'lib-collection-detail nxs-document-list table tbody tr',
   },
   // The app shell around whichever listing is mounted. Same element on both surfaces, named here
   // rather than in a step so that a surface which replaced the shell could say so.
@@ -568,11 +577,20 @@ const NXS = {
     items: 'nxs-satori-breadcrumbs nav li, nxs-breadcrumbs nav li',
     nav: 'nxs-satori-breadcrumbs nav, nxs-breadcrumbs nav',
   },
-  // As on `adf-hx`: the app's own collections feature, listing through the surface's list.
+  // As on `adf-hx`: the app's own collections feature, with its own list selectors.
+  // The collections page is the app's own feature on both surfaces: the POC replaced the browse
+  // and search routes, not this one, and `collection-detail.html:185` mounts the app's own
+  // `nxs-document-list` regardless of surface. So its error, retry and row selectors are named
+  // here rather than taken from `list` — reusing `list` put `.hxp-poc-error` and
+  // `hxp-document-list` in front of a component that is neither, on every adf-hx surface, and the
+  // collection case could then observe none of its error, its retry or its recovered member.
   collection: {
     root: 'lib-collection-detail',
     route: (uid) => `/#/collections/${uid}`,
     failPattern: '**/search/pp/default_content_collection/execute**',
+    error: 'lib-collection-detail nxs-document-list nxs-error-state',
+    retry: 'lib-collection-detail nxs-document-list nxs-error-state button',
+    rows: 'lib-collection-detail nxs-document-list table tbody tr',
   },
   // The app shell around whichever listing is mounted. Same element on both surfaces, named here
   // rather than in a step so that a surface which replaced the shell could say so.
@@ -1994,11 +2012,14 @@ export default async function run(page, h, outDir) {
     .locator(A.permissions.save)
     .filter({ hasText: /^\s*Save\s*$/ })
     .first();
-  const saveOffered = (await saveButton.count()) > 0;
+  // Enabled, not merely present: a disabled Save is a Save that cannot be pressed, and the ACL
+  // left untouched behind it would look exactly like one that survived a save.
+  const saveOffered =
+    (await saveButton.count()) > 0 && (await saveButton.isEnabled().catch(() => false));
   h.check(
-    `${LB} staging the change offers a Save`,
+    `${LB} staging the change offers a Save that can be pressed`,
     saveOffered,
-    `Save button present=${saveOffered}`,
+    `Save present=${(await saveButton.count()) > 0}, enabled=${saveOffered}`,
   );
   await saveButton.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(3500);
@@ -2012,13 +2033,19 @@ export default async function run(page, h, outDir) {
     .replace(/\s+/g, ' ');
   const afterAcl = localAces((await getJson(`/path${enc(ACL.path)}/@acl`)).data);
   const writes = wire.slice(beforeSave).filter((w) => w.method !== 'GET');
+  // The save has to have *happened*, which is a thing the run can observe rather than infer:
+  // either a write left the browser, or the panel said why it refused one. Staging and a pressable
+  // Save are necessary and not sufficient — a click swallowed by an overlay, or a handler that
+  // does nothing, leaves both of those true and the ACL untouched, which is indistinguishable
+  // from an entry that survived. That is the shape of the original false pass, one step further
+  // in: an unmatched option meant nothing was staged, no request went out, and this check read an
+  // untouched ACL and certified that an entry had survived an operation that never ran.
+  const saveOutcome = writes.length > 0 || feedback.trim().length > 0;
   h.check(
     `${LB} parity-user's AddChildren survives the save — nothing outside the panel's vocabulary is silently dropped`,
-    // A save has to have been attempted. Until the two checks above existed, an unmatched option
-    // meant nothing was staged, no Save appeared, no request went out — and this check then read
-    // an untouched ACL and passed, certifying that an entry survived an operation that never ran.
-    everythingStaged && saveOffered && afterAcl.includes('parity-user:AddChildren'),
-    `${writes.length} write request(s); local ACL after save ${JSON.stringify(afterAcl)}`,
+    everythingStaged && saveOffered && saveOutcome && afterAcl.includes('parity-user:AddChildren'),
+    `staged=${everythingStaged}, save pressable=${saveOffered}, ${writes.length} write request(s), ` +
+      `panel said ${JSON.stringify(feedback.slice(0, 80))}; local ACL after save ${JSON.stringify(afterAcl)}`,
   );
   const refused =
     /error/i.test(feedback) &&
@@ -2266,26 +2293,33 @@ export default async function run(page, h, outDir) {
     Boolean(pdf?.visible),
     JSON.stringify(pdf),
   );
-  // A frame big enough to be the viewer rather than a 0×0 leftover, pointed at the document's
-  // own blob. This is the whole of what a host-side reader can see of a PDF handed to the
-  // browser's viewer; `pdfNote` records that limit beside the result rather than leaving the
-  // reader to assume the page itself was inspected.
+  // A frame big enough to be the viewer rather than a 0×0 leftover, pointed at the document's own
+  // blob. That is the hand-off, and it is its own `[context]` check — **not** evidence that the PDF
+  // rendered. A revoked blob URL or a corrupt file leaves the frame exactly this size while the
+  // browser shows its own error inside it, so accepting the frame as the parity target would have
+  // passed `viewer.pdf` on a viewer displaying nothing.
   const pdfFramed = (pdf?.pdfFrames ?? []).filter(
     (f) => f.src.startsWith('blob:') && f.w > 200 && f.h > 200,
   );
-  if (A.viewer.pdfFrame) h.note(`${A.viewer.pdfNote}: ${JSON.stringify(pdf?.pdfFrames ?? [])}`);
+  if (A.viewer.pdfFrame) {
+    h.check(
+      `${CTX} the PDF is handed to a sized frame whose source is the document's own blob`,
+      pdfFramed.length > 0,
+      JSON.stringify(pdf?.pdfFrames ?? []),
+    );
+    h.note(
+      `${A.viewer.pdfNote}. So on this surface the parity target below is UNVERIFIED rather than ` +
+        `observed to be wrong: the frame was handed off, and whether a page was painted in it ` +
+        `cannot be read from the host. It is left red rather than passed on the hand-off alone.`,
+    );
+  }
   gap('viewer.pdf', {
     correct:
       Boolean(pdf?.visible) &&
-      (pdf.text.includes(MEDIA.pdfText) || pdf.painted > 0 || pdfFramed.length > 0) &&
+      (pdf.text.includes(MEDIA.pdfText) || pdf.painted > 0) &&
       pdf.unknown === 0,
-    wrongObserved:
-      Boolean(pdf) &&
-      pdf.painted === 0 &&
-      pdfFramed.length === 0 &&
-      !pdf.text.includes(MEDIA.pdfText),
-    expect:
-      'render the PDF (its text, a canvas with the page painted on it, or a sized frame holding it)',
+    wrongObserved: Boolean(pdf) && pdf.painted === 0 && !pdf.text.includes(MEDIA.pdfText),
+    expect: 'render the PDF (its text, or a canvas with the page painted on it)',
     observed: `${JSON.stringify(pdf)}`,
   });
   if (A.upstream) {
@@ -2527,9 +2561,12 @@ export default async function run(page, h, outDir) {
     `collection uid: ${JSON.stringify(collectionUid)}`,
   );
   if (collectionUid) {
-    const memberError = `${A.collection.root} ${A.list.error}`;
-    const memberRetry = `${A.collection.root} ${A.list.retry}`;
-    const memberRows = `${A.collection.root} ${A.list.rows}`;
+    // From the collection adapter, not from `list`: the collections page mounts the app's own
+    // `nxs-document-list` on both surfaces, so the browse surface's list selectors describe a
+    // component that is not there.
+    const memberError = A.collection.error;
+    const memberRetry = A.collection.retry;
+    const memberRows = A.collection.rows;
     await fail500(A.collection.failPattern);
     await h.goTo(A.collection.route(collectionUid));
     await page.waitForTimeout(3000);
