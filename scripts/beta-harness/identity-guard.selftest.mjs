@@ -2129,7 +2129,7 @@ await silently(async () => {
     // When h.login() is replacing a session for a DIFFERENT user, expectApp() restarts the window,
     // putting requests from the clearCookies/storage interval behind `since` where no boundary sees them.
     // This control simulates a cross-user re-login (after h.signedInAs) with a request during that interval.
-    const saved = { USER: process.env['NUXEO_USER'], PASS: process.env['NUXEO_PASS'], URL: process.env['APP_URL'] };
+    const saved = { NUXEO_USER: process.env['NUXEO_USER'], NUXEO_PASS: process.env['NUXEO_PASS'], APP_URL: process.env['APP_URL'] };
     process.env['NUXEO_USER'] = 'Administrator';
     process.env['NUXEO_PASS'] = 'adminpw';
     process.env['APP_URL'] = APP;
@@ -2234,6 +2234,7 @@ await silently(async () => {
       method: 'GET',
       path: '/nuxeo/api/v1/x',
       finished: true,
+      networkComplete: true,
       failed: false,
       authorization: null,
       cookie: null,
