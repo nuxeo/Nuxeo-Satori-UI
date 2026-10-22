@@ -25,8 +25,6 @@
  *   npm run beta:evidence -- phase-0-baseline
  */
 
-import { requireStepCredentials } from '../helpers.mjs';
-
 /**
  * Errors this environment always produces, unrelated to the browse surfaces.
  * `AI.*` operations come from a marketplace package that is not installed on a
@@ -56,32 +54,19 @@ const ENVIRONMENTAL_ERRORS = [
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step('Application loads and authenticates against live Nuxeo');
+  await h.step('Application loads and authenticates against live Nuxeo');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
-  const me = await page.evaluate(async () => {
-    const r = await fetch('/nuxeo/api/v1/me', { headers: { Accept: 'application/json' } });
-    return r.ok ? (await r.json()).id : `HTTP ${r.status}`;
-  });
-  // The identity the run signed in with, not the one the runner used to default to. This
-  // compared against a literal `Administrator`, which held only while the login defaulted to it
-  // too; with the default gone (NXSAT-649) any other account an operator exports read as an
-  // authentication defect. `h.login()` above has already required the pair.
-  const { username } = requireStepCredentials('check which identity the run signed in as');
-  h.check(
-    'authenticated as NUXEO_USER',
-    me === username,
-    `/me returned ${me}, expected ${username}`,
-  );
+  // Who the run signed in as is checked by the identity guard at the next boundary (NXSAT-643).
   await h.screenshot('app-shell');
 
-  h.step('Production browse renders real repository content');
+  await h.step('Production browse renders real repository content');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.expectText('repository content listed', 'lib-browse', 'Default domain');
   await h.screenshot('production-browse');
 
-  h.step('adf-hx POC browse renders real repository content');
+  await h.step('adf-hx POC browse renders real repository content');
   // Entered directly: the page and its hxp components must render on their own.
   await h.goTo('/#/browse-adf-hx');
   await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
@@ -91,11 +76,11 @@ export default async function run(page, h) {
   await h.expectText('Last Contributor column populated', 'hxp-document-list', 'Administrator');
   await h.screenshot('adf-hx-poc-browse');
 
-  h.step('POC tabs render');
+  await h.step('POC tabs render');
   await h.expectVisible('hxp tabs present', 'hxp-browse-tabs');
   await h.screenshot('adf-hx-poc-tabs');
 
-  h.step('Nav drawer and folder tree mount when entered via platform nav');
+  await h.step('Nav drawer and folder tree mount when entered via platform nav');
   await h.goTo('/#/browse');
   const navEntry = page
     .locator('a,button')
@@ -107,6 +92,6 @@ export default async function run(page, h) {
   await h.expectVisible('hxp nav drawer mounted', 'hxp-browse-nav-drawer');
   await h.screenshot('adf-hx-poc-nav-drawer');
 
-  h.step('Baseline health');
+  await h.step('Baseline health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

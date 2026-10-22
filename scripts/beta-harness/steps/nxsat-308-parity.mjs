@@ -39,13 +39,14 @@
  *
  * ## Data
  *
- * Seeded by `seed-parity-data.mjs`, kept with the evidence in
- * `~/Desktop/agentic-ui-evidence/NXSAT-308/parity-before/seed/`. The first step verifies the
- * fixture over REST and aborts with `precondition-not-met` (exit 2) when it does not match.
+ * Seeded by `nxsat-308-parity/seed-parity-data.mjs`, next to this file (committed by NXSAT-643;
+ * it had been kept only with the 2026-10-08 evidence). The first step verifies the fixture over
+ * REST and aborts with `precondition-not-met` (exit 2) when it does not match. Team runs use a
+ * Nuxeo of their own, started and seeded from that folder — see its `README.md`.
  *
  * ## Run
  *
- *   # throwaway Nuxeo seeded, app served against it (see the evidence README)
+ *   # your own Nuxeo seeded, app served against it (nxsat-308-parity/README.md)
  *   export NUXEO_USER=… NUXEO_PASS=… PARITY_USER_PASS=…   # the same PARITY_USER_PASS the seed used
  *   APP_URL=http://localhost:4216 PARITY_SURFACE=adf-hx npm run beta:evidence -- nxsat-308-parity
  *
@@ -54,6 +55,8 @@
 
 import { writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
+
+import { askThroughFetch, PROBE_TIMEOUT_MS } from '../identity-guard.mjs';
 
 const LB = '[load-bearing]';
 const NEG = '[negative]';
@@ -704,7 +707,7 @@ export default async function run(page, h, outDir) {
   };
 
   // ── 1. Preconditions ──────────────────────────────────────────────────────────────────────────
-  h.step(`Preconditions — surface "${surfaceId}" and the seeded parity fixture`);
+  await h.step(`Preconditions — surface "${surfaceId}" and the seeded parity fixture`);
   h.requirePrecondition(
     'PARITY_SURFACE names a known surface',
     Boolean(A),
@@ -760,13 +763,11 @@ export default async function run(page, h, outDir) {
   const parityBasic = Buffer.from(`${ACL.user}:${process.env['PARITY_USER_PASS']}`).toString(
     'base64',
   );
-  const parityMe = await page.request
-    .get(`${api}/me`, {
-      headers: { Authorization: `Basic ${parityBasic}` },
-      failOnStatusCode: false,
-    })
-    .then((r) => r.json())
-    .catch(noAnswer);
+  // Node's `fetch`, not `page.request`: the runner's `httpCredentials` use `send: 'always'`, which
+  // replaces an explicit `Authorization` on `page.request`, so this asked who the *administrator*
+  // was and the invariant could never hold (NXSAT-643). The guard's probe refuses a redirect and
+  // bounds headers and body together, so a `/me` that never finishes fails this precondition.
+  const parityMe = (await askThroughFetch(`${api}/me`, `Basic ${parityBasic}`)).body;
   // Every fixture a later step reads, so drift aborts here as precondition-not-met instead of
   // surfacing later as what would look like a component defect.
   const fixture = {
@@ -852,7 +853,7 @@ export default async function run(page, h, outDir) {
   h.note(`surface: ${A.label}`);
 
   // ── 2. DocumentList: columns and default order ────────────────────────────────────────────────
-  h.step('DocumentList — columns and default order on a folder of 125 mixed children');
+  await h.step('DocumentList — columns and default order on a folder of 125 mixed children');
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
   const headers0 = await readHeaders(page, A);
@@ -889,7 +890,9 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-default-columns');
 
   // ── 3. DocumentList: server sort ──────────────────────────────────────────────────────────────
-  h.step('DocumentList — sort by Title descending reaches the server, and the header says so');
+  await h.step(
+    'DocumentList — sort by Title descending reaches the server, and the header says so',
+  );
   const titleControl = page.locator(A.list.headerControl('Title')).first();
   /** Clicks the Title header until the first row is `first`; the header cycles, so at most three. */
   const sortTitleUntilFirst = async (first) => {
@@ -946,7 +949,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('list-sorted-title-desc');
 
-  h.step('DocumentList — a sort header is reachable and operable by keyboard');
+  await h.step('DocumentList — a sort header is reachable and operable by keyboard');
   h.check(
     `${LB} each of the three sortable headers holds exactly one keyboard-focusable sort control`,
     headersDesc.length === 3 && headersDesc.every((x) => x.focusable === 1),
@@ -997,7 +1000,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-sorted-modified-by-keyboard');
 
   // ── 4. DocumentList: server paging ───────────────────────────────────────────────────────────
-  h.step('DocumentList — server paging to page 2 and to page 3, beyond the first two');
+  await h.step('DocumentList — server paging to page 2 and to page 3, beyond the first two');
   await h.goTo(A.browse(EMPTY.path));
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
@@ -1066,7 +1069,7 @@ export default async function run(page, h, outDir) {
   );
 
   // ── 5. DocumentList: selection ───────────────────────────────────────────────────────────────
-  h.step('DocumentList — single, multiple and range selection by pointer');
+  await h.step('DocumentList — single, multiple and range selection by pointer');
   await h.goTo(A.browse(EMPTY.path));
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
@@ -1114,7 +1117,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('list-selection-multi-and-shift');
 
-  h.step('DocumentList — select all on the page, then clear');
+  await h.step('DocumentList — select all on the page, then clear');
   await page.locator(A.list.selectAll).first().click();
   await page.waitForTimeout(600);
   const all = await selectedTitles();
@@ -1133,7 +1136,7 @@ export default async function run(page, h, outDir) {
     `${cleared.length} still selected`,
   );
 
-  h.step('DocumentList — keyboard: Space selects, arrows move, every row has a name');
+  await h.step('DocumentList — keyboard: Space selects, arrows move, every row has a name');
   const rowsK = await readRows(page, A.list.rows, A.list.title);
   // The computed name, from the accessibility tree: an absent or empty aria-label says nothing about
   // it, because a row can take its name from its cells. Read before any row is selected, since
@@ -1193,7 +1196,7 @@ export default async function run(page, h, outDir) {
   await page.waitForTimeout(300);
 
   // ── 6. DocumentList: empty state ─────────────────────────────────────────────────────────────
-  h.step('DocumentList — empty folder shows an empty state, not a blank table');
+  await h.step('DocumentList — empty folder shows an empty state, not a blank table');
   await h.goTo(A.browse(EMPTY.path));
   await waitForList(page, A);
   const emptyText = await visibleText(A.list.empty);
@@ -1211,7 +1214,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-empty-folder');
 
   // ── 7. DocumentTree ──────────────────────────────────────────────────────────────────────────
-  h.step('DocumentTree — expand by hand to six levels below the workspace (aria-level 10)');
+  await h.step('DocumentTree — expand by hand to six levels below the workspace (aria-level 10)');
   mark('tree', 'start');
   await h.goTo(A.browse(ROOT));
   await page.reload({ waitUntil: 'networkidle' });
@@ -1282,7 +1285,7 @@ export default async function run(page, h, outDir) {
   }
   await h.screenshot('tree-expanded-to-depth');
 
-  h.step('DocumentTree — a fresh load deep-linked six levels down opens the whole branch');
+  await h.step('DocumentTree — a fresh load deep-linked six levels down opens the whole branch');
   await h.goTo(A.browse(deepPath(DEEP_LEVELS)));
   await page.reload({ waitUntil: 'networkidle' });
   await page
@@ -1353,7 +1356,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('tree-deep-link-fresh-load');
 
-  h.step('DocumentTree — a server error while expanding a node');
+  await h.step('DocumentTree — a server error while expanding a node');
   await h.goTo(A.browse(ROOT));
   await page.reload({ waitUntil: 'networkidle' });
   await page.waitForTimeout(2500);
@@ -1392,7 +1395,7 @@ export default async function run(page, h, outDir) {
   mark('tree', 'end');
 
   // ── 8. Breadcrumb ────────────────────────────────────────────────────────────────────────────
-  h.step('Breadcrumb — a ten-crumb path with an 80-character title');
+  await h.step('Breadcrumb — a ten-crumb path with an 80-character title');
   await h.goTo(A.browse(deepPath(DEEP_LEVELS)));
   await waitForList(page, A);
   const crumbs = await page
@@ -1500,7 +1503,7 @@ export default async function run(page, h, outDir) {
   );
 
   // ── 9. PropertiesPanel ───────────────────────────────────────────────────────────────────────
-  h.step(`PropertiesPanel — ${A.properties.provenance}`);
+  await h.step(`PropertiesPanel — ${A.properties.provenance}`);
   await A.properties.open(page, h, contract.data?.uid);
   // Text plus form-control values: a read-only panel may render each value inside an input.
   const props = await page
@@ -1557,7 +1560,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('properties-panel');
 
   // ── 10. ManageVersions ───────────────────────────────────────────────────────────────────────
-  h.step(`ManageVersions — ${A.versions.provenance}`);
+  await h.step(`ManageVersions — ${A.versions.provenance}`);
   await A.versions.open(page, h, contract.data?.uid);
   const v = await A.versions.read(page);
   h.check(
@@ -1609,7 +1612,9 @@ export default async function run(page, h, outDir) {
   await h.screenshot('versions-none');
 
   // ── 11. PermissionsPanel ─────────────────────────────────────────────────────────────────────
-  h.step('PermissionsPanel — an ACL holding AddChildren, outside Read / ReadWrite / Everything');
+  await h.step(
+    'PermissionsPanel — an ACL holding AddChildren, outside Read / ReadWrite / Everything',
+  );
   mark('permissions', 'start');
   await A.permissions.open(page, h, ACL.path);
   const permText = (
@@ -1682,7 +1687,7 @@ export default async function run(page, h, outDir) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(500);
 
-  h.step('PermissionsPanel — saving a change to another row of that ACL');
+  await h.step('PermissionsPanel — saving a change to another row of that ACL');
   await A.permissions.showTab(page, 'User Groups');
   const beforeSave = wire.length;
   await page
@@ -1763,7 +1768,7 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(600);
   }
 
-  h.step('PermissionsPanel — a document whose ACL grants WriteVersion');
+  await h.step('PermissionsPanel — a document whose ACL grants WriteVersion');
   await A.permissions.open(page, h, ACL.doc);
   const docPanel = (
     await page
@@ -1796,7 +1801,7 @@ export default async function run(page, h, outDir) {
   mark('permissions', 'end');
 
   // ── 12. Viewer ───────────────────────────────────────────────────────────────────────────────
-  h.step('Viewer — PDF');
+  await h.step('Viewer — PDF');
   await h.goTo(A.browse(MEDIA.path));
   await waitForList(page, A);
   const viewerState = async () => {
@@ -1866,7 +1871,7 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.pdf);
   h.check(`${LB} the viewer closes again`, (await page.locator(A.viewer.root).count()) === 0);
 
-  h.step('Viewer — image');
+  await h.step('Viewer — image');
   await A.viewer.open(page, A, MEDIA.image);
   const img = await viewerState();
   h.check(
@@ -1886,7 +1891,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('viewer-image');
   await A.viewer.close(page, A, MEDIA.image);
 
-  h.step('Viewer — video (WebM)');
+  await h.step('Viewer — video (WebM)');
   await A.viewer.open(page, A, MEDIA.video);
   const vid = await viewerState();
   h.check(
@@ -1903,7 +1908,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('viewer-video');
   await A.viewer.close(page, A, MEDIA.video);
 
-  h.step('Viewer — fallback for a format no viewer handles');
+  await h.step('Viewer — fallback for a format no viewer handles');
   await A.viewer.open(page, A, MEDIA.unknown);
   const unk = await viewerState();
   h.check(
@@ -1923,7 +1928,7 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.unknown);
 
   // ── 13. Search listing ───────────────────────────────────────────────────────────────────────
-  h.step('Search listing — 125 hits paged 50 / 50 / 25');
+  await h.step('Search listing — 125 hits paged 50 / 50 / 25');
   await h.goTo(A.search.route);
   const searchFor = async (term) => {
     await page.locator(A.search.input).first().fill(term);
@@ -1977,7 +1982,7 @@ export default async function run(page, h, outDir) {
   );
   await h.screenshot('search-results-page-3');
 
-  h.step('Search listing — no results, and a match the administrator can see');
+  await h.step('Search listing — no results, and a match the administrator can see');
   await searchFor(SEARCH.none);
   const noneText = await visibleText(A.search.none);
   h.check(
@@ -2000,7 +2005,7 @@ export default async function run(page, h, outDir) {
   await h.screenshot('search-admin-sees-secret-memo');
 
   // ── 14. Failure: a 500 from Nuxeo on each listing ────────────────────────────────────────────
-  h.step('Failure — the folder listing answers 500');
+  await h.step('Failure — the folder listing answers 500');
   await fail500(A.list.failPattern);
   await h.goTo(A.browse(PAGED.path));
   await waitForList(page, A);
@@ -2026,7 +2031,7 @@ export default async function run(page, h, outDir) {
     (await readRows(page, A.list.rows, A.list.title)).length === 50,
   );
 
-  h.step('Failure — the search listing answers 500');
+  await h.step('Failure — the search listing answers 500');
   await h.goTo(A.search.route);
   await fail500(A.search.failPattern);
   await searchFor(`${SEARCH.token}x`);
@@ -2053,8 +2058,17 @@ export default async function run(page, h, outDir) {
   await page.unroute(A.search.failPattern);
 
   // ── 15. Failure: a permission-denied folder, as parity-user ──────────────────────────────────
-  h.step('Failure — parity-user opens a folder they cannot read');
+  await h.step('Failure — parity-user opens a folder they cannot read');
   const basic = parityBasic;
+  // Declared before the header and the session move, and awaited: the switch judges the
+  // administrator session it is leaving before restarting the request window, so anything this
+  // run read headerless up to here is refused rather than discarded with the window. The
+  // restricted session must not be installed yet, or it is what the switch reads — and it would
+  // be judged against the user it is replacing.
+  await h.signedInAs(
+    ACL.user,
+    'the permission-denied steps read the fixture as the restricted user',
+  );
   // Basic auth decides identity on every Nuxeo REST call (the API keeps no session), so forcing
   // the header switches the browser to parity-user for everything the app requests from here on.
   await page.route('**/nuxeo/**', (route) =>
@@ -2081,12 +2095,16 @@ export default async function run(page, h, outDir) {
   // to time the reload out, and the list wait below is what the next checks depend on.
   await page.reload({ waitUntil: 'load' });
   await waitForList(page, A);
-  const me = await page.evaluate(() =>
-    fetch('/nuxeo/api/v1/me')
-      .then((r) => r.json())
-      .then((j) => j.id)
-      // Runs in the browser, where this module's helpers do not exist; null fails the check below.
-      .catch(() => null),
+  const me = await page.evaluate(
+    (timeoutMs) =>
+      // Not following a redirect: an opaque redirect has no JSON, so it answers null below. The
+      // signal also aborts the body read, so a `/me` that never finishes answers null too.
+      fetch('/nuxeo/api/v1/me', { redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) })
+        .then((r) => r.json())
+        .then((j) => j.id)
+        // Runs in the browser, where this module's helpers do not exist; null fails the check below.
+        .catch(() => null),
+    PROBE_TIMEOUT_MS,
   );
   h.check(
     `${CTX} the browser is now signed in to Nuxeo as parity-user`,
@@ -2166,7 +2184,7 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('failure-permission-denied-folder');
 
-  h.step('Failure — parity-user searching cannot find the restricted document');
+  await h.step('Failure — parity-user searching cannot find the restricted document');
   await h.goTo(A.search.route);
   await searchFor(SEARCH.secret);
   const userSecret = await readRows(page, A.search.rows, A.search.title);
@@ -2186,7 +2204,7 @@ export default async function run(page, h, outDir) {
   await page.unroute('**/nuxeo/**');
 
   // ── 16. Health ───────────────────────────────────────────────────────────────────────────────
-  h.step('Health');
+  await h.step('Health');
   await writeFile(
     resolve(outDir, 'video-marks.json'),
     `${JSON.stringify({ surface: surfaceId, marks }, null, 2)}\n`,

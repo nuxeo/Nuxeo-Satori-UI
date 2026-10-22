@@ -116,6 +116,96 @@ red auth-guard checks is to go change the auth guard.
 A precondition mismatch now aborts on the first step with its own verdict and its
 own exit code, and says what to run instead.
 
+### The identity guard
+
+Some Nuxeo servers have anonymous authentication switched on — the shared local one does. They
+answer a request whose credentials did not arrive `200` as `Anonymous` instead of refusing it, so
+a status code, a non-empty result and a rendered page all look the same either way, and a
+permission check can pass because a guest can do nothing. `identity-guard.mjs` asks
+`/nuxeo/api/v1/me` who the request ran as, through the channel the result came from, and rejects
+`Anonymous`, another user, or no answer (NXSAT-643).
+
+In the runner it checks `page.request` before the first step, and `page.request` plus the app in
+the page — its stored session, and `/me` asked with the header that session sends, from inside the
+page and replayed from Node with the browser's cookies — at every step boundary and after the
+last step. An in-page answer must come from a server (a `page.route` that fulfils `/me` is
+refused), every probe goes to the app's own origin, no probe follows a redirect, and an app that
+sends Nuxeo API requests to another origin is refused rather than judged on the wrong server. User
+ids compare exactly.
+
+`/me` vouches only for the header it was asked with, so the requests the page itself sent are
+judged too. Every `fetch` or XHR the page sent to `/nuxeo/` since its session was installed must
+have gone out with the session's header, read after any `page.route` rewrite. One without it, or
+with another user's, is rejected. Neither a reload nor a later request that carried the header
+excuses it.
+
+The session counts as installed at one of three points:
+
+- the start of the page, for a session injected before the page loads;
+- the reload `h.login()` makes, so the signed-out boot before it is not judged. A script that signs
+  in by reload outside the runner calls `restartAtNextLoad()` on its watcher first;
+- a declared switch.
+
+Before a form sign-in has been seen, and only then, the requests before the first that carried the
+header are excused. The configuration service's files under `/nuxeo/agentic-ui-config/` are read
+without the header by design, so they are not judged.
+
+A rejection makes the run `precondition-not-met` (exit 2), marks
+`manifest.identity.valid: false`, and records the failed check on the step whose result is
+invalid. So:
+
+- **`await h.step(...);`, as a statement of its own.** The boundary check is asynchronous; not
+  awaited, it runs alongside the next step and cannot speak for its own. `npm run beta:audit`
+  refuses any other form in `steps/` — a `.then()` chain, `Promise.all`, an alias — because a
+  discarded `Promise.all([h.step(...)])` looks to the runtime exactly like an `await`. At run time
+  a boundary nothing awaited in time is still recorded as a failed check on its step, and the run
+  ends `precondition-not-met`.
+- **A steps file's own in-page `fetch` to `/nuxeo/` sends the session's header**, as the app's
+  interceptor does. The guard cannot tell it from the app's requests, and one without the header
+  ran as whoever the cookies say.
+- **Say when the browser is meant to be someone else**: `await h.signedInAs(user, reason)` before
+  the next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
+- **Say when it is meant to be signed out**: `await h.signedOut(reason)`. Once a run has signed
+  in, a boundary that finds no session, or a page off the app, is rejected — losing the session is
+  one way to hide a result obtained as someone else. Before the first sign-in both are accepted.
+- **Declare a transition before you make it, and await it.** `h.signedInAs`, `h.signedOut` and
+  `h.login()` each restart the window of requests the next boundary judges, so they first ask
+  Nuxeo who the outgoing session's requests ran as: a step that read anything headerless is
+  refused there rather than discarded. Two consequences. The new session must not be installed
+  yet, or it is what gets judged — against the user it replaces. And the call must be awaited as a
+  statement; `npm run beta:audit` fails a floating one, because discarding that promise would skip
+  the verification in silence.
+- **`page.request` always sends the run's own user.** The context's `httpCredentials` use
+  `send: 'always'`, which replaces an explicit `Authorization` on the request. A second API
+  identity needs its own `request.newContext()` or Node `fetch`.
+- **`h.login()` clears cookies** before it signs in, so a guest session cannot be adopted.
+
+Its controls:
+
+```bash
+npm run beta:identity-guard-selftest     # offline: the judgement and the step wiring
+APP_URL=… npm run beta:identity-guard-controls   # live, needs a guest-enabled Nuxeo
+```
+
+The live controls run `fixtures/identity-guard/control.steps.mjs` through the real runner three
+times: no fault must pass; credentials dropped mid-run, and a guest cookie adopted mid-run, must
+each end `precondition-not-met` while every check of the steps' own passes — without the guard
+both would have been green.
+
+#### What talks to Nuxeo, and how it is guarded
+
+| Harness                                                                                               | Credentials on every request                       | Identity checked                                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `phase-runner.mjs` + `steps/*.mjs`                                                                    | `page.request`: `send: 'always'`; app: its session | start, every step boundary, end                                                          |
+| `steps/nxsat-308-parity/seed-parity-data.mjs`                                                         | explicit header, Node `fetch`                      | before the first write, after verifying                                                  |
+| `backend-preflight.mjs`, `e2e-preflight.mjs`, `a11y/preflight.mjs`                                    | explicit header, Node `fetch`                      | `/me` by name, before any data check                                                     |
+| `apps/nuxeo-ui-e2e` (`signedIn`, `newNuxeoApiContext`)                                                | `send: 'always'`; API contexts: explicit header    | `signedIn`: both channels before and after every test; an API context once, when created |
+| `a11y/` suites (`signedIn`) and `a11y/diagnostics/*`                                                  | `send: 'always'`; diagnostics: explicit header     | both channels before and after every test; diagnostics once, after sign-in               |
+| `scripts/collect-evidence/story-runner.mjs`, `annotate-showcase.mjs`, `scripts/demo-deck/capture.mjs` | `send: 'always'`                                   | not by this guard (`capture.mjs` checks `/me` itself)                                    |
+| `libs/integration-tests`, `apps/nuxeo-ui/e2e/*.mjs`, `tools/video`, `tools/i18n`                      | explicit header or the app's session               | not by this guard                                                                        |
+
+The last two rows are named, not covered: they predate the guard and are follow-ups.
+
 ### Notes are not checks
 
 `h.note(text)` records something a run deliberately does **not** cover. Use it

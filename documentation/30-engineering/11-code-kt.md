@@ -122,16 +122,16 @@ The most common failure in this repository. Ask, in order:
 
 ### An application failure
 
-| Symptom                                           | First look                                                                                                                       |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `NG0201: No provider`                             | An upstream `providedIn: 'root'` service resolving a port from the root injector. Provide it in root                             |
-| Raw i18n keys on screen                           | A catalogue missing or empty in the bundle. `npm run beta:bundle`                                                                |
-| Empty lists, intermittent 403                     | XHRs unauthenticated. Session in `sessionStorage` satisfies the _guard_; `httpCredentials` authenticates _requests_. Both needed |
-| Broken image, or an internal URL in the DOM       | `<img [src]>` bound to a Nuxeo URL. `checkNoNuxeoUrlInImgSrc`                                                                    |
-| Memory growth over a session                      | An un-revoked blob URL. `checkBlobUrlLifecycle`                                                                                  |
-| A nav entry that goes to the wrong page           | A registered path with no route — it falls through the wildcard. The host must map the path                                      |
-| HTTP 500 from `AI.*`                              | The AI backend package is absent. Expected                                                                                       |
-| Specs fail with `SecurityError` on `localStorage` | Node 22+. Use Node 20 or `npm run beta:gate`                                                                                     |
+| Symptom                                           | First look                                                                                                                                                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NG0201: No provider`                             | An upstream `providedIn: 'root'` service resolving a port from the root injector. Provide it in root                                                                                                                                                             |
+| Raw i18n keys on screen                           | A catalogue missing or empty in the bundle. `npm run beta:bundle`                                                                                                                                                                                                |
+| Empty lists, intermittent 403                     | XHRs unauthenticated. The session in `sessionStorage` satisfies the _guard_ and gives the app's XHRs their header; `httpCredentials` with `send: 'always'` authenticates `page.request`. Both needed; the identity guard (NXSAT-643) catches a run that lost one |
+| Broken image, or an internal URL in the DOM       | `<img [src]>` bound to a Nuxeo URL. `checkNoNuxeoUrlInImgSrc`                                                                                                                                                                                                    |
+| Memory growth over a session                      | An un-revoked blob URL. `checkBlobUrlLifecycle`                                                                                                                                                                                                                  |
+| A nav entry that goes to the wrong page           | A registered path with no route — it falls through the wildcard. The host must map the path                                                                                                                                                                      |
+| HTTP 500 from `AI.*`                              | The AI backend package is absent. Expected                                                                                                                                                                                                                       |
+| Specs fail with `SecurityError` on `localStorage` | Node 22+. Use Node 20 or `npm run beta:gate`                                                                                                                                                                                                                     |
 
 ### Getting a trace out of E2E
 

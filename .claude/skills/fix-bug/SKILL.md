@@ -390,9 +390,11 @@ own callouts on annotated _copies_ afterwards.
 
 Gotchas:
 
-- **Auth needs both mechanisms.** `h.login()` injects the session the route guard reads; the
-  runner's `httpCredentials` authenticates the XHRs. Without both, `/nuxeo/api` calls
-  intermittently 403 and you photograph empty states that read as component defects.
+- **Auth needs both mechanisms.** `h.login()` injects the session the route guard reads and the
+  app's interceptor turns into the Basic header on its XHRs; the runner's `httpCredentials`
+  (`send: 'always'`) authenticate `page.request`. Nuxeo with guests enabled never challenges, so
+  a missing half does not 403 — it runs as `Anonymous` and looks green. The phase runner's
+  identity guard rejects that at every step boundary (NXSAT-643); `await h.step(...)`.
 - **Hash routing.** `withHashLocation()` makes `goto('/#/x')` same-document, so anything asserting
   a **reloaded** app needs an explicit `page.reload()` or `APP_INITIALIZER` never re-runs.
 - **Probe the DOM, not the pixels.** A change inheriting theme colours makes before/after stills

@@ -23,6 +23,8 @@
     "beta:fork": "node scripts/beta-harness/fork-simulation.mjs",
     "beta:gate": "node scripts/beta-harness/verify-gate.mjs",
     "beta:gate-selftest": "node scripts/beta-harness/verify-gate.selftest.mjs",
+    "beta:identity-guard-controls": "node scripts/beta-harness/identity-guard.controls.mjs",
+    "beta:identity-guard-selftest": "node scripts/beta-harness/identity-guard.selftest.mjs",
     "beta:lockfile": "node scripts/beta-harness/lockfile-integrity.mjs",
     "beta:lockfile-selftest": "node scripts/beta-harness/lockfile-integrity.selftest.mjs",
     "beta:publishable": "node scripts/beta-harness/publishability.mjs",
