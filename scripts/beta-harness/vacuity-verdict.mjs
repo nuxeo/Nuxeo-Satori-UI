@@ -189,10 +189,17 @@ export function classify({ baseline, starved, assertions }) {
       missing.push(base);
       continue;
     }
-    if (starvedSpec.passed) {
-      // A pass is only evidence if the perturbation actually reached the spec.
-      (starvedSpec.starved ? vacuous : notPerturbed).push(base);
+    // Checked before the outcome, and in both directions. Starvation is what this run
+    // varies, so a spec it never reached tells us nothing — whichever way that spec went.
+    // The first version of this guarded only the passing branch, which left the failing one
+    // able to *credit* a spec that was never starved: an unrelated failure, or a flake, would
+    // have counted as proof that the assertion reads repository data. Same false credit as
+    // the `auth.spec.ts` specs appearing in the vacuity list, one branch over.
+    if (!starvedSpec.starved) {
+      notPerturbed.push(base);
+      continue;
     }
+    if (starvedSpec.passed) vacuous.push(base);
     else if (atAssertion.has(base.key)) counted.push(base);
     else inconclusive.push(base);
   }

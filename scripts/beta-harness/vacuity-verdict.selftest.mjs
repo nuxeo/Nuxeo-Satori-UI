@@ -127,6 +127,22 @@ ok('a spec that passed both runs WITHOUT being starved is NOT PERTURBED, not vac
     return c.notPerturbed.length === 1 && c.vacuous.length === 0;
   })());
 
+ok('a never-starved spec that FAILED at its own assertion is NOT counted',
+  (() => {
+    const base = results([{ title: 'fails for its own reasons', file: 'd.spec.ts', line: 9, ok: true }]);
+    const starved = results([
+      { title: 'fails for its own reasons', file: 'd.spec.ts', line: 9, ok: false, starved: false },
+    ]);
+    const c = classify({
+      baseline: base,
+      starved,
+      assertions: assertionReport([
+        { title: 'fails for its own reasons', file: 'd.spec.ts', line: 9, failedAtAssertion: true },
+      ]),
+    });
+    return c.counted.length === 0 && c.notPerturbed.length === 1 && c.inconclusive.length === 0;
+  })());
+
 ok('the spec key separates two parameterized describes sharing a line and a leaf title',
   specKey('a.spec.ts', 1, 'chromium', 'case A > does the thing') !==
     specKey('a.spec.ts', 1, 'chromium', 'case B > does the thing'));
