@@ -39,6 +39,14 @@
  * | `vacuous`         | pass     | pass               | the assertion survives an empty repository |
  * | `inconclusive`    | pass     | fail, but in a hook| starvation broke its setup; says nothing  |
  * | `baselineFailure` | fail     | either             | not measurable until the spec is fixed    |
+ * | `notPerturbed`    | pass     | pass, unstarved    | never starved, so it proves nothing      |
+ *
+ * `notPerturbed` exists because starvation rides on the `signedIn` fixture, and
+ * `auth.spec.ts` imports `test` from `@playwright/test` directly — deliberately, since it
+ * tests the guards that fixture defeats. Its specs are therefore never starved, and counting
+ * them as "passed with the repository empty" claimed they survived a perturbation they never
+ * saw. The fixture now annotates each test it starves, and a spec with no such annotation is
+ * reported here instead.
  *
  * `vacuous` is the finding, not an error: some specs legitimately assert non-data things
  * (chrome, a redirect, a negative case). They are **named** in the output so the distinction
@@ -76,16 +84,20 @@ import { basename } from 'node:path';
  * files and then need a second, different join for the third input. One key for all three
  * inputs is the reason the three files cannot disagree about which spec is which.
  *
- * The **title** is in the key because `file:line:project` alone is not unique: tests
+ * The **full title** is in the key because `file:line:project` alone is not unique: tests
  * registered in a loop from one `test()` call all report the same line, so a parameterized
  * spec would collide with its siblings and the join would silently pick whichever came
  * first. There are none in this suite today, and a key that depends on that staying true is
  * the kind of assumption this control exists to stop relying on.
  *
+ * The whole describe chain, not just the leaf: a first attempt used the leaf alone, which
+ * still collides when two parameterized `describe` blocks register the same test name at the
+ * same line. The chains are safe to compare because the two sources produce them
+ * identically — verified against a real run, where every title in
+ * `assertion-failures.json` appears verbatim among the chains built from `results.json`.
+ *
  * `basename` because the two sources spell the path differently: `results.json` says
- * `auth.spec.ts` and `assertion-failures.json` says `src/auth.spec.ts`. Only the **leaf**
- * title is used, because the two sources also differ on the prefix: the reporter joins the
- * enclosing describe titles with ` > ` and the results tree nests them as suites.
+ * `auth.spec.ts` and `assertion-failures.json` says `src/auth.spec.ts`.
  */
 export function loadSpecs(results) {
   const specs = [];
@@ -94,7 +106,7 @@ export function loadSpecs(results) {
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         specs.push({
-          key: specKey(spec.file, spec.line, test.projectName, spec.title),
+          key: specKey(spec.file, spec.line, test.projectName, [...titles, spec.title].join(' > ')),
           file: spec.file,
           line: spec.line,
           project: test.projectName,
@@ -106,6 +118,9 @@ export function loadSpecs(results) {
           // Distinguished from a failure: a skipped spec was not measured, and treating it
           // as a pass would let `test.skip` manufacture a vacuous-looking entry.
           skipped: (spec.tests ?? []).every((t) => t.status === 'skipped'),
+          // Written by the `signedIn` fixture when it installs the starvation route, so
+          // "passed while starved" is distinguishable from "was never starved".
+          starved: (test.annotations ?? []).some((a) => a.type === 'starved'),
         });
       }
     }
@@ -120,11 +135,8 @@ export function loadSpecs(results) {
   return specs;
 }
 
-/** The leaf test title, however the source spelled the enclosing describes. */
-const leafTitle = (title) => String(title ?? '').split(' > ').pop().trim();
-
 export function specKey(file, line, project, title) {
-  return `${basename(String(file))}:${line}:${project ?? ''}:${leafTitle(title)}`;
+  return `${basename(String(file))}:${line}:${project ?? ''}:${String(title ?? '').trim()}`;
 }
 
 /**
@@ -158,6 +170,7 @@ export function classify({ baseline, starved, assertions }) {
 
   const counted = [];
   const vacuous = [];
+  const notPerturbed = [];
   const inconclusive = [];
   const baselineFailure = [];
   const missing = [];
@@ -176,12 +189,15 @@ export function classify({ baseline, starved, assertions }) {
       missing.push(base);
       continue;
     }
-    if (starvedSpec.passed) vacuous.push(base);
+    if (starvedSpec.passed) {
+      // A pass is only evidence if the perturbation actually reached the spec.
+      (starvedSpec.starved ? vacuous : notPerturbed).push(base);
+    }
     else if (atAssertion.has(base.key)) counted.push(base);
     else inconclusive.push(base);
   }
 
-  return { counted, vacuous, inconclusive, baselineFailure, missing };
+  return { counted, vacuous, notPerturbed, inconclusive, baselineFailure, missing };
 }
 
 /** The whole control is the comparison against this number, so it is validated. */
@@ -211,7 +227,7 @@ const listing = (rows) =>
     .join('\n');
 
 export function report(result, minExpected) {
-  const { counted, vacuous, inconclusive, baselineFailure, missing } = result;
+  const { counted, vacuous, notPerturbed = [], inconclusive, baselineFailure, missing } = result;
   const out = [];
   out.push('=== E2E vacuity control: do the specs notice an empty repository? ===');
   out.push('');
@@ -228,6 +244,12 @@ export function report(result, minExpected) {
     out.push('  repository satisfies. Legitimate for chrome, redirects and negative cases;');
     out.push('  a defect for anything claiming to read repository data:');
     out.push(listing(vacuous));
+    out.push('');
+  }
+  if (notPerturbed.length) {
+    out.push('  NOT PERTURBED — these never received the starvation, because it rides on the');
+    out.push('  `signedIn` fixture and they do not use it. Their pass says nothing either way:');
+    out.push(listing(notPerturbed));
     out.push('');
   }
   if (inconclusive.length) {
@@ -254,8 +276,9 @@ export function report(result, minExpected) {
     out.push('');
     out.push('That is the whole of the claim: for those specs, an assertion the spec itself');
     out.push('wrote changes outcome when the app is served an empty repository. It says');
-    out.push('nothing about the specs listed as vacuous, inconclusive or not measured —');
-    out.push('those are gaps, and they are named above rather than folded into the total.');
+    out.push('nothing about the specs listed as vacuous, not perturbed, inconclusive or not');
+    out.push('measured: those are gaps, and they are named above rather than folded into the');
+    out.push('total.');
   } else {
     out.push(`FAIL: only ${counted.length} spec(s) are data-sensitive, below the ${minExpected} expected.`);
     out.push('');

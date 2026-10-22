@@ -243,8 +243,14 @@ red counts as sensitive when it is red either way.
 Specs that pass **both** runs are listed by name as a standing vacuity list. That is a finding,
 not a failure: chrome, redirect and negative-case assertions legitimately survive an empty
 repository, while anything claiming to read repository data and appearing there is a defect.
+
+Starvation rides on the `signedIn` fixture, so specs that do not use it — `auth.spec.ts`, which
+tests the guards that fixture defeats — are never starved. The fixture annotates each test it
+starves and the verdict lists the rest as **not perturbed**, because counting them as having
+survived an empty repository would claim a perturbation they never saw.
+
 A successful control establishes data-sensitivity for the specs it counted, and says nothing
-about the ones it lists as vacuous, inconclusive or not measured.
+about the ones it lists as vacuous, not perturbed, inconclusive or not measured.
 
 Archive `dist/e2e/results.json`, `dist/e2e/assertion-failures.json` and `dist/e2e/artifacts/`
 after each build/browser run and before the vacuity control: later runs overwrite them. The

@@ -88,6 +88,14 @@ export const test = base.extend<{ signedIn: Page }>({
     // still the expected user. Starving it would move the failure into this fixture, which
     // is exactly the hook-shaped failure that made the credential-based control unmeasurable.
     if (process.env['E2E_STARVE_APP'] === '1') {
+      // Recorded on the test itself, so the verdict can tell "passed while starved" from
+      // "was never starved". `auth.spec.ts` imports `test` from `@playwright/test` directly —
+      // deliberately, since its whole job is to test the guards this fixture defeats — so it
+      // never reaches this code. Without the annotation its eight specs appeared in the
+      // control's "passed even with the repository empty" list, which claimed they survived a
+      // perturbation they never saw.
+      testInfo.annotations.push({ type: 'starved', description: 'E2E_STARVE_APP=1' });
+
       await page.route('**/nuxeo/api/**', async (route) => {
         const url = route.request().url();
         // `continue()`, not `fallback()`: there is no second handler to fall back to, and

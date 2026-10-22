@@ -70,9 +70,10 @@ set -euo pipefail
 #   ./scripts/e2e-negative-control.sh [min-expected]
 #
 # Default: 5. Measured on 2026-10-22 at `integration/nxsat-308` @ 8badd9c8e, full Chromium
-# project: 8 data-sensitive specs, 16 that pass with the repository empty, 0 inconclusive and
-# 0 already failing. 5 leaves margin for one or two specs legitimately changing shape without
-# the gate going red for the wrong reason.
+# project: 8 data-sensitive specs, 8 that pass with the repository empty, 8 never perturbed
+# (`auth.spec.ts`, which does not use the `signedIn` fixture), 0 inconclusive and 0 already
+# failing. 5 leaves margin for one or two specs legitimately changing shape without the gate
+# going red for the wrong reason.
 #
 # The first measurement on that head was 7, before this change also fixed the four browse and
 # cross-browser assertions that were matching the listing's empty-state copy. Three of those

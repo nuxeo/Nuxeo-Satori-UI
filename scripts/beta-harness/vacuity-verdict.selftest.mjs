@@ -41,7 +41,16 @@ const results = (specs) => ({
             file: s.file,
             line: s.line,
             ok: s.ok,
-            tests: [{ projectName: 'chromium', status: s.status ?? (s.ok ? 'expected' : 'unexpected'), results: [] }],
+            tests: [
+              {
+                projectName: 'chromium',
+                status: s.status ?? (s.ok ? 'expected' : 'unexpected'),
+                results: [],
+                // Default true: most cases are about a spec that *was* starved. The
+                // not-perturbed case sets it false explicitly.
+                annotations: s.starved === false ? [] : [{ type: 'starved' }],
+              },
+            ],
           })),
         },
       ],
@@ -49,9 +58,14 @@ const results = (specs) => ({
   ],
 });
 
+/**
+ * Shaped like `assertion-failure-reporter.ts`'s output, which titles each spec with its whole
+ * describe chain joined by ` > ` — the same string `loadSpecs` builds, verified against a real
+ * run. The synthetic rows carried the leaf alone at first, and the join silently failed.
+ */
 const assertionReport = (rows) => ({
   specs: rows.map((r) => ({
-    title: r.title,
+    title: `inner > ${r.title}`,
     file: `src/${r.file}`,
     line: r.line,
     project: 'chromium',
@@ -103,9 +117,23 @@ ok('a spec already failing in the baseline is NOT MEASURED, even though it faile
 ok('a spec present in the baseline and absent when starved is NOT MEASURED',
   titles(r.missing).join() === 'inner > vanishes when starved', titles(r.missing).join());
 
-ok('the four populations are disjoint',
-  new Set([...r.counted, ...r.vacuous, ...r.inconclusive, ...r.baselineFailure, ...r.missing]
-    .map((x) => x.key)).size === 5);
+ok('a spec that passed both runs WITHOUT being starved is NOT PERTURBED, not vacuous',
+  (() => {
+    const base = results([{ title: 'never starved', file: 'c.spec.ts', line: 7, ok: true }]);
+    const starved = results([
+      { title: 'never starved', file: 'c.spec.ts', line: 7, ok: true, starved: false },
+    ]);
+    const c = classify({ baseline: base, starved, assertions: assertionReport([]) });
+    return c.notPerturbed.length === 1 && c.vacuous.length === 0;
+  })());
+
+ok('the spec key separates two parameterized describes sharing a line and a leaf title',
+  specKey('a.spec.ts', 1, 'chromium', 'case A > does the thing') !==
+    specKey('a.spec.ts', 1, 'chromium', 'case B > does the thing'));
+
+ok('the populations are disjoint',
+  new Set([...r.counted, ...r.vacuous, ...(r.notPerturbed ?? []), ...r.inconclusive,
+    ...r.baselineFailure, ...r.missing].map((x) => x.key)).size === 5);
 
 // ---------------------------------------------------------------- the verdict
 
@@ -143,8 +171,8 @@ ok('the spec key separates the same spec on two browser projects',
 ok('the spec key separates two parameterized tests registered at the same line',
   specKey('a.spec.ts', 1, 'chromium', 'case A') !== specKey('a.spec.ts', 1, 'chromium', 'case B'));
 
-ok('the spec key ignores the differing describe prefixes of the two input files',
-  specKey('a.spec.ts', 1, 'chromium', 'outer > inner > t') === specKey('a.spec.ts', 1, 'chromium', 't'));
+ok('the spec key distinguishes the same leaf under different describe chains',
+  specKey('a.spec.ts', 1, 'chromium', 'outer > t') !== specKey('a.spec.ts', 1, 'chromium', 'other > t'));
 
 ok('loadSpecs keeps the describe titles but not the file-path root suite',
   loadSpecs(baseline)[0].title === 'inner > reads data', loadSpecs(baseline)[0].title);
