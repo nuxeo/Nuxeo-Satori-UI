@@ -28,6 +28,7 @@ import {
   parseStoredSession,
   pendingAcrossSignIn,
   sameUser,
+  strayRequests,
   watchNuxeoApiOrigins,
 } from './identity-guard.mjs';
 
@@ -48,6 +49,8 @@ const GUEST = { 'entity-type': 'user', id: 'Anonymous', isAnonymous: true };
 const b64 = (s) => Buffer.from(s).toString('base64');
 const basicSession = (username, basic = b64(`${username}:pw`)) =>
   JSON.stringify({ kind: 'basic', username, basic, isAdministrator: true, groups: [] });
+const cookieSession = (username) =>
+  JSON.stringify({ kind: 'cookie', username, isAdministrator: true, groups: [] });
 const ok200 = (body) => ({ status: 200, body });
 const both = (body) => ({ inPage: ok200(body), replayed: ok200(body) });
 
@@ -301,6 +304,7 @@ function fakePage({
     /** `page.request`'s `/me` redirects to another origin. */
     redirectApi: false,
     waiters: [],
+    requestWaiters: [],
     /** What a document `goto` loads sends before anything else, signed out. */
     bootRequests: [],
     /** @type {Record<string, ((request: object) => void)[]>} */
@@ -330,6 +334,20 @@ function fakePage({
         fetch: async (url, init) => {
           const auth = init?.headers?.['Authorization'] ?? null;
           state.headersSeen.push(auth);
+          // Trigger request event for waitForRequest (P1 fix needs this). Simulate browser behavior:
+          // with credentials: 'same-origin', the browser includes cookies from the jar automatically.
+          const allHeaders = {};
+          if (auth) allHeaders['authorization'] = auth;
+          // Include cookies from the jar if credentials: 'same-origin' (the default for identity probes)
+          if (init?.credentials === 'same-origin' && state.cookies.length > 0) {
+            allHeaders['cookie'] = state.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+          }
+          const request = {
+            url: () => String(url),
+            method: () => init?.method ?? 'GET',
+            allHeaders: async () => allHeaders,
+          };
+          for (const w of state.requestWaiters.splice(0)) if (w.pred(request)) w.resolve(request);
           const response = {
             url: () => String(url),
             serverAddr: async () => (state.stubbedMe ? null : { ipAddress: '::1', port: 4200 }),
@@ -393,17 +411,22 @@ function fakePage({
       cookies: async () => state.cookies,
     }),
     waitForResponse: (pred) => new Promise((resolve) => state.waiters.push({ pred, resolve })),
+    waitForRequest: (pred) => new Promise((resolve) => state.requestWaiters.push({ pred, resolve })),
     on: (event, fn) => {
       (state.listeners[event] ??= []).push(fn);
     },
     /**
      * Make the page send a request and finish it, as the app would. `authorization` is the header
-     * it went out with; `navigation` loads a new main-frame document.
+     * it went out with; `navigation` loads a new main-frame document; `cookie` is the session
+     * cookie value at request time (for testing cookie sessions, Gap 1).
      *
      * @param {string} url
-     * @param {{ authorization?: string | null, type?: string, navigation?: boolean }} [options]
+     * @param {{ authorization?: string | null, type?: string, navigation?: boolean, cookie?: string | null }} [options]
      */
-    send: (url, { authorization = null, type = 'xhr', navigation = false } = {}) => {
+    send: (url, { authorization = null, type = 'xhr', navigation = false, cookie = null } = {}) => {
+      const allHeaders = {};
+      if (authorization) allHeaders['authorization'] = authorization;
+      if (cookie) allHeaders['cookie'] = `JSESSIONID=${cookie}`;
       const request = {
         url: () => url,
         method: () => 'GET',
@@ -411,9 +434,18 @@ function fakePage({
         isNavigationRequest: () => navigation,
         frame: () => mainFrame,
         headers: () => (authorization ? { authorization } : {}),
+        allHeaders: async () => allHeaders,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
-      for (const fn of state.listeners['requestfinished'] ?? []) fn(request);
+      // Resolve any waitForRequest waiters
+      for (const w of state.requestWaiters.splice(0)) if (w.pred(request)) w.resolve(request);
+      // Call requestfinished handlers. These are async in production, and tests must exercise
+      // the real async path (P2). Fire them but don't await - matches Playwright's behavior.
+      for (const fn of state.listeners['requestfinished'] ?? []) {
+        const result = fn(request);
+        // Catch errors but don't wait - Playwright doesn't await event listeners
+        if (result && typeof result.catch === 'function') result.catch(() => {});
+      }
     },
     /**
      * Start a request and leave it in flight: `request` fires now, `requestfinished` only when
@@ -421,9 +453,12 @@ function fakePage({
      * declared while the app is still waiting for a response sees.
      *
      * @param {string} url
-     * @param {{ authorization?: string | null, type?: string }} [options]
+     * @param {{ authorization?: string | null, type?: string, cookie?: string | null }} [options]
      */
-    begin: (url, { authorization = null, type = 'xhr' } = {}) => {
+    begin: (url, { authorization = null, type = 'xhr', cookie = null } = {}) => {
+      const allHeaders = {};
+      if (authorization) allHeaders['authorization'] = authorization;
+      if (cookie) allHeaders['cookie'] = `JSESSIONID=${cookie}`;
       const request = {
         url: () => url,
         method: () => 'GET',
@@ -431,8 +466,11 @@ function fakePage({
         isNavigationRequest: () => false,
         frame: () => mainFrame,
         headers: () => (authorization ? { authorization } : {}),
+        allHeaders: async () => allHeaders,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
+      // Resolve any waitForRequest waiters
+      for (const w of state.requestWaiters.splice(0)) if (w.pred(request)) w.resolve(request);
       const emit = (event) => {
         for (const fn of state.listeners[event] ?? []) fn(request);
       };
@@ -861,6 +899,108 @@ function watchedPage(options) {
     r,
   );
 }
+
+{
+  // Gap 1, P2: Cookie session with null expectedCookie (cleared after probes but before check)
+  const SESSION_KEY = 'agentic_ui_nuxeo_session';
+  const cookieSessionStorage = {
+    [`sessionStorage:${SESSION_KEY}`]: cookieSession('Administrator'),
+  };
+  const { page, traffic } = watchedPage({
+    storage: cookieSessionStorage,
+    meFor: () => ADMIN,
+  });
+  page.state.cookies = [{ name: 'JSESSIONID', value: 'admin-cookie' }];
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
+  // Request without cookie - should be refused even when expectedCookie is null
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+  // Drain pending headers before checking (P1) - async requestfinished means headers may not be ready
+  await traffic.drainPendingHeaders();
+  // Simulate cleared cookie by passing null as expectedCookie
+  const stored = {
+    key: SESSION_KEY,
+    storage: 'sessionStorage',
+    kind: 'cookie',
+    username: 'Administrator',
+    authorization: null,
+  };
+  const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie: null });
+  control(
+    'negative',
+    'a cookie session with null expectedCookie fails closed and reports ALL requests as stray (Gap 1, P2)',
+    stray.length === 2 &&
+      stray.some((r) => r.path === '/nuxeo/api/v1/me') &&
+      stray.some((r) => r.path === '/nuxeo/api/v1/search/lang/NXQL/execute'),
+    { strayCount: stray.length, stray: stray.map((r) => r.path) },
+  );
+}
+
+{
+  // Gap 1, P2: Cookie session with null expectedCookie and wrong-user Authorization header
+  const SESSION_KEY = 'agentic_ui_nuxeo_session';
+  const WRONG_USER_AUTH = 'Basic ' + b64('WrongUser:pw');
+  const cookieSessionStorage = {
+    [`sessionStorage:${SESSION_KEY}`]: cookieSession('Administrator'),
+  };
+  const { page, traffic } = watchedPage({
+    storage: cookieSessionStorage,
+    meFor: () => ADMIN,
+  });
+  page.state.cookies = [{ name: 'JSESSIONID', value: 'admin-cookie' }];
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
+  // Request with wrong user's Authorization header - should be refused when expectedCookie is null
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: WRONG_USER_AUTH, cookie: null });
+  // Drain pending headers before checking (P1)
+  await traffic.drainPendingHeaders();
+  const stored = {
+    key: SESSION_KEY,
+    storage: 'sessionStorage',
+    kind: 'cookie',
+    username: 'Administrator',
+    authorization: null,
+  };
+  const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie: null });
+  control(
+    'negative',
+    'a cookie session with null expectedCookie reports wrong-user Authorization header as stray (Gap 1, P2)',
+    stray.length === 2 &&
+      stray.some((r) => r.path === '/nuxeo/api/v1/search/lang/NXQL/execute' && r.authorization === WRONG_USER_AUTH),
+    { strayCount: stray.length, stray: stray.map((r) => ({ path: r.path, auth: r.authorization })) },
+  );
+}
+
+{
+  // Gap 1: cookie-authenticated traffic is invisible to the traffic log.
+  // A cookie session stores authorization: null, and a guest request also has authorization: null.
+  // Before the fix, the guard compared r.authorization !== stored.authorization (null !== null = false),
+  // so the guest request was NOT considered stray. After the fix, it checks cookies for cookie sessions.
+  const SESSION_KEY = 'agentic_ui_nuxeo_session';
+  const ADMIN_COOKIE = 'admin-cookie-value';
+  const cookieSessionStorage = {
+    [`sessionStorage:${SESSION_KEY}`]: cookieSession('Administrator'),
+  };
+  const { page, traffic } = watchedPage({
+    storage: cookieSessionStorage,
+    meFor: () => ADMIN, // /me answers as Admin when called with the cookie
+  });
+  // Simulate the page's actual cookie
+  page.state.cookies = [{ name: 'JSESSIONID', value: ADMIN_COOKIE }];
+  // First request with the cookie (simulating authenticated traffic)
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: ADMIN_COOKIE });
+  // Second request without the cookie (guest traffic that should be rejected)
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    'a cookie session: a request sent without the session cookie is refused (Gap 1 - cookie traffic visibility)',
+    !r.ok && /without the header/.test(r.problem ?? ''),
+    r,
+  );
+}
+
 {
   // `AppConfigService` and `DocumentLayoutService` read these through `HttpBackend` on every load.
   const { page, traffic } = watchedPage();
@@ -1821,6 +1961,46 @@ await silently(async () => {
     );
   }
   {
+    // Cookie-session variant: form sign-in using cookie, with in-flight request (Finding 4)
+    const COOKIE_VAL = 'admin-session-cookie';
+    const cookieSessionStorage = {
+      'sessionStorage:agentic_ui_nuxeo_session': cookieSession('Administrator'),
+    };
+    const page = fakePage({
+      url: `${APP}/#/`,
+      meFor: () => ADMIN,
+    });
+    page.state.cookies = [{ name: 'JSESSIONID', value: COOKIE_VAL }];
+    const recorder = { steps: [], consoleErrors: [] };
+    const identity = createIdentityMonitor({
+      page,
+      baseUrl: APP,
+      username: 'Administrator',
+      fetchImpl: page.fetch,
+    });
+    const h = createHelpers(page, '/tmp', recorder, { identity });
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: null });
+    page.state.storage = { ...cookieSessionStorage };
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: COOKIE_VAL });
+    const inFlight = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { cookie: null });
+    const thrown = await thrownBy(async () => {
+      await h.step('two');
+      inFlight.finish();
+      await h.step('three');
+      await h.finish();
+    });
+    control(
+      'negative',
+      'a cookie-session form sign-in with in-flight request refuses the promotion (Finding 4)',
+      thrown instanceof PreconditionError &&
+        /in flight/.test(thrown.message) &&
+        /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+        identity.checks.some((c) => !c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
     // The bootstrap exemption, kept: a request in flight from *before* anything carried a header
     // is the signed-out page's own. It has no identity to strand, and refusing it would make
     // every run that signs in through the form while its boot is still settling red.
@@ -1945,6 +2125,62 @@ await silently(async () => {
     }
   }
   {
+    // Gap 2: the re-login interval after the second verification is unjudged for cross-user logins.
+    // When h.login() is replacing a session for a DIFFERENT user, expectApp() restarts the window,
+    // putting requests from the clearCookies/storage interval behind `since` where no boundary sees them.
+    // This control simulates a cross-user re-login (after h.signedInAs) with a request during that interval.
+    const saved = { NUXEO_USER: process.env['NUXEO_USER'], NUXEO_PASS: process.env['NUXEO_PASS'], APP_URL: process.env['APP_URL'] };
+    process.env['NUXEO_USER'] = 'Administrator';
+    process.env['NUXEO_PASS'] = 'adminpw';
+    process.env['APP_URL'] = APP;
+    try {
+      const page = fakePage({ url: `${APP}/#/`, storage: { ...signedIn } });
+      const ALT_USER = 'AlternateUser';
+      const ALT_AUTH = `Basic ${b64(`${ALT_USER}:altpw`)}`;
+      page.state.meFor = (/** @type {string | null} */ auth) =>
+        auth === H ? ADMIN : auth === ALT_AUTH ? { id: ALT_USER, isAnonymous: false } : GUEST;
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      // Sign in as alternate user, then switch back to Administrator (cross-user re-login)
+      await h.signedInAs(ALT_USER, 'altpw', 'switch to alternate user');
+      page.state.storage = { 'sessionStorage:agentic_ui_nuxeo_session': basicSession(ALT_USER, b64(`${ALT_USER}:altpw`)) };
+      page.send(`${APP}/nuxeo/api/v1/me`, { authorization: ALT_AUTH });
+      // The boot navigation happens while the AlternateUser session is still active, so it uses ALT_AUTH
+      page.state.bootRequests = [{ url: `${APP}/nuxeo/api/v1/me`, authorization: ALT_AUTH }];
+      // During clearCookies, send a headerless request that should be caught but currently escapes (Gap 2)
+      page.state.duringClear = () =>
+        page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+      const thrown = await thrownBy(async () => {
+        await h.login(); // Cross-user: from AlternateUser back to Administrator
+        page.state.duringClear = undefined;
+        await h.step('two');
+        await h.finish();
+      });
+      control(
+        'negative',
+        'a cross-user re-login: a request during the post-verification interval is refused (Gap 2 - re-login interval)',
+        thrown instanceof PreconditionError &&
+          /identity guard/.test(thrown.message) &&
+          (/without the .* session's credential/.test(thrown.message) || /in flight/.test(thrown.message)) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+          identity.checks.some((c) => !c.ok && c.at.includes('cross-user re-login')),
+        { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
     // The other side of the same stale `required`: a request the app starts *during* the probe.
     // It is beyond the promotion's mark, so `pendingAcrossSignIn` rightly leaves it in the
     // window for a later boundary — but the transition reads `required` from before the
@@ -1998,8 +2234,10 @@ await silently(async () => {
       method: 'GET',
       path: '/nuxeo/api/v1/x',
       finished: true,
+      networkComplete: true,
       failed: false,
       authorization: null,
+      cookie: null,
       ...over,
     });
     const signedInBoot = req({ authorization: H });
