@@ -84,6 +84,16 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
 
       expect(dialog.isSubmitDisabled()).toBe(true);
     });
+
+    it('no-ops when create() is called with a right the list does not offer', async () => {
+      const dialog = await open({ permissions: NO_READ });
+      dialog.onSuggestionSelected(MEMBERS);
+      dialog.right = 'Read';
+
+      dialog.create(false);
+
+      expect(dialog.dialogRef.close).not.toHaveBeenCalled();
+    });
   });
 
   it("falls back to Nuxeo's default three when the read carried no list", async () => {
