@@ -500,8 +500,11 @@ const NXS = {
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
     save: 'nxs-permissions-panel button',
+    // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
+    // clicks the first status or alert button: the status text after a save, and after a refusal
+    // the alert's Reload, which re-reads the panel once every check on the save has run.
     feedback:
-      'nxs-permissions-panel .nxs-permissions-panel__status, nxs-permissions-panel .nxs-permissions-panel__alert, mat-snack-bar-container, nxs-toast',
+      'nxs-permissions-panel .nxs-permissions-panel__status, nxs-permissions-panel .nxs-permissions-panel__alert',
   },
   // libs/shared/ui/src/lib/document-viewer/document-viewer.component.ts: there is no nxs- viewer;
   // the document page renders lib-document-viewer, reached from the row's open button.
