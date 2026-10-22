@@ -91,7 +91,13 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
 
   function ensureStep() {
     if (!current) {
-      current = { index: recorder.steps.length + 1, label: 'unlabelled', screenshots: [], checks: [], notes: [] };
+      current = {
+        index: recorder.steps.length + 1,
+        label: 'unlabelled',
+        screenshots: [],
+        checks: [],
+        notes: [],
+      };
       recorder.steps.push(current);
     }
     return current;
@@ -138,7 +144,11 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       const detail =
         `h.step(...) was not awaited, so the identity check ${at} ran alongside the next step and ` +
         'may have judged that step instead — write `await h.step(...)`';
-      b.step.checks.push({ name: 'the identity guard ran between this step and the next', passed: false, detail });
+      b.step.checks.push({
+        name: 'the identity guard ran between this step and the next',
+        passed: false,
+        detail,
+      });
       identity?.reject(at, detail);
       unawaitedFailure ??= new PreconditionError(`identity guard ${at}: ${detail}`);
     }
@@ -203,7 +213,13 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     step(msg) {
       closeBoundaries();
       const previous = current;
-      current = { index: recorder.steps.length + 1, label: msg, screenshots: [], checks: [], notes: [] };
+      current = {
+        index: recorder.steps.length + 1,
+        label: msg,
+        screenshots: [],
+        checks: [],
+        notes: [],
+      };
       recorder.steps.push(current);
       console.log(`\n[step ${current.index}] ${msg}`);
       if (!identity || !previous) return Promise.resolve();
@@ -342,7 +358,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       const s = ensureStep();
       const passed = Boolean(condition);
       s.checks.push({ name, passed, ...(detail && !passed ? { detail } : {}) });
-      console.log(`  [${passed ? 'pass' : 'FAIL'}] ${name}${passed || !detail ? '' : ` - ${detail}`}`);
+      console.log(
+        `  [${passed ? 'pass' : 'FAIL'}] ${name}${passed || !detail ? '' : ` - ${detail}`}`,
+      );
       return passed;
     },
 
@@ -442,11 +460,20 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
 
       let results;
       try {
-        let builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa']);
+        let builder = new AxeBuilder({ page }).withTags([
+          'wcag2a',
+          'wcag2aa',
+          'wcag21a',
+          'wcag21aa',
+        ]);
         if (include) builder = builder.include(include);
         results = await builder.analyze();
       } catch (err) {
-        return this.check(name, false, `axe scan failed: ${err instanceof Error ? err.message : String(err)}`);
+        return this.check(
+          name,
+          false,
+          `axe scan failed: ${err instanceof Error ? err.message : String(err)}`,
+        );
       }
 
       const violations = results.violations.filter((v) => !ignore.includes(v.id));
@@ -461,13 +488,17 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
           .slice(0, 3)
           .map((n) => n.target.join(' '))
           .join(' | ');
-        (s.notes ??= []).push(`a11y ${v.impact}: ${v.id} — ${v.help} (${v.nodes.length} node(s): ${where})`);
+        (s.notes ??= []).push(
+          `a11y ${v.impact}: ${v.id} — ${v.help} (${v.nodes.length} node(s): ${where})`,
+        );
       }
       for (const v of ignored) {
         (s.notes ??= []).push(`a11y ignored by rule id: ${v.id} (${v.nodes.length} node(s))`);
       }
       if (violations.length) {
-        console.log(`  [note] ${violations.length} a11y violation(s); ${blocking.length} at ${failOn.join('/')}`);
+        console.log(
+          `  [note] ${violations.length} a11y violation(s); ${blocking.length} at ${failOn.join('/')}`,
+        );
       }
 
       return this.check(
@@ -519,6 +550,18 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      */
     async login() {
       const { username: user, password: pass } = requireStepCredentials('sign the evidence run in');
+
+      // If already on the app with a session, verify its traffic before clearing it. A headerless
+      // request followed by `h.login()` would otherwise reset the window and hide the violation.
+      if (identity && page.url().startsWith(this.baseUrl)) {
+        const { ok, reports } = await identity.verify(
+          `before h.login() at step ${ensureStep().index}`,
+        );
+        if (!ok) {
+          const { assertIdentity } = await import('./identity-guard.mjs');
+          assertIdentity(reports, `before h.login() at step ${ensureStep().index}`);
+        }
+      }
 
       await page.goto(this.baseUrl, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);

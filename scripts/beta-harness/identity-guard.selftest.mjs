@@ -1339,6 +1339,45 @@ await silently(async () => {
     }
   }
   {
+    // Repeated h.login() before a step boundary: the headerless request from the first authenticated
+    // session must be caught, not hidden by the window reset.
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.login();
+      page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+      const thrown = await thrownBy(() => h.login());
+      control(
+        'negative',
+        'repeated h.login() verifies the current session before resetting, catching headerless traffic',
+        thrown instanceof Error && thrown.name === 'IdentityError' && /without the header/.test(thrown.message),
+        { thrown: String(thrown), checks: identity.checks },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
     // A form sign-in, seen at a boundary rather than declared.
     const page = fakePage({ url: `${APP}/#/`, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
     const recorder = { steps: [], consoleErrors: [] };

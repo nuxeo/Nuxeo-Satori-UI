@@ -72,7 +72,7 @@ const CHROMIUM = {
   // session, and `signedIn` checks both against `/me` (`scripts/beta-harness/identity-guard.mjs`).
   httpCredentials: {
     ...requireNuxeoCredentials(),
-    origin: baseURL,
+    origin: new URL(baseURL).origin,
     send: 'always' as const,
   },
   trace: 'retain-on-failure' as const,

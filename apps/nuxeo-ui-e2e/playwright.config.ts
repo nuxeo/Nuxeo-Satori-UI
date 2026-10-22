@@ -82,7 +82,7 @@ export default defineConfig({
     // challenge-based credentials were never sent and a spec's `page.request` ran as `Anonymous`.
     // It reaches `page.request` only, and replaces an explicit `Authorization` there — a second
     // identity needs `request.newContext()`. The browser is signed in by `signedIn`'s session.
-    httpCredentials: { ...nuxeoCredentials(), origin: baseURL, send: 'always' },
+    httpCredentials: { ...nuxeoCredentials(), origin: new URL(baseURL).origin, send: 'always' },
     // Diagnostics on failure only, so a green run leaves nothing behind.
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
