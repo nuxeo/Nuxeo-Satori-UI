@@ -308,7 +308,7 @@ export class NxsPermissionsPanelComponent {
    * Permissions the editor must offer beyond the offered set: the entry's own, and the one the
    * user has picked, which stays selectable if All permissions is unticked under the form.
    */
-  protected readonly editorExtraPermissions = computed(() => {
+  protected readonly editorExtraPermissions = computed<readonly string[]>(() => {
     const offered = this.offered();
     const held = this.editor()?.item?.extraPermissions ?? [];
     return [...new Set([...held, this.editorPermission()])].filter((p) => !!p && !offered.has(p));
