@@ -654,20 +654,20 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
   page.on('requestfinished', async (request) => {
     const record = pending.get(request);
     if (!record) return;
-    const headers = request.headers();
-    record.authorization = headers['authorization'] ?? null;
-    // Record the session cookie for cookie-based authentication. Cookie sessions have
-    // authorization: null in both the stored session and the request, so without this the guard
-    // cannot distinguish authenticated requests from guest requests (Gap 1).
     // In tests, the request may have _testCookie set directly for synchronous testing.
     if ('_testCookie' in request) {
+      record.authorization = request.headers()['authorization'] ?? null;
       record.cookie = request._testCookie ?? null;
       record.finished = true;
       return;
     }
+    // Use allHeaders() to get security headers including Cookie, which request.headers() omits.
+    // Keep the record pending until header collection finishes (async).
+    const allHeaders = await request.allHeaders();
+    record.authorization = allHeaders['authorization'] ?? null;
     // Read the actual Cookie header the request sent, not context().cookies() which reflects the
     // current jar and can show an authenticated cookie for a request sent with credentials:'omit'.
-    const cookieHeader = headers['cookie'] ?? null;
+    const cookieHeader = allHeaders['cookie'] ?? null;
     if (cookieHeader) {
       // Parse JSESSIONID from the Cookie header (format: "name=value; name2=value2")
       const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
@@ -728,9 +728,9 @@ export function pendingRequests(traffic) {
  * false evidence, which is worse than a missing check.
  *
  * The signed-out bootstrap stays exempt, drawn where `strayRequests` draws it — at the first
- * request that carried *any* `Authorization`. Before that the app had no session to send, so its
- * requests are the signed-out page's and carry no identity to strand; after it the app is
- * signed in, and what it sends is the session's.
+ * request that carried *any* `Authorization` header or session cookie. Before that the app had
+ * no session to send, so its requests are the signed-out page's and carry no identity to strand;
+ * after it the app is signed in, and what it sends is the session's.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @param {number} upTo where the promotion would move `since` to
@@ -741,7 +741,11 @@ export function pendingAcrossSignIn(traffic, upTo) {
   const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
   if (!Array.isArray(sent) || typeof since !== 'number') return [];
   const discarded = sent.slice(since, upTo).filter((r) => !anonymousByDesign(r));
-  const signedIn = discarded.findIndex((r) => r.finished && r.authorization !== null);
+  // Recognize both Authorization-header and cookie-based sign-in. Note: cookie field may be
+  // undefined in older traffic or tests, so check for explicit non-null values.
+  const signedIn = discarded.findIndex(
+    (r) => r.finished && (r.authorization !== null || (r.cookie !== null && r.cookie !== undefined)),
+  );
   if (signedIn < 0) return [];
   return discarded.slice(signedIn).filter((r) => !r.finished && !r.failed);
 }
@@ -776,10 +780,11 @@ export function strayRequests(traffic, stored, { signingIn = false, expectedCook
   const isCookieSession = stored.kind === 'cookie';
   if (isCookieSession) {
     // If we don't have the expected cookie value (undefined or null), we cannot judge - fail closed
-    // by returning all headerless requests as potentially stray. Null can happen if the cookie was
-    // cleared after successful identity probes but before this check.
+    // by returning ALL requests as stray. Without a verified cookie, even requests carrying an
+    // Authorization header are unverified (could be another user, could be stale). Null can happen
+    // if the cookie was cleared after successful identity probes but before this check.
     if (expectedCookie === undefined || expectedCookie === null) {
-      return judged.filter((r) => r.authorization === null);
+      return judged;
     }
     // For signing in, find the first request that used this cookie
     const first = signingIn ? judged.findIndex((r) => r.cookie === expectedCookie) : 0;

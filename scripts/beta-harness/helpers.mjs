@@ -701,7 +701,32 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         const beforeUser = identity.expectedApp;
         const at = `before h.login() completes (cross-user re-login, after clearCookies interval)`;
 
-        // Check for pending requests first
+        // Validate the captured outgoing session. If unavailable, invalid, or wrong user, refuse.
+        const { stored, expectedCookie } = outgoingSnapshot;
+        if (!stored) {
+          const problem =
+            `h.login() cannot complete: the outgoing session disappeared during the clearCookies interval, ` +
+            `and this is a cross-user re-login that would restart the window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+        if ('problem' in stored) {
+          const problem =
+            `h.login() cannot complete: the outgoing session could not be verified (${stored.problem}), ` +
+            `and this is a cross-user re-login that would restart the window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+        if (!sameUser(stored.username, beforeUser)) {
+          const problem =
+            `h.login() cannot complete: the outgoing session is for ${stored.username ?? '(no user)'}, ` +
+            `not for ${beforeUser} as expected, and this is a cross-user re-login that would restart the ` +
+            `window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+
+        // Check for pending requests
         const pending = identity.pendingRequests();
         if (pending.length) {
           const listed = pending.map((r) => `${r.method} ${r.path}`).join(', ');
@@ -714,20 +739,17 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         }
 
         // Check for stray requests against the captured outgoing session
-        const { stored, expectedCookie } = outgoingSnapshot;
-        if (stored && !('problem' in stored)) {
-          const traffic = identity._traffic;
-          const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie });
-          if (stray.length) {
-            const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
-            const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
-            const problem =
-              `h.login() cannot complete: ${stray.length} request(s) were sent during the clearCookies interval ` +
-              `without the ${beforeUser} session's credential (${listed}${suffix}), and this is a cross-user re-login ` +
-              `that would restart the window over them, leaving them unjudged`;
-            identity.reject(at, problem);
-            throw new PreconditionError(`identity guard ${at}: ${problem}`);
-          }
+        const traffic = identity._traffic;
+        const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie });
+        if (stray.length) {
+          const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+          const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
+          const problem =
+            `h.login() cannot complete: ${stray.length} request(s) were sent during the clearCookies interval ` +
+            `without the ${beforeUser} session's credential (${listed}${suffix}), and this is a cross-user re-login ` +
+            `that would restart the window over them, leaving them unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
         }
       }
 

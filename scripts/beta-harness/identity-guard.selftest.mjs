@@ -408,6 +408,9 @@ function fakePage({
      * @param {{ authorization?: string | null, type?: string, navigation?: boolean, cookie?: string | null }} [options]
      */
     send: (url, { authorization = null, type = 'xhr', navigation = false, cookie = null } = {}) => {
+      const allHeaders = {};
+      if (authorization) allHeaders['authorization'] = authorization;
+      if (cookie) allHeaders['cookie'] = `JSESSIONID=${cookie}`;
       const request = {
         url: () => url,
         method: () => 'GET',
@@ -415,6 +418,7 @@ function fakePage({
         isNavigationRequest: () => navigation,
         frame: () => mainFrame,
         headers: () => (authorization ? { authorization } : {}),
+        allHeaders: async () => allHeaders,
         // For testing: store the cookie value to be picked up by async requestfinished handler
         _testCookie: cookie,
       };
@@ -433,9 +437,12 @@ function fakePage({
      * declared while the app is still waiting for a response sees.
      *
      * @param {string} url
-     * @param {{ authorization?: string | null, type?: string }} [options]
+     * @param {{ authorization?: string | null, type?: string, cookie?: string | null }} [options]
      */
-    begin: (url, { authorization = null, type = 'xhr' } = {}) => {
+    begin: (url, { authorization = null, type = 'xhr', cookie = null } = {}) => {
+      const allHeaders = {};
+      if (authorization) allHeaders['authorization'] = authorization;
+      if (cookie) allHeaders['cookie'] = `JSESSIONID=${cookie}`;
       const request = {
         url: () => url,
         method: () => 'GET',
@@ -443,6 +450,7 @@ function fakePage({
         isNavigationRequest: () => false,
         frame: () => mainFrame,
         headers: () => (authorization ? { authorization } : {}),
+        allHeaders: async () => allHeaders,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
       const emit = (event) => {
@@ -899,11 +907,43 @@ function watchedPage(options) {
   const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie: null });
   control(
     'negative',
-    'a cookie session with null expectedCookie fails closed and reports all headerless requests as stray (Gap 1, P2)',
+    'a cookie session with null expectedCookie fails closed and reports ALL requests as stray (Gap 1, P2)',
     stray.length === 2 &&
       stray.some((r) => r.path === '/nuxeo/api/v1/me') &&
       stray.some((r) => r.path === '/nuxeo/api/v1/search/lang/NXQL/execute'),
     { strayCount: stray.length, stray: stray.map((r) => r.path) },
+  );
+}
+
+{
+  // Gap 1, P2: Cookie session with null expectedCookie and wrong-user Authorization header
+  const SESSION_KEY = 'agentic_ui_nuxeo_session';
+  const WRONG_USER_AUTH = 'Basic ' + b64('WrongUser:pw');
+  const cookieSessionStorage = {
+    [`sessionStorage:${SESSION_KEY}`]: cookieSession('Administrator'),
+  };
+  const { page, traffic } = watchedPage({
+    storage: cookieSessionStorage,
+    meFor: () => ADMIN,
+  });
+  page.state.cookies = [{ name: 'JSESSIONID', value: 'admin-cookie' }];
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
+  // Request with wrong user's Authorization header - should be refused when expectedCookie is null
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: WRONG_USER_AUTH, cookie: null });
+  const stored = {
+    key: SESSION_KEY,
+    storage: 'sessionStorage',
+    kind: 'cookie',
+    username: 'Administrator',
+    authorization: null,
+  };
+  const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie: null });
+  control(
+    'negative',
+    'a cookie session with null expectedCookie reports wrong-user Authorization header as stray (Gap 1, P2)',
+    stray.length === 2 &&
+      stray.some((r) => r.path === '/nuxeo/api/v1/search/lang/NXQL/execute' && r.authorization === WRONG_USER_AUTH),
+    { strayCount: stray.length, stray: stray.map((r) => ({ path: r.path, auth: r.authorization })) },
   );
 }
 
@@ -1899,6 +1939,46 @@ await silently(async () => {
     );
   }
   {
+    // Cookie-session variant: form sign-in using cookie, with in-flight request (Finding 4)
+    const COOKIE_VAL = 'admin-session-cookie';
+    const cookieSessionStorage = {
+      'sessionStorage:agentic_ui_nuxeo_session': cookieSession('Administrator'),
+    };
+    const page = fakePage({
+      url: `${APP}/#/`,
+      meFor: () => ADMIN,
+    });
+    page.state.cookies = [{ name: 'JSESSIONID', value: COOKIE_VAL }];
+    const recorder = { steps: [], consoleErrors: [] };
+    const identity = createIdentityMonitor({
+      page,
+      baseUrl: APP,
+      username: 'Administrator',
+      fetchImpl: page.fetch,
+    });
+    const h = createHelpers(page, '/tmp', recorder, { identity });
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: null });
+    page.state.storage = { ...cookieSessionStorage };
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: COOKIE_VAL });
+    const inFlight = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { cookie: null });
+    const thrown = await thrownBy(async () => {
+      await h.step('two');
+      inFlight.finish();
+      await h.step('three');
+      await h.finish();
+    });
+    control(
+      'negative',
+      'a cookie-session form sign-in with in-flight request refuses the promotion (Finding 4)',
+      thrown instanceof PreconditionError &&
+        /in flight/.test(thrown.message) &&
+        /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+        identity.checks.some((c) => !c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
     // The bootstrap exemption, kept: a request in flight from *before* anything carried a header
     // is the signed-out page's own. It has no identity to strand, and refusing it would make
     // every run that signs in through the form while its boot is still settling red.
@@ -2134,6 +2214,7 @@ await silently(async () => {
       finished: true,
       failed: false,
       authorization: null,
+      cookie: null,
       ...over,
     });
     const signedInBoot = req({ authorization: H });
