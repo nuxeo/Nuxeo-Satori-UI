@@ -341,15 +341,21 @@ function checkThemeTokens() {
  * does not demand a sweep of what is already there.
  */
 function checkOutlineTokenIsNotTextColour() {
+  // Two regexes, not one, and the split is the point. The first bounds the **declaration**;
+  // the second asks whether that declaration uses the token.
+  //
   // `(?<![-\w])` so `border-color`, `background-color`, `outline-color` and
   // `text-decoration-color` are not matched — each of those IS a non-text use and is
   // exactly what the token is for. Only the bare `color` property sets text colour.
   //
-  // `[^;{}]*?` spans newlines (a newline is neither `;`, `{` nor `}`) which is what makes
-  // the multiline form above match, while the excluded characters stop the match escaping
-  // into the next declaration or rule.
-  const textColourFromOutline =
-    /(?<![-\w])color\s*:\s*[^;{}]*?var\(\s*--mat-sys-outline\s*[,)]/g;
+  // `[^;{}]*` is greedy and spans newlines, so it reaches the end of the declaration however
+  // it is formatted, while `;`, `{` and `}` stop it escaping into the next one. Matching the
+  // whole declaration first is what makes `endLine` cover a multiline `var()` **including its
+  // fallback and closing line** — a second review finding on this rule: a regex that stopped
+  // at the comma after the token excluded those lines, so an icon declaration annotated on its
+  // closing line was rejected despite following the documented opt-out.
+  const colourDeclaration = /(?<![-\w])color\s*:[^;{}]*/g;
+  const usesOutlineToken = /var\(\s*--mat-sys-outline\s*[,)]/;
 
   for (const [file, lines] of addedLinesByFile) {
     let inlineBlock = null;
@@ -362,32 +368,33 @@ function checkOutlineTokenIsNotTextColour() {
 
     const text = read(file);
     const masked = maskCommentsPreservingOffsets(text);
+    const sourceLines = text.split('\n');
     const addedLineNumbers = new Set(lines.map(({ line }) => line));
-    // Cumulative newline count per character index, so a match offset becomes a line number
-    // without re-scanning the file for every match.
     const lineAt = (index) => {
       let line = 1;
       for (let i = 0; i < index; i += 1) if (text[i] === '\n') line += 1;
       return line;
     };
 
-    for (const match of masked.matchAll(textColourFromOutline)) {
+    for (const match of masked.matchAll(colourDeclaration)) {
+      if (!usesOutlineToken.test(match[0])) continue;
+
       const startLine = lineAt(match.index);
       const endLine = startLine + (match[0].match(/\n/g)?.length ?? 0);
       const spanned = [];
       for (let line = startLine; line <= endLine; line += 1) spanned.push(line);
 
-      // Only a declaration the diff actually touched, and for a `.ts` file only one inside an
-      // inline template/styles block.
+      // Only a declaration the diff actually touched — anywhere in its span, so editing just
+      // the fallback line of an existing multiline declaration is still caught. For a `.ts`
+      // file, only one inside an inline template/styles block.
       const touched = spanned.some(
         (line) => addedLineNumbers.has(line) && (!inlineBlock || inlineBlock.has(line)),
       );
       if (!touched) continue;
 
-      // The deliberate non-text use declares itself, anywhere on the lines the declaration
-      // spans — read from the ORIGINAL text, because the marker lives in a comment and the
-      // matched copy has had its comments masked away.
-      const sourceLines = text.split('\n');
+      // The deliberate non-text use declares itself anywhere in the declaration's span,
+      // closing line included. Read from the ORIGINAL text: the marker lives in a comment,
+      // and the copy this matched against has had its comments masked away.
       const declarationText = spanned.map((line) => sourceLines[line - 1] ?? '').join('\n');
       if (/non-text/.test(declarationText)) continue;
 

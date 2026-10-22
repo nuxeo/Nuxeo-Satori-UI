@@ -470,6 +470,64 @@ expectGreenAfterEdit(
     ),
 );
 
+/**
+ * The false positive from the second review round on PR #448, and the sharper half of it.
+ *
+ * With a fallback, a regex that ended at `[,)]` stopped on the comma after the token, so the
+ * declaration's closing line was outside the span — and that is precisely where Prettier puts
+ * the annotation, because a trailing comment makes the single-line form too long to keep. The
+ * three icon declarations in this repository are in exactly this shape and passed only because
+ * they have no fallback: `color: var(\n  --mat-sys-outline\n)` ends at the `)`, which IS on the
+ * closing line. Adding a fallback to any of them would have failed the gate on a correct line.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'a multiline non-text use with a fallback, annotated on its closing line',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__icon {\n  font-size: 32px;\n  color: var(\n    --mat-sys-outline,\n' +
+        '    #777683\n  ); /* non-text: a 32px glyph, so 1.4.11\u2019s 3:1 applies */\n}\n',
+    ),
+);
+
+/**
+ * Editing one line of an existing multiline declaration must still be judged. The span check
+ * asks whether ANY line the declaration covers was added, so touching only the fallback
+ * counts — otherwise the rule could be slipped past by introducing the declaration and the
+ * violation in two commits.
+ */
+const OUTLINE_SCSS_MULTILINE = {
+  'libs/shared/ui/src/lib/probe/probe.component.scss':
+    '.probe__hint {\n  font-size: 12px;\n  color: var(\n    --mat-sys-outline,\n' +
+    '    #777683\n  );\n}\n',
+};
+
+expectRed(
+  'only the fallback line of an existing multiline text declaration is edited',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS_MULTILINE,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe__hint {\n  font-size: 12px;\n  color: var(\n    --mat-sys-outline,\n' +
+        '    #777684\n  );\n}\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
+/** The same declaration, untouched by the diff, must stay green — this rule is diff-scoped. */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'an existing multiline text declaration the diff does not touch',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS_MULTILINE,
+  (write) => write('libs/shared/ui/src/lib/probe/other.scss', '.other {\n  margin: 0;\n}\n'),
+);
+
 expectWarn(
   'locale missing a key the reference has — warns, because English is the fallback',
   'checkTranslationCatalogues',
