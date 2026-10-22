@@ -42,7 +42,13 @@ process.on('uncaughtException', (error) => {
  * A steps file in the shape the audit reads. `adapters` is appended inside each surface object and
  * `steps` becomes the body outside every adapter, which is the distinction every rule turns on.
  */
-const stepsFile = ({ adfExtra = '', nxsExtra = '', helpers = '', steps = '' }) => `
+const stepsFile = ({
+  adfExtra = '',
+  nxsExtra = '',
+  helpers = '',
+  steps = '',
+  surfacesMap = "{ 'adf-hx': ADF_HX, nxs: NXS }",
+}) => `
 ${helpers}
 const ADF_HX = {
   id: 'adf-hx',
@@ -58,7 +64,7 @@ const NXS = {
   knownGaps: new Set(),
 ${nxsExtra}
 };
-const SURFACES = { 'adf-hx': ADF_HX, nxs: NXS };
+const SURFACES = ${surfacesMap};
 
 export default async function run(page, h) {
   const A = SURFACES[process.env['PARITY_SURFACE'] ?? 'adf-hx'];
@@ -180,6 +186,38 @@ const controls = [
       adfExtra: `  openTab: (page, tab) => openAdfTab(page, tab),`,
       nxsExtra: `  openTab: (page) => page.locator('[role="tab"]').first().click({ timeout: 10 }).catch(() => undefined),`,
       steps: `  await openAdfTab(page, 'Permissions');`,
+    }),
+  },
+  {
+    name: 'a SURFACES entry written inline refuses the whole map rather than auditing the rest',
+    // The audit's own version of the bug it exists to catch: the unresolvable entry was skipped,
+    // and a run that never looked at `nxs` at all reported a pass.
+    expectExit: 2,
+    file: stepsFile({
+      surfacesMap: "{ 'adf-hx': ADF_HX, nxs: { ...NXS, search: {} } }",
+      steps: `  await page.locator(A.list.rows).count();`,
+    }),
+  },
+  {
+    name: 'a SURFACES entry naming an unknown adapter refuses the whole map',
+    expectExit: 2,
+    file: stepsFile({ surfacesMap: "{ 'adf-hx': ADF_HX, nxs: NXS_TYPO }" }),
+  },
+  {
+    name: 'a spread inside the SURFACES map refuses it',
+    expectExit: 2,
+    file: stepsFile({ surfacesMap: "{ ...{ 'adf-hx': ADF_HX }, nxs: NXS }" }),
+  },
+  {
+    name: 'a group one surface defines as a value, opposite a real group, is caught',
+    // The scalar exemption is for `knownGaps: new Set(…)`. It must not excuse `search: null`
+    // opposite `search: { pageSize }` — the nxs run throws on `A.search.pageSize`.
+    expectExit: 1,
+    expectRule: 'adapter-gap',
+    file: stepsFile({
+      adfExtra: `  search: { pageSize: 50 },`,
+      nxsExtra: `  search: null,`,
+      steps: `  h.check('page size', A.search.pageSize > 0, String(A.search.pageSize));`,
     }),
   },
   {

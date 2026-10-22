@@ -48,7 +48,9 @@
  * Usage:
  *   node scripts/beta-harness/parity-surface-audit.mjs [--json] [file...]
  *
- * Exit 1 if any rule is broken. Exit 2 if the file cannot be read or parsed.
+ * Exit 1 if any rule is broken. Exit 2 if the file cannot be read, parsed, or resolved — an
+ * unresolvable `SURFACES` entry refuses the whole map rather than auditing the rest, because a
+ * surface skipped quietly is a surface the run reports a pass without having looked at.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -137,19 +139,49 @@ function topLevelObjects(ast) {
 /**
  * The adapters, from the `SURFACES` map rather than from a hardcoded list of names: the map is
  * what the steps dispatch on, so a surface added without being registered there is not a surface.
+ *
+ * An entry this cannot resolve **refuses the whole map** rather than auditing the rest. Skipping
+ * one quietly was the audit's own version of the bug it exists to catch: with
+ * `nxs: { ...NXS, search: {} }` written inline, or a misspelled `nxs: NXS_TYPO`, the `nxs` surface
+ * was dropped and the run passed having never looked at it. Only `id: NAME`, where `NAME` is a
+ * top-level `const NAME = { … }`, is supported; an inline object or a spread in the map is a shape
+ * this cannot follow, and saying so is the only safe answer.
+ *
+ * @returns {{surfaces: Map<string, {name: string, object: object}>} | {problem: string}}
  */
 function findSurfaces(ast, objects) {
   const map = objects.get('SURFACES');
-  if (!map) return null;
-  const surfaces = new Map();
-  for (const prop of map.properties) {
-    if (prop.type !== 'Property') continue;
-    const id = propertyName(prop);
-    if (prop.value.type !== 'Identifier') continue;
-    const object = objects.get(prop.value.name);
-    if (id && object) surfaces.set(id, { name: prop.value.name, object });
+  if (!map) {
+    return {
+      problem: 'no SURFACES map of named adapter objects was found, so there is nothing to audit',
+    };
   }
-  return surfaces.size > 0 ? surfaces : null;
+  const surfaces = new Map();
+  const mustBeNamed =
+    'Every entry must be `id: NAME`, where NAME is a top-level `const NAME = { … }` — otherwise a ' +
+    'surface would be skipped and the run would pass without ever checking it';
+  for (const prop of map.properties) {
+    if (prop.type !== 'Property') {
+      return { problem: `SURFACES holds a ${prop.type} this audit cannot resolve. ${mustBeNamed}` };
+    }
+    const id = propertyName(prop);
+    if (!id || prop.value.type !== 'Identifier') {
+      return {
+        problem: `SURFACES entry ${JSON.stringify(id ?? '(computed)')} is not \`id: NAME\`. ${mustBeNamed}`,
+      };
+    }
+    const object = objects.get(prop.value.name);
+    if (!object) {
+      return {
+        problem:
+          `SURFACES entry ${JSON.stringify(id)} names ${prop.value.name}, which is not a ` +
+          `top-level \`const … = { … }\` in this file. ${mustBeNamed}`,
+      };
+    }
+    surfaces.set(id, { name: prop.value.name, object });
+  }
+  if (surfaces.size === 0) return { problem: 'SURFACES is empty, so there is nothing to audit' };
+  return { surfaces };
 }
 
 /**
@@ -217,15 +249,11 @@ async function auditFile(file) {
   }
 
   const objects = topLevelObjects(ast);
-  const surfaces = findSurfaces(ast, objects);
-  if (!surfaces) {
-    return {
-      file: rel,
-      unparsable:
-        'no SURFACES map of named adapter objects was found, so there is nothing to audit',
-      findings: [],
-    };
+  const resolved = findSurfaces(ast, objects);
+  if ('problem' in resolved) {
+    return { file: rel, unparsable: resolved.problem, findings: [] };
   }
+  const { surfaces } = resolved;
 
   const adapterObjects = [...new Set([...surfaces.values()].map((s) => s.object))];
   const objectRanges = adapterObjects.map((o) => [o.start, o.end]);
@@ -350,8 +378,21 @@ async function auditFile(file) {
   });
 
   // ── adapter-gap ────────────────────────────────────────────────────────────────────────────
+  const keysBySurface = new Map(
+    [...surfaces].map(([id, surface]) => [id, adapterKeys(surface.object, objects)]),
+  );
+  // The keys some surface defines as a group of selectors. The scalar exemption below is for a
+  // value like `knownGaps: new Set(…)`, where `A.knownGaps.has(…)` is a method call rather than an
+  // adapter key — but `adapterKeys` represents *every* non-object value as having no keys, so the
+  // exemption also excused `search: null` opposite a real `search: { pageSize }`, and a step
+  // reading `A.search.pageSize` got no finding on a surface where it will throw. A key another
+  // surface defines as a group is a group, and a scalar in its place is a gap.
+  const groupKeys = new Set();
+  for (const keys of keysBySurface.values()) {
+    for (const [group, members] of keys) if (members !== null) groupKeys.add(group);
+  }
   for (const [id, surface] of surfaces) {
-    const keys = adapterKeys(surface.object, objects);
+    const keys = keysBySurface.get(id);
     for (const [group, members] of reads) {
       if (!keys.has(group)) {
         findings.push({
@@ -361,8 +402,20 @@ async function auditFile(file) {
         });
         continue;
       }
+      if (keys.get(group) === null) {
+        if (!groupKeys.has(group)) continue; // a scalar everywhere: a value, not a group of keys
+        findings.push({
+          rule: 'adapter-gap',
+          line: surface.object.loc.start.line,
+          detail:
+            `surface "${id}" (${surface.name}) defines "${group}" as a value, but another surface ` +
+            `defines it as a group of selectors and the steps read ${[...members]
+              .map((m) => `"${group}.${m}"`)
+              .join(', ')} from it`,
+        });
+        continue;
+      }
       for (const member of members) {
-        if (keys.get(group) === null) break; // a value, not a group of keys
         if (!keys.get(group).has(member)) {
           findings.push({
             rule: 'adapter-gap',
