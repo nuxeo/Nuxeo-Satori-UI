@@ -87,12 +87,13 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
 
     it('no-ops when create() is called with a right the list does not offer', async () => {
       const dialog = await open({ permissions: NO_READ });
+      const mockDialogRef = TestBed.inject(MatDialogRef);
       dialog.onSuggestionSelected(MEMBERS);
       dialog.right = 'Read';
 
       dialog.create(false);
 
-      expect(dialog.dialogRef.close).not.toHaveBeenCalled();
+      expect(mockDialogRef.close).not.toHaveBeenCalled();
     });
   });
 
@@ -108,5 +109,11 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     });
     expect(dialog.right).toBe('ReadCanCollect');
     expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything', 'ReadCanCollect']);
+  });
+
+  it('falls back to Read when an empty permissions list is provided', async () => {
+    const dialog = await open({ permissions: [] });
+    expect(dialog.right).toBe('Read');
+    expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything']);
   });
 });
