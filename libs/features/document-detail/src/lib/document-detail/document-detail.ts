@@ -110,8 +110,6 @@ import {
   formatRelativeTime,
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { SatTagModule, SatTagCategory } from '@hylandsoftware/satori-ui/tag';
 import {
   AiGatewayService,
@@ -177,6 +175,9 @@ import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NxsCommentExtraDirective,
+  NXS_PRIMITIVE_IDS,
+  NxsAvatarComponent,
+  NxsBreadcrumbsComponent,
   NxsCommentsComponent,
   NxsTagEditorComponent,
   NxsDeletePermissionDialogComponent,
@@ -199,6 +200,7 @@ import {
   nxsErrorStatus,
   nxsToggleFavorite,
   provideNxsToast,
+  type NxsBreadcrumbItem,
   type NxsDeletePermissionDialogData,
   type NxsDetailsPanelTab,
   type NxsDriveDialogData,
@@ -308,6 +310,8 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   standalone: true,
   imports: [
     NxsCommentExtraDirective,
+    NxsAvatarComponent,
+    NxsBreadcrumbsComponent,
     NxsCommentsComponent,
     NxsTagEditorComponent,
     NxsDetailsPanelComponent,
@@ -340,8 +344,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
     NoteEditorComponent,
-    SatAvatarModule,
-    SatBreadcrumbsComponent,
     SatTagModule,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
@@ -623,7 +625,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   /** Set when navigating here immediately after creating a Note. */
   private freshNoteDocument = false;
   private breadcrumbPathCache: string | null = null;
-  private breadcrumbItemsCache: SatBreadcrumbsItem[] = [];
+  private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
 
   // AI Insights state
   readonly aiSummary = signal<SummarizeResponse | null>(null);
@@ -766,7 +768,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     return `${(len / (1024 * 1024)).toFixed(2)} MB`;
   });
 
-  readonly breadcrumbItems = computed<SatBreadcrumbsItem[]>(() => {
+  readonly breadcrumbItems = computed<NxsBreadcrumbItem[]>(() => {
     const d = this.doc();
     if (!d) return [];
 
@@ -2771,6 +2773,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   avatarColor = avatarColor;
+
+  /** The breadcrumbs, the AI category tag and the activity avatars render by these IDs. */
+  readonly primitiveIds = NXS_PRIMITIVE_IDS;
 
   tagCategory(index: number): SatTagCategory {
     return TAG_CATEGORIES[index % TAG_CATEGORIES.length];

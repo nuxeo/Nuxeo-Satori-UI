@@ -594,12 +594,11 @@
                       </th>
                       <td mat-cell *matCellDef="let row">
                         <span class="user-cell">
-                          <sat-avatar
-                            [initials]="avatarInitials(row.principalName)"
-                            [category]="avatarColor(row.principalName)"
-                            size="24"
-                            [borderless]="true"
-                            aria-hidden="true"
+                          <ng-container
+                            *ngTemplateOutlet="
+                              primitiveAvatar;
+                              context: { $implicit: row.principalName, size: '24' }
+                            "
                           />
                           {{ row.principalName }}
                         </span>
@@ -706,9 +705,12 @@
                             <span class="doc-title">{{ doc.title }}</span>
                           </td>
                           <td>
-                            <sat-category-tag category="blue">{{
-                              doc.type | docTypeLabel
-                            }}</sat-category-tag>
+                            <ng-container
+                              *ngTemplateOutlet="
+                                primitiveTag;
+                                context: { $implicit: (doc.type | docTypeLabel) }
+                              "
+                            />
                           </td>
                           <td>{{ doc.lastModified | date: 'mediumDate' }}</td>
                           <td>
@@ -810,12 +812,11 @@
               <div class="panel-info-row">
                 <span class="info-label">{{ 'browse.browse.by' | translate }}</span>
                 <span class="info-value avatar-value">
-                  <sat-avatar
-                    [initials]="avatarInitials(docCreator(doc))"
-                    [category]="avatarColor(docCreator(doc))"
-                    size="24"
-                    [borderless]="true"
-                    aria-hidden="true"
+                  <ng-container
+                    *ngTemplateOutlet="
+                      primitiveAvatar;
+                      context: { $implicit: docCreator(doc), size: '24' }
+                    "
                   />
                   {{ docCreator(doc) }}
                 </span>
@@ -823,12 +824,11 @@
               <div class="panel-info-row">
                 <span class="info-label">{{ 'browse.browse.contributors' | translate }}</span>
                 <span class="info-value avatar-value">
-                  <sat-avatar
-                    [initials]="avatarInitials(lastContributor(doc))"
-                    [category]="avatarColor(lastContributor(doc))"
-                    size="24"
-                    [borderless]="true"
-                    aria-hidden="true"
+                  <ng-container
+                    *ngTemplateOutlet="
+                      primitiveAvatar;
+                      context: { $implicit: lastContributor(doc), size: '24' }
+                    "
                   />
                   {{ lastContributor(doc) }}
                 </span>
@@ -860,7 +860,7 @@
             <div class="tags-container">
               @for (tag of tags(); track tag) {
                 <span class="removable-tag">
-                  <sat-category-tag category="blue">{{ tag }}</sat-category-tag>
+                  <ng-container *ngTemplateOutlet="primitiveTag; context: { $implicit: tag }" />
                   <button
                     type="button"
                     class="tag-remove-btn"
@@ -913,12 +913,11 @@
             } @else {
               @for (entry of activityEntries(); track entry.id) {
                 <div class="activity-item">
-                  <sat-avatar
-                    [initials]="avatarInitials(entry.principalName)"
-                    [category]="avatarColor(entry.principalName)"
-                    size="28"
-                    [borderless]="true"
-                    aria-hidden="true"
+                  <ng-container
+                    *ngTemplateOutlet="
+                      primitiveAvatar;
+                      context: { $implicit: entry.principalName, size: '28' }
+                    "
                   />
                   <div class="activity-text">
                     <span class="activity-user">{{ entry.principalName }}</span>
@@ -937,3 +936,31 @@
     }
   </div>
 </div>
+
+<!--
+  The avatar and tag primitives by registered ID, so a component registered under
+  `nxs.primitives.avatar` or `nxs.primitives.tag` replaces every use above. The `nxs-` element is
+  the fallback for a host that registers neither.
+-->
+<ng-template #primitiveAvatar let-name let-size="size">
+  @let initials = avatarInitials(name);
+  @let color = avatarColor(name);
+  <lib-extension-outlet
+    #avatarOutlet
+    [componentId]="primitiveIds.avatar"
+    [componentInputs]="{ initials, color, size }"
+  />
+  @if (avatarOutlet.unresolved()) {
+    <nxs-avatar [initials]="initials" [color]="color" [size]="size" />
+  }
+</ng-template>
+<ng-template #primitiveTag let-label>
+  <lib-extension-outlet
+    #tagOutlet
+    [componentId]="primitiveIds.tag"
+    [componentInputs]="{ label, color: 'blue' }"
+  />
+  @if (tagOutlet.unresolved()) {
+    <nxs-tag [label]="label" color="blue" />
+  }
+</ng-template>

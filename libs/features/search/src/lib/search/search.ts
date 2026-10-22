@@ -1,6 +1,11 @@
 import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
-import { DescriptorLabelPipe, descriptorLabel } from '@nuxeo/satori-platform/extensions';
+import {
+  DescriptorLabelPipe,
+  ExtensionOutletComponent,
+  descriptorLabel,
+} from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { NgTemplateOutlet } from '@angular/common';
 import { ActivatedRoute, Router } from '@angular/router';
 import {
   type Observable,
@@ -43,12 +48,14 @@ import {
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NXS_PRIMITIVE_IDS,
   NxsColumnPickerComponent,
   NxsErrorStateComponent,
   NxsFavoriteToggleComponent,
   NxsPagerComponent,
   NxsSavedSearchActionsComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsThumbnailComponent,
   nxsErrorStatus,
   provideNxsThumbnailCache,
@@ -190,6 +197,9 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
     NxsPagerComponent,
     NxsSavedSearchActionsComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
+    ExtensionOutletComponent,
+    NgTemplateOutlet,
     NxsThumbnailComponent,
     DocTypeLabelPipe,
     DescriptorLabelPipe,
@@ -221,6 +231,9 @@ export class SearchComponent {
   private readonly aiGateway = inject(AiGatewayService);
   readonly featureFlags = inject(AiFeatureFlagService);
   readonly selectionService = inject(SelectionService);
+
+  /** A result's type renders by ID, so an override of `nxs.primitives.tag` reaches search too. */
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
 
   /**
    * Sequence for the whole AI request lifecycle — `nlToNxql` *and* the `nxqlSearch` it triggers.

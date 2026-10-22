@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideZonelessChangeDetection, signal } from '@angular/core';
+import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -22,7 +22,19 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { AiFeatureFlagService, AiGatewayService } from '@agentic-ui/shared/ai-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { NxsToastService } from '@nuxeo/satori-platform/components';
+import { NXS_PRIMITIVE_IDS, NxsToastService } from '@nuxeo/satori-platform/components';
+import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
+
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
 
 type SearchResponseLike = { items: SearchResultItem[]; aggregations: Record<string, unknown> };
 
@@ -206,11 +218,12 @@ describe('SearchComponent', () => {
 
   /**
    * Rebuild the TestBed with a given query-param map. `rendered` keeps the real template, for a
-   * test that asserts what the page shows rather than what the component holds.
+   * test that asserts what the page shows rather than what the component holds; `providers` are
+   * added to the defaults.
    */
   async function configure(
     queryParams: Record<string, string> = {},
-    { rendered = false } = {},
+    { rendered = false, providers = [] as unknown[] } = {},
   ): Promise<void> {
     TestBed.overrideProvider(NxsToastService, { useValue: toast });
     const bed = TestBed.configureTestingModule({
@@ -233,6 +246,7 @@ describe('SearchComponent', () => {
         { provide: AiFeatureFlagService, useValue: mockAiFeatureFlagService },
         { provide: NuxeoApiBase, useValue: mockNuxeoApiBase },
         { provide: MatDialog, useValue: mockDialog },
+        ...providers,
       ],
     });
     if (!rendered) {
@@ -1304,6 +1318,57 @@ describe('SearchComponent', () => {
       expect(new URL(view.imageUrl, 'http://nuxeo.test/nuxeo/agentic-ui/').pathname).toBe(
         '/nuxeo/agentic-ui/images/Login-background.svg',
       );
+    });
+  });
+
+  /**
+   * NXSAT-652. A result's type renders through `nxs.primitives.tag` in the grid and the list, so a
+   * component registered under the ID replaces it; with nothing registered, `nxs-tag` renders.
+   * Seen red on purpose by restoring the plain `.result-type-pill` text.
+   */
+  describe('the type tag', () => {
+    async function renderResults(view: 'grid' | 'list', providers: unknown[]): Promise<void> {
+      mockSearchService.search.mockReturnValue(
+        of({ items: [resultItem({ id: 'a', type: 'File' })], aggregations: {} }),
+      );
+      TestBed.resetTestingModule();
+      await configure({}, { rendered: true, providers });
+      fixture = TestBed.createComponent(SearchComponent);
+      component = fixture.componentInstance;
+      component.setViewMode(view);
+      await fixture.whenStable();
+      fixture.detectChanges();
+      // An unregistered ID is reported unresolved from a promise.
+      await new Promise((resolve) => setTimeout(resolve));
+      fixture.detectChanges();
+    }
+
+    const override = provideSatoriExtensions({
+      components: { [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent },
+    });
+    const el = (selector: string): HTMLElement | null =>
+      (fixture.nativeElement as HTMLElement).querySelector(selector);
+
+    it('renders the grid card’s type through nxs.primitives.tag', async () => {
+      await renderResults('grid', [override]);
+
+      const tag = el('.result-type-pill .acme-tag');
+      expect(tag?.textContent?.trim()).toBe('File');
+      expect(tag?.dataset['color']).toBe('gray');
+      expect(el('.result-type-pill')?.getAttribute('title')).toBe('File');
+    });
+
+    it('renders the list row’s type through nxs.primitives.tag', async () => {
+      await renderResults('list', [override]);
+
+      expect(el('.simple-list-type-badge .acme-tag')?.textContent?.trim()).toBe('File');
+    });
+
+    it('falls back to nxs-tag when nothing is registered under the ID', async () => {
+      await renderResults('grid', []);
+
+      expect(el('.result-type-pill nxs-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.result-type-pill .acme-tag')).toBeNull();
     });
   });
 

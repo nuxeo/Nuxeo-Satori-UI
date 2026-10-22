@@ -1172,6 +1172,7 @@
       "attachments": "Attachments",
       "augment-your-editorial-workflow-with-cognitive": "Augment your editorial workflow with cognitive processing. Generate summaries, classify complex data, and discover hidden relationships.",
       "automatic-taxonomy-mapping-based-on-entity": "Automatic taxonomy mapping based on entity extraction and sentiment analysis of the current document text.",
+      "breadcrumbs": "Breadcrumbs",
       "by": "By",
       "cancel": "Cancel",
       "categorize-content-into-predefined-editorial-verticals": "Categorize content into predefined editorial verticals and extract structural metadata including author, publication date, and reading time estimation.",
@@ -2836,6 +2837,7 @@
     "tabs-view": "View"
   },
   "tasks": {
+    "breadcrumbs": "Breadcrumbs",
     "document": "Document",
     "due-on": "Due {{ date }}",
     "message": {

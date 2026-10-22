@@ -9,7 +9,7 @@ import {
   untracked,
 } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { forkJoin, of, Subject, timer, EMPTY } from 'rxjs';
@@ -91,7 +91,6 @@ import {
   DocTypeLabelPipe,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 
 import {
@@ -147,6 +146,7 @@ import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
   NxsActionMenuComponent,
+  NxsAvatarComponent,
   NxsBreadcrumbsComponent,
   NxsColumnPickerComponent,
   NxsDocumentListComponent,
@@ -159,6 +159,7 @@ import {
   NxsPagerComponent,
   NxsPermissionsPanelComponent,
   NxsSpinnerComponent,
+  NxsTagComponent,
   NxsThumbnailComponent,
   NxsUploadQueue,
   NxsUploadQueueComponent,
@@ -224,6 +225,7 @@ const PAGE_SIZE = 50;
   ],
   imports: [
     NxsActionMenuComponent,
+    NxsAvatarComponent,
     NxsBreadcrumbsComponent,
     NxsColumnPickerComponent,
     NxsDocumentListComponent,
@@ -232,11 +234,13 @@ const PAGE_SIZE = 50;
     NxsFolderHeaderComponent,
     NxsPagerComponent,
     NxsSpinnerComponent,
+    NxsTagComponent,
     NxsThumbnailComponent,
     NxsUploadQueueComponent,
     DocTypeLabelPipe,
     TranslatePipe,
     DatePipe,
+    NgTemplateOutlet,
     FormsModule,
     MatIconModule,
     MatProgressSpinnerModule,
@@ -255,7 +259,6 @@ const PAGE_SIZE = 50;
     MatChipsModule,
     MatAutocompleteModule,
     MatCheckboxModule,
-    SatAvatarModule,
     SatTagModule,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
@@ -689,6 +692,8 @@ export class BrowseComponent {
 
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** The avatar and tag in the template's `primitiveAvatar` and `primitiveTag`, by ID likewise. */
+  readonly primitiveIds = NXS_PRIMITIVE_IDS;
 
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();

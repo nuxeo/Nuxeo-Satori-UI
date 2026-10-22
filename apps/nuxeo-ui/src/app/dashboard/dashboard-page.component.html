@@ -105,12 +105,11 @@
                 <td class="doc-date">{{ doc.lastModified | date: 'mediumDate' }}</td>
                 <td class="doc-contributor">
                   <span class="contributor-cell">
-                    <sat-avatar
-                      [initials]="lastContributor(doc)"
-                      [category]="avatarColor(lastContributor(doc))"
-                      size="24"
-                      [borderless]="true"
-                      aria-hidden="true"
+                    <ng-container
+                      *ngTemplateOutlet="
+                        contributorAvatar;
+                        context: { $implicit: lastContributor(doc) }
+                      "
                     />
                     {{ lastContributor(doc) }}
                   </span>
@@ -242,12 +241,11 @@
                 <td class="doc-date">{{ doc.lastModified | date: 'mediumDate' }}</td>
                 <td class="doc-contributor">
                   <span class="contributor-cell">
-                    <sat-avatar
-                      [initials]="lastContributor(doc)"
-                      [category]="avatarColor(lastContributor(doc))"
-                      size="24"
-                      [borderless]="true"
-                      aria-hidden="true"
+                    <ng-container
+                      *ngTemplateOutlet="
+                        contributorAvatar;
+                        context: { $implicit: lastContributor(doc) }
+                      "
                     />
                     {{ lastContributor(doc) }}
                   </span>
@@ -276,3 +274,19 @@
     <mat-icon aria-hidden="true">add</mat-icon>
   </button>
 </div>
+
+<!--
+  A contributor's avatar by registered ID, so a component registered under `nxs.primitives.avatar`
+  replaces it. `nxs-avatar` is the fallback for a host that registers none.
+-->
+<ng-template #contributorAvatar let-name>
+  @let color = avatarColor(name);
+  <lib-extension-outlet
+    #avatarOutlet
+    [componentId]="avatarId"
+    [componentInputs]="{ initials: name, color, size: '24' }"
+  />
+  @if (avatarOutlet.unresolved()) {
+    <nxs-avatar [initials]="name" [color]="color" size="24" />
+  }
+</ng-template>

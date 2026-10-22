@@ -25,6 +25,8 @@ import {
   NuxeoApiBase,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
+import { NXS_PRIMITIVE_IDS, NxsTagComponent } from '@nuxeo/satori-platform/components';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   provideSatoriDateAdapter,
@@ -48,6 +50,8 @@ import {
     MatDatepickerModule,
     MatSnackBarModule,
     SatTagModule,
+    ExtensionOutletComponent,
+    NxsTagComponent,
   ],
   templateUrl: './task-detail.component.html',
   styleUrl: './task-detail.component.scss',
@@ -71,6 +75,9 @@ export class TaskDetailComponent implements OnInit {
   readonly submitting = signal(false);
   readonly error = signal<string | null>(null);
   readonly docLoading = signal(true);
+
+  /** The target document's type renders by ID, so an override of `nxs.primitives.tag` reaches it. */
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
 
   // Form fields
   comment = '';

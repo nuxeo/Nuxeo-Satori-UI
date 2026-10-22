@@ -28,10 +28,22 @@
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
-      <sat-breadcrumbs
-        [items]="breadcrumbItems()"
+      <!-- The trail's links are hrefs; `onBreadcrumbClick` routes them in the app, from whichever
+           component `nxs.primitives.breadcrumbs` resolves to. -->
+      @let trailLabel = 'document-detail.document-detail.breadcrumbs' | translate;
+      <lib-extension-outlet
+        #breadcrumbsOutlet
+        [componentId]="primitiveIds.breadcrumbs"
+        [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
         (click)="onBreadcrumbClick($event)"
-      ></sat-breadcrumbs>
+      />
+      @if (breadcrumbsOutlet.unresolved()) {
+        <nxs-breadcrumbs
+          [items]="breadcrumbItems()"
+          [label]="trailLabel"
+          (click)="onBreadcrumbClick($event)"
+        />
+      }
     </div>
     <nxs-document-toolbar
       class="header-actions"
@@ -1004,9 +1016,14 @@
                         <span class="ai-meta-key">{{
                           'document-detail.document-detail.primary-category' | translate
                         }}</span>
-                        <sat-category-tag category="blue">{{
-                          aiClassification()!.nature
-                        }}</sat-category-tag>
+                        <lib-extension-outlet
+                          #natureOutlet
+                          [componentId]="primitiveIds.tag"
+                          [componentInputs]="{ label: aiClassification()!.nature, color: 'blue' }"
+                        />
+                        @if (natureOutlet.unresolved()) {
+                          <nxs-tag [label]="aiClassification()!.nature" color="blue" />
+                        }
                       </div>
                       <div class="ai-meta-row">
                         <span class="ai-meta-key">{{
@@ -1384,13 +1401,15 @@
               } @else {
                 @for (entry of panelActivity(); track $index) {
                   <div class="activity-card">
-                    <sat-avatar
-                      [initials]="entry.principalName"
-                      [category]="avatarColor(entry.principalName)"
-                      size="28"
-                      [borderless]="true"
-                      aria-hidden="true"
+                    @let color = avatarColor(entry.principalName);
+                    <lib-extension-outlet
+                      #avatarOutlet
+                      [componentId]="primitiveIds.avatar"
+                      [componentInputs]="{ initials: entry.principalName, color, size: '28' }"
                     />
+                    @if (avatarOutlet.unresolved()) {
+                      <nxs-avatar [initials]="entry.principalName" [color]="color" size="28" />
+                    }
                     <div class="activity-info">
                       <span class="activity-user">{{ entry.principalName }}</span>
                       <span class="activity-action">{{ activityLabel(entry) }}</span>

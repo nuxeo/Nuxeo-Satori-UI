@@ -55,7 +55,14 @@
                 </div>
                 <div class="doc-banner-path">{{ targetDoc()!.path }}</div>
                 <div class="doc-banner-meta">
-                  <sat-category-tag category="blue">{{ targetDoc()!.type }}</sat-category-tag>
+                  <lib-extension-outlet
+                    #typeOutlet
+                    [componentId]="tagId"
+                    [componentInputs]="{ label: targetDoc()!.type, color: 'blue' }"
+                  />
+                  @if (typeOutlet.unresolved()) {
+                    <nxs-tag [label]="targetDoc()!.type" color="blue" />
+                  }
                   @if (docDownloadUrl()) {
                     <a class="doc-download-link" [href]="docDownloadUrl()" target="_blank">
                       <mat-icon class="inline-icon">download</mat-icon>

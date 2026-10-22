@@ -36,7 +36,12 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
+import {
+  NXS_PRIMITIVE_IDS,
+  NxsBreadcrumbsComponent,
+  type NxsBreadcrumbItem,
+} from '@nuxeo/satori-platform/components';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 const DUE_LABEL_KEYS = {
@@ -73,7 +78,8 @@ const DUE_LABEL_KEYS = {
     MatTabsModule,
     MatDividerModule,
     DocumentViewerComponent,
-    SatBreadcrumbsComponent,
+    ExtensionOutletComponent,
+    NxsBreadcrumbsComponent,
   ],
   templateUrl: './tasks-page.component.html',
   styleUrl: './tasks-page.component.scss',
@@ -164,11 +170,13 @@ export class TasksPageComponent implements OnInit {
   readonly groupResults = signal<NuxeoGroup[]>([]);
   readonly searching = signal(false);
   private breadcrumbPathCache: string | null = null;
-  private breadcrumbItemsCache: SatBreadcrumbsItem[] = [];
+  private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
+  /** The target document's trail renders by ID, so an override of `nxs.primitives.breadcrumbs` reaches it. */
+  protected readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
 
   /* ─── Computed ─── */
   readonly hasSelection = computed(() => this.selectedTask() !== null);
-  readonly breadcrumbItems = computed<SatBreadcrumbsItem[]>(() => {
+  readonly breadcrumbItems = computed<NxsBreadcrumbItem[]>(() => {
     const doc = this.targetDoc();
     if (!doc?.path) return [];
 

@@ -31,7 +31,7 @@ import {
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 /**
- * jsdom has no `ResizeObserver`, and `SatBreadcrumbs` inside this template constructs one. The stub
+ * jsdom has no `ResizeObserver`, which a component this template renders may construct. The stub
  * is intentionally inert: recording calls would imply this file asserts something about resizing.
  */
 class ResizeObserverStub {

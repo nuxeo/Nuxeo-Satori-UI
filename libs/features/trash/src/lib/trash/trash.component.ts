@@ -1,8 +1,8 @@
 import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
+import { DescriptorLabelPipe, ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
-import { DatePipe } from '@angular/common';
+import { DatePipe, NgTemplateOutlet } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
@@ -15,7 +15,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { of, finalize, filter, switchMap, map } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
-import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
+import { NXS_PRIMITIVE_IDS, NxsTagComponent } from '@nuxeo/satori-platform/components';
 import {
   ConfirmDialogComponent,
   SAVED_SEARCH_DIALOG_OPTIONS,
@@ -92,7 +92,9 @@ const SORTABLE_COLUMNS = new Set(['title', 'modified', 'contributor', 'created',
     MatSnackBarModule,
     MatMenuModule,
     MatDialogModule,
-    SatTagModule,
+    ExtensionOutletComponent,
+    NgTemplateOutlet,
+    NxsTagComponent,
   ],
   templateUrl: './trash.component.html',
   styleUrl: './trash.component.scss',
@@ -108,6 +110,9 @@ export class TrashComponent {
   private readonly detailService = inject(DocumentDetailService);
   readonly trashFilterService = inject(TrashFilterService);
   readonly selectionService = inject(SelectionService);
+
+  /** A row's type renders by ID, so an override of `nxs.primitives.tag` reaches the trash too. */
+  protected readonly tagId = NXS_PRIMITIVE_IDS.tag;
 
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);

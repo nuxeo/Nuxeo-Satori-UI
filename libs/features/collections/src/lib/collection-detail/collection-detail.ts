@@ -50,7 +50,6 @@ import {
   decodeNuxeoPathSegment,
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ShareDialogComponent,
@@ -72,6 +71,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
   NXS_PERMISSIONS_PANEL_ID,
   NXS_PRIMITIVE_IDS,
+  NxsAvatarComponent,
   NxsBreadcrumbsComponent,
   NxsDeletePermissionDialogComponent,
   NxsDocumentListComponent,
@@ -119,6 +119,7 @@ const MEMBER_PAGE_SIZE = 50;
   imports: [
     DateMaskPipe,
     ExtensionOutletComponent,
+    NxsAvatarComponent,
     NxsBreadcrumbsComponent,
     NxsDocumentListComponent,
     NxsFolderHeaderComponent,
@@ -140,7 +141,6 @@ const MEMBER_PAGE_SIZE = 50;
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    SatAvatarModule,
     SatTagModule,
   ],
   templateUrl: './collection-detail.html',
@@ -250,6 +250,8 @@ export class CollectionDetailComponent {
   private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** A member's avatar, by ID likewise. */
+  readonly avatarId = NXS_PRIMITIVE_IDS.avatar;
 
   readonly isInClipboard = computed(() =>
     this.clipboardDocs().some((d) => d.uid === this.collectionUid),

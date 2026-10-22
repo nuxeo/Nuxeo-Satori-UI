@@ -674,12 +674,18 @@ theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
 the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An override of yours
 implements the matching `Nxs…Inputs` interface.
 
-**Where packaged screens render them.** Browse and the collection page render their breadcrumb
-trail through `nxs.primitives.breadcrumbs`, and `nxs-document-list` renders each row's type through
-`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`, so an override of
-those three IDs reaches them. Every other screen still uses the `sat-*` elements directly until it
-moves onto these IDs; there the IDs render only where a host resolves them — a
-`lib-extension-outlet` with a `componentId` — and in the library's Storybook.
+**Where packaged screens render them.** Every packaged screen renders its avatars, category tags
+and breadcrumb trails through these three IDs, never through a `sat-*` element directly, so an
+override of an ID reaches all of them:
+
+| Component ID                 | Rendered on                                                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `nxs.primitives.avatar`      | browse (members, the info panel's creator and contributor, activity), document detail (activity), the collection page (members), the dashboard, `nxs-document-list` |
+| `nxs.primitives.tag`         | browse (a child's type, the tags panel), search (a result's type), document detail (the AI primary category), task detail, trash, `nxs-document-list`               |
+| `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                        |
+
+Search shows no avatar or breadcrumb trail. The status tags (`sat-status-tag`) are not one of these
+primitives and are still rendered directly, until NXSAT-653 gives them an ID.
 
 ### `nxs-` components registered for a slot
 

@@ -48,9 +48,9 @@ import { tasksRoutes } from '../lib.routes';
  * type against the claim it refused to render, blanking the preview.
  */
 /**
- * jsdom has no `ResizeObserver`, and `SatBreadcrumbs` constructs one. Rendering the real template
- * therefore needs this stub; without it the component throws during construction and every assertion
- * fails for an environment reason rather than a behavioural one.
+ * jsdom has no `ResizeObserver`, which a component this template renders may construct. Rendering
+ * the real template therefore keeps this stub, so a failure here is a behavioural one rather than an
+ * environment one.
  */
 class ResizeObserverStub {
   // Intentionally inert: nothing here observes layout, and a stub that recorded calls would imply

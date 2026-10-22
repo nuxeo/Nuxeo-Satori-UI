@@ -1,4 +1,11 @@
-import { Component, input, provideZonelessChangeDetection, signal, type Type } from '@angular/core';
+import {
+  Component,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+  type Type,
+  type WritableSignal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideHttpClient } from '@angular/common/http';
@@ -6,6 +13,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { MatDialog } from '@angular/material/dialog';
 import {
   ActivatedRoute,
+  Router,
   convertToParamMap,
   provideRouter,
   withDisabledInitialNavigation,
@@ -14,9 +22,11 @@ import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of } from 'rxjs';
 import { vi, type Mock } from 'vitest';
 import {
+  NXS_PRIMITIVE_IDS,
   NxsDeletePermissionDialogComponent,
   NxsShareExternalDialogComponent,
   NxsUpdatePermissionDialogComponent,
+  type NxsBreadcrumbItem,
 } from '@nuxeo/satori-platform/components';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
@@ -36,6 +46,7 @@ import {
   TagService,
   TaskService,
   WorkflowService,
+  type AuditEntry,
   type NuxeoAce,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
@@ -112,6 +123,43 @@ class CaseViewComponent {}
 class CustomPermissionsComponent {
   readonly documentId = input('');
   readonly permissionsChanged = input<(() => void) | null>(null);
+}
+
+/** A customer's breadcrumbs, registered under `nxs.primitives.breadcrumbs`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-trail',
+  template: `<nav class="acme-trail" [attr.aria-label]="label()">
+    @for (item of items(); track $index) {
+      <a [attr.href]="item.href">{{ item.label }}</a>
+    }
+  </nav>`,
+})
+class AcmeTrailComponent {
+  readonly items = input<readonly NxsBreadcrumbItem[]>([]);
+  readonly label = input('');
+}
+
+/** A customer's tag, registered under `nxs.primitives.tag`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-tag',
+  template: '<span class="acme-tag" [attr.data-color]="color()">{{ label() }}</span>',
+})
+class AcmeTagComponent {
+  readonly label = input('');
+  readonly color = input('');
+}
+
+/** A customer's avatar, registered under `nxs.primitives.avatar`. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-acme-avatar',
+  template: '<span class="acme-avatar" [attr.data-size]="size()">{{ initials() }}</span>',
+})
+class AcmeAvatarComponent {
+  readonly initials = input('');
+  readonly size = input('');
 }
 
 /** The packaged type rule, so these tests exercise the rule a customer is told to write. */
@@ -1309,6 +1357,99 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
 
       expect(viewBody().querySelector('lib-note-editor')).toBeTruthy();
       expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
+    });
+  });
+
+  /**
+   * NXSAT-652. The trail, the AI primary category and the activity avatars render by their
+   * `nxs.primitives.*` ID, so a component registered under one replaces it here. This spec
+   * registers no `provideNxsComponents()`, so without an override each falls back to its `nxs-`
+   * element — the second half of the contract. Seen red on purpose by restoring `<sat-breadcrumbs>`.
+   */
+  describe('nxs.primitives.*', () => {
+    const header = (): HTMLElement => fixture.nativeElement.querySelector('.header-info');
+    const texts = (root: ParentNode, selector: string): string[] =>
+      [...root.querySelectorAll(selector)].map(
+        (el) => (el as HTMLElement).textContent?.trim() ?? '',
+      );
+
+    it('renders the trail through nxs.primitives.breadcrumbs, so an override replaces it', async () => {
+      await render({}, doc(), { [NXS_PRIMITIVE_IDS.breadcrumbs]: AcmeTrailComponent });
+
+      const trail = header().querySelector('.acme-trail') as HTMLElement;
+      expect(trail).toBeTruthy();
+      expect(texts(trail, 'a')).toEqual(['default-domain', 'workspaces', 'ws']);
+      expect(trail.getAttribute('aria-label')).toBe('Breadcrumbs');
+      expect(header().querySelector('nxs-breadcrumbs')).toBeNull();
+    });
+
+    it('routes a click on the override’s link inside the app', async () => {
+      await render({}, doc(), { [NXS_PRIMITIVE_IDS.breadcrumbs]: AcmeTrailComponent });
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
+
+      const link = header().querySelector('.acme-trail a') as HTMLAnchorElement;
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true });
+      link.dispatchEvent(click);
+
+      expect(navigate).toHaveBeenCalledWith('/browse/default-domain');
+      expect(click.defaultPrevented).toBe(true);
+    });
+
+    it('falls back to nxs-breadcrumbs when nothing is registered under the ID', async () => {
+      await render({});
+
+      const trail = header().querySelector('nxs-breadcrumbs') as HTMLElement;
+      expect(trail).toBeTruthy();
+      expect(texts(trail, '.nxs-breadcrumbs__nav .nxs-breadcrumbs__link')).toEqual([
+        'default-domain',
+        'workspaces',
+        'ws',
+      ]);
+    });
+
+    it('renders the activity avatars through nxs.primitives.avatar', async () => {
+      await render({}, doc(), { [NXS_PRIMITIVE_IDS.avatar]: AcmeAvatarComponent });
+      const component = fixture.componentInstance;
+      component.switchPanelSubTab('activity');
+      component.panelActivityLoading.set(false);
+      component.panelActivity.set([
+        { id: 1, principalName: 'alice', eventId: 'documentModified' } as AuditEntry,
+      ]);
+      fixture.detectChanges();
+
+      const avatar = fixture.nativeElement.querySelector(
+        '.activity-card .acme-avatar',
+      ) as HTMLElement;
+      expect(avatar?.textContent?.trim()).toBe('alice');
+      expect(avatar.dataset['size']).toBe('28');
+    });
+
+    it('renders the AI primary category through nxs.primitives.tag', async () => {
+      await render({}, doc(), { [NXS_PRIMITIVE_IDS.tag]: AcmeTagComponent });
+      // The AI Insights tab is gated on the AI feature flag, which this file otherwise leaves off.
+      // This file provides it as a writable signal; the service declares it read-only.
+      (TestBed.inject(AiFeatureFlagService).aiEnabled as WritableSignal<boolean>).set(true);
+      fixture.detectChanges();
+      const component = fixture.componentInstance;
+      const aiTab = component.detailTabs().findIndex((tab) => tab.id === 'app.tabs.aiInsights');
+      expect(aiTab).toBeGreaterThanOrEqual(0);
+      component.onTabChange(aiTab);
+      component.aiClassification.set({
+        description: 'A quarterly report',
+        nature: 'Report',
+        subjects: [],
+        suggestedType: 'File',
+        confidence: 0.9,
+        suggestedWorkflow: 'none',
+        workflowReason: '',
+      });
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      const tag = fixture.nativeElement.querySelector('.ai-meta-row .acme-tag') as HTMLElement;
+      expect(tag?.textContent?.trim()).toBe('Report');
+      expect(tag.dataset['color']).toBe('blue');
     });
   });
 });
