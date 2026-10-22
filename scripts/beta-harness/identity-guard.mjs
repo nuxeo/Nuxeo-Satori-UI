@@ -735,7 +735,37 @@ export async function checkPageIdentity(
       policy,
     );
   }
-  if (originOf(safeUrl(page)) !== originOf(appOrigin)) {
+  const onApp = originOf(safeUrl(page)) === originOf(appOrigin);
+  if (!onApp) {
+    // Off-app, but if the policy requires a signed-in user and we have traffic to check, judge the
+    // headerless requests that were sent before the navigation rather than letting them be hidden.
+    const { user: expectedUser, required } = normalisePolicy(policy);
+    if (required && foreignApiOrigins) {
+      const signingIn = false;
+      // Find what authorization the session used by looking at any authenticated request in the log.
+      // Recent requests (since) may all be headerless, so look at the entire history to find what
+      // the correct authorization was before the violation.
+      const { sent, since } = foreignApiOrigins;
+      const expectedAuth = sent.find((r) => r.authorization)?.authorization;
+      if (expectedAuth) {
+        // Use a minimal stored session just for checking stray requests. The real session can't be
+        // read because the page is off-app, but the traffic log has the authorization each request
+        // carried, so strayRequests can still find headerless ones.
+        const stored = {
+          key: '',
+          storage: '',
+          kind: 'basic',
+          username: expectedUser,
+          authorization: expectedAuth,
+        };
+        const stray = strayRequests(foreignApiOrigins, stored, { signingIn });
+        if (stray.length) {
+          // Provide fake successful /me answers so judgeApp focuses on the stray requests.
+          const fakeMe = { status: 200, body: { id: expectedUser } };
+          return judgeApp(stored, { inPage: fakeMe, replayed: fakeMe }, policy, stray);
+        }
+      }
+    }
     return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
   const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);

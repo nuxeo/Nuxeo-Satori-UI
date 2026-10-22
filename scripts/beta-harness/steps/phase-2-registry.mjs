@@ -600,8 +600,10 @@ export default async function run(page, h) {
   );
   await h.screenshot('non-admin-has-no-administration-entry');
 
-  // Back to the configured user for the remaining steps.
+  // Back to the configured user for the remaining steps. Remove the synthetic session so the
+  // identity guard does not see a username mismatch before h.login() restores the real one.
   await page.unroute('**/api/v1/me');
+  await page.evaluate(() => sessionStorage.removeItem('agentic_ui_nuxeo_session'));
   await h.login();
   await page.waitForTimeout(500);
 

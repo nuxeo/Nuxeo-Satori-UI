@@ -551,16 +551,11 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     async login() {
       const { username: user, password: pass } = requireStepCredentials('sign the evidence run in');
 
-      // If already on the app with a session, verify its traffic before clearing it. A headerless
+      // If already on the app with a session, or if the policy requires a signed-in user (which an
+      // off-app navigation cannot bypass), verify its traffic before clearing it. A headerless
       // request followed by `h.login()` would otherwise reset the window and hide the violation.
-      if (identity && page.url().startsWith(this.baseUrl)) {
-        const { ok, reports } = await identity.verify(
-          `before h.login() at step ${ensureStep().index}`,
-        );
-        if (!ok) {
-          const { assertIdentity } = await import('./identity-guard.mjs');
-          assertIdentity(reports, `before h.login() at step ${ensureStep().index}`);
-        }
+      if (identity && (page.url().startsWith(this.baseUrl) || 'user' in identity.appPolicy)) {
+        await verifyIdentity(ensureStep(), `before h.login() at step ${ensureStep().index}`);
       }
 
       await page.goto(this.baseUrl, { waitUntil: 'domcontentloaded' });

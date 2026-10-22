@@ -1364,11 +1364,59 @@ await silently(async () => {
       await h.login();
       page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
       const thrown = await thrownBy(() => h.login());
+      const failedCheck = recorder.steps[0]?.checks.find((c) => !c.passed);
       control(
         'negative',
         'repeated h.login() verifies the current session before resetting, catching headerless traffic',
-        thrown instanceof Error && thrown.name === 'IdentityError' && /without the header/.test(thrown.message),
-        { thrown: String(thrown), checks: identity.checks },
+        thrown instanceof PreconditionError &&
+          /without the header/.test(thrown.message) &&
+          failedCheck &&
+          /identity guard/.test(failedCheck.name),
+        { thrown: String(thrown), checks: identity.checks, failedCheck },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
+    // Off-app navigation cannot bypass verification when the policy requires a signed-in user.
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.login();
+      page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: LOGIN });
+      page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+      page.state.url = 'about:blank';
+      const thrown = await thrownBy(() => h.login());
+      const failedCheck = recorder.steps[0]?.checks.find((c) => !c.passed);
+      control(
+        'negative',
+        'off-app navigation cannot bypass verification when policy requires a signed-in user',
+        thrown instanceof PreconditionError &&
+          /without the header/.test(thrown.message) &&
+          failedCheck &&
+          /identity guard/.test(failedCheck.name),
+        { thrown: String(thrown), url: page.state.url, failedCheck },
       );
     } finally {
       for (const [k, v] of Object.entries(saved)) {
