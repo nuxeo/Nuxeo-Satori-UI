@@ -72,6 +72,42 @@ export const test = base.extend<{ signedIn: Page }>({
 
     const foreignApiOrigins = watchNuxeoApiOrigins(page, E2E_BASE_URL);
 
+    // NXSAT-708 vacuity control, opt-in and off by default.
+    //
+    // `E2E_STARVE_APP=1` makes every data call the **app in the page** sends answer
+    // healthily-but-empty: HTTP 200, well-formed, zero rows. Discovery is untouched —
+    // `newNuxeoApiContext()` uses its own `request.newContext()`, which `page.route` cannot
+    // reach — so a spec still knows which document it expected to see.
+    //
+    // A spec whose assertion really reads repository data must then fail at its own
+    // `expect()`. A spec that still PASSES is asserting something that survives an empty
+    // repository, which is the defect the negative control exists to find and, since
+    // NXSAT-643's guard began failing the wrong-password run in setup, can no longer find.
+    //
+    // `/me` is let through deliberately: the guard below probes it to confirm the page is
+    // still the expected user. Starving it would move the failure into this fixture, which
+    // is exactly the hook-shaped failure that made the credential-based control unmeasurable.
+    if (process.env['E2E_STARVE_APP'] === '1') {
+      await page.route('**/nuxeo/api/**', async (route) => {
+        // `continue()`, not `fallback()`: there is no second handler to fall back to, and
+        // "send this one to the network" is what is meant.
+        if (route.request().url().includes('/api/v1/me')) return route.continue();
+        return route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            'entity-type': 'documents',
+            entries: [],
+            resultsCount: 0,
+            pageSize: 40,
+            currentPageIndex: 0,
+            numberOfPages: 0,
+            isNextPageAvailable: false,
+          }),
+        });
+      });
+    }
+
     await page.addInitScript(
       ({ key, signedOutKey, value }) => {
         sessionStorage.setItem(key, value);
@@ -123,6 +159,35 @@ export async function expectSurfaceWithData(page: Page, selector: string, text: 
   await expect(host, `${selector} should show repository data, not an empty state`).toContainText(
     text,
   );
+}
+
+/**
+ * Assert the text appears in a **row** of a listing surface, not merely somewhere inside it.
+ *
+ * `expectSurfaceWithData` searches the whole surface, which is sound wherever the surface's
+ * own empty state cannot contain the expected text. On `lib-browse` it can: the empty state
+ * reads "Open Sections, Templates, or Workspaces, then create content inside those folders",
+ * and `aRootChild()` returns one of exactly those three titles in a stock repository. So the
+ * assertion matched the instructions telling the user the folder was empty. Measured against
+ * an app served an empty repository (NXSAT-708): 0 rows, "0 results" on screen, and the
+ * assertion green — under a message reading "should show repository data, not an empty state".
+ *
+ * A row is only rendered for a document, so scoping to rows cannot pass on an empty state.
+ * `tbody tr` rather than `getByRole('row')`, because that role also matches the **header**
+ * row — so a title colliding with a column name ("Title", "Modified") would have passed on
+ * the header and reintroduced the same defect one row higher. A surface with no `tbody`
+ * matches nothing and fails loudly, which is the safe direction for a check like this.
+ *
+ * Used where the surface's empty copy and its data can collide; `expectSurfaceWithData`
+ * remains correct for document detail and search, where the starved run shows it failing.
+ */
+export async function expectRowWithData(page: Page, selector: string, text: string | RegExp) {
+  const host = page.locator(selector);
+  await expect(host, `${selector} should render`).toBeVisible();
+  await expect(
+    host.locator('tbody tr').filter({ hasText: text }).first(),
+    `${selector} should list "${text}" as a row, not merely mention it in an empty state`,
+  ).toBeVisible();
 }
 
 export const E2E_BASE_URL = process.env['E2E_BASE_URL'] ?? 'http://localhost:4200';
@@ -209,27 +274,32 @@ export async function expectAuthenticatedAs(
 }
 
 /**
- * A child of `/default-domain` that the browse root lists, discovered from the API.
+ * A document the **browse root actually lists**, discovered from the API.
  *
- * Discovering it rather than hardcoding `'Root'` is the point of the helper, and it was right.
- * The query was not: it asked for `ecm:path = '/default-domain' AND ecm:primaryType =
- * 'WorkspaceRoot'`, and no document can satisfy both — `ecm:path =` is exact match,
- * `/default-domain` is a `Domain`, and every `WorkspaceRoot` sits one level below it at
- * `<domain>/workspaces`. It returned zero rows on every instance, so the helper threw and the
- * five specs calling it errored. `STARTSWITH` is the predicate that expresses "below the
- * domain".
+ * Discovering it rather than hardcoding a title is the point of the helper, and that part was
+ * always right. What it discovered was not.
  *
- * The depth is then **checked**, not assumed. `STARTSWITH` would also match a `WorkspaceRoot`
- * nested further down, which the browse root does not list — so the helper would hand back a
- * title that is genuinely in the repository and genuinely not on the page, and the spec would
- * fail pointing at the wrong thing.
+ * It used to return a `WorkspaceRoot` directly under `/default-domain` — `Workspaces` — while
+ * claiming in this docblock to be "a child of `/default-domain` that the browse root lists".
+ * The browse root lists the children of the repository root `/`, which in a stock instance is
+ * the single `Domain` at `/default-domain`. `Workspaces` is one level below that and is never
+ * a row on that screen. Measured at `integration/nxsat-308` @ 8badd9c8e: the browse root
+ * renders exactly one body row, `Domain`, while this helper returned `Workspaces`.
+ *
+ * So every spec that asserted the returned title against `lib-browse` was green for the wrong
+ * reason: the surface's empty state reads "Open Sections, Templates, or Workspaces, then
+ * create content inside those folders", and `toContainText('Workspaces')` matched that
+ * sentence. Four call sites, passing on the instructions that tell a user the folder is empty.
+ * NXSAT-708 found it by serving the app an empty repository and watching them all stay green.
+ *
+ * The depth is **checked**, not assumed, for the same reason the previous version checked it:
+ * a `Domain` nested deeper would be a title that is genuinely in the repository and genuinely
+ * not on that screen, and the spec would fail pointing at the wrong thing.
  */
 export async function aRootChild(api: APIRequestContext): Promise<{ uid: string; title: string }> {
   const response = await api.get('/nuxeo/api/v1/search/lang/NXQL/execute', {
     params: {
-      query:
-        "SELECT * FROM Document WHERE ecm:path STARTSWITH '/default-domain' " +
-        "AND ecm:primaryType = 'WorkspaceRoot'",
+      query: "SELECT * FROM Document WHERE ecm:primaryType = 'Domain' AND ecm:isTrashed = 0",
       pageSize: 20,
     },
     headers: { 'X-NXproperties': '*' },
@@ -239,15 +309,15 @@ export async function aRootChild(api: APIRequestContext): Promise<{ uid: string;
 
   const body = await response.json();
   const directChildren = (body.entries ?? []).filter((entry: { path?: string }) =>
-    /^\/default-domain\/[^/]+$/.test(entry.path ?? ''),
+    /^\/[^/]+$/.test(entry.path ?? ''),
   );
 
   if (directChildren.length === 0) {
     throw new Error(
-      `No WorkspaceRoot directly under /default-domain (the query matched ` +
+      `No Domain directly under the repository root (the query matched ` +
         `${(body.entries ?? []).length} document(s) at other depths). A stock Nuxeo has one at ` +
-        `/default-domain/workspaces; without it the browse-root specs have no repository data ` +
-        `to assert and would pass vacuously.`,
+        `/default-domain; without it the browse-root specs have no repository data to assert ` +
+        `and would pass vacuously.`,
     );
   }
 

@@ -1,269 +1,158 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# E2E Negative Control: Bogus Credentials Sensitivity
+# E2E Vacuity Control: do the specs notice an empty repository?
 #
-# Runs the E2E suite with wrong credentials and asserts that at least N specs fail at an
-# `expect` of their own.
+# Runs the Chromium suite twice against the same code — once normally, once with the app in
+# the page starved of data — and counts the specs that passed the first run and then failed
+# at an `expect()` of their own in the second. Those specs' assertions demonstrably depend on
+# what the repository returned. Specs that pass both runs are named as a standing list: they
+# assert something an empty repository already satisfies.
 #
-# ## What this control does and does not establish — read before quoting its output
+# The verdict and the exit code come from `scripts/beta-harness/vacuity-verdict.mjs`, which
+# has its own selftest (`npm run beta:e2e-vacuity-selftest`). This script's job is to produce
+# the two runs; it does not classify anything itself.
 #
-# It measures **credential sensitivity**: that a spec's own assertion changes outcome when the
-# session is invalid, so the spec is not asserting a server-independent constant. That is a
-# real property and it is the §9.1 class of defect it catches.
+# ## Why this no longer uses a wrong password
 #
-# It does **not** establish that the assertion observed *repository data*. `NUXEO_PASS` gates
-# the session, so an assertion about post-login chrome, routing or authentication state fails
-# under a wrong password having read no document at all. This script claimed the stronger thing
-# for three rounds — "so those assertions depend on repository data rather than on constants" —
-# and that claim was false, which the run below demonstrates rather than supposes. Of the ten
-# counted failures on 2026-09-25 against the local stack, chromium:
+# It did, for four rounds, and the file's header carried the reasoning for each. NXSAT-643
+# ended that approach rather than refining it, and the reason is worth keeping because it is
+# the same class of defect the earlier rounds fixed:
 #
-#   src/browse.spec.ts:50   browse > the shell renders its chrome on an authenticated route
+# The identity guard NXSAT-643 added asks who the session belongs to in the `signedIn`
+# fixture and in `test.beforeAll`, *before* a spec body runs. A wrong password therefore
+# fails there — and `apps/nuxeo-ui-e2e/assertion-failure-reporter.ts` excludes hook and
+# fixture failures by design, because a spec that dies in setup "would have failed
+# identically if its body were empty". So from the moment the guard merged, every
+# repository-data spec failed in excluded territory and the counted population was empty for
+# every possible run. Measured at `integration/nxsat-308` @ 8badd9c8e on 2026-10-22:
 #
-# is an assertion about chrome on an authenticated route. It failed because authentication
-# failed. Several others — "exposes the tab surfaces the Beta scope covers", "the adf-hx search
-# surface has no text input to type into", "lib-search should render" — are surface-presence
-# assertions in the same position. The measurement was sound; the sentence drawn from it was
-# not, so the sentence is what changed.
+#   wrong password    9 failed, 0 at an assertion, threshold 5   -> FAIL, unconditionally
 #
-# ## Why the counted population is not narrowed to repository-data assertions
+# A control that can only print FAIL is as useless as one that can only print PASS, and
+# worse than none, because it gets silenced. That sentence was already in this file, about
+# the first version of it. This is the same shape in the other direction.
 #
-# Review proposed counting only explicitly annotated repository-data checks, or keeping an
-# allowlist of them. Declined deliberately, and this is the fourth round on this control, so
-# the reason matters: an annotation is a claim by whoever wrote the spec that nothing verifies.
-# A spec tagged `repository-data` while asserting `'Root'` would be counted, and the tag would
-# read as a control while being an assertion about an assertion. That is the defect class this
-# audit exists to remove, reintroduced one level up. Narrowing the *claim* costs nothing and
-# cannot rot; narrowing the *population* by self-declared metadata can.
+# Two alternatives were measured before this one, and both were rejected on the numbers
+# rather than on taste:
 #
-# Context from audit §9.1.1: cross-browser.spec.ts:49-52 records that running the suite
-# under bad credentials caught two vacuous specs. That negative control existed only as
-# a comment. This script makes it executable.
+#   - Count the identity/auth setup failures. Reverses the review decision that excluded
+#     them, and readmits failures that say nothing about what a spec asserts.
+#   - Run as a restricted user (`parity-user`). Measured 2 failed / 10 passed, and neither
+#     failure was about an assertion reading data: one was a toolbar button absent for a
+#     non-writer, the other a 403 on the spec creating its own fixture. The reason is
+#     structural — every spec discovers its expected value from the same server and identity
+#     it renders from, so changing the identity moves both sides together and the assertions
+#     still agree. No server-side perturbation can reach a spec body; discovery breaks first,
+#     and discovery lives in `beforeAll`.
 #
-# ## Why it counts specs out of results.json rather than grepping the console
+# So the perturbation is client-side: `E2E_STARVE_APP=1` makes the app's own `/nuxeo/api`
+# calls answer 200-but-empty via `page.route`, while the spec's discovery context — a
+# separate `request.newContext()` that `page.route` cannot reach — keeps working. `/me` is
+# passed through so the identity guard still functions; starving it would move the failure
+# back into the fixture, which is the whole defect being fixed.
 #
-# The first version forced `--reporter=json` and then grepped stdout for `N failed` — a
-# phrase only Playwright's `list` and `line` reporters emit. The JSON reporter never
-# prints it, so the `|| echo "0"` fallback fired on every run, `ACTUAL_FAILURES` was
-# always 0, and `[ 0 -ge 5 ]` was always false. The script could only ever print FAIL,
-# whichever way the run went — a control that always reports failure is as useless as one
-# that always reports success, and worse than none, because it gets silenced.
+# ## Why two runs rather than one
 #
-# So the reporter is left as the config declares it (`list` for a human, `json` to
-# `dist/e2e/results.json`) and the count comes from the file. That does not depend on
-# console phrasing, and an absent file is treated as an environment failure rather than
-# as zero failures — the same mistake in a different place.
+# A single starved run cannot tell a data-sensitive spec from one that was already red.
+# Measured the same day: `auth.spec.ts:211` fails at its own assertion on the unmodified
+# harness with correct credentials, and a single-run count included it among the sensitive.
+# It is not sensitive to anything. The baseline run removes that whole class, and it also
+# turns the specs that pass both runs into a reportable finding instead of silence.
 #
-# ## Why a bare failure count is not the measurement
+# ## Why --retries=0 on both runs
 #
-# `NUXEO_PASS` is read in three places, not one: this suite's `signedIn` fixture, the
-# `httpCredentials` in `playwright.config.ts`, and `newNuxeoApiContext()` in `fixtures.ts`.
-# So a wrong password does not only make repository-data assertions fail — it also makes
-# `aRootChild()` throw `API query failed: 401` before the spec body runs at all.
-#
-# A spec that died there proves nothing about whether its assertions check anything: it
-# would have failed identically if its body were empty. Counting those toward the threshold
-# is the same defect as the reporter mismatch above, one level up — a control whose number
-# does not measure what its message claims. On the run this script was last verified
-# against, 4 of 13 failures were exactly that.
-#
-# ## Why the filename is not the measurement either
-#
-# The previous version classified by where the run said the error happened: a failure located
-# in a `*.spec.ts` file counted, anything else did not. Review was right that this does not
-# hold, and it was measured rather than argued — on Playwright 1.63, `expect(1 + 1).toBe(3)`
-# and a promise rejecting with "Timeout 45000ms exceeded" produce error locations that are
-# both `*.spec.ts` lines and are indistinguishable by filename. A `page.goto()` timeout is
-# thrown from a line the spec wrote, so it counted toward the threshold with no `expect`
-# having run at all. A run where the wrong password broke navigation everywhere could
-# therefore satisfy a control whose entire purpose is to prove that specs' assertions are credential-sensitive.
-#
-# So the fact is emitted rather than inferred. `apps/nuxeo-ui-e2e/assertion-failure-reporter.ts`
-# reads `TestStep.category === 'expect'` — which Playwright sets itself and its JSON reporter
-# does not serialize — and writes, per failing spec, whether a failing assertion outside any
-# hook was the cause. An `expect` that fails in `beforeEach` does not count: it is nested
-# under the hook steps and the body never ran.
-#
-# That keeps the conservatism the filename test was reaching for while dropping its two
-# errors. It no longer excludes a genuine repository-data assertion for living in
-# `fixtures.ts` — `expectSurfaceWithData()` was in exactly that position — and it no longer
-# admits a navigation timeout for being thrown from a spec file.
-#
-# Both corrections are visible on the runs this version was verified against, chromium,
-# against the local stack:
-#
-#   wrong password    14 failed, 10 at an assertion, 4 never reached one
-#   correct password   2 failed,  2 at an assertion, 21 passed
-#
-# The old classifier scored the same suite 8 and 6. The two runs also show the corrections
-# separately: under correct credentials one of the two genuine failures is located in
-# `fixtures.ts:69` and the filename test would have discarded it, and
-# `scripts/beta-harness/assertion-reporter.selftest.mjs` shows the reverse — restore the
-# filename rule and its count of deliberate failures goes from 1 to 3.
-#
-# NOTE the default threshold below is still 5 against a measured 10. Raising it is a
-# judgement about how much drift should be tolerated, not part of this fix.
+# The measurement is a difference between two runs, so a retry that rescues a spec in one of
+# them and not the other is noise in the comparison rather than flake tolerance. The suite's
+# own committed config keeps its retries for ordinary runs.
 #
 # Usage:
-#   ./scripts/e2e-negative-control.sh [min-expected-failures]
+#   ./scripts/e2e-negative-control.sh [min-expected]
 #
-# Default: expects at least 5 failures (conservative - should be higher once fixed)
+# Default: 5. Measured on 2026-10-22 at `integration/nxsat-308` @ 8badd9c8e, full Chromium
+# project: 8 data-sensitive specs, 16 that pass with the repository empty, 0 inconclusive and
+# 0 already failing. 5 leaves margin for one or two specs legitimately changing shape without
+# the gate going red for the wrong reason.
+#
+# The first measurement on that head was 7, before this change also fixed the four browse and
+# cross-browser assertions that were matching the listing's empty-state copy. Three of those
+# are data-sensitive now, and `auth.spec.ts`'s privilege test moved out of the already-failing
+# column — which is why the number moved while the suite did not grow.
 #
 # Exit codes:
-#   0 - Control passed (enough specs failed at their own assertions, as expected)
-#   1 - Control FAILED (too few failures = vacuous assertions present)
-#   2 - Environment issue (no Nuxeo, preflight failed, no results file)
+#   0 - Control passed (enough specs are data-sensitive)
+#   1 - Control FAILED (too few = assertions may be vacuous)
+#   2 - Environment issue (no Nuxeo, preflight failed, a run produced no report)
 
 MIN_FAILURES="${1:-5}"
-# Validated, because the whole control is the comparison against this number. `0` — or a
-# negative, or a word — made `FAILURE_COUNT >= MIN_FAILURES` true for every possible run,
-# so the control reported success while proving nothing, and `-- 0` was enough to disable it
-# by accident. A threshold of at least 1 is the minimum that can fail.
-case "$MIN_FAILURES" in
-  '' | *[!0-9]*)
-    echo "ERROR: min-expected-failures must be a positive integer, got '${MIN_FAILURES}'"
-    exit 2
-    ;;
-esac
-if [ "$MIN_FAILURES" -lt 1 ]; then
-  echo "ERROR: min-expected-failures must be at least 1, got '${MIN_FAILURES}'"
-  echo "  A threshold of 0 makes this control unconditional: it would pass on a run in which"
-  echo "  nothing failed, which is the opposite of what it exists to detect."
-  exit 2
-fi
-# Written by the `json` reporter registered in apps/nuxeo-ui-e2e/playwright.config.ts.
-RESULTS_FILE="dist/e2e/results.json"
-# Written by assertion-failure-reporter.ts, registered beside it. This is what the count
-# comes from; RESULTS_FILE is kept only so an absent run is still detected as one.
-ASSERTIONS_FILE="dist/e2e/assertion-failures.json"
 
-echo "=== E2E Negative Control: Bogus Credentials ==="
-echo "Running E2E suite with NUXEO_PASS=wrong"
-echo "Expected: at least ${MIN_FAILURES} specs should fail"
+OUT_DIR="dist/e2e"
+BASELINE_DIR="$OUT_DIR/vacuity-baseline"
+STARVED_DIR="$OUT_DIR/vacuity-starved"
+RESULTS_FILE="$OUT_DIR/results.json"
+ASSERTIONS_FILE="$OUT_DIR/assertion-failures.json"
+CONFIG="apps/nuxeo-ui-e2e/playwright.config.ts"
+
+echo "=== E2E Vacuity Control: do the specs notice an empty repository? ==="
+echo "Two runs of the Chromium suite: baseline, then with the app starved of data."
+echo "Expected: at least ${MIN_FAILURES} specs pass the baseline and fail at their own expect when starved."
 echo ""
 
-# Clear previous results, so a stale file from an earlier run can never be counted.
+# Validated before either run — a threshold that cannot fail would otherwise be discovered
+# after ten minutes of Playwright.
+node scripts/beta-harness/vacuity-verdict.mjs --check-threshold "$MIN_FAILURES"
+
+rm -rf "$BASELINE_DIR" "$STARVED_DIR"
 rm -f "$RESULTS_FILE" "$ASSERTIONS_FILE"
+mkdir -p "$BASELINE_DIR" "$STARVED_DIR"
 
-# Run preflight with correct credentials first
 if ! npx tsx scripts/beta-harness/e2e-preflight.mjs; then
-  echo "ERROR: Preflight failed with correct credentials"
-  echo "Fix environment before running negative control"
+  echo "ERROR: Preflight failed with correct credentials."
+  echo "Fix the environment before running the vacuity control."
   exit 2
 fi
 
-# Run E2E with wrong password
-# Use chromium only (faster); a non-zero exit is the expected outcome, not an error.
-export NUXEO_PASS="wrong"
+# `collect <dir> <label>` moves the two reports a run wrote into their own directory. An
+# absent report is an environment failure, never an empty result: treating a missing file as
+# zero findings is the mistake that made the first version of this control incapable of
+# reporting anything but FAIL.
+collect() {
+  local dir="$1" label="$2"
+  for f in "$RESULTS_FILE" "$ASSERTIONS_FILE"; do
+    if [ ! -f "$f" ]; then
+      echo ""
+      echo "ERROR: ${f} was not written by the ${label} run, so no verdict can be read."
+      echo "Check that the json reporter and assertion-failure-reporter.ts are both still"
+      echo "registered in ${CONFIG}."
+      exit 2
+    fi
+  done
+  mv "$RESULTS_FILE" "$dir/results.json"
+  mv "$ASSERTIONS_FILE" "$dir/assertion-failures.json"
+}
 
+echo ""
+echo "--- run 1 of 2: baseline (correct credentials, app served normally) ---"
 set +e
-npx playwright test -c apps/nuxeo-ui-e2e/playwright.config.ts \
-  --project=chromium 2>&1 | tee /tmp/e2e-negative-control.log
-PLAYWRIGHT_EXIT=${PIPESTATUS[0]}
+npx playwright test -c "$CONFIG" --project=chromium --retries=0 2>&1 | tee /tmp/e2e-vacuity-baseline.log
+BASELINE_EXIT=${PIPESTATUS[0]}
 set -e
-
-if [ ! -f "$RESULTS_FILE" ]; then
-  echo ""
-  echo "ERROR: ${RESULTS_FILE} was not written, so no failure count can be read."
-  echo "Playwright exited ${PLAYWRIGHT_EXIT}. Check that the json reporter is still"
-  echo "registered in apps/nuxeo-ui-e2e/playwright.config.ts."
-  exit 2
-fi
-
-# An absent assertions file is an environment failure, never zero. Treating it as zero is
-# the same mistake as the `|| echo "0"` fallback that made the first version of this script
-# incapable of reporting anything but FAIL.
-if [ ! -f "$ASSERTIONS_FILE" ]; then
-  echo ""
-  echo "ERROR: ${ASSERTIONS_FILE} was not written, so no assertion count can be read."
-  echo "Playwright exited ${PLAYWRIGHT_EXIT}. Check that assertion-failure-reporter.ts is"
-  echo "still registered in apps/nuxeo-ui-e2e/playwright.config.ts."
-  exit 2
-fi
-
-# The reporter has already decided, per spec, whether a failing `expect` outside any hook was
-# the cause; it counts only specs whose every attempt failed, the same population `spec.ok`
-# describes. Nothing here re-derives that from an error location.
-CLASSIFIED=$(node -e '
-  const { specs = [] } = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8"));
-  const row = (s) => ({
-    title: s.title,
-    where: s.failedAtAssertion ? s.assertion.where : s.errorLocation,
-    assertion: s.assertion?.assertion ?? "",
-  });
-  process.stdout.write(
-    JSON.stringify({
-      atAssertion: specs.filter((s) => s.failedAtAssertion).map(row),
-      beforeAssertion: specs.filter((s) => !s.failedAtAssertion).map(row),
-    }),
-  );
-' "$ASSERTIONS_FILE")
-
-ACTUAL_FAILURES=$(printf "%s" "$CLASSIFIED" | node -e '
-  let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
-    process.stdout.write(String(JSON.parse(s).atAssertion.length));
-  });
-')
-SETUP_FAILURES=$(printf "%s" "$CLASSIFIED" | node -e '
-  let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
-    const { beforeAssertion } = JSON.parse(s);
-    process.stdout.write(String(beforeAssertion.length));
-  });
-')
+collect "$BASELINE_DIR" "baseline"
+echo "baseline Playwright exit: ${BASELINE_EXIT}"
 
 echo ""
-echo "=== Results ==="
-echo "Playwright exit code: ${PLAYWRIGHT_EXIT}"
-echo "Failures at a spec's own assertion: ${ACTUAL_FAILURES}   (these are what count)"
-echo "Failures with no assertion reached: ${SETUP_FAILURES}   (setup, navigation, hooks — excluded)"
-echo "Expected minimum: ${MIN_FAILURES}"
-echo ""
-printf "%s" "$CLASSIFIED" | node -e '
-  let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => {
-    const { atAssertion, beforeAssertion } = JSON.parse(s);
-    const list = (rows) =>
-      rows.map((r) => `    ${r.where.padEnd(44)} ${r.assertion.padEnd(26)} ${r.title}`).join("\n");
-    // No apostrophes in here: this whole program is a single-quoted shell argument, and one
-    // stray "spec+apostrophe+s" closed it early and took the script down with a syntax error.
-    if (atAssertion.length) console.log("  Counted — a failing expect() written by the spec itself:\n" + list(atAssertion));
-    if (beforeAssertion.length) {
-      console.log("\n  Excluded — no assertion ran, so the failure says nothing about what the spec checks:\n" + list(beforeAssertion));
-    }
-  });
-'
-echo ""
+echo "--- run 2 of 2: starved (same specs, the app served an empty repository) ---"
+set +e
+E2E_STARVE_APP=1 npx playwright test -c "$CONFIG" --project=chromium --retries=0 2>&1 \
+  | tee /tmp/e2e-vacuity-starved.log
+STARVED_EXIT=${PIPESTATUS[0]}
+set -e
+collect "$STARVED_DIR" "starved"
+echo "starved Playwright exit: ${STARVED_EXIT}   (non-zero is the expected outcome here)"
 
-if [ "$ACTUAL_FAILURES" -ge "$MIN_FAILURES" ]; then
-  echo "✅ PASS: Negative control succeeded"
-  echo "${ACTUAL_FAILURES} spec(s) failed at an expect() of their own when the credentials were"
-  echo "wrong, so those assertions are CREDENTIAL-SENSITIVE: their outcome depends on a valid"
-  echo "session rather than on a server-independent constant."
-  echo ""
-  echo "That is the whole of the claim. It does NOT establish that those assertions read"
-  echo "repository data — NUXEO_PASS gates the session, so an assertion about post-login chrome,"
-  echo "routing or authentication state fails here having read no document at all. Read the list"
-  echo "above before treating any individual spec as data-backed; several are surface-presence"
-  echo "checks. This script asserted the stronger thing for three rounds and was wrong."
-  echo ""
-  echo "It also says nothing about the specs that still PASSED with a wrong password, or about"
-  echo "the ${SETUP_FAILURES} that never reached an assertion. Both are gaps, not evidence."
-  exit 0
-else
-  echo "❌ FAIL: Negative control FAILED"
-  echo "Only ${ACTUAL_FAILURES} spec(s) failed at an assertion of their own, below the ${MIN_FAILURES} expected."
-  echo ""
-  if [ "$SETUP_FAILURES" -gt 0 ]; then
-    echo "${SETUP_FAILURES} further spec(s) failed without reaching an assertion. Those do not count:"
-    echo "a spec that dies in setup or navigation would have failed identically with an empty"
-    echo "body, so it demonstrates nothing about what it asserts."
-    echo ""
-  fi
-  echo "Either some specs pass vacuously — asserting constants that hold whether or not a valid"
-  echo "session returned anything — or the run collapsed in setup before it could tell."
-  echo ""
-  echo "Fix: review the specs that passed and ensure they use API-discovered values, not"
-  echo "hardcoded constants like 'Root'. If the setup count is high, fix that first: the"
-  echo "control cannot measure anything through a harness that fell over."
-  exit 1
-fi
+echo ""
+node scripts/beta-harness/vacuity-verdict.mjs \
+  "$BASELINE_DIR/results.json" \
+  "$STARVED_DIR/results.json" \
+  "$STARVED_DIR/assertion-failures.json" \
+  "$MIN_FAILURES"
