@@ -376,7 +376,13 @@ function checkOutlineTokenIsNotTextColour() {
   // it is formatted, while `;`, `{` and `}` stop it escaping into the next one. Bounding the
   // whole declaration first is what makes the span cover a multiline `var()` including its
   // fallback and closing line — which is where Prettier puts the annotation.
-  const colourDeclaration = /(?<![-\w])color\s*:[^;{}]*/g;
+  //
+  // `$` and `@` are excluded from the lookbehind for a different reason, found on review: a
+  // Sass variable named exactly `$color` is an assignment, not a declaration, and says nothing
+  // about where the value is used — `$color: var(--mat-sys-outline); .x { border-color: $color; }`
+  // sets no text colour at all and was failed. A custom property needs no special case: `--color`
+  // is already excluded by the `-` before it.
+  const colourDeclaration = /(?<![-\w$@])color\s*:[^;{}]*/g;
   const usesOutlineToken = /var\(\s*--mat-sys-outline\s*[,)]/;
 
   for (const [file, lines] of addedLinesByFile) {

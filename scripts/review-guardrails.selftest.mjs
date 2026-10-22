@@ -632,6 +632,52 @@ expectRed(
   /probe\.component\.scss:7 sets a text colour from --mat-sys-outline/,
 );
 
+/**
+ * A Sass variable named exactly `$color` is an assignment, not a declaration.
+ *
+ * Found on review round 6: the lookbehind permitted `$`, so `$color: var(--mat-sys-outline)` was
+ * read as the CSS property. An assignment says nothing about where the value is used, and here it
+ * is used only for a border — a correct non-text use that the gate failed.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'a Sass $color variable used only for a border',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '$color: var(--mat-sys-outline);\n\n.probe {\n  border-color: $color;\n}\n',
+    ),
+);
+
+/** A custom property declaration is excluded by the `-` already, and must stay that way. */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'a --color custom property declared from the token',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      ':root {\n  --probe-divider: var(--mat-sys-outline);\n  --color: var(--mat-sys-outline);\n}\n',
+    ),
+);
+
+/** But the real property must still be caught when it sits right after an assignment. */
+expectRed(
+  'a text colour declaration following a $color assignment',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '$color: var(--mat-sys-outline);\n\n.probe__hint {\n  font-size: 12px;\n' +
+        '  color: var(--mat-sys-outline);\n}\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
 expectWarn(
   'locale missing a key the reference has — warns, because English is the fallback',
   'checkTranslationCatalogues',
