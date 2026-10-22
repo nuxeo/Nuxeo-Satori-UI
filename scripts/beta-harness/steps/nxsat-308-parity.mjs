@@ -101,6 +101,7 @@ const MEDIA = {
   pdfText: 'Parity PDF fixture',
 };
 const EMPTY = { path: `${ROOT}/empty` };
+const COLLECTION = { title: 'Parity collection', memberTitle: 'Paged item 001' };
 const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secret' };
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
@@ -1800,6 +1801,62 @@ export default async function run(page, h, outDir) {
   }
   mark('permissions', 'end');
 
+  // ── 11b. PermissionsPanel at 320 px ──────────────────────────────────────────────────────────────
+  await h.step('PermissionsPanel — fits and is usable at 320 px');
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.waitForTimeout(800);
+  await A.permissions.open(page, h, ACL.path);
+  const narrowPanel = page.locator(A.permissions.root).first();
+  const narrowVisible = await narrowPanel.isVisible().catch(() => false);
+  h.check(
+    `${LB} the permissions panel renders at 320 px`,
+    narrowVisible,
+    `panel visible=${narrowVisible}`,
+  );
+  if (narrowVisible) {
+    const panelBox = await narrowPanel.boundingBox();
+    const docScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const innerWidth = await page.evaluate(() => window.innerWidth);
+    const horizontalScroll = docScrollWidth > innerWidth;
+    const panelScrollWidth = await narrowPanel.evaluate((el) => el.scrollWidth);
+    const panelClientWidth = await narrowPanel.evaluate((el) => el.clientWidth);
+    const panelOverflows = panelScrollWidth > panelClientWidth;
+    h.check(
+      `${LB} the permissions panel at 320 px fits without causing page or panel horizontal scroll`,
+      !horizontalScroll && !panelOverflows && (panelBox?.width ?? 0) <= 320,
+      `page scrollWidth=${docScrollWidth}, innerWidth=${innerWidth}, panel scrollWidth=${panelScrollWidth}, clientWidth=${panelClientWidth}, box width=${panelBox?.width ?? 'not measured'}`,
+    );
+    // Check that permission entries (rows) are visible - data rows start after header row
+    const dataRows = await page.locator(`${A.permissions.rows}:not(:first-child)`).first().isVisible().catch(() => false);
+    // Stage a reversible edit to make Save visible: nxs-permissions-panel only shows Save when pendingCount() > 0
+    await A.permissions.showTab(page, 'Groups');
+    await page.waitForTimeout(800);
+    const membersRow = await page.locator(A.permissions.rows).filter({ hasText: 'members' }).first();
+    if (await membersRow.count()) {
+      await membersRow.locator(A.permissions.accessControl).first().click();
+      await page.waitForTimeout(600);
+      await page.locator(A.permissions.options).filter({ hasText: /^\s*Read\s*$/ }).first().click();
+      await page.waitForTimeout(600);
+    }
+    const saveButton = await page.locator(`${A.permissions.save}`).filter({ hasText: /save/i }).first().isVisible().catch(() => false);
+    h.check(
+      `${LB} permission entries and controls remain visible at 320 px`,
+      dataRows && saveButton,
+      `data rows visible=${dataRows}, save button visible=${saveButton}`,
+    );
+    // Discard the staged change without saving so the fixture remains unchanged
+    await h.screenshot('permissions-panel-320px');
+  }
+  // Reset viewport to default before the viewer steps, which assume the wider width
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(600);
+  const resetWidth = await page.evaluate(() => window.innerWidth);
+  h.check(
+    `${CTX} viewport reset to 1440 px before the viewer steps`,
+    resetWidth === 1440,
+    `window.innerWidth=${resetWidth}`,
+  );
+
   // ── 12. Viewer ───────────────────────────────────────────────────────────────────────────────
   await h.step('Viewer — PDF');
   await h.goTo(A.browse(MEDIA.path));
@@ -2057,6 +2114,81 @@ export default async function run(page, h, outDir) {
   await h.screenshot('failure-search-500');
   await page.unroute(A.search.failPattern);
 
+  // ── 14b. Failure: collection member listing answers 500 ──────────────────────────────────────
+  await h.step('Failure — the collection member listing answers 500');
+  // Find the collection in the workspace's children (it's owned by the workspace, not in the user's
+  // personal Collections folder). This avoids ambiguity from multiple collections with the same title.
+  const wsChildren = (await getJson(`/path${enc(ROOT)}/@children?pageSize=500`)).data;
+  const collection =
+    (wsChildren?.entries ?? []).find(
+      (e) => e.type === 'Collection' && e.title === COLLECTION.title,
+    ) ?? null;
+  const collectionUid = collection?.uid ?? null;
+  h.check(
+    `${CTX} the parity collection was seeded and is findable`,
+    Boolean(collectionUid),
+    `collection uid: ${JSON.stringify(collectionUid)}`,
+  );
+  if (collectionUid) {
+    await fail500('**/search/pp/default_content_collection/execute**');
+    await h.goTo(`/#/collections/${collectionUid}`);
+    await page.waitForTimeout(3000);
+    const collectionError = (
+      await page
+        .locator('lib-collection-detail nxs-document-list nxs-error-state')
+        .first()
+        .allInnerTexts()
+        .catch(() => [])
+    )
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    const collectionRows = (
+      await page.locator('lib-collection-detail nxs-document-list table tbody tr').count()
+    );
+    h.check(
+      `${LB} the collection shows an error state with a message`,
+      collectionError.trim().length > 0,
+      JSON.stringify(collectionError.slice(0, 160)),
+    );
+    h.check(
+      `${LB} the error state offers a retry`,
+      (await page
+        .locator('lib-collection-detail nxs-document-list nxs-error-state button')
+        .filter({ hasText: /try again|retry/i })
+        .count()) > 0,
+    );
+    h.check(
+      `${NEG} no stale member rows are shown`,
+      collectionError.trim().length > 0 && collectionRows === 0,
+      `${collectionRows} rows`,
+    );
+    await h.screenshot('failure-collection-500');
+    await page.unroute('**/search/pp/default_content_collection/execute**');
+    await page
+      .locator('lib-collection-detail nxs-document-list nxs-error-state button')
+      .filter({ hasText: /try again|retry/i })
+      .first()
+      .click()
+      .catch(leaveItToTheNextCheck);
+    await page.waitForTimeout(3000);
+    const recoveredMember = (
+      await page
+        .locator('lib-collection-detail nxs-document-list table tbody tr')
+        .first()
+        .allInnerTexts()
+        .catch(() => [])
+    )
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    h.check(
+      `${LB} retry recovers and shows the collection member`,
+      recoveredMember.includes(COLLECTION.memberTitle),
+      JSON.stringify(recoveredMember.slice(0, 120)),
+    );
+  } else {
+    h.note('collection was not found, so error state tests were skipped');
+  }
+
   // ── 15. Failure: a permission-denied folder, as parity-user ──────────────────────────────────
   await h.step('Failure — parity-user opens a folder they cannot read');
   const basic = parityBasic;
@@ -2113,10 +2245,10 @@ export default async function run(page, h, outDir) {
   );
   const asUser = await readRows(page, A.list.rows, A.list.title);
   h.check(
-    `${LB} parity-user sees the workspace's six other folders`,
+    `${LB} parity-user sees the workspace's seven folders (including the collection)`,
     sameSet(
       asUser.map((r) => r.title),
-      [ACL.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
+      [ACL.title, COLLECTION.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
     ),
     JSON.stringify(asUser.map((r) => r.title)),
   );

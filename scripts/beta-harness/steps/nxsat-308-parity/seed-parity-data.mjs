@@ -214,6 +214,11 @@ export const FIXTURE = {
     },
   },
   empty: { name: 'empty', title: 'Empty folder' },
+  collection: {
+    name: 'parity-collection',
+    title: 'Parity collection',
+    description: 'Test collection for error states',
+  },
   pdfText: 'Parity PDF fixture',
   searchToken: 'paritytoken',
 };
@@ -625,6 +630,28 @@ async function seed() {
   }
 
   await create(root, 'Folder', FIXTURE.empty.name, { 'dc:title': FIXTURE.empty.title });
+
+  // Collection for error state testing. Create it in the fixture workspace so it is cleaned up
+  // with the workspace. Collection.Create with no input stores it in the user's personal Collections
+  // folder outside the workspace, which survives reseeding and --remove. By passing the workspace as
+  // the input document, the collection belongs to the workspace's path.
+  const collectionResp = await call('POST', `/id/${rootDoc.uid}/@op/Collection.Create`, {
+    json: {
+      params: {
+        name: FIXTURE.collection.title,
+        description: FIXTURE.collection.description,
+      },
+      input: rootDoc.uid,
+      context: {},
+    },
+  });
+  const collectionUid = collectionResp.data?.uid;
+  if (!collectionUid) throw new Error('Collection.Create did not return a uid');
+  // Add one document to the collection so it has members to list
+  const firstPaged = await call('GET', `/path${enc(`${pagedPath}/paged-001`)}`);
+  if (firstPaged.data?.uid) {
+    await op(firstPaged.data.uid, 'Document.AddToCollection', { collection: collectionUid });
+  }
 }
 
 // ── Verify ────────────────────────────────────────────────────────────────────────────────────────
@@ -834,6 +861,47 @@ async function verify(assets) {
     `HTTP ${empty.status}`,
   );
   manifest.docs.empty = { path: emptyPath, uid: (await byPath(emptyPath)).data?.uid };
+
+  // Collection verification. Look for it by title in the workspace's children to confirm
+  // it's owned by the workspace (not in the user's personal Collections folder).
+  const wsChildren = await get(`/path${enc(FIXTURE.root)}/@children?pageSize=500`, {});
+  const coll = (wsChildren.data?.entries ?? []).find(
+    (e) => e.type === 'Collection' && e.title === FIXTURE.collection.title,
+  );
+  expect(
+    'collection exists as a child of the workspace',
+    wsChildren.status === 200 && Boolean(coll),
+    `HTTP ${wsChildren.status}, found in workspace: ${Boolean(coll)}`,
+  );
+  if (coll?.uid) {
+    // Get members using GET with queryParams as the app does
+    const membersResp = await call(
+      'GET',
+      `/search/pp/default_content_collection/execute?queryParams=${encodeURIComponent(coll.uid)}`,
+      { ok: null },
+    );
+    const collEntries = membersResp.data?.entries ?? [];
+    expect(
+      'collection has 1 member',
+      membersResp.status === 200 && collEntries.length === 1,
+      `HTTP ${membersResp.status}, ${collEntries.length} members`,
+    );
+    const collDoc = collEntries[0];
+    expect(
+      'collection member is paged-001',
+      collDoc?.title === 'Paged item 001',
+      `member title: ${collDoc?.title}`,
+    );
+    manifest.docs.collection = {
+      uid: coll.uid,
+      path: coll.path,
+      title: FIXTURE.collection.title,
+      memberCount: collEntries.length,
+      firstMember: collDoc?.title,
+    };
+  } else {
+    manifest.docs.collection = { found: false };
+  }
 
   manifest.assets = assets;
   manifest.verification = { failures };
