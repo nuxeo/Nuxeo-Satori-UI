@@ -748,9 +748,14 @@ grep -rnE '(^|[^-[:alnum:]_])color[[:space:]]*:[[:space:]]*var\(--mat-sys-outlin
 ```
 
 `checkOutlineTokenIsNotTextColour` in `scripts/review-guardrails.mjs` now fails a newly added
-line that does this, with `border-color`, `background-color`, `outline-color` and
-`text-decoration-color` excluded because those are the token's correct uses. It is a token-usage
-rule, not an accessibility verdict — `docs/accessibility.md` keeps the WCAG number with axe.
+`.scss` declaration that does this, with `border-color`, `background-color`, `outline-color` and
+`text-decoration-color` excluded because those are the token's correct uses, and comments and
+strings masked so the token inside `content: "…"` is not mistaken for a declaration. The opt-out
+must be a **comment** on one of the declaration's lines — a selector called `.non-text-hint` does
+not exempt anything. It reads **stylesheets only**: a `style` attribute and a component's inline
+`styles` block are out of scope, because matching CSS inside markup with a regex did not
+converge over four review rounds. It is a token-usage rule, not an accessibility verdict —
+`docs/accessibility.md` keeps the WCAG number with axe.
 
 ---
 

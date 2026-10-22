@@ -328,8 +328,19 @@ expectRed(
   /sets a text colour from --mat-sys-outline/,
 );
 
-expectRed(
-  'the outline token as a text colour inside a component\u2019s inline styles block',
+/**
+ * The documented limitation, pinned so a future widening is deliberate rather than accidental.
+ *
+ * A component's inline `styles` block is **not** read, and neither is a template's `style`
+ * attribute. Four review rounds on PR #448 showed that matching CSS inside markup with a regex
+ * does not converge — a missing semicolon, an HTML comment and ordinary element text each
+ * produced a wrong answer — so the rule was cut back to stylesheets, where a declaration's
+ * boundaries are unambiguous and where all four measured instances of the defect were.
+ * `checkThemeTokens` already pushes colour out of templates.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'the outline token inside a component\u2019s inline styles block — out of scope, not checked',
   'checkOutlineTokenIsNotTextColour',
   {
     ...OUTLINE_SCSS,
@@ -346,7 +357,6 @@ expectRed(
         '  styles: [`\n    .hint { font-size: 12px; color: var(--mat-sys-outline); }\n  `],\n})\n' +
         'export class Probe {}\n',
     ),
-  /sets a text colour from --mat-sys-outline/,
 );
 
 /**
@@ -542,56 +552,54 @@ expectGreenAfterEdit(
     ),
 );
 
-/* --- the `style` attribute, where the last declaration may omit its semicolon --- */
+/* --- non-code content, and where the opt-out may come from --- */
 
-const OUTLINE_HTML = {
-  'libs/shared/ui/src/lib/probe/probe.component.html': '<p>probe</p>\n',
-};
-
-expectRed(
-  'the outline token as a text colour in a style attribute with no trailing semicolon',
+/**
+ * The token inside a CSS string is not a declaration. `content: "color: var(--mat-sys-outline)"`
+ * sets no colour at all, and the rule failed it — a false positive on correct code, found on
+ * review round 4 and reproduced against a real stylesheet before being fixed.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'the token appearing only inside a quoted CSS string',
   'checkOutlineTokenIsNotTextColour',
-  OUTLINE_HTML,
+  OUTLINE_SCSS,
   (write) =>
     write(
-      'libs/shared/ui/src/lib/probe/probe.component.html',
-      '<p style="font-size: 12px; color: var(--mat-sys-outline)">probe</p>\n',
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__label::before {\n  content: "color: var(--mat-sys-outline)";\n}\n',
+    ),
+);
+
+/**
+ * The opt-out must come from a COMMENT, not from any source text containing the word. Reading
+ * whole lines let a selector name exempt a real violation — the same round-4 finding that, in a
+ * template, let an element's visible text do it.
+ */
+expectRed(
+  'a selector named for non-text does not exempt the declaration',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.non-text-hint {\n  font-size: 12px;\n  color: var(--mat-sys-outline);\n}\n',
     ),
   /sets a text colour from --mat-sys-outline/,
 );
 
-/**
- * The span must stop at the attribute's closing quote. Without that, this valid `color`
- * declaration was failed because the NEXT element's `border-color` — a correct non-text use of
- * the token — fell inside the same match.
- */
-falsePositiveControls += 1;
-expectGreenAfterEdit(
-  'a valid style-attribute text colour followed by an element using the token for a border',
-  'checkOutlineTokenIsNotTextColour',
-  OUTLINE_HTML,
-  (write) =>
-    write(
-      'libs/shared/ui/src/lib/probe/probe.component.html',
-      '<p style="color: var(--mat-sys-on-surface)">probe</p>\n' +
-        '<hr style="border-color: var(--mat-sys-outline)" />\n',
-    ),
-);
-
-/**
- * Annotation isolation: a `non-text` marker belonging to a LATER element must not exempt this
- * one. With the span running past the quote it did, which turned a real violation green.
- */
+/** And the same word inside a string on the declaration's own line must not exempt it either. */
 expectRed(
-  'an unannotated style-attribute text colour followed by a separate annotated icon',
+  'the word non-text inside a string does not exempt the declaration',
   'checkOutlineTokenIsNotTextColour',
-  OUTLINE_HTML,
+  OUTLINE_SCSS,
   (write) =>
     write(
-      'libs/shared/ui/src/lib/probe/probe.component.html',
-      '<p style="color: var(--mat-sys-outline)">probe</p>\n' +
-        '<!-- non-text: the icon below is a decorative glyph, so 1.4.11 applies -->\n' +
-        '<i style="font-size: 32px; color: var(--mat-sys-outline)">icon</i>\n',
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__hint {\n  font-family: "non-text";\n  color: var(--mat-sys-outline);\n}\n',
     ),
   /sets a text colour from --mat-sys-outline/,
 );

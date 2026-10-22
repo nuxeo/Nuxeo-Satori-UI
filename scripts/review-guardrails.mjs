@@ -337,6 +337,30 @@ function checkThemeTokens() {
  * continuation lines of a block comment are read as code — which is how a measurement
  * written into a comment here was first reported as a hardcoded colour.
  *
+ * ## Scope: stylesheets only, and why it was cut to that
+ *
+ * This rule reads `.scss` and nothing else. It began also reading `.html` and a
+ * component's inline `styles`, and four review rounds on PR #448 each found
+ * another syntactic context where matching markup with a regex is wrong: a
+ * declaration spanning lines, a `var()` fallback moving the closing line, a
+ * `style` attribute whose last declaration may omit its semicolon, an HTML
+ * comment holding retired markup, and visible element text that happens to
+ * contain the word `non-text`. Every one of those findings was correct.
+ *
+ * The signal in four consecutive rounds is not that the fifth patch would have
+ * been wrong; it is that the approach was. So the surface is now the one where a
+ * declaration's boundaries are unambiguous — a stylesheet — and that is also
+ * where all four measured instances of this defect actually were. An inline
+ * `style="color: var(--mat-sys-outline)"` in a template is **not** caught, and is
+ * recorded as a limitation in `docs/accessibility.md` rather than half-handled.
+ * `checkThemeTokens` already pushes colour out of templates and into stylesheets.
+ *
+ * Within a stylesheet, comments **and string literals** are masked before
+ * matching, so `content: "color: var(--mat-sys-outline)"` is not a declaration,
+ * and the `non-text` opt-out is read **only from comment text** overlapping the
+ * declaration's lines — never from a selector name or any other source text that
+ * merely contains the word.
+ *
  * Scoped to added lines, like every check here: this forbids writing a new one, and
  * does not demand a sweep of what is already there.
  */
@@ -349,50 +373,23 @@ function checkOutlineTokenIsNotTextColour() {
   // exactly what the token is for. Only the bare `color` property sets text colour.
   //
   // `[^;{}]*` is greedy and spans newlines, so it reaches the end of the declaration however
-  // it is formatted, while `;`, `{` and `}` stop it escaping into the next one. Matching the
-  // whole declaration first is what makes `endLine` cover a multiline `var()` **including its
-  // fallback and closing line** — a second review finding on this rule: a regex that stopped
-  // at the comma after the token excluded those lines, so an icon declaration annotated on its
-  // closing line was rejected despite following the documented opt-out.
-  //
-  // **A `style` attribute needs the quote as a terminator too**, which was the third review
-  // finding. CSS lets the last declaration in a `style="…"` omit its semicolon, so `;{}` does
-  // not bound it and the match ran on into the markup after the attribute. All three
-  // consequences were real: a valid `style="color: var(--mat-sys-on-surface)"` was failed
-  // because a later element's `border-color: var(--mat-sys-outline)` fell inside the span; an
-  // invalid text colour was missed because a later icon's `non-text` annotation fell inside it;
-  // and an unrelated edit after the attribute made an untouched declaration count as touched.
-  //
-  // So HTML and inline templates terminate on a quote as well. `.scss` deliberately does not:
-  // a stylesheet has no attribute boundary, and a quote there would cut a multiline
-  // declaration short — the thing the previous finding was about.
-  const DECLARATION_BODY = { style: '[^;{}"\']*', stylesheet: '[^;{}]*' };
+  // it is formatted, while `;`, `{` and `}` stop it escaping into the next one. Bounding the
+  // whole declaration first is what makes the span cover a multiline `var()` including its
+  // fallback and closing line — which is where Prettier puts the annotation.
+  const colourDeclaration = /(?<![-\w])color\s*:[^;{}]*/g;
   const usesOutlineToken = /var\(\s*--mat-sys-outline\s*[,)]/;
 
   for (const [file, lines] of addedLinesByFile) {
-    let inlineBlock = null;
-    if (!file.endsWith('.scss') && !file.endsWith('.html')) {
-      if (!file.endsWith('.ts') || !fileExists(file)) continue;
-      inlineBlock = inlineStyleBlockLines(read(file));
-      if (inlineBlock.size === 0) continue;
-    }
-    if (!fileExists(file)) continue;
+    if (!file.endsWith('.scss') || !fileExists(file)) continue;
 
     const text = read(file);
-    const masked = maskCommentsPreservingOffsets(text);
-    const sourceLines = text.split('\n');
+    const { masked, comments } = maskNonCodeInStylesheet(text);
     const addedLineNumbers = new Set(lines.map(({ line }) => line));
     const lineAt = (index) => {
       let line = 1;
       for (let i = 0; i < index; i += 1) if (text[i] === '\n') line += 1;
       return line;
     };
-    // A `.scss` file is a stylesheet; an `.html` file and a component's inline template both
-    // carry CSS inside quoted attributes, so they take the quote-terminated form.
-    const colourDeclaration = new RegExp(
-      `(?<![-\\w])color\\s*:${file.endsWith('.scss') ? DECLARATION_BODY.stylesheet : DECLARATION_BODY.style}`,
-      'g',
-    );
 
     for (const match of masked.matchAll(colourDeclaration)) {
       if (!usesOutlineToken.test(match[0])) continue;
@@ -403,18 +400,19 @@ function checkOutlineTokenIsNotTextColour() {
       for (let line = startLine; line <= endLine; line += 1) spanned.push(line);
 
       // Only a declaration the diff actually touched — anywhere in its span, so editing just
-      // the fallback line of an existing multiline declaration is still caught. For a `.ts`
-      // file, only one inside an inline template/styles block.
-      const touched = spanned.some(
-        (line) => addedLineNumbers.has(line) && (!inlineBlock || inlineBlock.has(line)),
-      );
-      if (!touched) continue;
+      // the fallback line of an existing multiline declaration is still caught.
+      if (!spanned.some((line) => addedLineNumbers.has(line))) continue;
 
-      // The deliberate non-text use declares itself anywhere in the declaration's span,
-      // closing line included. Read from the ORIGINAL text: the marker lives in a comment,
-      // and the copy this matched against has had its comments masked away.
-      const declarationText = spanned.map((line) => sourceLines[line - 1] ?? '').join('\n');
-      if (/non-text/.test(declarationText)) continue;
+      // The opt-out must be a COMMENT on one of the declaration's lines. Reading the raw
+      // source lines instead let any text containing `non-text` exempt a violation — a
+      // selector called `.non-text-hint`, or in a template a paragraph that said "non-text".
+      const annotated = comments.some((comment) => {
+        const from = lineAt(comment.start);
+        const to = lineAt(comment.end);
+        const overlaps = from <= endLine && to >= startLine;
+        return overlaps && /non-text/.test(text.slice(comment.start, comment.end));
+      });
+      if (annotated) continue;
 
       fail(
         `${file}:${startLine} sets a text colour from --mat-sys-outline, which is a non-text ` +
@@ -429,22 +427,55 @@ function checkOutlineTokenIsNotTextColour() {
 }
 
 /**
- * Replace every comment with spaces, keeping each remaining character at its original
- * index and every newline where it was.
+ * Blank out everything in a stylesheet that is not code, keeping every remaining character at
+ * its original index, and report where the comments were.
  *
- * Offsets have to survive because the caller turns a match index back into a line number.
- * `' '.repeat(m.length)` would do that for a `//` comment but not a block comment, whose
- * newlines must be kept or every line number after it shifts up.
+ * Offsets have to survive because the caller turns a match index back into a line number, and
+ * a block comment's newlines must be kept or every line after it shifts.
  *
- * Known limitation, stated rather than hidden: a `//` inside a string or a `url(https://…)`
- * is masked as if it began a comment. That can only lose a finding on a line that puts such
- * a URL before a `color:` declaration, which does not occur here, and it fails toward
- * silence rather than toward a false accusation.
+ * A single pass rather than chained regexes, because comments and strings can contain each
+ * other: `content: "/* not a comment *\/"` and `/* "not a string" *\/` both have to come out
+ * the right way round, and two independent `replace` calls cannot agree on which opened first.
+ *
+ * Strings are masked but **not** reported as comments — a string is not an opt-out.
+ *
+ * @param {string} text
+ * @returns {{ masked: string, comments: Array<{ start: number, end: number }> }}
  */
-function maskCommentsPreservingOffsets(text) {
-  return text
-    .replace(/\/\*[\s\S]*?\*\//g, (comment) => comment.replace(/[^\n]/g, ' '))
-    .replace(/\/\/[^\n]*/g, (comment) => ' '.repeat(comment.length));
+function maskNonCodeInStylesheet(text) {
+  const out = Array.from(text);
+  /** @type {Array<{ start: number, end: number }>} */
+  const comments = [];
+  const blank = (from, to) => {
+    for (let i = from; i < to; i += 1) if (out[i] !== '\n') out[i] = ' ';
+  };
+  let i = 0;
+  while (i < text.length) {
+    const here = text[i];
+    const next = text[i + 1];
+    if (here === '/' && next === '*') {
+      const close = text.indexOf('*/', i + 2);
+      const end = close === -1 ? text.length : close + 2;
+      blank(i, end);
+      comments.push({ start: i, end });
+      i = end;
+    } else if (here === '/' && next === '/') {
+      const newline = text.indexOf('\n', i);
+      const end = newline === -1 ? text.length : newline;
+      blank(i, end);
+      comments.push({ start: i, end });
+      i = end;
+    } else if (here === '"' || here === "'") {
+      let j = i + 1;
+      while (j < text.length && text[j] !== here) j += text[j] === '\\' ? 2 : 1;
+      const end = Math.min(j + 1, text.length);
+      blank(i, end);
+      i = end;
+    } else {
+      i += 1;
+    }
+  }
+  return { masked: out.join(''), comments };
 }
 
 function checkDocsNumbering() {
