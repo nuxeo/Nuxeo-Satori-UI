@@ -22,7 +22,7 @@ export const NXS_DEFAULT_VISIBLE_PERMISSIONS: readonly string[] = [
  * `current` when an entry being edited holds one outside that list, so editing never changes it
  * silently.
  */
-export function offeredRights(
+export function nxsOfferedRights(
   visible: readonly string[] | null | undefined,
   current?: string,
 ): readonly string[] {
