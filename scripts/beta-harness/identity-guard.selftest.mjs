@@ -48,6 +48,8 @@ const GUEST = { 'entity-type': 'user', id: 'Anonymous', isAnonymous: true };
 const b64 = (s) => Buffer.from(s).toString('base64');
 const basicSession = (username, basic = b64(`${username}:pw`)) =>
   JSON.stringify({ kind: 'basic', username, basic, isAdministrator: true, groups: [] });
+const cookieSession = (username) =>
+  JSON.stringify({ kind: 'cookie', username, isAdministrator: true, groups: [] });
 const ok200 = (body) => ({ status: 200, body });
 const both = (body) => ({ inPage: ok200(body), replayed: ok200(body) });
 
@@ -398,12 +400,13 @@ function fakePage({
     },
     /**
      * Make the page send a request and finish it, as the app would. `authorization` is the header
-     * it went out with; `navigation` loads a new main-frame document.
+     * it went out with; `navigation` loads a new main-frame document; `cookie` is the session
+     * cookie value at request time (for testing cookie sessions, Gap 1).
      *
      * @param {string} url
-     * @param {{ authorization?: string | null, type?: string, navigation?: boolean }} [options]
+     * @param {{ authorization?: string | null, type?: string, navigation?: boolean, cookie?: string | null }} [options]
      */
-    send: (url, { authorization = null, type = 'xhr', navigation = false } = {}) => {
+    send: (url, { authorization = null, type = 'xhr', navigation = false, cookie = null } = {}) => {
       const request = {
         url: () => url,
         method: () => 'GET',
@@ -411,9 +414,17 @@ function fakePage({
         isNavigationRequest: () => navigation,
         frame: () => mainFrame,
         headers: () => (authorization ? { authorization } : {}),
+        // For testing: store the cookie value to be picked up by async requestfinished handler
+        _testCookie: cookie,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
-      for (const fn of state.listeners['requestfinished'] ?? []) fn(request);
+      // Call requestfinished handlers, which may be async. In the real browser these are async,
+      // but for testing we don't await them to keep the test synchronous.
+      for (const fn of state.listeners['requestfinished'] ?? []) {
+        const result = fn(request);
+        // If it's a promise, catch errors but don't wait
+        if (result && typeof result.catch === 'function') result.catch(() => {});
+      }
     },
     /**
      * Start a request and leave it in flight: `request` fires now, `requestfinished` only when
@@ -861,6 +872,39 @@ function watchedPage(options) {
     r,
   );
 }
+
+{
+  // Gap 1: cookie-authenticated traffic is invisible to the traffic log.
+  // A cookie session stores authorization: null, and a guest request also has authorization: null.
+  // Before the fix, the guard compared r.authorization !== stored.authorization (null !== null = false),
+  // so the guest request was NOT considered stray. After the fix, it checks cookies for cookie sessions.
+  const SESSION_KEY = 'agentic_ui_nuxeo_session';
+  const ADMIN_COOKIE = 'admin-cookie-value';
+  const cookieSessionStorage = {
+    [`sessionStorage:${SESSION_KEY}`]: cookieSession('Administrator'),
+  };
+  const { page, traffic } = watchedPage({
+    storage: cookieSessionStorage,
+    meFor: () => ADMIN, // /me answers as Admin when called with the cookie
+  });
+  // Simulate the page's actual cookie
+  page.state.cookies = [{ name: 'JSESSIONID', value: ADMIN_COOKIE }];
+  // First request with the cookie (simulating authenticated traffic)
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: ADMIN_COOKIE });
+  // Second request without the cookie (guest traffic that should be rejected)
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+  const r = await checkPageIdentity(page, 'Administrator', APP, {
+    fetchImpl: page.fetch,
+    foreignApiOrigins: traffic,
+  });
+  control(
+    'negative',
+    'a cookie session: a request sent without the session cookie is refused (Gap 1 - cookie traffic visibility)',
+    !r.ok && /without the header/.test(r.problem ?? ''),
+    r,
+  );
+}
+
 {
   // `AppConfigService` and `DocumentLayoutService` read these through `HttpBackend` on every load.
   const { page, traffic } = watchedPage();
@@ -1934,6 +1978,60 @@ await silently(async () => {
         'a headerless request completing while repeated h.login() clears cookies and installs the session is still judged',
         thrown instanceof PreconditionError &&
           /without the header/.test(thrown.message) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message),
+        { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
+    // Gap 2: the re-login interval after the second verification is unjudged for cross-user logins.
+    // When h.login() is replacing a session for a DIFFERENT user, expectApp() restarts the window,
+    // putting requests from the clearCookies/storage interval behind `since` where no boundary sees them.
+    // This control simulates a cross-user re-login (after h.signedInAs) with a request during that interval.
+    const saved = { USER: process.env['NUXEO_USER'], PASS: process.env['NUXEO_PASS'], URL: process.env['APP_URL'] };
+    process.env['NUXEO_USER'] = 'Administrator';
+    process.env['NUXEO_PASS'] = 'adminpw';
+    process.env['APP_URL'] = APP;
+    try {
+      const page = fakePage({ url: `${APP}/#/`, storage: { ...signedIn } });
+      const ALT_USER = 'AlternateUser';
+      const ALT_AUTH = `Basic ${b64(`${ALT_USER}:altpw`)}`;
+      page.state.meFor = (/** @type {string | null} */ auth) =>
+        auth === H ? ADMIN : auth === ALT_AUTH ? { id: ALT_USER, isAnonymous: false } : GUEST;
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      // Sign in as alternate user, then switch back to Administrator (cross-user re-login)
+      await h.signedInAs(ALT_USER, 'altpw', 'switch to alternate user');
+      page.state.storage = { 'sessionStorage:agentic_ui_nuxeo_session': basicSession(ALT_USER, b64(`${ALT_USER}:altpw`)) };
+      page.send(`${APP}/nuxeo/api/v1/me`, { authorization: ALT_AUTH });
+      // The boot navigation happens while the AlternateUser session is still active, so it uses ALT_AUTH
+      page.state.bootRequests = [{ url: `${APP}/nuxeo/api/v1/me`, authorization: ALT_AUTH }];
+      // During clearCookies, send a headerless request that should be caught but currently escapes (Gap 2)
+      page.state.duringClear = () =>
+        page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+      const thrown = await thrownBy(async () => {
+        await h.login(); // Cross-user: from AlternateUser back to Administrator
+        page.state.duringClear = undefined;
+        await h.step('two');
+        await h.finish();
+      });
+      control(
+        'negative',
+        'a cross-user re-login: a request during the post-verification interval is refused (Gap 2 - re-login interval)',
+        thrown instanceof PreconditionError &&
+          (/without the .* session's header/.test(thrown.message) || /in flight/.test(thrown.message)) &&
           /search\/lang\/NXQL\/execute/.test(thrown.message),
         { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
       );

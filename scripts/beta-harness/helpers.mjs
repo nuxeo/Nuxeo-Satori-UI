@@ -15,6 +15,7 @@
 
 import { resolve } from 'node:path';
 import { requireNuxeoCredentials } from './nuxeo-credentials.mjs';
+import { sameUser, strayRequests } from './identity-guard.mjs';
 
 const DEFAULT_BASE_URL = 'http://localhost:4200';
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -682,6 +683,70 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         },
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
+
+      // Gap 2: For cross-user re-logins, expectApp will restart the window, putting the
+      // clearCookies/storage interval (lines 676-684) behind `since` where no boundary judges it.
+      // Refuse now if there are pending or stray requests from that interval, before the restart hides them.
+      if (replacing && identity) {
+        const beforeUser = identity.expectedApp;
+        const crossUser = !sameUser(user, beforeUser);
+        if (crossUser) {
+          // Check for pending requests first
+          const pending = identity.pendingRequests();
+          if (pending.length) {
+            const listed = pending.map((r) => `${r.method} ${r.path}`).join(', ');
+            const s = pending.length === 1 ? '' : 's';
+            ensureStep().checks.push({
+              name: `identity guard before h.login() completes (cross-user re-login, after clearCookies interval)`,
+              passed: false,
+              detail: `${pending.length} request${s} still in flight: ${listed}`,
+            });
+            throw new PreconditionError(
+              `h.login() cannot complete: ${pending.length} request${s} still in flight (${listed}), ` +
+                `and this is a cross-user re-login that would restart the window over them, leaving them unjudged`,
+            );
+          }
+
+          // Check for stray requests completed during the clearCookies interval, against the OLD user's session.
+          // We can't call identity.verify() here because the session has been rewritten to the NEW user,
+          // but expectApp hasn't updated the expected user yet. So we manually check the traffic.
+          const traffic = identity._traffic; // Access internal traffic log
+          if (traffic && Array.isArray(traffic.sent)) {
+            // Find the actual authorization the old session was using by looking at recent authenticated requests
+            const recentAuth = traffic.sent
+              .slice()
+              .reverse()
+              .find((r) => r.finished && r.authorization)?.authorization;
+
+            if (recentAuth) {
+              // Construct a minimal stored session for the old user to check against
+              const oldSession = {
+                key: 'placeholder',
+                storage: 'sessionStorage',
+                kind: 'basic',
+                username: beforeUser,
+                authorization: recentAuth,
+              };
+              const stray = strayRequests(traffic, oldSession, { signingIn: false });
+              if (stray.length) {
+                const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+                const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
+                ensureStep().checks.push({
+                  name: `identity guard before h.login() completes (cross-user re-login, after clearCookies interval)`,
+                  passed: false,
+                  detail: `${stray.length} stray request(s): ${listed}${suffix}`,
+                });
+                throw new PreconditionError(
+                  `h.login() cannot complete: ${stray.length} request(s) were sent during the clearCookies interval ` +
+                    `without the ${beforeUser} session's header (${listed}${suffix}), and this is a cross-user re-login ` +
+                    `that would restart the window over them, leaving them unjudged`,
+                );
+              }
+            }
+          }
+        }
+      }
+
       identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
       // Only the run's first login booted a signed-out page, so only it has requests to excuse:
       // its session's start at the reload. A repeated login has no signed-out boot, so it does
@@ -693,8 +758,8 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // That boundary is the right judge here because `h.login()` always signs in as the run's
       // own credentials: the header it installs is the one the replaced session carried, so
       // traffic from the interval is held to the same standard either way. Where it is *not* the
-      // same user — a login after `h.signedInAs(...)` — `expectApp` above has already restarted
-      // the window, and the interval after it is the residue NXSAT-703 covers.
+      // same user — a login after `h.signedInAs(...)` — the verification above (Gap 2, NXSAT-707)
+      // checks the interval before `expectApp` restarts the window.
       if (!replacing) identity?.sessionInstalled();
 
       await page.reload({ waitUntil: 'networkidle' });

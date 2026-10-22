@@ -118,6 +118,8 @@ export const APP_SESSION_SOURCES = /** @type {const} */ ([
  *   Not `finished`, so nothing judges it — and nothing can have read it either
  * @property {string | null} authorization the header it went out with, after any `page.route`
  *   rewrite; read when it finished
+ * @property {string | null} cookie the session cookie (JSESSIONID) value at request time, or null
+ *   if no session cookie was present; read when it finished
  */
 
 /**
@@ -644,14 +646,32 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
       finished: false,
       failed: false,
       authorization: null,
+      cookie: null,
     };
     traffic.sent.push(record);
     pending.set(request, record);
   });
-  page.on('requestfinished', (request) => {
+  page.on('requestfinished', async (request) => {
     const record = pending.get(request);
     if (!record) return;
     record.authorization = request.headers()['authorization'] ?? null;
+    // Record the session cookie for cookie-based authentication. Cookie sessions have
+    // authorization: null in both the stored session and the request, so without this the guard
+    // cannot distinguish authenticated requests from guest requests (Gap 1).
+    // In tests, the request may have _testCookie set directly for synchronous testing.
+    if ('_testCookie' in request) {
+      record.cookie = request._testCookie ?? null;
+      record.finished = true;
+      return;
+    }
+    try {
+      const cookies = await page.context().cookies(request.url());
+      const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
+      record.cookie = sessionCookie?.value ?? null;
+    } catch {
+      // If reading cookies fails, record remains null - better to fail closed than assume OK
+      record.cookie = null;
+    }
     record.finished = true;
   });
   // Aborted, or a network error: the only other event this request will emit. It is recorded so
@@ -733,17 +753,37 @@ export function pendingAcrossSignIn(traffic, upTo) {
  * while the app may still be signed out (`signingIn`) are the requests before the first that
  * carried the header excused; those are the signed-out page before a form sign-in.
  *
+ * For cookie sessions (where authorization is null for both the session and guest requests),
+ * checks the session cookie instead. Without an `expectedCookie`, cookie sessions cannot be
+ * judged and return all headerless traffic as stray (Gap 1 - fail closed).
+ *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @param {StoredSession} stored
- * @param {{ signingIn?: boolean }} [options]
+ * @param {{ signingIn?: boolean, expectedCookie?: string | null }} [options]
  * @returns {SentRequest[]}
  */
-export function strayRequests(traffic, stored, { signingIn = false } = {}) {
+export function strayRequests(traffic, stored, { signingIn = false, expectedCookie = undefined } = {}) {
   // By shape, not `instanceof`: a second copy of this module, as a loader can make, would
   // otherwise switch the check off without a word.
   const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
   if (!Array.isArray(sent) || typeof since !== 'number') return [];
   const judged = sent.slice(since).filter((r) => r.finished && !anonymousByDesign(r));
+
+  // For cookie sessions, check the cookie dimension instead of authorization header
+  const isCookieSession = stored.kind === 'cookie';
+  if (isCookieSession) {
+    // If we don't have the expected cookie value, we cannot judge - fail closed by returning
+    // all headerless requests as potentially stray
+    if (expectedCookie === undefined) {
+      return judged.filter((r) => r.authorization === null);
+    }
+    // For signing in, find the first request that used this cookie
+    const first = signingIn ? judged.findIndex((r) => r.cookie === expectedCookie) : 0;
+    // Return requests that don't have the expected cookie
+    return judged.slice(Math.max(first, 0)).filter((r) => r.cookie !== expectedCookie);
+  }
+
+  // For Basic auth sessions, use the authorization header as before
   const first = signingIn ? judged.findIndex((r) => r.authorization === stored.authorization) : 0;
   return judged.slice(Math.max(first, 0)).filter((r) => r.authorization !== stored.authorization);
 }
@@ -842,8 +882,24 @@ export async function checkPageIdentity(
   }
   const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
   const signingIn = !normalisePolicy(policy).required;
+
+  // For cookie sessions, get the expected session cookie to check against requests (Gap 1)
+  let expectedCookie = undefined;
+  if (stored && !('problem' in stored) && stored.kind === 'cookie') {
+    try {
+      const cookies = await page.context().cookies(`${originOf(appOrigin)}${ME_PATH}`);
+      const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
+      expectedCookie = sessionCookie?.value ?? null;
+    } catch {
+      // If reading cookies fails, leave undefined - strayRequests will fail closed
+      expectedCookie = undefined;
+    }
+  }
+
   const stray =
-    stored && !('problem' in stored) ? strayRequests(foreignApiOrigins, stored, { signingIn }) : [];
+    stored && !('problem' in stored)
+      ? strayRequests(foreignApiOrigins, stored, { signingIn, expectedCookie })
+      : [];
   return judgeApp(stored, answers, policy, stray);
 }
 
@@ -914,6 +970,8 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     },
     checks,
     switches,
+    // Internal: traffic log for Gap 2 manual stray-request check in h.login() cross-user path
+    _traffic: foreignApiOrigins,
 
     /** The current session's requests still in flight; any one of them refuses a transition. */
     pendingRequests() {
