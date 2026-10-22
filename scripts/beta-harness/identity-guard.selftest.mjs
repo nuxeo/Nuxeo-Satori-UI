@@ -28,6 +28,7 @@ import {
   parseStoredSession,
   pendingAcrossSignIn,
   sameUser,
+  strayRequests,
   watchNuxeoApiOrigins,
 } from './identity-guard.mjs';
 
@@ -870,6 +871,39 @@ function watchedPage(options) {
     'a signed-out boot is excused only when the reload that installs the session is marked',
     !r.ok && /without the header/.test(r.problem ?? ''),
     r,
+  );
+}
+
+{
+  // Gap 1, P2: Cookie session with null expectedCookie (cleared after probes but before check)
+  const SESSION_KEY = 'agentic_ui_nuxeo_session';
+  const cookieSessionStorage = {
+    [`sessionStorage:${SESSION_KEY}`]: cookieSession('Administrator'),
+  };
+  const { page, traffic } = watchedPage({
+    storage: cookieSessionStorage,
+    meFor: () => ADMIN,
+  });
+  page.state.cookies = [{ name: 'JSESSIONID', value: 'admin-cookie' }];
+  page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
+  // Request without cookie - should be refused even when expectedCookie is null
+  page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+  // Simulate cleared cookie by passing null as expectedCookie
+  const stored = {
+    key: SESSION_KEY,
+    storage: 'sessionStorage',
+    kind: 'cookie',
+    username: 'Administrator',
+    authorization: null,
+  };
+  const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie: null });
+  control(
+    'negative',
+    'a cookie session with null expectedCookie fails closed and reports all headerless requests as stray (Gap 1, P2)',
+    stray.length === 2 &&
+      stray.some((r) => r.path === '/nuxeo/api/v1/me') &&
+      stray.some((r) => r.path === '/nuxeo/api/v1/search/lang/NXQL/execute'),
+    { strayCount: stray.length, stray: stray.map((r) => r.path) },
   );
 }
 
@@ -2031,8 +2065,10 @@ await silently(async () => {
         'negative',
         'a cross-user re-login: a request during the post-verification interval is refused (Gap 2 - re-login interval)',
         thrown instanceof PreconditionError &&
-          (/without the .* session's header/.test(thrown.message) || /in flight/.test(thrown.message)) &&
-          /search\/lang\/NXQL\/execute/.test(thrown.message),
+          /identity guard/.test(thrown.message) &&
+          (/without the .* session's credential/.test(thrown.message) || /in flight/.test(thrown.message)) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+          identity.checks.some((c) => !c.ok && c.at.includes('cross-user re-login')),
         { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
       );
     } finally {

@@ -654,7 +654,8 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
   page.on('requestfinished', async (request) => {
     const record = pending.get(request);
     if (!record) return;
-    record.authorization = request.headers()['authorization'] ?? null;
+    const headers = request.headers();
+    record.authorization = headers['authorization'] ?? null;
     // Record the session cookie for cookie-based authentication. Cookie sessions have
     // authorization: null in both the stored session and the request, so without this the guard
     // cannot distinguish authenticated requests from guest requests (Gap 1).
@@ -664,12 +665,14 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
       record.finished = true;
       return;
     }
-    try {
-      const cookies = await page.context().cookies(request.url());
-      const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
-      record.cookie = sessionCookie?.value ?? null;
-    } catch {
-      // If reading cookies fails, record remains null - better to fail closed than assume OK
+    // Read the actual Cookie header the request sent, not context().cookies() which reflects the
+    // current jar and can show an authenticated cookie for a request sent with credentials:'omit'.
+    const cookieHeader = headers['cookie'] ?? null;
+    if (cookieHeader) {
+      // Parse JSESSIONID from the Cookie header (format: "name=value; name2=value2")
+      const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
+      record.cookie = match ? match[1] : null;
+    } else {
       record.cookie = null;
     }
     record.finished = true;
@@ -772,9 +775,10 @@ export function strayRequests(traffic, stored, { signingIn = false, expectedCook
   // For cookie sessions, check the cookie dimension instead of authorization header
   const isCookieSession = stored.kind === 'cookie';
   if (isCookieSession) {
-    // If we don't have the expected cookie value, we cannot judge - fail closed by returning
-    // all headerless requests as potentially stray
-    if (expectedCookie === undefined) {
+    // If we don't have the expected cookie value (undefined or null), we cannot judge - fail closed
+    // by returning all headerless requests as potentially stray. Null can happen if the cookie was
+    // cleared after successful identity probes but before this check.
+    if (expectedCookie === undefined || expectedCookie === null) {
       return judged.filter((r) => r.authorization === null);
     }
     // For signing in, find the first request that used this cookie
@@ -890,9 +894,18 @@ export async function checkPageIdentity(
       const cookies = await page.context().cookies(`${originOf(appOrigin)}${ME_PATH}`);
       const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
       expectedCookie = sessionCookie?.value ?? null;
+      // Recheck that the page stayed on the app during the async cookie lookup. Navigation after
+      // askThroughPage's final check can leave cookies from the old origin while the page is off-app.
+      if (!onApp) {
+        return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
+      }
     } catch {
       // If reading cookies fails, leave undefined - strayRequests will fail closed
       expectedCookie = undefined;
+      // Also recheck origin after the failure path
+      if (!onApp) {
+        return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
+      }
     }
   }
 
@@ -976,6 +989,31 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     /** The current session's requests still in flight; any one of them refuses a transition. */
     pendingRequests() {
       return pendingRequests(foreignApiOrigins);
+    },
+
+    /**
+     * Capture the outgoing session's complete state for judging the interval before a cross-user
+     * restart (Gap 2, P1). Returns the stored session and its expected cookie for a cookie session.
+     * Called before clearing cookies/storage so the snapshot reflects what was actually in use.
+     *
+     * @returns {Promise<{stored: StoredSession | {problem: string} | null, expectedCookie?: string | null}>}
+     */
+    async captureOutgoingSession() {
+      const { stored } = await askThroughPage(page, appOrigin, fetchImpl);
+      if (!stored || 'problem' in stored) {
+        return { stored };
+      }
+      // For cookie sessions, also capture the expected cookie at this moment
+      if (stored.kind === 'cookie') {
+        try {
+          const cookies = await page.context().cookies(`${appOrigin}${ME_PATH}`);
+          const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
+          return { stored, expectedCookie: sessionCookie?.value ?? null };
+        } catch {
+          return { stored, expectedCookie: null };
+        }
+      }
+      return { stored };
     },
 
     /**
