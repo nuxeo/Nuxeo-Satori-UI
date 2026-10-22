@@ -89,9 +89,34 @@ export const test = base.extend<{ signedIn: Page }>({
     // is exactly the hook-shaped failure that made the credential-based control unmeasurable.
     if (process.env['E2E_STARVE_APP'] === '1') {
       await page.route('**/nuxeo/api/**', async (route) => {
+        const url = route.request().url();
         // `continue()`, not `fallback()`: there is no second handler to fall back to, and
         // "send this one to the network" is what is meant.
-        if (route.request().url().includes('/api/v1/me')) return route.continue();
+        if (url.includes('/api/v1/me')) return route.continue();
+
+        // The empty answer has to be empty **in the shape that endpoint returns**, or the
+        // app fails parsing rather than rendering an empty state — and a spec failing on a
+        // broken payload is not evidence that its assertion reads data. A sub-resource is
+        // checked before the single-document read it hangs off, because `@children` is also
+        // a `/id/` URL.
+        const isList =
+          /@children|@search|@query|\/search\/lang\/|\/api\/v1\/query/.test(url) ||
+          /@(acl|audit|annotations|comments|tags|versions|renditions)\b/.test(url);
+        const isSingleDocument = !isList && /\/api\/v1\/(id|path)\//.test(url);
+
+        if (isSingleDocument) {
+          // What an empty repository actually says about a document it does not hold.
+          return route.fulfill({
+            status: 404,
+            contentType: 'application/json',
+            body: JSON.stringify({
+              'entity-type': 'exception',
+              status: 404,
+              message: 'No such document (E2E_STARVE_APP)',
+            }),
+          });
+        }
+
         return route.fulfill({
           status: 200,
           contentType: 'application/json',

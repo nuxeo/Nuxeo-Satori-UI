@@ -86,6 +86,10 @@ set -euo pipefail
 
 MIN_FAILURES="${1:-5}"
 
+# Each run gets its own directory, for the reports *and* for Playwright's artifacts. Both
+# runs used the config's single `outputDir` at first, so the starved run overwrote the
+# baseline's screenshots, videos and traces — the half a reader needs to see what the app
+# looked like when the assertion still passed.
 OUT_DIR="dist/e2e"
 BASELINE_DIR="$OUT_DIR/vacuity-baseline"
 STARVED_DIR="$OUT_DIR/vacuity-starved"
@@ -133,8 +137,13 @@ collect() {
 
 echo ""
 echo "--- run 1 of 2: baseline (correct credentials, app served normally) ---"
+# `E2E_STARVE_APP=0` explicitly, not merely "unset here". A caller who exported it while
+# investigating the control would otherwise starve BOTH runs, and two starved runs agree with
+# each other: no spec changes outcome between them, the count is 0, and the control reports a
+# confident FAIL about the suite rather than an error about its own invocation.
 set +e
-npx playwright test -c "$CONFIG" --project=chromium --retries=0 2>&1 | tee /tmp/e2e-vacuity-baseline.log
+E2E_STARVE_APP=0 npx playwright test -c "$CONFIG" --project=chromium --retries=0 \
+  --output "$OUT_DIR/vacuity-baseline/artifacts" 2>&1 | tee /tmp/e2e-vacuity-baseline.log
 BASELINE_EXIT=${PIPESTATUS[0]}
 set -e
 collect "$BASELINE_DIR" "baseline"
@@ -143,7 +152,8 @@ echo "baseline Playwright exit: ${BASELINE_EXIT}"
 echo ""
 echo "--- run 2 of 2: starved (same specs, the app served an empty repository) ---"
 set +e
-E2E_STARVE_APP=1 npx playwright test -c "$CONFIG" --project=chromium --retries=0 2>&1 \
+E2E_STARVE_APP=1 npx playwright test -c "$CONFIG" --project=chromium --retries=0 \
+  --output "$OUT_DIR/vacuity-starved/artifacts" 2>&1 \
   | tee /tmp/e2e-vacuity-starved.log
 STARVED_EXIT=${PIPESTATUS[0]}
 set -e

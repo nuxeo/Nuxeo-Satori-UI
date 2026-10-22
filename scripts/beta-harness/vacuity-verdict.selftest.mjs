@@ -135,12 +135,18 @@ ok('a skipped spec is not treated as a pass, so test.skip cannot manufacture a v
 // ---------------------------------------------------------------- keys and threshold
 
 ok('the spec key ignores the differing path prefixes of the two input files',
-  specKey('auth.spec.ts', 211, 'chromium') === specKey('src/auth.spec.ts', 211, 'chromium'));
+  specKey('auth.spec.ts', 211, 'chromium', 't') === specKey('src/auth.spec.ts', 211, 'chromium', 't'));
 
 ok('the spec key separates the same spec on two browser projects',
-  specKey('a.spec.ts', 1, 'chromium') !== specKey('a.spec.ts', 1, 'webkit'));
+  specKey('a.spec.ts', 1, 'chromium', 't') !== specKey('a.spec.ts', 1, 'webkit', 't'));
 
-ok('loadSpecs keeps the describe title in the reported name',
+ok('the spec key separates two parameterized tests registered at the same line',
+  specKey('a.spec.ts', 1, 'chromium', 'case A') !== specKey('a.spec.ts', 1, 'chromium', 'case B'));
+
+ok('the spec key ignores the differing describe prefixes of the two input files',
+  specKey('a.spec.ts', 1, 'chromium', 'outer > inner > t') === specKey('a.spec.ts', 1, 'chromium', 't'));
+
+ok('loadSpecs keeps the describe titles but not the file-path root suite',
   loadSpecs(baseline)[0].title === 'inner > reads data', loadSpecs(baseline)[0].title);
 
 for (const bad of ['0', '-1', 'five', '', '2.5', ' ']) {

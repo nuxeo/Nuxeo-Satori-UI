@@ -70,26 +70,35 @@ import { basename } from 'node:path';
 /**
  * Every spec in a Playwright `results.json`, flattened out of the suite tree.
  *
- * The key is `file:line:project` rather than the `id` Playwright also provides. Both are
- * stable across two runs of identical code, but the assertion reporter's output carries only
- * file, line and project — so joining on `id` would work for the two results files and then
- * need a second, different join for the third input. One key for all three inputs is the
- * reason the three files cannot disagree about which spec is which.
+ * The key is `file:line:project:title` rather than the `id` Playwright also provides. Both
+ * are stable across two runs of identical code, but the assertion reporter's output carries
+ * only file, line, project and title — so joining on `id` would work for the two results
+ * files and then need a second, different join for the third input. One key for all three
+ * inputs is the reason the three files cannot disagree about which spec is which.
+ *
+ * The **title** is in the key because `file:line:project` alone is not unique: tests
+ * registered in a loop from one `test()` call all report the same line, so a parameterized
+ * spec would collide with its siblings and the join would silently pick whichever came
+ * first. There are none in this suite today, and a key that depends on that staying true is
+ * the kind of assumption this control exists to stop relying on.
  *
  * `basename` because the two sources spell the path differently: `results.json` says
- * `auth.spec.ts` and `assertion-failures.json` says `src/auth.spec.ts`.
+ * `auth.spec.ts` and `assertion-failures.json` says `src/auth.spec.ts`. Only the **leaf**
+ * title is used, because the two sources also differ on the prefix: the reporter joins the
+ * enclosing describe titles with ` > ` and the results tree nests them as suites.
  */
 export function loadSpecs(results) {
   const specs = [];
-  const walk = (suite) => {
+  const walk = (suite, ancestry) => {
+    const titles = suite.title ? [...ancestry, suite.title] : ancestry;
     for (const spec of suite.specs ?? []) {
       for (const test of spec.tests ?? []) {
         specs.push({
-          key: specKey(spec.file, spec.line, test.projectName),
+          key: specKey(spec.file, spec.line, test.projectName, spec.title),
           file: spec.file,
           line: spec.line,
           project: test.projectName,
-          title: [...(suite.title ? [suite.title] : []), spec.title].join(' > '),
+          title: [...titles, spec.title].join(' > '),
           // `ok` is Playwright's own per-spec verdict and already accounts for retries and
           // for `expectedStatus`, which is why it is used rather than re-deriving a status
           // from the results array. A spec that only passed on retry is `ok`.
@@ -100,14 +109,22 @@ export function loadSpecs(results) {
         });
       }
     }
-    for (const child of suite.suites ?? []) walk(child);
+    for (const child of suite.suites ?? []) walk(child, titles);
   };
-  for (const suite of results.suites ?? []) walk(suite);
+  // The root suite's title is the spec file's path, which is already the left-hand column of
+  // every report line, so it is not part of the displayed name. Its describes are.
+  for (const suite of results.suites ?? []) {
+    for (const spec of suite.specs ?? []) walk({ specs: [spec] }, []);
+    for (const child of suite.suites ?? []) walk(child, []);
+  }
   return specs;
 }
 
-export function specKey(file, line, project) {
-  return `${basename(String(file))}:${line}:${project ?? ''}`;
+/** The leaf test title, however the source spelled the enclosing describes. */
+const leafTitle = (title) => String(title ?? '').split(' > ').pop().trim();
+
+export function specKey(file, line, project, title) {
+  return `${basename(String(file))}:${line}:${project ?? ''}:${leafTitle(title)}`;
 }
 
 /**
@@ -122,7 +139,9 @@ export function specKey(file, line, project) {
 export function assertionKeys(assertionReport) {
   const keys = new Set();
   for (const spec of assertionReport.specs ?? []) {
-    if (spec.failedAtAssertion) keys.add(specKey(spec.file, spec.line, spec.project));
+    if (spec.failedAtAssertion) {
+      keys.add(specKey(spec.file, spec.line, spec.project, spec.title));
+    }
   }
   return keys;
 }
