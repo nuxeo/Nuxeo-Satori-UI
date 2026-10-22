@@ -19,9 +19,9 @@
  *   a local, uncommitted revert of 0b7b44b15's three POC files. Only those two steps differ.
  * - `adf-hx-as-target` — negative control: `adf-hx` with no known gaps, so every gap check is
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
- * - `nxs` — the replacements. The adapter is provisional: its selectors follow the table-primitive
- *   decision (`docs/satori-components/decision-table-primitive.md`) and must be confirmed against
- *   the built components. Change the adapter only; never the steps or the expected values.
+ * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
+ *   renders it, not from the table-primitive decision it was first drafted from. Change the
+ *   adapter only; never the steps or the expected values.
  *
  * ## Reading the checks
  *
@@ -431,9 +431,8 @@ const ADF_HX_REMOUNT = {
 };
 
 /**
- * Confirmed against the components on feature/nxsat-308-identity-guard at 23d60bb5d (NXSAT-644);
- * each group names the template it was read from. Expectations no selector can reach are recorded
- * in NXSAT-644 rather than worked around here. Change only this object.
+ * Each group names the template its selectors were read from. An expectation no selector can
+ * reach is left to fail rather than worked around here. Change only this object.
  */
 const NXS = {
   id: 'nxs',
@@ -477,7 +476,8 @@ const NXS = {
     toggle: (label) =>
       `nxs-document-tree .nxs-document-tree__row:has(> .nxs-document-tree__label:text-is("${label}")) .nxs-document-tree__arrow`,
     region: 'nxs-document-tree',
-    // BrowseService.getNavTreeChildren asks the tree_children page provider, not @children.
+    // An ordinary folder's level comes from the tree_children page provider; BrowseService turns
+    // to @children only when that answers no entries, and a 500 there reaches the tree as an error.
     failPattern: '**/search/pp/tree_children/execute**',
   },
   // breadcrumbs/breadcrumbs.component.ts: the selector is plural.
@@ -537,7 +537,11 @@ const NXS = {
     provenance: 'nxs-manage-versions',
     root: 'nxs-manage-versions',
     async open(page, h, uid) {
-      await page.keyboard.press('Escape'); // a menu left open by the previous read
+      // The previous read leaves its menu open for the screenshot; a stale menu must not be read.
+      if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
       await h.goToDoc(uid);
       await page.waitForTimeout(2500);
       const trigger = page.locator('nxs-manage-versions .nxs-manage-versions__trigger');
@@ -554,6 +558,11 @@ const NXS = {
       const menu = page.locator('.cdk-overlay-container .nxs-manage-versions__menu').first();
       const scope = hasMenu ? menu : root;
       const rootText = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
+      // A version item is a menuitemradio; a restore could be any of the three roles.
+      let restore = 0;
+      for (const role of ['menuitem', 'menuitemradio', 'button']) {
+        restore += await scope.getByRole(role, { name: /restore/i }).count();
+      }
       const text = hasMenu
         ? (await menu.innerText().catch(() => '')).replace(/\s+/g, ' ')
         : rootText;
@@ -567,7 +576,7 @@ const NXS = {
             ).map((t) => t.trim())
           : [],
         live: rootText.match(/1\.0\+|current version/i)?.[0] ?? '',
-        restore: await scope.getByRole('menuitem', { name: /restore/i }).count(),
+        restore,
         create: await scope.locator('.nxs-manage-versions__create:not([disabled])').count(),
         empty: /no (previous )?versions/i.test(text) ? text.slice(0, 120) : '',
         text: text.slice(0, 300),
