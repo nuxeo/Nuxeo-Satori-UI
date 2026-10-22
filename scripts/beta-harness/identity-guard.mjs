@@ -539,22 +539,33 @@ export async function askThroughPage(
       // can be stale: if a guest cookie G is replaced by authenticated cookie A between snapshot and
       // probe, the snapshot would show G while the probe used A. Read the Cookie header from the
       // actual request, and use that same credential for the replay and all traffic checks.
+      // For Basic auth sessions, still read the jar to send with the replay (the control expects this).
       let verifiedCookie = undefined;
       let replayCookie = '';
-      if (stored.kind === 'cookie' && probeRequest) {
+      if (probeRequest) {
         try {
           const probeHeaders = await probeRequest.allHeaders();
           const cookieHeader = probeHeaders['cookie'] ?? null;
-          if (cookieHeader) {
-            const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
-            verifiedCookie = match ? match[1] : null;
-            replayCookie = cookieHeader; // Use the entire Cookie header for replay
+          if (stored.kind === 'cookie') {
+            // Cookie session: use the probe's actual Cookie header
+            if (cookieHeader) {
+              const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
+              verifiedCookie = match ? match[1] : null;
+              replayCookie = cookieHeader; // Use the entire Cookie header for replay
+            } else {
+              verifiedCookie = null;
+            }
           } else {
-            verifiedCookie = null;
+            // Basic auth: still read the jar for the replay (credentials come from Authorization header)
+            if (cookieHeader) {
+              replayCookie = cookieHeader;
+            }
           }
           if (!stillOnApp()) return left();
         } catch {
-          verifiedCookie = null;
+          if (stored.kind === 'cookie') {
+            verifiedCookie = null;
+          }
         }
       }
 
@@ -1222,8 +1233,10 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
             reports.push(refusal);
           } else {
             // Validate probe answers before accepting the credential (same validation as checkPageIdentity)
-            const verdict = judgeMe(answers.inPage, answers.replayed, stored);
-            if (verdict.problem) {
+            const inPageVerdict = judgeMe(answers.inPage ?? { status: 0, body: null }, username);
+            const replayedVerdict = judgeMe(answers.replayed ?? { status: 0, body: null }, username);
+            if (inPageVerdict.problem || replayedVerdict.problem) {
+              const problem = inPageVerdict.problem || replayedVerdict.problem;
               /** @type {ChannelReport} */
               const refusal = {
                 channel: 'step',
@@ -1233,7 +1246,7 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
                 user: null,
                 problem:
                   `the app was found signed in as ${username}, but the session's /me probes failed ` +
-                  `validation for promotion: ${verdict.problem}`,
+                  `validation for promotion: ${problem}`,
               };
               reports.push(refusal);
             } else {

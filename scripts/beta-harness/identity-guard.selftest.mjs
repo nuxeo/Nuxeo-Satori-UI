@@ -304,6 +304,7 @@ function fakePage({
     /** `page.request`'s `/me` redirects to another origin. */
     redirectApi: false,
     waiters: [],
+    requestWaiters: [],
     /** What a document `goto` loads sends before anything else, signed out. */
     bootRequests: [],
     /** @type {Record<string, ((request: object) => void)[]>} */
@@ -333,6 +334,20 @@ function fakePage({
         fetch: async (url, init) => {
           const auth = init?.headers?.['Authorization'] ?? null;
           state.headersSeen.push(auth);
+          // Trigger request event for waitForRequest (P1 fix needs this). Simulate browser behavior:
+          // with credentials: 'same-origin', the browser includes cookies from the jar automatically.
+          const allHeaders = {};
+          if (auth) allHeaders['authorization'] = auth;
+          // Include cookies from the jar if credentials: 'same-origin' (the default for identity probes)
+          if (init?.credentials === 'same-origin' && state.cookies.length > 0) {
+            allHeaders['cookie'] = state.cookies.map((c) => `${c.name}=${c.value}`).join('; ');
+          }
+          const request = {
+            url: () => String(url),
+            method: () => init?.method ?? 'GET',
+            allHeaders: async () => allHeaders,
+          };
+          for (const w of state.requestWaiters.splice(0)) if (w.pred(request)) w.resolve(request);
           const response = {
             url: () => String(url),
             serverAddr: async () => (state.stubbedMe ? null : { ipAddress: '::1', port: 4200 }),
@@ -396,6 +411,7 @@ function fakePage({
       cookies: async () => state.cookies,
     }),
     waitForResponse: (pred) => new Promise((resolve) => state.waiters.push({ pred, resolve })),
+    waitForRequest: (pred) => new Promise((resolve) => state.requestWaiters.push({ pred, resolve })),
     on: (event, fn) => {
       (state.listeners[event] ??= []).push(fn);
     },
@@ -421,6 +437,8 @@ function fakePage({
         allHeaders: async () => allHeaders,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
+      // Resolve any waitForRequest waiters
+      for (const w of state.requestWaiters.splice(0)) if (w.pred(request)) w.resolve(request);
       // Call requestfinished handlers. These are async in production, and tests must exercise
       // the real async path (P2). Fire them but don't await - matches Playwright's behavior.
       for (const fn of state.listeners['requestfinished'] ?? []) {
@@ -451,6 +469,8 @@ function fakePage({
         allHeaders: async () => allHeaders,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
+      // Resolve any waitForRequest waiters
+      for (const w of state.requestWaiters.splice(0)) if (w.pred(request)) w.resolve(request);
       const emit = (event) => {
         for (const fn of state.listeners[event] ?? []) fn(request);
       };
