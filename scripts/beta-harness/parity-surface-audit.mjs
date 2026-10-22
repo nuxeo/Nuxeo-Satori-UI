@@ -70,8 +70,15 @@ export const DECLARED_LIMITS = [
   'a click guarded by a try/catch rather than by .catch() — only the .catch() form is recognised',
 ];
 
-/** The element prefixes this repository's own components and the upstream packages use. */
-const SURFACE_ELEMENT = /(?:^|[\s,>~+])(?:nxs|hxp|adf|sat|lib)-[a-z][a-z0-9-]*/;
+/**
+ * The element prefixes this repository's own components and the upstream packages use.
+ *
+ * `(` is a boundary as much as a space or a comma is: `:is(nxs-error-state) button` and
+ * `main:has(nxs-error-state)` name a surface's component just as directly as `nxs-error-state`
+ * does, and without it they passed the rule — not as a runtime-built selector, which is a declared
+ * limit, but as a literal the matcher simply did not reach into.
+ */
+const SURFACE_ELEMENT = /(?:^|[\s,>~+(])(?:nxs|hxp|adf|sat|lib)-[a-z][a-z0-9-]*/;
 
 /**
  * Calls whose first argument is a CSS selector, in the runner and inside a `page.evaluate` alike:
@@ -194,16 +201,24 @@ function adapterKeys(object, objects, seen = new Set()) {
   const keys = new Map();
   for (const prop of object.properties) {
     if (prop.type === 'SpreadElement') {
-      if (prop.argument.type !== 'Identifier' || seen.has(prop.argument.name)) continue;
-      const source = objects.get(prop.argument.name);
-      if (!source) continue;
-      for (const [group, members] of adapterKeys(
-        source,
-        objects,
-        new Set([...seen, prop.argument.name]),
-      )) {
-        keys.set(group, members);
-      }
+      // A spread of an object literal, `{ ...ADF_HX, ...{ search: {} } }`, was skipped outright,
+      // so the audit read `search.pageSize` as still inherited where JavaScript had replaced the
+      // whole group and `A.search.pageSize` is undefined. Both spread forms are resolved, in
+      // source order, so a later group replaces an inherited one here exactly as it does at run
+      // time. Only a named spread needs the cycle guard; an inline object cannot refer to itself.
+      const inline =
+        prop.argument.type === 'ObjectExpression'
+          ? adapterKeys(prop.argument, objects, seen)
+          : prop.argument.type === 'Identifier' && !seen.has(prop.argument.name)
+            ? (() => {
+                const source = objects.get(prop.argument.name);
+                return source
+                  ? adapterKeys(source, objects, new Set([...seen, prop.argument.name]))
+                  : null;
+              })()
+            : null;
+      if (!inline) continue;
+      for (const [group, members] of inline) keys.set(group, members);
       continue;
     }
     const name = propertyName(prop);

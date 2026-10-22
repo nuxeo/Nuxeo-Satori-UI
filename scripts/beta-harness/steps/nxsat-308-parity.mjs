@@ -2422,6 +2422,7 @@ export default async function run(page, h, outDir) {
     .innerText()
     .catch(() => '');
   const searchPages = [];
+  let firstPageVisible = false;
   for (let i = 0; i < searchPageSizes.length; i++) {
     if (i > 0) {
       await page
@@ -2432,19 +2433,27 @@ export default async function run(page, h, outDir) {
       await page.waitForTimeout(3000);
     }
     searchPages.push(await readRows(page, A.search.rows, A.search.title));
-    if (i === 0) await h.screenshot('search-results-page-1');
+    // Measured on the page the rows were just read from. `readRows` uses `$$eval` and counts a
+    // hidden row, so the visibility half has to be observed here: after the loop it described the
+    // last page, and an invisible first page followed by a visible last one would have passed.
+    if (i === 0) {
+      firstPageVisible = await page
+        .locator(A.search.rows)
+        .first()
+        .isVisible()
+        .catch(() => false);
+      await h.screenshot('search-results-page-1');
+    }
   }
   const s1 = searchPages[0] ?? [];
   h.check(
     `${LB} the first page lists ${searchPageSizes[0]} hits, all of them paged items`,
     s1.length === searchPageSizes[0] &&
       s1.every((r) => r.title.startsWith('Paged item')) &&
-      (await page
-        .locator(A.search.rows)
-        .first()
-        .isVisible()
-        .catch(() => false)),
-    `${s1.length} rows: ${JSON.stringify(s1.slice(0, 3).map((r) => r.title))}`,
+      firstPageVisible,
+    `${s1.length} rows, first page visible=${firstPageVisible}: ${JSON.stringify(
+      s1.slice(0, 3).map((r) => r.title),
+    )}`,
   );
   h.check(
     `${CTX} the result count is ${PAGED.count}`,

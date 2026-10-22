@@ -110,6 +110,31 @@ const controls = [
     }),
   },
   {
+    name: "a surface's element inside :is() is caught — ( is a boundary too",
+    expectExit: 1,
+    expectRule: 'surface-selector-in-step',
+    file: stepsFile({ steps: `  await page.locator(':is(nxs-error-state) button').count();` }),
+  },
+  {
+    name: "a surface's element inside :has() is caught",
+    expectExit: 1,
+    expectRule: 'surface-selector-in-step',
+    file: stepsFile({ steps: `  await page.locator('main:has(nxs-error-state)').count();` }),
+  },
+  {
+    name: 'an inline object spread that replaces an inherited group is resolved, not ignored',
+    // `{ ...ADF_HX, ...{ search: {} } }` replaces the whole group at run time. Skipping the inline
+    // spread read `search.pageSize` as still inherited, so a step reading it got no finding on a
+    // surface where it is undefined.
+    expectExit: 1,
+    expectRule: 'adapter-gap',
+    file: stepsFile({
+      adfExtra: `  search: { pageSize: 50 },`,
+      nxsExtra: `  ...{ search: {} },`,
+      steps: `  h.check('page size', A.search.pageSize > 0, String(A.search.pageSize));`,
+    }),
+  },
+  {
     name: 'the same element inside an adapter is not reported, so the rule is about where it is',
     expectExit: 0,
     file: stepsFile({
