@@ -683,10 +683,19 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
       identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
-      // The run's first login booted a signed-out page, so the session's requests start at the
-      // reload. A repeated login's boot was not signed out — what this discards there has just
-      // been judged above, which is the condition `sessionInstalled` is documented to need.
-      identity?.sessionInstalled();
+      // Only the run's first login booted a signed-out page, so only it has requests to excuse:
+      // its session's start at the reload. A repeated login has no signed-out boot, so it does
+      // not take the exemption at all, and everything the page sent since the last restart —
+      // the boot above, and anything emitted while the cookies and storage were rewritten, which
+      // runs after the verification above and cannot be covered by it — stays in the window for
+      // the next boundary to judge against the session being installed.
+      //
+      // That boundary is the right judge here because `h.login()` always signs in as the run's
+      // own credentials: the header it installs is the one the replaced session carried, so
+      // traffic from the interval is held to the same standard either way. Where it is *not* the
+      // same user — a login after `h.signedInAs(...)` — `expectApp` above has already restarted
+      // the window, and the interval after it is the residue NXSAT-703 covers.
+      if (!replacing) identity?.sessionInstalled();
 
       await page.reload({ waitUntil: 'networkidle' });
       await page.waitForTimeout(1200);

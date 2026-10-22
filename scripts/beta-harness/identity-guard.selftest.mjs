@@ -383,7 +383,15 @@ function fakePage({
         return { status: () => 200, json: async () => state.apiMe };
       },
     },
-    context: () => ({ clearCookies: async () => undefined, cookies: async () => state.cookies }),
+    context: () => ({
+      clearCookies: async () => {
+        // The page is still live while `h.login()` clears the cookies and writes the session,
+        // so a request can complete in that gap — after the boot-navigation verification, and
+        // before the reload.
+        state.duringClear?.();
+      },
+      cookies: async () => state.cookies,
+    }),
     waitForResponse: (pred) => new Promise((resolve) => state.waiters.push({ pred, resolve })),
     on: (event, fn) => {
       (state.listeners[event] ??= []).push(fn);
@@ -1881,6 +1889,59 @@ await silently(async () => {
     } finally {
       if (savedUrl === undefined) Reflect.deleteProperty(process.env, 'APP_URL');
       else process.env['APP_URL'] = savedUrl;
+    }
+  }
+  {
+    // The interval a probe cannot cover however late it runs: the page is live while
+    // `h.login()` clears the cookies and writes the new session, after the boot-navigation
+    // verification and before the reload. A repeated login therefore declines the signed-out
+    // exemption entirely, so this traffic stays in the window and the next boundary judges it
+    // against the session being installed.
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.login();
+      // The repeated login's own boot is authenticated and clean; the only offending request is
+      // the one that completes while the cookies are being cleared.
+      page.state.bootRequests = [{ url: `${APP}/nuxeo/api/v1/me`, authorization: LOGIN }];
+      page.state.duringClear = () =>
+        page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+      const thrown = await thrownBy(async () => {
+        await h.login();
+        page.state.duringClear = undefined;
+        await h.step('two');
+        await h.finish();
+      });
+      control(
+        'negative',
+        'a headerless request completing while repeated h.login() clears cookies and installs the session is still judged',
+        thrown instanceof PreconditionError &&
+          /without the header/.test(thrown.message) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message),
+        { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
     }
   }
   {
