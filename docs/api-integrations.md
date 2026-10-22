@@ -1243,7 +1243,7 @@ The current UI flow is:
 ```json
 {
   "params": {
-    "actions": "text-classification",
+    "actions": "textClassification",
     "sourceId": "document-uuid",
     "classes": "[\"Contract\",\"Invoice\",\"Legal\",\"Technical\"]"
   }

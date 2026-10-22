@@ -79,7 +79,7 @@ The `request` part contains:
 ```json
 {
   "params": {
-    "actions": "text-classification,text-summarization",
+    "actions": "textClassification,textSummarization",
     "sourceId": "document-uuid",
     "classes": "[\"Contract\",\"Invoice\",\"Legal\"]",
     "extraJsonPayloadStr": "{\"maxWordCount\":150}"
@@ -262,7 +262,7 @@ printf 'KE smoke test' >/tmp/ke-sample.txt
 curl -sS -u Administrator:Administrator \
   -X POST "http://localhost:8080/nuxeo/site/automation/HylandKnowledgeEnrichment.Enrich" \
   -H "Accept: application/json" \
-  -F "request={\"params\":{\"actions\":\"text-summarization\"}};type=application/json" \
+  -F "request={\"params\":{\"actions\":\"textSummarization\"}};type=application/json" \
   -F "input=@/tmp/ke-sample.txt;type=text/plain"
 ```
 
