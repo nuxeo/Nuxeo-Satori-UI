@@ -214,6 +214,11 @@ export const FIXTURE = {
     },
   },
   empty: { name: 'empty', title: 'Empty folder' },
+  collection: {
+    name: 'parity-collection',
+    title: 'Parity collection',
+    description: 'Test collection for error states',
+  },
   pdfText: 'Parity PDF fixture',
   searchToken: 'paritytoken',
 };
@@ -625,6 +630,24 @@ async function seed() {
   }
 
   await create(root, 'Folder', FIXTURE.empty.name, { 'dc:title': FIXTURE.empty.title });
+
+  // Collection for error state testing.
+  const collectionResp = await call('POST', '/automation/Collection.Create', {
+    json: {
+      params: {
+        name: FIXTURE.collection.title,
+        description: FIXTURE.collection.description,
+      },
+      context: {},
+    },
+  });
+  const collectionUid = collectionResp.data?.uid;
+  if (!collectionUid) throw new Error('Collection.Create did not return a uid');
+  // Add one document to the collection so it has members to list
+  const firstPaged = await call('GET', `/path${enc(`${pagedPath}/paged-001`)}`);
+  if (firstPaged.data?.uid) {
+    await op(firstPaged.data.uid, 'Document.AddToCollection', { collection: collectionUid });
+  }
 }
 
 // ── Verify ────────────────────────────────────────────────────────────────────────────────────────
@@ -834,6 +857,32 @@ async function verify(assets) {
     `HTTP ${empty.status}`,
   );
   manifest.docs.empty = { path: emptyPath, uid: (await byPath(emptyPath)).data?.uid };
+
+  // Collection verification.
+  const collResp = await call('POST', '/search/pp/default_content_collection/execute', {
+    json: {
+      namedParameters: { collection: FIXTURE.collection.title },
+      queryParams: ['CURRENT_USERID'],
+    },
+    ok: null,
+  });
+  const collEntries = collResp.data?.entries ?? [];
+  expect(
+    'collection exists and has 1 member',
+    collResp.status === 200 && collEntries.length === 1,
+    `HTTP ${collResp.status}, ${collEntries.length} members`,
+  );
+  const collDoc = (collResp.data?.entries ?? [])[0];
+  expect(
+    'collection member is paged-001',
+    collDoc?.title === 'Paged item 001',
+    `member title: ${collDoc?.title}`,
+  );
+  manifest.docs.collection = {
+    title: FIXTURE.collection.title,
+    memberCount: collEntries.length,
+    firstMember: collDoc?.title,
+  };
 
   manifest.assets = assets;
   manifest.verification = { failures };

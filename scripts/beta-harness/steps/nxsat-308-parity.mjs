@@ -101,6 +101,7 @@ const MEDIA = {
   pdfText: 'Parity PDF fixture',
 };
 const EMPTY = { path: `${ROOT}/empty` };
+const COLLECTION = { title: 'Parity collection', memberTitle: 'Paged item 001' };
 const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secret' };
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
@@ -2101,6 +2102,89 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('failure-search-500');
   await page.unroute(A.search.failPattern);
+
+  // ── 14b. Failure: collection member listing answers 500 ──────────────────────────────────────
+  await h.step('Failure — the collection member listing answers 500');
+  // Find the collection by title through the user's collections list
+  const collectionsResp = await page.evaluate(
+    async ({ title }) => {
+      const resp = await fetch('/nuxeo/api/v1/automation/User.GetCollections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ params: {}, context: {} }),
+      });
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      const entries = json.entries ?? [];
+      return entries.find((e) => e.title === title) ?? null;
+    },
+    { title: COLLECTION.title },
+  );
+  const collectionUid = collectionsResp?.uid ?? null;
+  h.check(
+    `${CTX} the parity collection was seeded and is findable`,
+    Boolean(collectionUid),
+    `collection uid: ${JSON.stringify(collectionUid)}`,
+  );
+  if (collectionUid) {
+    await fail500('**/search/pp/default_content_collection/execute**');
+    await h.goTo(`/#/collections/${collectionUid}`);
+    await page.waitForTimeout(3000);
+    const collectionError = (
+      await page
+        .locator('lib-collection-detail .collection-unavailable, lib-collection-detail nxs-document-list .nxs-list-error')
+        .first()
+        .allInnerTexts()
+        .catch(() => [])
+    )
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    const collectionRows = (
+      await page.locator('lib-collection-detail nxs-document-list table tbody tr').count()
+    );
+    h.check(
+      `${LB} the collection shows an error state with a message`,
+      collectionError.trim().length > 0,
+      JSON.stringify(collectionError.slice(0, 160)),
+    );
+    h.check(
+      `${LB} the error state offers a retry`,
+      (await page
+        .locator('lib-collection-detail button')
+        .filter({ hasText: /try again|retry/i })
+        .count()) > 0,
+    );
+    h.check(
+      `${NEG} no stale member rows are shown`,
+      collectionError.trim().length > 0 && collectionRows === 0,
+      `${collectionRows} rows`,
+    );
+    await h.screenshot('failure-collection-500');
+    await page.unroute('**/search/pp/default_content_collection/execute**');
+    await page
+      .locator('lib-collection-detail button')
+      .filter({ hasText: /try again|retry/i })
+      .first()
+      .click()
+      .catch(leaveItToTheNextCheck);
+    await page.waitForTimeout(3000);
+    const recoveredMember = (
+      await page
+        .locator('lib-collection-detail nxs-document-list table tbody tr')
+        .first()
+        .allInnerTexts()
+        .catch(() => [])
+    )
+      .join(' ')
+      .replace(/\s+/g, ' ');
+    h.check(
+      `${LB} retry recovers and shows the collection member`,
+      recoveredMember.includes(COLLECTION.memberTitle),
+      JSON.stringify(recoveredMember.slice(0, 120)),
+    );
+  } else {
+    h.note('collection was not found, so error state tests were skipped');
+  }
 
   // ── 15. Failure: a permission-denied folder, as parity-user ──────────────────────────────────
   await h.step('Failure — parity-user opens a folder they cannot read');
