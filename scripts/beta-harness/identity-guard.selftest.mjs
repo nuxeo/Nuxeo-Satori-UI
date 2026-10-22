@@ -419,15 +419,13 @@ function fakePage({
         frame: () => mainFrame,
         headers: () => (authorization ? { authorization } : {}),
         allHeaders: async () => allHeaders,
-        // For testing: store the cookie value to be picked up by async requestfinished handler
-        _testCookie: cookie,
       };
       for (const fn of state.listeners['request'] ?? []) fn(request);
-      // Call requestfinished handlers, which may be async. In the real browser these are async,
-      // but for testing we don't await them to keep the test synchronous.
+      // Call requestfinished handlers. These are async in production, and tests must exercise
+      // the real async path (P2). Fire them but don't await - matches Playwright's behavior.
       for (const fn of state.listeners['requestfinished'] ?? []) {
         const result = fn(request);
-        // If it's a promise, catch errors but don't wait
+        // Catch errors but don't wait - Playwright doesn't await event listeners
         if (result && typeof result.catch === 'function') result.catch(() => {});
       }
     },
@@ -896,6 +894,8 @@ function watchedPage(options) {
   page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
   // Request without cookie - should be refused even when expectedCookie is null
   page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null, cookie: null });
+  // Drain pending headers before checking (P1) - async requestfinished means headers may not be ready
+  await traffic.drainPendingHeaders();
   // Simulate cleared cookie by passing null as expectedCookie
   const stored = {
     key: SESSION_KEY,
@@ -930,6 +930,8 @@ function watchedPage(options) {
   page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null, cookie: 'admin-cookie' });
   // Request with wrong user's Authorization header - should be refused when expectedCookie is null
   page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: WRONG_USER_AUTH, cookie: null });
+  // Drain pending headers before checking (P1)
+  await traffic.drainPendingHeaders();
   const stored = {
     key: SESSION_KEY,
     storage: 'sessionStorage',

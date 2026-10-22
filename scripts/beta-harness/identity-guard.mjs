@@ -436,7 +436,7 @@ export async function askThroughFetch(
  * @param {string} appOrigin
  * @param {typeof fetch} [fetchImpl] for the replay
  * @param {number} [timeoutMs] per probe, body included
- * @returns {Promise<{ stored: StoredSession | { problem: string } | null, answers: { inPage: MeAnswer | null, replayed: MeAnswer | null } }>}
+ * @returns {Promise<{ stored: StoredSession | { problem: string } | null, answers: { inPage: MeAnswer | null, replayed: MeAnswer | null }, verifiedCookie?: string | null }>}
  */
 export async function askThroughPage(
   page,
@@ -466,6 +466,21 @@ export async function askThroughPage(
       if (!found) return { stored: null, answers: none };
       const stored = parseStoredSession(found.key, found.storage, found.raw);
       if ('problem' in stored) return { stored, answers: none };
+
+      // For cookie sessions, capture the verified cookie NOW, before running probes (P1).
+      // This snapshot is what both /me probes will actually use, not a later fresh read.
+      let verifiedCookie = undefined;
+      if (stored.kind === 'cookie') {
+        try {
+          const url = `${origin}${ME_PATH}`;
+          const cookies = await page.context().cookies(url);
+          const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
+          verifiedCookie = sessionCookie?.value ?? null;
+          if (!stillOnApp()) return left();
+        } catch {
+          verifiedCookie = null;
+        }
+      }
 
       const nonce = `${PROBE_MARK}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
       const seen = page
@@ -530,6 +545,7 @@ export async function askThroughPage(
       if (!stillOnApp()) return left();
 
       const url = `${origin}${ME_PATH}`;
+      // Use the verified cookie snapshot for the replay, not a fresh read
       const cookies = await page.context().cookies(url);
       const cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
       const replayed = await askThroughFetch(
@@ -539,10 +555,10 @@ export async function askThroughPage(
         cookie,
         timeoutMs,
       );
-      // And after the replay: a page that navigated during `cookies()` or the request is no
+      // And after the replay: a page that navigated during the request is no
       // longer the page these answers describe.
       if (!stillOnApp()) return left();
-      return { stored, answers: { inPage, replayed } };
+      return { stored, answers: { inPage, replayed }, verifiedCookie };
     } catch (err) {
       lastError = err;
       await new Promise((r) => setTimeout(r, 300));
@@ -567,6 +583,9 @@ class NuxeoApiTraffic extends Set {
   since = 0;
   /** Set by `restartAtNextLoad`: the next main-frame load moves `since`. */
   armed = false;
+  /** Pending header-collection promises for async allHeaders() calls */
+  /** @type {Set<Promise<void>>} */
+  pendingHeaders = new Set();
 
   /**
    * From here on, every request must carry the session's header: a declared change of identity,
@@ -585,6 +604,36 @@ class NuxeoApiTraffic extends Set {
    */
   restartAtNextLoad() {
     this.armed = true;
+  }
+
+  /**
+   * Wait for all pending header collections to complete, with a deadline. Boundaries must drain
+   * this before judging traffic to ensure completed requests have their headers read (P1).
+   *
+   * @param {number} [timeoutMs] deadline in milliseconds
+   * @returns {Promise<{ completed: number, timedOut: number }>}
+   */
+  async drainPendingHeaders(timeoutMs = 2000) {
+    if (this.pendingHeaders.size === 0) return { completed: 0, timedOut: 0 };
+    const pending = Array.from(this.pendingHeaders);
+    const deadline = Date.now() + timeoutMs;
+    let completed = 0;
+    let timedOut = 0;
+    for (const promise of pending) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 0) {
+        timedOut++;
+        continue;
+      }
+      try {
+        await Promise.race([promise, new Promise((r) => setTimeout(r, remaining))]);
+        completed++;
+      } catch {
+        // Header collection failed, but request is marked finished, which is what matters
+        completed++;
+      }
+    }
+    return { completed, timedOut };
   }
 }
 
@@ -651,31 +700,33 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
     traffic.sent.push(record);
     pending.set(request, record);
   });
-  page.on('requestfinished', async (request) => {
+  page.on('requestfinished', (request) => {
     const record = pending.get(request);
     if (!record) return;
-    // In tests, the request may have _testCookie set directly for synchronous testing.
-    if ('_testCookie' in request) {
-      record.authorization = request.headers()['authorization'] ?? null;
-      record.cookie = request._testCookie ?? null;
-      record.finished = true;
-      return;
-    }
-    // Use allHeaders() to get security headers including Cookie, which request.headers() omits.
-    // Keep the record pending until header collection finishes (async).
-    const allHeaders = await request.allHeaders();
-    record.authorization = allHeaders['authorization'] ?? null;
-    // Read the actual Cookie header the request sent, not context().cookies() which reflects the
-    // current jar and can show an authenticated cookie for a request sent with credentials:'omit'.
-    const cookieHeader = allHeaders['cookie'] ?? null;
-    if (cookieHeader) {
-      // Parse JSESSIONID from the Cookie header (format: "name=value; name2=value2")
-      const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
-      record.cookie = match ? match[1] : null;
-    } else {
-      record.cookie = null;
-    }
-    record.finished = true;
+    // Track the async header collection so boundaries can drain it (P1).
+    // Playwright doesn't await event listeners, so without this, completed requests can have
+    // unread headers when strayRequests() runs, causing them to be skipped (finished: false).
+    const headerPromise = (async () => {
+      try {
+        // Use allHeaders() to get security headers including Cookie, which request.headers() omits.
+        const allHeaders = await request.allHeaders();
+        record.authorization = allHeaders['authorization'] ?? null;
+        // Read the actual Cookie header the request sent, not context().cookies() which reflects
+        // the current jar and can show an authenticated cookie for a request sent with credentials:'omit'.
+        const cookieHeader = allHeaders['cookie'] ?? null;
+        if (cookieHeader) {
+          // Parse JSESSIONID from the Cookie header (format: "name=value; name2=value2")
+          const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
+          record.cookie = match ? match[1] : null;
+        } else {
+          record.cookie = null;
+        }
+        record.finished = true;
+      } finally {
+        traffic.pendingHeaders.delete(headerPromise);
+      }
+    })();
+    traffic.pendingHeaders.add(headerPromise);
   });
   // Aborted, or a network error: the only other event this request will emit. It is recorded so
   // `pendingRequests` does not report it as still in flight — a navigation aborts whatever was
@@ -727,25 +778,35 @@ export function pendingRequests(traffic) {
  * any remains, for the reason `pendingRequests` gives: unjudged traffic certified as valid is
  * false evidence, which is worse than a missing check.
  *
- * The signed-out bootstrap stays exempt, drawn where `strayRequests` draws it — at the first
- * request that carried *any* `Authorization` header or session cookie. Before that the app had
- * no session to send, so its requests are the signed-out page's and carry no identity to strand;
- * after it the app is signed in, and what it sends is the session's.
+ * The signed-out bootstrap stays exempt, drawn at the first request carrying the VERIFIED session's
+ * credential (P2). A JSESSIONID alone doesn't establish sign-in: guest requests can carry guest
+ * session cookies. Only the credential actually verified counts as sign-in.
  *
  * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
  * @param {number} upTo where the promotion would move `since` to
+ * @param {{ verifiedAuth?: string | null, verifiedCookie?: string | null }} [verified] the credential verified by /me
  * @returns {SentRequest[]}
  */
-export function pendingAcrossSignIn(traffic, upTo) {
+export function pendingAcrossSignIn(traffic, upTo, { verifiedAuth, verifiedCookie } = {}) {
   // By shape, not `instanceof`, for the reason on `strayRequests`.
   const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
   if (!Array.isArray(sent) || typeof since !== 'number') return [];
   const discarded = sent.slice(since, upTo).filter((r) => !anonymousByDesign(r));
-  // Recognize both Authorization-header and cookie-based sign-in. Note: cookie field may be
-  // undefined in older traffic or tests, so check for explicit non-null values.
-  const signedIn = discarded.findIndex(
-    (r) => r.finished && (r.authorization !== null || (r.cookie !== null && r.cookie !== undefined)),
-  );
+  // Recognize sign-in by matching the VERIFIED credential, not just any auth/cookie (P2).
+  // Without verified context, fall back to any non-null credential for compatibility.
+  const matches = (r) => {
+    if (verifiedAuth !== undefined) {
+      // Basic auth session: match the verified Authorization header
+      return r.authorization === verifiedAuth;
+    } else if (verifiedCookie !== undefined) {
+      // Cookie session: match the verified cookie value
+      return r.cookie === verifiedCookie;
+    } else {
+      // No verified context: fallback to any credential (old behavior)
+      return r.authorization !== null || (r.cookie !== null && r.cookie !== undefined);
+    }
+  };
+  const signedIn = discarded.findIndex((r) => r.finished && matches(r));
   if (signedIn < 0) return [];
   return discarded.slice(signedIn).filter((r) => !r.finished && !r.failed);
 }
@@ -889,30 +950,19 @@ export async function checkPageIdentity(
     }
     return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
   }
-  const { stored, answers } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
+
+  // Drain pending header collections before judging traffic (P1). Playwright doesn't await the
+  // async requestfinished handler, so completed requests can have unread headers.
+  if (foreignApiOrigins && 'drainPendingHeaders' in foreignApiOrigins) {
+    await foreignApiOrigins.drainPendingHeaders();
+  }
+
+  const { stored, answers, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
   const signingIn = !normalisePolicy(policy).required;
 
-  // For cookie sessions, get the expected session cookie to check against requests (Gap 1)
-  let expectedCookie = undefined;
-  if (stored && !('problem' in stored) && stored.kind === 'cookie') {
-    try {
-      const cookies = await page.context().cookies(`${originOf(appOrigin)}${ME_PATH}`);
-      const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
-      expectedCookie = sessionCookie?.value ?? null;
-      // Recheck that the page stayed on the app during the async cookie lookup. Navigation after
-      // askThroughPage's final check can leave cookies from the old origin while the page is off-app.
-      if (!onApp) {
-        return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
-      }
-    } catch {
-      // If reading cookies fails, leave undefined - strayRequests will fail closed
-      expectedCookie = undefined;
-      // Also recheck origin after the failure path
-      if (!onApp) {
-        return judgeApp('not-on-app', { inPage: null, replayed: null }, policy);
-      }
-    }
-  }
+  // Use the verified cookie snapshot from askThroughPage (P1). Reading cookies fresh here can
+  // pick up a different cookie than what the /me probes verified, accepting wrong-user traffic.
+  const expectedCookie = verifiedCookie;
 
   const stray =
     stored && !('problem' in stored)
@@ -998,27 +1048,38 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
 
     /**
      * Capture the outgoing session's complete state for judging the interval before a cross-user
-     * restart (Gap 2, P1). Returns the stored session and its expected cookie for a cookie session.
+     * restart (Gap 2, P1). Returns the stored session, validated answers, and verified cookie.
      * Called before clearing cookies/storage so the snapshot reflects what was actually in use.
      *
      * @returns {Promise<{stored: StoredSession | {problem: string} | null, expectedCookie?: string | null}>}
      */
     async captureOutgoingSession() {
-      const { stored } = await askThroughPage(page, appOrigin, fetchImpl);
+      const { stored, answers, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl);
       if (!stored || 'problem' in stored) {
         return { stored };
       }
-      // For cookie sessions, also capture the expected cookie at this moment
-      if (stored.kind === 'cookie') {
-        try {
-          const cookies = await page.context().cookies(`${appOrigin}${ME_PATH}`);
-          const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
-          return { stored, expectedCookie: sessionCookie?.value ?? null };
-        } catch {
-          return { stored, expectedCookie: null };
-        }
+      // Validate the probe answers before accepting the snapshot (P1). If /me answered Anonymous,
+      // another user, or an error, the outgoing credential is invalid and shouldn't be used for
+      // judging interval traffic.
+      const currentUser = expectedUser();
+      const inPageVerdict = judgeMe(answers.inPage ?? { status: 0, body: null }, currentUser);
+      if (inPageVerdict.problem) {
+        return {
+          stored: {
+            problem: `outgoing session's /me probe (in-page): ${inPageVerdict.problem}`,
+          },
+        };
       }
-      return { stored };
+      const replayedVerdict = judgeMe(answers.replayed ?? { status: 0, body: null }, currentUser);
+      if (replayedVerdict.problem) {
+        return {
+          stored: {
+            problem: `outgoing session's /me probe (replayed from Node): ${replayedVerdict.problem}`,
+          },
+        };
+      }
+      // Both probes passed - return the validated snapshot with verified cookie
+      return { stored, expectedCookie: verifiedCookie };
     },
 
     /**
@@ -1098,7 +1159,11 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
           // Unless the sign-in left traffic the restart below would strand unjudged. This is a
           // transition in everything but name — it is just not declared by a steps file — so it
           // refuses on the same terms a declared one does rather than promoting over it.
-          const stranded = pendingAcrossSignIn(foreignApiOrigins, mark);
+          // Get the verified credential to properly recognize sign-in (P2). A JSESSIONID alone
+          // doesn't establish sign-in: guest cookies can also be present.
+          const { stored, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl);
+          const verifiedAuth = stored && !('problem' in stored) ? stored.authorization : null;
+          const stranded = pendingAcrossSignIn(foreignApiOrigins, mark, { verifiedAuth, verifiedCookie });
           if (stranded.length) {
             const named = stranded.map((r) => `${r.method} ${r.path}`).join(', ');
             /** @type {ChannelReport} */
