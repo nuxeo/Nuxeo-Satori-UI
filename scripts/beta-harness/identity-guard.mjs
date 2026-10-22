@@ -667,8 +667,9 @@ class NuxeoApiTraffic extends Set {
     }
     // Check for requests that completed network-wise but whose headers remain unread (P1/P2).
     // networkComplete means requestfinished fired (network done), but finished: false means headers
-    // not yet read. These can pass through identity checks because strayRequests skips !finished.
-    const unreadRequests = this.sent.filter(
+    // not yet read. Only scan the active window (since onwards) to preserve bootstrap/config exemptions.
+    // These can pass through identity checks because strayRequests skips !finished records.
+    const unreadRequests = this.sent.slice(this.since).filter(
       (r) => r.networkComplete && !r.finished && !r.failed && !r.headerError,
     );
     return { completed, timedOut, unreadRequests };
@@ -1004,8 +1005,10 @@ export async function checkPageIdentity(
 
   // Drain pending header collections before judging traffic (P1). Playwright doesn't await the
   // async requestfinished handler, so completed requests can have unread headers.
-  if (foreignApiOrigins && 'drainPendingHeaders' in foreignApiOrigins) {
-    const { unreadRequests } = await foreignApiOrigins.drainPendingHeaders();
+  // Narrow to Partial<NuxeoApiTraffic> to access optional drainPendingHeaders method (P1 typecheck).
+  const traffic = /** @type {Partial<NuxeoApiTraffic>} */ (foreignApiOrigins ?? {});
+  if (traffic.drainPendingHeaders) {
+    const { unreadRequests } = await traffic.drainPendingHeaders();
     // Reject if any completed requests have unread headers at deadline (P1). These would be skipped
     // by strayRequests (which only judges finished: true records), letting unjudged traffic pass.
     if (unreadRequests.length > 0) {
@@ -1266,13 +1269,17 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
             };
             reports.push(refusal);
           } else {
-            // Drain headers to capture any requests that finished since checkPageIdentity (P1).
-            // checkPageIdentity already validated completed traffic, so we only need to ensure requests
-            // that finish now get their headers read before the restart. Don't re-check stray traffic.
+            // Drain headers and recheck completed traffic before promotion (P1). A headerless request
+            // started before `mark` can be unfinished when checkPageIdentity scans, then finish during
+            // the page.evaluate() above or header drain. Once headers are read, pendingAcrossSignIn
+            // ignores it (finished) and restart(mark) moves it outside all future checks. After draining,
+            // verify completed traffic against the session before advancing `since`.
             let verifiedCookie = undefined;
             let promotionAllowed = true;
-            if (foreignApiOrigins && 'drainPendingHeaders' in foreignApiOrigins) {
-              const { unreadRequests } = await foreignApiOrigins.drainPendingHeaders();
+            // Narrow to Partial<NuxeoApiTraffic> to access optional drainPendingHeaders method (P1 typecheck).
+            const traffic = /** @type {Partial<NuxeoApiTraffic>} */ (foreignApiOrigins ?? {});
+            if (traffic.drainPendingHeaders) {
+              const { unreadRequests } = await traffic.drainPendingHeaders();
               if (unreadRequests.length > 0) {
                 const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
                 const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
@@ -1290,16 +1297,40 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
                 };
                 reports.push(refusal);
                 promotionAllowed = false;
-              }
-              // For cookie sessions, read the verified cookie from the jar after draining headers.
-              if (session.kind === 'cookie') {
-                try {
-                  const url = `${appOrigin}${ME_PATH}`;
-                  const cookies = await page.context().cookies(url);
-                  const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
-                  verifiedCookie = sessionCookie?.value ?? null;
-                } catch {
-                  verifiedCookie = null;
+              } else {
+                // For cookie sessions, read the verified cookie from the jar after draining headers.
+                if (session.kind === 'cookie') {
+                  try {
+                    const url = `${appOrigin}${ME_PATH}`;
+                    const cookies = await page.context().cookies(url);
+                    const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
+                    verifiedCookie = sessionCookie?.value ?? null;
+                  } catch {
+                    verifiedCookie = null;
+                  }
+                }
+                // Recheck completed traffic against the verified session (P1). Headers just read above
+                // can reveal requests started before `mark` that checkPageIdentity didn't judge yet.
+                // Preserve the signed-out bootstrap exemption (signingIn: true before first authed request).
+                const expectedCookie = verifiedCookie;
+                const signingIn = true; // The form sign-in case: signed-out bootstrap is still exempt
+                const stray = strayRequests(foreignApiOrigins, session, { signingIn, expectedCookie });
+                if (stray.length) {
+                  const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+                  const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
+                  /** @type {ChannelReport} */
+                  const refusal = {
+                    channel: 'step',
+                    ok: false,
+                    state: 'rejected',
+                    expected: expectedUser(),
+                    user: null,
+                    problem:
+                      `the app was found signed in as ${username}, but ${stray.length} request(s) completed ` +
+                      `after the identity check without the session's credential (${listed}${suffix}).`,
+                  };
+                  reports.push(refusal);
+                  promotionAllowed = false;
                 }
               }
             }
