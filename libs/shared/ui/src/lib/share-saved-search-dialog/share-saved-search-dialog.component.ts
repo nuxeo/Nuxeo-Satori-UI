@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -9,6 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
 import { catchError, finalize, of, forkJoin, map, switchMap } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   CURRENT_USERNAME,
   UserService,
@@ -90,6 +91,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly userService = inject(UserService);
   private readonly detailService = inject(DocumentDetailService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly permissions = signal<PermissionEntry[]>([]);
   readonly inheritedPermissions = signal<PermissionSummary[]>([]);
@@ -468,6 +470,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
               ),
         ),
         finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
       )
       .subscribe((doc) => {
         if (doc) this.reconcileLocalRows(doc);
