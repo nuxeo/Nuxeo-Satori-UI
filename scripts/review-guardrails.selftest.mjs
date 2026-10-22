@@ -224,6 +224,27 @@ function expectGreen(label, guardrail, files) {
   });
 }
 
+/**
+ * Asserts the guardrail stays green on a tree that was **edited**, not merely on one that
+ * was never touched.
+ *
+ * `expectGreen` passes no mutation, so the fixture has no diff at all. For the checks that
+ * read whole tracked files that is a real control. For a **diff-scoped** guardrail — one that
+ * walks `addedLinesByFile` — it is vacuous: with nothing added there is nothing to judge, and
+ * the guardrail would pass just as happily if its rule were deleted. A false-positive control
+ * for those has to add the legitimate line and then assert green.
+ */
+function expectGreenAfterEdit(label, guardrail, files, mutate) {
+  if (!selected(guardrail)) return;
+  positive += 1;
+  withFixture(files, mutate, (runGuardrail) => {
+    const { code, out } = runGuardrail(guardrail);
+    if (code !== 0) {
+      failures.push(`${label}: ${guardrail} failed on a correct edit.\n    ${out.trim()}`);
+    }
+  });
+}
+
 const APP = {
   'apps/nuxeo-ui/public/i18n/en.json': EN_JSON,
   'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK,
@@ -281,6 +302,131 @@ expectGreen(
     'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK,
     'apps/nuxeo-ui/src/app/shell/app-shell.component.html': GOOD_TEMPLATE,
   },
+);
+
+/* ---------------- checkOutlineTokenIsNotTextColour ---------------- */
+
+/**
+ * The fixture is a stylesheet that already uses the token correctly, so every control below
+ * differs from the baseline only in the line it is about.
+ */
+const OUTLINE_SCSS = {
+  'libs/shared/ui/src/lib/probe/probe.component.scss':
+    '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n',
+};
+
+expectRed(
+  'the outline token used as a text colour',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__hint {\n  font-size: 12px;\n  color: var(--mat-sys-outline);\n}\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
+expectRed(
+  'the outline token as a text colour inside a component\u2019s inline styles block',
+  'checkOutlineTokenIsNotTextColour',
+  {
+    ...OUTLINE_SCSS,
+    'libs/shared/ui/src/lib/probe/probe.ts':
+      "import { Component } from '@angular/core';\n\n@Component({\n" +
+      "  selector: 'lib-probe',\n  template: '<p class=\"hint\"></p>',\n" +
+      '  styles: [`\n    .hint { font-size: 12px; }\n  `],\n})\nexport class Probe {}\n',
+  },
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.ts',
+      "import { Component } from '@angular/core';\n\n@Component({\n" +
+        "  selector: 'lib-probe',\n  template: '<p class=\"hint\"></p>',\n" +
+        '  styles: [`\n    .hint { font-size: 12px; color: var(--mat-sys-outline); }\n  `],\n})\n' +
+        'export class Probe {}\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
+/**
+ * The control that matters most. `border-color`, `background-color`, `outline-color` and
+ * `text-decoration-color` all END in `color`, so the obvious regex for this rule flags every
+ * correct use of the token — and the token's correct use is exactly borders. A guardrail that
+ * red-flags the thing it is meant to permit gets switched off within a day.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'the outline token on border-color, background-color and text-decoration-color',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n' +
+        '  border-color: var(--mat-sys-outline);\n' +
+        '  background-color: var(--mat-sys-outline);\n' +
+        '  outline-color: var(--mat-sys-outline);\n' +
+        '  text-decoration-color: var(--mat-sys-outline);\n}\n',
+    ),
+);
+
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'a declared non-text use of the outline token as a colour',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__icon {\n  font-size: 32px;\n' +
+        '  color: var(--mat-sys-outline); /* non-text: a 32px glyph, so 1.4.11\u2019s 3:1 applies */\n}\n',
+    ),
+);
+
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'the text-appropriate token used for text',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__hint {\n  font-size: 12px;\n  color: var(--mat-sys-on-surface-variant);\n}\n',
+    ),
+);
+
+expectRed(
+  'the outline token used as a text colour with a fallback value',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__hint {\n  font-size: 12px;\n  color: var(--mat-sys-outline, #777683);\n}\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
+/**
+ * `--mat-sys-outline-variant` is a DIFFERENT token — Material's low-emphasis divider — and this
+ * rule says nothing about it. Pattern 16 in `AGENTS/08-bug-patterns.md` is about that one, and
+ * conflating them here would make this gate fail a line it has no measurement for.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'the outline-variant token, which this rule is not about',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '.probe__divider {\n  color: var(--mat-sys-outline-variant, #c8c6d0);\n}\n',
+    ),
 );
 
 expectWarn(

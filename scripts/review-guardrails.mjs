@@ -278,6 +278,77 @@ function checkThemeTokens() {
   }
 }
 
+/**
+ * The `--mat-sys-outline` token is a **non-text** token. It must not be used as a
+ * text colour.
+ *
+ * Material's `outline` role is specified for borders, dividers and the outline of
+ * an unfilled control. WCAG grades those as non-text contrast (1.4.11, **3:1**),
+ * and the token is built to clear that bar — not the 4.5:1 that body text needs
+ * under 1.4.3. Measured in this application's light theme, `--mat-sys-outline`
+ * resolves to `rgb(119, 118, 131)` and on `--mat-sys-surface`
+ * (`rgb(249, 249, 252)`) gives:
+ *
+ * | Token                          | Ratio  | 1.4.11 (3:1) | 1.4.3 (4.5:1) |
+ * | ------------------------------ | ------ | ------------ | ------------- |
+ * | `--mat-sys-outline`            | 4.25:1 | pass         | **fail**      |
+ * | `--mat-sys-on-surface-variant` | 8.93:1 | pass         | pass          |
+ *
+ * So it is never *obviously* wrong on screen — it is a plausible-looking grey that
+ * misses the text bar by a quarter of a point. That is why this needs a gate rather
+ * than review: four measured instances reached `integration/nxsat-308` this way, and
+ * the two that were found (`.rv-sep` at 4.24:1, the tasks hint at 4.46:1, both fixed
+ * under NXSAT-647) were found by running axe, not by reading the diff. The other two
+ * (`.task-due-prefix` and `.expired-sep`) survived that same sweep,
+ * because a fix applied by searching for the *symptom* cannot find the instances
+ * that were not on screen at scan time. `--mat-sys-on-surface-variant` is the text
+ * equivalent and clears 1.4.3 on that background.
+ *
+ * ## The opt-out, and why it is a comment rather than an allowlist here
+ *
+ * Icons legitimately take this token: a 48px empty-state glyph, an 18px breadcrumb
+ * chevron and a 32px panel icon all carry it today, and all three are correct —
+ * they are non-text, so 3:1 is the applicable bar. A path allowlist in this file
+ * would put that justification in a different file from the line it licenses, which
+ * is how an allowlist entry outlives the reason for it. Instead the line says so
+ * itself, with `non-text` in a comment, which a reviewer reads next to the code and
+ * a later edit cannot silently inherit.
+ *
+ * Scoped to added lines, like every check here: this forbids writing a new one, and
+ * does not demand a sweep of what is already there.
+ */
+function checkOutlineTokenIsNotTextColour() {
+  // `(?<![-\w])` so `border-color`, `background-color`, `outline-color` and
+  // `text-decoration-color` are not matched — each of those IS a non-text use and is
+  // exactly what the token is for. Only the bare `color` property sets text colour.
+  const textColourFromOutline = /(?<![-\w])color\s*:\s*var\(\s*--mat-sys-outline\s*[,)]/;
+
+  for (const [file, lines] of addedLinesByFile) {
+    let inlineBlock = null;
+    if (!file.endsWith('.scss') && !file.endsWith('.html')) {
+      if (!file.endsWith('.ts') || !fileExists(file)) continue;
+      inlineBlock = inlineStyleBlockLines(read(file));
+      if (inlineBlock.size === 0) continue;
+    }
+    for (const { line, text } of lines) {
+      if (inlineBlock && !inlineBlock.has(line)) continue;
+      const trimmed = text.trim();
+      if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('/*')) continue;
+      if (!textColourFromOutline.test(trimmed)) continue;
+      // The deliberate non-text use declares itself on the line.
+      if (/non-text/.test(trimmed)) continue;
+      fail(
+        `${file}:${line} sets a text colour from --mat-sys-outline, which is a non-text ` +
+          `token (borders and dividers, WCAG 1.4.11 at 3:1). It measures 4.25:1 on ` +
+          `--mat-sys-surface, so it fails 1.4.3's 4.5:1 for text. ` +
+          `Use --mat-sys-on-surface-variant (8.93:1 on that background). ` +
+          `If this really is non-text — an icon or a divider — say so with \`non-text\` in a ` +
+          `comment on the line, naming what it is.`,
+      );
+    }
+  }
+}
+
 function checkDocsNumbering() {
   const docFiles = changedFiles.filter((file) => file.endsWith('.md') && file.startsWith('docs/'));
   for (const file of docFiles) {
@@ -9589,6 +9660,7 @@ function checkSatoriPrimitivesRegisteredInOrder() {
 
 const GUARDRAILS = [
   checkThemeTokens,
+  checkOutlineTokenIsNotTextColour,
   checkDocsNumbering,
   checkNoReviewCorpusChurn,
   checkVitestProjects,
