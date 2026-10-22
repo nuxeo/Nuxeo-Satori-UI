@@ -172,7 +172,14 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     // reported as that rather than as a timing problem. Only while a session is required: the
     // signed-out page's requests carry no header by right, and have no outgoing identity to be
     // held against.
-    if (!required) return;
+    //
+    // Read again rather than reusing `required` above: the verification itself can recognise a
+    // first form sign-in and promote the policy, and a request the app started *during* that
+    // probe sits past the promotion's mark — so `pendingAcrossSignIn` leaves it in the window,
+    // correctly, for a boundary to judge later. The stale `required` skipped this check, and the
+    // restart below then discarded it. It is the same request either way; only the window it is
+    // read from differs.
+    if (!('user' in identity.appPolicy)) return;
     const pending = identity.pendingRequests?.() ?? [];
     if (!pending.length) return;
     const named = pending.map((r) => `${r.method} ${r.path}`).join(', ');

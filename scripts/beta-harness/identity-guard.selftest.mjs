@@ -1884,6 +1884,53 @@ await silently(async () => {
     }
   }
   {
+    // The other side of the same stale `required`: a request the app starts *during* the probe.
+    // It is beyond the promotion's mark, so `pendingAcrossSignIn` rightly leaves it in the
+    // window for a later boundary — but the transition reads `required` from before the
+    // verification, skips the pending check, and then restarts the window over it.
+    const savedUrl = process.env['APP_URL'];
+    process.env['APP_URL'] = APP;
+    try {
+      const page = fakePage({ url: `${APP}/#/` });
+      /** @type {{ finish: () => void } | null} */
+      let inFlight = null;
+      page.state.meFor = (/** @type {string | null} */ auth) => {
+        inFlight ??= page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`);
+        return auth === H ? ADMIN : GUEST;
+      };
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      page.state.storage = { ...signedIn };
+      page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+      const thrown = await thrownBy(async () => {
+        await h.signedOut('selftest: driving the sign-in form');
+        page.state.storage = {};
+        inFlight?.finish();
+        await h.step('two');
+        await h.finish();
+      });
+      control(
+        'negative',
+        'a request started while the boundary probe runs is not discarded by the transition that follows it',
+        thrown instanceof PreconditionError &&
+          /in flight/.test(thrown.message) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+          identity.checks.some((c) => !c.ok),
+        { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+      );
+    } finally {
+      if (savedUrl === undefined) Reflect.deleteProperty(process.env, 'APP_URL');
+      else process.env['APP_URL'] = savedUrl;
+    }
+  }
+  {
     // `pendingAcrossSignIn` on its own: where the bootstrap exemption ends, and what the
     // promotion's mark excludes.
     const req = (/** @type {any} */ over) => ({
