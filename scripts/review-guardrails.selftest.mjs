@@ -604,6 +604,34 @@ expectRed(
   /sets a text colour from --mat-sys-outline/,
 );
 
+/**
+ * An astral character must not shift the offsets.
+ *
+ * The scanner built its output with `Array.from`, which iterates code points, while every index
+ * it and its caller use is a UTF-16 code unit. One emoji desynchronises the two by one unit and
+ * every offset after it is wrong.
+ *
+ * **The declaration is deliberately unindented**, and that is what makes this control able to
+ * fail. A one-unit drift only changes the answer if it crosses a newline, so with the usual two
+ * spaces of indentation the reported line comes out right by luck and the control passes against
+ * the bug — which is how the first version of it was vacuous. At column 0 the drift moves the
+ * match onto the previous line: measured, this reports line 6 with `Array.from` and line 7 with
+ * `split('')`.
+ */
+expectRed(
+  'an emoji in a comment does not shift the reported line',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_SCSS,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe {\n  border: 1px solid var(--mat-sys-outline);\n}\n\n' +
+        '/* \u{1F600} a comment with an astral character in it */\n' +
+        '.probe__hint {\ncolor: var(--mat-sys-outline);\n}\n',
+    ),
+  /probe\.component\.scss:7 sets a text colour from --mat-sys-outline/,
+);
+
 expectWarn(
   'locale missing a key the reference has — warns, because English is the fallback',
   'checkTranslationCatalogues',

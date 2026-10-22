@@ -439,11 +439,17 @@ function checkOutlineTokenIsNotTextColour() {
  *
  * Strings are masked but **not** reported as comments — a string is not an opt-out.
  *
+ * `split('')` rather than `Array.from`: the latter iterates **code points**, while every index
+ * this function and its caller use — `indexOf`, `match.index`, `text[i]`, and the newline count
+ * that becomes a line number — is a **UTF-16 code unit**. One astral character, an emoji in a
+ * comment, desynchronises the two by one unit per character and every offset after it is wrong.
+ * Found on review; `'😀'.length` is 2 and `Array.from('😀').length` is 1.
+ *
  * @param {string} text
  * @returns {{ masked: string, comments: Array<{ start: number, end: number }> }}
  */
 function maskNonCodeInStylesheet(text) {
-  const out = Array.from(text);
+  const out = text.split('');
   /** @type {Array<{ start: number, end: number }>} */
   const comments = [];
   const blank = (from, to) => {
