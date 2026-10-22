@@ -1800,6 +1800,51 @@ export default async function run(page, h, outDir) {
   }
   mark('permissions', 'end');
 
+  // ── 11b. PermissionsPanel at 320 px ──────────────────────────────────────────────────────────────
+  await h.step('PermissionsPanel — fits and is usable at 320 px');
+  await page.setViewportSize({ width: 320, height: 900 });
+  await page.waitForTimeout(800);
+  await A.permissions.open(page, h, ACL.path);
+  const narrowPanel = page.locator(A.permissions.root).first();
+  const narrowVisible = await narrowPanel.isVisible().catch(() => false);
+  h.check(
+    `${LB} the permissions panel renders at 320 px`,
+    narrowVisible,
+    `panel visible=${narrowVisible}`,
+  );
+  if (narrowVisible) {
+    const panelBox = await narrowPanel.boundingBox();
+    const bodyScrollWidth = await page.evaluate(() => document.body.scrollWidth);
+    const bodyClientWidth = await page.evaluate(() => document.body.clientWidth);
+    const horizontalScroll = bodyScrollWidth > bodyClientWidth;
+    h.check(
+      `${LB} the permissions panel at 320 px does not cause horizontal page scroll`,
+      !horizontalScroll,
+      `body scrollWidth=${bodyScrollWidth}, clientWidth=${bodyClientWidth}, panel width=${panelBox?.width ?? 'not measured'}`,
+    );
+    const tabsVisible = await page
+      .locator('hxp-permissions-management-panel [role="tab"]')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const rowsVisible = await page.locator(A.permissions.rows).first().isVisible().catch(() => false);
+    h.check(
+      `${LB} the permissions panel tabs and rows remain accessible at 320 px`,
+      tabsVisible && rowsVisible,
+      `tabs visible=${tabsVisible}, rows visible=${rowsVisible}`,
+    );
+    await h.screenshot('permissions-panel-320px');
+  }
+  // Reset viewport to default before the viewer steps, which assume the wider width
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.waitForTimeout(600);
+  const resetWidth = await page.evaluate(() => window.innerWidth);
+  h.check(
+    `${CTX} viewport reset to 1440 px before the viewer steps`,
+    resetWidth === 1440,
+    `window.innerWidth=${resetWidth}`,
+  );
+
   // ── 12. Viewer ───────────────────────────────────────────────────────────────────────────────
   await h.step('Viewer — PDF');
   await h.goTo(A.browse(MEDIA.path));
