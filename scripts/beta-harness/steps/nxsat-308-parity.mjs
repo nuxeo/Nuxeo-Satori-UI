@@ -2118,10 +2118,7 @@ export default async function run(page, h, outDir) {
   await h.step('Failure — the collection member listing answers 500');
   // Find the collection in the workspace's children (it's owned by the workspace, not in the user's
   // personal Collections folder). This avoids ambiguity from multiple collections with the same title.
-  const wsChildrenResp = await page.request.get(
-    `/nuxeo/api/v1/path${encodeURIComponent(ROOT)}/@children?pageSize=500`,
-  );
-  const wsChildren = wsChildrenResp.ok() ? await wsChildrenResp.json() : null;
+  const wsChildren = (await getJson(`/path${enc(ROOT)}/@children?pageSize=500`)).data;
   const collection =
     (wsChildren?.entries ?? []).find(
       (e) => e.type === 'Collection' && e.title === COLLECTION.title,
@@ -2248,10 +2245,10 @@ export default async function run(page, h, outDir) {
   );
   const asUser = await readRows(page, A.list.rows, A.list.title);
   h.check(
-    `${LB} parity-user sees the workspace's six other folders`,
+    `${LB} parity-user sees the workspace's seven folders (including the collection)`,
     sameSet(
       asUser.map((r) => r.title),
-      [ACL.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
+      [ACL.title, COLLECTION.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
     ),
     JSON.stringify(asUser.map((r) => r.title)),
   );

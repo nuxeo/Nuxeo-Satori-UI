@@ -635,14 +635,13 @@ async function seed() {
   // with the workspace. Collection.Create with no input stores it in the user's personal Collections
   // folder outside the workspace, which survives reseeding and --remove. By passing the workspace as
   // the input document, the collection belongs to the workspace's path.
-  const rootDoc = await call('GET', `/path${enc(root)}`);
-  const collectionResp = await call('POST', `/id/${rootDoc.data.uid}/@op/Collection.Create`, {
+  const collectionResp = await call('POST', `/id/${rootDoc.uid}/@op/Collection.Create`, {
     json: {
       params: {
         name: FIXTURE.collection.title,
         description: FIXTURE.collection.description,
       },
-      input: rootDoc.data.uid,
+      input: rootDoc.uid,
       context: {},
     },
   });
