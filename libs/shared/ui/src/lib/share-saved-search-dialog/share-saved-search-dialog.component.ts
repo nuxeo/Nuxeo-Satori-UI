@@ -8,7 +8,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { catchError, of, forkJoin } from 'rxjs';
+import { catchError, of, forkJoin, map, switchMap } from 'rxjs';
 import {
   CURRENT_USERNAME,
   UserService,
@@ -137,16 +137,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     const localAcl = allAcls.find((acl) => acl.name === 'local') || allAcls[0];
     const localAces = localAcl?.aces ?? [];
 
-    const localRows: PermissionEntry[] = localAces
-      .filter((ace) => !ace.externalUser)
-      .map((ace, index: number) => ({
-        id: String(index),
-        aceId: ace.id,
-        userGroup: ace.username || ace.email || 'Unknown',
-        right: ace.permission || 'Read',
-        timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
-        grantedBy: ace.creator || 'System',
-      }));
+    const localRows = this.localRowsOf(localAces);
 
     const externalRows: ExternalPermissionEntry[] = localAces
       .filter((ace) => !!ace.externalUser)
@@ -178,6 +169,43 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     this.externalPermissions.set(externalRows);
     this.inheritedPermissions.set(inheritedRows);
     this.nextId = localRows.length + 1;
+  }
+
+  private localRowsOf(aces: readonly AceLike[]): PermissionEntry[] {
+    return aces
+      .filter((ace) => !ace.externalUser)
+      .map((ace, index: number) => ({
+        id: String(index),
+        aceId: ace.id,
+        userGroup: ace.username || ace.email || 'Unknown',
+        right: ace.permission || 'Read',
+        timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
+        grantedBy: ace.creator || 'System',
+      }));
+  }
+
+  /**
+   * Replaces the local rows with the server's, keeping the unsaved edit of any row whose entry is
+   * still there. Nuxeo answers 200 to removing an id it no longer holds, so only a re-read shows
+   * whether a removal took.
+   */
+  private reconcileLocalRows(doc: NuxeoDocument): void {
+    const acls = ((doc.contextParameters?.acls as unknown) ?? []) as Array<{
+      name: string;
+      aces: AceLike[];
+    }>;
+    const local = acls.find((acl) => acl.name === 'local') || acls[0];
+    const shown = new Map(
+      this.permissions()
+        .filter((row) => row.aceId)
+        .map((row) => [row.aceId, row]),
+    );
+    const rows = this.localRowsOf(local?.aces ?? []).map((row) => {
+      const kept = row.aceId ? shown.get(row.aceId) : undefined;
+      return kept ? { ...kept, id: row.id } : row;
+    });
+    this.permissions.set(rows);
+    this.nextId = rows.length + 1;
   }
 
   openExternalPermissionDialog(): void {
@@ -377,16 +405,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
         this.saving.set(true);
 
-        // Call addPermission API for each new permission
+        // The dialog returns the server's own identifiers, so they are sent as they are: the
+        // display-label mapping would turn `Write` into the broader `ReadWrite`.
         const requests = result.map((entry) => {
-          const { right } = this.normalizePermissionForApi({
-            right: entry.right,
-          } as PermissionEntry);
           const [begin, end] = this.parseTimeFrame(entry.timeFrame);
 
           return this.detailService.addPermission(this.data.id, {
             username: entry.userGroup,
-            permission: right,
+            permission: entry.right,
             begin: begin || null,
             end: end || null,
             notify: false,
@@ -418,17 +444,31 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     // Remove from local state first
     this.permissions.update((rows) => rows.filter((r) => r.id !== id));
 
+    const uid = this.data.id;
     this.detailService
-      .removePermissionById(this.data.id, row.aceId)
+      .removePermissionById(uid, row.aceId)
       .pipe(
+        map(() => true),
         catchError((error) => {
           console.error('Error removing permission:', error);
           // Revert the removal on error
           this.permissions.update((rows) => [...rows, row]);
-          return of(null);
+          return of(false);
         }),
+        switchMap((removed) =>
+          !removed
+            ? of(null)
+            : this.detailService.getDocumentPermissions(uid).pipe(
+                catchError((error) => {
+                  console.error('Error re-reading permissions after a removal:', error);
+                  return of(null);
+                }),
+              ),
+        ),
       )
-      .subscribe();
+      .subscribe((doc) => {
+        if (doc) this.reconcileLocalRows(doc);
+      });
   }
 
   editRow(id: string): void {

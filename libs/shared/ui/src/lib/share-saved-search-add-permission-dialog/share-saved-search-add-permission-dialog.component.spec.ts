@@ -4,12 +4,22 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { of } from 'rxjs';
 import { vi } from 'vitest';
 
-import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
+import {
+  DocumentDetailService,
+  type UserGroupSuggestion,
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   ShareSavedSearchAddPermissionDialogComponent,
   type ShareSavedSearchAddPermissionDialogData,
 } from './share-saved-search-add-permission-dialog.component';
+
+const MEMBERS: UserGroupSuggestion = {
+  id: 'members',
+  displayLabel: 'members',
+  type: 'GROUP_TYPE',
+  prefixed_id: 'group:members',
+};
 
 /** A saved search's `userVisiblePermissions` on a stock server, measured on the local Nuxeo. */
 const SAVED_SEARCH_VISIBLE = ['Read', 'ReadWrite', 'Everything'];
@@ -45,6 +55,35 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
       permissions: ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'],
     });
     expect(values(dialog)).toEqual(['Read', 'ReadCanCollect', 'ReadWrite', 'Everything']);
+  });
+
+  describe('with a list that does not hold Read', () => {
+    const NO_READ = ['ReadWrite', 'Everything'];
+
+    it('starts a new entry on the first right offered', async () => {
+      const dialog = await open({ permissions: NO_READ });
+      expect(dialog.right).toBe('ReadWrite');
+    });
+
+    it('resets to the first right offered after Create And Add Another', async () => {
+      const dialog = await open({ permissions: NO_READ });
+      dialog.onSuggestionSelected(MEMBERS);
+      dialog.right = 'Everything';
+
+      dialog.create(true);
+
+      expect(dialog.right).toBe('ReadWrite');
+    });
+
+    it('will not submit a right the list does not offer', async () => {
+      const dialog = await open({ permissions: NO_READ });
+      dialog.onSuggestionSelected(MEMBERS);
+      expect(dialog.isSubmitDisabled()).toBe(false);
+
+      dialog.right = 'Read';
+
+      expect(dialog.isSubmitDisabled()).toBe(true);
+    });
   });
 
   it("falls back to Nuxeo's default three when the read carried no list", async () => {

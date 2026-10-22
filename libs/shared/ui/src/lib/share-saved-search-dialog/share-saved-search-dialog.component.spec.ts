@@ -50,6 +50,18 @@ const SAVED_SEARCH = {
   },
 } as unknown as NuxeoDocument;
 
+/** The saved search as the server holds it after `drop` were removed and `add` granted. */
+function readAfter(drop: string[], add: ReturnType<typeof ace>[] = []): NuxeoDocument {
+  const context = SAVED_SEARCH.contextParameters as { acls: { name: string; aces: unknown[] }[] };
+  const local = (context.acls[0].aces as ReturnType<typeof ace>[])
+    .filter((a) => !drop.includes(a.id))
+    .concat(add);
+  return {
+    ...SAVED_SEARCH,
+    contextParameters: { ...context, acls: [{ name: 'local', aces: local }] },
+  } as unknown as NuxeoDocument;
+}
+
 describe('ShareSavedSearchDialogComponent', () => {
   let fixture: ComponentFixture<ShareSavedSearchDialogComponent>;
   let documents: Record<string, ReturnType<typeof vi.fn>>;
@@ -99,6 +111,9 @@ describe('ShareSavedSearchDialogComponent', () => {
         .permissions()
         .find((r) => r.right === 'Read');
       if (!read) throw new Error('the members: Read row is not shown');
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'])),
+      );
 
       component().removeRow(read.id);
 
@@ -113,6 +128,46 @@ describe('ShareSavedSearchDialogComponent', () => {
           .permissions()
           .map((r) => r.right),
       ).toEqual(['WriteVersion']);
+    });
+
+    it('shows the entry again when the server still holds it after a 200', async () => {
+      // Another administrator changed members: Read meanwhile, so its id moved on. Nuxeo answers
+      // 200 to removing the old id and changes nothing; only the re-read tells.
+      await mount(SAVED_SEARCH);
+      const read = component()
+        .permissions()
+        .find((r) => r.right === 'Read');
+      if (!read) throw new Error('the members: Read row is not shown');
+      const changed = { ...ace('members', 'Read'), id: 'members:Read:true:jdoe::' };
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'], [changed])),
+      );
+
+      component().removeRow(read.id);
+
+      const rows = component().permissions();
+      expect(rows.map((r) => r.aceId)).toContain('members:Read:true:jdoe::');
+      expect(rows.map((r) => r.right)).toEqual(['WriteVersion', 'Read']);
+    });
+
+    it('keeps an unsaved edit to another row when it re-reads after a removal', async () => {
+      await mount(SAVED_SEARCH);
+      const [read, writeVersion] = component().permissions();
+      component().permissions.update((rows) =>
+        rows.map((r) => (r.id === writeVersion.id ? { ...r, right: 'Everything' } : r)),
+      );
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'])),
+      );
+
+      component().removeRow(read.id);
+
+      expect(component().permissions()).toEqual([
+        expect.objectContaining({
+          aceId: 'members:WriteVersion:true:Administrator::',
+          right: 'Everything',
+        }),
+      ]);
     });
 
     it('writes nothing for a row that was not read from the ACL, and disables its button', async () => {
@@ -145,6 +200,23 @@ describe('ShareSavedSearchDialogComponent', () => {
       'guest@example.com:ReadWrite:true:Administrator::',
     );
     expect(documents['removePermission']).not.toHaveBeenCalled();
+  });
+
+  it('grants the server identifier the add dialog returned, without the display-label mapping', async () => {
+    await mount(SAVED_SEARCH);
+    documents['addPermission'] = vi.fn(() => of({}));
+    dialog.open.mockReturnValueOnce({
+      afterClosed: () =>
+        of([{ userGroup: 'members', right: 'Write', timeFrame: 'Permanent', grantedBy: 'Group' }]),
+    });
+
+    component().openAddPermissionDialog();
+
+    // The legacy map turns `Write` into the broader `ReadWrite`.
+    expect(documents['addPermission']).toHaveBeenCalledExactlyOnceWith(
+      UID,
+      expect.objectContaining({ username: 'members', permission: 'Write' }),
+    );
   });
 
   it("hands the add and edit dialogs the saved search's own userVisiblePermissions", async () => {

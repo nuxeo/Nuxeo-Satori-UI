@@ -113,6 +113,16 @@ export class ShareSavedSearchAddPermissionDialogComponent {
       value,
       label: permissionRightLabel(value, (key) => this.translate.instant(key)),
     }));
+    // The type's list need not hold `Read`, so a new entry starts on the first right it offers.
+    if (!this.isEditMode) this.right = this.firstRight();
+  }
+
+  private firstRight(): string {
+    return this.rightOptions[0]?.value ?? 'Read';
+  }
+
+  private rightIsOffered(): boolean {
+    return this.rightOptions.some((option) => option.value === this.right);
   }
 
   private initializeFormWithData(data: NonNullable<typeof this.data.initialData>): void {
@@ -208,7 +218,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   }
 
   create(andAddAnother: boolean): void {
-    if (!this.selectedPrincipal || this.saving()) return;
+    if (this.isSubmitDisabled()) return;
 
     this.saving.set(true);
 
@@ -231,7 +241,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   }
 
   isSubmitDisabled(): boolean {
-    return !this.selectedPrincipal || this.saving();
+    return !this.selectedPrincipal || this.saving() || !this.rightIsOffered();
   }
 
   private buildResultEntry(): ShareSavedSearchAddPermissionResult {
@@ -276,7 +286,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   private resetForm(): void {
     this.searchText = '';
     this.selectedPrincipal = null;
-    this.right = 'Read';
+    this.right = this.firstRight();
     this.timeFrameMode = 'permanent';
     this.beginDate = null;
     this.endDate = null;
