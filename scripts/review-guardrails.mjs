@@ -354,7 +354,19 @@ function checkOutlineTokenIsNotTextColour() {
   // fallback and closing line** — a second review finding on this rule: a regex that stopped
   // at the comma after the token excluded those lines, so an icon declaration annotated on its
   // closing line was rejected despite following the documented opt-out.
-  const colourDeclaration = /(?<![-\w])color\s*:[^;{}]*/g;
+  //
+  // **A `style` attribute needs the quote as a terminator too**, which was the third review
+  // finding. CSS lets the last declaration in a `style="…"` omit its semicolon, so `;{}` does
+  // not bound it and the match ran on into the markup after the attribute. All three
+  // consequences were real: a valid `style="color: var(--mat-sys-on-surface)"` was failed
+  // because a later element's `border-color: var(--mat-sys-outline)` fell inside the span; an
+  // invalid text colour was missed because a later icon's `non-text` annotation fell inside it;
+  // and an unrelated edit after the attribute made an untouched declaration count as touched.
+  //
+  // So HTML and inline templates terminate on a quote as well. `.scss` deliberately does not:
+  // a stylesheet has no attribute boundary, and a quote there would cut a multiline
+  // declaration short — the thing the previous finding was about.
+  const DECLARATION_BODY = { style: '[^;{}"\']*', stylesheet: '[^;{}]*' };
   const usesOutlineToken = /var\(\s*--mat-sys-outline\s*[,)]/;
 
   for (const [file, lines] of addedLinesByFile) {
@@ -375,6 +387,12 @@ function checkOutlineTokenIsNotTextColour() {
       for (let i = 0; i < index; i += 1) if (text[i] === '\n') line += 1;
       return line;
     };
+    // A `.scss` file is a stylesheet; an `.html` file and a component's inline template both
+    // carry CSS inside quoted attributes, so they take the quote-terminated form.
+    const colourDeclaration = new RegExp(
+      `(?<![-\\w])color\\s*:${file.endsWith('.scss') ? DECLARATION_BODY.stylesheet : DECLARATION_BODY.style}`,
+      'g',
+    );
 
     for (const match of masked.matchAll(colourDeclaration)) {
       if (!usesOutlineToken.test(match[0])) continue;

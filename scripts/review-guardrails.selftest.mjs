@@ -519,13 +519,81 @@ expectRed(
   /sets a text colour from --mat-sys-outline/,
 );
 
-/** The same declaration, untouched by the diff, must stay green — this rule is diff-scoped. */
+/**
+ * The same declaration, untouched by the diff, must stay green — this rule is diff-scoped.
+ *
+ * The edit has to be to the **already tracked** file. The first version of this control created
+ * a new `other.scss`, and a reviewer pointed out it proved nothing: `withFixture` does not stage
+ * its mutations, so an untracked new file produces no diff at all, `addedLinesByFile` is empty
+ * and the guardrail never even opens the stylesheet. It would have passed with the declaration
+ * span check deleted — a control that cannot fail, which is the one thing this file exists to
+ * prevent.
+ */
 falsePositiveControls += 1;
 expectGreenAfterEdit(
   'an existing multiline text declaration the diff does not touch',
   'checkOutlineTokenIsNotTextColour',
   OUTLINE_SCSS_MULTILINE,
-  (write) => write('libs/shared/ui/src/lib/probe/other.scss', '.other {\n  margin: 0;\n}\n'),
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.scss',
+      '.probe__hint {\n  font-size: 12px;\n  color: var(\n    --mat-sys-outline,\n' +
+        '    #777683\n  );\n}\n\n.probe__unrelated {\n  margin: 0;\n}\n',
+    ),
+);
+
+/* --- the `style` attribute, where the last declaration may omit its semicolon --- */
+
+const OUTLINE_HTML = {
+  'libs/shared/ui/src/lib/probe/probe.component.html': '<p>probe</p>\n',
+};
+
+expectRed(
+  'the outline token as a text colour in a style attribute with no trailing semicolon',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_HTML,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.html',
+      '<p style="font-size: 12px; color: var(--mat-sys-outline)">probe</p>\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
+);
+
+/**
+ * The span must stop at the attribute's closing quote. Without that, this valid `color`
+ * declaration was failed because the NEXT element's `border-color` — a correct non-text use of
+ * the token — fell inside the same match.
+ */
+falsePositiveControls += 1;
+expectGreenAfterEdit(
+  'a valid style-attribute text colour followed by an element using the token for a border',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_HTML,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.html',
+      '<p style="color: var(--mat-sys-on-surface)">probe</p>\n' +
+        '<hr style="border-color: var(--mat-sys-outline)" />\n',
+    ),
+);
+
+/**
+ * Annotation isolation: a `non-text` marker belonging to a LATER element must not exempt this
+ * one. With the span running past the quote it did, which turned a real violation green.
+ */
+expectRed(
+  'an unannotated style-attribute text colour followed by a separate annotated icon',
+  'checkOutlineTokenIsNotTextColour',
+  OUTLINE_HTML,
+  (write) =>
+    write(
+      'libs/shared/ui/src/lib/probe/probe.component.html',
+      '<p style="color: var(--mat-sys-outline)">probe</p>\n' +
+        '<!-- non-text: the icon below is a decorative glyph, so 1.4.11 applies -->\n' +
+        '<i style="font-size: 32px; color: var(--mat-sys-outline)">icon</i>\n',
+    ),
+  /sets a text colour from --mat-sys-outline/,
 );
 
 expectWarn(
