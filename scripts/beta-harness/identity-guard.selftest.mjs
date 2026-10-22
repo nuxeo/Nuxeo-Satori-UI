@@ -405,6 +405,29 @@ function fakePage({
       for (const fn of state.listeners['request'] ?? []) fn(request);
       for (const fn of state.listeners['requestfinished'] ?? []) fn(request);
     },
+    /**
+     * Start a request and leave it in flight: `request` fires now, `requestfinished` only when
+     * the returned `finish` is called — or `requestfailed`, through `fail`. What a transition
+     * declared while the app is still waiting for a response sees.
+     *
+     * @param {string} url
+     * @param {{ authorization?: string | null, type?: string }} [options]
+     */
+    begin: (url, { authorization = null, type = 'xhr' } = {}) => {
+      const request = {
+        url: () => url,
+        method: () => 'GET',
+        resourceType: () => type,
+        isNavigationRequest: () => false,
+        frame: () => mainFrame,
+        headers: () => (authorization ? { authorization } : {}),
+      };
+      for (const fn of state.listeners['request'] ?? []) fn(request);
+      const emit = (event) => {
+        for (const fn of state.listeners[event] ?? []) fn(request);
+      };
+      return { finish: () => emit('requestfinished'), fail: () => emit('requestfailed') };
+    },
     /** Make the page send a request, as the app would. */
     emitRequest: (url) => page.send(url),
     goto: async (url) => {
@@ -1351,6 +1374,86 @@ await silently(async () => {
     );
   }
   {
+    // A request still *in flight* at a declared switch. Verifying the outgoing session does not
+    // reach it: `strayRequests` judges only finished records, and `restart` then moves `since`
+    // past this one, so it is judged by nothing, ever — and the run still ends `identity.valid:
+    // true` over traffic the guard could not read. The switch must refuse instead.
+    const UFU = 'Basic UFU=';
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const { h, identity } = harness(page);
+    await h.step('one');
+    const inFlight = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`);
+    const thrown = await thrownBy(async () => {
+      await h.signedInAs('parity-user', 'selftest');
+      // Only reached when the switch did not refuse: the new session, and the pending request
+      // landing headerless afterwards, where no later boundary's window contains it.
+      page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
+        'parity-user',
+        'UFU=',
+      );
+      page.state.meFor = (auth) => (auth === UFU ? { id: 'parity-user' } : GUEST);
+      inFlight.finish();
+      await h.step('two');
+      await h.finish();
+    });
+    control(
+      'negative',
+      'a request in flight at a declared switch refuses the switch, names the request, and invalidates the run',
+      thrown instanceof PreconditionError &&
+        /in flight/.test(thrown.message) &&
+        /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+        identity.checks.some((c) => !c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
+    // The same at the other transition: `expectSignedOut` restarts the window too.
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const { h, identity } = harness(page);
+    await h.step('one');
+    const inFlight = page.begin(`${APP}/nuxeo/api/v1/path/default-domain`);
+    const thrown = await thrownBy(async () => {
+      await h.signedOut('selftest: driving the sign-in form');
+      page.state.storage = {};
+      inFlight.finish();
+      await h.step('two');
+      await h.finish();
+    });
+    control(
+      'negative',
+      'a request in flight at a declared sign-out refuses the sign-out, names the request, and invalidates the run',
+      thrown instanceof PreconditionError &&
+        /in flight/.test(thrown.message) &&
+        /path\/default-domain/.test(thrown.message) &&
+        identity.checks.some((c) => !c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
+    // A request that was in flight, then *failed*: the page never received a response, so no step
+    // could have read it, and `requestfailed` is the only event it will ever emit. Treating it as
+    // pending would refuse every transition after a navigation aborted a request.
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const { h, identity } = harness(page);
+    await h.step('one');
+    const aborted = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`);
+    aborted.fail();
+    // Inside `thrownBy` so a refusal here is reported as this control failing, not as the
+    // selftest aborting: over-refusal is the failure mode this control exists to catch.
+    const thrown = await thrownBy(async () => {
+      await h.signedOut('selftest: driving the sign-in form');
+      page.state.storage = {};
+      await h.step('two');
+      await h.finish();
+    });
+    control(
+      'positive',
+      'a request that failed before the transition is not in flight, so the transition is allowed',
+      thrown === null && identity.checks.every((c) => c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
     // h.login() itself: the page boots signed out, then the session is written and the page reloaded.
     const saved = Object.fromEntries(
       ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
@@ -1423,6 +1526,56 @@ await silently(async () => {
           failedCheck &&
           /identity guard/.test(failedCheck.name),
         { thrown: String(thrown), checks: identity.checks, failedCheck },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
+  {
+    // `h.login()`'s reload path with a request in flight. `restartAtNextLoad` moves the window at
+    // the reload, so the pending record is behind `since` by the time it finishes: the third way
+    // into the same hole, and the one the parity step's own comment describes.
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      await h.login();
+      const inFlight = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`);
+      const thrown = await thrownBy(async () => {
+        await h.login();
+        inFlight.finish();
+        await h.step('two');
+        await h.finish();
+      });
+      const failedCheck = recorder.steps[0]?.checks.find((c) => !c.passed);
+      control(
+        'negative',
+        "a request in flight at repeated h.login() refuses the reload path, names the request, and fails the step's check",
+        thrown instanceof PreconditionError &&
+          /in flight/.test(thrown.message) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+          failedCheck !== undefined &&
+          /identity guard/.test(failedCheck.name),
+        { thrown: String(thrown), failedCheck },
       );
     } finally {
       for (const [k, v] of Object.entries(saved)) {

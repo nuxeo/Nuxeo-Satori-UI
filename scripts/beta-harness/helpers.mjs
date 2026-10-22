@@ -141,14 +141,55 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * with one to read: before the run has signed in, and after a declared sign-out, there is no
    * outgoing identity to hold anything against.
    *
+   * A request still **in flight** escapes that verification: it has no `Authorization` to read
+   * yet, so `strayRequests` cannot judge it, and the window restart that follows puts it behind
+   * `since` where no later boundary will either. So a transition with one outstanding **refuses**,
+   * naming it, rather than letting it through unjudged.
+   *
+   * Refusing and not waiting is the deliberate choice. Discarding traffic the guard could not
+   * read is worse than the hardcoded fallback this guard replaced: the run reports
+   * `identity.valid: true` over a result that may have been read as the guest, which is false
+   * evidence rather than a missing check. Refusing is noisy and correct. A bounded wait needs a
+   * deadline *and* an expiry policy, and admits a harness that hangs instead of reporting — its
+   * own failure mode. See `pendingRequests` in `identity-guard.mjs` for the full trade-off; the
+   * design question is tracked as a follow-up to NXSAT-643 rather than settled here.
+   *
    * @param {string} what names the transition, e.g. `h.signedOut()`
    */
   async function verifyBeforeTransition(what) {
     if (!identity) return;
     const onApp = page.url().startsWith(baseUrl);
-    if (!onApp && !('user' in identity.appPolicy)) return;
+    const required = 'user' in identity.appPolicy;
+    if (!onApp && !required) return;
     const step = ensureStep();
-    await verifyIdentity(step, `before ${what} at step ${step.index}`);
+    const at = `before ${what} at step ${step.index}`;
+    await verifyIdentity(step, at);
+    // After the verification, so a request that finished during it has been judged on its merits
+    // rather than refused for being slow, and so an outgoing session that is already stray is
+    // reported as that rather than as a timing problem. Only while a session is required: the
+    // signed-out page's requests carry no header by right, and have no outgoing identity to be
+    // held against.
+    if (!required) return;
+    const pending = identity.pendingRequests?.() ?? [];
+    if (!pending.length) return;
+    const named = pending.map((r) => `${r.method} ${r.path}`).join(', ');
+    // A distinct label from the verification above, which passed: the manifest would otherwise
+    // carry two checks with the same `at` disagreeing, and a reviewer could not tell which is which.
+    const inFlightAt = `${at}, with requests in flight`;
+    const detail =
+      `${pending.length} Nuxeo request(s) the app sent as the outgoing session were still in ` +
+      `flight: ${named}. Nothing can say who they ran as — they carry no readable ` +
+      `Authorization yet, and ${what} ends the window anything would judge them in. Let the app ` +
+      `settle before declaring the transition (await the work that issued them, or ` +
+      `\`page.waitForLoadState('networkidle')\`), then declare it.`;
+    step.checks.push({
+      name: `precondition: identity guard ${inFlightAt}`,
+      passed: false,
+      detail,
+    });
+    console.log(`  [FAIL] precondition: identity guard ${inFlightAt} - ${detail}`);
+    identity.reject(inFlightAt, detail);
+    throw new PreconditionError(`identity guard ${inFlightAt}: ${detail}`);
   }
 
   /**

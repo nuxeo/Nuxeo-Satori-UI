@@ -174,9 +174,21 @@ red(
   'unawaited-identity-transition',
 );
 
+red(
+  'an unawaited h.login is reported: it verifies and can refuse before resetting the window',
+  `export async function run(h) {\n  h.login();\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-identity-transition',
+);
+
+red(
+  'an alias of h.login is reported too',
+  `export async function run(h) {\n  const { login } = h;\n  await login();\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-identity-transition',
+);
+
 green(
   'awaited identity transitions are not reported',
-  `export async function run(h, recorder) {\n  await h.signedInAs('parity-user', 'why');\n  await h.signedOut('why');\n  h.check('c', recorder.steps.length > 0);\n}\n`,
+  `export async function run(h, recorder) {\n  await h.login();\n  await h.signedInAs('parity-user', 'why');\n  await h.signedOut('why');\n  h.check('c', recorder.steps.length > 0);\n}\n`,
 );
 
 // ---- the guard exemption, which is where this audit has been wrong twice ---------------------

@@ -217,13 +217,15 @@ function auditFile(rel, src, ast) {
   // an `await` from a discarded `Promise.all([h.step(...)])`. So the one accepted form is a
   // statement that awaits the call itself; any other reference, alias or destructuring is refused.
   //
-  // `signedInAs` and `signedOut` are held to the same form for the same reason: each judges the
-  // identity it is leaving before restarting the request window, and a floating promise would
-  // discard that verification without a word — the one failure mode worse than no guard at all.
+  // `signedInAs`, `signedOut` and `login` are held to the same form for the same reason: each
+  // judges the identity it is leaving before restarting the request window, and each can now
+  // refuse outright when a request is in flight. A floating promise would discard that
+  // verification, or swallow the refusal, without a word — the one failure mode worse than no
+  // guard at all.
   //
   // Not in `scripts/collect-evidence/`: the story runner opens steps without the identity guard.
   const guarded = !rel.startsWith('scripts/collect-evidence/');
-  const MUST_AWAIT = new Set(['step', 'signedInAs', 'signedOut']);
+  const MUST_AWAIT = new Set(['step', 'signedInAs', 'signedOut', 'login']);
   walk(ast, (node) => {
     if (!guarded) return;
     const isMember = node.type === 'MemberExpression' && MUST_AWAIT.has(memberName(node));

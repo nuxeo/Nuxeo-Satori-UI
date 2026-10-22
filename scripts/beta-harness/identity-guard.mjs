@@ -114,6 +114,8 @@ export const APP_SESSION_SOURCES = /** @type {const} */ ([
  * @property {string} method
  * @property {string} path
  * @property {boolean} finished
+ * @property {boolean} failed the page will never receive a response: aborted, or a network error.
+ *   Not `finished`, so nothing judges it — and nothing can have read it either
  * @property {string | null} authorization the header it went out with, after any `page.route`
  *   rewrite; read when it finished
  */
@@ -640,6 +642,7 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
       method: request.method(),
       path: url.pathname,
       finished: false,
+      failed: false,
       authorization: null,
     };
     traffic.sent.push(record);
@@ -651,7 +654,42 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
     record.authorization = request.headers()['authorization'] ?? null;
     record.finished = true;
   });
+  // Aborted, or a network error: the only other event this request will emit. It is recorded so
+  // `pendingRequests` does not report it as still in flight — a navigation aborts whatever was
+  // outstanding, and `h.login()` navigates twice, so every transition after one would otherwise
+  // refuse. The page received no response, so no step can have read it either.
+  page.on('requestfailed', (request) => {
+    const record = pending.get(request);
+    if (record) record.failed = true;
+  });
   return traffic;
+}
+
+/**
+ * The requests the current session started that have neither finished nor failed: in flight, with
+ * no `Authorization` read yet, so nothing can say who they ran as.
+ *
+ * `strayRequests` judges only finished records, and a transition's `restart` then moves `since`
+ * past a pending one — so a request in flight at a transition is judged by nothing, ever, and the
+ * run can still report `identity.valid: true` over it. A transition therefore **refuses** when
+ * this is non-empty (`verifyBeforeTransition` in `helpers.mjs`) rather than discarding it.
+ *
+ * Refusing, not waiting, is deliberate. A guard that discards unjudged traffic is worse than the
+ * hardcoded fallback it replaced, because it produces false evidence: a result read as the guest,
+ * asserted on, and certified. Refusing is noisy and correct. A bounded wait would need a deadline
+ * *and* a policy for its expiry, and buys the possibility of a harness that hangs instead of
+ * reporting — its own failure mode. Refusing is blunt: a legitimately slow request fails a run
+ * that was not compromised. That trade-off is tracked as a follow-up to NXSAT-643, not settled
+ * here.
+ *
+ * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
+ * @returns {SentRequest[]}
+ */
+export function pendingRequests(traffic) {
+  // By shape, not `instanceof`, for the reason on `strayRequests`.
+  const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
+  if (!Array.isArray(sent) || typeof since !== 'number') return [];
+  return sent.slice(since).filter((r) => !r.finished && !r.failed && !anonymousByDesign(r));
 }
 
 /**
@@ -845,6 +883,11 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
     },
     checks,
     switches,
+
+    /** The current session's requests still in flight; any one of them refuses a transition. */
+    pendingRequests() {
+      return pendingRequests(foreignApiOrigins);
+    },
 
     /**
      * From here on the app must be signed in as `user`.
