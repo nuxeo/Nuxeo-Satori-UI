@@ -77,6 +77,7 @@ export function requireStepCredentials(purpose) {
  *   it, every step boundary asks Nuxeo who the previous step ran as; see `step`.
  */
 export function createHelpers(page, outDir, recorder, { identity = null } = {}) {
+  const baseUrl = process.env['APP_URL'] ?? DEFAULT_BASE_URL;
   let current = null;
   /**
    * Every step boundary's identity check, in order, so `finish` can drain them all — not only the
@@ -124,6 +125,30 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     throw new PreconditionError(
       `identity guard ${at}: the results were not obtained as the expected user, so they are invalid — ${detail}`,
     );
+  }
+
+  /**
+   * Judge the identity the run is leaving, before anything moves the request window.
+   *
+   * Every transition — `h.login()`, `h.signedInAs()`, `h.signedOut()` — restarts that window, so
+   * what the outgoing session sent is no longer in the next boundary's. Without this, a completed
+   * headerless request followed by a declared transition and a valid replacement session is judged
+   * by nothing at all, and the run still ends `identity.valid: true`: a guest-read result, asserted
+   * on, and certified. That is worse than the hardcoded fallback this guard replaced, so a
+   * transition refuses rather than discards.
+   *
+   * Only when a session is currently required (`'user' in appPolicy`), or the page is on the app
+   * with one to read: before the run has signed in, and after a declared sign-out, there is no
+   * outgoing identity to hold anything against.
+   *
+   * @param {string} what names the transition, e.g. `h.signedOut()`
+   */
+  async function verifyBeforeTransition(what) {
+    if (!identity) return;
+    const onApp = page.url().startsWith(baseUrl);
+    if (!onApp && !('user' in identity.appPolicy)) return;
+    const step = ensureStep();
+    await verifyIdentity(step, `before ${what} at step ${step.index}`);
   }
 
   /**
@@ -194,7 +219,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
   }
 
   return {
-    baseUrl: process.env['APP_URL'] ?? DEFAULT_BASE_URL,
+    baseUrl,
 
     /**
      * Open a new named step. Everything captured or asserted afterwards is
@@ -264,10 +289,19 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      *
      * Only the app channel moves. `page.request` keeps the run's own credentials.
      *
+     * Declare the switch **before** installing the new session or rewriting the header: this
+     * judges the identity being left first, and rejects a step that read anything headerless
+     * rather than discarding it with the request window. So the new session must not be in place
+     * yet, or it is what gets judged — against the user it is replacing.
+     *
+     * Await it. The verification is a request to Nuxeo, and `assertion-audit.mjs` requires
+     * `await h.signedInAs(...);` so a floating promise cannot skip the check in silence.
+     *
      * @param {string} username
      * @param {string} reason
      */
-    signedInAs(username, reason) {
+    async signedInAs(username, reason) {
+      await verifyBeforeTransition(`h.signedInAs(${username})`);
       identity?.expectApp(username, reason, `step ${ensureStep().index}`);
       this.note(`identity: the browser is signed in as ${username} from here — ${reason}`);
     },
@@ -278,9 +312,14 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
      * signed out at a boundary is rejected: losing the session is one way to hide a result that was
      * obtained as someone else. A session the app still holds must be the run's own user.
      *
+     * Declare it before signing out, and await it, for the reasons on `signedInAs`: a sign-out
+     * that is accepted ends the window the outgoing session's requests were in, and nothing
+     * afterwards can judge them.
+     *
      * @param {string} reason
      */
-    signedOut(reason) {
+    async signedOut(reason) {
+      await verifyBeforeTransition('h.signedOut()');
       identity?.expectSignedOut(reason, `step ${ensureStep().index}`);
       this.note(`identity: the app may be signed out from here — ${reason}`);
     },
@@ -551,12 +590,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
     async login() {
       const { username: user, password: pass } = requireStepCredentials('sign the evidence run in');
 
-      // If already on the app with a session, or if the policy requires a signed-in user (which an
-      // off-app navigation cannot bypass), verify its traffic before clearing it. A headerless
-      // request followed by `h.login()` would otherwise reset the window and hide the violation.
-      if (identity && (page.url().startsWith(this.baseUrl) || 'user' in identity.appPolicy)) {
-        await verifyIdentity(ensureStep(), `before h.login() at step ${ensureStep().index}`);
-      }
+      // Before the cookies and storage below are cleared, so the session being replaced is still
+      // there to be judged; an off-app navigation cannot bypass it either.
+      await verifyBeforeTransition('h.login()');
 
       await page.goto(this.baseUrl, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);

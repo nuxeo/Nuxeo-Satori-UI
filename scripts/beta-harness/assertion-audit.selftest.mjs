@@ -154,6 +154,31 @@ green(
   `export async function run(h, recorder) {\n  await h.step('one');\n  if (recorder.steps.length) {\n    await h.step(\n      'two',\n    );\n  }\n  h.check('c', recorder.steps.length > 0);\n}\n`,
 );
 
+// ---- identity transitions: each judges the outgoing identity before restarting the window ----
+
+red(
+  'an unawaited h.signedInAs is reported: the outgoing identity would go unjudged',
+  `export async function run(h) {\n  h.signedInAs('parity-user', 'why');\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-identity-transition',
+);
+
+red(
+  'an unawaited h.signedOut is reported',
+  `export async function run(h) {\n  h.signedOut('why');\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-identity-transition',
+);
+
+red(
+  'an alias of h.signedInAs is reported, so the rule cannot be stepped around',
+  `export async function run(h) {\n  const { signedInAs } = h;\n  await signedInAs('parity-user', 'why');\n  h.check('c', h.ok);\n}\n`,
+  'unawaited-identity-transition',
+);
+
+green(
+  'awaited identity transitions are not reported',
+  `export async function run(h, recorder) {\n  await h.signedInAs('parity-user', 'why');\n  await h.signedOut('why');\n  h.check('c', recorder.steps.length > 0);\n}\n`,
+);
+
 // ---- the guard exemption, which is where this audit has been wrong twice ---------------------
 //
 // Each fixture below is `if (<always truthy>) check(name, false)` — an unconditional failure

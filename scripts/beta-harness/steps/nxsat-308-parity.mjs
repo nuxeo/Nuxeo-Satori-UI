@@ -2060,6 +2060,15 @@ export default async function run(page, h, outDir) {
   // ── 15. Failure: a permission-denied folder, as parity-user ──────────────────────────────────
   await h.step('Failure — parity-user opens a folder they cannot read');
   const basic = parityBasic;
+  // Declared before the header and the session move, and awaited: the switch judges the
+  // administrator session it is leaving before restarting the request window, so anything this
+  // run read headerless up to here is refused rather than discarded with the window. The
+  // restricted session must not be installed yet, or it is what the switch reads — and it would
+  // be judged against the user it is replacing.
+  await h.signedInAs(
+    ACL.user,
+    'the permission-denied steps read the fixture as the restricted user',
+  );
   // Basic auth decides identity on every Nuxeo REST call (the API keeps no session), so forcing
   // the header switches the browser to parity-user for everything the app requests from here on.
   await page.route('**/nuxeo/**', (route) =>
@@ -2081,7 +2090,6 @@ export default async function run(page, h, outDir) {
       }),
     },
   );
-  h.signedInAs(ACL.user, 'the permission-denied steps read the fixture as the restricted user');
   await h.goTo(A.browse(ROOT));
   // `load`, not `networkidle`: the identity switch can leave a request in flight for long enough
   // to time the reload out, and the list wait below is what the next checks depend on.

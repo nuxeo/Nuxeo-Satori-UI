@@ -163,11 +163,18 @@ invalid. So:
 - **A steps file's own in-page `fetch` to `/nuxeo/` sends the session's header**, as the app's
   interceptor does. The guard cannot tell it from the app's requests, and one without the header
   ran as whoever the cookies say.
-- **Say when the browser is meant to be someone else**: `h.signedInAs(user, reason)` before the
-  next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
-- **Say when it is meant to be signed out**: `h.signedOut(reason)`. Once a run has signed in, a
-  boundary that finds no session, or a page off the app, is rejected — losing the session is one
-  way to hide a result obtained as someone else. Before the first sign-in both are accepted.
+- **Say when the browser is meant to be someone else**: `await h.signedInAs(user, reason)` before
+  the next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
+- **Say when it is meant to be signed out**: `await h.signedOut(reason)`. Once a run has signed
+  in, a boundary that finds no session, or a page off the app, is rejected — losing the session is
+  one way to hide a result obtained as someone else. Before the first sign-in both are accepted.
+- **Declare a transition before you make it, and await it.** `h.signedInAs`, `h.signedOut` and
+  `h.login()` each restart the window of requests the next boundary judges, so they first ask
+  Nuxeo who the outgoing session's requests ran as: a step that read anything headerless is
+  refused there rather than discarded. Two consequences. The new session must not be installed
+  yet, or it is what gets judged — against the user it replaces. And the call must be awaited as a
+  statement; `npm run beta:audit` fails a floating one, because discarding that promise would skip
+  the verification in silence.
 - **`page.request` always sends the run's own user.** The context's `httpCredentials` use
   `send: 'always'`, which replaces an explicit `Authorization` on the request. A second API
   identity needs its own `request.newContext()` or Node `fetch`.

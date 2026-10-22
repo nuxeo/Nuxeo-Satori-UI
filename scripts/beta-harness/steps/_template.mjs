@@ -36,14 +36,18 @@
  *    An in-page `fetch` of your own to `/nuxeo/` sends the session's header, as the
  *    app does: the guard judges every request the page sends to Nuxeo.
  *    A step that deliberately signs the browser in as someone else says so with
- *    `h.signedInAs(user, reason)` first, and one that signs out says
- *    `h.signedOut(reason)`. A second API identity needs its own request context
+ *    `await h.signedInAs(user, reason)` first, and one that signs out says
+ *    `await h.signedOut(reason)`. Declare either one *before* installing the new
+ *    session: each judges the identity it is leaving before restarting the request
+ *    window, so a headerless read is refused rather than discarded, and the new
+ *    session must not be what it reads. `npm run beta:audit` refuses a call that is
+ *    not awaited as a statement. A second API identity needs its own request context
  *    or `fetch`: `page.request` always sends the run's own user.
  *
  * Helper reference: see `scripts/beta-harness/helpers.mjs`.
  *   await h.step(label)                  open a named step; the guard judges the last
- *   h.signedInAs(user, reason)           declare a deliberate change of browser identity
- *   h.signedOut(reason)                  declare that the app may be signed out from here
+ *   await h.signedInAs(user, reason)     declare a deliberate change of browser identity
+ *   await h.signedOut(reason)            declare that the app may be signed out from here
  *   h.screenshot(name, locator?)         capture into the phase folder
  *   h.check(name, condition, detail?)    record an arbitrary assertion
  *   h.note(text)                         record what this run does NOT cover

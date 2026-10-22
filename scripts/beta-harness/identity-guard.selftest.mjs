@@ -941,7 +941,8 @@ await silently(async () => {
     const page = fakePage({ storage: signedIn });
     const { h, identity } = harness(page);
     await h.step('one');
-    h.signedOut('selftest: driving the sign-in form');
+    // Declared while the session is still there, so the sign-out can judge what it is ending.
+    await h.signedOut('selftest: driving the sign-in form');
     page.state.storage = {};
     await h.step('two');
     await h.finish();
@@ -1129,12 +1130,14 @@ await silently(async () => {
     const page = fakePage({ storage: signedIn });
     const { h, identity } = harness(page);
     await h.step('one');
+    // Declared first, then installed: the switch judges the identity it is leaving, so the
+    // outgoing session must still be the one in place.
+    await h.signedInAs('parity-user', 'selftest');
     page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
       'parity-user',
       'UFU=',
     );
     page.state.meFor = (auth) => (auth === 'Basic UFU=' ? { id: 'parity-user' } : ADMIN);
-    h.signedInAs('parity-user', 'selftest');
     await h
       .step('two')
       .then(() => h.finish())
@@ -1259,23 +1262,24 @@ await silently(async () => {
     await h.step('one');
     page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
     await h.step('two');
+    await h.signedInAs('parity-user', 'selftest');
     page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
       'parity-user',
       'UFU=',
     );
     page.state.meFor = (auth) => (auth === UFU ? { id: 'parity-user' } : GUEST);
-    h.signedInAs('parity-user', 'selftest');
     page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: UFU });
     await h.step('three');
+    await h.signedInAs('Administrator', 'selftest');
     page.state.storage = { ...signedIn };
     page.state.meFor = (auth) => (auth === H ? ADMIN : GUEST);
-    h.signedInAs('Administrator', 'selftest');
     page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: H });
     const thrown = await thrownBy(() => h.finish());
     control(
       'positive',
       "a declared switch, and a switch back, does not hold one identity's requests against the other",
-      thrown === null && identity.checks.length === 3 && identity.checks.every((c) => c.ok),
+      // Five: three boundaries, and the verification each declared switch now makes first.
+      thrown === null && identity.checks.length === 5 && identity.checks.every((c) => c.ok),
       { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
     );
   }
@@ -1284,18 +1288,64 @@ await silently(async () => {
     const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
     const { h } = harness(page);
     await h.step('one');
+    await h.signedInAs('parity-user', 'selftest');
     page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
       'parity-user',
       'UFU=',
     );
     page.state.meFor = (auth) => (auth === UFU ? { id: 'parity-user' } : GUEST);
-    h.signedInAs('parity-user', 'selftest');
     page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: UFU });
     page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
     const thrown = await thrownBy(() => h.step('two'));
     control(
       'negative',
       "after a declared switch, the new identity's headerless request is still refused",
+      thrown instanceof PreconditionError && /without the header/.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
+    // The outgoing session's traffic, at a declared switch. `expectApp` restarts the request
+    // window, so a headerless request made before the switch is outside the next boundary's
+    // window: unless the switch verifies first, that request is never judged by anything.
+    const UFU = 'Basic UFU=';
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const { h } = harness(page);
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+    const thrown = await thrownBy(async () => {
+      await h.signedInAs('parity-user', 'selftest');
+      // Only reached when the switch did not refuse: the new session, as the parity steps file
+      // installs it, and a boundary that would otherwise find nothing to judge.
+      page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession(
+        'parity-user',
+        'UFU=',
+      );
+      page.state.meFor = (auth) => (auth === UFU ? { id: 'parity-user' } : GUEST);
+      await h.step('two');
+    });
+    control(
+      'negative',
+      "a declared switch refuses the outgoing session's headerless request instead of discarding it",
+      thrown instanceof PreconditionError && /without the header/.test(thrown.message),
+      String(thrown),
+    );
+  }
+  {
+    // The same hole at the other transition: `expectSignedOut` restarts the window too, and a
+    // sign-out that is accepted leaves the discarded request unjudged for the rest of the run.
+    const page = fakePage({ storage: signedIn, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const { h } = harness(page);
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`, { authorization: null });
+    const thrown = await thrownBy(async () => {
+      await h.signedOut('selftest: driving the sign-in form');
+      page.state.storage = {};
+      await h.step('two');
+    });
+    control(
+      'negative',
+      "a declared sign-out refuses the outgoing session's headerless request instead of discarding it",
       thrown instanceof PreconditionError && /without the header/.test(thrown.message),
       String(thrown),
     );
