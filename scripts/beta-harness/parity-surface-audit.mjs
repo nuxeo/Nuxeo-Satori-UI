@@ -30,7 +30,8 @@
  *                             `sat-`, `lib-`) passed to `locator`, `$$eval`, `$eval` or
  *                             `waitForSelector` from outside a surface adapter.
  *   `adapter-gap`             a surface that does not define an adapter key the steps read, so
- *                             that surface reads `undefined` where another reads a selector.
+ *                             that surface reads `undefined` where another reads a selector. Both
+ *                             `A.group.member` and a key read directly, like `A.crumbHref`.
  *
  * What this CANNOT do, stated narrowly because the useful version of this tool is the one whose
  * reach is not overstated:
@@ -317,7 +318,21 @@ async function auditFile(file) {
       }
     }
 
-    // ── collect every A.group.member the steps read ──────────────────────────────────────────
+    // ── collect every adapter key the steps read ─────────────────────────────────────────────
+    // Both shapes. Only `A.group.member` was collected, which missed every key read directly —
+    // `A.browse`, `A.present`, `A.crumbHref`, `A.upstream` — so deleting `NXS.crumbHref` produced
+    // no finding at all, on the very function the breadcrumb step calls before its guarded click.
+    // A top-level key is recorded with no members: `keys.has(key)` is the whole check for it.
+    if (
+      node.type === 'MemberExpression' &&
+      node.object.type === 'Identifier' &&
+      node.object.name === 'A' &&
+      node.property?.type === 'Identifier' &&
+      !node.computed
+    ) {
+      const key = node.property.name;
+      if (!reads.has(key)) reads.set(key, new Set());
+    }
     if (
       node.type === 'MemberExpression' &&
       node.object.type === 'MemberExpression' &&

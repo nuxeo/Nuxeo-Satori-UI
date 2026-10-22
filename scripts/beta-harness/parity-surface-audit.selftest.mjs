@@ -130,6 +130,27 @@ const controls = [
     }),
   },
   {
+    name: 'a top-level adapter key one surface does not define is caught',
+    // `A.crumbHref` is read directly, not as `A.group.member`. Only the two-level shape was
+    // collected, so deleting a surface's `crumbHref` produced no finding at all — on the very
+    // function the breadcrumb step calls before its guarded click.
+    expectExit: 1,
+    expectRule: 'adapter-gap',
+    file: stepsFile({
+      adfExtra: `  crumbHref: (path) => '#/browse-adf-hx?path=' + path,`,
+      steps: `  h.check('crumb href', typeof A.crumbHref === 'function', 'fn');`,
+    }),
+  },
+  {
+    name: 'the same top-level key defined on both surfaces passes',
+    expectExit: 0,
+    file: stepsFile({
+      adfExtra: `  crumbHref: (path) => '#/browse-adf-hx?path=' + path,`,
+      nxsExtra: `  crumbHref: (path) => '#/browse' + path,`,
+      steps: `  h.check('crumb href', typeof A.crumbHref === 'function', 'fn');`,
+    }),
+  },
+  {
     name: 'a method call on a non-object adapter value is not reported as a missing key',
     // `A.knownGaps.has(…)` is in every control above. If it were read as `knownGaps.has`, every
     // one of them would fail, and the suite would be measuring nothing but this bug.
