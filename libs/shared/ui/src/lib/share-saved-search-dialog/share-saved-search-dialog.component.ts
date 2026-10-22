@@ -8,7 +8,7 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { catchError, of, forkJoin, map, switchMap } from 'rxjs';
+import { catchError, finalize, of, forkJoin, map, switchMap } from 'rxjs';
 import {
   CURRENT_USERNAME,
   UserService,
@@ -175,7 +175,8 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     return aces
       .filter((ace) => !ace.externalUser)
       .map((ace, index: number) => ({
-        id: String(index),
+        // The ACE id, not the position: a re-read must not move an open edit onto another row.
+        id: ace.id || `local-${index}`,
         aceId: ace.id,
         userGroup: ace.username || ace.email || 'Unknown',
         right: ace.permission || 'Read',
@@ -200,10 +201,9 @@ export class ShareSavedSearchDialogComponent implements OnInit {
         .filter((row) => row.aceId)
         .map((row) => [row.aceId, row]),
     );
-    const rows = this.localRowsOf(local?.aces ?? []).map((row) => {
-      const kept = row.aceId ? shown.get(row.aceId) : undefined;
-      return kept ? { ...kept, id: row.id } : row;
-    });
+    const rows = this.localRowsOf(local?.aces ?? []).map(
+      (row) => (row.aceId ? shown.get(row.aceId) : undefined) ?? row,
+    );
     this.permissions.set(rows);
     this.nextId = rows.length + 1;
   }
@@ -439,12 +439,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   removeRow(id: string): void {
     const row = this.permissions().find((r) => r.id === id);
     // By id: removing by user would also take every other entry that user or group holds.
-    if (!row || !this.data.id || !row.aceId) return;
+    // One removal and its re-read at a time, so an older read cannot restore a later removal.
+    if (!row || !this.data.id || !row.aceId || this.saving()) return;
 
     // Remove from local state first
     this.permissions.update((rows) => rows.filter((r) => r.id !== id));
 
     const uid = this.data.id;
+    this.saving.set(true);
     this.detailService
       .removePermissionById(uid, row.aceId)
       .pipe(
@@ -465,6 +467,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
                 }),
               ),
         ),
+        finalize(() => this.saving.set(false)),
       )
       .subscribe((doc) => {
         if (doc) this.reconcileLocalRows(doc);

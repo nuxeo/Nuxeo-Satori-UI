@@ -1,7 +1,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed, type ComponentFixture } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
-import { of, throwError } from 'rxjs';
+import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
 import {
@@ -168,6 +168,95 @@ describe('ShareSavedSearchDialogComponent', () => {
           right: 'Everything',
         }),
       ]);
+    });
+
+    it('applies an edit opened before the re-read to the row it was opened on', async () => {
+      await mount(SAVED_SEARCH);
+      const [read, writeVersion] = component().permissions();
+      const reread = new Subject<NuxeoDocument>();
+      documents['getDocumentPermissions'].mockReturnValueOnce(reread);
+      const edited = new Subject<unknown>();
+      dialog.open.mockReturnValueOnce({ afterClosed: () => edited });
+
+      component().removeRow(read.id);
+      component().editRow(writeVersion.id);
+      // The re-read lands while the edit dialog is still open, then the edit is submitted.
+      reread.next(readAfter(['members:Read:true:Administrator::']));
+      reread.complete();
+      edited.next([
+        { userGroup: 'members', right: 'Everything', timeFrame: 'Permanent', grantedBy: 'Group' },
+      ]);
+
+      expect(component().permissions()).toEqual([
+        expect.objectContaining({
+          aceId: 'members:WriteVersion:true:Administrator::',
+          right: 'Everything',
+        }),
+      ]);
+    });
+
+    it('keeps row ids unique when the re-read brings in an entry the dialog had not shown', async () => {
+      // Another administrator granted powerusers meanwhile. Keyed by position, the new row would
+      // share an id with a kept one, and removing it would delete the kept entry instead.
+      await mount(SAVED_SEARCH);
+      const [read] = component().permissions();
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'], [ace('powerusers', 'Remove')])),
+      );
+      component().removeRow(read.id);
+
+      const rows = component().permissions();
+      expect(new Set(rows.map((r) => r.id)).size).toBe(rows.length);
+      const added = rows.find((r) => r.userGroup === 'powerusers');
+      if (!added) throw new Error('the new powerusers row is not shown');
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(readAfter(['members:Read:true:Administrator::'])),
+      );
+
+      component().removeRow(added.id);
+
+      expect(documents['removePermissionById']).toHaveBeenLastCalledWith(
+        UID,
+        'powerusers:Remove:true:Administrator::',
+      );
+    });
+
+    it('takes one removal at a time, so an older re-read cannot restore a later removal', async () => {
+      await mount(SAVED_SEARCH);
+      const [read, writeVersion] = component().permissions();
+      const reread = new Subject<NuxeoDocument>();
+      documents['getDocumentPermissions'].mockReturnValueOnce(reread);
+
+      component().removeRow(read.id);
+      fixture.detectChanges();
+      component().removeRow(writeVersion.id);
+
+      expect(documents['removePermissionById']).toHaveBeenCalledTimes(1);
+      const removes = Array.from(
+        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>(
+          'button.delete-btn',
+        ),
+      ).slice(0, component().permissions().length);
+      expect(removes.every((b) => b.disabled)).toBe(true);
+
+      reread.next(readAfter(['members:Read:true:Administrator::']));
+      reread.complete();
+      documents['getDocumentPermissions'].mockReturnValueOnce(
+        of(
+          readAfter([
+            'members:Read:true:Administrator::',
+            'members:WriteVersion:true:Administrator::',
+          ]),
+        ),
+      );
+      component().removeRow(writeVersion.id);
+
+      expect(documents['removePermissionById']).toHaveBeenLastCalledWith(
+        UID,
+        'members:WriteVersion:true:Administrator::',
+      );
+      expect(component().permissions()).toEqual([]);
+      expect(component().saving()).toBe(false);
     });
 
     it('writes nothing for a row that was not read from the ACL, and disables its button', async () => {

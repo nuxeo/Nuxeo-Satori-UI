@@ -76,7 +76,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.remove-permission' | translate
                     "
-                    [disabled]="!row.aceId"
+                    [disabled]="saving() || !row.aceId"
                     (click)="removeRow(row.id)"
                   >
                     <mat-icon>delete_outline</mat-icon>
