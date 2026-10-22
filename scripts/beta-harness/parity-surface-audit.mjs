@@ -1,0 +1,413 @@
+#!/usr/bin/env node
+/**
+ * Static audit of the parity steps' surface adapters.
+ *
+ * `scripts/beta-harness/steps/nxsat-308-parity.mjs` captures the same claims twice, once on the
+ * upstream adf-hx components and once on their nxs- replacements. The upstream half cannot be
+ * captured again — NXSAT-637 removed the packages — so the file's rule is that the steps and the
+ * expected values are written once and only the surface adapter changes between the halves.
+ *
+ * That rule only holds if the adapter can express everything that differs, and if a difference
+ * cannot take the run down. Both failed, and the parity run was unable to finish for two months:
+ *
+ *   - A breadcrumb crumb was selected by its label. The label was one of the things under test, so
+ *     the one real defect there — a trail labelled with path segments rather than document titles
+ *     — turned into a 30 s `locator.click` timeout, `verdict: error`, and eleven of the
+ *     twenty-four steps never ran at all. The same thing happened again at 320 px, where the nav
+ *     drawer covers the tab the step clicks.
+ *   - The fallback element, the properties labels, the search page size, how a search is
+ *     submitted, the no-results wording and how a permission option is chosen were written into
+ *     the step bodies as one surface's answer. Each read as a parity failure on a surface that
+ *     behaved correctly. One was worse than a false red: a permission option matched by its
+ *     translated label ("Manage everything", not "Everything") staged no change, so the save under
+ *     test never ran — and the check that `AddChildren` survived it passed on an untouched ACL.
+ *
+ * Three rules, each one of those failures made mechanical:
+ *
+ *   `unguarded-click`         a `.click()` with no `.catch()`. One blocked click ends the run, and
+ *                             the check after it would have reported what was on screen.
+ *   `surface-selector-in-step` a selector naming a surface's own element (`nxs-`, `hxp-`, `adf-`,
+ *                             `sat-`, `lib-`) passed to `locator`, `$$eval`, `$eval` or
+ *                             `waitForSelector` from outside a surface adapter.
+ *   `adapter-gap`             a surface that does not define an adapter key the steps read, so
+ *                             that surface reads `undefined` where another reads a selector.
+ *
+ * What this CANNOT do, stated narrowly because the useful version of this tool is the one whose
+ * reach is not overstated:
+ *
+ *   - It does not find a surface-specific *class* with no prefix. `.result-list`, `.row-name-text`
+ *     and `.viewer-placeholder` are as surface-bound as `nxs-document-list`, and nothing here can
+ *     tell them from a shared one. Only the element-prefix form is decided.
+ *   - It does not judge whether an adapter's selector is *correct*. `nxs-breadcrumbs` was a real
+ *     element of this repository and still matched nothing on the app, because `app.config.ts`
+ *     re-registers that primitive on Satori. A selector is checked for existing, not for matching.
+ *   - It reads one file's adapters. A steps file that builds a selector at run time, or reaches
+ *     the DOM through a helper it was handed, is outside all three rules.
+ *
+ * Usage:
+ *   node scripts/beta-harness/parity-surface-audit.mjs [--json] [file...]
+ *
+ * Exit 1 if any rule is broken. Exit 2 if the file cannot be read or parsed.
+ */
+
+import { readFile } from 'node:fs/promises';
+import { relative, resolve } from 'node:path';
+
+const repoRoot = resolve(import.meta.dirname, '..', '..');
+const argv = process.argv.slice(2);
+const asJson = argv.includes('--json');
+const explicit = argv.filter((a) => !a.startsWith('--'));
+
+const DEFAULT_FILES = ['scripts/beta-harness/steps/nxsat-308-parity.mjs'];
+
+export const DECLARED_LIMITS = [
+  'a surface-specific CSS class with no element prefix (.result-list, .viewer-placeholder)',
+  'whether an adapter selector matches anything on the running app',
+  'a selector built at run time, or reached through a helper the steps were handed',
+  'a click guarded by a try/catch rather than by .catch() — only the .catch() form is recognised',
+];
+
+/** The element prefixes this repository's own components and the upstream packages use. */
+const SURFACE_ELEMENT = /(?:^|[\s,>~+])(?:nxs|hxp|adf|sat|lib)-[a-z][a-z0-9-]*/;
+
+/**
+ * Calls whose first argument is a CSS selector, in the runner and inside a `page.evaluate` alike:
+ * the fallback element and the properties labels were both inlined as a `querySelectorAll` in a
+ * browser function, where no amount of reading the adapter would have shown them.
+ * `route`/`unroute` take URL globs, so not those.
+ */
+const SELECTOR_CALLS = new Set([
+  'locator',
+  '$$eval',
+  '$eval',
+  'waitForSelector',
+  'querySelector',
+  'querySelectorAll',
+]);
+
+let parse;
+try {
+  ({ parse } = await import('acorn'));
+} catch {
+  console.error(
+    'parity-surface-audit: acorn is unavailable, so the steps cannot be parsed.\n' +
+      'It ships with the toolchain; run `npm ci` and try again. Refusing to pass by default.',
+  );
+  process.exit(2);
+}
+
+/** Depth-first walk that hands every node its parent chain, innermost first. */
+function walk(node, visit, parents = []) {
+  if (!node || typeof node.type !== 'string') return;
+  visit(node, parents);
+  const next = [node, ...parents];
+  for (const key of Object.keys(node)) {
+    if (key === 'type' || key === 'start' || key === 'end' || key === 'loc') continue;
+    const value = node[key];
+    if (Array.isArray(value)) {
+      for (const child of value) walk(child, visit, next);
+    } else if (value && typeof value === 'object' && typeof value.type === 'string') {
+      walk(value, visit, next);
+    }
+  }
+}
+
+const propertyName = (prop) =>
+  prop.key?.type === 'Identifier'
+    ? prop.key.name
+    : prop.key?.type === 'Literal'
+      ? String(prop.key.value)
+      : null;
+
+/** Every top-level `const NAME = { … }`, by name. */
+function topLevelObjects(ast) {
+  const objects = new Map();
+  for (const node of ast.body) {
+    if (node.type !== 'VariableDeclaration') continue;
+    for (const decl of node.declarations) {
+      if (decl.id.type === 'Identifier' && decl.init?.type === 'ObjectExpression') {
+        objects.set(decl.id.name, decl.init);
+      }
+    }
+  }
+  return objects;
+}
+
+/**
+ * The adapters, from the `SURFACES` map rather than from a hardcoded list of names: the map is
+ * what the steps dispatch on, so a surface added without being registered there is not a surface.
+ */
+function findSurfaces(ast, objects) {
+  const map = objects.get('SURFACES');
+  if (!map) return null;
+  const surfaces = new Map();
+  for (const prop of map.properties) {
+    if (prop.type !== 'Property') continue;
+    const id = propertyName(prop);
+    if (prop.value.type !== 'Identifier') continue;
+    const object = objects.get(prop.value.name);
+    if (id && object) surfaces.set(id, { name: prop.value.name, object });
+  }
+  return surfaces.size > 0 ? surfaces : null;
+}
+
+/**
+ * An adapter's keys, following `...OTHER` spreads so a derived surface inherits what it reuses.
+ * A group whose value is not an object literal — `knownGaps: new Set(…)` — is recorded with no
+ * members: it is a value, not a group of selectors, and `A.knownGaps.has(…)` is a method call on
+ * it rather than an adapter key that could be missing.
+ */
+function adapterKeys(object, objects, seen = new Set()) {
+  const keys = new Map();
+  for (const prop of object.properties) {
+    if (prop.type === 'SpreadElement') {
+      if (prop.argument.type !== 'Identifier' || seen.has(prop.argument.name)) continue;
+      const source = objects.get(prop.argument.name);
+      if (!source) continue;
+      for (const [group, members] of adapterKeys(
+        source,
+        objects,
+        new Set([...seen, prop.argument.name]),
+      )) {
+        keys.set(group, members);
+      }
+      continue;
+    }
+    const name = propertyName(prop);
+    if (!name) continue;
+    // A group defined here replaces an inherited one outright, exactly as the spread does.
+    keys.set(
+      name,
+      prop.value.type === 'ObjectExpression'
+        ? new Set(prop.value.properties.map(propertyName).filter(Boolean))
+        : null,
+    );
+  }
+  return keys;
+}
+
+/** Whether this call expression's result has `.catch(…)` called on it. */
+function isCaught(call, parents) {
+  const [parent, grandparent] = parents;
+  return Boolean(
+    parent?.type === 'MemberExpression' &&
+    parent.object === call &&
+    parent.property?.type === 'Identifier' &&
+    parent.property.name === 'catch' &&
+    grandparent?.type === 'CallExpression' &&
+    grandparent.callee === parent,
+  );
+}
+
+async function auditFile(file) {
+  const abs = resolve(repoRoot, file);
+  const rel = relative(repoRoot, abs);
+  let source;
+  try {
+    source = await readFile(abs, 'utf8');
+  } catch (error) {
+    return { file: rel, unreadable: String(error.message), findings: [] };
+  }
+  let ast;
+  try {
+    ast = parse(source, { ecmaVersion: 'latest', sourceType: 'module', locations: true });
+  } catch (error) {
+    return { file: rel, unparsable: String(error.message), findings: [] };
+  }
+
+  const objects = topLevelObjects(ast);
+  const surfaces = findSurfaces(ast, objects);
+  if (!surfaces) {
+    return {
+      file: rel,
+      unparsable:
+        'no SURFACES map of named adapter objects was found, so there is nothing to audit',
+      findings: [],
+    };
+  }
+
+  const adapterObjects = [...new Set([...surfaces.values()].map((s) => s.object))];
+  const objectRanges = adapterObjects.map((o) => [o.start, o.end]);
+  const within = (ranges, node) =>
+    ranges.some(([start, end]) => node.start >= start && node.end <= end);
+
+  // A top-level function the adapters call and nothing else does is adapter code, wherever it sits
+  // in the file: `adfHxOpenFolderTab` exists only to drive one surface's tabs, and the selectors
+  // in it are that surface's to change. A helper the steps also call is not — the steps would then
+  // be reaching one surface's DOM through it, which is the thing this rule is about.
+  const topLevelFunctions = new Map();
+  for (const node of ast.body) {
+    if (node.type === 'FunctionDeclaration' && node.id) topLevelFunctions.set(node.id.name, node);
+    if (node.type === 'VariableDeclaration') {
+      for (const decl of node.declarations) {
+        if (
+          decl.id.type === 'Identifier' &&
+          (decl.init?.type === 'ArrowFunctionExpression' ||
+            decl.init?.type === 'FunctionExpression')
+        ) {
+          topLevelFunctions.set(decl.id.name, decl);
+        }
+      }
+    }
+  }
+  const referencedBy = new Map(); // helper name -> { inAdapter, elsewhere }
+  walk(ast, (node) => {
+    if (node.type !== 'Identifier' || !topLevelFunctions.has(node.name)) return;
+    const declaration = topLevelFunctions.get(node.name);
+    if (node.start >= declaration.start && node.end <= declaration.end) return; // its own name
+    const seen = referencedBy.get(node.name) ?? { inAdapter: false, elsewhere: false };
+    if (within(objectRanges, node)) seen.inAdapter = true;
+    else seen.elsewhere = true;
+    referencedBy.set(node.name, seen);
+  });
+  const adapterRanges = [
+    ...objectRanges,
+    ...[...referencedBy]
+      .filter(([, seen]) => seen.inAdapter && !seen.elsewhere)
+      .map(([name]) => topLevelFunctions.get(name))
+      .map((node) => [node.start, node.end]),
+  ];
+  const insideAdapter = (node) => within(adapterRanges, node);
+
+  const findings = [];
+  const reads = new Map(); // group -> Set(member), every `A.group.member` the steps read
+
+  walk(ast, (node, parents) => {
+    // ── unguarded-click ──────────────────────────────────────────────────────────────────────
+    if (
+      node.type === 'CallExpression' &&
+      node.callee.type === 'MemberExpression' &&
+      node.callee.property?.type === 'Identifier' &&
+      node.callee.property.name === 'click' &&
+      !isCaught(node, parents)
+    ) {
+      findings.push({
+        rule: 'unguarded-click',
+        line: node.loc.start.line,
+        detail:
+          'a click with no .catch(): one element another surface renders differently, or covers, ' +
+          'ends the whole run on a timeout instead of failing the one check that reads it',
+      });
+    }
+
+    // ── surface-selector-in-step ─────────────────────────────────────────────────────────────
+    if (
+      node.type === 'CallExpression' &&
+      node.callee.type === 'MemberExpression' &&
+      node.callee.property?.type === 'Identifier' &&
+      SELECTOR_CALLS.has(node.callee.property.name) &&
+      !insideAdapter(node)
+    ) {
+      const [first] = node.arguments;
+      const literals =
+        first?.type === 'Literal' && typeof first.value === 'string'
+          ? [first.value]
+          : first?.type === 'TemplateLiteral'
+            ? first.quasis.map((q) => q.value.cooked ?? '')
+            : [];
+      for (const value of literals) {
+        if (!SURFACE_ELEMENT.test(value)) continue;
+        findings.push({
+          rule: 'surface-selector-in-step',
+          line: node.loc.start.line,
+          detail:
+            `${node.callee.property.name}(${JSON.stringify(value.slice(0, 60))}) names a surface's ` +
+            'own element from outside an adapter, so the other surface reads the wrong DOM — or none',
+        });
+      }
+    }
+
+    // ── collect every A.group.member the steps read ──────────────────────────────────────────
+    if (
+      node.type === 'MemberExpression' &&
+      node.object.type === 'MemberExpression' &&
+      node.object.object.type === 'Identifier' &&
+      node.object.object.name === 'A' &&
+      node.object.property?.type === 'Identifier' &&
+      node.property?.type === 'Identifier' &&
+      !node.computed &&
+      !node.object.computed
+    ) {
+      const group = node.object.property.name;
+      if (!reads.has(group)) reads.set(group, new Set());
+      reads.get(group).add(node.property.name);
+    }
+  });
+
+  // ── adapter-gap ────────────────────────────────────────────────────────────────────────────
+  for (const [id, surface] of surfaces) {
+    const keys = adapterKeys(surface.object, objects);
+    for (const [group, members] of reads) {
+      if (!keys.has(group)) {
+        findings.push({
+          rule: 'adapter-gap',
+          line: surface.object.loc.start.line,
+          detail: `surface "${id}" (${surface.name}) defines no "${group}", which the steps read`,
+        });
+        continue;
+      }
+      for (const member of members) {
+        if (keys.get(group) === null) break; // a value, not a group of keys
+        if (!keys.get(group).has(member)) {
+          findings.push({
+            rule: 'adapter-gap',
+            line: surface.object.loc.start.line,
+            detail: `surface "${id}" (${surface.name}) defines no "${group}.${member}", which the steps read`,
+          });
+        }
+      }
+    }
+  }
+
+  findings.sort((a, b) => a.line - b.line || a.rule.localeCompare(b.rule));
+  return { file: rel, findings, surfaces: [...surfaces.keys()] };
+}
+
+const files = explicit.length > 0 ? explicit : DEFAULT_FILES;
+const results = [];
+for (const file of files) results.push(await auditFile(file));
+
+const broken = results.filter((r) => r.unreadable || r.unparsable);
+const failing = results.filter((r) => r.findings.length > 0);
+const total = results.reduce((n, r) => n + r.findings.length, 0);
+
+if (asJson) {
+  console.log(
+    JSON.stringify(
+      {
+        verdict: broken.length > 0 || total > 0 ? 'fail' : 'pass',
+        files: results,
+        findings: total,
+        declaredLimits: DECLARED_LIMITS,
+      },
+      null,
+      2,
+    ),
+  );
+} else {
+  for (const result of results) {
+    if (result.unreadable) {
+      console.error(`  ${result.file}: cannot be read — ${result.unreadable}`);
+      continue;
+    }
+    if (result.unparsable) {
+      console.error(`  ${result.file}: cannot be audited — ${result.unparsable}`);
+      continue;
+    }
+    console.log(`  ${result.file}  surfaces: ${result.surfaces.join(', ')}`);
+    for (const finding of result.findings) {
+      console.log(`    ${result.file}:${finding.line}  ${finding.rule}\n      ${finding.detail}`);
+    }
+  }
+  console.log(
+    broken.length > 0 || total > 0
+      ? `\nparity-surface-audit: fail — ${total} finding(s) in ${failing.length} file(s)` +
+          `${broken.length > 0 ? `, ${broken.length} file(s) unreadable or unparsable` : ''}`
+      : '\nparity-surface-audit: pass — every surface-specific selector is in an adapter, every ' +
+          'adapter key the steps read is defined, and no click can end the run',
+  );
+  console.log('\n  NOT claimed by this audit:');
+  for (const limit of DECLARED_LIMITS) console.log(`    - ${limit}`);
+}
+
+process.exit(broken.length > 0 ? 2 : total > 0 ? 1 : 0);

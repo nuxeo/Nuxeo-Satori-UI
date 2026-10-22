@@ -219,6 +219,26 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/assertion-audit.mjs'],
   },
+  // The assertion audit above asks whether a check can fail. It cannot ask whether the check is
+  // reading the surface it claims to, and the parity steps are the one file where that question
+  // decides everything: they capture the same claims on two sets of components, one of which can
+  // never be captured again. The run was unable to finish for two months — a crumb selected by a
+  // label that was itself under test aborted it on a timeout — and no gate was in a position to
+  // notice, because every defect was in a steps file nothing audited.
+  {
+    id: 'parity-surface',
+    label: 'Parity surface adapter audit',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/parity-surface-audit.mjs'],
+  },
+  // Static and synthetic: the controls are written to a temporary directory, so unlike the
+  // sanitizer selftest this one cannot leave the tree dirty.
+  {
+    id: 'parity-surface-selftest',
+    label: 'Parity surface audit controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/parity-surface-audit.selftest.mjs'],
+  },
   {
     id: 'lint',
     label: 'Affected lint',

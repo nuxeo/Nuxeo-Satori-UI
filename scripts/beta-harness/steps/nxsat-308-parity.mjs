@@ -20,8 +20,24 @@
  * - `adf-hx-as-target` — negative control: `adf-hx` with no known gaps, so every gap check is
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
  * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
- *   renders it, not from the table-primitive decision it was first drafted from. Change the
- *   adapter only; never the steps or the expected values.
+ *   renders it, and against the app as it is actually configured: `app.config.ts` calls
+ *   `provideNxsSatoriComponents()`, which re-registers the breadcrumbs primitive on Satori, so the
+ *   browse route renders `nxs-satori-breadcrumbs` and not `nxs-breadcrumbs`. A selector read from
+ *   a component's own file, or from Storybook, can therefore be the wrong element on the app.
+ *
+ * ## The adapter owns every surface-specific fact
+ *
+ * "Change the adapter only; never the steps or the expected values" only holds if the adapter can
+ * express everything that differs. It could not: the fallback element, the properties labels, the
+ * search page size, how a search is submitted, the no-results wording, how a permission option is
+ * chosen and whether local and inherited grants share a row were all written into the step bodies
+ * as one surface's answer. Each of those read as a parity failure on a surface that behaved
+ * correctly, and one of them — an option matched by a translated label — staged no change, so the
+ * save under test never ran and the check on it passed on an untouched ACL.
+ *
+ * So a surface-specific selector, wording, size or interaction belongs in the adapter, and a step
+ * asserts the claim through it. `parity-surface-audit.mjs` holds this: it fails if a step body
+ * names a surface's element, and if a surface does not define every adapter key the steps read.
  *
  * ## Reading the checks
  *
@@ -103,6 +119,15 @@ const MEDIA = {
 const EMPTY = { path: `${ROOT}/empty` };
 const COLLECTION = { title: 'Parity collection', memberTitle: 'Paged item 001' };
 const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secret' };
+/**
+ * The search feature's page size, from `SEARCH_PAGE_SIZE` in
+ * `libs/features/search/src/lib/search-session/search-session.ts`. It is 40, not the 50 the
+ * DocumentList pages a folder by, so the paging expectation is read from the surface and not
+ * from `PAGED.pageSize`. The steps assert the partition of the fixture's 125 hits — complete,
+ * disjoint and page-sized — which 50 / 50 / 25 satisfies as well, so the before-half's recorded
+ * run still meets it.
+ */
+const SEARCH_PAGE_SIZE_NXS = 40;
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
 /**
@@ -168,15 +193,30 @@ async function adfHxSetRowSelected(page, A, title, selected) {
 async function adfHxOpenRowTab(page, h, path, title, tab) {
   await h.goTo(adfHxBrowse(ROOT)); // a folder change clears the POC's selection
   await h.goTo(adfHxBrowse(path));
-  await page.locator('hxp-browse-tabs [role="tab"]').filter({ hasText: 'View' }).first().click();
+  await page
+    .locator('hxp-browse-tabs [role="tab"]')
+    .filter({ hasText: 'View' })
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(1500);
   await adfHxSetRowSelected(page, ADF_HX, title, true);
-  await page.locator('hxp-browse-tabs [role="tab"]').filter({ hasText: tab }).first().click();
+  await page
+    .locator('hxp-browse-tabs [role="tab"]')
+    .filter({ hasText: tab })
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
 }
 
 async function adfHxOpenFolderTab(page, h, path, tab) {
   await h.goTo(adfHxBrowse(path));
-  await page.locator('hxp-browse-tabs [role="tab"]').filter({ hasText: tab }).first().click();
+  await page
+    .locator('hxp-browse-tabs [role="tab"]')
+    .filter({ hasText: tab })
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(2500);
 }
 
@@ -216,6 +256,17 @@ const ADF_HX = {
     failPattern: '**/search/pp/tree_children/execute**',
   },
   breadcrumb: { items: 'hxp-ui-breadcrumb nav li', nav: 'hxp-ui-breadcrumb nav' },
+  // The collections page is the app's own feature on both surfaces; the POC replaced the browse
+  // and search routes, not this one. Its listing is still the surface's list, so the error, retry
+  // and row selectors come from `list` and nothing is duplicated here.
+  collection: {
+    root: 'lib-collection-detail',
+    route: (uid) => `/#/collections/${uid}`,
+    failPattern: '**/search/pp/default_content_collection/execute**',
+  },
+  // The app shell around whichever listing is mounted. Same element on both surfaces, named here
+  // rather than in a step so that a surface which replaced the shell could say so.
+  shell: { selectionBar: 'lib-selection-topbar' },
   permissions: {
     root: 'hxp-permissions-management-panel',
     async open(page, h, path) {
@@ -232,20 +283,40 @@ const ADF_HX = {
         .locator('hxp-permissions-management-panel [role="tab"]')
         .filter({ hasText: label })
         .first()
-        .click();
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(1200);
     },
     rows: 'hxp-permissions-management-panel mat-tab-body.mat-mdc-tab-body-active tr[mat-row]',
+    // Upstream puts local and inherited entries in one row of the active tab, so both views of
+    // an ACL are the same rows. A surface that splits them says so with two different selectors.
+    localRows: 'hxp-permissions-management-panel mat-tab-body.mat-mdc-tab-body-active tr[mat-row]',
+    inheritedRows:
+      'hxp-permissions-management-panel mat-tab-body.mat-mdc-tab-body-active tr[mat-row]',
+    oneRowPerPrincipal: true,
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
+    /** Upstream labels an option with the permission itself, so the name is the way to choose it. */
+    option: (permission) => ({
+      selector: '.cdk-overlay-container mat-option',
+      hasText: new RegExp(`^\\s*${permission}\\s*$`),
+    }),
     save: 'hxp-permissions-management-panel button',
     feedback: 'mat-snack-bar-container',
   },
   viewer: {
     root: 'mat-dialog-container .hxp-viewer-overlay',
+    // adf-core's viewer renders into the host DOM; it mounts no cross-document frame, so there is
+    // nothing a frame reader could add here.
+    fallback: 'adf-viewer-unknown-format, nxs-viewer-fallback',
+    pdfFrame: null,
+    pdfNote: null,
     async open(page, A, title) {
       await adfHxSetRowSelected(page, A, title, true);
-      await page.locator('.hxp-browse-page__preview-btn').click();
+      await page
+        .locator('.hxp-browse-page__preview-btn')
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(5000);
     },
     async close(page, A, title) {
@@ -258,6 +329,7 @@ const ADF_HX = {
     provenance:
       'production document page (hand-written): upstream hxp-properties-sidebar is not mounted on main',
     root: 'lib-document-detail .properties-panel',
+    labels: 'mat-label, label, .doc-info-label',
     async open(page, h, uid) {
       await h.goToDoc(uid);
       await page
@@ -280,7 +352,7 @@ const ADF_HX = {
       // A never-versioned document has no menu: the Version row holds a Create version button.
       const menu = page.locator('lib-document-detail .version-select');
       if (await menu.count()) {
-        await menu.first().click();
+        await menu.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
         await page.waitForTimeout(1500);
       }
     },
@@ -320,11 +392,17 @@ const ADF_HX = {
   search: {
     route: '/#/search-adf-hx',
     input: 'lib-search-adf-hx input[matinput], lib-search-adf-hx input',
+    // The POC's box searches as it is typed, so filling it is the whole interaction.
+    async submit() {
+      return undefined;
+    },
+    pageSize: 50,
     rows: 'lib-search-adf-hx hxp-document-list .adf-datatable-body adf-datatable-row',
     title: '[role="gridcell"][aria-label="Title"] .adf-datatable-cell-value',
     next: 'lib-search-adf-hx button[aria-label="Next page"]',
     count: 'lib-search-adf-hx .hxp-search-page__results-count',
     none: 'lib-search-adf-hx .hxp-search-page__no-results',
+    nonePattern: /no results/i,
     error: 'lib-search-adf-hx .hxp-search-page__error',
     failPattern: '**/search/lang/NXQL/execute**',
   },
@@ -353,6 +431,7 @@ const ADF_HX_REMOUNT = {
   properties: {
     provenance: 'upstream hxp-properties-sidebar, re-mounted as the browse POC Properties tab',
     root: 'hxp-properties-sidebar',
+    labels: 'mat-label, label, .doc-info-label',
     async open(page, h) {
       await adfHxOpenRowTab(page, h, VERSIONS.path, VERSIONS.docTitle, 'Properties');
       await page
@@ -365,7 +444,7 @@ const ADF_HX_REMOUNT = {
       for (const header of await page
         .locator('hxp-properties-sidebar mat-expansion-panel-header[aria-expanded="false"]')
         .all()) {
-        await header.click();
+        await header.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
         await page.waitForTimeout(600);
       }
     },
@@ -398,7 +477,7 @@ const ADF_HX_REMOUNT = {
           .nth(i)
           .locator('.hxp-context-btn button')
           .first()
-          .click()
+          .click({ timeout: 10_000 })
           .catch(leaveItToTheNextCheck);
         await page.waitForTimeout(600);
         menus.push(
@@ -481,25 +560,60 @@ const NXS = {
     // to @children only when that answers no entries, and a 500 there reaches the tree as an error.
     failPattern: '**/search/pp/tree_children/execute**',
   },
-  // breadcrumbs/breadcrumbs.component.ts: the selector is plural.
-  breadcrumb: { items: 'nxs-breadcrumbs nav li', nav: 'nxs-breadcrumbs nav' },
+  // breadcrumbs: the app re-registers the breadcrumbs primitive on Satori in app.config.ts
+  // (`provideNxsSatoriComponents`), so what the browse route renders is NxsSatoriBreadcrumbsComponent
+  // wrapping Satori's own `sat-breadcrumbs`, not `nxs-breadcrumbs`. Read from the host that is
+  // actually mounted; `nxs-breadcrumbs` matched nothing and took the whole run down with it.
+  breadcrumb: {
+    items: 'nxs-satori-breadcrumbs nav li, nxs-breadcrumbs nav li',
+    nav: 'nxs-satori-breadcrumbs nav, nxs-breadcrumbs nav',
+  },
+  // As on `adf-hx`: the app's own collections feature, listing through the surface's list.
+  collection: {
+    root: 'lib-collection-detail',
+    route: (uid) => `/#/collections/${uid}`,
+    failPattern: '**/search/pp/default_content_collection/execute**',
+  },
+  // The app shell around whichever listing is mounted. Same element on both surfaces, named here
+  // rather than in a step so that a surface which replaced the shell could say so.
+  shell: { selectionBar: 'lib-selection-topbar' },
   // permissions-panel/permissions-panel.component.html: one table row per entry, no tabs, and its
   // save outcome is reported inside the panel rather than in a snack bar.
   permissions: {
     root: 'nxs-permissions-panel',
     async open(page, h, path) {
       await h.goTo(`/#/browse${path}`);
-      await page.locator('[role="tab"]').filter({ hasText: 'Permissions' }).first().click();
+      await page
+        .locator('[role="tab"]')
+        .filter({ hasText: 'Permissions' })
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(2500);
     },
     async showTab(page, label) {
       const tab = page.locator('nxs-permissions-panel [role="tab"]').filter({ hasText: label });
-      if (await tab.count()) await tab.first().click();
+      if (await tab.count())
+        await tab.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
       await page.waitForTimeout(800);
     },
     rows: 'nxs-permissions-panel tr[role="row"]',
+    // The panel has no tabs: local and inherited entries are two tables, each labelled by its own
+    // section heading. A principal with both appears once in each, never in one row — so a reader
+    // that concatenates every row cannot tell an inherited grant from a local one.
+    localRows: 'nxs-permissions-panel table[aria-labelledby$="-local"] tr[role="row"]',
+    inheritedRows: 'nxs-permissions-panel table[aria-labelledby$="-inherited"] tr[role="row"]',
+    oneRowPerPrincipal: false,
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
+    // Each option carries its Nuxeo permission in `data-permission`, so a change is staged by the
+    // permission rather than by its label. The labels are translated and are not the permission:
+    // ReadWrite reads "Edit" and Everything reads "Manage everything", so matching the option text
+    // against the permission name staged nothing, and every later check on the save then read an
+    // ACL that had never been written.
+    option: (permission) => ({
+      selector: `.cdk-overlay-container mat-option[data-permission="${permission}"]`,
+    }),
     save: 'nxs-permissions-panel button',
     // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
     // clicks the first status or alert button: the status text after a save, and after a refusal
@@ -511,6 +625,16 @@ const NXS = {
   // the document page renders lib-document-viewer, reached from the row's open button.
   viewer: {
     root: 'lib-document-viewer',
+    // The `@default` branch of document-viewer.component.html. There is no `nxs-viewer-fallback`
+    // element: counting one meant the fallback could never be observed.
+    fallback: '.viewer-placeholder',
+    // A PDF is handed to the browser's own viewer in an iframe, so neither host text nor a canvas
+    // can be read. The frame itself, sized and pointed at the document's blob, is as far as a
+    // reader can see; `pdfNote` states that limit in the report.
+    pdfFrame: 'iframe.viewer-iframe',
+    pdfNote:
+      'the PDF renders in a cross-document iframe handed to the browser viewer, so the page text ' +
+      'and canvas are not readable from the host; the frame, its size and its blob source are',
     async open(page, A, title) {
       await page
         .locator(A.list.rows)
@@ -518,7 +642,8 @@ const NXS = {
         .first()
         .locator('.nxs-document-list__open')
         .first()
-        .click();
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(5000);
     },
     async close(page) {
@@ -530,6 +655,10 @@ const NXS = {
   properties: {
     provenance: 'nxs-properties-panel',
     root: 'nxs-properties-panel',
+    // The panel is a definition list: every field name is a <dt>. There is no mat-label, no
+    // <label> and no .doc-info-label in it, so the reader that looked for those read no labels at
+    // all — and `props.labels-translated`, whose whole subject is the labels, was judged on none.
+    labels: '.nxs-properties-panel__label',
     async open(page, h, uid) {
       await h.goToDoc(uid);
       await page.waitForTimeout(2500);
@@ -550,7 +679,7 @@ const NXS = {
       await page.waitForTimeout(2500);
       const trigger = page.locator('nxs-manage-versions .nxs-manage-versions__trigger');
       if (await trigger.count()) {
-        await trigger.first().click().catch(leaveItToTheNextCheck);
+        await trigger.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
         await page.waitForTimeout(1500);
       }
     },
@@ -592,11 +721,20 @@ const NXS = {
   search: {
     route: '/#/search',
     input: 'nxs-search-filters input[type="search"]',
+    // search-filters.component.html binds the full-text box to `(keydown.enter)="applyFulltext()"`:
+    // filling it stages a draft and searches nothing. Without this the search steps read the
+    // unfiltered listing — 161 results where the fixture has 125 — and judged it as the search.
+    async submit(page, A) {
+      await page.locator(A.search.input).first().press('Enter');
+    },
+    pageSize: SEARCH_PAGE_SIZE_NXS,
     rows: 'lib-search .result-list .list-row',
     title: '.row-name-text',
     next: 'lib-search [aria-label="Next page"]',
     count: 'lib-search .results-count',
     none: 'lib-search .results-empty',
+    // search.html's `search.search.no-documents-match-the-search-criteria`.
+    nonePattern: /no documents match the search criteria/i,
     error: 'lib-search nxs-error-state',
     failPattern: '**/search/**',
   },
@@ -675,6 +813,19 @@ function treeChildren(nodes, label) {
     if (nodes[j].level === level + 1) children.push(nodes[j]);
   }
   return { found: true, level, expanded: nodes[i].expanded, children };
+}
+
+/**
+ * One label per crumb, read from the crumb's own link or text element. Never `li.textContent`: a
+ * trail whose separator is an icon font puts its ligature inside the `li`, so every crumb would
+ * read "Parity fixtureschevron_right" and no expected label could match.
+ */
+async function readCrumbLabels(page, A) {
+  return page
+    .$$eval(A.breadcrumb.items, (lis) =>
+      lis.map((li) => ((li.querySelector('a, span') ?? li).textContent ?? '').trim()),
+    )
+    .catch(() => []);
 }
 
 async function waitForList(page, A, timeout = 15_000) {
@@ -955,7 +1106,7 @@ export default async function run(page, h, outDir) {
     for (let i = 0; i < 3; i++) {
       const r = await readRows(page, A.list.rows, A.list.title);
       if (r[0]?.title === first) return;
-      await titleControl.click();
+      await titleControl.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
       await page.waitForTimeout(2500);
     }
   };
@@ -1063,7 +1214,7 @@ export default async function run(page, h, outDir) {
   await sortTitleUntilFirst(pagedTitle(1));
   const next = page.locator(A.list.next).first();
   const beforeP2 = wire.length;
-  await next.click();
+  await next.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(2500);
   const p2 = await readRows(page, A.list.rows, A.list.title);
   const p2Range = await page
@@ -1092,7 +1243,7 @@ export default async function run(page, h, outDir) {
     `pager read ${JSON.stringify(p2Range)}`,
   );
   const beforeP3 = wire.length;
-  await next.click();
+  await next.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(2500);
   const p3 = await readRows(page, A.list.rows, A.list.title);
   h.check(
@@ -1115,7 +1266,11 @@ export default async function run(page, h, outDir) {
     p3.length === 25 && (await next.isDisabled().catch(() => false)),
   );
   await h.screenshot('list-page-3-of-3');
-  await page.locator(A.list.previous).first().click();
+  await page
+    .locator(A.list.previous)
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(2500);
   const back = await readRows(page, A.list.rows, A.list.title);
   h.check(
@@ -1133,7 +1288,11 @@ export default async function run(page, h, outDir) {
   const rowLoc = (i) => page.locator(A.list.rows).nth(i);
   const selectedTitles = async () =>
     (await readRows(page, A.list.rows, A.list.title)).filter((r) => r.selected).map((r) => r.title);
-  await rowLoc(1).locator(A.list.checkbox).first().click();
+  await rowLoc(1)
+    .locator(A.list.checkbox)
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(500);
   const single = await selectedTitles();
   h.check(
@@ -1142,7 +1301,7 @@ export default async function run(page, h, outDir) {
     JSON.stringify(single),
   );
   const bar1 = await page
-    .locator('lib-selection-topbar')
+    .locator(A.shell.selectionBar)
     .first()
     .innerText()
     .catch(() => '');
@@ -1151,7 +1310,11 @@ export default async function run(page, h, outDir) {
     /\b1 item\b/.test(bar1),
     JSON.stringify(bar1.slice(0, 60)),
   );
-  await rowLoc(3).locator(A.list.checkbox).first().click();
+  await rowLoc(3)
+    .locator(A.list.checkbox)
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(500);
   const multi = await selectedTitles();
   h.check(
@@ -1162,7 +1325,8 @@ export default async function run(page, h, outDir) {
   await rowLoc(6)
     .locator(A.list.checkbox)
     .first()
-    .click({ modifiers: ['Shift'] });
+    .click({ modifiers: ['Shift'], timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(500);
   const ranged = await selectedTitles();
   gap('list.range-select', {
@@ -1174,7 +1338,11 @@ export default async function run(page, h, outDir) {
   await h.screenshot('list-selection-multi-and-shift');
 
   await h.step('DocumentList — select all on the page, then clear');
-  await page.locator(A.list.selectAll).first().click();
+  await page
+    .locator(A.list.selectAll)
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
   const all = await selectedTitles();
   h.check(
@@ -1183,7 +1351,11 @@ export default async function run(page, h, outDir) {
     `${all.length} selected`,
   );
   await h.screenshot('list-select-all-on-page');
-  await page.locator(A.list.selectAll).first().click();
+  await page
+    .locator(A.list.selectAll)
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
   const cleared = await selectedTitles();
   h.check(
@@ -1299,7 +1471,7 @@ export default async function run(page, h, outDir) {
     await page
       .locator(A.tree.toggle(deepTitle(n)))
       .first()
-      .click()
+      .click({ timeout: 10_000 })
       .catch(leaveItToTheNextCheck);
     await page
       .locator(A.tree.node)
@@ -1418,7 +1590,11 @@ export default async function run(page, h, outDir) {
   await page.waitForTimeout(2500);
   await fail500(A.tree.failPattern);
   const beforeTree500 = wire.length;
-  await page.locator(A.tree.toggle(PAGED.title)).first().click().catch(leaveItToTheNextCheck);
+  await page
+    .locator(A.tree.toggle(PAGED.title))
+    .first()
+    .click({ timeout: 10_000 })
+    .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(3500);
   const tree500 = wire.slice(beforeTree500).filter((w) => w.status === 500);
   const pagedKids = treeChildren(await readTree(page, A), PAGED.title);
@@ -1458,12 +1634,19 @@ export default async function run(page, h, outDir) {
     .$$eval(A.breadcrumb.items, (lis) =>
       lis.map((li) => {
         const a = li.querySelector('a');
+        // The crumb's own label element, never the whole <li>: a trail that draws its separator
+        // as an icon font puts the ligature ("chevron_right") in `li.textContent`, so every
+        // crumb would read "Domainchevron_right" and no expected label could ever match.
+        const label = li.querySelector('a, span') ?? li;
         const r = (a ?? li).getBoundingClientRect();
         const cs = a ? getComputedStyle(a) : null;
         return {
-          text: (li.textContent ?? '').trim(),
+          text: (label.textContent ?? '').trim(),
           href: a?.getAttribute('href') ?? null,
-          current: a?.getAttribute('aria-current') ?? li.getAttribute('aria-current'),
+          current:
+            a?.getAttribute('aria-current') ??
+            li.getAttribute('aria-current') ??
+            label.getAttribute('aria-current'),
           width: Math.round(r.width),
           top: Math.round(r.top),
           title: a?.getAttribute('title') ?? li.getAttribute('title') ?? null,
@@ -1540,12 +1723,23 @@ export default async function run(page, h, outDir) {
     observed: `${lines} line(s); long crumb ${longCrumb?.width}px, ellipsis=${longCrumb?.ellipsis}, title=${JSON.stringify(longCrumb?.title)}`,
   });
   await h.screenshot('breadcrumb-deep-path');
-  await page
+  // By the ancestor's own href, not by its label. The label is what the check above judges, so
+  // selecting the crumb by it made one failure — a trail labelled with path segments rather than
+  // titles — abort the run on a 30 s timeout, and steps 14 to 24 never ran at all. Navigation and
+  // labelling are two claims; each gets its own red.
+  const l3Crumb = page
     .locator(A.breadcrumb.items)
-    .filter({ hasText: /^\s*Deep L3\s*$/ })
-    .locator('a')
-    .first()
-    .click();
+    .locator(`a[href="${A.crumbHref(deepPath(3))}"]`)
+    .first();
+  const l3Reachable = (await l3Crumb.count()) > 0;
+  h.check(
+    `${LB} the Deep L3 ancestor is a crumb that links to Deep L3`,
+    l3Reachable,
+    `looked for a crumb linking to ${A.crumbHref(deepPath(3))}; the trail links to ${JSON.stringify(
+      crumbs.map((c) => c.href),
+    )}`,
+  );
+  await l3Crumb.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(2500);
   await waitForList(page, A);
   const l3 = await readRows(page, A.list.rows, A.list.title);
@@ -1565,13 +1759,16 @@ export default async function run(page, h, outDir) {
   const props = await page
     .locator(A.properties.root)
     .first()
-    .evaluate((el) => ({
-      text: (el.innerText ?? '').replace(/\s+/g, ' '),
-      values: [...el.querySelectorAll('input, textarea')].map((i) => i.value).filter(Boolean),
-      labels: [...el.querySelectorAll('mat-label, label, .doc-info-label')]
-        .map((l) => (l.textContent ?? '').trim())
-        .filter(Boolean),
-    }))
+    .evaluate(
+      (el, labelSel) => ({
+        text: (el.innerText ?? '').replace(/\s+/g, ' '),
+        values: [...el.querySelectorAll('input, textarea')].map((i) => i.value).filter(Boolean),
+        labels: [...el.querySelectorAll(labelSel)]
+          .map((l) => (l.textContent ?? '').trim())
+          .filter(Boolean),
+      }),
+      A.properties.labels,
+    )
     .catch(() => ({ text: '', values: [], labels: [] }));
   const propsText = `${props.text} ${props.values.join(' ')}`;
   h.check(
@@ -1685,25 +1882,46 @@ export default async function run(page, h, outDir) {
     permText.includes(ACL.title),
     permText.slice(0, 120),
   );
-  const rowText = async () =>
+  const rowText = async (selector = A.permissions.rows) =>
     (
       await page
-        .locator(A.permissions.rows)
+        .locator(selector)
         .allInnerTexts()
         .catch(() => [])
     ).map((t) => t.replace(/\s+/g, ' ').trim());
   await A.permissions.showTab(page, 'User Groups');
   const groupRows = await rowText();
   const membersRow = groupRows.find((t) => /members/i.test(t)) ?? '';
+  const membersLocal = (await rowText(A.permissions.localRows)).find((t) => /members/i.test(t));
+  const membersInherited = (await rowText(A.permissions.inheritedRows)).find((t) =>
+    /members/i.test(t),
+  );
   h.check(
     `${LB} members shows inherited Read and its local Read & Write`,
-    // Inherited is the column before the local one; a bare /Read/ would match "Read & Write" alone.
-    /\bRead\b(?! &| and)[\s\S]*(Read & Write|ReadWrite|Read and write)/i.test(membersRow),
-    JSON.stringify(groupRows),
+    // A surface that puts both grants in one row is read as one row; a surface that splits them
+    // into a local and an inherited table is read as two. Concatenating every row of both tables
+    // could not tell the two grants apart, so this read as a parity failure on a panel that
+    // renders both correctly.
+    A.permissions.oneRowPerPrincipal
+      ? // Inherited is the column before the local one; a bare /Read/ would match "Read & Write" alone.
+        /\bRead\b(?! &| and)[\s\S]*(Read & Write|ReadWrite|Read and write)/i.test(membersRow)
+      : Boolean(membersInherited) &&
+          /\bRead\b(?! &| and)/i.test(membersInherited) &&
+          Boolean(membersLocal) &&
+          /Read & Write|ReadWrite|Read and write/i.test(membersLocal),
+    A.permissions.oneRowPerPrincipal
+      ? JSON.stringify(groupRows)
+      : JSON.stringify({ local: membersLocal ?? null, inherited: membersInherited ?? null }),
   );
   await A.permissions.showTab(page, 'Individual Users');
   const userRows = await rowText();
-  const parityRow = userRows.find((t) => t.includes(ACL.userLabel) || t.includes(ACL.user)) ?? '';
+  // The claim is about a *local* AddChildren grant, so it is read from the local entries. On a
+  // split panel the same principal also appears in the inherited table with a different
+  // permission, and whichever row came first in the DOM would otherwise decide the verdict.
+  const parityRow =
+    (await rowText(A.permissions.localRows)).find(
+      (t) => t.includes(ACL.userLabel) || t.includes(ACL.user),
+    ) ?? '';
   h.check(`${LB} parity-user is listed`, parityRow.length > 0, JSON.stringify(userRows));
   gap('perm.non-expressible-shown', {
     correct: /add ?children/i.test(parityRow),
@@ -1713,11 +1931,11 @@ export default async function run(page, h, outDir) {
   });
   await h.screenshot('permissions-addchildren-not-shown');
   const parityControl = page
-    .locator(A.permissions.rows)
+    .locator(A.permissions.localRows)
     .filter({ hasText: ACL.userLabel })
     .locator(A.permissions.accessControl)
     .first();
-  await parityControl.click().catch(leaveItToTheNextCheck);
+  await parityControl.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(800);
   const options = (
     await page
@@ -1747,26 +1965,42 @@ export default async function run(page, h, outDir) {
   await A.permissions.showTab(page, 'User Groups');
   const beforeSave = wire.length;
   await page
-    .locator(A.permissions.rows)
+    .locator(A.permissions.localRows)
     .filter({ hasText: /members/i })
     .locator(A.permissions.accessControl)
     .first()
-    .click()
+    .click({ timeout: 10_000 })
     .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
-  await page
-    .locator(A.permissions.options)
-    .filter({ hasText: /^\s*Everything\s*$/ })
-    .first()
-    .click()
-    .catch(leaveItToTheNextCheck);
+  const everything = A.permissions.option('Everything');
+  const everythingOption = everything.hasText
+    ? page.locator(everything.selector).filter({ hasText: everything.hasText })
+    : page.locator(everything.selector);
+  // Whether the option was there to choose, before the click: Save only appears once a change is
+  // staged, so an option that matched nothing left the ACL untouched — and then "AddChildren
+  // survives the save" passed because nothing had been saved. The gap checks below read the ACL
+  // after a save that never happened, so this condition has to be recorded, not assumed.
+  const everythingStaged = (await everythingOption.count()) > 0;
+  h.check(
+    `${LB} the panel offers Everything, so the save under test can be staged at all`,
+    everythingStaged,
+    `looked for ${JSON.stringify(everything.selector)}${
+      everything.hasText ? ` matching ${everything.hasText}` : ''
+    }; the panel offered ${JSON.stringify(options)}`,
+  );
+  await everythingOption.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
-  await page
+  const saveButton = page
     .locator(A.permissions.save)
     .filter({ hasText: /^\s*Save\s*$/ })
-    .first()
-    .click()
-    .catch(leaveItToTheNextCheck);
+    .first();
+  const saveOffered = (await saveButton.count()) > 0;
+  h.check(
+    `${LB} staging the change offers a Save`,
+    saveOffered,
+    `Save button present=${saveOffered}`,
+  );
+  await saveButton.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(3500);
   const feedback = (
     await page
@@ -1780,8 +2014,11 @@ export default async function run(page, h, outDir) {
   const writes = wire.slice(beforeSave).filter((w) => w.method !== 'GET');
   h.check(
     `${LB} parity-user's AddChildren survives the save — nothing outside the panel's vocabulary is silently dropped`,
-    afterAcl.includes('parity-user:AddChildren'),
-    `local ACL after save ${JSON.stringify(afterAcl)}`,
+    // A save has to have been attempted. Until the two checks above existed, an unmatched option
+    // meant nothing was staged, no Save appeared, no request went out — and this check then read
+    // an untouched ACL and passed, certifying that an entry survived an operation that never ran.
+    everythingStaged && saveOffered && afterAcl.includes('parity-user:AddChildren'),
+    `${writes.length} write request(s); local ACL after save ${JSON.stringify(afterAcl)}`,
   );
   const refused =
     /error/i.test(feedback) &&
@@ -1819,7 +2056,7 @@ export default async function run(page, h, outDir) {
     await page
       .locator(`${A.permissions.feedback} button`)
       .first()
-      .click()
+      .click({ timeout: 10_000 })
       .catch(leaveItToTheNextCheck);
     await page.waitForTimeout(600);
   }
@@ -1840,11 +2077,13 @@ export default async function run(page, h, outDir) {
   );
   if (docPanel.includes('ACL memo')) {
     await A.permissions.showTab(page, 'Individual Users');
-    const docRow = (await rowText()).find((t) => t.includes(ACL.userLabel)) ?? '';
+    // The local entries: WriteVersion is granted on this document, not inherited onto it.
+    const docRow =
+      (await rowText(A.permissions.localRows)).find((t) => t.includes(ACL.userLabel)) ?? '';
     h.check(
       `${LB} parity-user is listed on the document`,
       docRow.length > 0,
-      JSON.stringify(await rowText()),
+      JSON.stringify(await rowText(A.permissions.localRows)),
     );
     gap('perm.non-expressible-shown', {
       correct: /write ?version/i.test(docRow),
@@ -1863,10 +2102,28 @@ export default async function run(page, h, outDir) {
   await A.permissions.open(page, h, ACL.path);
   const narrowPanel = page.locator(A.permissions.root).first();
   const narrowVisible = await narrowPanel.isVisible().catch(() => false);
+  // What blocked it, when it is blocked. At 320 px the nav drawer stays open in `side` mode and
+  // lies over the content, so the Permissions tab is on screen and unclickable — and a bare
+  // "panel visible=false" would send a reader looking at the panel instead of the drawer.
+  const permTab = page.locator('[role="tab"]').filter({ hasText: 'Permissions' }).first();
+  const narrowTab = narrowVisible
+    ? ''
+    : `; the Permissions tab is ${
+        (await permTab.count()) ? 'present' : 'absent'
+      } and ${(await permTab.isVisible().catch(() => false)) ? 'visible' : 'not visible'}, obscured by ${JSON.stringify(
+        await page
+          .evaluate(() => {
+            const drawer = document.querySelector('mat-sidenav.mat-drawer-opened');
+            return drawer
+              ? `${drawer.tagName.toLowerCase()} (open, ${drawer.clientWidth}px)`
+              : null;
+          })
+          .catch(() => null),
+      )}`;
   h.check(
     `${LB} the permissions panel renders at 320 px`,
     narrowVisible,
-    `panel visible=${narrowVisible}`,
+    `panel visible=${narrowVisible}${narrowTab}`,
   );
   if (narrowVisible) {
     const panelBox = await narrowPanel.boundingBox();
@@ -1881,27 +2138,57 @@ export default async function run(page, h, outDir) {
       !horizontalScroll && !panelOverflows && (panelBox?.width ?? 0) <= 320,
       `page scrollWidth=${docScrollWidth}, innerWidth=${innerWidth}, panel scrollWidth=${panelScrollWidth}, clientWidth=${panelClientWidth}, box width=${panelBox?.width ?? 'not measured'}`,
     );
-    // Check that permission entries (rows) are visible - data rows start after header row
-    const dataRows = await page.locator(`${A.permissions.rows}:not(:first-child)`).first().isVisible().catch(() => false);
-    // Stage a reversible edit to make Save visible: nxs-permissions-panel only shows Save when pendingCount() > 0
-    await A.permissions.showTab(page, 'Groups');
+    // A data row, not the header: the header is a tr[role="row"] as well, and asserting on it
+    // would pass on a panel that rendered no entries at all.
+    const dataRows = await page
+      .locator(`${A.permissions.localRows}:not(:first-child)`)
+      .first()
+      .isVisible()
+      .catch(() => false);
+    // Save only exists once a change is staged (`pendingCount() > 0`), so one has to be staged to
+    // see whether it stays reachable at 320 px. It is never saved: the step leaves the panel by
+    // navigating away at the next step, which drops the pending change with it, so the fixture is
+    // unchanged. Staged through the adapter's `option`, by permission rather than by label.
+    await A.permissions.showTab(page, 'User Groups');
     await page.waitForTimeout(800);
-    const membersRow = await page.locator(A.permissions.rows).filter({ hasText: 'members' }).first();
-    if (await membersRow.count()) {
-      await membersRow.locator(A.permissions.accessControl).first().click();
+    const narrowMembersRow = page
+      .locator(A.permissions.localRows)
+      .filter({ hasText: 'members' })
+      .first();
+    if (await narrowMembersRow.count()) {
+      await narrowMembersRow
+        .locator(A.permissions.accessControl)
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(600);
-      await page.locator(A.permissions.options).filter({ hasText: /^\s*Read\s*$/ }).first().click();
+      const read = A.permissions.option('Read');
+      await (
+        read.hasText
+          ? page.locator(read.selector).filter({ hasText: read.hasText })
+          : page.locator(read.selector)
+      )
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(600);
     }
-    const saveButton = await page.locator(`${A.permissions.save}`).filter({ hasText: /save/i }).first().isVisible().catch(() => false);
+    const narrowSaveVisible = await page
+      .locator(A.permissions.save)
+      .filter({ hasText: /save/i })
+      .first()
+      .isVisible()
+      .catch(() => false);
     h.check(
       `${LB} permission entries and controls remain visible at 320 px`,
-      dataRows && saveButton,
-      `data rows visible=${dataRows}, save button visible=${saveButton}`,
+      dataRows && narrowSaveVisible,
+      `data rows visible=${dataRows}, save button visible=${narrowSaveVisible}`,
     );
-    // Discard the staged change without saving so the fixture remains unchanged
-    await h.screenshot('permissions-panel-320px');
   }
+  // Outside the branch. The screenshot was inside it, so the one outcome worth a picture — the
+  // panel *not* reachable at 320 px, behind an open 280 px nav drawer — was the one case that
+  // produced no image, and the step's red had nothing to look at.
+  await h.screenshot('permissions-panel-320px');
   // Reset viewport to default before the viewer steps, which assume the wider width
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.waitForTimeout(600);
@@ -1920,38 +2207,54 @@ export default async function run(page, h, outDir) {
     const root = page.locator(A.viewer.root).first();
     const visible = await root.isVisible().catch(() => false);
     const state = await root
-      .evaluate((el) => {
-        const img = el.querySelector('img:not([src$=".svg"])');
-        const vid = el.querySelector('video');
-        return {
-          text: (el.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
-          unknown: el.querySelectorAll('adf-viewer-unknown-format, nxs-viewer-fallback').length,
-          canvas: el.querySelectorAll('canvas').length,
-          // A canvas proves nothing on its own: a blank or failed renderer still creates one.
-          painted: [...el.querySelectorAll('canvas')].filter((c) => {
-            try {
-              const ctx = c.getContext('2d');
-              if (!ctx || !c.width || !c.height) return false;
-              const { data } = ctx.getImageData(0, 0, c.width, c.height);
-              for (let i = 4; i < data.length; i += 4 * 97) {
-                if (data[i] !== data[0] || data[i + 1] !== data[1] || data[i + 2] !== data[2]) {
-                  return true;
+      .evaluate(
+        (el, { fallbackSel, pdfFrameSel }) => {
+          const img = el.querySelector('img:not([src$=".svg"])');
+          const vid = el.querySelector('video');
+          return {
+            text: (el.innerText ?? '').replace(/\s+/g, ' ').trim().slice(0, 200),
+            // The surface's own fallback element. Counting another surface's element name meant
+            // the fallback could never be seen on this one, however plainly it was rendered.
+            unknown: el.querySelectorAll(fallbackSel).length,
+            // A cross-document frame carrying the document, for a surface that hands a PDF to the
+            // browser's own viewer. Its contents cannot be read from the host, so its presence,
+            // its painted size and its source are what there is to assert.
+            pdfFrames: pdfFrameSel
+              ? [...el.querySelectorAll(pdfFrameSel)].map((f) => ({
+                  src: (f.getAttribute('src') ?? '').slice(0, 12),
+                  title: f.getAttribute('title'),
+                  w: f.clientWidth,
+                  h: f.clientHeight,
+                }))
+              : [],
+            canvas: el.querySelectorAll('canvas').length,
+            // A canvas proves nothing on its own: a blank or failed renderer still creates one.
+            painted: [...el.querySelectorAll('canvas')].filter((c) => {
+              try {
+                const ctx = c.getContext('2d');
+                if (!ctx || !c.width || !c.height) return false;
+                const { data } = ctx.getImageData(0, 0, c.width, c.height);
+                for (let i = 4; i < data.length; i += 4 * 97) {
+                  if (data[i] !== data[0] || data[i + 1] !== data[1] || data[i + 2] !== data[2]) {
+                    return true;
+                  }
                 }
+                return false;
+              } catch {
+                // A tainted or non-2d canvas cannot be read, so it does not count as painted.
+                return false;
               }
-              return false;
-            } catch {
-              // A tainted or non-2d canvas cannot be read, so it does not count as painted.
-              return false;
-            }
-          }).length,
-          img: img
-            ? { w: img.naturalWidth, h: img.naturalHeight, alt: img.getAttribute('alt') }
-            : null,
-          video: vid
-            ? { ready: vid.readyState, duration: vid.duration, error: vid.error?.code ?? null }
-            : null,
-        };
-      })
+            }).length,
+            img: img
+              ? { w: img.naturalWidth, h: img.naturalHeight, alt: img.getAttribute('alt') }
+              : null,
+            video: vid
+              ? { ready: vid.readyState, duration: vid.duration, error: vid.error?.code ?? null }
+              : null,
+          };
+        },
+        { fallbackSel: A.viewer.fallback, pdfFrameSel: A.viewer.pdfFrame },
+      )
       .catch(noAnswer);
     return state ? { ...state, visible } : null;
   };
@@ -1963,13 +2266,26 @@ export default async function run(page, h, outDir) {
     Boolean(pdf?.visible),
     JSON.stringify(pdf),
   );
+  // A frame big enough to be the viewer rather than a 0×0 leftover, pointed at the document's
+  // own blob. This is the whole of what a host-side reader can see of a PDF handed to the
+  // browser's viewer; `pdfNote` records that limit beside the result rather than leaving the
+  // reader to assume the page itself was inspected.
+  const pdfFramed = (pdf?.pdfFrames ?? []).filter(
+    (f) => f.src.startsWith('blob:') && f.w > 200 && f.h > 200,
+  );
+  if (A.viewer.pdfFrame) h.note(`${A.viewer.pdfNote}: ${JSON.stringify(pdf?.pdfFrames ?? [])}`);
   gap('viewer.pdf', {
     correct:
       Boolean(pdf?.visible) &&
-      (pdf.text.includes(MEDIA.pdfText) || pdf.painted > 0) &&
+      (pdf.text.includes(MEDIA.pdfText) || pdf.painted > 0 || pdfFramed.length > 0) &&
       pdf.unknown === 0,
-    wrongObserved: Boolean(pdf) && pdf.painted === 0 && !pdf.text.includes(MEDIA.pdfText),
-    expect: 'render the PDF (its text, or a canvas with the page painted on it)',
+    wrongObserved:
+      Boolean(pdf) &&
+      pdf.painted === 0 &&
+      pdfFramed.length === 0 &&
+      !pdf.text.includes(MEDIA.pdfText),
+    expect:
+      'render the PDF (its text, a canvas with the page painted on it, or a sized frame holding it)',
     observed: `${JSON.stringify(pdf)}`,
   });
   if (A.upstream) {
@@ -2040,10 +2356,23 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.unknown);
 
   // ── 13. Search listing ───────────────────────────────────────────────────────────────────────
-  await h.step('Search listing — 125 hits paged 50 / 50 / 25');
+  // The page sizes the surface's own paging produces over the fixture's 125 hits. The step used to
+  // name 50 / 50 / 25 outright, which is one surface's `SEARCH_PAGE_SIZE` written into an
+  // expectation: on a surface that pages by 40 the first check failed for a listing that was
+  // paging perfectly. What is asserted is the partition — every page its own size, the pages
+  // disjoint, and the 125 hits covered exactly — which 50 / 50 / 25 satisfies as before.
+  const searchPageSizes = [];
+  for (let left = PAGED.count; left > 0; left -= A.search.pageSize) {
+    searchPageSizes.push(Math.min(left, A.search.pageSize));
+  }
+  await h.step(`Search listing — ${PAGED.count} hits paged ${searchPageSizes.join(' / ')}`);
   await h.goTo(A.search.route);
   const searchFor = async (term) => {
     await page.locator(A.search.input).first().fill(term);
+    // The surface's own way of running the search. Filling the box is not always searching:
+    // nxs-search-filters applies the full-text term on Enter, so without this the steps below
+    // read the unfiltered listing — 161 documents where the fixture has 125 — and judged that.
+    await A.search.submit(page, A);
     await page.waitForTimeout(3000);
     await page
       .locator(`${A.search.rows}, ${A.search.none}, ${A.search.error}`)
@@ -2053,44 +2382,55 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(500);
   };
   await searchFor(SEARCH.token);
-  const s1 = await readRows(page, A.search.rows, A.search.title);
   const countText = await page
     .locator(A.search.count)
     .first()
     .innerText()
     .catch(() => '');
+  const searchPages = [];
+  for (let i = 0; i < searchPageSizes.length; i++) {
+    if (i > 0) {
+      await page
+        .locator(A.search.next)
+        .first()
+        .click({ timeout: 10_000 })
+        .catch(leaveItToTheNextCheck);
+      await page.waitForTimeout(3000);
+    }
+    searchPages.push(await readRows(page, A.search.rows, A.search.title));
+    if (i === 0) await h.screenshot('search-results-page-1');
+  }
+  const s1 = searchPages[0] ?? [];
   h.check(
-    `${LB} the first page lists 50 hits, all of them paged items`,
-    s1.length === 50 &&
+    `${LB} the first page lists ${searchPageSizes[0]} hits, all of them paged items`,
+    s1.length === searchPageSizes[0] &&
       s1.every((r) => r.title.startsWith('Paged item')) &&
       (await page
         .locator(A.search.rows)
         .first()
         .isVisible()
         .catch(() => false)),
-    `${s1.length} rows`,
-  );
-  h.check(`${CTX} the result count is 125`, /125/.test(countText), JSON.stringify(countText));
-  await h.screenshot('search-results-page-1');
-  await page.locator(A.search.next).first().click();
-  await page.waitForTimeout(3000);
-  const s2 = await readRows(page, A.search.rows, A.search.title);
-  await page.locator(A.search.next).first().click();
-  await page.waitForTimeout(3000);
-  const s3 = await readRows(page, A.search.rows, A.search.title);
-  const union = new Set([...s1, ...s2, ...s3].map((r) => r.title));
-  h.check(
-    `${LB} pages 2 and 3 hold 50 and 25 hits`,
-    s2.length === 50 && s3.length === 25,
-    `${s2.length} and ${s3.length}`,
+    `${s1.length} rows: ${JSON.stringify(s1.slice(0, 3).map((r) => r.title))}`,
   );
   h.check(
-    `${LB} the three pages are disjoint and cover exactly Paged item 001 to 125`,
+    `${CTX} the result count is ${PAGED.count}`,
+    new RegExp(`\\b${PAGED.count}\\b`).test(countText),
+    JSON.stringify(countText),
+  );
+  const seen = searchPages.flat();
+  const union = new Set(seen.map((r) => r.title));
+  h.check(
+    `${LB} each of the ${searchPageSizes.length} pages holds ${searchPageSizes.join(' / ')} hits`,
+    JSON.stringify(searchPages.map((p) => p.length)) === JSON.stringify(searchPageSizes),
+    `${JSON.stringify(searchPages.map((p) => p.length))} against ${JSON.stringify(searchPageSizes)}`,
+  );
+  h.check(
+    `${LB} the pages are disjoint and cover exactly Paged item 001 to ${PAGED.count}`,
     sameSet(
       [...union],
       Array.from({ length: PAGED.count }, (_, i) => pagedTitle(i + 1)),
-    ) && s1.length + s2.length + s3.length === PAGED.count,
-    `${union.size} distinct titles across ${s1.length + s2.length + s3.length} rows`,
+    ) && seen.length === PAGED.count,
+    `${union.size} distinct titles across ${seen.length} rows`,
   );
   await h.screenshot('search-results-page-3');
 
@@ -2099,12 +2439,14 @@ export default async function run(page, h, outDir) {
   const noneText = await visibleText(A.search.none);
   h.check(
     `${LB} an unmatched term says no results were found`,
-    /no results/i.test(noneText),
+    // The surface's own wording. `/no results/i` is one surface's phrasing: this panel says
+    // "No documents match the search criteria.", so the message was on screen and read as absent.
+    A.search.nonePattern.test(noneText),
     JSON.stringify(noneText),
   );
   h.check(
     `${NEG} and lists no rows`,
-    /no results/i.test(noneText) &&
+    A.search.nonePattern.test(noneText) &&
       (await readRows(page, A.search.rows, A.search.title)).length === 0,
   );
   await searchFor(SEARCH.secret);
@@ -2136,7 +2478,7 @@ export default async function run(page, h, outDir) {
   );
   await h.screenshot('failure-list-500');
   await page.unroute(A.list.failPattern);
-  await page.locator(A.list.retry).first().click().catch(leaveItToTheNextCheck);
+  await page.locator(A.list.retry).first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await waitForList(page, A);
   h.check(
     `${LB} retry recovers the 50 rows once the server answers`,
@@ -2185,21 +2527,22 @@ export default async function run(page, h, outDir) {
     `collection uid: ${JSON.stringify(collectionUid)}`,
   );
   if (collectionUid) {
-    await fail500('**/search/pp/default_content_collection/execute**');
-    await h.goTo(`/#/collections/${collectionUid}`);
+    const memberError = `${A.collection.root} ${A.list.error}`;
+    const memberRetry = `${A.collection.root} ${A.list.retry}`;
+    const memberRows = `${A.collection.root} ${A.list.rows}`;
+    await fail500(A.collection.failPattern);
+    await h.goTo(A.collection.route(collectionUid));
     await page.waitForTimeout(3000);
     const collectionError = (
       await page
-        .locator('lib-collection-detail nxs-document-list nxs-error-state')
+        .locator(memberError)
         .first()
         .allInnerTexts()
         .catch(() => [])
     )
       .join(' ')
       .replace(/\s+/g, ' ');
-    const collectionRows = (
-      await page.locator('lib-collection-detail nxs-document-list table tbody tr').count()
-    );
+    const collectionRows = await page.locator(memberRows).count();
     h.check(
       `${LB} the collection shows an error state with a message`,
       collectionError.trim().length > 0,
@@ -2208,7 +2551,7 @@ export default async function run(page, h, outDir) {
     h.check(
       `${LB} the error state offers a retry`,
       (await page
-        .locator('lib-collection-detail nxs-document-list nxs-error-state button')
+        .locator(memberRetry)
         .filter({ hasText: /try again|retry/i })
         .count()) > 0,
     );
@@ -2218,17 +2561,17 @@ export default async function run(page, h, outDir) {
       `${collectionRows} rows`,
     );
     await h.screenshot('failure-collection-500');
-    await page.unroute('**/search/pp/default_content_collection/execute**');
+    await page.unroute(A.collection.failPattern);
     await page
-      .locator('lib-collection-detail nxs-document-list nxs-error-state button')
+      .locator(memberRetry)
       .filter({ hasText: /try again|retry/i })
       .first()
-      .click()
+      .click({ timeout: 10_000 })
       .catch(leaveItToTheNextCheck);
     await page.waitForTimeout(3000);
     const recoveredMember = (
       await page
-        .locator('lib-collection-detail nxs-document-list table tbody tr')
+        .locator(memberRows)
         .first()
         .allInnerTexts()
         .catch(() => [])
@@ -2247,6 +2590,25 @@ export default async function run(page, h, outDir) {
   // ── 15. Failure: a permission-denied folder, as parity-user ──────────────────────────────────
   await h.step('Failure — parity-user opens a folder they cannot read');
   const basic = parityBasic;
+  /**
+   * Drop the browser's Nuxeo session cookie, so the next step boundary judges each channel by the
+   * header it sends rather than by a cookie they share.
+   *
+   * `page.request` is the run's own channel on the run's own credentials, and the identity guard
+   * holds it to the administrator for the whole run. But it shares the browser's cookie jar, and a
+   * `JSESSIONID` Nuxeo has already answered an API request on **beats a valid Basic header** — the
+   * guard documents exactly this. So once the page below loads as parity-user, the administrator's
+   * `page.request` is answered as parity-user too, and the boundary is refused with
+   * "[api] page.request: Nuxeo ran the request as parity-user". Nothing had ever seen it, because
+   * the run aborted at the breadcrumb sixteen steps earlier.
+   *
+   * Clearing the jar costs the app nothing: its session is in `sessionStorage`, and the route below
+   * puts the restricted header on every request a frame makes. Called at the end of each restricted
+   * step, which is where a boundary check reads.
+   */
+  const releaseSharedCookieJar = async () => {
+    await page.context().clearCookies();
+  };
   // Declared before the header and the session move, and awaited: the switch judges the
   // administrator session it is leaving before restarting the request window, so anything this
   // run read headerless up to here is refused rather than discarded with the window. The
@@ -2258,9 +2620,26 @@ export default async function run(page, h, outDir) {
   );
   // Basic auth decides identity on every Nuxeo REST call (the API keeps no session), so forcing
   // the header switches the browser to parity-user for everything the app requests from here on.
-  await page.route('**/nuxeo/**', (route) =>
-    route.continue({ headers: { ...route.request().headers(), authorization: `Basic ${basic}` } }),
-  );
+  //
+  // Only what a frame asked for. `page.request` is the run's own channel, on the run's own
+  // credentials, and the identity guard holds it to the administrator for the whole run — so a
+  // route that rewrote its header too made the guard refuse the step with "[api] page.request:
+  // Nuxeo ran the request as parity-user". That had never been seen, because the run aborted at
+  // the breadcrumb eleven steps earlier and this step was never reached.
+  await page.route('**/nuxeo/**', (route) => {
+    let fromFrame = false;
+    try {
+      fromFrame = Boolean(route.request().frame());
+    } catch {
+      // Not a frame's request — `page.request`, or a worker. Those keep their own identity.
+      fromFrame = false;
+    }
+    return fromFrame
+      ? route.continue({
+          headers: { ...route.request().headers(), authorization: `Basic ${basic}` },
+        })
+      : route.continue();
+  });
   await page.evaluate(
     ({ key, value }) => {
       sessionStorage.setItem(key, value);
@@ -2303,7 +2682,15 @@ export default async function run(page, h, outDir) {
     `${LB} parity-user sees the workspace's seven folders (including the collection)`,
     sameSet(
       asUser.map((r) => r.title),
-      [ACL.title, COLLECTION.title, deepTitle(1), 'Empty folder', PAGED.title, 'Versions', 'Viewer fixtures'],
+      [
+        ACL.title,
+        COLLECTION.title,
+        deepTitle(1),
+        'Empty folder',
+        PAGED.title,
+        'Versions',
+        'Viewer fixtures',
+      ],
     ),
     JSON.stringify(asUser.map((r) => r.title)),
   );
@@ -2357,12 +2744,7 @@ export default async function run(page, h, outDir) {
     expect: 'tell a permission refusal apart from a server failure',
     observed: `403 reads ${JSON.stringify(deniedText.trim())}; 500 read ${JSON.stringify(list500.trim())}`,
   });
-  const deniedCrumbs = (
-    await page
-      .locator(A.breadcrumb.items)
-      .allInnerTexts()
-      .catch(() => [])
-  ).map((t) => t.trim());
+  const deniedCrumbs = await readCrumbLabels(page, A);
   gap('denied.stale-breadcrumb', {
     correct: deniedCrumbs.at(-1) !== 'Parity fixtures',
     wrongObserved: deniedText.trim().length > 0 && deniedCrumbs.at(-1) === 'Parity fixtures',
@@ -2370,6 +2752,7 @@ export default async function run(page, h, outDir) {
     observed: `breadcrumb on the refused folder reads ${JSON.stringify(deniedCrumbs)}`,
   });
   await h.screenshot('failure-permission-denied-folder');
+  await releaseSharedCookieJar();
 
   await h.step('Failure — parity-user searching cannot find the restricted document');
   await h.goTo(A.search.route);
@@ -2378,7 +2761,7 @@ export default async function run(page, h, outDir) {
   const userNone = await visibleText(A.search.none);
   h.check(
     `${LB} the search completed (a no-results state or result rows)`,
-    userSecret.length > 0 || /no results/i.test(userNone),
+    userSecret.length > 0 || A.search.nonePattern.test(userNone),
     JSON.stringify(userNone),
   );
   h.check(
@@ -2389,6 +2772,7 @@ export default async function run(page, h, outDir) {
   );
   await h.screenshot('failure-search-no-leak');
   await page.unroute('**/nuxeo/**');
+  await releaseSharedCookieJar();
 
   // ── 16. Health ───────────────────────────────────────────────────────────────────────────────
   await h.step('Health');
