@@ -116,4 +116,11 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     expect(dialog.right).toBe('Read');
     expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything']);
   });
+
+  it('creates option labels by passing each right through permissionRightLabel', async () => {
+    const dialog = await open({ permissions: ['Read', 'Everything'] });
+    expect(dialog.rightOptions).toHaveLength(2);
+    expect(dialog.rightOptions[0]).toEqual({ value: 'Read', label: 'Read' });
+    expect(dialog.rightOptions[1]).toEqual({ value: 'Everything', label: 'Manage everything' });
+  });
 });
