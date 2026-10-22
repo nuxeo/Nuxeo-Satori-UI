@@ -13,7 +13,10 @@
  *
  * And for the two faulted runs, every check of the steps' own passed: without the guard they
  * would have been green, which is the failure the guard exists for. A control that went red on
- * its own checks would prove nothing about the guard.
+ * its own checks would prove nothing about the guard — nor would one that never reached its
+ * fault, which is why the assertion that runs after the fault must be recorded as passed and not
+ * merely absent. `identity-guard.control-verdict.mjs` holds that judgement, and the selftest
+ * proves it rejects a run that stopped at the runner's startup check.
  *
  * Needs a server with anonymous authentication on — otherwise Nuxeo itself refuses a dropped
  * credential, and the controls cannot show the guard doing anything. Checked first; exit 2 when
@@ -30,6 +33,7 @@ import { spawnSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 
+import { judgeControlRun } from './identity-guard.control-verdict.mjs';
 import { ME_PATH, isAnonymousMe } from './identity-guard.mjs';
 import { nuxeoCredentialsOrExit } from './nuxeo-credentials.mjs';
 
@@ -82,32 +86,7 @@ for (const control of CONTROLS) {
   if (report)
     manifest = JSON.parse(await readFile(resolve(dirname(report), 'manifest.json'), 'utf8'));
 
-  const problems = [];
-  if (run.status !== control.exit) problems.push(`exited ${run.status}, expected ${control.exit}`);
-  if (!manifest) problems.push('wrote no manifest');
-  else {
-    if (manifest.identity?.valid !== control.valid) {
-      problems.push(`identity.valid is ${manifest.identity?.valid}, expected ${control.valid}`);
-    }
-    const ownChecks = manifest.steps
-      .flatMap((s) => s.checks)
-      .filter((c) => !c.name.includes('identity guard'));
-    const ownFailed = ownChecks.filter((c) => !c.passed);
-    if (ownFailed.length) {
-      problems.push(
-        `the steps' own checks failed (${ownFailed.map((c) => c.name).join(', ')}), so this says nothing about the guard`,
-      );
-    }
-    if (!control.valid) {
-      const rejected = manifest.identity.checks.flatMap((c) => c.reports).filter((r) => !r.ok);
-      if (!rejected.some((r) => /Anonymous/.test(r.problem ?? ''))) {
-        problems.push(
-          `rejected, but not for running as Anonymous: ${JSON.stringify(rejected.map((r) => r.problem))}`,
-        );
-      }
-      if (manifest.verdict !== 'precondition-not-met') problems.push(`verdict ${manifest.verdict}`);
-    }
-  }
+  const problems = judgeControlRun(control, run.status, manifest);
   const line = manifest?.identity?.checks
     ?.flatMap((c) =>
       c.reports.filter((r) => !r.ok).map((r) => `${c.at} [${r.channel}] ${r.problem}`),

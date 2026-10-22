@@ -155,14 +155,17 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
    * design question is NXSAT-703, not settled here.
    *
    * @param {string} what names the transition, e.g. `h.signedOut()`
+   * @param {string} [where] distinguishes a second verification of the same transition, e.g.
+   *   `h.login()`'s boot navigation; it becomes part of the `at` label so the manifest does not
+   *   carry two checks a reviewer cannot tell apart
    */
-  async function verifyBeforeTransition(what) {
+  async function verifyBeforeTransition(what, where) {
     if (!identity) return;
     const onApp = page.url().startsWith(baseUrl);
     const required = 'user' in identity.appPolicy;
     if (!onApp && !required) return;
     const step = ensureStep();
-    const at = `before ${what} at step ${step.index}`;
+    const at = `before ${what} at step ${step.index}${where ? `, ${where}` : ''}`;
     await verifyIdentity(step, at);
     // After the verification, so a request that finished during it has been judged on its merits
     // rather than refused for being slow, and so an outgoing session that is already stray is
@@ -635,8 +638,25 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // there to be judged; an off-app navigation cannot bypass it either.
       await verifyBeforeTransition('h.login()');
 
+      // Whether this call is replacing a session or installing the run's first one. Read before
+      // the navigation below, because only one of the two boots signed out.
+      const replacing = Boolean(identity && 'user' in identity.appPolicy);
+
       await page.goto(this.baseUrl, { waitUntil: 'domcontentloaded' });
       await page.waitForTimeout(800);
+
+      // On a repeated login the boot above ran under the session being replaced — it is still
+      // installed, and the app it booted talked to Nuxeo as it. Both `expectApp` and
+      // `sessionInstalled` below move the request window past that traffic, so this is the last
+      // point at which anything can judge it; without this, a headerless request emitted and
+      // completed here was discarded as though it were the initial signed-out boot's, and the
+      // verification above had already passed before it was sent. One still in flight is refused
+      // for the same reason it is at any other transition.
+      //
+      // Only when a session was in place: the run's first login boots a genuinely signed-out
+      // page, whose requests carry no header by right and have no outgoing identity to be held
+      // against.
+      if (replacing) await verifyBeforeTransition('h.login()', 'after its boot navigation');
 
       const session = {
         kind: 'basic',
@@ -656,7 +676,9 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
       identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
-      // The boot above ran signed out; the session's requests start at the reload.
+      // The run's first login booted a signed-out page, so the session's requests start at the
+      // reload. A repeated login's boot was not signed out — what this discards there has just
+      // been judged above, which is the condition `sessionInstalled` is documented to need.
       identity?.sessionInstalled();
 
       await page.reload({ waitUntil: 'networkidle' });

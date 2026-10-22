@@ -692,6 +692,38 @@ export function pendingRequests(traffic) {
 }
 
 /**
+ * The in-flight requests that promoting a form sign-in would strand, in the window `[since, upTo)`
+ * a promotion is about to discard.
+ *
+ * A sign-in the run did not declare is recognised at a boundary: the app is found authenticated
+ * as the run's user, a session becomes required from then on, and the window restarts at the
+ * probe's mark so what the page sent while signing in is not held against it. A request still in
+ * flight at that mark is put *behind* `since` by that restart, and no later boundary's window
+ * contains it — so when it completes, headerless or not, it is judged by nothing and the run can
+ * still end `identity.valid: true` over what it returned. The promotion therefore refuses while
+ * any remains, for the reason `pendingRequests` gives: unjudged traffic certified as valid is
+ * false evidence, which is worse than a missing check.
+ *
+ * The signed-out bootstrap stays exempt, drawn where `strayRequests` draws it — at the first
+ * request that carried *any* `Authorization`. Before that the app had no session to send, so its
+ * requests are the signed-out page's and carry no identity to strand; after it the app is
+ * signed in, and what it sends is the session's.
+ *
+ * @param {Set<string> | undefined} traffic from `watchNuxeoApiOrigins`
+ * @param {number} upTo where the promotion would move `since` to
+ * @returns {SentRequest[]}
+ */
+export function pendingAcrossSignIn(traffic, upTo) {
+  // By shape, not `instanceof`, for the reason on `strayRequests`.
+  const { sent, since } = /** @type {Partial<NuxeoApiTraffic>} */ (traffic ?? {});
+  if (!Array.isArray(sent) || typeof since !== 'number') return [];
+  const discarded = sent.slice(since, upTo).filter((r) => !anonymousByDesign(r));
+  const signedIn = discarded.findIndex((r) => r.finished && r.authorization !== null);
+  if (signedIn < 0) return [];
+  return discarded.slice(signedIn).filter((r) => !r.finished && !r.failed);
+}
+
+/**
  * The requests the page sent to Nuxeo without `stored`'s header since its session's requests
  * began: the start of the page, or where the session was installed (`restart`,
  * `restartAtNextLoad`).
@@ -903,7 +935,13 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
       policy = { user };
     },
 
-    /** A session was just written into a page that booted signed out; it starts at the next load. */
+    /**
+     * A session was just written into a page that booted signed out; it starts at the next load.
+     *
+     * The caller must have judged anything the page sent since the window last restarted, or this
+     * discards it: on a *repeated* login the boot is not signed out, and its traffic belongs to
+     * the session being replaced (`h.login()` in `helpers.mjs` verifies it first).
+     */
     sessionInstalled() {
       foreignApiOrigins.restartAtNextLoad();
     },
@@ -956,9 +994,32 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
         const appReport = reports[1];
         // Seen signed in as the run's user without `h.login()` (a form sign-in): required from now.
         if (appReport?.ok && appReport.state === 'authenticated' && 'unsigned' in policy) {
-          policy = { user: username };
-          // What the page sent before this check was judged as signing in; after it, strictly.
-          foreignApiOrigins.restart(mark);
+          // Unless the sign-in left traffic the restart below would strand unjudged. This is a
+          // transition in everything but name — it is just not declared by a steps file — so it
+          // refuses on the same terms a declared one does rather than promoting over it.
+          const stranded = pendingAcrossSignIn(foreignApiOrigins, mark);
+          if (stranded.length) {
+            const named = stranded.map((r) => `${r.method} ${r.path}`).join(', ');
+            /** @type {ChannelReport} */
+            const refusal = {
+              channel: 'step',
+              ok: false,
+              state: 'rejected',
+              expected: expectedUser(),
+              user: null,
+              problem:
+                `the app was found signed in as ${username}, but ${stranded.length} Nuxeo ` +
+                `request(s) it sent after signing in were still in flight: ${named}. Nothing can ` +
+                'say who they ran as — they carry no readable Authorization yet, and recognising ' +
+                'the sign-in here ends the window anything would judge them in. Let the app settle ' +
+                "before the boundary (await the work that issued them, or `page.waitForLoadState('networkidle')`).",
+            };
+            reports.push(refusal);
+          } else {
+            policy = { user: username };
+            // What the page sent before this check was judged as signing in; after it, strictly.
+            foreignApiOrigins.restart(mark);
+          }
         }
         const entry = { at, ok: reports.every((r) => r.ok), reports };
         checks.push(entry);

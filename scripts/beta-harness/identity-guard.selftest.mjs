@@ -15,6 +15,7 @@
  */
 
 import { createHelpers, PreconditionError } from './helpers.mjs';
+import { POST_FAULT_ASSERTION, judgeControlRun } from './identity-guard.control-verdict.mjs';
 import {
   checkFetchIdentity,
   checkPageIdentity,
@@ -25,6 +26,7 @@ import {
   judgeApp,
   judgeMe,
   parseStoredSession,
+  pendingAcrossSignIn,
   sameUser,
   watchNuxeoApiOrigins,
 } from './identity-guard.mjs';
@@ -433,7 +435,17 @@ function fakePage({
     goto: async (url) => {
       state.url = url;
       page.send(url, { navigation: true });
-      for (const u of state.bootRequests) page.send(u, { authorization: null });
+      // A `bootRequests` entry is a bare URL when the boot is signed out, or `{ url,
+      // authorization }` when a session is already installed and the app's interceptor puts its
+      // header on what the boot sends — which is what a *repeated* `h.login()` boots into.
+      for (const r of state.bootRequests) {
+        if (typeof r === 'string') page.send(r, { authorization: null });
+        else page.send(r.url, { authorization: r.authorization });
+      }
+      // What the booted app goes on to do while the caller waits: `h.login()` sits for 800 ms
+      // after this navigation, and a request emitted in that interval is the one nothing used
+      // to judge.
+      state.duringGoto?.();
     },
     reload: async () => page.send(state.url, { navigation: true }),
     waitForTimeout: async () => undefined,
@@ -1584,6 +1596,89 @@ await silently(async () => {
       }
     }
   }
+  // The interval *inside* a repeated `h.login()`: its verification has already passed, and the
+  // boot navigation and 800 ms wait that follow still run under the session being replaced. A
+  // request emitted there used to be discarded by `restartAtNextLoad` as though it belonged to
+  // the initial signed-out boot — the verification could not have seen it, and no later boundary
+  // ever did. These three emit during the call rather than before it.
+  for (const variant of [
+    {
+      kind: /** @type {const} */ ('negative'),
+      name: "a headerless request emitted during repeated h.login()'s boot interval is refused, not discarded with the window",
+      path: '/nuxeo/api/v1/search/lang/NXQL/execute',
+      first: false,
+      emit: (/** @type {any} */ page, /** @type {string} */ url) =>
+        page.send(url, { authorization: null }),
+      expect: /without the header/,
+    },
+    {
+      kind: /** @type {const} */ ('negative'),
+      name: "a request still in flight from repeated h.login()'s boot interval refuses the login",
+      path: '/nuxeo/api/v1/path/default-domain',
+      first: false,
+      emit: (/** @type {any} */ page, /** @type {string} */ url) => page.begin(url),
+      expect: /in flight/,
+    },
+    {
+      kind: /** @type {const} */ ('positive'),
+      name: "the same headerless request during the run's *first* h.login() is still exempt: that boot really is signed out",
+      path: '/nuxeo/api/v1/search/lang/NXQL/execute',
+      first: true,
+      emit: (/** @type {any} */ page, /** @type {string} */ url) =>
+        page.send(url, { authorization: null }),
+      expect: null,
+    },
+  ]) {
+    const saved = Object.fromEntries(
+      ['APP_URL', 'NUXEO_USER', 'NUXEO_PASS'].map((k) => [k, process.env[k]]),
+    );
+    Object.assign(process.env, { APP_URL: APP, NUXEO_USER: 'Administrator', NUXEO_PASS: 'pw' });
+    const LOGIN = `Basic ${Buffer.from('Administrator:pw').toString('base64')}`;
+    try {
+      const page = fakePage({
+        url: 'about:blank',
+        meFor: (auth) => (auth === LOGIN ? ADMIN : GUEST),
+      });
+      page.state.bootRequests = [`${APP}/nuxeo/api/v1/me`];
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      if (!variant.first) await h.login();
+      // Nothing headerless from the boot itself, so the only request this can refuse for is the
+      // one emitted in the interval — otherwise the control would pass on the wrong evidence.
+      page.state.bootRequests = [];
+      page.state.duringGoto = () => variant.emit(page, `${APP}${variant.path}`);
+      const thrown = await thrownBy(async () => {
+        await h.login();
+        page.state.duringGoto = undefined;
+        page.send(`${APP}/nuxeo/api/v1/path/default-domain`, { authorization: LOGIN });
+        await h.step('two');
+        await h.finish();
+      });
+      control(
+        variant.kind,
+        variant.name,
+        variant.expect
+          ? thrown instanceof PreconditionError &&
+              variant.expect.test(thrown.message) &&
+              thrown.message.includes(variant.path) &&
+              /after its boot navigation/.test(thrown.message)
+          : thrown === null && identity.checks.every((c) => c.ok),
+        { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+      );
+    } finally {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) Reflect.deleteProperty(process.env, k);
+        else process.env[k] = v;
+      }
+    }
+  }
   {
     // Off-app navigation cannot bypass verification when the policy requires a signed-in user.
     const saved = Object.fromEntries(
@@ -1657,6 +1752,13 @@ await silently(async () => {
       page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = basicSession('jdoe', 'UFU=');
       // Restore genuine before h.login() so pre-restoration verification sees it.
       page.state.storage['sessionStorage:agentic_ui_nuxeo_session'] = genuine;
+      // This login replaces a session rather than installing the first one, so the page it boots
+      // still holds that session and its interceptor authenticates what the boot sends. That
+      // traffic is now judged instead of discarded, so the fake has to send it as the real app
+      // does — every green evidence run already proves an authenticated boot sends no headerless
+      // `/nuxeo/api/` request, because the reload below produces the same boot and the next step
+      // boundary judges it.
+      page.state.bootRequests = [{ url: `${APP}/nuxeo/api/v1/me`, authorization: LOGIN }];
       await h.login();
       const thrown = await thrownBy(() => h.step('two'));
       control(
@@ -1671,6 +1773,153 @@ await silently(async () => {
         else process.env[k] = v;
       }
     }
+  }
+  {
+    // The same form sign-in, with a request the app started *after* it still in flight at the
+    // boundary that recognises it. Recognising the sign-in restarts the window at the probe's
+    // mark, which puts that request behind `since` where no later boundary contains it: it
+    // completes headerless, nothing judges it, and the run still ends valid. The recognition
+    // must refuse instead — a transition in everything but name.
+    const page = fakePage({ url: `${APP}/#/`, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const recorder = { steps: [], consoleErrors: [] };
+    const identity = createIdentityMonitor({
+      page,
+      baseUrl: APP,
+      username: 'Administrator',
+      fetchImpl: page.fetch,
+    });
+    const h = createHelpers(page, '/tmp', recorder, { identity });
+    await h.step('one');
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: null });
+    page.state.storage = { ...signedIn };
+    page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+    const inFlight = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`);
+    const thrown = await thrownBy(async () => {
+      await h.step('two');
+      // Only reached when the recognition did not refuse: the search lands headerless, behind
+      // `since`, and every remaining boundary reports a clean run over it.
+      inFlight.finish();
+      await h.step('three');
+      await h.finish();
+    });
+    control(
+      'negative',
+      'a request in flight across a recognised form sign-in refuses the promotion, names the request, and invalidates the run',
+      thrown instanceof PreconditionError &&
+        /in flight/.test(thrown.message) &&
+        /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+        identity.checks.some((c) => !c.ok),
+      { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+    );
+  }
+  {
+    // The bootstrap exemption, kept: a request in flight from *before* anything carried a header
+    // is the signed-out page's own. It has no identity to strand, and refusing it would make
+    // every run that signs in through the form while its boot is still settling red.
+    const page = fakePage({ url: `${APP}/#/`, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+    const recorder = { steps: [], consoleErrors: [] };
+    const identity = createIdentityMonitor({
+      page,
+      baseUrl: APP,
+      username: 'Administrator',
+      fetchImpl: page.fetch,
+    });
+    const h = createHelpers(page, '/tmp', recorder, { identity });
+    await h.step('one');
+    const booting = page.begin(`${APP}/nuxeo/api/v1/me`);
+    page.state.storage = { ...signedIn };
+    const thrown = await thrownBy(() => h.step('two'));
+    booting.finish();
+    control(
+      'positive',
+      'a request in flight from the signed-out bootstrap does not refuse the form sign-in: it carries no identity to strand',
+      thrown === null && identity.checks.every((c) => c.ok) && 'user' in identity.appPolicy,
+      { thrown: String(thrown), policy: identity.appPolicy },
+    );
+  }
+  {
+    // The same promotion reached through a declared transition. `verifyBeforeTransition` reads
+    // `required` *before* its verification, so when that verification is what recognises the
+    // form sign-in, the pending-request refusal below it is skipped as though no session were
+    // required — and the window has already been reset by then. Refusing inside the promotion
+    // closes this entry point too, without the transition having to recompute anything.
+    const savedUrl = process.env['APP_URL'];
+    // `verifyBeforeTransition` compares `page.url()` against the helpers' own base URL, which
+    // defaults to localhost; without this the transition reads the page as off-app and returns
+    // before verifying anything, and the control would pass on the wrong evidence.
+    process.env['APP_URL'] = APP;
+    try {
+      const page = fakePage({ url: `${APP}/#/`, meFor: (auth) => (auth === H ? ADMIN : GUEST) });
+      const recorder = { steps: [], consoleErrors: [] };
+      const identity = createIdentityMonitor({
+        page,
+        baseUrl: APP,
+        username: 'Administrator',
+        fetchImpl: page.fetch,
+      });
+      const h = createHelpers(page, '/tmp', recorder, { identity });
+      await h.step('one');
+      page.state.storage = { ...signedIn };
+      page.send(`${APP}/nuxeo/api/v1/me`, { authorization: H });
+      const inFlight = page.begin(`${APP}/nuxeo/api/v1/search/lang/NXQL/execute`);
+      const thrown = await thrownBy(async () => {
+        await h.signedOut('selftest: driving the sign-in form');
+        page.state.storage = {};
+        inFlight.finish();
+        await h.step('two');
+        await h.finish();
+      });
+      control(
+        'negative',
+        'a transition whose own verification recognises the form sign-in still refuses a request in flight across it',
+        thrown instanceof PreconditionError &&
+          /in flight/.test(thrown.message) &&
+          /search\/lang\/NXQL\/execute/.test(thrown.message) &&
+          identity.checks.some((c) => !c.ok),
+        { thrown: String(thrown), checks: identity.checks.map((c) => [c.at, c.ok]) },
+      );
+    } finally {
+      if (savedUrl === undefined) Reflect.deleteProperty(process.env, 'APP_URL');
+      else process.env['APP_URL'] = savedUrl;
+    }
+  }
+  {
+    // `pendingAcrossSignIn` on its own: where the bootstrap exemption ends, and what the
+    // promotion's mark excludes.
+    const req = (/** @type {any} */ over) => ({
+      method: 'GET',
+      path: '/nuxeo/api/v1/x',
+      finished: true,
+      failed: false,
+      authorization: null,
+      ...over,
+    });
+    const signedInBoot = req({ authorization: H });
+    const flying = req({ path: '/nuxeo/api/v1/search', finished: false });
+    /** @param {any[]} sent */
+    const log = (sent) => /** @type {any} */ ({ sent, since: 0 });
+
+    control(
+      'negative',
+      'a request in flight after the first header-carrying one is reported: the app was signed in when it started it',
+      pendingAcrossSignIn(log([req({}), signedInBoot, flying]), 3).length === 1,
+    );
+    control(
+      'positive',
+      "a request in flight before anything carried a header is the signed-out page's own, and is not reported",
+      pendingAcrossSignIn(log([req({}), flying, req({})]), 3).length === 0,
+    );
+    control(
+      'positive',
+      'a request that failed is not in flight, so it is not reported',
+      pendingAcrossSignIn(log([signedInBoot, req({ finished: false, failed: true })]), 2).length ===
+        0,
+    );
+    control(
+      'positive',
+      "a request started after the probe's mark is not reported: the restart leaves it in the window for a later boundary",
+      pendingAcrossSignIn(log([signedInBoot, flying]), 1).length === 0,
+    );
   }
   {
     // A form sign-in, seen at a boundary rather than declared.
@@ -1716,6 +1965,64 @@ await silently(async () => {
     );
   }
 });
+
+// ── the live controls' own verdict ──────────────────────────────────────────────────────────────
+// `identity-guard.controls.mjs` is the evidence every other claim about the guard rests on, so
+// its accept/reject rule is held to the same standard as the guard itself: shown rejecting a run
+// that proved nothing, and accepting one that did.
+{
+  const faulted = { mode: 'drop-credentials', exit: 2, valid: false };
+  const rejectedAsGuest = {
+    identity: {
+      valid: false,
+      checks: [{ at: 'at the start', reports: [{ ok: false, problem: 'ran as Anonymous' }] }],
+    },
+    verdict: 'precondition-not-met',
+  };
+  /** @param {any[]} checks */
+  const withSteps = (checks) => ({ ...rejectedAsGuest, steps: [{ checks }] });
+
+  control(
+    'negative',
+    'a faulted control that never reached its fault is rejected: exit, verdict and the Anonymous rejection all match, and it still proves nothing',
+    judgeControlRun(faulted, 2, { ...rejectedAsGuest, steps: [] }).some((p) =>
+      p.includes(POST_FAULT_ASSERTION),
+    ),
+    judgeControlRun(faulted, 2, { ...rejectedAsGuest, steps: [] }),
+  );
+  control(
+    'negative',
+    'a faulted control whose own checks failed is rejected: it would have been red without the guard, so it says nothing about it',
+    judgeControlRun(faulted, 2, withSteps([{ name: POST_FAULT_ASSERTION, passed: false }])).some(
+      (p) => p.includes("the steps' own checks failed"),
+    ),
+  );
+  control(
+    'negative',
+    'the guard checks alone cannot certify a control: a manifest carrying only them is rejected',
+    judgeControlRun(
+      faulted,
+      2,
+      withSteps([{ name: 'precondition: identity guard at the start', passed: true }]),
+    ).some((p) => p.includes(POST_FAULT_ASSERTION)),
+  );
+  control(
+    'positive',
+    'a faulted control that reached its fault, asserted after it, and was rejected as Anonymous is accepted',
+    judgeControlRun(faulted, 2, withSteps([{ name: POST_FAULT_ASSERTION, passed: true }]))
+      .length === 0,
+    judgeControlRun(faulted, 2, withSteps([{ name: POST_FAULT_ASSERTION, passed: true }])),
+  );
+  control(
+    'positive',
+    'the unfaulted control is accepted when it ran to the end',
+    judgeControlRun({ mode: 'none', exit: 0, valid: true }, 0, {
+      identity: { valid: true, checks: [] },
+      verdict: 'complete',
+      steps: [{ checks: [{ name: POST_FAULT_ASSERTION, passed: true }] }],
+    }).length === 0,
+  );
+}
 
 const negatives = controls.filter((c) => c.kind === 'negative');
 const failed = controls.filter((c) => !c.ok);
