@@ -15,6 +15,7 @@
 
 import { resolve } from 'node:path';
 import { requireNuxeoCredentials } from './nuxeo-credentials.mjs';
+import { sameUser, strayRequests } from './identity-guard.mjs';
 
 const DEFAULT_BASE_URL = 'http://localhost:4200';
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -673,6 +674,18 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         groups: [],
       };
 
+      // Gap 2: For cross-user re-logins, capture the outgoing session BEFORE clearing cookies/storage.
+      // expectApp will restart the window, putting the clearCookies/storage interval behind `since`.
+      let outgoingSnapshot = null;
+      if (replacing && identity) {
+        const beforeUser = identity.expectedApp;
+        const crossUser = !sameUser(user, beforeUser);
+        if (crossUser) {
+          // Capture the complete outgoing session state before clearing cookies/storage
+          outgoingSnapshot = await identity.captureOutgoingSession();
+        }
+      }
+
       await page.context().clearCookies();
       await page.evaluate(
         ({ key, value, signedOutKey }) => {
@@ -682,6 +695,80 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
         },
         { key: SESSION_KEY, value: JSON.stringify(session), signedOutKey: SIGNED_OUT_KEY },
       );
+
+      // Now check if the clearCookies/storage interval produced unjudged traffic (after clearing, before restart)
+      if (outgoingSnapshot && identity) {
+        const beforeUser = identity.expectedApp;
+        const at = `before h.login() completes (cross-user re-login, after clearCookies interval)`;
+
+        // Validate the captured outgoing session. If unavailable, invalid, or wrong user, refuse.
+        const { stored, expectedCookie } = outgoingSnapshot;
+        if (!stored) {
+          const problem =
+            `h.login() cannot complete: the outgoing session disappeared during the clearCookies interval, ` +
+            `and this is a cross-user re-login that would restart the window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+        if ('problem' in stored) {
+          const problem =
+            `h.login() cannot complete: the outgoing session could not be verified (${stored.problem}), ` +
+            `and this is a cross-user re-login that would restart the window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+        if (!sameUser(stored.username, beforeUser)) {
+          const problem =
+            `h.login() cannot complete: the outgoing session is for ${stored.username ?? '(no user)'}, ` +
+            `not for ${beforeUser} as expected, and this is a cross-user re-login that would restart the ` +
+            `window over any traffic from it, leaving it unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+
+        // Drain pending header collections before checking traffic (P2). A correctly authenticated
+        // request can emit requestfinished during this interval but still have finished: false while
+        // allHeaders() resolves. Checking before draining can reject a clean re-login as in-flight.
+        const traffic = identity._traffic;
+        if (traffic && 'drainPendingHeaders' in traffic) {
+          const { unreadRequests } = await traffic.drainPendingHeaders();
+          if (unreadRequests.length > 0) {
+            const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+            const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
+            const problem =
+              `h.login() cannot complete: ${unreadRequests.length} request(s) completed but their headers ` +
+              `remain unread at the identity check deadline (${listed}${suffix}). Cannot determine who they ran as.`;
+            identity.reject(at, problem);
+            throw new PreconditionError(`identity guard ${at}: ${problem}`);
+          }
+        }
+
+        // Check for pending requests
+        const pending = identity.pendingRequests();
+        if (pending.length) {
+          const listed = pending.map((r) => `${r.method} ${r.path}`).join(', ');
+          const s = pending.length === 1 ? '' : 's';
+          const problem =
+            `h.login() cannot complete: ${pending.length} request${s} still in flight (${listed}), ` +
+            `and this is a cross-user re-login that would restart the window over them, leaving them unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+
+        // Check for stray requests against the captured outgoing session (traffic already drained above)
+        const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie });
+        if (stray.length) {
+          const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+          const suffix = stray.length > 3 ? `, and ${stray.length - 3} more` : '';
+          const problem =
+            `h.login() cannot complete: ${stray.length} request(s) were sent during the clearCookies interval ` +
+            `without the ${beforeUser} session's credential (${listed}${suffix}), and this is a cross-user re-login ` +
+            `that would restart the window over them, leaving them unjudged`;
+          identity.reject(at, problem);
+          throw new PreconditionError(`identity guard ${at}: ${problem}`);
+        }
+      }
+
       identity?.expectApp(user, 'h.login()', `step ${ensureStep().index}`);
       // Only the run's first login booted a signed-out page, so only it has requests to excuse:
       // its session's start at the reload. A repeated login has no signed-out boot, so it does
@@ -693,8 +780,8 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
       // That boundary is the right judge here because `h.login()` always signs in as the run's
       // own credentials: the header it installs is the one the replaced session carried, so
       // traffic from the interval is held to the same standard either way. Where it is *not* the
-      // same user — a login after `h.signedInAs(...)` — `expectApp` above has already restarted
-      // the window, and the interval after it is the residue NXSAT-703 covers.
+      // same user — a login after `h.signedInAs(...)` — the verification above (Gap 2, NXSAT-707)
+      // checks the interval before `expectApp` restarts the window.
       if (!replacing) identity?.sessionInstalled();
 
       await page.reload({ waitUntil: 'networkidle' });
