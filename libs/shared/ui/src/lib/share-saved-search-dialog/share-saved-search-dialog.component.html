@@ -76,6 +76,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.remove-permission' | translate
                     "
+                    [disabled]="!row.aceId"
                     (click)="removeRow(row.id)"
                   >
                     <mat-icon>delete_outline</mat-icon>
@@ -223,7 +224,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.remove-external-permission' | translate
                     "
-                    [disabled]="saving()"
+                    [disabled]="saving() || !row.aceId"
                     (click)="removeExternalPermission(row)"
                   >
                     <mat-icon>delete_outline</mat-icon>

@@ -18,6 +18,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   ShareSavedSearchAddPermissionDialogComponent,
+  type ShareSavedSearchAddPermissionDialogData,
   type ShareSavedSearchAddPermissionResult,
 } from '../share-saved-search-add-permission-dialog/share-saved-search-add-permission-dialog.component';
 import { ShareSavedSearchExternalDialogComponent } from '../share-saved-search-external-dialog/share-saved-search-external-dialog.component';
@@ -26,6 +27,8 @@ import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 export interface PermissionEntry {
   id: string;
+  /** Nuxeo's id for the ACE the row shows; absent for a row not read from the ACL. */
+  aceId?: string;
   userGroup: string;
   right: string;
   timeFrame: string;
@@ -41,6 +44,7 @@ interface PermissionSummary {
 
 interface ExternalPermissionEntry extends PermissionSummary {
   id: string;
+  aceId?: string;
   email: string;
   begin?: string | null;
   end?: string | null;
@@ -91,6 +95,8 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   readonly inheritedPermissions = signal<PermissionSummary[]>([]);
   readonly externalPermissions = signal<ExternalPermissionEntry[]>([]);
   readonly isInheritanceBlocked = signal(false);
+  /** The saved search's `userVisiblePermissions`, the rights the add and edit dialogs offer. */
+  private readonly visiblePermissions = signal<readonly string[] | null>(null);
   readonly saving = signal(false);
   readonly loading = signal(false);
 
@@ -120,6 +126,8 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   }
 
   private parsePermissionsFromDocument(doc: NuxeoDocument): void {
+    const visible = doc.contextParameters?.['userVisiblePermissions'];
+    this.visiblePermissions.set(Array.isArray(visible) ? (visible as string[]) : null);
     const allAcls = ((doc.contextParameters?.acls as unknown) ?? []) as Array<{
       name: string;
       aces: AceLike[];
@@ -133,6 +141,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       .filter((ace) => !ace.externalUser)
       .map((ace, index: number) => ({
         id: String(index),
+        aceId: ace.id,
         userGroup: ace.username || ace.email || 'Unknown',
         right: ace.permission || 'Read',
         timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
@@ -143,6 +152,7 @@ export class ShareSavedSearchDialogComponent implements OnInit {
       .filter((ace) => !!ace.externalUser)
       .map((ace, index) => ({
         id: ace.id || `external-${index}`,
+        aceId: ace.id,
         email: ace.email || ace.username || '',
         userGroup: ace.email || ace.username || 'Unknown',
         right: ace.permission || 'Read',
@@ -244,15 +254,12 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   }
 
   removeExternalPermission(row: ExternalPermissionEntry): void {
-    if (!this.data.id || this.saving()) return;
+    // By id: removing by user would also take every other entry the same address holds.
+    if (!this.data.id || this.saving() || !row.aceId) return;
 
     this.saving.set(true);
     this.detailService
-      .removePermission(this.data.id, {
-        user: row.email || row.userGroup,
-        permission: this.normalizePermissionForApi({ right: row.right } as PermissionEntry).right,
-        acl: 'local',
-      })
+      .removePermissionById(this.data.id, row.aceId)
       .pipe(
         catchError((error) => {
           console.error('Error removing external permission:', error);
@@ -355,11 +362,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     this.dialog
       .open<
         ShareSavedSearchAddPermissionDialogComponent,
-        { title: string },
+        ShareSavedSearchAddPermissionDialogData,
         ShareSavedSearchAddPermissionResult[] | null
       >(ShareSavedSearchAddPermissionDialogComponent, {
         width: '720px',
-        data: { title: this.translate.instant('confirm.add-a-permission') },
+        data: {
+          title: this.translate.instant('confirm.add-a-permission'),
+          permissions: this.visiblePermissions(),
+        },
       })
       .afterClosed()
       .subscribe((result) => {
@@ -402,23 +412,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
   removeRow(id: string): void {
     const row = this.permissions().find((r) => r.id === id);
-    if (!row || !this.data.id) return;
+    // By id: removing by user would also take every other entry that user or group holds.
+    if (!row || !this.data.id || !row.aceId) return;
 
     // Remove from local state first
     this.permissions.update((rows) => rows.filter((r) => r.id !== id));
 
-    // Call API to delete the permission
-    const username = row.userGroup;
-    const permission = this.normalizePermissionForApi({
-      right: row.right,
-    } as PermissionEntry).right;
-
     this.detailService
-      .removePermission(this.data.id, {
-        user: username,
-        permission: permission,
-        acl: 'local',
-      })
+      .removePermissionById(this.data.id, row.aceId)
       .pipe(
         catchError((error) => {
           console.error('Error removing permission:', error);
@@ -437,13 +438,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     this.dialog
       .open<
         ShareSavedSearchAddPermissionDialogComponent,
-        { title: string; initialData: PermissionEntry },
+        ShareSavedSearchAddPermissionDialogData,
         ShareSavedSearchAddPermissionResult[] | null
       >(ShareSavedSearchAddPermissionDialogComponent, {
         width: '720px',
         data: {
           title: this.translate.instant('confirm.update'),
           initialData: row,
+          permissions: this.visiblePermissions(),
         },
       })
       .afterClosed()
