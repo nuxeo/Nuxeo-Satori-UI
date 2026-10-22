@@ -1815,24 +1815,24 @@ export default async function run(page, h, outDir) {
   );
   if (narrowVisible) {
     const panelBox = await narrowPanel.boundingBox();
-    const bodyScrollWidth = await page.evaluate(() => document.body.scrollWidth);
-    const bodyClientWidth = await page.evaluate(() => document.body.clientWidth);
-    const horizontalScroll = bodyScrollWidth > bodyClientWidth;
+    const docScrollWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+    const innerWidth = await page.evaluate(() => window.innerWidth);
+    const horizontalScroll = docScrollWidth > innerWidth;
+    const panelScrollWidth = await narrowPanel.evaluate((el) => el.scrollWidth);
+    const panelClientWidth = await narrowPanel.evaluate((el) => el.clientWidth);
+    const panelOverflows = panelScrollWidth > panelClientWidth;
     h.check(
-      `${LB} the permissions panel at 320 px does not cause horizontal page scroll`,
-      !horizontalScroll,
-      `body scrollWidth=${bodyScrollWidth}, clientWidth=${bodyClientWidth}, panel width=${panelBox?.width ?? 'not measured'}`,
+      `${LB} the permissions panel at 320 px fits without causing page or panel horizontal scroll`,
+      !horizontalScroll && !panelOverflows && (panelBox?.width ?? 0) <= 320,
+      `page scrollWidth=${docScrollWidth}, innerWidth=${innerWidth}, panel scrollWidth=${panelScrollWidth}, clientWidth=${panelClientWidth}, box width=${panelBox?.width ?? 'not measured'}`,
     );
-    const tabsVisible = await page
-      .locator('hxp-permissions-management-panel [role="tab"]')
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const rowsVisible = await page.locator(A.permissions.rows).first().isVisible().catch(() => false);
+    // Check that permission entries (rows) are visible - data rows start after header row
+    const dataRows = await page.locator(`${A.permissions.rows}:not(:first-child)`).first().isVisible().catch(() => false);
+    const saveButton = await page.locator(`${A.permissions.save}`).filter({ hasText: /save/i }).first().isVisible().catch(() => false);
     h.check(
-      `${LB} the permissions panel tabs and rows remain accessible at 320 px`,
-      tabsVisible && rowsVisible,
-      `tabs visible=${tabsVisible}, rows visible=${rowsVisible}`,
+      `${LB} permission entries and controls remain visible at 320 px`,
+      dataRows && saveButton,
+      `data rows visible=${dataRows}, save button visible=${saveButton}`,
     );
     await h.screenshot('permissions-panel-320px');
   }
@@ -2111,7 +2111,7 @@ export default async function run(page, h, outDir) {
       const resp = await fetch('/nuxeo/api/v1/automation/User.GetCollections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ params: {}, context: {} }),
+        body: JSON.stringify({ params: { searchTerm: '' }, context: {} }),
       });
       if (!resp.ok) return null;
       const json = await resp.json();
@@ -2132,7 +2132,7 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(3000);
     const collectionError = (
       await page
-        .locator('lib-collection-detail .collection-unavailable, lib-collection-detail nxs-document-list .nxs-list-error')
+        .locator('lib-collection-detail nxs-document-list nxs-error-state')
         .first()
         .allInnerTexts()
         .catch(() => [])
@@ -2150,7 +2150,7 @@ export default async function run(page, h, outDir) {
     h.check(
       `${LB} the error state offers a retry`,
       (await page
-        .locator('lib-collection-detail button')
+        .locator('lib-collection-detail nxs-document-list nxs-error-state button')
         .filter({ hasText: /try again|retry/i })
         .count()) > 0,
     );
@@ -2162,7 +2162,7 @@ export default async function run(page, h, outDir) {
     await h.screenshot('failure-collection-500');
     await page.unroute('**/search/pp/default_content_collection/execute**');
     await page
-      .locator('lib-collection-detail button')
+      .locator('lib-collection-detail nxs-document-list nxs-error-state button')
       .filter({ hasText: /try again|retry/i })
       .first()
       .click()

@@ -859,30 +859,45 @@ async function verify(assets) {
   manifest.docs.empty = { path: emptyPath, uid: (await byPath(emptyPath)).data?.uid };
 
   // Collection verification.
-  const collResp = await call('POST', '/search/pp/default_content_collection/execute', {
-    json: {
-      namedParameters: { collection: FIXTURE.collection.title },
-      queryParams: ['CURRENT_USERID'],
-    },
+  // Find the collection by title through User.GetCollections
+  const userColls = await call('POST', '/automation/User.GetCollections', {
+    json: { params: { searchTerm: '' }, context: {} },
     ok: null,
   });
-  const collEntries = collResp.data?.entries ?? [];
+  const coll = (userColls.data?.entries ?? []).find((e) => e.title === FIXTURE.collection.title);
   expect(
-    'collection exists and has 1 member',
-    collResp.status === 200 && collEntries.length === 1,
-    `HTTP ${collResp.status}, ${collEntries.length} members`,
+    'collection was created',
+    userColls.status === 200 && Boolean(coll),
+    `HTTP ${userColls.status}, found: ${Boolean(coll)}`,
   );
-  const collDoc = (collResp.data?.entries ?? [])[0];
-  expect(
-    'collection member is paged-001',
-    collDoc?.title === 'Paged item 001',
-    `member title: ${collDoc?.title}`,
-  );
-  manifest.docs.collection = {
-    title: FIXTURE.collection.title,
-    memberCount: collEntries.length,
-    firstMember: collDoc?.title,
-  };
+  if (coll?.uid) {
+    // Get members using GET with queryParams as the app does
+    const membersResp = await call(
+      'GET',
+      `/search/pp/default_content_collection/execute?queryParams=${encodeURIComponent(coll.uid)}`,
+      { ok: null },
+    );
+    const collEntries = membersResp.data?.entries ?? [];
+    expect(
+      'collection has 1 member',
+      membersResp.status === 200 && collEntries.length === 1,
+      `HTTP ${membersResp.status}, ${collEntries.length} members`,
+    );
+    const collDoc = collEntries[0];
+    expect(
+      'collection member is paged-001',
+      collDoc?.title === 'Paged item 001',
+      `member title: ${collDoc?.title}`,
+    );
+    manifest.docs.collection = {
+      uid: coll.uid,
+      title: FIXTURE.collection.title,
+      memberCount: collEntries.length,
+      firstMember: collDoc?.title,
+    };
+  } else {
+    manifest.docs.collection = { found: false };
+  }
 
   manifest.assets = assets;
   manifest.verification = { failures };
