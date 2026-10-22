@@ -747,15 +747,13 @@ grep -rnE '(^|[^-[:alnum:]_])color[[:space:]]*:[[:space:]]*var\(--mat-sys-outlin
   --include='*.scss' --include='*.html' libs apps
 ```
 
-`checkOutlineTokenIsNotTextColour` in `scripts/review-guardrails.mjs` now fails a newly added
-`.scss` declaration that does this, with `border-color`, `background-color`, `outline-color` and
-`text-decoration-color` excluded because those are the token's correct uses, and comments and
-strings masked so the token inside `content: "…"` is not mistaken for a declaration. The opt-out
-must be a **comment** on one of the declaration's lines — a selector called `.non-text-hint` does
-not exempt anything. It reads **stylesheets only**: a `style` attribute and a component's inline
-`styles` block are out of scope, because matching CSS inside markup with a regex did not
-converge over four review rounds. It is a token-usage rule, not an accessibility verdict —
-`docs/accessibility.md` keeps the WCAG number with axe.
+There is **no static gate for this yet.** One was written under NXSAT-647 and withdrawn: over
+seven review rounds it produced ten valid findings, all in its text matching, ending at SCSS
+property nesting — where `border: { color: … }` _is_ `border-color`, a correct non-text use it
+called a violation. A rule for this needs a real Sass parser rather than a regex, tracked as
+**NXSAT-709**; `docs/accessibility.md` records the ten cases so a second attempt does not
+restart from zero.
+Until then this pattern is the check: search for the token, not for the symptom.
 
 ---
 
@@ -776,4 +774,4 @@ Fix proactively to avoid a review cycle:
 - "SVG has no accessible name" → if the link around it is already named, mark the graphic decorative with `aria-hidden="true"` on the wrapper; an `aria-label` on the host element does not reach the `<svg>`
 - "Focus indicator may not be visible" → set the vendor's focus-outline custom property to its own foreground token; left unset it falls back to a low-emphasis divider colour and misses 3:1
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
-- "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token at 3:1; use `var(--mat-sys-on-surface-variant)` for text, or declare the non-text use with `non-text` in a comment on one of the declaration's lines
+- "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio

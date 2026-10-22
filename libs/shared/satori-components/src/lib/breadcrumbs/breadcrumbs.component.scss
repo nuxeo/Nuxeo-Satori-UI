@@ -60,9 +60,7 @@
   width: 18px;
   height: 18px;
   font-size: 18px;
-  color: var(
-    --mat-sys-outline
-  ); /* non-text: an 18px chevron separator, so WCAG 1.4.11's 3:1 applies */
+  color: var(--mat-sys-outline);
 }
 
 :host-context([dir='rtl']) .nxs-breadcrumbs__separator {

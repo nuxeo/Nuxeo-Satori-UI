@@ -697,9 +697,7 @@
   font-size: 32px;
   width: 32px;
   height: 32px;
-  color: var(
-    --mat-sys-outline
-  ); /* non-text: a 32px decorative glyph, so WCAG 1.4.11's 3:1 applies */
+  color: var(--mat-sys-outline);
 }
 
 .tasks-panel-wrap {

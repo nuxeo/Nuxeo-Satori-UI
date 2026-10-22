@@ -152,37 +152,27 @@ compiles, because no screen renders those components in every colour — screens
 the axe layer has no node to judge. It computes from the palette and the compiled theme values; a
 host's own `--nxs-*` colours are outside it, and the published WCAG number still comes from axe.
 
-### `checkOutlineTokenIsNotTextColour` is a code guardrail, not a fifth layer
+### A static rule for this defect class was attempted and withdrawn
 
-`scripts/review-guardrails.mjs` fails a newly added `.scss` declaration that sets a text `color`
-from `--mat-sys-outline`. It is in the same category as `checkThemeTokens`, which forbids a
-hardcoded colour literal: a **token-usage** rule, enforced on the diff, and not an accessibility
-verdict. It computes no ratio and claims no conformance; the WCAG 2.1 AA number still comes from
-axe and nowhere else. `border-color`, `background-color`, `outline-color` and
-`text-decoration-color` are explicitly not matched — those are what the token is for — and a
-genuine non-text use opts out by saying `non-text` in a **comment** on one of the declaration's
-lines, which the three icon uses now do. Comments and string literals are masked before matching,
-so `content: "color: var(--mat-sys-outline)"` is not a declaration, and the opt-out is read only
-from comment text, never from a selector name.
+The `--mat-sys-outline`-as-text-colour defect fixed under NXSAT-647 resists being found by the
+runtime layer, because axe only judges what is rendered while it is scanning: of four measured
+instances, the axe-driven sweep found the two that were on screen and left `.task-due-prefix`
+(which needs a task with a due date) and `.expired-sep` (in a drawer panel phase-6 never opens).
 
-**It reads stylesheets only — a template's `style` attribute and a component's inline `styles`
-block are not covered.** That is a deliberate retreat, not an oversight: four review rounds on
-PR #448 each found another context in which matching CSS embedded in markup with a regex gives
-the wrong answer — a declaration split across lines, a `var()` fallback moving the closing line,
-a `style` attribute whose last declaration may omit its semicolon, an HTML comment holding
-retired markup, and element text that merely contains the word `non-text`. Every finding was
-correct, and four in a row said the approach rather than the patch was wrong. A stylesheet is
-where a declaration's boundaries are unambiguous, and it is where all four measured instances
-were. `checkThemeTokens` already pushes colour out of templates.
+A diff-scoped guardrail was therefore written to forbid the token as a text `color`, and
+**withdrawn before merge**. Over seven review rounds it produced ten valid findings, every one in
+its text matching rather than in the accessibility fix: a declaration split across lines, a
+`var()` fallback moving the closing line, a `style` attribute allowed to omit its last semicolon,
+an HTML comment holding retired markup, element text containing the opt-out word, a token inside
+`content: "…"`, an opt-out read from a selector name, `Array.from` counting code points where the
+offsets were code units, a Sass `$color:` assignment, a Sass map entry, and SCSS property nesting
+— where `border: { color: … }` **is** `border-color`, a correct non-text use the rule called a
+violation.
 
-It is justified on the rule stated just above, and the justification is **not** that axe cannot
-reach the state — axe reached two of these. It is that axe only judges the states that happen to
-render while a scan is running, and this one defect class produced four instances of which that
-caught two: the tasks hint (4.46:1) and `.rv-sep` (4.24:1) were found and fixed, while
-`.task-due-prefix` (4.25:1) and `.expired-sep` survived the same sweep — one because it needs a
-task with a due date on screen, the other because the expired-queue panel is a journey screen
-that phase-6 never opens. A fix driven by the symptom finds the instances that were rendered;
-only a rule about the token finds the ones that were not.
+Seven consecutive rounds in one class is a statement about the approach: the rule needs a real
+Sass parser (`postcss-scss`), not a regex, and that is tracked as **NXSAT-709**. Recorded here so the
+next attempt starts from the ten known cases and their controls rather than from scratch. The
+WCAG verdict is unaffected either way — it belongs to axe, and `phase-6-a11y` is `PASS 35/35`.
 
 ## Baselines and suppression
 
