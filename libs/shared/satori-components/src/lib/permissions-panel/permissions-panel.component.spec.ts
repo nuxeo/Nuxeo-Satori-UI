@@ -301,6 +301,27 @@ describe('NxsPermissionsPanelComponent', () => {
       expect(offeredNames(overlay)).toEqual(['Write', 'Read', 'ReadWrite', 'Everything']);
     });
 
+    it('starts a new document with its own default, not the expanded list', async () => {
+      await mount(PARITY);
+      panel()['allPermissions'].set(true);
+      documents.getDocumentPermissions.mockReturnValueOnce(
+        of(serverDoc([], { uid: 'doc-2', title: 'Other document' })),
+      );
+      fixture.componentInstance.uid.set('doc-2');
+      await render();
+      expect(panel()['allPermissions']()).toBe(false);
+    });
+
+    it('keeps an entry’s own grant selectable when All permissions is unticked under its editor', async () => {
+      await mount(serverDoc([{ username: 'jdoe', permission: 'Write' }]));
+      panel()['allPermissions'].set(true);
+      panel()['openEdit'](panel()['localItems']()[0]);
+      panel()['editorPermission'].set('Unlock');
+      panel()['allPermissions'].set(false);
+      await render();
+      expect(panel()['editorExtraPermissions']()).toEqual(['Write', 'Unlock']);
+    });
+
     it('shows a permission the server does not list, so its entry can still be kept', async () => {
       await mount(serverDoc([{ username: 'jdoe', permission: 'CustomFromMarketplace' }]));
       expect(text()).toContain('CustomFromMarketplace');

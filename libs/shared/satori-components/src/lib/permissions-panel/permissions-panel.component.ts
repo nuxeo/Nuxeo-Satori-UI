@@ -310,8 +310,12 @@ export class NxsPermissionsPanelComponent {
    */
   protected readonly editorExtraPermissions = computed<readonly string[]>(() => {
     const offered = this.offered();
-    const held = this.editor()?.item?.extraPermissions ?? [];
-    return [...new Set([...held, this.editorPermission()])].filter((p) => !!p && !offered.has(p));
+    // The entry's own grant comes from its row, so it stays offered after All permissions is unticked.
+    const item = this.editor()?.item;
+    const held = [item?.row?.permission, ...(item?.extraPermissions ?? [])];
+    return [...new Set([...held, this.editorPermission()])].filter(
+      (p): p is string => !!p && !offered.has(p),
+    );
   });
 
   protected readonly editorInvalidRange = computed(() => {
@@ -368,6 +372,7 @@ export class NxsPermissionsPanelComponent {
       untracked(() => {
         this.generation += 1;
         this.snapshot.set(null);
+        this.allPermissions.set(false);
         this.clearStaged();
         this.outcome.set(null);
         this.editor.set(null);
