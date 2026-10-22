@@ -78,7 +78,7 @@ const collection = {
 } as unknown as NuxeoDocument;
 
 describe('CollectionDetailComponent — Permissions tab offers the type’s list', () => {
-  it('passes offer="type" to a registered replacement and to the built-in panel', async () => {
+  it('passes offer="type" through the extension outlet and to the built-in panel', async () => {
     await TestBed.configureTestingModule({
       imports: [CollectionDetailComponent, testTranslateModule()],
       providers: [

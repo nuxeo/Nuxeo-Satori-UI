@@ -1598,7 +1598,9 @@ holds** — 33 on 2025.26.16 for a holder of `Everything`, 9 for a manager holdi
 `WriteSecurity`. The panel offers the first list, then the standard grants (`Write`, `ReadVersion`,
 `WriteVersion`, `AddChildren`, `RemoveChildren`, `Remove`, `Version`, `WriteSecurity`, `Unlock`,
 `SetRetention`, `UnsetRetention`), then the rest of the second. It filters the standard grants by the
-second list only when that list includes `Everything`, since only then is it the full set.
+second list only when that list includes `Everything`, since only then is it the full set. With
+`offer: 'type'`, which a collection's Permissions tab passes, it offers the first list alone, as Web UI
+does.
 
 **Behaviour measured on 2025.26.16, which the panel is built around:**
 

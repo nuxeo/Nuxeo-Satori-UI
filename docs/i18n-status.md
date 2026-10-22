@@ -122,8 +122,8 @@ back to the type's own name, camel case split, for a custom type — never a raw
 English text this change alters, and invisible in HTML text, which collapses whitespace anyway.
 
 **Deliberately left hard-coded**, each for a stated reason: CSV export header rows (a file format
-downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialogs,
-which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
+downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialog's API
+mapping and its external-user dialog, which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
 publish dialog's form value; adf-hx port errors, which are diagnostics returned to the upstream
 library; product names (`Nuxeo Drive`, the Layer 0 branding defaults); and `apps/nuxeo-satori-template`
 (slice 11).
