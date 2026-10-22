@@ -19,9 +19,9 @@
  *   a local, uncommitted revert of 0b7b44b15's three POC files. Only those two steps differ.
  * - `adf-hx-as-target` — negative control: `adf-hx` with no known gaps, so every gap check is
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
- * - `nxs` — the replacements. The adapter is provisional: its selectors follow the table-primitive
- *   decision (`docs/satori-components/decision-table-primitive.md`) and must be confirmed against
- *   the built components. Change the adapter only; never the steps or the expected values.
+ * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
+ *   renders it, not from the table-primitive decision it was first drafted from. Change the
+ *   adapter only; never the steps or the expected values.
  *
  * ## Reading the checks
  *
@@ -432,8 +432,8 @@ const ADF_HX_REMOUNT = {
 };
 
 /**
- * Provisional. Selectors follow the table-primitive decision (mat-table + MatSort) and ARIA roles;
- * confirm each against the built nxs- components and change only this object.
+ * Each group names the template its selectors were read from. An expectation no selector can
+ * reach is left to fail rather than worked around here. Change only this object.
  */
 const NXS = {
   id: 'nxs',
@@ -446,10 +446,15 @@ const NXS = {
     await h.goTo(`/#/browse${ROOT}`);
     return (await page.locator('nxs-document-list').count()) > 0;
   },
+  // document-list/document-list.component.html (mat-table: CdkRow and CdkHeaderCell set the roles,
+  // MatSortHeader's container is the role="button"), pager/pager.component.html,
+  // empty-state and error-state; scoped to the list so the tree's error state is never read.
   list: {
     rows: 'nxs-document-list tbody tr[role="row"]',
-    title: 'td:nth-of-type(2) a, td:nth-of-type(2)',
-    headers: 'nxs-document-list th[role="columnheader"]',
+    // The title cell also holds the type icon, whose ligature is text; the open button is the title.
+    title: '.nxs-document-list__open',
+    headers:
+      'nxs-document-list th[role="columnheader"]:not(.nxs-document-list__select):not(.nxs-document-list__actions)',
     headerControl: (label) =>
       `nxs-document-list th[role="columnheader"]:has-text("${label}") [role="button"]`,
     checkbox: 'mat-checkbox',
@@ -457,20 +462,29 @@ const NXS = {
     next: 'nxs-document-list [aria-label="Next page"], nxs-pager [aria-label="Next page"]',
     previous:
       'nxs-document-list [aria-label="Previous page"], nxs-pager [aria-label="Previous page"]',
-    range: 'nxs-pager [role="status"]',
-    empty: 'nxs-empty-state',
-    error: 'nxs-error-state',
-    retry: 'nxs-error-state button',
+    range: 'nxs-pager .nxs-pager__range',
+    empty: 'nxs-document-list nxs-empty-state',
+    error: 'nxs-document-list nxs-error-state',
+    retry: 'nxs-document-list nxs-error-state button',
     failPattern: '**/@children**',
   },
+  // document-tree/document-tree.component.html, mounted by nav-drawer.component.html. Only the
+  // chevron toggles; the rest of a row opens the folder. A failed level is reported in a treeitem
+  // row of its own, which is not a document, so it is not a node.
   tree: {
-    node: 'nxs-document-tree [role="treeitem"]',
-    label: '[data-nxs-tree-label]',
-    toggle: (label) => `nxs-document-tree button[aria-label*="${label}"]`,
+    node: 'nxs-document-tree [role="treeitem"]:not(.nxs-document-tree__item--error)',
+    label: '.nxs-document-tree__label',
+    toggle: (label) =>
+      `nxs-document-tree .nxs-document-tree__row:has(> .nxs-document-tree__label:text-is("${label}")) .nxs-document-tree__arrow`,
     region: 'nxs-document-tree',
-    failPattern: '**/@children**',
+    // An ordinary folder's level comes from the tree_children page provider; BrowseService turns
+    // to @children only when that answers no entries, and a 500 there reaches the tree as an error.
+    failPattern: '**/search/pp/tree_children/execute**',
   },
-  breadcrumb: { items: 'nxs-breadcrumb nav li', nav: 'nxs-breadcrumb nav' },
+  // breadcrumbs/breadcrumbs.component.ts: the selector is plural.
+  breadcrumb: { items: 'nxs-breadcrumbs nav li', nav: 'nxs-breadcrumbs nav' },
+  // permissions-panel/permissions-panel.component.html: one table row per entry, no tabs, and its
+  // save outcome is reported inside the panel rather than in a snack bar.
   permissions: {
     root: 'nxs-permissions-panel',
     async open(page, h, path) {
@@ -487,16 +501,22 @@ const NXS = {
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
     save: 'nxs-permissions-panel button',
-    feedback: 'mat-snack-bar-container, nxs-toast',
+    // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
+    // clicks the first status or alert button: the status text after a save, and after a refusal
+    // the alert's Reload, which re-reads the panel once every check on the save has run.
+    feedback:
+      'nxs-permissions-panel .nxs-permissions-panel__status, nxs-permissions-panel .nxs-permissions-panel__alert',
   },
+  // libs/shared/ui/src/lib/document-viewer/document-viewer.component.ts: there is no nxs- viewer;
+  // the document page renders lib-document-viewer, reached from the row's open button.
   viewer: {
-    root: 'nxs-viewer',
+    root: 'lib-document-viewer',
     async open(page, A, title) {
       await page
         .locator(A.list.rows)
         .filter({ hasText: title })
         .first()
-        .locator('a')
+        .locator('.nxs-document-list__open')
         .first()
         .click();
       await page.waitForTimeout(5000);
@@ -506,6 +526,7 @@ const NXS = {
       await page.waitForTimeout(1500);
     },
   },
+  // properties-panel/properties-panel.component.html, on the document page's details panel.
   properties: {
     provenance: 'nxs-properties-panel',
     root: 'nxs-properties-panel',
@@ -514,34 +535,68 @@ const NXS = {
       await page.waitForTimeout(2500);
     },
   },
+  // manage-versions/manage-versions.component.html: the versions are a mat-menu, rendered in the
+  // overlay only once the trigger is pressed. A document without versions has no trigger.
   versions: {
     provenance: 'nxs-manage-versions',
     root: 'nxs-manage-versions',
     async open(page, h, uid) {
+      // The previous read leaves its menu open for the screenshot; a stale menu must not be read.
+      if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
       await h.goToDoc(uid);
       await page.waitForTimeout(2500);
+      const trigger = page.locator('nxs-manage-versions .nxs-manage-versions__trigger');
+      if (await trigger.count()) {
+        await trigger.first().click().catch(leaveItToTheNextCheck);
+        await page.waitForTimeout(1500);
+      }
     },
     async read(page) {
       const root = page.locator('nxs-manage-versions').first();
-      const text = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
+      const hasMenu =
+        (await root.locator('.nxs-manage-versions__trigger').count()) > 0 &&
+        (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) > 0;
+      const menu = page.locator('.cdk-overlay-container .nxs-manage-versions__menu').first();
+      const scope = hasMenu ? menu : root;
+      const rootText = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
+      // A version item is a menuitemradio; a restore could be any of the three roles.
+      let restore = 0;
+      for (const role of ['menuitem', 'menuitemradio', 'button']) {
+        restore += await scope.getByRole(role, { name: /restore/i }).count();
+      }
+      const text = hasMenu
+        ? (await menu.innerText().catch(() => '')).replace(/\s+/g, ' ')
+        : rootText;
       return {
-        labels: [...new Set([...text.matchAll(/(?:^|\s)(\d+\.\d+)(?=\s|$)/g)].map((m) => m[1]))],
-        live: text.match(/1\.0\+|current version/i)?.[0] ?? '',
-        restore: await root.getByRole('button', { name: /restore/i }).count(),
-        create: await root.getByRole('button', { name: /create|new version/i }).count(),
+        labels: hasMenu
+          ? (
+              await menu
+                .locator('.nxs-manage-versions__version .nxs-manage-versions__number')
+                .allInnerTexts()
+                .catch(() => [])
+            ).map((t) => t.trim())
+          : [],
+        live: rootText.match(/1\.0\+|current version/i)?.[0] ?? '',
+        restore,
+        create: await scope.locator('.nxs-manage-versions__create:not([disabled])').count(),
         empty: /no (previous )?versions/i.test(text) ? text.slice(0, 120) : '',
         text: text.slice(0, 300),
       };
     },
   },
+  // search/search.html (table view: a CSS-grid div.result-list, not nxs-document-list) and the
+  // filters drawer's search-filters.component.html, which the nav drawer mounts outside lib-search.
   search: {
     route: '/#/search',
-    input: 'lib-search input[type="search"], lib-search input',
-    rows: 'lib-search nxs-document-list tbody tr[role="row"]',
-    title: 'td:nth-of-type(2)',
+    input: 'nxs-search-filters input[type="search"]',
+    rows: 'lib-search .result-list .list-row',
+    title: '.row-name-text',
     next: 'lib-search [aria-label="Next page"]',
-    count: 'lib-search [role="status"]',
-    none: 'lib-search nxs-empty-state',
+    count: 'lib-search .results-count',
+    none: 'lib-search .results-empty',
     error: 'lib-search nxs-error-state',
     failPattern: '**/search/**',
   },
