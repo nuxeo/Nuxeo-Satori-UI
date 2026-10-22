@@ -13,6 +13,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatButtonModule } from '@angular/material/button';
+import { MatCheckboxModule } from '@angular/material/checkbox';
 import { DateAdapter } from '@angular/material/core';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -80,8 +81,9 @@ interface EditorState {
 
 /**
  * A document's permissions: local and inherited ACEs, blocked inheritance, and each ACE's time
- * frame and status, with add, edit and remove over the server's list for the document type, Nuxeo's
- * standard permissions and every other permission the server reports to the user.
+ * frame and status, with add, edit and remove over the server's list for the document type. Under
+ * **All permissions**, Nuxeo's standard permissions and every other permission the server reports
+ * to the user are offered too.
  *
  * **Every write addresses one ACE.** Changes are staged and applied on Save as one
  * `Document.AddPermission`, `ReplacePermission` or `RemovePermission`-by-id per change, so an
@@ -107,6 +109,7 @@ interface EditorState {
     TranslatePipe,
     MatAutocompleteModule,
     MatButtonModule,
+    MatCheckboxModule,
     MatDatepickerModule,
     MatFormFieldModule,
     MatIconModule,
@@ -204,26 +207,52 @@ export class NxsPermissionsPanelComponent {
   protected readonly trackItem = (_index: number, item: LocalItem) => item.key;
   protected readonly pendingCount = computed(() => this.staged().size);
 
+  /**
+   * Whether every select offers the whole grantable set, not only the server's list for this
+   * document type. Off by default, as Web UI offers only its `userVisiblePermissions`.
+   */
+  protected readonly allPermissions = signal(false);
+  /**
+   * The whole set is offered when asked for, and also when the type suggests nothing, so that no
+   * select is left with no option to pick.
+   */
+  protected readonly typeSuggestsNothing = computed(
+    () => (this.snapshot()?.catalogue.suggested.length ?? 0) === 0,
+  );
+  protected readonly offersAll = computed(
+    () => this.allPermissions() || this.typeSuggestsNothing(),
+  );
+
   /** The permission groups every select offers, in the server's order. */
   protected readonly permissionGroups = computed(() => {
     const catalogue = this.snapshot()?.catalogue;
     if (!catalogue) return [];
-    return [
+    const groups = [
       {
         label: 'satori-components.permissions-panel.group.suggested',
         permissions: catalogue.suggested,
       },
-      {
-        label: 'satori-components.permissions-panel.group.standard',
-        permissions: catalogue.standard,
-      },
-      { label: 'satori-components.permissions-panel.group.other', permissions: catalogue.other },
-    ].filter((group) => group.permissions.length > 0);
+    ];
+    if (this.offersAll()) {
+      groups.push(
+        {
+          label: 'satori-components.permissions-panel.group.standard',
+          permissions: catalogue.standard,
+        },
+        { label: 'satori-components.permissions-panel.group.other', permissions: catalogue.other },
+      );
+    }
+    return groups.filter((group) => group.permissions.length > 0);
   });
 
+  /**
+   * What a select offers without a group of its own. An entry holding a permission outside this
+   * set still shows it, as an extra option, so no entry is left with a blank select.
+   */
   private readonly offered = computed(() => {
     const catalogue = this.snapshot()?.catalogue;
-    return new Set(catalogue ? offeredPermissions(catalogue) : []);
+    if (!catalogue) return new Set<string>();
+    return new Set(this.offersAll() ? offeredPermissions(catalogue) : catalogue.suggested);
   });
 
   protected readonly localItems = computed<LocalItem[]>(() => {
@@ -236,9 +265,11 @@ export class NxsPermissionsPanelComponent {
       const key = row.id || `no-id-${index}`;
       const change = staged.get(key);
       const lockedReason = !row.id ? 'satori-components.permissions-panel.locked.no-id' : null;
+      // A staged replacement may name a permission outside the offered set, which needs its option too.
+      const replaced = change?.kind === 'replace' ? change.permission : undefined;
       const base = {
         ...this.fromRow(key, row, lockedReason),
-        extraPermissions: extras(row.permission),
+        extraPermissions: extras(row.permission, replaced),
       };
       if (change?.kind === 'remove') {
         return { ...base, state: 'removed' };
@@ -273,10 +304,15 @@ export class NxsPermissionsPanelComponent {
     return items;
   });
 
-  /** Permissions the entry being edited holds that the server's lists do not offer. */
-  protected readonly editorExtraPermissions = computed(
-    () => this.editor()?.item?.extraPermissions ?? [],
-  );
+  /**
+   * Permissions the editor must offer beyond the offered set: the entry's own, and the one the
+   * user has picked, which stays selectable if All permissions is unticked under the form.
+   */
+  protected readonly editorExtraPermissions = computed(() => {
+    const offered = this.offered();
+    const held = this.editor()?.item?.extraPermissions ?? [];
+    return [...new Set([...held, this.editorPermission()])].filter((p) => !!p && !offered.has(p));
+  });
 
   protected readonly editorInvalidRange = computed(() => {
     const begin = toDay(this.editorBegin());

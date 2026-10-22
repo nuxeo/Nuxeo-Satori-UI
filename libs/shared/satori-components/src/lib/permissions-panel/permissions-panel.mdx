@@ -90,8 +90,9 @@ application's sign-in. The panel reads the document with three enrichers:
 - **`permissions`** decides whether the panel can be edited. Holding `WriteSecurity` or `Everything`
   makes it editable; with anything less the same tables are read-only. A version is always
   read-only, because its `permissions` repeat the live document's.
-- **`userVisiblePermissions`** fills the "suggested" group of the permission list. Nuxeo's standard
-  permissions, and any others `permissions` reports, follow it.
+- **`userVisiblePermissions`** fills the "suggested" group of the permission list, which is the
+  default. Ticking **All permissions** adds Nuxeo's standard permissions, and any others
+  `permissions` reports.
 
 Writes call `addPermission`, `replacePermission` and `removePermissionById`, one per changed entry.
 Blocking and restoring inheritance call `blockPermissionInheritance` and

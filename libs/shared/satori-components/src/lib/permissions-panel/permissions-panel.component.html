@@ -154,18 +154,29 @@
       >
         {{ 'satori-components.permissions-panel.local.heading' | translate }}
       </div>
-      @if (canManage() && !editor()) {
-        <button
-          mat-stroked-button
-          type="button"
-          color="primary"
-          [disabled]="!editable()"
-          (click)="openAdd()"
-        >
-          <mat-icon aria-hidden="true">add</mat-icon>
-          {{ 'satori-components.permissions-panel.add' | translate }}
-        </button>
-      }
+      <div class="nxs-permissions-panel__section-actions">
+        @if (canManage()) {
+          <mat-checkbox
+            [checked]="offersAll()"
+            [disabled]="typeSuggestsNothing()"
+            (change)="allPermissions.set($event.checked)"
+          >
+            {{ 'satori-components.permissions-panel.all-permissions' | translate }}
+          </mat-checkbox>
+        }
+        @if (canManage() && !editor()) {
+          <button
+            mat-stroked-button
+            type="button"
+            color="primary"
+            [disabled]="!editable()"
+            (click)="openAdd()"
+          >
+            <mat-icon aria-hidden="true">add</mat-icon>
+            {{ 'satori-components.permissions-panel.add' | translate }}
+          </button>
+        }
+      </div>
     </div>
 
     @if (editor(); as edit) {

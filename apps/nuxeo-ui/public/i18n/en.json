@@ -2156,6 +2156,7 @@
     },
     "permissions-panel": {
       "add": "Add",
+      "all-permissions": "All permissions",
       "column": {
         "acl": "Access list",
         "actions": "Actions",
