@@ -726,6 +726,23 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
           throw new PreconditionError(`identity guard ${at}: ${problem}`);
         }
 
+        // Drain pending header collections before checking traffic (P2). A correctly authenticated
+        // request can emit requestfinished during this interval but still have finished: false while
+        // allHeaders() resolves. Checking before draining can reject a clean re-login as in-flight.
+        const traffic = identity._traffic;
+        if (traffic && 'drainPendingHeaders' in traffic) {
+          const { unreadRequests } = await traffic.drainPendingHeaders();
+          if (unreadRequests.length > 0) {
+            const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+            const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
+            const problem =
+              `h.login() cannot complete: ${unreadRequests.length} request(s) completed but their headers ` +
+              `remain unread at the identity check deadline (${listed}${suffix}). Cannot determine who they ran as.`;
+            identity.reject(at, problem);
+            throw new PreconditionError(`identity guard ${at}: ${problem}`);
+          }
+        }
+
         // Check for pending requests
         const pending = identity.pendingRequests();
         if (pending.length) {
@@ -738,8 +755,7 @@ export function createHelpers(page, outDir, recorder, { identity = null } = {}) 
           throw new PreconditionError(`identity guard ${at}: ${problem}`);
         }
 
-        // Check for stray requests against the captured outgoing session
-        const traffic = identity._traffic;
+        // Check for stray requests against the captured outgoing session (traffic already drained above)
         const stray = strayRequests(traffic, stored, { signingIn: false, expectedCookie });
         if (stray.length) {
           const listed = stray.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');

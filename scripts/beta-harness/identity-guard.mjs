@@ -120,6 +120,7 @@ export const APP_SESSION_SOURCES = /** @type {const} */ ([
  *   rewrite; read when it finished
  * @property {string | null} cookie the session cookie (JSESSIONID) value at request time, or null
  *   if no session cookie was present; read when it finished
+ * @property {string} [headerError] error from allHeaders() rejection; treated as identity precondition failure
  */
 
 /**
@@ -467,22 +468,11 @@ export async function askThroughPage(
       const stored = parseStoredSession(found.key, found.storage, found.raw);
       if ('problem' in stored) return { stored, answers: none };
 
-      // For cookie sessions, capture the verified cookie NOW, before running probes (P1).
-      // This snapshot is what both /me probes will actually use, not a later fresh read.
-      let verifiedCookie = undefined;
-      if (stored.kind === 'cookie') {
-        try {
-          const url = `${origin}${ME_PATH}`;
-          const cookies = await page.context().cookies(url);
-          const sessionCookie = cookies.find((c) => c.name === 'JSESSIONID');
-          verifiedCookie = sessionCookie?.value ?? null;
-          if (!stillOnApp()) return left();
-        } catch {
-          verifiedCookie = null;
-        }
-      }
-
       const nonce = `${PROBE_MARK}${Date.now().toString(36)}${Math.random().toString(36).slice(2)}`;
+      // Capture both the response and the request to read the actual credential sent
+      const seenProbe = page
+        .waitForRequest((r) => r.url().includes(nonce), { timeout: timeoutMs + 1_000 })
+        .catch(() => null);
       const seen = page
         .waitForResponse((r) => r.url().includes(nonce), { timeout: timeoutMs + 1_000 })
         // No response seen is itself a verdict: the in-page answer is refused below.
@@ -529,6 +519,7 @@ export async function askThroughPage(
         },
       );
       const response = await seen;
+      const probeRequest = await seenProbe;
       // No address, for whatever reason, is treated as a stub and refused below. An answer that
       // is already refused keeps its own reason: Playwright reports no response for a manual
       // redirect (measured on Chromium, 1.63), and "no response seen" would hide why.
@@ -544,15 +535,35 @@ export async function askThroughPage(
       }
       if (!stillOnApp()) return left();
 
+      // For cookie sessions, read the actual cookie the probe sent (P1). The pre-probe jar snapshot
+      // can be stale: if a guest cookie G is replaced by authenticated cookie A between snapshot and
+      // probe, the snapshot would show G while the probe used A. Read the Cookie header from the
+      // actual request, and use that same credential for the replay and all traffic checks.
+      let verifiedCookie = undefined;
+      let replayCookie = '';
+      if (stored.kind === 'cookie' && probeRequest) {
+        try {
+          const probeHeaders = await probeRequest.allHeaders();
+          const cookieHeader = probeHeaders['cookie'] ?? null;
+          if (cookieHeader) {
+            const match = /(?:^|;\s*)JSESSIONID=([^;]+)/.exec(cookieHeader);
+            verifiedCookie = match ? match[1] : null;
+            replayCookie = cookieHeader; // Use the entire Cookie header for replay
+          } else {
+            verifiedCookie = null;
+          }
+          if (!stillOnApp()) return left();
+        } catch {
+          verifiedCookie = null;
+        }
+      }
+
       const url = `${origin}${ME_PATH}`;
-      // Use the verified cookie snapshot for the replay, not a fresh read
-      const cookies = await page.context().cookies(url);
-      const cookie = cookies.map((c) => `${c.name}=${c.value}`).join('; ');
       const replayed = await askThroughFetch(
         url,
         stored.authorization,
         fetchImpl,
-        cookie,
+        replayCookie,
         timeoutMs,
       );
       // And after the replay: a page that navigated during the request is no
@@ -611,10 +622,10 @@ class NuxeoApiTraffic extends Set {
    * this before judging traffic to ensure completed requests have their headers read (P1).
    *
    * @param {number} [timeoutMs] deadline in milliseconds
-   * @returns {Promise<{ completed: number, timedOut: number }>}
+   * @returns {Promise<{ completed: number, timedOut: number, unreadRequests: SentRequest[] }>}
    */
   async drainPendingHeaders(timeoutMs = 2000) {
-    if (this.pendingHeaders.size === 0) return { completed: 0, timedOut: 0 };
+    if (this.pendingHeaders.size === 0) return { completed: 0, timedOut: 0, unreadRequests: [] };
     const pending = Array.from(this.pendingHeaders);
     const deadline = Date.now() + timeoutMs;
     let completed = 0;
@@ -625,15 +636,24 @@ class NuxeoApiTraffic extends Set {
         timedOut++;
         continue;
       }
+      const timeout = new Promise((r) => setTimeout(() => r('timeout'), remaining));
       try {
-        await Promise.race([promise, new Promise((r) => setTimeout(r, remaining))]);
-        completed++;
+        const result = await Promise.race([promise, timeout]);
+        // Only count as completed if the promise actually resolved, not if timeout won (P1)
+        if (result !== 'timeout') {
+          completed++;
+        } else {
+          timedOut++;
+        }
       } catch {
-        // Header collection failed, but request is marked finished, which is what matters
+        // Header collection failed, but request is marked with headerError
         completed++;
       }
     }
-    return { completed, timedOut };
+    // Check for requests that completed network-wise but whose headers remain unread (P1).
+    // These can pass through identity checks because strayRequests skips !finished records.
+    const unreadRequests = this.sent.filter((r) => !r.finished && !r.failed && !r.headerError);
+    return { completed, timedOut, unreadRequests };
   }
 }
 
@@ -722,6 +742,11 @@ export function watchNuxeoApiOrigins(page, appOrigin) {
           record.cookie = null;
         }
         record.finished = true;
+      } catch (err) {
+        // allHeaders() can reject (P2): retain the error so identity checks can fail rather than
+        // treating this as a network-failed request. An unhandled rejection would terminate the runner.
+        record.headerError = String(err);
+        record.finished = false;
       } finally {
         traffic.pendingHeaders.delete(headerPromise);
       }
@@ -795,7 +820,10 @@ export function pendingAcrossSignIn(traffic, upTo, { verifiedAuth, verifiedCooki
   // Recognize sign-in by matching the VERIFIED credential, not just any auth/cookie (P2).
   // Without verified context, fall back to any non-null credential for compatibility.
   const matches = (r) => {
-    if (verifiedAuth !== undefined) {
+    // Skip null Authorization so cookie sessions reach their branch (P2). The caller passes
+    // verifiedAuth: null for cookie sessions, so checking verifiedAuth !== undefined would always
+    // take this branch and never reach verifiedCookie, accepting guest JSESSIONID as sign-in.
+    if (verifiedAuth !== undefined && verifiedAuth !== null) {
       // Basic auth session: match the verified Authorization header
       return r.authorization === verifiedAuth;
     } else if (verifiedCookie !== undefined) {
@@ -954,7 +982,22 @@ export async function checkPageIdentity(
   // Drain pending header collections before judging traffic (P1). Playwright doesn't await the
   // async requestfinished handler, so completed requests can have unread headers.
   if (foreignApiOrigins && 'drainPendingHeaders' in foreignApiOrigins) {
-    await foreignApiOrigins.drainPendingHeaders();
+    const { unreadRequests } = await foreignApiOrigins.drainPendingHeaders();
+    // Reject if any completed requests have unread headers at deadline (P1). These would be skipped
+    // by strayRequests (which only judges finished: true records), letting unjudged traffic pass.
+    if (unreadRequests.length > 0) {
+      const listed = unreadRequests.slice(0, 3).map((r) => `${r.method} ${r.path}`).join(', ');
+      const suffix = unreadRequests.length > 3 ? `, and ${unreadRequests.length - 3} more` : '';
+      return judgeApp(
+        {
+          problem:
+            `${unreadRequests.length} request(s) completed but their headers remain unread at the ` +
+            `identity check deadline (${listed}${suffix}). Cannot determine who they ran as.`,
+        },
+        { inPage: null, replayed: null },
+        policy,
+      );
+    }
   }
 
   const { stored, answers, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl, timeoutMs);
@@ -1159,13 +1202,12 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
           // Unless the sign-in left traffic the restart below would strand unjudged. This is a
           // transition in everything but name — it is just not declared by a steps file — so it
           // refuses on the same terms a declared one does rather than promoting over it.
-          // Get the verified credential to properly recognize sign-in (P2). A JSESSIONID alone
-          // doesn't establish sign-in: guest cookies can also be present.
-          const { stored, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl);
-          const verifiedAuth = stored && !('problem' in stored) ? stored.authorization : null;
-          const stranded = pendingAcrossSignIn(foreignApiOrigins, mark, { verifiedAuth, verifiedCookie });
-          if (stranded.length) {
-            const named = stranded.map((r) => `${r.method} ${r.path}`).join(', ');
+          // Validate the credential snapshot for promotion (P1). checkPageIdentity already validated
+          // the session and returned success, but that validation is not reused here. If the cookie
+          // jar changed between that check and this call, pendingAcrossSignIn could match the wrong
+          // credential. Validate the snapshot before using it to judge stranded traffic.
+          const { stored, answers, verifiedCookie } = await askThroughPage(page, appOrigin, fetchImpl);
+          if (!stored || 'problem' in stored) {
             /** @type {ChannelReport} */
             const refusal = {
               channel: 'step',
@@ -1174,17 +1216,52 @@ export function createIdentityMonitor({ page, baseUrl, username, fetchImpl }) {
               expected: expectedUser(),
               user: null,
               problem:
-                `the app was found signed in as ${username}, but ${stranded.length} Nuxeo ` +
-                `request(s) it sent after signing in were still in flight: ${named}. Nothing can ` +
-                'say who they ran as — they carry no readable Authorization yet, and recognising ' +
-                'the sign-in here ends the window anything would judge them in. Let the app settle ' +
-                "before the boundary (await the work that issued them, or `page.waitForLoadState('networkidle')`).",
+                `the app was found signed in as ${username}, but the session could not be verified for ` +
+                `promotion: ${stored ? stored.problem : 'no stored session'}`,
             };
             reports.push(refusal);
           } else {
-            policy = { user: username };
-            // What the page sent before this check was judged as signing in; after it, strictly.
-            foreignApiOrigins.restart(mark);
+            // Validate probe answers before accepting the credential (same validation as checkPageIdentity)
+            const verdict = judgeMe(answers.inPage, answers.replayed, stored);
+            if (verdict.problem) {
+              /** @type {ChannelReport} */
+              const refusal = {
+                channel: 'step',
+                ok: false,
+                state: 'rejected',
+                expected: expectedUser(),
+                user: null,
+                problem:
+                  `the app was found signed in as ${username}, but the session's /me probes failed ` +
+                  `validation for promotion: ${verdict.problem}`,
+              };
+              reports.push(refusal);
+            } else {
+              const verifiedAuth = stored.authorization;
+              const stranded = pendingAcrossSignIn(foreignApiOrigins, mark, { verifiedAuth, verifiedCookie });
+              if (stranded.length) {
+                const named = stranded.map((r) => `${r.method} ${r.path}`).join(', ');
+                /** @type {ChannelReport} */
+                const refusal = {
+                  channel: 'step',
+                  ok: false,
+                  state: 'rejected',
+                  expected: expectedUser(),
+                  user: null,
+                  problem:
+                    `the app was found signed in as ${username}, but ${stranded.length} Nuxeo ` +
+                    `request(s) it sent after signing in were still in flight: ${named}. Nothing can ` +
+                    'say who they ran as — they carry no readable Authorization yet, and recognising ' +
+                    'the sign-in here ends the window anything would judge them in. Let the app settle ' +
+                    "before the boundary (await the work that issued them, or `page.waitForLoadState('networkidle')`).",
+                };
+                reports.push(refusal);
+              } else {
+                policy = { user: username };
+                // What the page sent before this check was judged as signing in; after it, strictly.
+                foreignApiOrigins.restart(mark);
+              }
+            }
           }
         }
         const entry = { at, ok: reports.every((r) => r.ok), reports };
