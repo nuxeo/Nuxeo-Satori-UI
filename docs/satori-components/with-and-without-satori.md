@@ -727,7 +727,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori. Every screen renders its avatars, category tags and breadcrumbs by ID — the screens where each appears are listed in `docs/extension-reference.md` §6a — so the app shows Satori's and a manifest can swap them. Only the status tag, `<sat-status-tag>`, is still used directly, so a manifest cannot swap it until it has an ID of its own.
+The app registers both entry points, so anything rendered by ID shows Satori. The screens resolve each avatar, category tag and breadcrumb trail of their own by ID — `docs/extension-reference.md` §6a lists where — so there the app shows Satori's, and a component registered later under the same ID, with `provideSatoriExtensions({ components })`, replaces it; no JSON manifest entry selects a component for these IDs. Library components nested in a screen, such as the comments, history and properties panel on document detail, still draw the built-in avatar and tag directly, and the status tag, `<sat-status-tag>`, is used directly; a registration does not reach either until they render by ID.
 
 Only things rendered by ID — these screens, and customer extensions — go through the choice.
 

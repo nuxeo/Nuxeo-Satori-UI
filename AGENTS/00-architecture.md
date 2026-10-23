@@ -121,9 +121,12 @@ without GitHub Packages access lists only the first. Each pair implements one `N
 interface and a spec compares their declared inputs, so `componentInputs` mean the same thing
 whichever is registered. `@hylandsoftware/satori-ui` is an **optional** peer of the package, and
 `beta:installable` proves the built tarball installs without it. The IDs are in
-`docs/extension-reference.md` §6a. Every packaged screen renders its avatars, category tags and
-breadcrumbs by ID, with the `nxs-` element as the fallback, never `sat-*` directly; the status tag
-is still `sat-status-tag` until NXSAT-653. The base library's value
+`docs/extension-reference.md` §6a. The screens resolve each avatar, category tag and trail of
+their own by ID, with the `nxs-` element as the fallback, never `sat-*` directly; the status tag is
+still `sat-status-tag` until NXSAT-653. Library components nested in a screen —
+`nxs-comments`, `nxs-document-history`, `nxs-properties-panel`, `nxs-tag-editor` — still draw
+`nxs-avatar`/`nxs-tag` directly, so an override does not reach them; §6a lists them. The base
+library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 

@@ -674,9 +674,9 @@ theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
 the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An override of yours
 implements the matching `Nxs…Inputs` interface.
 
-**Where packaged screens render them.** Every packaged screen renders its avatars, category tags
-and breadcrumb trails through these three IDs, never through a `sat-*` element directly, so an
-override of an ID reaches all of them:
+**Where packaged screens render them.** The screens place no `sat-avatar`, `sat-category-tag` or
+`sat-breadcrumbs` of their own: each of those uses is resolved through its ID, so an override of the
+ID reaches it. The uses resolved by ID are these:
 
 | Component ID                 | Rendered on                                                                                                                                                         |
 | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -686,6 +686,12 @@ override of an ID reaches all of them:
 
 Search shows no avatar or breadcrumb trail. The status tags (`sat-status-tag`) are not one of these
 primitives and are still rendered directly, until NXSAT-653 gives them an ID.
+
+**Not reached by an override yet.** Four library components on document detail draw the built-in
+`nxs-avatar` or `nxs-tag` themselves rather than resolving the ID, so an override does not replace
+them there: `nxs-comments` (each author's avatar), `nxs-document-history` (each entry's avatar and
+lifecycle tag), `nxs-properties-panel` (the creator and contributor avatars, and its state, tag,
+coverage and collection tags) and `nxs-tag-editor` (each tag).
 
 ### `nxs-` components registered for a slot
 
