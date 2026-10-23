@@ -4,6 +4,8 @@
   "scripts": {
     "beta:api": "node scripts/beta-harness/api-surface.mjs",
     "beta:audit": "node scripts/beta-harness/assertion-audit.mjs",
+    "beta:parity-surface": "node scripts/beta-harness/parity-surface-audit.mjs",
+    "beta:parity-surface-selftest": "node scripts/beta-harness/parity-surface-audit.selftest.mjs",
     "beta:audit-selftest": "node scripts/beta-harness/assertion-audit.selftest.mjs",
     "beta:parity-selftest": "node scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs",
     "beta:backend": "node scripts/beta-harness/backend-preflight.mjs",
