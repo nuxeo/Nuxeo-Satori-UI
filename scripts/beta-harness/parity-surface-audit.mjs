@@ -50,7 +50,9 @@
  *
  * Exit 1 if any rule is broken. Exit 2 if the file cannot be read, parsed, or resolved — an
  * unresolvable `SURFACES` entry refuses the whole map rather than auditing the rest, because a
- * surface skipped quietly is a surface the run reports a pass without having looked at.
+ * surface skipped quietly is a surface the run reports a pass without having looked at. An adapter
+ * spread that cannot be followed is refused the same way, because the keys it may overwrite would
+ * otherwise be certified as inherited.
  */
 
 import { readFile } from 'node:fs/promises';
@@ -191,11 +193,20 @@ function findSurfaces(ast, objects) {
   return { surfaces };
 }
 
+/** An adapter spread this audit cannot follow; the caller refuses the file with exit 2. */
+class UnresolvedSpread extends Error {}
+
 /**
  * An adapter's keys, following `...OTHER` spreads so a derived surface inherits what it reuses.
  * A group whose value is not an object literal — `knownGaps: new Set(…)` — is recorded with no
  * members: it is a value, not a group of selectors, and `A.knownGaps.has(…)` is a method call on
  * it rather than an adapter key that could be missing.
+ *
+ * A spread that cannot be resolved throws `UnresolvedSpread` rather than being skipped. Skipping
+ * it kept whatever earlier spreads supplied, so `{ ...ADF_HX, ...CONFIG.nxs }` with
+ * `CONFIG.nxs = { search: {} }` was audited as still holding `search.pageSize`, which is
+ * undefined at run time. An alias, an `Object.freeze(…)` initializer, a member expression, a
+ * call, or a cycle are all shapes this cannot follow, and the only safe answer is to say so.
  */
 function adapterKeys(object, objects, seen = new Set()) {
   const keys = new Map();
@@ -206,18 +217,27 @@ function adapterKeys(object, objects, seen = new Set()) {
       // whole group and `A.search.pageSize` is undefined. Both spread forms are resolved, in
       // source order, so a later group replaces an inherited one here exactly as it does at run
       // time. Only a named spread needs the cycle guard; an inline object cannot refer to itself.
-      const inline =
-        prop.argument.type === 'ObjectExpression'
-          ? adapterKeys(prop.argument, objects, seen)
-          : prop.argument.type === 'Identifier' && !seen.has(prop.argument.name)
-            ? (() => {
-                const source = objects.get(prop.argument.name);
-                return source
-                  ? adapterKeys(source, objects, new Set([...seen, prop.argument.name]))
-                  : null;
-              })()
-            : null;
-      if (!inline) continue;
+      let inline;
+      if (prop.argument.type === 'ObjectExpression') {
+        inline = adapterKeys(prop.argument, objects, seen);
+      } else if (prop.argument.type === 'Identifier') {
+        const name = prop.argument.name;
+        if (seen.has(name)) {
+          throw new UnresolvedSpread(`the spread ...${name} refers back to itself`);
+        }
+        const source = objects.get(name);
+        if (!source) {
+          throw new UnresolvedSpread(
+            `the spread ...${name} does not name a top-level \`const ${name} = { … }\` in this file`,
+          );
+        }
+        inline = adapterKeys(source, objects, new Set([...seen, name]));
+      } else {
+        throw new UnresolvedSpread(
+          `a spread of a ${prop.argument.type} cannot be resolved; only \`...NAME\` of a ` +
+            'top-level `const NAME = { … }` or an inline object literal can be',
+        );
+      }
       for (const [group, members] of inline) keys.set(group, members);
       continue;
     }
@@ -393,9 +413,30 @@ async function auditFile(file) {
   });
 
   // ── adapter-gap ────────────────────────────────────────────────────────────────────────────
-  const keysBySurface = new Map(
-    [...surfaces].map(([id, surface]) => [id, adapterKeys(surface.object, objects)]),
-  );
+  let keysBySurface;
+  try {
+    keysBySurface = new Map(
+      [...surfaces].map(([id, surface]) => {
+        try {
+          return [id, adapterKeys(surface.object, objects)];
+        } catch (error) {
+          if (error instanceof UnresolvedSpread) {
+            error.message = `surface "${id}" (${surface.name}): ${error.message}`;
+          }
+          throw error;
+        }
+      }),
+    );
+  } catch (error) {
+    if (!(error instanceof UnresolvedSpread)) throw error;
+    return {
+      file: rel,
+      unparsable:
+        `${error.message}. A spread this audit cannot follow may overwrite inherited keys at run ` +
+        'time, so the adapter is refused rather than audited with keys it may not have',
+      findings: [],
+    };
+  }
   // The keys some surface defines as a group of selectors. The scalar exemption below is for a
   // value like `knownGaps: new Set(…)`, where `A.knownGaps.has(…)` is a method call rather than an
   // adapter key — but `adapterKeys` represents *every* non-object value as having no keys, so the

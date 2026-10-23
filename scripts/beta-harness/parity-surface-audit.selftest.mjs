@@ -251,6 +251,38 @@ const controls = [
     }),
   },
   {
+    name: 'an adapter spread of a member expression refuses the file rather than keeping inherited keys',
+    // `CONFIG.nxs` replaces `search` at run time, so `A.search.pageSize` is undefined on nxs. Skipped,
+    // the spread left the inherited `search.pageSize` in place and the audit certified it.
+    expectExit: 2,
+    file: stepsFile({
+      helpers: `const CONFIG = { nxs: { search: {} } };`,
+      adfExtra: `  search: { pageSize: 50 },`,
+      nxsExtra: `  ...ADF_HX,\n  ...CONFIG.nxs,`,
+      steps: `  h.check('page size', A.search.pageSize > 0, String(A.search.pageSize));`,
+    }),
+  },
+  {
+    name: 'an adapter spread through an alias refuses the file',
+    expectExit: 2,
+    file: stepsFile({
+      helpers: `const OVERRIDE = { search: {} };\nconst ALIAS = OVERRIDE;`,
+      adfExtra: `  search: { pageSize: 50 },`,
+      nxsExtra: `  ...ADF_HX,\n  ...ALIAS,`,
+      steps: `  h.check('page size', A.search.pageSize > 0, String(A.search.pageSize));`,
+    }),
+  },
+  {
+    name: 'an adapter spread of an Object.freeze() initializer refuses the file',
+    expectExit: 2,
+    file: stepsFile({
+      helpers: `const FROZEN = Object.freeze({ search: {} });`,
+      adfExtra: `  search: { pageSize: 50 },`,
+      nxsExtra: `  ...ADF_HX,\n  ...FROZEN,`,
+      steps: `  h.check('page size', A.search.pageSize > 0, String(A.search.pageSize));`,
+    }),
+  },
+  {
     name: 'a file with no SURFACES map is refused rather than passed',
     expectExit: 2,
     file: `export default async function run() {}\n`,
