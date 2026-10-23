@@ -1,0 +1,89 @@
+// Each status takes a container role from the theme, and `--nxs-status-tag-<status>-background`
+// and `-foreground` override it. `status-tag.component.spec.ts` holds the status classes.
+:host {
+  --nxs-status-tag-background: var(--mat-sys-surface-container-high);
+  --nxs-status-tag-foreground: var(--mat-sys-on-surface-variant);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  max-inline-size: 100%;
+  padding: 2px 8px;
+  border-radius: var(--mat-sys-corner-extra-small);
+  font: var(--mat-sys-label-large);
+  background: var(--nxs-status-tag-background);
+  color: var(--nxs-status-tag-foreground);
+}
+
+.nxs-status-tag__icon {
+  flex: none;
+  inline-size: 16px;
+  block-size: 16px;
+  font-size: 16px;
+}
+
+.nxs-status-tag__label {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+:host(.nxs-status-tag--important-loud) {
+  --nxs-status-tag-background: var(
+    --nxs-status-tag-important-loud-background,
+    var(--mat-sys-error)
+  );
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-important-loud-foreground,
+    var(--mat-sys-on-error)
+  );
+}
+
+:host(.nxs-status-tag--important) {
+  --nxs-status-tag-background: var(
+    --nxs-status-tag-important-background,
+    var(--mat-sys-error-container)
+  );
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-important-foreground,
+    var(--mat-sys-on-error-container)
+  );
+}
+
+:host(.nxs-status-tag--success) {
+  --nxs-status-tag-background: var(
+    --nxs-status-tag-success-background,
+    var(--mat-sys-tertiary-container)
+  );
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-success-foreground,
+    var(--mat-sys-on-tertiary-container)
+  );
+}
+
+:host(.nxs-status-tag--warning) {
+  --nxs-status-tag-background: var(
+    --nxs-status-tag-warning-background,
+    var(--mat-sys-secondary-container)
+  );
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-warning-foreground,
+    var(--mat-sys-on-secondary-container)
+  );
+}
+
+:host(.nxs-status-tag--info) {
+  --nxs-status-tag-background: var(
+    --nxs-status-tag-info-background,
+    var(--mat-sys-primary-container)
+  );
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-info-foreground,
+    var(--mat-sys-on-primary-container)
+  );
+}
+
+:host(.nxs-status-tag--neutral-quiet) {
+  --nxs-status-tag-background: transparent;
+  --nxs-status-tag-foreground: var(--mat-sys-on-surface);
+  box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
+}
