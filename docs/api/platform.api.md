@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-127 exported symbol(s).
+130 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -200,6 +200,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly avatar: "nxs.primitives.avatar";
     readonly breadcrumbs: "nxs.primitives.breadcrumbs";
     readonly tag: "nxs.primitives.tag";
+    readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
     }>;
@@ -1249,6 +1250,21 @@ class NxsSpinnerComponent {
     static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSpinnerComponent, "nxs-spinner", never, { "diameter": { "alias": "diameter"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
     }
 }
+class NxsStatusTagComponent implements NxsStatusTagInputs {
+    readonly label: _angular_core.InputSignal<string>;
+    readonly status: _angular_core.InputSignal<NxsTagStatus>;
+    readonly hideIcon: _angular_core.InputSignal<boolean>;
+    protected readonly icon: _angular_core.Signal<string | null>;
+    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsStatusTagComponent, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsStatusTagComponent, "nxs-status-tag", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "status": { "alias": "status"; "required": false; "isSignal": true; }; "hideIcon": { "alias": "hideIcon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    }
+}
+interface NxsStatusTagInputs {
+    readonly label: InputSignal<string>;
+    readonly status: InputSignal<NxsTagStatus>;
+    readonly hideIcon: InputSignal<boolean>;
+    }
+}
 interface NxsTab {
     readonly id: string;
     readonly label: string;
@@ -1348,6 +1364,7 @@ interface NxsTagInputs {
     readonly color: InputSignal<NxsTagColor>;
     }
 }
+type NxsTagStatus = 'important' | 'important-loud' | 'info' | 'neutral' | 'neutral-quiet' | 'success' | 'warning';
 class NxsThumbnailComponent {
     readonly documentId: _angular_core.InputSignal<string>;
     readonly alt: _angular_core.InputSignal<string>;
