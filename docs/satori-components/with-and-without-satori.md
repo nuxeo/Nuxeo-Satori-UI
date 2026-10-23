@@ -222,7 +222,7 @@ It has four variants, chosen by the status of the request that failed: the sessi
 
 ![Banner: without Satori on the left, with Satori on the right](banner-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-A notice within a document: a trashed document, with Restore and Delete permanently. The icon, the colours and the buttons are the same in both; the theme sets the type and the button style.
+A notice within a document: a trashed document, with Restore and Delete permanently. It is the same component with and without Satori access.
 
 It takes a message and a list of actions, each a button with its own emphasis, and a tone (info, warning or error) that picks the icon and colours. Each action is data rather than a projected button, so a host can render the same banner by its ID. It is registered under an ID, so a customer can replace it. Satori has its own banner, which this component does not yet wrap; until it does, the ID renders this component with Satori too.
 
@@ -237,7 +237,7 @@ It takes a message and a list of actions, each a button with its own emphasis, a
 
 ![Chip set: without Satori on the left, with Satori on the right](chip-set-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
-The values a vocabulary field holds, each as a chip with a remove button, as the metadata and collection dialogs and the search filters show them. The theme sets the chip colours and shape in both.
+The values a vocabulary field holds, each as a chip with a remove button, as the metadata and collection dialogs and the search filters show them. It is the same component with and without Satori access.
 
 It takes the chips as data, each with its label and the remove button's accessible name, and it emits the chip when its remove button is pressed. The host drops the value from its own list, and the chip leaves with it. It is registered under an ID, so a customer can replace it. Satori has no removable chip of its own, so the ID renders this component with Satori too.
 
