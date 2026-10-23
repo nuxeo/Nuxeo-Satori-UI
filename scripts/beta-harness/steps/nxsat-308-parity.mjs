@@ -152,17 +152,54 @@ const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secre
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
 /**
- * How each surface's access control names the permission underneath it, for a step that has to
- * pick one. Ours translates through `permissions.right.*` — `ReadWrite` reads "Edit" and
- * `Everything` reads "Manage everything"; upstream's reads "Read & Write" and "Everything". A
- * filter that matches neither selects nothing, so nothing is staged, no Save appears, and every
- * claim about what the save did is made about a save that never happened. `/^\s*Everything\s*$/`
- * was exactly that on the nxs surface.
+ * Fallback only: how a surface's access control *reads* when it discloses no permission identifier.
+ *
+ * Matching rendered text for this was the original defect and then, corrected, the defect again.
+ * `/^\s*Everything\s*$/` matched nothing on the nxs surface, whose label is "Manage everything";
+ * widening it to `/^\s*(Manage everything|Everything)\s*$/` still matched nothing, because
+ * `permissions-panel.component.html:385-405` appends the identifier next to the label wherever the
+ * two differ — the Everything option renders "Manage everything Everything" and the ReadWrite
+ * trigger renders "Edit ReadWrite", and an anchored alternation over the parts matches neither
+ * whole. A filter that selects nothing stages nothing, so no Save appears and every claim about
+ * what the save did is made about a save that never happened.
+ *
+ * So text is no longer the primary test. A surface that discloses the identifier is matched on the
+ * identifier — `permissionId` and `option` in its adapter — which is the permission's own name and
+ * cannot be re-translated. This is kept for the surface that discloses none: upstream's, whose
+ * markup cannot be read first-hand since NXSAT-637 removed the packages, leaving its label
+ * ("Read & Write", "Everything") the only handle there is.
+ *
+ * `Read` is here for the 11b edit; our label for it *is* `Read`, so no identifier is appended and
+ * the text and the identifier coincide.
  */
 export const PERMISSION_OPTION = {
+  Read: /^\s*Read\s*$/i,
   ReadWrite: /^\s*(Read & Write|Read and write|ReadWrite|Edit)\s*$/i,
   Everything: /^\s*(Manage everything|Everything)\s*$/i,
 };
+
+/**
+ * Does an access control that rendered `shown` currently grant `permission`?
+ *
+ * `shown.identifier` is the text of the element the surface uses to disclose the permission
+ * identifier beside the translated label — its adapter's `permissionId`, which on the nxs panel is
+ * the `<span class="nxs-permissions-panel__id">` of `permissions-panel.component.html:387-389`.
+ * Where there is one, this is an exact comparison against the identifier and no change to
+ * `permissions.right.*` can break it.
+ *
+ * `shown.text` is the control's whole rendered text and is only consulted when no identifier was
+ * disclosed — either because the surface appends none, or because the label and the identifier are
+ * equal and the template's `@if` therefore omits the span. Matching it is strictly the weaker test:
+ * see PERMISSION_OPTION.
+ *
+ * @param {string} permission
+ * @param {{identifier?: string, text?: string}} shown
+ */
+export function showsPermission(permission, shown) {
+  const identifier = (shown.identifier ?? '').trim();
+  if (identifier) return identifier === permission;
+  return PERMISSION_OPTION[permission].test(shown.text ?? '');
+}
 
 /**
  * A write that is a permissions write, by the endpoint it went to: Nuxeo's permission operations
@@ -327,6 +364,14 @@ const ADF_HX = {
     rows: 'hxp-permissions-management-panel mat-tab-body.mat-mdc-tab-body-active tr[mat-row]',
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
+    // Upstream's option and trigger markup cannot be read first-hand — NXSAT-637 removed the
+    // packages — so no identifier handle can be claimed for this surface and its translated label
+    // is the only thing left to match. `permissionId: null` is what makes showsPermission fall back.
+    permissionId: null,
+    option: (page, permission) =>
+      page
+        .locator('.cdk-overlay-container mat-option')
+        .filter({ hasText: PERMISSION_OPTION[permission] }),
     save: 'hxp-permissions-management-panel button',
     feedback: 'mat-snack-bar-container',
   },
@@ -605,6 +650,14 @@ const NXS = {
     rows: 'nxs-permissions-panel tr[role="row"]',
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
+    // permissions-panel.component.html:387-389 — the trigger and the read-only cell append the
+    // permission identifier in this span wherever it differs from the translated label.
+    permissionId: '.nxs-permissions-panel__id',
+    // :392 and :400 — every option carries its identifier in data-permission. Selecting on that
+    // rather than on text is the whole point: the rendered text is label *and* identifier
+    // ("Manage everything Everything"), which no pattern over either part alone matches.
+    option: (page, permission) =>
+      page.locator(`.cdk-overlay-container mat-option[data-permission="${permission}"]`),
     save: 'nxs-permissions-panel button',
     // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
     // clicks the first status or alert button: the status text after a save, and after a refusal
@@ -1790,7 +1843,12 @@ export default async function run(page, h, outDir) {
     `a restore of a listed version is offered on ${restoreOffer.where} — on the nxs surface that is` +
       ' the document page, not nxs-manage-versions, which deliberately offers none (bug-pattern §21);' +
       ' whether that restore is confirmed first is asserted by document-detail.versions.spec.ts, not' +
-      ' here, because confirming it by clicking would rewrite the fixture if it were not',
+      ' here, because confirming it by clicking would rewrite the fixture if it were not. The' +
+      ' expectation for where restore is offered was corrected after the before-half had been' +
+      ' captured (it counted restore controls inside nxs-manage-versions, where none are offered).' +
+      ' The before results were produced against the old expectation and cannot be re-measured,' +
+      ' because NXSAT-637 removed the upstream packages, so this step compares against a corrected' +
+      ' expectation rather than a re-measured baseline.',
   );
   gap('versions.restore-offered', {
     correct: restoreOffer.listed === 3 && restoreOffer.offered >= 3,
@@ -1863,6 +1921,7 @@ export default async function run(page, h, outDir) {
   const membersRowCount = await membersRowLocator.count();
   let membersEditable = 0;
   let localMembersPermission = '';
+  let localMembersPermissionId = '';
   let inheritedMembersRow = '';
   for (let i = 0; i < membersRowCount; i++) {
     const row = membersRowLocator.nth(i);
@@ -1875,6 +1934,21 @@ export default async function run(page, h, outDir) {
           .innerText()
           .catch(() => '')
       ).trim();
+      // The identifier the trigger discloses beside the label, where the surface discloses one.
+      // Read separately rather than parsed out of the text above: the text is the two concatenated
+      // and splitting it would be guessing at where the boundary is.
+      const idSpan = A.permissions.permissionId
+        ? control.first().locator(A.permissions.permissionId)
+        : null;
+      localMembersPermissionId =
+        idSpan && (await idSpan.count())
+          ? (
+              await idSpan
+                .first()
+                .innerText()
+                .catch(() => '')
+            ).trim()
+          : '';
     } else {
       inheritedMembersRow = (await row.innerText().catch(() => '')).replace(/\s+/g, ' ');
     }
@@ -1888,11 +1962,17 @@ export default async function run(page, h, outDir) {
     `${LB} the locally defined members row grants ReadWrite and the inherited one grants Read`,
     // The local row's permission is read from its access control, not from the row's text: the
     // actions column renders Material icon ligatures, and "edit" there is not the "Edit" label.
+    // Within that control it is read from the identifier the trigger discloses where there is one,
+    // because the trigger's text is label *and* identifier — "Edit ReadWrite".
     // `Read` is matched only where it is the whole permission — upstream's ReadWrite label is
     // "Read & Write", which a bare \bRead\b would match.
-    PERMISSION_OPTION.ReadWrite.test(localMembersPermission) &&
-      /\bRead\b(?! ?&| and)/i.test(inheritedMembersRow),
-    `access control reads ${JSON.stringify(localMembersPermission)}; inherited row reads ${JSON.stringify(inheritedMembersRow)}`,
+    showsPermission('ReadWrite', {
+      identifier: localMembersPermissionId,
+      text: localMembersPermission,
+    }) && /\bRead\b(?! ?&| and)/i.test(inheritedMembersRow),
+    `access control reads ${JSON.stringify(localMembersPermission)}` +
+      ` (identifier ${JSON.stringify(localMembersPermissionId) || 'not disclosed'});` +
+      ` inherited row reads ${JSON.stringify(inheritedMembersRow)}`,
   );
   await A.permissions.showTab(page, 'Individual Users');
   const userRows = await rowText();
@@ -1947,9 +2027,9 @@ export default async function run(page, h, outDir) {
     .click()
     .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
-  const grantEverything = page
-    .locator(A.permissions.options)
-    .filter({ hasText: PERMISSION_OPTION.Everything });
+  // Selected by the surface's most stable handle for the permission, not by its label: on the nxs
+  // surface that is data-permission, because the option's text is "Manage everything Everything".
+  const grantEverything = A.permissions.option(page, 'Everything');
   const everythingOffered = await grantEverything.count();
   await grantEverything.first().click().catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
@@ -1960,7 +2040,8 @@ export default async function run(page, h, outDir) {
   h.check(
     `${LB} choosing Everything for members stages a save`,
     everythingOffered > 0 && saveOffered > 0,
-    `${everythingOffered} option(s) matched ${PERMISSION_OPTION.Everything}; ${saveOffered} Save control(s) offered before the click`,
+    `${everythingOffered} option(s) offered Everything by this surface's handle for it;` +
+      ` ${saveOffered} Save control(s) offered before the click`,
   );
   await saveControl.first().click().catch(leaveItToTheNextCheck);
   await page.waitForTimeout(3500);
@@ -2093,7 +2174,7 @@ export default async function run(page, h, outDir) {
     if (await membersRow.count()) {
       await membersRow.locator(A.permissions.accessControl).first().click();
       await page.waitForTimeout(600);
-      await page.locator(A.permissions.options).filter({ hasText: /^\s*Read\s*$/ }).first().click();
+      await A.permissions.option(page, 'Read').first().click();
       await page.waitForTimeout(600);
     }
     const saveButton = await page.locator(`${A.permissions.save}`).filter({ hasText: /save/i }).first().isVisible().catch(() => false);

@@ -19,16 +19,30 @@
  * verdict would be red exactly when the save worked. It is kept here so the mistake cannot be made
  * again without a red.
  *
- * The second group checks the root cause itself: the filter against the labels each surface
- * actually renders, read from `permissions.right.*` in `apps/nuxeo-ui/public/i18n/en.json` and
- * from upstream's own vocabulary. It does not prove the option list contains them — only a real
- * run against the panel can — but it does prove the pattern admits both and that the one it
- * replaced admitted neither of ours.
+ * The second group checks the root cause itself, and it is on its second correction, because the
+ * first one made exactly the mistake this repo keeps catching: it asserted the *model* rather than
+ * the product. It compared the filter against bare labels — "Manage everything", "Everything" —
+ * and went green, while `permissions-panel.component.html:385-405` appends the permission
+ * identifier beside the label wherever the two differ, so the panel renders "Manage everything
+ * Everything" and "Edit ReadWrite" and the corrected filter matched neither. The selftest passed
+ * and the real page would still have staged nothing.
+ *
+ * So the group now runs `showsPermission` against the strings the component actually emits, and
+ * prints beside each what matching the rendered *text* would have concluded — which is the red,
+ * re-proved against the product. The handle is the permission identifier: `data-permission` on
+ * every option and the `nxs-permissions-panel__id` span in the trigger. It is the permission's own
+ * name, so no change to `permissions.right.*` can break it, which a text match cannot promise.
+ * `PERMISSION_OPTION` survives only as the fallback for a surface that discloses no identifier —
+ * upstream's, whose markup NXSAT-637 put out of reach.
+ *
+ * It still does not prove the option list *contains* Everything; only a real run against the panel
+ * can. It proves that when it does, this is selected and the previous two rounds would not have
+ * selected it.
  *
  * Usage:  node scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs
  */
 
-import { aclSaveVerdict, PERMISSION_OPTION } from './nxsat-308-parity.mjs';
+import { aclSaveVerdict, PERMISSION_OPTION, showsPermission } from './nxsat-308-parity.mjs';
 
 /** The predicate step 11 carried before this change, for the comparison controls 1 and 2 make. */
 const oldPredicate = ({ afterAcl }) => afterAcl.includes('parity-user:AddChildren');
@@ -132,43 +146,127 @@ for (const control of CONTROLS) {
   }
 }
 
-/** The pattern step 11 filtered the option list with before this change. */
-const OLD_EVERYTHING_FILTER = /^\s*Everything\s*$/;
-
-/** `[label, matchedByTheNewPattern, matchedByTheOldOne]` — our labels first, then upstream's. */
-const LABELS = [
-  ['Manage everything', true, false],
-  ['Everything', true, true],
-  ['Edit', false, false],
-  ['Read', false, false],
-  ['Manage everything else', false, false],
+/**
+ * What an access control on each surface actually renders, and the identifier handle beside it.
+ *
+ * The nxs strings are not fixtures invented here. `permissions-panel.component.html:385-405` emits
+ * the translated label and then, in a `<span class="nxs-permissions-panel__id">`, the permission
+ * identifier wherever the two differ. With `permissions.right.*` from
+ * `apps/nuxeo-ui/public/i18n/en.json` — `Everything: "Manage everything"`, `ReadWrite: "Edit"`,
+ * `Read: "Read"` — that is "Manage everything Everything", "Edit ReadWrite", and for `Read`, where
+ * label and identifier are equal, the `@if` omits the span and the text is bare "Read".
+ *
+ * `textOnly` is the verdict matching the rendered *text* would reach — the test that was on disk
+ * for both of this file's previous rounds. It is false on the first two nxs rows: that is the red
+ * being re-proved, against what the component renders rather than against a bare label.
+ *
+ * `[what it renders, the identifier it discloses, showsPermission, what text alone would say]`
+ */
+const RENDERED = [
+  {
+    surface: 'nxs',
+    permission: 'Everything',
+    text: 'Manage everything Everything',
+    identifier: 'Everything',
+    expected: true,
+    textOnly: false,
+    why: 'the option step 11 must select; text alone rejects it, which staged nothing',
+  },
+  {
+    surface: 'nxs',
+    permission: 'ReadWrite',
+    text: 'Edit ReadWrite',
+    identifier: 'ReadWrite',
+    expected: true,
+    textOnly: false,
+    why: "the local members row's trigger; text alone rejects it, failing the panel that is correct",
+  },
+  {
+    surface: 'nxs',
+    permission: 'Read',
+    text: 'Read',
+    identifier: '',
+    expected: true,
+    textOnly: true,
+    why: 'label equals identifier, so no span is emitted and the text is all there is',
+  },
+  {
+    surface: 'nxs',
+    permission: 'Everything',
+    text: 'Edit ReadWrite',
+    identifier: 'ReadWrite',
+    expected: false,
+    textOnly: false,
+    why: 'a control showing a different permission must be refused by the identifier',
+  },
+  {
+    surface: 'nxs',
+    permission: 'ReadWrite',
+    text: 'Manage everything Everything',
+    identifier: 'Everything',
+    expected: false,
+    textOnly: false,
+    why: 'the converse: the identifier must not admit the other permission either',
+  },
+  {
+    surface: 'adf-hx',
+    permission: 'Everything',
+    text: 'Everything',
+    identifier: '',
+    expected: true,
+    textOnly: true,
+    why: 'upstream discloses no identifier, so the label is the only handle — the fallback',
+  },
+  {
+    surface: 'adf-hx',
+    permission: 'ReadWrite',
+    text: 'Read & Write',
+    identifier: '',
+    expected: true,
+    textOnly: true,
+    why: "upstream's ReadWrite label, which our own pattern must still admit",
+  },
+  {
+    surface: 'adf-hx',
+    permission: 'Everything',
+    text: 'Manage everything else',
+    identifier: '',
+    expected: false,
+    textOnly: false,
+    why: 'the fallback stays anchored: a longer label containing one must not match',
+  },
 ];
 
-console.log('\nPERMISSION_OPTION.Everything against the labels each surface renders\n');
-for (const [label, expected, expectedOld] of LABELS) {
-  const matched = PERMISSION_OPTION.Everything.test(label);
-  const old = OLD_EVERYTHING_FILTER.test(label);
-  const ok = matched === expected && old === expectedOld;
+console.log('\nshowsPermission against the text each surface actually renders\n');
+for (const r of RENDERED) {
+  const got = showsPermission(r.permission, { identifier: r.identifier, text: r.text });
+  const textOnly = PERMISSION_OPTION[r.permission].test(r.text);
+  const ok = got === r.expected && textOnly === r.textOnly;
   console.log(
-    `${ok ? 'ok  ' : 'FAIL'} ${JSON.stringify(label)}: now ${matched ? 'matches' : 'does not match'},` +
-      ` ${OLD_EVERYTHING_FILTER} ${old ? 'matched' : 'did not match'}`,
+    `${ok ? 'ok  ' : 'FAIL'} ${r.surface} ${r.permission}: renders ${JSON.stringify(r.text)},` +
+      ` discloses ${r.identifier ? JSON.stringify(r.identifier) : 'no identifier'}` +
+      ` — showsPermission ${got ? 'GREEN' : 'RED'}, matching the text alone ${textOnly ? 'GREEN' : 'RED'}`,
   );
+  console.log(`       ${r.why}`);
   if (!ok) {
     failures.push(
-      `option filter on ${JSON.stringify(label)} — expected now=${expected} old=${expectedOld},` +
-        ` got now=${matched} old=${old}`,
+      `${r.surface} ${r.permission} on ${JSON.stringify(r.text)} — expected showsPermission=${r.expected}` +
+        ` textOnly=${r.textOnly}, got showsPermission=${got} textOnly=${textOnly}`,
     );
   }
 }
 
 const flipped = CONTROLS.filter((c) => c.oldVerdict && !c.survives).length;
+/** The rows where matching rendered text is wrong — the defect this round corrects. */
+const textWouldBeWrong = RENDERED.filter((r) => r.expected && !r.textOnly);
 console.log();
-const total = CONTROLS.length + LABELS.length;
+const total = CONTROLS.length + RENDERED.length;
 if (failures.length === 0) {
   console.log(
-    `nxsat-308-parity selftest: pass — ${CONTROLS.length} verdict control(s) and ${LABELS.length}` +
-      ` option-label control(s); ${flipped} verdict control(s) passed the old predicate while no` +
-      ` save had happened.`,
+    `nxsat-308-parity selftest: pass — ${CONTROLS.length} verdict control(s) and ${RENDERED.length}` +
+      ` rendered-text control(s); ${flipped} verdict control(s) passed the old predicate while no` +
+      ` save had happened, and matching rendered text is wrong on ${textWouldBeWrong.length} of the` +
+      ` strings the nxs panel actually emits.`,
   );
   process.exit(0);
 }
