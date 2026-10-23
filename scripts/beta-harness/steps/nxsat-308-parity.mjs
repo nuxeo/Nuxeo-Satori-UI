@@ -140,6 +140,25 @@ const leaveItToTheNextCheck = () => undefined;
 /** For a request or a page evaluation that got no answer at all; the caller's check reports it. */
 const noAnswer = () => null;
 
+/**
+ * A field label still showing its message key rather than a translation of it. The test is the
+ * shape of a key, not its case: identifier segments joined by `.` or `_` and never a space.
+ * `props.labels-translated` used to read uppercase keys only, which upstream renders
+ * (`DOCUMENT.TITLE`, `PROPERTIES.LAST_MODIFIED`) but the nxs panel does not — its labels are
+ * lowercase hyphenated keys such as `satori-components.properties-panel.last-modified`, so an
+ * entirely untranslated nxs panel matched nothing and was judged translated.
+ */
+const isRawKeyLabel = (label) => /^[\w-]+(?:[._][\w-]+)+$/.test(label.trim());
+
+/** Keys of both styles, and labels no reader may mistake for one; the control below reads these. */
+const RAW_KEY_LABELS = [
+  'satori-components.properties-panel.last-modified',
+  'satori-components.properties-panel.version',
+  'DOCUMENT.TITLE',
+  'PROPERTIES.LAST_MODIFIED',
+];
+const TRANSLATED_LABELS = ['Last modified', 'Version', 'Contributors', 'Main file'];
+
 // ── Surfaces ──────────────────────────────────────────────────────────────────────────────────────
 
 /** Defects upstream already has. Each is a parity target for the replacement. */
@@ -339,6 +358,10 @@ const ADF_HX = {
       'production document page (hand-written): upstream hxp-properties-sidebar is not mounted on main',
     root: 'lib-document-detail .properties-panel',
     labels: 'mat-label, label, .doc-info-label',
+    // The reader for `props.labels-translated`, on the surface rather than in the check: the two
+    // surfaces label their fields with different key styles, and a check carrying one surface's
+    // style cannot see the other's untranslated panel.
+    rawLabel: isRawKeyLabel,
     async open(page, h, uid) {
       await h.goToDoc(uid);
       await page
@@ -441,6 +464,7 @@ const ADF_HX_REMOUNT = {
     provenance: 'upstream hxp-properties-sidebar, re-mounted as the browse POC Properties tab',
     root: 'hxp-properties-sidebar',
     labels: 'mat-label, label, .doc-info-label',
+    rawLabel: isRawKeyLabel,
     async open(page, h) {
       await adfHxOpenRowTab(page, h, VERSIONS.path, VERSIONS.docTitle, 'Properties');
       await page
@@ -677,6 +701,11 @@ const NXS = {
     // <label> and no .doc-info-label in it, so the reader that looked for those read no labels at
     // all — and `props.labels-translated`, whose whole subject is the labels, was judged on none.
     labels: '.nxs-properties-panel__label',
+    // Every label here is a `| translate` key such as
+    // `satori-components.properties-panel.last-modified`: lowercase and hyphenated, which the
+    // uppercase-only reader this check used to carry matched none of, so an untranslated panel
+    // would have been certified translated.
+    rawLabel: isRawKeyLabel,
     async open(page, h, uid) {
       await h.goToDoc(uid);
       await page.waitForTimeout(2500);
@@ -1821,7 +1850,16 @@ export default async function run(page, h, outDir) {
     expect: 'render the main file as a file, not as "[object Object]"',
     observed: `values ${JSON.stringify(props.values.slice(0, 12))}`,
   });
-  const rawLabels = props.labels.filter((l) => /^[A-Z][A-Z0-9]*(?:[._][A-Z0-9]+)+$/.test(l));
+  // The reader first, then what it read: a detector blind to this surface's own key style reports
+  // no raw labels on a wholly untranslated panel, which is a pass for the defect it looks for.
+  h.check(
+    `${LB} the raw-key reader flags an untranslated label of either key style, and no readable one`,
+    RAW_KEY_LABELS.every((l) => A.properties.rawLabel(l)) &&
+      TRANSLATED_LABELS.every((l) => !A.properties.rawLabel(l)),
+    `flagged ${JSON.stringify(RAW_KEY_LABELS.filter((l) => A.properties.rawLabel(l)))}, ` +
+      `wrongly flagged ${JSON.stringify(TRANSLATED_LABELS.filter((l) => A.properties.rawLabel(l)))}`,
+  );
+  const rawLabels = props.labels.filter((l) => A.properties.rawLabel(l));
   gap('props.labels-translated', {
     correct: props.labels.length > 0 && rawLabels.length === 0,
     wrongObserved: rawLabels.length > 0,
