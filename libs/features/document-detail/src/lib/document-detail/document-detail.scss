@@ -1062,6 +1062,14 @@ sat-breadcrumbs {
   padding: 0;
   max-height: none;
 }
+// The banners are library components; these host rules keep the strip they sat in: a rule under the
+// content, and not squeezed by the flex column it sits in.
+.trashed-banner,
+.version-banner {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
 .action-danger {
   color: #d32f2f !important;
 }
