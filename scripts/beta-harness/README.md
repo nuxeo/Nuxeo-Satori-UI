@@ -331,6 +331,15 @@ re-registers that primitive on Satori. Both limits are printed on every run.
 `npm run beta:parity-surface-selftest` is its negative controls; they are synthetic files in
 a temporary directory, so unlike the sanitizer controls they cannot leave the tree dirty.
 
+`npm run beta:parity-selftest` is the other half, and it answers the question the audit
+structurally cannot: not whether the file has the right shape, but whether a verdict in it is
+capable of being wrong. It runs step 11's `aclSaveVerdict` in process against each situation the
+step can observe — nothing staged, the happy path, the entry dropped, the Save counted after the
+click, a click that never reached the wire, an unrelated write in the same window — and prints
+beside each what the predicate that used to be there would have concluded. Four of the six passed
+that old predicate with nothing saved. Both are gates (`parity-surface-selftest`,
+`parity-selftest`) and both run in `ci.yml`.
+
 ### Coverage ratchet
 
 The Beta bar is 90%. Nothing is near it — `search` is at 22.8%, `document-detail`

@@ -239,6 +239,33 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/parity-surface-audit.selftest.mjs'],
   },
+  // The parity steps' own step-11 controls. `parity-surface` above audits that file's *shape* —
+  // selectors in adapters, no unguarded click, no adapter gap. It cannot ask whether a verdict in
+  // it is capable of being wrong, and step 11's was: "parity-user's AddChildren survives the save"
+  // was green on the nxs surface while nothing had been saved, because the option filter matched
+  // no option, so no change was staged, no Save appeared, and the entry survived an ACL nobody
+  // touched. `aclSaveVerdict` is the fix, and this runs it in process against each situation step
+  // 11 can observe, printing beside each what the old predicate would have concluded. Its second
+  // group covers the root cause rather than the verdict: `showsPermission` against the strings the
+  // panel actually emits — "Manage everything Everything", "Edit ReadWrite" — which is where
+  // matching a translated label went wrong twice.
+  //
+  // It is here because it was registered nowhere. `beta:parity-selftest` existed in `package.json`
+  // and was wired into neither this list nor `ci.yml`, so the only demonstration that the step-11
+  // control can go red was a script a human had to remember to run — and an edit that dropped the
+  // control would have been caught by nothing.
+  //
+  // In process and synthetic: no browser, no backend, no file written, ~50 ms. Next to the audit
+  // above because both read the same steps file and neither compiles anything.
+  {
+    id: 'parity-selftest',
+    label: 'Parity step 11 save-verdict and option-match controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs'],
+    // How many controls passed the old predicate while no save had happened is the evidence, so
+    // surface it on a pass too.
+    echoOnPass: true,
+  },
   {
     id: 'lint',
     label: 'Affected lint',
