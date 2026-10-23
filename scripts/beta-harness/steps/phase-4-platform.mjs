@@ -137,7 +137,7 @@ export default async function run(page, h) {
   });
 
   // ---------------------------------------------------------------------------
-  h.step('The served application is the template, not the product');
+  await h.step('The served application is the template, not the product');
 
   await page.goto(`${h.baseUrl}/`, { waitUntil: 'networkidle' });
 
@@ -160,7 +160,7 @@ export default async function run(page, h) {
   await page.waitForSelector('.shell__nav-link');
 
   // ---------------------------------------------------------------------------
-  h.step('Layer 0 branding reaches the DOM and the document title');
+  await h.step('Layer 0 branding reaches the DOM and the document title');
 
   const heading = (await page.textContent('h1'))?.trim();
   h.check(
@@ -178,7 +178,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('A Layer 0 theme token is written to <html> and actually consumed');
+  await h.step('A Layer 0 theme token is written to <html> and actually consumed');
 
   const inlineToken = await page.evaluate(() =>
     document.documentElement.style.getPropertyValue('--shell-nav-bg').trim(),
@@ -210,7 +210,7 @@ export default async function run(page, h) {
   await h.screenshot('home-branded-themed-and-nav-from-registry');
 
   // ---------------------------------------------------------------------------
-  h.step('The rebrand cannot make navigation unreadable');
+  await h.step('The rebrand cannot make navigation unreadable');
 
   const navFg = await page.evaluate(() => {
     const link = document.querySelector('.shell__nav-link');
@@ -224,7 +224,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('The navbar is resolved from the extension registry');
+  await h.step('The navbar is resolved from the extension registry');
 
   const nav = await readNav(page);
   h.check(
@@ -234,7 +234,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('A generated extension library contributes with zero platform edits');
+  await h.step('A generated extension library contributes with zero platform edits');
 
   h.check(
     'the generated library’s nav entry renders alongside the template’s',
@@ -271,7 +271,7 @@ export default async function run(page, h) {
   await page.waitForSelector('.shell__nav-link');
 
   // ---------------------------------------------------------------------------
-  h.step('inventory() lists the generated library’s registered ids');
+  await h.step('inventory() lists the generated library’s registered ids');
 
   const inventoryText = (await page.textContent('.home__panel:last-of-type')) ?? '';
   for (const id of [
@@ -283,7 +283,7 @@ export default async function run(page, h) {
   }
 
   // ---------------------------------------------------------------------------
-  h.step('Configuration diagnostics report where configuration came from (negative check)');
+  await h.step('Configuration diagnostics report where configuration came from (negative check)');
 
   const diagnostics = (await page.textContent('.home__panel')) ?? '';
   h.check(
@@ -302,7 +302,7 @@ export default async function run(page, h) {
   await h.screenshot('registered-ids-and-config-sources', page.locator('.home__panel').last());
 
   // ---------------------------------------------------------------------------
-  h.step('The published declarations carry nullable types');
+  await h.step('The published declarations carry nullable types');
 
   const extensionsDts = readFileSync(entryTypes(DIST, './extensions'), 'utf8');
   h.check(
@@ -319,7 +319,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('The exports map advertises the root and six subpaths, all resolvable');
+  await h.step('The exports map advertises the root and six subpaths, all resolvable');
 
   const pkg = JSON.parse(readFileSync(join(DIST, 'package.json'), 'utf8'));
   const subpaths = Object.keys(pkg.exports ?? {}).filter((k) => k !== './package.json');
@@ -340,7 +340,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('Publishing is still blocked while the scope is unconfirmed');
+  await h.step('Publishing is still blocked while the scope is unconfirmed');
 
   h.check(
     'private: true survives into the built artifact',
@@ -361,7 +361,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('No unexpected console errors (negative check)');
+  await h.step('No unexpected console errors (negative check)');
 
   // Both configuration files are served beside the template, and it reads no Nuxeo
   // document for configuration, so no request is expected to fail.

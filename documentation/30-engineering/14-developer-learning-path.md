@@ -505,8 +505,10 @@ Configuration facts worth knowing before you write a spec:
 - `workers: 1` — serial, because every spec shares one Nuxeo repository
 - `retries: CI ? 2 : 1`, `timeout: 45_000`, `expect.timeout: 10_000`, `forbidOnly: true`
 - Trace, screenshot and video all `retain-on-failure` / `only-on-failure`
-- **Two auth mechanisms, both required**: `httpCredentials` for Basic on every request, _and_ an
-  `addInitScript` that writes the app's session into `sessionStorage`. `storageState` does not work
+- **Two auth mechanisms, both required**: `httpCredentials` with `send: 'always'` for Basic on every
+  `page.request` call, _and_ an `addInitScript` that writes the app's session into `sessionStorage`,
+  which the app turns into the header on its own XHRs. `signedIn` then checks both against `/me`
+  (NXSAT-643). `storageState` does not work
   because the app uses `sessionStorage`, not `localStorage`.
 
 Accessibility: `@axe-core/playwright` (also untracked), scanning 15 cases across 8 routes against
@@ -795,7 +797,7 @@ the last `@alfresco` package in NXSAT-637.
 
 Context that explains a lot of the workarounds: there has been no stable adf-hx release in twelve
 months (last true stable `7.19.5`, on an Angular 15 baseline); the published packages are compiled
-against **Angular 19.2.18** while this repo runs 20.3.33; and the dependency contract is
+against **Angular 19.2.18** while this repo runs 20.3.34; and the dependency contract is
 **under-declared** — one declared peer against thirteen imported packages — so the pin set is
 maintained by hand.
 
@@ -1278,20 +1280,26 @@ range, the range follows in brackets.
 
 **Four baselines, not one.** The Angular row was refreshed at `3f381e2` (#164), where the framework
 moved to 20.3.31 to clear two advisories, and again at `b15d9cf` (NXSAT-303, #300) where it moved to
-20.3.33 for GHSA-ff3f-86qr-9cv3 in `@angular/router`; the `dompurify` row was refreshed at that same
-commit, 3.4.13 -> 3.4.16 for GHSA-p98j-92pf-mc4p. The `@hylandsoftware/satori-ui` row was refreshed at
+20.3.33 for GHSA-ff3f-86qr-9cv3 in `@angular/router`, and again at #441, where it moved to
+20.3.34 for GHSA-jfgx-762w-99vr (CVE-2026-111753) in `@angular/common`. That last move is
+**lockfile-only**: `~20.3.33` already admitted 20.3.34, so the Angular row below reads
+`20.3.34 (~20.3.33)` — the resolved version moved and the declared range did not, and that
+mismatched patch digit is correct rather than a typo. All nine framework packages moved together,
+because their `peerDependencies` pin each other to an exact version. The `dompurify` row was refreshed at
+`b15d9cf`, 3.4.13 -> 3.4.16 for GHSA-p98j-92pf-mc4p. The `@hylandsoftware/satori-ui` row was refreshed at
 `d500aae` (NXSAT-308, #332), 0.2.0 -> 0.2.1, the newest Satori on the Angular 20 line. Those three rows
 do not come from `e334b0f` and cannot be reproduced there. **No other row has been re-verified since `e334b0f`**, and some may have
 drifted — `axios` and `brace-expansion` also moved at `b15d9cf`, as `overrides` rather than declared
 dependencies, and neither appears in this matrix at all. The honest fix is to re-baseline the whole
 matrix against one revision, which is more than a version bump should carry. Until then, reproduce
-the Angular and `dompurify` rows at `b15d9cf`, the Satori row at `d500aae` and the rest at `e334b0f`.
+the Angular row at #441, the `dompurify` row at `b15d9cf`, the Satori row at `d500aae` and the rest
+at `e334b0f`.
 
 ### Runtime dependencies
 
 | Package                                                                                    | Resolved                                 |
 | ------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `@angular/core`, `common`, `router`, `forms`, `compiler`, `animations`, `platform-browser` | 20.3.33 (`~20.3.33`)                     |
+| `@angular/core`, `common`, `router`, `forms`, `compiler`, `animations`, `platform-browser` | 20.3.34 (`~20.3.33`)                     |
 | `@angular/material`                                                                        | 20.2.14 (`~20.2.0`)                      |
 | `@angular/cdk`                                                                             | 20.2.14 (`~20.2.0`)                      |
 | `@angular/material-date-fns-adapter`                                                       | 20.2.14                                  |

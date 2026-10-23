@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-126 exported symbol(s).
+127 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -949,6 +949,7 @@ class NxsPagerComponent {
 class NxsPermissionsPanelComponent {
     readonly documentId: _angular_core.InputSignal<string>;
     readonly permissionsChanged: _angular_core.InputSignal<(() => void) | null>;
+    readonly offer: _angular_core.InputSignal<"all" | "type">;
     protected readonly idPrefix: string;
     protected readonly localColumns: string[];
     protected readonly inheritedColumns: string[];
@@ -1010,7 +1011,7 @@ class NxsPermissionsPanelComponent {
     kind: 'failed';
     }>): string;
     static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsPermissionsPanelComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsPermissionsPanelComponent, "nxs-permissions-panel", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "permissionsChanged": { "alias": "permissionsChanged"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsPermissionsPanelComponent, "nxs-permissions-panel", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "permissionsChanged": { "alias": "permissionsChanged"; "required": false; "isSignal": true; }; "offer": { "alias": "offer"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
     }
 }
 interface NxsPickableColumn {
@@ -1543,6 +1544,7 @@ function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): st
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
+function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
 function nxsPropertyText(value: unknown): string;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
@@ -1861,7 +1863,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-315 exported symbol(s).
+316 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -2625,6 +2627,9 @@ interface NuxeoDocument {
     isFavorite: boolean;
     };
     subscribedNotifications?: string[];
+    breadcrumb?: {
+    entries?: NuxeoDocument[];
+    };
     [key: string]: unknown;
     };
     }
@@ -3322,6 +3327,7 @@ function normalizeDocumentPickerList(res: PaginatedListMeta & {
 }
 function normalizeNuxeoPath(path: string): string;
 function noteFormatLabel(mimeType: string | null | undefined): string;
+function nuxeoBreadcrumbTitles(doc: Pick<NuxeoDocument, 'contextParameters'> | null | undefined): Map<string, string>;
 function nuxeoPathSegments(path: string): string[];
 function nuxeoPathsEqual(a: string, b: string): boolean;
 function nuxeoPathsEqualFlexible(a: string, b: string): boolean;
@@ -3578,6 +3584,7 @@ const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>>;
 const PLATFORM_MISSING_TRANSLATION_NEXT: InjectionToken<MissingTranslationHandler>;
 interface PermissionEntry {
     id: string;
+    aceId?: string;
     userGroup: string;
     right: string;
     timeFrame: string;
