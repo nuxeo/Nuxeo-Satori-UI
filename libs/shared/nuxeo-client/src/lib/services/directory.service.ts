@@ -90,8 +90,9 @@ export class DirectoryService {
   /**
    * Loads active directory entries for metadata pickers via Directory.SuggestEntries.
    * Each call queries the server (Nuxeo Web UI parity — no session-wide list cache).
+   * `lang` localises the labels; English unless the caller asks for another language.
    */
-  getEntries(directoryName: string): Observable<DirectoryEntry[]> {
+  getEntries(directoryName: string, lang = 'en'): Observable<DirectoryEntry[]> {
     return this.api
       .post<DirectoryEntry[]>(
         '/nuxeo/api/v1/automation/Directory.SuggestEntries',
@@ -101,7 +102,7 @@ export class DirectoryService {
             contains: true,
             dbl10n: false,
             localize: true,
-            lang: 'en',
+            lang,
             searchTerm: '',
           },
           context: {},

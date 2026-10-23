@@ -2,16 +2,13 @@ import { Component, DestroyRef, LOCALE_ID, inject, signal, computed } from '@ang
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { forkJoin, Observable, of } from 'rxjs';
-import { catchError } from 'rxjs/operators';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
+import { forkJoin, map, Observable } from 'rxjs';
 import { MatIconModule } from '@angular/material/icon';
-import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSnackBarModule, MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { MatTableModule } from '@angular/material/table';
 import { MatSortModule, Sort } from '@angular/material/sort';
@@ -30,7 +27,6 @@ import {
   DocumentDetailService,
   DirectoryService,
   DirectoryEntry,
-  docTypeIcon,
   avatarColor,
   canViewDocumentAuditLog,
   canWriteDocument,
@@ -40,7 +36,6 @@ import {
   hasDocumentPermissionsEnricher,
   PERMISSION_DENIED_KEY,
   isPermissionDeniedError,
-  NON_CONTENT_DOCUMENT_TYPES,
   isMailSendError,
   mailSendFailureMessage,
   readClipboardDocs,
@@ -51,11 +46,11 @@ import {
   shouldShowUserWorkspaceBreadcrumbs,
   postTrashBrowseRouterUrl,
   BrowseContextService,
-  formatAceDateRange,
+  canManageDocumentPermissions,
+  decodeNuxeoPathSegment,
   permissionRightLabel,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ShareDialogComponent,
@@ -70,35 +65,73 @@ import {
   DateMaskPipe,
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
-} from '@nuxeo-satori/platform/ui';
-import {
-  AddPermissionDialogComponent,
-  AddPermissionDialogData,
-  DeletePermissionDialogComponent,
-  DeletePermissionDialogData,
-  ShareExternalDialogComponent,
-  ShareExternalDialogData,
-  UpdatePermissionDialogComponent,
-  UpdatePermissionDialogData,
-} from '@agentic-ui/shared-permission-dialogs';
+} from '@nuxeo/satori-platform/ui';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import {
+  NXS_PERMISSIONS_PANEL_ID,
+  NXS_PRIMITIVE_IDS,
+  NxsBreadcrumbsComponent,
+  NxsDeletePermissionDialogComponent,
+  NxsDocumentListComponent,
+  NxsFolderHeaderComponent,
+  NxsPermissionsPanelComponent,
+  NxsShareExternalDialogComponent,
+  NxsSpinnerComponent,
+  NxsUpdatePermissionDialogComponent,
+  nxsAceTimeFrame,
+  nxsErrorStatus,
+  provideNxsThumbnailCache,
+  NxsToastService,
+  provideNxsToast,
+  type NxsBreadcrumbItem,
+  type NxsDeletePermissionDialogData,
+  type NxsDocumentListColumn,
+  type NxsDocumentListSort,
+  type NxsErrorStatus,
+  type NxsShareExternalDialogData,
+  type NxsUpdatePermissionDialogData,
+} from '@nuxeo/satori-platform/components';
+
+/**
+ * The property each member column sorts by on the server: the three columns this page shows, each
+ * of which Nuxeo Web UI's collection view also sorts, and `default_content_collection` was checked
+ * to accept.
+ */
+const MEMBER_SORT_FIELDS: Readonly<Record<string, string>> = {
+  title: 'dc:title',
+  modified: 'dc:modified',
+  lastContributor: 'dc:lastContributor',
+};
+
+const MEMBER_PAGE_SIZE = 50;
 
 @Component({
   selector: 'lib-collection-detail',
   standalone: true,
-  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [
+    provideSatoriDateAdapter(),
+    provideTranslatedDatepickerIntl(),
+    provideNxsToast(),
+    provideNxsThumbnailCache(),
+  ],
   imports: [
     DateMaskPipe,
+    ExtensionOutletComponent,
+    NxsBreadcrumbsComponent,
+    NxsDocumentListComponent,
+    NxsFolderHeaderComponent,
+    NxsPermissionsPanelComponent,
+    NxsSpinnerComponent,
     TranslatePipe,
     DatePipe,
     FormsModule,
     MatIconModule,
-    MatProgressSpinnerModule,
     MatButtonModule,
     MatTabsModule,
     MatTooltipModule,
     MatMenuModule,
-    MatSnackBarModule,
     MatDialogModule,
     MatTableModule,
     MatSortModule,
@@ -108,7 +141,6 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     MatSelectModule,
     MatDatepickerModule,
     SatAvatarModule,
-    SatBreadcrumbsComponent,
     SatTagModule,
   ],
   templateUrl: './collection-detail.html',
@@ -122,11 +154,12 @@ export class CollectionDetailComponent {
   private readonly collectionService = inject(CollectionService);
   private readonly detailService = inject(DocumentDetailService);
   private readonly directoryService = inject(DirectoryService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly dialog = inject(MatDialog);
   private readonly destroyRef = inject(DestroyRef);
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly adminAccess = inject(ADMIN_ACCESS_CHECKS);
+  private readonly appConfig = inject(AppConfigService);
 
   readonly collection = signal<NuxeoDocument | null>(null);
   /**
@@ -140,11 +173,31 @@ export class CollectionDetailComponent {
   readonly members = signal<NuxeoDocument[]>([]);
   readonly loading = signal(true);
   readonly error = signal<string | null>(null);
+  /** Which error state `error` shows: the status of the member request that failed. */
+  readonly errorStatus = signal<NxsErrorStatus>(500);
   readonly totalSize = signal(0);
-  readonly thumbnailMap = signal<Record<string, string | null>>({});
-  /** Batch token for thumbnail loads, so a superseded response cannot write. */
-  private thumbnailGeneration = 0;
-  /** Request token for the members load — see `loadMembers` for why the two are separate. */
+  readonly memberPageSize = MEMBER_PAGE_SIZE;
+  readonly memberPageIndex = signal(0);
+  readonly membersHaveNextPage = signal(false);
+  readonly memberSort = signal<NxsDocumentListSort | null>(null);
+  /** The active language as a signal, so the column names follow a language change. */
+  private readonly currentLang = toSignal(
+    this.translate.onLangChange.pipe(map((event) => event.lang)),
+    { initialValue: this.translate.currentLang },
+  );
+  /** The member columns, as the list takes them: translated, each sorted on the server. */
+  readonly memberColumns = computed<readonly NxsDocumentListColumn[]>(() => {
+    this.currentLang();
+    return [
+      { key: 'title', label: this.translate.instant('collections.collection-detail.title') },
+      { key: 'modified', label: this.translate.instant('collections.collection-detail.modified') },
+      {
+        key: 'lastContributor',
+        label: this.translate.instant('collections.collection-detail.last-contributor'),
+      },
+    ].map((column) => ({ ...column, sortable: column.key in MEMBER_SORT_FIELDS }));
+  });
+  /** Request token for the members load — see `loadMembers`. */
   private memberGeneration = 0;
   /**
    * Request token for the collection read and its fallback. Without it a read for a collection
@@ -194,7 +247,9 @@ export class CollectionDetailComponent {
   private sortActive = signal('');
   private sortDirection = signal<'asc' | 'desc' | ''>('');
   private breadcrumbPathCache: string | null = null;
-  private breadcrumbItemsCache: SatBreadcrumbsItem[] = [];
+  private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
+  /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
+  readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
 
   readonly isInClipboard = computed(() =>
     this.clipboardDocs().some((d) => d.uid === this.collectionUid),
@@ -218,7 +273,7 @@ export class CollectionDetailComponent {
 
   private readonly browseContext = inject(BrowseContextService);
 
-  readonly breadcrumbItems = computed<SatBreadcrumbsItem[]>(() => {
+  readonly breadcrumbItems = computed<NxsBreadcrumbItem[]>(() => {
     const col = this.collection();
     if (!col?.path) return [];
 
@@ -232,7 +287,7 @@ export class CollectionDetailComponent {
     let accumulated = '/browse';
     this.breadcrumbItemsCache = segments.map((s) => {
       accumulated += `/${s}`;
-      return { label: decodeURIComponent(s), href: accumulated };
+      return { label: decodeNuxeoPathSegment(s), routerLink: accumulated };
     });
     return this.breadcrumbItemsCache;
   });
@@ -247,44 +302,37 @@ export class CollectionDetailComponent {
     );
   });
 
-  onBreadcrumbClick(event: MouseEvent): void {
-    const anchor = (event.target as HTMLElement).closest('a');
-    const href = anchor?.getAttribute('href');
-    if (href) {
-      event.preventDefault();
-      void this.router.navigateByUrl(href);
-    }
-  }
+  /** The collection's local and inherited entries: the `nxs-` panel, resolved by its ID. */
+  readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
+  /** The panel's writes can change the external shares this tab lists itself. */
+  readonly onPermissionsChanged = () => this.loadCollection();
 
-  readonly localAces = computed<NuxeoAce[]>(() => {
+  /**
+   * Web UI's external-user card: the collection's own pending and effective shares. An inherited
+   * share is the parent's to edit, and an archived one has expired.
+   */
+  readonly externalAces = computed<(NuxeoAce & { aclName: string })[]>(() => {
     const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
     if (!acls) return [];
-    const local = acls.find((a) => a.name === 'local');
-    return local?.aces.filter((ace) => ace.granted && !ace.externalUser) ?? [];
+    return acls
+      .filter((acl) => acl.name !== 'inherited')
+      .flatMap((acl) => acl.aces.map((ace) => ({ ...ace, aclName: acl.name })))
+      .filter(
+        (ace) =>
+          ace.externalUser &&
+          ace.granted &&
+          (ace.status === 'pending' || ace.status === 'effective'),
+      );
   });
 
-  readonly inheritedAces = computed<NuxeoAce[]>(() => {
-    const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
-    if (!acls) return [];
-    const inherited = acls.find((a) => a.name === 'inherited');
-    return inherited?.aces.filter((ace) => ace.granted) ?? [];
-  });
+  /** Web UI's `org.nuxeo.web.ui.permissions.externalUsers`, on unless a package turns it off. */
+  readonly showExternalShares = computed(() =>
+    this.appConfig.featureToggle('permissions.externalUsers', true),
+  );
 
-  readonly externalAces = computed<NuxeoAce[]>(() => {
-    const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
-    if (!acls) return [];
-    return acls.flatMap((a) => a.aces).filter((ace) => ace.externalUser && ace.granted);
-  });
-
-  readonly isInheritanceBlocked = computed<boolean>(() => {
-    const acls = this.collection()?.contextParameters?.['acls'] as NuxeoAcl[] | undefined;
-    if (!acls) return false;
-    return !acls.some((a) => a.name === 'inherited');
-  });
+  readonly canManagePermissions = computed(() => canManageDocumentPermissions(this.collection()));
 
   constructor() {
-    this.destroyRef.onDestroy(() => this.revokeThumbnails());
-
     this.route.paramMap.pipe(takeUntilDestroyed()).subscribe((params) => {
       this.releaseLockRequest();
       this.collectionUid = params.get('uid') ?? '';
@@ -369,11 +417,8 @@ export class CollectionDetailComponent {
   loadMembers(): void {
     // Claimed at request start, and checked on BOTH callbacks.
     //
-    // The thumbnail generation below does not cover this, because it is minted from *inside* the
-    // members response — so it orders thumbnail batches against each other and leaves the members
-    // request itself unguarded. Navigating A -> B starts two member requests; if B resolves first and
-    // A lands afterwards, A overwrote `members` and `totalSize` with the previous collection's data
-    // and its `loadThumbnails` then took the newest thumbnail generation, discarding B's images too.
+    // Navigating A -> B starts two member requests; if B resolves first and A lands afterwards, A
+    // overwrote `members` and `totalSize` with the previous collection's data.
     //
     // The uid is captured as well as the counter: the route can change between request and response,
     // and the uid is what the user is actually looking at.
@@ -382,22 +427,31 @@ export class CollectionDetailComponent {
     this.loading.set(true);
     this.error.set(null);
 
+    const sort = this.memberSort();
+    const sortBy = sort ? MEMBER_SORT_FIELDS[sort.key] : undefined;
     this.collectionService
-      .getCollectionMembers(requestedUid, 50)
+      .getCollectionMembers(requestedUid, MEMBER_PAGE_SIZE, {
+        currentPageIndex: this.memberPageIndex(),
+        sort:
+          sort && sortBy ? [{ sortBy, sortOrder: sort.direction === 'asc' ? 'ASC' : 'DESC' }] : [],
+      })
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (res) => {
           if (generation !== this.memberGeneration || requestedUid !== this.collectionUid) return;
           this.members.set(res.entries);
           this.totalSize.set(res.totalSize);
+          this.membersHaveNextPage.set(
+            (res as { isNextPageAvailable?: boolean }).isNextPageAvailable === true,
+          );
           this.loading.set(false);
-          this.loadThumbnails(res.entries);
         },
-        error: () => {
+        error: (err: unknown) => {
           // Guarded too, and it has to clear `loading` only for the request that still owns it — a
           // stale failure would otherwise show an error over a newer collection's results. The
           // superseding call already set `loading` true for itself.
           if (generation !== this.memberGeneration || requestedUid !== this.collectionUid) return;
+          this.errorStatus.set(nxsErrorStatus(err));
           this.error.set(
             this.translate.instant('collections.message.failed-to-load-collection-contents'),
           );
@@ -406,63 +460,18 @@ export class CollectionDetailComponent {
       });
   }
 
-  private loadThumbnails(docs: NuxeoDocument[]): void {
-    // Same guard as the Search, Trash, Assets and Browse loaders: a request started for the previous
-    // collection could otherwise resolve after the reset below and insert stale data.
-    const generation = ++this.thumbnailGeneration;
-    // The reset that made the leak unbounded: `thumbnailMap.set({})` dropped the last
-    // batch's URLs without revoking the blobs behind them, so every navigation to
-    // another collection pinned another batch in memory for the life of the document.
-    this.revokeThumbnails();
-    this.thumbnailMap.set({});
-    for (const doc of docs) {
-      if (!this.canLoadThumbnail(doc)) continue;
-      this.detailService
-        .fetchThumbnail(doc.uid)
-        .pipe(
-          catchError(() => of(null)),
-          takeUntilDestroyed(this.destroyRef),
-        )
-        .subscribe((blob) => {
-          // Drop a response from a superseded batch. Without this a thumbnail request started for the
-          // previous collection could resolve after the reset above and reinsert a stale blob URL —
-          // and the map is also the revocation ledger, so the leaked URL is then never revoked.
-          if (!blob || generation !== this.thumbnailGeneration) return;
-          const url = URL.createObjectURL(blob);
-          this.thumbnailMap.update((m) => {
-            const previous = m[doc.uid];
-            if (previous && previous !== url) URL.revokeObjectURL(previous);
-            return {
-              ...m,
-              [doc.uid]: url,
-            };
-          });
-        });
-    }
+  /** Another page of members, in the same order. */
+  goToMemberPage(pageIndex: number): void {
+    if (pageIndex < 0 || pageIndex === this.memberPageIndex()) return;
+    this.memberPageIndex.set(pageIndex);
+    this.loadMembers();
   }
 
-  private revokeThumbnails(): void {
-    for (const url of Object.values(this.thumbnailMap())) {
-      if (url) URL.revokeObjectURL(url);
-    }
-  }
-
-  private canLoadThumbnail(doc: NuxeoDocument): boolean {
-    const normalizedType = doc.type.trim().toLowerCase();
-    return normalizedType.length > 0 && !NON_CONTENT_DOCUMENT_TYPES.has(normalizedType);
-  }
-
-  docIcon(doc: NuxeoDocument): string {
-    return docTypeIcon(doc.type);
-  }
-
-  lastContributor(doc: NuxeoDocument): string {
-    return (doc.properties?.['dc:lastContributor'] as string) ?? '';
-  }
-
-  contributorInitial(doc: NuxeoDocument): string {
-    const c = this.lastContributor(doc);
-    return c ? c.charAt(0).toUpperCase() : '?';
+  /** A new order starts from the first page. */
+  onMemberSortChange(sort: NxsDocumentListSort | null): void {
+    this.memberSort.set(sort);
+    this.memberPageIndex.set(0);
+    this.loadMembers();
   }
 
   onRowClick(doc: NuxeoDocument): void {
@@ -475,7 +484,7 @@ export class CollectionDetailComponent {
     const col = this.collection();
     if (!col) return;
     if (hasDocumentPermissionsEnricher(col) && !canWriteDocument(col)) {
-      this.toast(this.translate.instant(PERMISSION_DENIED_KEY));
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
 
@@ -491,7 +500,7 @@ export class CollectionDetailComponent {
         if (updatedDoc) {
           this.collection.set(updatedDoc);
           this.browseContext.requestTreeRefresh();
-          this.toast(this.translate.instant('browse.message.collection-updated'));
+          this.toast.show(this.translate.instant('browse.message.collection-updated'));
         }
       });
   }
@@ -499,7 +508,7 @@ export class CollectionDetailComponent {
   toggleLock(): void {
     if (this.actionInProgress() || !this.showsLockAction()) return;
     if (!this.canEditCollection()) {
-      this.toast(
+      this.toast.error(
         this.translate.instant(
           this.isLocked() ? 'common.lock.locked-by-another-user' : PERMISSION_DENIED_KEY,
         ),
@@ -528,7 +537,7 @@ export class CollectionDetailComponent {
           wasLocked ? null : (updated?.lockOwner ?? this.currentUsername() ?? null),
         );
         this.lockCreated.set(wasLocked ? null : (updated?.lockCreated ?? new Date().toISOString()));
-        this.toast(
+        this.toast.show(
           this.translate.instant(
             wasLocked
               ? 'collections.message.collection-unlocked'
@@ -540,7 +549,7 @@ export class CollectionDetailComponent {
         if (request !== this.lockRequest) return;
         this.actionInProgress.set(null);
         if (uid !== this.collectionUid) return;
-        this.toast(this.translate.instant(this.lockRefusalKey(err, wasLocked)));
+        this.toast.error(this.translate.instant(this.lockRefusalKey(err, wasLocked)));
       },
     });
   }
@@ -590,7 +599,7 @@ export class CollectionDetailComponent {
         const wasSub = this.isSubscribed();
         this.isSubscribed.set(!wasSub);
         this.actionInProgress.set(null);
-        this.toast(
+        this.toast.show(
           this.translate.instant(
             wasSub
               ? 'collections.message.notifications-disabled'
@@ -600,7 +609,7 @@ export class CollectionDetailComponent {
       },
       error: () => {
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.action-failed'));
+        this.toast.error(this.translate.instant('browse.message.action-failed'));
       },
     });
   }
@@ -609,7 +618,7 @@ export class CollectionDetailComponent {
     const col = this.collection();
     if (this.actionInProgress()) return;
     if (col && hasDocumentPermissionsEnricher(col) && !canRemoveDocument(col)) {
-      this.toast(this.translate.instant(PERMISSION_DENIED_KEY));
+      this.toast.error(this.translate.instant(PERMISSION_DENIED_KEY));
       return;
     }
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
@@ -633,7 +642,7 @@ export class CollectionDetailComponent {
           .subscribe({
             next: () => {
               this.actionInProgress.set(null);
-              this.toast(this.translate.instant('browse.message.collection-moved-to-trash'));
+              this.toast.show(this.translate.instant('browse.message.collection-moved-to-trash'));
               this.browseContext.requestTreeRefresh();
               const col = this.collection();
               const redirectUrl = col?.path ? postTrashBrowseRouterUrl(col.path) : '/collections';
@@ -641,7 +650,7 @@ export class CollectionDetailComponent {
             },
             error: (err) => {
               this.actionInProgress.set(null);
-              this.toast(
+              this.toast.error(
                 isPermissionDeniedError(err)
                   ? this.translate.instant(PERMISSION_DENIED_KEY)
                   : this.translate.instant('browse.message.failed-to-delete-collection'),
@@ -660,12 +669,12 @@ export class CollectionDetailComponent {
       const updated = current.filter((c) => c.uid !== this.collectionUid);
       this.clipboardDocs.set(updated);
       writeClipboardDocs(updated);
-      this.toast(this.translate.instant('collections.message.removed-from-clipboard'));
+      this.toast.show(this.translate.instant('collections.message.removed-from-clipboard'));
     } else {
       const updated = [...current, { uid: col.uid, title: col.title, type: col.type }];
       this.clipboardDocs.set(updated);
       writeClipboardDocs(updated);
-      this.toast(this.translate.instant('collections.message.added-to-clipboard'));
+      this.toast.show(this.translate.instant('collections.message.added-to-clipboard'));
     }
     window.dispatchEvent(new Event('clipboard-changed'));
   }
@@ -708,60 +717,32 @@ export class CollectionDetailComponent {
     return permissionRightLabel(permission, (key) => this.translate.instant(key));
   }
 
+  /** The day each date's writer picked, as the panel and the dialogs show it. */
   aceTimeFrame(ace: NuxeoAce): string {
-    return formatAceDateRange(
-      ace.begin,
-      ace.end,
-      (key, params) => this.translate.instant(key, params),
-      this.locale,
-    );
+    return nxsAceTimeFrame(ace, (key, params) => this.translate.instant(key, params), this.locale);
   }
 
-  addPermission(): void {
-    const dialogRef = this.dialog.open(AddPermissionDialogComponent, {
-      data: { documentUid: this.collectionUid } satisfies AddPermissionDialogData,
+  deletePermission(ace: NuxeoAce & { aclName?: string }): void {
+    const dialogRef = this.dialog.open(NxsDeletePermissionDialogComponent, {
       width: '560px',
-    });
-
-    dialogRef.afterClosed().subscribe((created: boolean | undefined) => {
-      if (created) {
-        this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-added'));
-      }
-    });
-  }
-
-  editPermission(ace: NuxeoAce): void {
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: { documentUid: this.collectionUid, ace } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-
-    dialogRef.afterClosed().subscribe((updated: boolean | undefined) => {
-      if (updated) {
-        this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-updated'));
-      }
-    });
-  }
-
-  deletePermission(ace: NuxeoAce): void {
-    const dialogRef = this.dialog.open(DeletePermissionDialogComponent, {
+      maxWidth: '95vw',
+      role: 'alertdialog',
       data: {
         documentUid: this.collectionUid,
         ace,
-        permissionLabel: this.permissionLabel(ace.permission),
-        timeFrameLabel: this.aceTimeFrame(ace),
-      } satisfies DeletePermissionDialogData,
-      width: '560px',
+        acl: ace.aclName,
+      } satisfies NxsDeletePermissionDialogData,
     });
 
-    dialogRef.afterClosed().subscribe((deleted: boolean | undefined) => {
-      if (deleted) {
-        this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-deleted'));
-      }
-    });
+    dialogRef
+      .afterClosed()
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((deleted: boolean | undefined) => {
+        if (deleted) {
+          this.loadCollection();
+          this.toast.show(this.translate.instant('browse.message.permission-deleted'));
+        }
+      });
   }
 
   displayUsername(ace: NuxeoAce): string {
@@ -769,21 +750,22 @@ export class CollectionDetailComponent {
   }
 
   editExternalPermission(ace: NuxeoAce): void {
-    const dialogRef = this.dialog.open(UpdatePermissionDialogComponent, {
-      data: {
-        documentUid: this.collectionUid,
-        ace,
-        isExternal: true,
-      } satisfies UpdatePermissionDialogData,
-      width: '520px',
-    });
-
-    dialogRef.afterClosed().subscribe((updated: boolean | undefined) => {
-      if (updated) {
-        this.loadCollection();
-        this.toast(this.translate.instant('browse.message.permission-updated'));
-      }
-    });
+    this.withVisiblePermissions((permissions) =>
+      this.dialog
+        .open(NxsUpdatePermissionDialogComponent, {
+          maxWidth: '95vw',
+          data: {
+            documentUid: this.collectionUid,
+            ace,
+            permissions,
+          } satisfies NxsUpdatePermissionDialogData,
+        })
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((updated: boolean | undefined) => {
+          if (updated) this.loadCollection();
+        }),
+    );
   }
 
   sendNotificationEmail(ace: NuxeoAce): void {
@@ -793,11 +775,11 @@ export class CollectionDetailComponent {
     this.detailService.sendNotificationEmailForPermission(this.collectionUid, ace.id).subscribe({
       next: () => {
         this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.notification-email-sent'));
+        this.toast.show(this.translate.instant('browse.message.notification-email-sent'));
       },
       error: (err) => {
         this.actionInProgress.set(null);
-        this.toast(
+        this.toast.error(
           isMailSendError(err)
             ? mailSendFailureMessage('send', (key) => this.translate.instant(key))
             : this.translate.instant('collections.message.failed-to-send-notification'),
@@ -807,45 +789,43 @@ export class CollectionDetailComponent {
   }
 
   shareWithExternal(): void {
-    const dialogRef = this.dialog.open(ShareExternalDialogComponent, {
-      data: { documentUid: this.collectionUid } satisfies ShareExternalDialogData,
-      width: '520px',
-    });
-
-    dialogRef.afterClosed().subscribe((created: boolean | undefined) => {
-      if (created) {
-        this.loadCollection();
-        this.toast(this.translate.instant('browse.message.shared-with-external-user'));
-      }
-    });
+    this.withVisiblePermissions((permissions) =>
+      this.dialog
+        .open(NxsShareExternalDialogComponent, {
+          maxWidth: '95vw',
+          data: {
+            documentUid: this.collectionUid,
+            permissions,
+          } satisfies NxsShareExternalDialogData,
+        })
+        .afterClosed()
+        .pipe(takeUntilDestroyed(this.destroyRef))
+        .subscribe((shared: boolean | undefined) => {
+          if (shared) this.loadCollection();
+        }),
+    );
   }
 
-  toggleInheritance(): void {
-    if (this.actionInProgress()) return;
-    this.actionInProgress.set('inheritance');
-
-    const blocked = this.isInheritanceBlocked();
-    const op = blocked
-      ? this.detailService.unblockPermissionInheritance(this.collectionUid)
-      : this.detailService.blockPermissionInheritance(this.collectionUid);
-
-    op.subscribe({
-      next: () => {
-        this.actionInProgress.set(null);
-        this.loadCollection();
-        this.toast(
-          this.translate.instant(
-            blocked
-              ? 'collections.message.inheritance-unblocked'
-              : 'collections.message.inheritance-blocked',
-          ),
-        );
-      },
-      error: () => {
-        this.actionInProgress.set(null);
-        this.toast(this.translate.instant('browse.message.action-failed'));
-      },
-    });
+  /**
+   * The rights a Collection offers, from the `userVisiblePermissions` enricher — Read,
+   * ReadCanCollect, ReadWrite and Everything on a stock server — rather than a fixed list. A
+   * failed read leaves the dialogs to their own default.
+   */
+  private withVisiblePermissions(open: (permissions: readonly string[] | null) => void): void {
+    const requestedFor = this.collectionUid;
+    this.detailService
+      .getDocumentPermissions(requestedFor)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe({
+        next: (doc) => {
+          if (requestedFor !== this.collectionUid) return;
+          const visible = doc.contextParameters?.['userVisiblePermissions'];
+          open(Array.isArray(visible) ? (visible as string[]) : null);
+        },
+        error: () => {
+          if (requestedFor === this.collectionUid) open(null);
+        },
+      });
   }
 
   // --- History tab ---
@@ -981,12 +961,4 @@ export class CollectionDetailComponent {
   }
 
   avatarColor = avatarColor;
-
-  private toast(message: string): void {
-    this.snackBar.open(message, this.translate.instant('common.ok'), {
-      duration: 3000,
-      horizontalPosition: 'center',
-      verticalPosition: 'bottom',
-    });
-  }
 }

@@ -1,7 +1,7 @@
 # Services — All Public Methods
 
 Most frontend data services live in `libs/shared/nuxeo-client/src/lib/services/` and are
-imported from `@nuxeo-satori/platform/nuxeo-client`.
+imported from `@nuxeo/satori-platform/nuxeo-client`.
 
 Knowledge Discovery uses the dedicated shared client in `libs/shared/kd-client/src/lib/`
 and is imported from `@agentic-ui/shared/kd-client`. It calls Knowledge Discovery through
@@ -26,7 +26,8 @@ fetchBlob(uid: string, options?: FetchBlobOptions): Observable<Blob>
 fetchBlobByXpath(uid: string, xpath: string, options?: FetchBlobOptions): Observable<Blob>
 fetchPdfRendition(uid: string): Observable<Blob>
 fetchThumbnail(uid: string): Observable<Blob>
-getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number): Observable<AuditLogList>
+getAuditLog(uid: string, pageSize?: number, currentPageIndex?: number, query?: AuditLogQuery): Observable<AuditLogList>
+  // query: principalName, eventIds, eventCategory, startDate, endDate (exclusive), sortBy, sortOrder — all server-side
 getPublishedVersions(uid: string): Observable<NuxeoDocumentList>
 getSectionTree(): Observable<NuxeoDocumentList>
 unpublishDocument(proxyUid: string): Observable<unknown>
@@ -56,7 +57,8 @@ replacePermissionWithNotification(uid, params): Observable<PermissionWithNotific
 addExternalPermissionWithNotification(uid, params): Observable<PermissionWithNotificationResult>  // saves with notify:false, then optional separate notification
 addExternalPermission(uid: string, params: { email, permission, notify?, comment?, begin?, end?, creator? }): Observable<NuxeoDocument>  // delegates to addPermission; notify defaults false; creator defaults to CURRENT_USERNAME
 replacePermission(uid: string, params: { id?, username?, email?, permission, notify?, comment?, begin?, end? }): Observable<NuxeoDocument>
-removePermission(uid: string, params: { user, permission, acl? }): Observable<NuxeoDocument>
+removePermission(uid: string, params: { user, permission, acl? }): Observable<NuxeoDocument>  // removes EVERY ACE `user` holds in `acl` — Nuxeo ignores `permission`
+removePermissionById(uid: string, aceId: string, acl = 'local'): Observable<NuxeoDocument>  // removes exactly one ACE by its Nuxeo id; an unknown id is a 200 no-op, so re-read to confirm
 blockPermissionInheritance(uid: string): Observable<NuxeoDocument>
 unblockPermissionInheritance(uid: string): Observable<NuxeoDocument>
 sendNotificationEmailForPermission(uid: string, aceId: string): Observable<NuxeoDocument>
@@ -67,17 +69,17 @@ sendNotificationEmailForPermission(uid: string, aceId: string): Observable<Nuxeo
 ## BrowseService (`browse.service.ts`)
 
 ```typescript
-getByPath(nuxeoPath: string): Observable<NuxeoDocument>
+getByPath(nuxeoPath: string): Observable<NuxeoDocument>  // enrichers acls, permissions, favorites, subscribedNotifications, breadcrumb — `breadcrumb` carries every ancestor's title, read with nuxeoBreadcrumbTitles()
 getUserWorkspace(): Observable<NuxeoDocument>  // POST automation/User.GetUserWorkspace (Web UI)
 getRepositoryRoot(): Observable<NuxeoDocument>  // falls back to NXQL when GET /path/ is denied
 getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>  // root + top-level folders for all permission profiles
-getBrowseFolderContents(nuxeoPath: string, pageSize?: number): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks
-getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // Favorites / Collection member listing
+getBrowseFolderContents(nuxeoPath: string, pageSize?: number, page?: BrowsePageRequest): Observable<BrowseFolderContents>  // browse page loader with restricted-user fallbacks; `page` ({ currentPageIndex?, sort?: { sortBy, sortOrder }[] }) is server paging and sort, honoured by every source — folders, Root, Domain, Favorites and Collection; below the root a failure is Nuxeo's own HttpErrorResponse, so map it with nxsErrorStatus()
+getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // Favorites / Collection member listing, one page in the requested order; a sort key the provider cannot use is HTTP 400
 getFolderContext(nuxeoPath: string): Observable<NuxeoDocument>  // includes @subtypes enricher
 getCreatableSubtypes(nuxeoPath: string): Observable<string[]>  // parsed allowed child types
 getChildren(nuxeoPath: string, pageSize?: number, currentPageIndex?: number): Observable<NuxeoDocumentList>
 getTreeChildren(parentUid: string, pageSize?: number): Observable<NuxeoDocumentList>  // tree_children page provider, all pages
-getNavTreeChildren(parent: NuxeoDocument, pageSize?: number): Observable<NuxeoDocumentList>  // Root/workspaces: tree_children; Domain: @children, folders only, total = folders kept
+getNavTreeChildren(parent: NuxeoDocument, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // Root/workspaces: tree_children; Domain: @children, folders only, first page, total = folders kept; with `page`, Root answers that one page in that order (a listing), without it Root lists every page (a tree level). A domain listing goes through getBrowseFolderContents, which pages @children with files
 getFolderIdsWithSubfolders(parentUids: readonly string[]): Observable<ReadonlySet<string> | null>  // one NXQL probe per tree level; null = incomplete, keep arrows
 updateDocument(uid: string, properties: Record<string, unknown>, options?: { enrichPermissions?: boolean }): Observable<NuxeoDocument>
 copyDocuments(uids: string[], targetUid: string): Observable<NuxeoDocument[]>  // Document.Copy automation
@@ -143,11 +145,29 @@ readonly selectedSavedSearchTitle: Signal<string>
 readonly savedSearchVersion: Signal<number>
 
 markSavedSearchDirty(): void
+```
+
+`SearchSession` in `libs/features/search` keeps the filters and the open saved search here, runs
+the one search the page and the drawer show, and publishes its `items` and `aggregations` here; the
+drawer's queue reads `items`. Search for results through the session, not by calling
+`SearchService.search` beside it.
+
+## SearchService (`search.service.ts`)
+
+`default_search`, saved searches and the lookups the search filters use. See
+`docs/api-integrations.md` §31 for the parameters and the server's behaviour.
+
+```typescript
+search(params: SearchQueryParams): Observable<SearchResponse>
 suggest(searchTerm: string, pageSize?: number): Observable<GlobalSearchSuggestion[]>
 getUserCollections(): Observable<SearchCollectionOption[]>
+getTagSuggestions(term: string): Observable<string[]>          // TagService.suggestTags; [] when blank or on failure
 getSavedSearches(pageProvider?: string): Observable<SavedSearchOption[]>
-getSavedSearchById(id: string): Observable<Record<string, string>>
+getSavedSearchById(id: string): Observable<Record<string, string>>   // lists as JSON
 saveSavedSearch(request: SaveSavedSearchParams): Observable<unknown>
+updateSavedSearch(id: string, request: SaveSavedSearchParams): Observable<unknown>
+renameSavedSearch(id: string, title: string, pageProviderName?: string): Observable<unknown>  // keeps params
+deleteSavedSearch(id: string): Observable<unknown>
 ```
 
 ---
@@ -225,7 +245,7 @@ markIngested(documentUids: string[]): Observable<NuxeoDocument[]>
 getById(uid: string): Observable<NuxeoDocument>
 getAll(pageSize?: number): Observable<NuxeoDocumentList>
 getFavorites(userId: string, pageSize?: number): Observable<NuxeoDocumentList>
-getCollectionMembers(collectionUid: string, pageSize?: number): Observable<NuxeoDocumentList>
+getCollectionMembers(collectionUid: string, pageSize?: number, page?: BrowsePageRequest): Observable<NuxeoDocumentList>  // one page, in the requested order; totalSize is the collection's size on every page
 updateProperties(uid: string, properties: Record<string, unknown>): Observable<NuxeoDocument>
 bulkDownload(collectionUid: string, filename?: string): Observable<Blob>
 ```
@@ -269,9 +289,10 @@ deleteGroup(groupname: string): Observable<void>
 ## TagService (`tag.service.ts`)
 
 ```typescript
-addTag(uid: string, label: string): Observable<unknown>
-removeTag(uid: string, label: string): Observable<unknown>
+addTag(uid: string, label: string): Observable<string[]> // the document's tags afterwards, as Nuxeo stored them
+removeTag(uid: string, label: string): Observable<string[]> // the tags left
 searchTags(term: string): Observable<string[]>
+suggestTags(term: string): Observable<string[]> // Tag.Suggestion, as Web UI; searchTags' directory 404s on Nuxeo 2025
 ```
 
 ---
@@ -384,7 +405,7 @@ search. That is a design change to a shared service and has not been made.
 Nuxeo vocabulary / directory lookups and admin CRUD. Picker methods (`getEntries`, `getL10nEntries`, `getAllL10nEntries`) query the server on every call (Nuxeo Web UI parity).
 
 ```typescript
-getEntries(directoryName: string): Observable<DirectoryEntry[]>
+getEntries(directoryName: string, lang?: string): Observable<DirectoryEntry[]>   // lang defaults to 'en'
 getAdminEntries(directoryName: string): Observable<ManagedDirectoryEntry[]>
 getDirectoryCatalog(): Observable<Map<string, DirectoryMetadata>>
 createEntry(directoryName: string, values: VocabularyEntryFormValues): Observable<ManagedDirectoryEntry>
@@ -445,7 +466,7 @@ Admin console operations (users, groups, system info).
 
 ## AppConfigService (`libs/shared/app-config/src/lib/app-config.service.ts`)
 
-Layer 0/1 configuration, loaded once at startup. Import: `@nuxeo-satori/platform/app-config`.
+Layer 0/1 configuration, loaded once at startup. Import: `@nuxeo/satori-platform/app-config`.
 
 | Member                                                                      | Notes                                                                                                                                                                                                                                                                                                      |
 | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -460,10 +481,24 @@ Removed in NXSAT-312, with no replacement: `loadBootstrap()`, `loadManifest()`, 
 
 ---
 
+## NxsToastService (`libs/shared/satori-components/src/lib/toast/toast.service.ts`)
+
+The core slice's one toast (NXSAT-308), over Material's `MatSnackBar`. Import:
+`@nuxeo/satori-platform/components`. Not provided in root: list `provideNxsToast()` in the
+component's `providers`. In a spec, `TestBed.overrideProvider(NxsToastService, { useValue })`.
+
+| Member                                                         | Notes                                                                                                                                                                                                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `show(message: string, options?: NxsToastOptions): void`       | Something happened. Announced politely. `message` is already translated; a blank one opens nothing.                                                                                                                                                             |
+| `error(message: string, options?: NxsToastErrorOptions): void` | Something the user asked for did not happen. Announced assertively. `retry` adds a translated Retry button running it.                                                                                                                                          |
+| `NxsToastOptions`                                              | `duration` in ms: below `NXS_TOAST_DURATION` (4000, Web UI's) it is raised to it, `0` keeps the toast until dismissed. `action: { label, run }` adds one button; a toast with an action defaults to `0`. Every toast has a Dismiss button and closes on Escape. |
+
+---
+
 ## DocumentLayoutService (`libs/shared/document-layouts/src/lib/document-layout.service.ts`)
 
 Per-type layouts (NXSAT-311). Internal: `@agentic-ui/shared/document-layouts` exports only the
-`<lib-document-layout [document] mode>` component that uses it, and no `@nuxeo-satori/platform`
+`<lib-document-layout [document] mode>` component that uses it, and no `@nuxeo/satori-platform`
 entry point re-exports the library.
 
 | Member                                                                                                                              | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -509,22 +544,4 @@ get<T>(path: string, options?: HttpOptions): Observable<T>
 post<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
 put<T>(path: string, body: unknown, options?: HttpOptions): Observable<T>
 delete<T>(path: string, options?: HttpOptions): Observable<T>
-```
-
----
-
-## AdfHxBridge (`libs/shared/adf-hx-bridge`)
-
-Nuxeo → HxPR bridge for NXENG-619 Scope A. Implements HxPR `DocumentApi` / `QueryApi` over `BrowseService` and `DocumentDetailService`.
-
-→ Architecture (layers, routes, hxp-* components, Scope A/B): `libs/shared/adf-hx-bridge/ARCHITECTURE.md`
-
-```typescript
-provideAdfHxNuxeoBridge(): EnvironmentProviders
-mapNuxeoDocumentToHx(doc: NuxeoDocument, repositoryId?: string): Document
-NuxeoDocumentApi.getDocumentById(docId, repositoryId?): Promise<{ data: Document }>
-NuxeoQueryApi.getDocumentsByNamedQuery(namedQuery?): Promise<{ data: QueryResult }>
-AdfHxDocumentService.getFolderChildren(parentId, repositoryId?, options?): Observable<DocumentFetchResults>
-AdfHxDocumentService.getAllChildren(parentId, options?, repositoryId?): Observable<DocumentFetchResults>
-NuxeoDocumentRouterService.navigateTo(document: Document): void
 ```

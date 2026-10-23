@@ -3,10 +3,7 @@
   <div class="viewer-content" [class.fit-real]="fitMode() === 'real' && contentType() === 'image'">
     @if (loading()) {
       <div class="viewer-loading">
-        <mat-spinner
-          diameter="36"
-          [attr.aria-label]="'shared-ui.document-viewer.loading' | translate"
-        />
+        <nxs-spinner diameter="36" [label]="'shared-ui.document-viewer.loading' | translate" />
       </div>
     } @else if (annotationsTab() && !arenderAvailable()) {
       <div class="viewer-placeholder">

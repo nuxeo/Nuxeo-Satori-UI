@@ -23,10 +23,13 @@ import {
   WorkflowService,
   DocumentService,
   NuxeoApiBase,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideSatoriDateAdapter, provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo/satori-platform/ui';
 
 @Component({
   selector: 'lib-task-detail',

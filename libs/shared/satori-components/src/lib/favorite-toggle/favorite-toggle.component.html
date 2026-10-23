@@ -1,0 +1,19 @@
+<button
+  mat-icon-button
+  type="button"
+  class="nxs-favorite-toggle__button"
+  [class.nxs-favorite-toggle__button--on]="favorite()"
+  [attr.aria-label]="'satori-components.favorite-toggle.label' | translate"
+  [attr.aria-pressed]="favorite()"
+  [attr.aria-busy]="busy() || null"
+  [matTooltip]="
+    (favorite()
+      ? 'satori-components.favorite-toggle.remove'
+      : 'satori-components.favorite-toggle.add'
+    ) | translate
+  "
+  [disabled]="disabled()"
+  (click)="press($event)"
+>
+  <mat-icon aria-hidden="true">{{ favorite() ? 'star' : 'star_border' }}</mat-icon>
+</button>

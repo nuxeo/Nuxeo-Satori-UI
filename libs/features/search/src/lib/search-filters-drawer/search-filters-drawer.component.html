@@ -1,399 +1,46 @@
-<div class="drawer-header-actions">
-  <div class="drawer-search-row-primary">
-    <div class="saved-filters-dropdown" (focusout)="onSavedSearchFocusOut($event)">
-      <button
-        class="saved-filters-trigger"
-        type="button"
-        [attr.aria-expanded]="savedSearchOpen()"
-        [attr.aria-label]="savedSearchInput() || ('search.saved-searches' | translate)"
-        (click)="onSavedSearchToggle()"
-      >
-        <span class="saved-filters-label">{{
-          savedSearchInput() || ('search.search-filters' | translate)
-        }}</span>
-        <mat-icon class="saved-filters-arrow">arrow_drop_down</mat-icon>
-      </button>
-
-      @if (savedSearchOpen()) {
-        <div class="saved-filters-panel">
-          @if (savedSearchesLoading()) {
-            <div class="saved-filters-empty">
-              {{ 'search.search-filters-drawer.loading-saved-searches' | translate }}
-            </div>
-          } @else if (availableSavedSearches().length === 0) {
-            <div class="saved-filters-empty">
-              {{ 'search.search-filters-drawer.no-saved-searches' | translate }}
-            </div>
-          } @else {
-            <div class="saved-filters-search">
-              <input
-                class="saved-filters-search-input"
-                type="text"
-                [placeholder]="'search.search-filters-drawer.search' | translate"
-                [value]="savedSearchFilter()"
-                (input)="savedSearchFilter.set($any($event.target).value)"
-              />
-            </div>
-            @if (filteredSavedSearches().length === 0) {
-              <div class="saved-filters-empty">
-                {{ 'search.search-filters-drawer.no-matching-saved-searches' | translate }}
-              </div>
-            } @else {
-              @for (option of filteredSavedSearches(); track option.key) {
-                <button
-                  class="saved-filters-option"
-                  type="button"
-                  (mousedown)="selectSavedSearch(option)"
-                >
-                  <mat-icon class="saved-filter-icon">bookmark</mat-icon>
-                  {{ option.label }}
-                </button>
-              }
-            }
-          }
-        </div>
-      }
-    </div>
-
-    <button
-      mat-icon-button
-      [matTooltip]="
-        viewMode() === 'filter'
-          ? ('search.switch-to-queue-view' | translate)
-          : ('search.switch-to-filter-view' | translate)
-      "
-      [attr.aria-label]="
-        viewMode() === 'filter'
-          ? ('search.switch-to-queue-view' | translate)
-          : ('search.switch-to-filter-view' | translate)
-      "
-      (click)="viewMode() === 'filter' ? switchToQueueView() : switchToFilterView()"
-      type="button"
-      class="queue-toggle-btn"
-      [class.active]="viewMode() === 'queue'"
-    >
-      <mat-icon>{{ viewMode() === 'filter' ? 'view_list' : 'filter_list' }}</mat-icon>
-    </button>
-  </div>
+<div class="drawer-header">
+  <nxs-saved-search-select
+    class="drawer-saved-searches"
+    [selectedId]="savedSearchId()"
+    [selectedTitle]="savedSearchTitle()"
+    [pageProvider]="pageProvider"
+    [refresh]="savedSearchesVersion()"
+    (selectedChange)="onSavedSearchChosen($event)"
+  />
+  <button
+    mat-icon-button
+    type="button"
+    class="queue-toggle-btn"
+    [class.active]="viewMode() === 'queue'"
+    [matTooltip]="
+      (viewMode() === 'filter' ? 'search.switch-to-queue-view' : 'search.switch-to-filter-view')
+        | translate
+    "
+    [attr.aria-label]="
+      (viewMode() === 'filter' ? 'search.switch-to-queue-view' : 'search.switch-to-filter-view')
+        | translate
+    "
+    (click)="viewMode() === 'filter' ? switchToQueueView() : switchToFilterView()"
+  >
+    <mat-icon aria-hidden="true">{{
+      viewMode() === 'filter' ? 'view_list' : 'filter_list'
+    }}</mat-icon>
+  </button>
 </div>
 
 <mat-divider />
 
 @if (viewMode() === 'filter') {
-  <div class="filters-section">
-    <div class="filter-group">
-      <p class="filter-title">{{ 'search.search-filters-drawer.full-text' | translate }}</p>
-      <div class="filter-input-wrap">
-        <input
-          class="filter-input"
-          type="text"
-          [placeholder]="'search.search-filters-drawer.search-for-something' | translate"
-          [value]="secondarySearchInput()"
-          (input)="onSecondarySearchInput($any($event.target).value)"
-          (keydown.enter)="onSecondarySearchEnter()"
-        />
-        @if (secondarySearchInput().trim()) {
-          <button class="clear-btn" type="button" (click)="onSecondarySearchClear()">
-            <mat-icon>close</mat-icon>
-          </button>
-        }
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <button class="filter-btn" type="button" (click)="toggleFilter('modification-date')">
-        <span class="filter-btn-label">{{
-          'search.search-filters-drawer.modification-date' | translate
-        }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ isExpanded('modification-date') ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
-      </button>
-
-      @if (isExpanded('modification-date')) {
-        <div class="filter-options">
-          @if (availableModificationDateWithData().length === 0) {
-            <span class="filter-no-results">{{
-              'search.search-filters-drawer.no-available-results' | translate
-            }}</span>
-          } @else {
-            @for (option of availableModificationDateWithData(); track option.key) {
-              <mat-checkbox
-                [checked]="isModificationDateSelected(option.value)"
-                (change)="toggleModificationDate(option.value)"
-                class="filter-checkbox"
-              >
-                {{ option | descriptorLabel }}{{ getCountText(option.count) }}
-              </mat-checkbox>
-            }
-          }
-        </div>
-      }
-    </div>
-
-    <div class="filter-group">
-      <p class="filter-title">{{ 'search.search-filters-drawer.authors' | translate }}</p>
-      <div class="typeahead-field">
-        <div class="typeahead-input-wrap">
-          <input
-            class="typeahead-input"
-            type="text"
-            [placeholder]="'search.search-filters-drawer.search-for-authors' | translate"
-            [value]="authorInput()"
-            (input)="onAuthorInput($any($event.target).value)"
-            (focus)="authorOpen.set(true)"
-            (blur)="closeAuthorDropdown()"
-          />
-          <mat-icon class="typeahead-arrow">arrow_drop_down</mat-icon>
-        </div>
-
-        @if (authorOpen()) {
-          <div class="typeahead-panel">
-            @if (filteredAuthors().length === 0) {
-              <div class="typeahead-hint">
-                {{ 'search.search-filters-drawer.no-results-found' | translate }}
-              </div>
-            } @else {
-              @for (author of filteredAuthors(); track author.key) {
-                <button class="typeahead-option" type="button" (mousedown)="selectAuthor(author)">
-                  {{ author.label }}{{ getCountText(author.count) }}
-                </button>
-              }
-            }
-          </div>
-        }
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <p class="filter-title">{{ 'search.search-filters-drawer.collections' | translate }}</p>
-      <div class="typeahead-field">
-        <div class="typeahead-input-wrap">
-          <input
-            class="typeahead-input"
-            type="text"
-            [placeholder]="'search.search-filters-drawer.select-a-value' | translate"
-            [value]="collectionInput()"
-            (input)="onCollectionInput($any($event.target).value)"
-            (focus)="onCollectionFocus()"
-            (blur)="closeCollectionDropdown()"
-          />
-          <mat-icon class="typeahead-arrow">arrow_drop_down</mat-icon>
-        </div>
-
-        @if (collectionOpen()) {
-          <div class="typeahead-panel">
-            @if (collectionsLoading()) {
-              <div class="typeahead-hint">
-                {{ 'search.search-filters-drawer.loading-collections' | translate }}
-              </div>
-            } @else if (filteredCollections().length === 0) {
-              <div class="typeahead-hint">
-                {{ 'search.search-filters-drawer.no-results-found' | translate }}
-              </div>
-            } @else {
-              @for (collection of filteredCollections(); track collection.key) {
-                <button
-                  class="typeahead-option"
-                  type="button"
-                  (mousedown)="selectCollection(collection)"
-                >
-                  {{ collection.label }}{{ getCountText(collection.count) }}
-                </button>
-              }
-            }
-          </div>
-        }
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <p class="filter-title">{{ 'search.search-filters-drawer.tags' | translate }}</p>
-      <div class="typeahead-field">
-        <div class="typeahead-input-wrap">
-          <input
-            class="typeahead-input"
-            type="text"
-            [placeholder]="'search.filter.tag-placeholder' | translate"
-            [value]="tagInput()"
-            (input)="onTagInput($any($event.target).value)"
-            (focus)="tagOpen.set(true)"
-            (blur)="closeTagDropdown()"
-          />
-          <mat-icon class="typeahead-arrow">arrow_drop_down</mat-icon>
-        </div>
-
-        @if (tagOpen()) {
-          <div class="typeahead-panel">
-            @if (!tagInput().trim()) {
-              <div class="typeahead-hint">
-                {{ 'search.search-filters-drawer.please-enter-1-or-more-characters' | translate }}
-              </div>
-            } @else if (filteredTags().length === 0) {
-              <div class="typeahead-hint">
-                {{ 'search.no-results-for' | translate: { term: tagInput().trim() } }}
-              </div>
-            } @else if (filteredTags().length > 0) {
-              @for (tag of filteredTags(); track tag.key) {
-                <button class="typeahead-option" type="button" (mousedown)="selectTag(tag)">
-                  {{ tag.label }}{{ getCountText(tag.count) }}
-                </button>
-              }
-            }
-          </div>
-        }
-      </div>
-    </div>
-
-    <div class="filter-group">
-      <button class="filter-btn" type="button" (click)="toggleFilter('nature')">
-        <span class="filter-btn-label">{{
-          'search.search-filters-drawer.nature' | translate
-        }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ isExpanded('nature') ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
-      </button>
-
-      @if (isExpanded('nature')) {
-        <div class="filter-options">
-          @if (availableNatureWithData().length === 0) {
-            <span class="filter-no-results">{{
-              'search.search-filters-drawer.no-available-results' | translate
-            }}</span>
-          } @else {
-            @for (option of availableNatureWithData(); track option.key) {
-              <mat-checkbox
-                [checked]="isNatureSelected(option.value)"
-                (change)="toggleNature(option.value)"
-                class="filter-checkbox"
-              >
-                {{ option | descriptorLabel }}{{ getCountText(option.count) }}
-              </mat-checkbox>
-            }
-          }
-        </div>
-      }
-    </div>
-
-    <div class="filter-group">
-      <button class="filter-btn" type="button" (click)="toggleFilter('subjects')">
-        <span class="filter-btn-label">{{
-          'search.search-filters-drawer.subjects' | translate
-        }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ isExpanded('subjects') ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
-      </button>
-
-      @if (isExpanded('subjects')) {
-        <div class="filter-options">
-          @if (availableSubjectsWithData().length === 0) {
-            <span class="filter-no-results">{{
-              'search.search-filters-drawer.no-available-results' | translate
-            }}</span>
-          } @else {
-            @for (option of availableSubjectsWithData(); track option.key) {
-              <mat-checkbox
-                [checked]="isSubjectSelected(option.value)"
-                (change)="toggleSubject(option.value)"
-                class="filter-checkbox"
-              >
-                {{ option | descriptorLabel }}{{ getCountText(option.count) }}
-              </mat-checkbox>
-            }
-          }
-        </div>
-      }
-    </div>
-
-    <div class="filter-group">
-      <button class="filter-btn" type="button" (click)="toggleFilter('coverage')">
-        <span class="filter-btn-label">{{
-          'search.search-filters-drawer.coverage' | translate
-        }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ isExpanded('coverage') ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
-      </button>
-
-      @if (isExpanded('coverage')) {
-        <div class="filter-options">
-          @if (availableCoverageWithData().length === 0) {
-            <span class="filter-no-results">{{
-              'search.search-filters-drawer.no-available-results' | translate
-            }}</span>
-          } @else {
-            @for (option of availableCoverageWithData(); track option.key) {
-              <mat-checkbox
-                [checked]="isCoverageSelected(option.value)"
-                (change)="toggleCoverage(option.value)"
-                class="filter-checkbox"
-              >
-                {{ option | descriptorLabel }}{{ getCountText(option.count) }}
-              </mat-checkbox>
-            }
-          }
-        </div>
-      }
-    </div>
-
-    <div class="filter-group">
-      <button class="filter-btn" type="button" (click)="toggleFilter('size')">
-        <span class="filter-btn-label">{{ 'search.search-filters-drawer.size' | translate }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ isExpanded('size') ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
-      </button>
-
-      @if (isExpanded('size')) {
-        <div class="filter-options">
-          @if (availableSizesWithData().length === 0) {
-            <span class="filter-no-results">{{
-              'search.search-filters-drawer.no-available-results' | translate
-            }}</span>
-          } @else {
-            @for (option of availableSizesWithData(); track option.key) {
-              <mat-checkbox
-                [checked]="isSizeSelected(option.value)"
-                (change)="toggleSize(option.value)"
-                class="filter-checkbox"
-              >
-                {{ option | descriptorLabel }}{{ getCountText(option.count) }}
-              </mat-checkbox>
-            }
-          }
-        </div>
-      }
-    </div>
-  </div>
-
-  <mat-divider />
-
-  <div class="drawer-footer">
-    <div class="footer-actions">
-      <button
-        mat-stroked-button
-        class="footer-btn reset-btn"
-        type="button"
-        [disabled]="!hasActiveFilters()"
-        (click)="resetFilters()"
-      >
-        {{ 'search.search-filters-drawer.reset' | translate }}
-      </button>
-      <button
-        mat-flat-button
-        color="primary"
-        class="footer-btn save-as-btn"
-        type="button"
-        [disabled]="!hasActiveFilters()"
-        (click)="openSaveAsDialog()"
-      >
-        {{ 'search.search-filters-drawer.save-as' | translate }}
-      </button>
-    </div>
-  </div>
-} @else if (viewMode() === 'queue') {
+  <nxs-search-filters
+    class="drawer-filters"
+    [filters]="filters()"
+    [aggregations]="aggregations()"
+    [optionLabels]="facetLabels()"
+    (filtersChange)="onFiltersChange($event)"
+    (filtersReset)="onReset()"
+    (saveAs)="openSaveAsDialog()"
+  />
+} @else {
   <lib-search-queue
     [selectedItemId]="selectedDocumentId()"
     [activeFilters]="activeFiltersForQueue()"

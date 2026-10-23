@@ -29,8 +29,9 @@
  * supply-chain surface for no benefit.
  *
  * The check needs an exception list because a package can be genuinely required and never appear in
- * an import: Angular's runtime needs `tslib` and `@angular/animations`, and seven packages exist
- * only to pin versions that `@alfresco/adf-core` requires as peers or dependencies. Every exception
+ * an import: Angular's runtime needs `tslib` and `@angular/animations`, and the rest are left over
+ * from ADF, which left the tree in NXSAT-637 — version pins for `@alfresco/adf-core`'s peers, and
+ * the `ng-mocks` stub adf-hx needed. NXSAT-672 removes them. Every exception
  * carries a reason, and an exception that stops being needed fails the check as unnecessary — so
  * the list cannot rot into a place where things are hidden.
  *
@@ -49,6 +50,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from 'typescript';
 import { CONTROL_COUNT, collectReferences, referenced, selfCheck } from './module-references.mjs';
+import {
+  CONTROL_COUNT as SCAN_CONTROL_COUNT,
+  selfCheck as scanSelfCheck,
+} from './stylesheet-scan.mjs';
 
 const repoRoot = resolve(import.meta.dirname, '..', '..');
 const argv = process.argv.slice(2);
@@ -308,6 +313,15 @@ if (controlFailures.length === 0) {
   notes.push(
     `module-reference controls: ${CONTROL_COUNT.negative} negative (must not count) + ` +
       `${CONTROL_COUNT.positive} positive (must count), all as specified.`,
+  );
+}
+const scanFailures = scanSelfCheck();
+for (const failure of scanFailures) fail(`stylesheet-scan control failed — ${failure}`);
+if (scanFailures.length === 0) {
+  notes.push(
+    `stylesheet-scan controls: ${SCAN_CONTROL_COUNT.mask} mask (exact output) + ` +
+      `${SCAN_CONTROL_COUNT.negative} negative (must find nothing) + ` +
+      `${SCAN_CONTROL_COUNT.positive} positive (must find exactly these), all as specified.`,
   );
 }
 

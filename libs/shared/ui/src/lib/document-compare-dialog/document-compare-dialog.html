@@ -34,9 +34,9 @@
 
   @if (loading()) {
     <div class="compare-loading">
-      <mat-spinner
+      <nxs-spinner
         diameter="32"
-        [attr.aria-label]="'shared-ui.document-compare-dialog.loading' | translate"
+        [label]="'shared-ui.document-compare-dialog.loading' | translate"
       />
     </div>
   } @else if (error()) {

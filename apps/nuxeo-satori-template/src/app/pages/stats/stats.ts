@@ -1,7 +1,7 @@
 import { Component, inject, computed } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { SearchService } from '@nuxeo-satori/platform/nuxeo-client';
-import { WidgetGridComponent, WidgetContainerComponent } from '@nuxeo-satori/platform/ui';
+import { SearchService } from '@nuxeo/satori-platform/nuxeo-client';
+import { WidgetGridComponent, WidgetContainerComponent } from '@nuxeo/satori-platform/ui';
 
 @Component({
   selector: 'app-stats',

@@ -2,16 +2,17 @@
 title: Nuxeo Satori — Documentation Home
 parent: null
 order: 0
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
-branch: feature/adf-hx-browse-poc
+last_reviewed: 2026-10-08
+repo_commit: fb97d44
+branch: feature/nxsat-308-dependency-tree-gate
 audience: all
 ---
 
 # Nuxeo Satori — Documentation Home
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9` on `feature/adf-hx-browse-poc`
-> (111 commits ahead of `main`, draft PR #145)
+> **Last reviewed:** 2026-10-08 · **Repository:** `fb97d44` (`feature/nxsat-308-dependency-tree-gate`)
+> Only the Dev Harness & Gates row was re-verified at that commit; the rest of the index was last
+> reviewed on 2026-08-24 at `77265f9` on `feature/adf-hx-browse-poc`.
 
 This is the authoritative documentation set for **Nuxeo Satori** — the Angular content
 management UI being converted into a customer-shippable Beta on real `adf-hx` components,
@@ -93,7 +94,7 @@ otherwise. The customer-facing AI features are always called "runtime AI feature
 | [Technology Stack](30-engineering/05-technology-stack.md)                           | Every technology, why it is here                      |
 | [Tools & Commands](30-engineering/06-tools-and-commands.md)                         | Complete command reference                            |
 | [Extensibility Contract](30-engineering/07-extensibility-contract.md)               | The four layers, and the 52 registered IDs            |
-| [Dev Harness & Gates](30-engineering/08-dev-harness-and-gates.md)                   | The 17 gates and the evidence system                  |
+| [Dev Harness & Gates](30-engineering/08-dev-harness-and-gates.md)                   | The gates and the evidence system                     |
 | [Skills, Agents & Generators](30-engineering/09-skills-agents-generators.md)        | What the AI tooling actually consists of              |
 | [Runtime AI Features](30-engineering/10-runtime-ai-features.md)                     | The 12 `AI.*` operations and their backend            |
 | [Code KT](30-engineering/11-code-kt.md)                                             | "Where do I make this change?"                        |

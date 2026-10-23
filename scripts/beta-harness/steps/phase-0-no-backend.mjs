@@ -53,7 +53,7 @@ export default async function run(page, h) {
   // Checked FIRST, and aborting, because this file's assertions are only meaningful
   // when it holds. The 2026-08-20T23-55-38 run recorded 9 of 13 checks failed with
   // Nuxeo up: one precondition mismatch dressed as nine defects.
-  h.step('Precondition: no Nuxeo backend is reachable');
+  await h.step('Precondition: no Nuxeo backend is reachable');
   // `page.request` deliberately bypasses the page, so this works before the app has
   // loaded and cannot be affected by any route interception a step might add later.
   const probe = await page.request.get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false }).catch(() => null);
@@ -65,7 +65,7 @@ export default async function run(page, h) {
   );
   h.note('authenticated, data-bearing surfaces — covered by phase-0-baseline, which needs a backend');
 
-  h.step('Dev server serves the built application');
+  await h.step('Dev server serves the built application');
   const response = await page.goto(`${h.baseUrl}/`, { waitUntil: 'networkidle' });
   h.check('root responds 200', response?.status() === 200, `status was ${response?.status()}`);
   await page.waitForTimeout(2000);
@@ -73,19 +73,19 @@ export default async function run(page, h) {
   await h.expectVisible('Angular root bootstrapped', 'app-root');
   await h.screenshot('app-serves');
 
-  h.step('Unauthenticated access is redirected to login by the auth guard');
+  await h.step('Unauthenticated access is redirected to login by the auth guard');
   h.check('redirected to /#/login', page.url().includes('/#/login'), page.url());
   await h.expectVisible('login page component rendered', 'app-login-page');
   await h.screenshot('login-page');
 
-  h.step('Login surface renders Satori branding and auth options');
+  await h.step('Login surface renders Satori branding and auth options');
   await h.expectVisible('Satori logo present', 'sat-logo');
   await h.expectText('username field labelled', 'app-login-page', 'Username (required)');
   await h.expectText('Log in action present', 'app-login-page', 'Log in');
   await h.expectText('SAML sign-in offered', 'app-login-page', 'SAML');
   await h.screenshot('login-controls');
 
-  h.step('Protected Beta route is guarded');
+  await h.step('Protected Beta route is guarded');
   await h.goTo('/#/browse-adf-hx');
   h.check(
     'adf-hx POC route requires auth',
@@ -94,12 +94,12 @@ export default async function run(page, h) {
   );
   await h.screenshot('adf-hx-route-guarded');
 
-  h.step('Production browse route is guarded');
+  await h.step('Production browse route is guarded');
   await h.goTo('/#/browse');
   h.check('browse route requires auth', page.url().includes('/#/login'), page.url());
   await h.screenshot('browse-route-guarded');
 
-  h.step('The backend is still unreachable from inside the loaded app');
+  await h.step('The backend is still unreachable from inside the loaded app');
   // Re-checked from the page, not just via `page.request`, because the app reaches
   // Nuxeo through the dev proxy from browser context — a different path from the
   // precondition probe, and the one that actually matters to the assertions above.

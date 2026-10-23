@@ -19,10 +19,10 @@ import {
   type ShareDialogData,
   type ExportDialogData,
   type SavedSearchDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 
 /**
- * Demonstrates all available UI components from `@nuxeo-satori/platform/ui`.
+ * Demonstrates all available UI components from `@nuxeo/satori-platform/ui`.
  *
  * This page serves as both documentation and a working example for customers
  * building their own Layer 2 extensions. Every component shown here is imported

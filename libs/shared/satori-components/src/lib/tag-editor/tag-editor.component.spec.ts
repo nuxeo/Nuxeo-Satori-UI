@@ -1,0 +1,481 @@
+import { HttpErrorResponse } from '@angular/common/http';
+import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import { ComponentFixture, TestBed } from '@angular/core/testing';
+import type { MatChipInputEvent } from '@angular/material/chips';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { of, Subject, throwError, type Observable } from 'rxjs';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
+
+import { NxsToastService } from '../toast/toast.service';
+import { NxsTagEditorComponent } from './tag-editor.component';
+
+@Component({
+  standalone: true,
+  imports: [NxsTagEditorComponent],
+  template: `
+    <nxs-tag-editor
+      [documentUid]="uid()"
+      [tags]="tags()"
+      [readOnly]="readOnly()"
+      (tagsChange)="changes.push($event)"
+    />
+  `,
+})
+class HostComponent {
+  readonly uid = signal('doc-1');
+  readonly tags = signal<readonly string[]>(['contract', 'q3']);
+  readonly readOnly = signal(false);
+  readonly changes: (readonly string[])[] = [];
+}
+
+type TagCall = (uid: string, label: string) => Observable<string[]>;
+
+describe('NxsTagEditorComponent', () => {
+  let fixture: ComponentFixture<HostComponent>;
+  let host: HostComponent;
+  let tags: {
+    addTag: ReturnType<typeof vi.fn<TagCall>>;
+    removeTag: ReturnType<typeof vi.fn<TagCall>>;
+    suggestTags: ReturnType<typeof vi.fn<(term: string) => Observable<string[]>>>;
+  };
+  let toastShow: ReturnType<typeof vi.spyOn>;
+  let toastError: ReturnType<typeof vi.spyOn>;
+
+  const el = (): HTMLElement => fixture.nativeElement;
+  const chips = (): string[] =>
+    [...el().querySelectorAll('mat-chip-row')].map((chip) =>
+      (chip.querySelector('.mat-mdc-chip-action-label')?.textContent ?? '').trim(),
+    );
+  const box = (): HTMLInputElement => el().querySelector('input') as HTMLInputElement;
+  const options = (): HTMLElement[] => [
+    ...document.querySelectorAll<HTMLElement>('.mat-mdc-autocomplete-panel mat-option'),
+  ];
+  const settle = async (): Promise<void> => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+  };
+  const type = async (value: string): Promise<void> => {
+    box().focus();
+    box().value = value;
+    box().dispatchEvent(new Event('input'));
+    await settle();
+  };
+  const key = (target: HTMLElement, keyCode: number, name: string): void => {
+    const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
+    Object.defineProperty(event, 'keyCode', { get: () => keyCode });
+    target.dispatchEvent(event);
+  };
+  const enter = async (): Promise<void> => {
+    key(box(), 13, 'Enter');
+    await settle();
+  };
+  const removeButton = (tag: string): HTMLButtonElement =>
+    el().querySelector(`button[aria-label="Remove tag ${tag}"]`) as HTMLButtonElement;
+
+  async function mount(): Promise<void> {
+    fixture = TestBed.createComponent(HostComponent);
+    host = fixture.componentInstance;
+    await settle();
+  }
+
+  beforeEach(async () => {
+    tags = { addTag: vi.fn(), removeTag: vi.fn(), suggestTags: vi.fn(() => of([])) };
+    toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
+    toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
+    await TestBed.configureTestingModule({
+      imports: [HostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: TagService, useValue: tags },
+      ],
+    }).compileComponents();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  describe('read-only', () => {
+    it('lists the tags with no box and no remove buttons', async () => {
+      await mount();
+      host.readOnly.set(true);
+      await settle();
+
+      const list = el().querySelector('ul.nxs-tag-editor__chips');
+      expect(list?.getAttribute('aria-label')).toBe('Tags');
+      expect([...el().querySelectorAll('nxs-tag')].map((tag) => tag.textContent?.trim())).toEqual([
+        'contract',
+        'q3',
+      ]);
+      expect(el().querySelector('input')).toBeNull();
+      expect(el().querySelector('button')).toBeNull();
+    });
+
+    it('shows a dash for no tags, read out as "No tags"', async () => {
+      await mount();
+      host.readOnly.set(true);
+      host.tags.set([]);
+      await settle();
+
+      const empty = el().querySelector('.nxs-tag-editor__empty');
+      expect(empty?.querySelector('[aria-hidden="true"]')?.textContent).toBe('—');
+      expect(empty?.textContent).toContain('No tags');
+    });
+  });
+
+  describe('editing', () => {
+    it('shows each tag as a chip with a labelled remove button, and a box to add one', async () => {
+      await mount();
+
+      expect(chips()).toEqual(['contract', 'q3']);
+      const icon = removeButton('contract').querySelector('mat-icon');
+      expect(icon?.classList).toContain('nxs-tag-editor__remove-icon');
+      expect(icon?.getAttribute('aria-hidden')).toBe('true');
+      expect(icon?.textContent?.trim()).toBe('');
+      expect(el().querySelector('mat-chip-grid')?.getAttribute('aria-label')).toBe('Tags');
+      expect(box().placeholder).toBe('Add tags to this document');
+      expect(box().getAttribute('aria-label')).toBe('Add tags to this document');
+    });
+
+    it('keeps the box, a combobox, out of the chip grid, which may hold only rows', async () => {
+      await mount();
+
+      expect(box().getAttribute('role')).toBe('combobox');
+      expect(box().closest('[role="grid"]')).toBeNull();
+      const grid = el().querySelector('[role="grid"]');
+      expect(
+        [...(grid?.querySelectorAll('[role]') ?? [])].map((child) => child.getAttribute('role')),
+      ).not.toContain('combobox');
+    });
+
+    it('follows the tags the host passes in', async () => {
+      await mount();
+      host.tags.set(['invoice']);
+      await settle();
+
+      expect(chips()).toEqual(['invoice']);
+    });
+
+    it('adds the typed text on Enter, then shows the label Nuxeo stored and says so', async () => {
+      const answer = new Subject<string[]>();
+      tags.addTag.mockReturnValue(answer);
+      await mount();
+
+      await type('Q3 Report');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      expect(tags.addTag).toHaveBeenCalledWith('doc-1', 'q3 report');
+      expect(box().value).toBe('');
+      const pending = el().querySelector('mat-chip-row.nxs-tag-editor__pending');
+      expect(pending?.textContent).toContain('q3 report');
+      expect(pending?.querySelector('[aria-label="Adding tag q3 report"]')).toBeTruthy();
+
+      answer.next(['contract', 'q3', 'q3report']);
+      answer.complete();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'q3', 'q3report']);
+      expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
+      expect(host.changes).toEqual([['contract', 'q3', 'q3report']]);
+      expect(toastShow).toHaveBeenCalledWith('The tag q3report has been added to the document.');
+    });
+
+    it('names the typed label without its spaces when the tag was already there', async () => {
+      tags.addTag.mockReturnValue(of(['contract', 'q3', 'q3report']));
+      await mount();
+      host.tags.set(['contract', 'q3', 'q3report']);
+      await settle();
+
+      await type('Q3 Report');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      expect(toastShow).toHaveBeenCalledWith('The tag q3report has been added to the document.');
+    });
+
+    it('does not send a tag the document already has, whatever its case', async () => {
+      await mount();
+
+      await type('Contract');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      expect(tags.addTag).not.toHaveBeenCalled();
+      expect(box().value).toBe('');
+    });
+
+    it('ignores Enter in an empty box', async () => {
+      await mount();
+
+      await type('   ');
+      await enter();
+
+      expect(tags.addTag).not.toHaveBeenCalled();
+    });
+
+    it('takes a chip away at once and keeps it away once Nuxeo confirms', async () => {
+      const answer = new Subject<string[]>();
+      tags.removeTag.mockReturnValue(answer);
+      await mount();
+
+      removeButton('contract').click();
+      await settle();
+
+      expect(tags.removeTag).toHaveBeenCalledWith('doc-1', 'contract');
+      expect(chips()).toEqual(['q3']);
+
+      answer.next(['q3']);
+      answer.complete();
+      await settle();
+
+      expect(chips()).toEqual(['q3']);
+      expect(host.changes).toEqual([['q3']]);
+      expect(toastShow).toHaveBeenCalledWith(
+        'The tag contract has been removed from the document.',
+      );
+    });
+
+    it('sends one removal per tag even if asked twice before the answer', async () => {
+      tags.removeTag.mockReturnValue(new Subject<string[]>());
+      await mount();
+      const editor = fixture.debugElement.children[0].componentInstance as unknown as {
+        remove(tag: string): void;
+      };
+
+      editor.remove('contract');
+      editor.remove('contract');
+      await settle();
+
+      expect(tags.removeTag).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('suggestions', () => {
+    it('suggests existing tags through Tag.Suggestion, after the typed text as a new tag', async () => {
+      vi.useFakeTimers();
+      tags.suggestTags.mockReturnValue(of(['contract', 'contoso', 'control']));
+      await mount();
+
+      await type('con');
+      vi.advanceTimersByTime(300);
+      await settle();
+
+      expect(tags.suggestTags).toHaveBeenCalledWith('con');
+      expect(options().map((option) => option.textContent?.trim())).toEqual([
+        '+ con',
+        'contoso',
+        'control',
+      ]);
+      expect(options()[0].getAttribute('aria-label')).toBe('New tag con');
+      expect(options()[1].getAttribute('aria-label')).toBeNull();
+    });
+
+    it('offers no new tag when the typed text is an existing tag', async () => {
+      vi.useFakeTimers();
+      tags.suggestTags.mockReturnValue(of(['contoso']));
+      await mount();
+
+      await type('Contoso');
+      vi.advanceTimersByTime(300);
+      await settle();
+
+      expect(options().map((option) => option.textContent?.trim())).toEqual(['contoso']);
+    });
+
+    it('still offers the new tag when suggesting fails', async () => {
+      vi.useFakeTimers();
+      tags.suggestTags.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await mount();
+
+      await type('con');
+      vi.advanceTimersByTime(300);
+      await settle();
+
+      expect(options().map((option) => option.textContent?.trim())).toEqual(['+ con']);
+    });
+
+    it('adds a suggestion picked with the mouse, as listed', async () => {
+      vi.useFakeTimers();
+      tags.suggestTags.mockReturnValue(of(['contoso']));
+      tags.addTag.mockReturnValue(of(['contract', 'q3', 'contoso']));
+      await mount();
+
+      await type('con');
+      vi.advanceTimersByTime(300);
+      await settle();
+      options()[1].click();
+      await settle();
+
+      expect(tags.addTag).toHaveBeenCalledWith('doc-1', 'contoso');
+      expect(tags.addTag).toHaveBeenCalledTimes(1);
+      expect(box().value).toBe('');
+      expect(chips()).toEqual(['contract', 'q3', 'contoso']);
+    });
+
+    it('adds the typed text once on Enter while its "+" entry is highlighted', async () => {
+      tags.addTag.mockReturnValue(of(['contract', 'q3', 'invoice']));
+      await mount();
+
+      await type('Invoice');
+      expect(options()[0].classList).toContain('mat-mdc-option-active');
+      await enter();
+
+      expect(tags.addTag).toHaveBeenCalledTimes(1);
+      expect(tags.addTag).toHaveBeenCalledWith('doc-1', 'invoice');
+      expect(box().value).toBe('');
+    });
+
+    it('adds only the highlighted suggestion on Enter, not the typed text as well', async () => {
+      vi.useFakeTimers();
+      tags.suggestTags.mockReturnValue(of(['contoso']));
+      tags.addTag.mockReturnValue(of(['contract', 'q3', 'contoso']));
+      await mount();
+
+      await type('con');
+      vi.advanceTimersByTime(300);
+      await settle();
+      key(box(), 40, 'ArrowDown');
+      await settle();
+      await enter();
+
+      expect(tags.addTag).toHaveBeenCalledTimes(1);
+      expect(tags.addTag).toHaveBeenCalledWith('doc-1', 'contoso');
+    });
+
+    it('leaves Enter to the suggestion list whichever of the two hears it first', async () => {
+      await mount();
+      const editor = fixture.debugElement.children[0].componentInstance as unknown as {
+        entered(event: MatChipInputEvent): void;
+      };
+
+      await type('con');
+      expect(options()[0].classList).toContain('mat-mdc-option-active');
+      editor.entered({ value: 'con' } as MatChipInputEvent);
+      await settle();
+
+      expect(tags.addTag).not.toHaveBeenCalled();
+    });
+
+    it('asks for nothing once the box is cleared', async () => {
+      vi.useFakeTimers();
+      await mount();
+
+      await type('   ');
+      vi.advanceTimersByTime(300);
+      await settle();
+
+      expect(tags.suggestTags).not.toHaveBeenCalled();
+      expect(options()).toEqual([]);
+    });
+  });
+
+  describe('ordering', () => {
+    it('sends changes one at a time, so a later answer always wins', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+
+      expect(tags.removeTag).not.toHaveBeenCalled();
+      expect(chips()).toEqual(['q3', 'invoice']);
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+      await settle();
+
+      expect(tags.removeTag).toHaveBeenCalledWith('doc-1', 'contract');
+      expect(chips()).toEqual(['q3', 'invoice']);
+      expect(host.changes).toEqual([
+        ['contract', 'q3', 'invoice'],
+        ['q3', 'invoice'],
+      ]);
+    });
+
+    it('drops what is still pending when the document changes', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      host.uid.set('doc-2');
+      host.tags.set(['other']);
+      await settle();
+
+      expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
+      added.next(['contract', 'q3', 'invoice']);
+      await settle();
+
+      expect(chips()).toEqual(['other']);
+      expect(host.changes).toEqual([]);
+    });
+  });
+
+  describe('failures', () => {
+    it('puts a chip back and says so when removing fails', async () => {
+      tags.removeTag.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 500 })));
+      await mount();
+
+      removeButton('contract').click();
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(toastError).toHaveBeenCalledWith('The tag contract could not be removed.');
+      expect(host.changes).toEqual([]);
+    });
+
+    it('drops the pending chip and says so when adding fails', async () => {
+      tags.addTag.mockReturnValue(throwError(() => new Error('offline')));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(toastError).toHaveBeenCalledWith('The tag invoice could not be added.');
+    });
+
+    it('reads a 403 as a refusal, not a failure', async () => {
+      tags.addTag.mockReturnValue(throwError(() => new HttpErrorResponse({ status: 403 })));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      expect(toastError).toHaveBeenCalledWith(
+        "You do not have permission to change this document's tags.",
+      );
+    });
+
+    it('keeps going after a failure', async () => {
+      tags.addTag
+        .mockReturnValueOnce(throwError(() => new HttpErrorResponse({ status: 500 })))
+        .mockReturnValueOnce(of(['contract', 'q3', 'invoice']));
+      await mount();
+
+      await type('broken');
+      key(box(), 27, 'Escape');
+      await enter();
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+    });
+  });
+});

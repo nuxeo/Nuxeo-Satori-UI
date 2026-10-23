@@ -63,6 +63,7 @@ import {
   requireAdministrationAccess,
   requireBackend,
   requireSessionAdopted,
+  watchNuxeoApiOrigins,
 } from './preconditions.mjs';
 
 /**
@@ -102,7 +103,6 @@ const ALL_SURFACES = [
   ['tasks', '/#/tasks', 'lib-tasks-page'],
   ['administration', '/#/administration', 'lib-administration-shell'],
   ['knowledge-discovery', '/#/knowledge-discovery', 'lib-knowledge-discovery'],
-  ['browse-adf-hx', '/#/browse-adf-hx', 'lib-browse-adf-hx-poc'],
 ];
 
 /** Narrowed by `--surface`. Its length is the requested count the exit code is checked against. */
@@ -175,7 +175,8 @@ function resolveScoutReport() {
  * a11y-scout records the URL after any redirect, and `/#/administration` lands on
  * `/#/administration/analytics`, so `endsWith(route)` never matched it and a complete baseline
  * still exited 2 naming administration as unscanned. A child path or a query string counts; a
- * sibling that merely shares the prefix, `/#/browse-adf-hx` against `/#/browse`, does not.
+ * sibling that merely shares the prefix, as the retired `/#/browse-adf-hx` did `/#/browse`,
+ * does not.
  *
  * @param {unknown} url
  * @param {string} route
@@ -285,7 +286,9 @@ const browser = await launchChromium(chromium, 'axe-differential');
 // one is present.
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  httpCredentials: { username: user, password: pass, origin: baseUrl },
+  // `send: 'always'`: a guest-enabled Nuxeo never challenges, so without it
+  // `page.request` ran as Anonymous (NXSAT-643).
+  httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
 const page = await context.newPage();
 
@@ -303,6 +306,7 @@ try {
   // `networkidle` rather than a fixed pause, so the app's own session hydration has very
   // likely finished before the session below is written. The reload after it is what makes
   // the written session the one the app starts from.
+  const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
   await gotoOrExit(page, baseUrl, 'axe-differential', { waitUntil: 'networkidle' });
   await page.evaluate(
     ({ key, value, signedOutKey }) => {
@@ -315,8 +319,13 @@ try {
       value: injectedSession(user, pass),
     },
   );
+  // The first navigation booted the app with no session, which on a guest-enabled Nuxeo adopts
+  // `Anonymous` and can leave a guest cookie that outranks the Basic header (NXSAT-643).
+  await context.clearCookies();
+  // The boot above ran signed out; the session's requests start at this reload.
+  foreignApiOrigins.restartAtNextLoad();
   await page.reload({ waitUntil: 'networkidle' });
-  await requireSessionAdopted(page, user, 'axe-differential');
+  await requireSessionAdopted(page, user, 'axe-differential', { baseUrl, foreignApiOrigins });
 
   for (const [surface, route, host] of SURFACES) {
     process.stdout.write(`scanning ${surface} `);

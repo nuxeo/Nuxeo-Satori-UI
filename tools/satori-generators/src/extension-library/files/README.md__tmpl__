@@ -19,7 +19,7 @@ export const appConfig: ApplicationConfig = {
 };
 ```
 
-**No edits to any `@nuxeo-satori/platform` library** are required, which is the property
+**No edits to any `@nuxeo/satori-platform` library** are required, which is the property
 this library exists to demonstrate.
 
 ## But add the route too, or the navbar entry goes nowhere
@@ -30,7 +30,7 @@ through your wildcard route and quietly lands on the wrong page. This happened i
 reference application and shipped for two commits.
 
 ```ts
-import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
 // in your app.routes.ts
 {

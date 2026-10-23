@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
@@ -22,7 +22,7 @@ import {
   SavedSearchDialogComponent,
   ShareSavedSearchDialogComponent,
   type ConfirmDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 
 import {
   TrashService,
@@ -34,7 +34,7 @@ import {
   type NuxeoDocument,
   type NuxeoDocumentList,
   DocTypeLabelPipe,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 export type ViewMode = 'grid' | 'table' | 'list';

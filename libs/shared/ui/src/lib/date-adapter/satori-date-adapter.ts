@@ -32,7 +32,7 @@ import {
  * language cannot quietly leave its dates being parsed as English.
  *
  * The regional entries are here for the **published** provider rather than for us. These
- * dialogs are exported from `@nuxeo-satori/platform/ui`, so a customer's `LOCALE_ID` reaches
+ * dialogs are exported from `@nuxeo/satori-platform/ui`, so a customer's `LOCALE_ID` reaches
  * this map unclamped, and a region can change the field order outright: all seven non-US
  * English regions date-fns ships are day-first or year-first, so reducing any of them to `en`
  * hands them `enUS` — month-first, the original defect wearing a different locale id.
@@ -159,7 +159,7 @@ export function dateFnsLocaleFor(localeId: string): Locale {
  * import `MatNativeDateModule` get `provideNativeDateAdapter()` from that module's own
  * providers, which an app-root provider cannot override — so a root-only fix silently left
  * six of the fifteen date inputs parsing US dates. And several of these dialogs are exported
- * from `@nuxeo-satori/platform/ui`: a customer who mounts `EditCollectionDialogComponent` in
+ * from `@nuxeo/satori-platform/ui`: a customer who mounts `EditCollectionDialogComponent` in
  * their own application gets our adapter with it, instead of whatever their root happens to
  * provide or a `NullInjectorError`.
  *

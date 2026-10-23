@@ -3,7 +3,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ActivatedRoute,
   convertToParamMap,
@@ -15,13 +14,14 @@ import {
 import { BehaviorSubject, Observable, of, Subject, throwError } from 'rxjs';
 import { type MockInstance, vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   ARenderService,
   BrowseService,
@@ -35,8 +35,8 @@ import {
   WorkflowService,
   type NuxeoDocument,
   type NuxeoWorkflow,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { ConfirmDialogComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { ConfirmDialogComponent } from '@nuxeo/satori-platform/ui';
 import {
   AiChatService,
   AiFeatureFlagService,
@@ -117,7 +117,14 @@ const mockDetailService = {
   getVersions: vi.fn((_uid: string): Observable<{ entries: NuxeoDocument[] }> =>
     of({ entries: [version(2), version(1)] }),
   ),
-  getPublishedVersions: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((_uid: string): Observable<NuxeoDocument[]> =>
+    of([version(2), version(1)]),
+  ),
+  getPublishedVersions: vi.fn((_uid: string): Observable<{ entries: unknown[] }> =>
+    of({ entries: [] }),
+  ),
+  unpublishDocument: vi.fn((_uid: string): Observable<unknown> => of(undefined)),
+  publishDocument: vi.fn((): Observable<unknown> => of({})),
   getSectionTree: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
   getAuditLog: vi.fn((): Observable<Record<string, unknown>> =>
@@ -134,7 +141,7 @@ const mockDialog = {
   })),
 };
 
-const snack = vi.fn();
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const mockWorkflowService = {
   getDocumentWorkflows: vi.fn((_uid: string): Observable<NuxeoWorkflow[]> => of([])),
@@ -213,7 +220,13 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
         { provide: ContentLakeIngestService, useValue: mockContentLake },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
-        { provide: AppConfigService, useValue: { manifest: signal({ extensionLayers: [] }) } },
+        {
+          provide: AppConfigService,
+          useValue: {
+            manifest: signal({ extensionLayers: [] }),
+            featureToggle: (_key: string, fallback: boolean) => fallback,
+          },
+        },
         provideSatoriExtensions({
           slots: {
             [EXTENSION_SLOTS.toolbar]: PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
@@ -222,10 +235,10 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         }),
       ],
     })
-      // The real template imports the Material modules, whose own `MatDialog` and
-      // `MatSnackBar` would otherwise shadow a root-level mock.
+      // The real template imports the Material modules, whose own `MatDialog` would otherwise
+      // shadow a root-level mock, and the component provides its own `NxsToastService`.
       .overrideProvider(MatDialog, { useValue: mockDialog })
-      .overrideProvider(MatSnackBar, { useValue: { open: snack } })
+      .overrideProvider(NxsToastService, { useValue: toast })
       .compileComponents();
 
     navigate = vi.spyOn(TestBed.inject(Router), 'navigate').mockResolvedValue(true);
@@ -250,27 +263,34 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
     await settle();
   }
 
+  /** `nxs-manage-versions`' list opens in the overlay container, outside the fixture. */
   async function openVersionsList(): Promise<void> {
-    await click('.version-select');
+    await click('.nxs-manage-versions__trigger');
+  }
+
+  function inMenu<T extends HTMLElement = HTMLElement>(selector: string): T | null {
+    return document.querySelector(`.nxs-manage-versions__menu ${selector}`) as T | null;
   }
 
   function versionItem(label: string): HTMLElement | undefined {
-    return [...fixture.nativeElement.querySelectorAll('.version-dropdown-item')].find(
-      (item) =>
-        (item as HTMLElement).querySelector('.version-dropdown-label')?.textContent?.trim() ===
-        label,
-    ) as HTMLElement | undefined;
+    return [...document.querySelectorAll<HTMLElement>('.nxs-manage-versions__version')].find(
+      (item) => item.querySelector('.nxs-manage-versions__number')?.textContent?.trim() === label,
+    );
   }
 
   beforeEach(() => {
     vi.clearAllMocks();
     dialogResult = undefined;
     mockDetailService.getVersions.mockReturnValue(of({ entries: [version(2), version(1)] }));
+    mockDetailService.getVersionsDirect.mockReturnValue(of([version(2), version(1)]));
     mockDetailService.restoreVersion.mockReturnValue(of(live({ isCheckedOut: false })));
     mockWorkflowService.getDocumentWorkflows.mockImplementation(() => of([]));
   });
 
-  afterEach(() => fixture?.destroy());
+  afterEach(() => {
+    fixture?.destroy();
+    document.querySelectorAll('.cdk-overlay-container').forEach((n) => n.remove());
+  });
 
   describe('the versions list', () => {
     it('opens the version a user clicks, and restores nothing', async () => {
@@ -281,7 +301,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await settle();
 
       expect(mockDetailService.restoreVersion).not.toHaveBeenCalled();
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1']);
     });
 
     it('lets a user who cannot write open a version too', async () => {
@@ -292,30 +312,41 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       versionItem('0.1')?.click();
       await settle();
 
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1']);
     });
 
     it("lists the live document's versions while a version is open, and leads back to it", async () => {
       await render(version(1));
       await openVersionsList();
 
-      expect(mockDetailService.getVersions).toHaveBeenCalledWith('doc-live');
-      expect(versionItem('0.1')?.getAttribute('aria-current')).toBe('true');
-      expect(versionItem('0.2')?.getAttribute('aria-current')).toBeNull();
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
+      expect(versionItem('0.1')?.getAttribute('aria-checked')).toBe('true');
+      expect(versionItem('0.2')?.getAttribute('aria-checked')).toBe('false');
 
-      await click('.version-dropdown-latest');
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      inMenu('.nxs-manage-versions__latest')?.click();
+      await settle();
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
-    it('keeps the browse return mode when moving between a document and its versions', async () => {
+    it('ignores the browseReturn an old adf-hx browse link carries', async () => {
+      // The adf-hx browse route is retired, so its return mode is gone: breadcrumbs lead to
+      // /browse and moving to a version no longer carries the parameter along.
       await render(live(), { query: { browseReturn: 'adf-hx' } });
       await openVersionsList();
+
+      expect(
+        fixture.componentInstance
+          .breadcrumbItems()
+          .map((item) => ('href' in item ? item.href : undefined)),
+      ).toEqual([
+        '/browse/default-domain',
+        '/browse/default-domain/workspaces',
+        '/browse/default-domain/workspaces/ws',
+      ]);
 
       versionItem('0.1')?.click();
       await settle();
 
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1'], {
-        queryParams: { browseReturn: 'adf-hx' },
-      });
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'v-0-1']);
     });
 
     it('ignores a slower response for a document the route has already left', async () => {
@@ -338,19 +369,26 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
     it('drops a versions list that arrives after the route moved to another document', async () => {
       const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
-      const lateList = new Subject<{ entries: NuxeoDocument[] }>();
+      const lateList = new Subject<NuxeoDocument[]>();
       await render(live(), { paramMap: route });
-      mockDetailService.getVersions.mockReturnValueOnce(lateList);
+      mockDetailService.getVersionsDirect.mockImplementation((uid: string) =>
+        uid === 'doc-live' ? lateList : of([]),
+      );
       await openVersionsList();
+      document.querySelector<HTMLElement>('.cdk-overlay-backdrop')?.click();
       const other = live({ uid: 'doc-other', title: 'Other' });
       mockDetailService.getFullDocument.mockReturnValue(of(other));
       route.next(convertToParamMap({ uid: 'doc-other' }));
       await settle();
-      lateList.next({ entries: [version(2), version(1)] });
+      lateList.next([version(2), version(1)]);
       await settle();
+      await openVersionsList();
 
-      expect(fixture.componentInstance.versions()).toEqual([]);
-      expect(fixture.componentInstance.versionsLoading()).toBe(false);
+      expect(mockDetailService.getVersionsDirect).toHaveBeenLastCalledWith('doc-other');
+      expect(versionItem('0.1')).toBeUndefined();
+      expect(inMenu('')?.textContent ?? document.body.textContent).toContain(
+        'No previous versions',
+      );
     });
 
     it('drops a permissions refresh for the document the route has left', async () => {
@@ -398,27 +436,6 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(fixture.componentInstance.publishLoading()).toBe(false);
     });
 
-    it('drops comments that arrive after the route moved on', async () => {
-      const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
-      await render(live(), { paramMap: route });
-      const late = new Subject<{ entries: unknown[] }>();
-      mockDetailService.getAllComments.mockReturnValueOnce(late);
-      fixture.componentInstance.loadComments();
-      mockDetailService.getFullDocument.mockImplementation((uid) =>
-        of(uid === 'v-0-1' ? version(1) : live()),
-      );
-      route.next(convertToParamMap({ uid: 'v-0-1' }));
-      await settle();
-      late.next({
-        entries: [
-          { uid: 'c1', properties: { 'comment:parentId': 'doc-live', 'comment:text': 'live' } },
-        ],
-      });
-      await settle();
-
-      expect(fixture.componentInstance.repliesMap()).toEqual({});
-    });
-
     it("drops the live document's workflows when they arrive after a version opened", async () => {
       const route = new BehaviorSubject(convertToParamMap({ uid: 'doc-live' }));
       const liveWorkflows = new Subject<NuxeoWorkflow[]>();
@@ -445,7 +462,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
       expect(el('.version-banner')?.textContent).toContain("You're viewing the 0.1 version.");
       await click('.version-banner-latest');
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
 
     it('is read-only even though the permissions enricher reports Write', async () => {
@@ -455,7 +472,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(component.canWriteDoc()).toBe(false);
       expect(component.canManagePermissions()).toBe(false);
       expect(el('[data-action-id="app.toolbar.edit"]')).toBeNull();
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('offers no enrichment that would write back to a version', async () => {
@@ -484,11 +501,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       fixture.componentInstance.openEditDialog();
 
       expect(mockDialog.open).not.toHaveBeenCalled();
-      expect(snack).toHaveBeenCalledWith(
-        'You do not have permission to perform this action',
-        'OK',
-        expect.anything(),
-      );
+      expect(toast.error).toHaveBeenCalledWith('You do not have permission to perform this action');
     });
 
     it('leaves the live document editable', async () => {
@@ -497,6 +510,208 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       expect(el('.version-banner')).toBeNull();
       expect(fixture.componentInstance.canWriteDoc()).toBe(true);
       expect(el('[data-action-id="app.toolbar.edit"]')).toBeTruthy();
+    });
+  });
+
+  describe('the version on a publication', () => {
+    const publication = (): NuxeoDocument =>
+      live({
+        uid: 'proxy-of-1-0',
+        path: '/default-domain/sections/news/contract',
+        isProxy: true,
+        isCheckedOut: false,
+        properties: { 'uid:major_version': 1, 'uid:minor_version': 0 },
+      });
+
+    it('reads as a plain tag, as Web UI shows a proxy, with no versions control', async () => {
+      await render(publication());
+
+      expect(el('nxs-manage-versions')).toBeNull();
+      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')?.textContent?.trim()).toBe('1.0');
+    });
+
+    it('keeps the versions control on the live document and on a version', async () => {
+      await render(live());
+      expect(el('nxs-manage-versions .nxs-manage-versions__trigger')).not.toBeNull();
+      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')).toBeNull();
+
+      fixture.destroy();
+      await render(version(1));
+      expect(el('nxs-manage-versions .nxs-manage-versions__trigger')).not.toBeNull();
+      expect(el('nxs-properties-panel nxs-tag[nxsVersion]')).toBeNull();
+    });
+  });
+
+  describe('publishing a version (register item 49)', () => {
+    const publishableVersion = (): NuxeoDocument =>
+      version(1, { facets: ['Immutable', 'Versionable', 'Publishable', 'Commentable'] });
+
+    it('offers Publish on a version, as Web UI does, and opens the dialog for that version', async () => {
+      await render(publishableVersion());
+      const component = fixture.componentInstance;
+      const publish = component.toolbarEntries().find((e) => e.id === 'app.toolbar.publish');
+      expect(publish, 'Publish is offered').toBeTruthy();
+      expect(publish?.disabled).toBe(false);
+
+      component.runToolbarEntry(publish!);
+      await settle();
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(mockDetailService.getVersionsDirect).toHaveBeenCalledWith('doc-live');
+      expect(mockDialog.open.mock.calls.at(-1)?.[1]?.data).toMatchObject({ documentUid: 'v-0-1' });
+    });
+
+    it('counts a version’s publications through its live document, as Web UI lists them', async () => {
+      const proxy = live({ uid: 'proxy-of-1-0', path: '/sections/a', isProxy: true });
+      mockDetailService.getPublishedVersions.mockImplementation((uid: string) =>
+        of({ entries: uid === 'doc-live' ? [proxy] : [] }),
+      );
+      await render(publishableVersion());
+
+      expect(mockDetailService.getPublishedVersions).toHaveBeenCalledWith('doc-live');
+      expect(mockDetailService.getPublishedVersions).not.toHaveBeenCalledWith('v-0-1');
+      expect(fixture.componentInstance.publicationCount()).toBe(1);
+    });
+
+    it('does not offer Publish on a version to a user without WriteVersion', async () => {
+      await render(
+        version(1, {
+          facets: ['Immutable', 'Versionable', 'Publishable'],
+          contextParameters: { permissions: ['Read', 'Write', 'ReadWrite'] },
+        }),
+      );
+      expect(
+        fixture.componentInstance.toolbarEntries().some((e) => e.id === 'app.toolbar.publish'),
+      ).toBe(false);
+    });
+  });
+
+  describe("the Publishing tab's own actions", () => {
+    async function openPublishingTab(): Promise<HTMLElement> {
+      fixture.componentInstance.goToPublishingTab();
+      await settle();
+      return fixture.nativeElement as HTMLElement;
+    }
+
+    it('offers Publish to a section only on a document the user can publish', async () => {
+      await render(live({ facets: ['Versionable', 'Publishable'] }));
+      expect((await openPublishingTab()).querySelector('.publish-btn')).not.toBeNull();
+
+      await render(
+        live({
+          facets: ['Versionable', 'Publishable'],
+          contextParameters: { permissions: ['Read', 'Write', 'ReadWrite'] },
+        }),
+      );
+      const tab = await openPublishingTab();
+      expect(tab.querySelector('.publish-container'), 'the tab itself renders').not.toBeNull();
+      expect(tab.querySelector('.publish-btn')).toBeNull();
+    });
+
+    it('offers Unpublish and Republish only on a publication the user holds WriteVersion on', async () => {
+      const proxy = (uid: string, permissions: string[]): NuxeoDocument =>
+        live({
+          uid,
+          path: `/sections/${uid}/contract`,
+          isProxy: true,
+          contextParameters: { permissions },
+          properties: { 'uid:major_version': 0, 'uid:minor_version': 1 },
+        });
+      mockDetailService.getPublishedVersions.mockReturnValue(
+        of({ entries: [proxy('own', ['Read', 'WriteVersion']), proxy('other', ['Read'])] }),
+      );
+      await render(live({ facets: ['Versionable', 'Publishable'] }));
+
+      const rows = Array.from(
+        (await openPublishingTab()).querySelectorAll('.publish-table tbody tr'),
+      );
+      expect(rows).toHaveLength(2);
+      const [own, other] = rows;
+      expect(own.querySelector('.unpublish-btn')).not.toBeNull();
+      // 0.1 published, 0.2 live: an older version, so it can be republished.
+      expect(own.querySelector('.republish-btn')).not.toBeNull();
+      expect(other.querySelector('.unpublish-btn')).toBeNull();
+      expect(other.querySelector('.republish-btn')).toBeNull();
+    });
+
+    describe('asks first, in Web UI’s words', () => {
+      async function tabWithOwnPublication(): Promise<HTMLElement> {
+        mockDetailService.getPublishedVersions.mockReturnValue(
+          of({
+            entries: [
+              live({
+                uid: 'own',
+                path: '/sections/own/contract',
+                isProxy: true,
+                contextParameters: { permissions: ['Read', 'WriteVersion'] },
+                properties: { 'uid:major_version': 0, 'uid:minor_version': 1 },
+              }),
+            ],
+          }),
+        );
+        await render(live({ facets: ['Versionable', 'Publishable'] }));
+        return openPublishingTab();
+      }
+
+      async function press(tab: HTMLElement, selector: string): Promise<HTMLElement> {
+        const button = tab.querySelector<HTMLElement>(selector);
+        expect(button, `${selector} is offered`).not.toBeNull();
+        button!.focus();
+        button!.click();
+        await settle();
+        return button!;
+      }
+
+      const asked = () => mockDialog.open.mock.calls.at(-1)?.[1]?.data;
+
+      it('asks before Unpublish; Cancel unpublishes nothing', async () => {
+        const tab = await tabWithOwnPublication();
+        await press(tab, '.unpublish-btn');
+
+        expect(asked()).toEqual({
+          title: 'Unpublish',
+          message: 'Are you sure you want to unpublish this document?',
+          confirmLabel: 'Unpublish',
+        });
+        expect(mockDetailService.unpublishDocument).not.toHaveBeenCalled();
+        expect(tab.querySelectorAll('.publish-table tbody tr')).toHaveLength(1);
+      });
+
+      it('unpublishes once confirmed, and moves focus from the departed button to the heading', async () => {
+        const tab = await tabWithOwnPublication();
+        dialogResult = true;
+        await press(tab, '.unpublish-btn');
+
+        expect(mockDetailService.unpublishDocument).toHaveBeenCalledWith('own');
+        expect(tab.querySelector('.publish-table')).toBeNull();
+        expect(document.activeElement?.getAttribute('role')).toBe('heading');
+        expect(document.activeElement?.textContent?.trim()).toBe('Publication details');
+      });
+
+      it('asks before Republish; Cancel republishes nothing', async () => {
+        const tab = await tabWithOwnPublication();
+        await press(tab, '.republish-btn');
+
+        expect(asked()).toEqual({
+          title: 'Republish',
+          message:
+            'Are you sure you want to erase this publication with the most recent version of the document?',
+          confirmLabel: 'Republish',
+        });
+        expect(mockDetailService.publishDocument).not.toHaveBeenCalled();
+      });
+
+      it('asks before Unpublish All; Cancel removes nothing', async () => {
+        const tab = await tabWithOwnPublication();
+        await press(tab, '.unpublish-all-btn');
+
+        expect(asked()).toEqual({
+          title: 'Unpublish All',
+          message: 'Are you sure you want to unpublish these documents?',
+          confirmLabel: 'Unpublish All',
+        });
+        expect(mockDetailService.unpublishDocument).not.toHaveBeenCalled();
+      });
     });
   });
 
@@ -553,8 +768,9 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await click('.version-banner-restore');
 
       expect(mockDetailService.restoreVersion).toHaveBeenCalledWith('v-0-1');
-      expect(snack).toHaveBeenCalledWith('Restored to version 0.1', 'OK', expect.anything());
-      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live'], {});
+      expect(toast.show).toHaveBeenCalledWith('Restored to version 0.1');
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(navigate).toHaveBeenCalledWith(['/doc', 'doc-live']);
     });
 
     it.each([
@@ -577,7 +793,8 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
 
       await click('.version-banner-restore');
 
-      expect(snack).toHaveBeenCalledWith(message, 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith(message);
+      expect(toast.show).not.toHaveBeenCalled();
       expect(navigate).not.toHaveBeenCalled();
       expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
       expect(fixture.componentInstance.actionInProgress()).toBeNull();
@@ -592,7 +809,7 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
     it('is offered on a versionable document to a user with WriteVersion', async () => {
       await render(neverVersioned());
 
-      expect(el('.create-version-btn')).toBeTruthy();
+      expect(el('button.nxs-manage-versions__create')).toBeTruthy();
     });
 
     it('is not offered to a user with Write but not WriteVersion', async () => {
@@ -602,31 +819,33 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
         }),
       );
 
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('is not offered on a document without the Versionable facet', async () => {
       await render(neverVersioned({ facets: ['Commentable'] }));
 
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('is not offered on a record', async () => {
       // `isRecord` is in Nuxeo's document JSON but not in the `NuxeoDocument` model.
       await render({ ...neverVersioned(), isRecord: true } as NuxeoDocument);
 
-      expect(el('.create-version-btn')).toBeNull();
+      expect(el('button.nxs-manage-versions__create')).toBeNull();
     });
 
     it('is offered in the list of a checked-out document only with WriteVersion', async () => {
       await render(live());
       await openVersionsList();
-      expect(el('.version-dropdown-create')).toBeTruthy();
+      expect(inMenu('.nxs-manage-versions__create')).toBeTruthy();
 
       fixture.destroy();
+      document.querySelectorAll('.cdk-overlay-container').forEach((n) => n.remove());
       await render(live({ contextParameters: { permissions: ['Read', 'Write'] } }));
       await openVersionsList();
-      expect(el('.version-dropdown-create')).toBeNull();
+      expect(versionItem('0.1')).toBeTruthy();
+      expect(inMenu('.nxs-manage-versions__create')).toBeNull();
     });
   });
 });

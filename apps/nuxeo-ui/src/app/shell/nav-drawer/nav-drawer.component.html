@@ -1,99 +1,78 @@
 @if (activeItem(); as item) {
-  @if (!isBrowseAdfHx) {
-    <div class="drawer-header" [class.drawer-header--tasks]="isTasksPanel">
-      <div
-        class="drawer-title"
-        [class.drawer-title--tasks]="isTasksPanel"
-        role="heading"
-        aria-level="2"
-      >
-        {{ item | descriptorLabel }}
-      </div>
-      @if (isTasksPanel) {
-        <button
-          mat-icon-button
-          (click)="loadTasks()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isRecentlyViewed) {
-        <button
-          mat-icon-button
-          (click)="refreshRecentlyViewed()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isExpiredQueue) {
-        <button
-          mat-icon-button
-          (click)="refreshExpired()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isBrowse) {
-        <button
-          mat-icon-button
-          (click)="refreshBrowseTree()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isPersonalSpace) {
-        <button
-          mat-icon-button
-          (click)="refreshPersonalSpaceTree()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
+  <div class="drawer-header" [class.drawer-header--tasks]="isTasksPanel">
+    <div
+      class="drawer-title"
+      [class.drawer-title--tasks]="isTasksPanel"
+      role="heading"
+      aria-level="2"
+    >
+      {{ item | descriptorLabel }}
     </div>
-  }
+    @if (isTasksPanel) {
+      <button
+        mat-icon-button
+        (click)="loadTasks()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon>refresh</mat-icon>
+      </button>
+    }
+    @if (isRecentlyViewed) {
+      <button
+        mat-icon-button
+        (click)="refreshRecentlyViewed()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon>refresh</mat-icon>
+      </button>
+    }
+    @if (isExpiredQueue) {
+      <button
+        mat-icon-button
+        (click)="refreshExpired()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon>refresh</mat-icon>
+      </button>
+    }
+    @if (isBrowse) {
+      <button
+        mat-icon-button
+        (click)="refreshBrowseTree()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon>refresh</mat-icon>
+      </button>
+    }
+    @if (isPersonalSpace) {
+      <button
+        mat-icon-button
+        (click)="refreshPersonalSpaceTree()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon>refresh</mat-icon>
+      </button>
+    }
+  </div>
 
   @if (isBrowse) {
     <div class="folder-tree">
-      @if (rootLoading()) {
-        <div class="tree-loading">
-          <mat-spinner diameter="24" [attr.aria-label]="'nav.loading' | translate" />
-        </div>
-      } @else if (rootNodes().length === 0) {
-        <div class="tree-empty">{{ 'nav.folders.empty' | translate }}</div>
-      } @else {
-        @if (browseTreeShowRootBack()) {
-          <button class="tree-back" type="button" (click)="navigateToBrowseRoot()">
-            <mat-icon>chevron_left</mat-icon>
-            {{ 'nav.tree.root' | translate }}
-          </button>
-        }
-        <div class="tree-list">
-          @for (node of browseDisplayNodes(); track node.doc.uid) {
-            <ng-container *ngTemplateOutlet="folderTpl; context: { $implicit: node, depth: 0 }" />
-          }
-        </div>
-      }
+      <nxs-document-tree
+        [label]="'nav.tree.label' | translate"
+        [currentPath]="browseTreePath()"
+        (navigate)="onBrowseTreeNavigate($event)"
+      />
     </div>
-  } @else if (isBrowseAdfHx) {
-    <hxp-browse-nav-drawer
-      [title]="item | descriptorLabel"
-      (navigatePath)="onAdfHxBrowseNavigate($event)"
-    />
   } @else if (isPersonalSpace) {
     <div class="folder-tree">
       @if (personalSpaceLoading()) {
@@ -229,7 +208,7 @@
   } @else if (isAssets) {
     <lib-extension-outlet componentId="app.sidebar.assets" />
   } @else if (isSearchFilters) {
-    <lib-extension-outlet componentId="app.sidebar.searchFilters" />
+    <lib-extension-outlet class="search-filters-outlet" componentId="app.sidebar.searchFilters" />
   } @else if (isTrash) {
     <lib-extension-outlet componentId="app.sidebar.trashFilters" />
   } @else if (isTasksPanel) {

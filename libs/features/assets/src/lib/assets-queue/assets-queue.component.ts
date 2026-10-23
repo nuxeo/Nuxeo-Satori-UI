@@ -16,7 +16,7 @@ import {
   AssetAggregationService,
   DocumentDetailService,
   type AssetQueueItem,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { catchError, of } from 'rxjs';
 import { TranslatePipe } from '@ngx-translate/core';
 

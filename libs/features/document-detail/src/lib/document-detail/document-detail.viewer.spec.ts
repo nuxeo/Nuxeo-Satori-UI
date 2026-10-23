@@ -10,9 +10,7 @@ import {
   withDisabledInitialNavigation,
   type ParamMap,
 } from '@angular/router';
-import { MatAutocompleteSelectedEvent } from '@angular/material/autocomplete';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { BehaviorSubject, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -31,7 +29,7 @@ import {
   type DirectoryEntry,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
@@ -45,9 +43,10 @@ import {
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { DocumentDetailComponent } from './document-detail';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * The viewer: storyboards, renditions, the metadata refresh poll and the ARender
@@ -100,19 +99,6 @@ function auditEntry(over: Partial<AuditEntry> = {}): AuditEntry {
   };
 }
 
-/**
- * A `MatAutocompleteSelectedEvent` carrying just what `selectTag` reads.
- *
- * Built on the real prototype rather than cast from a literal: the class takes a live
- * `MatAutocomplete` and `MatOption` that would have to be rendered to construct.
- */
-function tagSelection(value: string, deselect: () => void): MatAutocompleteSelectedEvent {
-  return Object.assign(Object.create(MatAutocompleteSelectedEvent.prototype), {
-    source: null,
-    option: { value, deselect },
-  });
-}
-
 interface DialogRefLike {
   afterClosed: () => Observable<unknown>;
 }
@@ -129,6 +115,7 @@ const mockDetailService = {
   exportZip: vi.fn((): Observable<Blob> => of(new Blob(['zip']))),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getSectionTree: vi.fn((): Observable<{ entries: NuxeoDocument[] }> => of({ entries: [] })),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -158,8 +145,8 @@ const mockARender = {
 
 const mockTagService = {
   searchTags: vi.fn((): Observable<string[]> => of([])),
-  addTag: vi.fn((): Observable<unknown> => of({})),
-  removeTag: vi.fn((): Observable<void> => of(undefined)),
+  addTag: vi.fn((): Observable<string[]> => of([])),
+  removeTag: vi.fn((): Observable<string[]> => of([])),
 };
 
 const mockTaskService = { getDocumentTasks: vi.fn((): Observable<unknown[]> => of([])) };
@@ -183,7 +170,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   let component: DocumentDetailComponent;
   let fixture: ComponentFixture<DocumentDetailComponent>;
   let http: HttpTestingController;
-  let snack: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   /** A subject rather than `of`, so a test can navigate to a second document. */
   let routeParams: BehaviorSubject<ParamMap>;
 
@@ -214,9 +201,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   }
 
   function offered(id: string): ExtensionActionDescriptor {
-    const found = [...component.toolbarActions(), ...component.overflowActions()].find(
-      (a) => a.id === id,
-    );
+    const found = component.toolbarActions().find((a) => a.id === id);
     if (!found) {
       throw new Error(`toolbar action "${id}" is not offered for this document`);
     }
@@ -251,7 +236,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
     mockARender.isAvailable.mockReturnValue(of(false));
     mockARender.getPreviewerUrl.mockReturnValue(of(null));
     mockTagService.searchTags.mockReturnValue(of([]));
-    mockTagService.addTag.mockReturnValue(of({}));
+    mockTagService.addTag.mockReturnValue(of([]));
     mockTaskService.getDocumentTasks.mockReturnValue(of([]));
     mockWorkflowService.getDocumentWorkflows.mockReturnValue(of([]));
     mockBrowseService.updateDocument.mockReturnValue(of(doc()));
@@ -260,7 +245,8 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    snack = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     routeParams = new BehaviorSubject<ParamMap>(convertToParamMap({ uid: 'doc-1' }));
     installDefaults();
 
@@ -319,7 +305,6 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         },
         { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: snack } },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
           slots: {
@@ -410,7 +395,16 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
     });
 
     it('opens the share, export, publish and start-process surfaces', async () => {
-      await build(doc({ properties: { 'uid:major_version': 1 } }));
+      // Publish is Web UI's `isPublishable`: the Publishable facet and WriteVersion.
+      await build(
+        doc({
+          facets: ['Publishable'],
+          properties: { 'uid:major_version': 1 },
+          contextParameters: {
+            permissions: ['Read', 'Write', 'ReadWrite', 'WriteVersion', 'Everything', 'Remove'],
+          },
+        }),
+      );
 
       for (const id of [
         'app.toolbar.share',
@@ -887,22 +881,22 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
   });
 
   describe('vocabularies', () => {
-    it('resolves the document category from the nature vocabulary', async () => {
+    it('labels the nature from the nature vocabulary for the properties panel', async () => {
       mockDirectoryService.getEntries.mockReturnValue(of([directoryEntry('contract', 'Contract')]));
       await build(doc({ properties: { 'dc:nature': 'contract' } }));
 
-      expect(component.documentCategory()).toBe('Contract');
+      expect(component.vocabularyLabel()('nature', 'contract')).toBe('Contract');
     });
 
-    it('shows no category when the nature vocabulary fails to load', async () => {
+    it('keeps the nature ID when the nature vocabulary fails to load', async () => {
       mockDirectoryService.getEntries.mockReturnValue(throwError(() => new Error('500')));
       await build(doc({ properties: { 'dc:nature': 'contract' } }));
 
       expect(component.natureVocabulary()).toEqual([]);
-      expect(component.documentCategory()).toBe('contract');
+      expect(component.vocabularyLabel()('nature', 'contract')).toBe('contract');
     });
 
-    it('resolves hierarchical coverage and subject labels', async () => {
+    it('labels hierarchical coverage and subjects from their own vocabularies', async () => {
       mockDirectoryService.getAllL10nEntries.mockReturnValue(
         of([l10nEntry('europe', 'Europe'), l10nEntry('europe/france', 'France', 'europe')]),
       );
@@ -912,8 +906,8 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         }),
       );
 
-      expect(component.documentCoverageDisplay()).toContain('France');
-      expect(component.documentSubjectsDisplay()).toContain('Europe');
+      expect(component.vocabularyLabel()('l10ncoverage', 'europe/france')).toContain('France');
+      expect(component.vocabularyLabel()('l10nsubjects', 'europe')).toContain('Europe');
     });
 
     it('empties both hierarchical vocabularies when the lookup fails', async () => {
@@ -922,95 +916,6 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
       expect(component.coverageVocabulary()).toEqual([]);
       expect(component.subjectVocabulary()).toEqual([]);
-    });
-  });
-
-  describe('tag autocomplete', () => {
-    it('offers matching tags the document does not already have', () => {
-      vi.useFakeTimers();
-      mockTagService.searchTags.mockReturnValue(of(['invoice', 'existing']));
-      buildSync(doc({ properties: { 'nxtag:tags': [{ label: 'existing' }] } }));
-      component.tagInput = 'in';
-
-      component.onTagSearch('in');
-      vi.advanceTimersByTime(300);
-
-      expect(component.tagSearchResults()).toEqual(['invoice']);
-      // "in" is not itself a tag, so creating it is offered.
-      expect(component.showCreateTagOption()).toBe(true);
-    });
-
-    it('does not offer to create a tag that already exists verbatim', () => {
-      vi.useFakeTimers();
-      mockTagService.searchTags.mockReturnValue(of(['invoice']));
-      buildSync();
-      component.tagInput = 'invoice';
-
-      component.onTagSearch('invoice');
-      vi.advanceTimersByTime(300);
-
-      expect(component.showCreateTagOption()).toBe(false);
-    });
-
-    it('offers nothing for an empty term', () => {
-      vi.useFakeTimers();
-      buildSync();
-      component.tagInput = '';
-
-      component.onTagSearch('');
-      vi.advanceTimersByTime(300);
-
-      expect(mockTagService.searchTags).not.toHaveBeenCalled();
-      expect(component.tagSearchResults()).toEqual([]);
-    });
-
-    it('offers nothing when the tag search itself fails', () => {
-      vi.useFakeTimers();
-      mockTagService.searchTags.mockReturnValue(throwError(() => new Error('500')));
-      buildSync();
-      component.tagInput = 'in';
-
-      component.onTagSearch('in');
-      vi.advanceTimersByTime(300);
-
-      expect(component.tagSearchResults()).toEqual([]);
-    });
-
-    it('applies the tag chosen from the autocomplete and clears the input', async () => {
-      await build();
-      const deselect = vi.fn();
-
-      component.selectTag(tagSelection('invoice', deselect));
-
-      expect(mockTagService.addTag).toHaveBeenCalledWith('doc-1', 'invoice');
-      expect(component.tagInput).toBe('');
-      expect(deselect).toHaveBeenCalled();
-    });
-
-    it('ignores an autocomplete selection with no value', async () => {
-      await build();
-
-      component.selectTag(tagSelection('   ', vi.fn()));
-
-      expect(mockTagService.addTag).not.toHaveBeenCalled();
-    });
-
-    it('does not add the tag twice when the chip input fires after the autocomplete', async () => {
-      await build();
-      component.selectTag(tagSelection('invoice', vi.fn()));
-      mockTagService.addTag.mockClear();
-
-      const chipInput = { clear: vi.fn() };
-      component.addInlineTagFromChip(
-        Object.assign(Object.create(null), {
-          value: 'invoice',
-          chipInput,
-          input: document.createElement('input'),
-        }),
-      );
-
-      expect(mockTagService.addTag).not.toHaveBeenCalled();
-      expect(chipInput.clear).toHaveBeenCalled();
     });
   });
 
@@ -1097,7 +1002,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
       component.saveNote('changed');
 
       expect(component.noteSaving()).toBe(false);
-      expect(snack).toHaveBeenCalledWith('Failed to save note', 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith('Failed to save note');
     });
 
     it('reports a permission failure distinctly from a generic one', async () => {
@@ -1108,7 +1013,7 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
 
       component.saveNote('changed');
 
-      expect(snack).not.toHaveBeenCalledWith('Failed to save note', 'OK', expect.anything());
+      expect(toast.error).not.toHaveBeenCalledWith('Failed to save note');
       expect(component.noteSaving()).toBe(false);
     });
 

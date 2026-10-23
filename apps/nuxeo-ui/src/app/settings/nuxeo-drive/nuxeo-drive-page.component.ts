@@ -1,7 +1,7 @@
 import { Component, inject, signal } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-import { SettingsService, type SynchronizationRootRow } from '@nuxeo-satori/platform/nuxeo-client';
+import { SettingsService, type SynchronizationRootRow } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 @Component({

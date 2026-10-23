@@ -61,7 +61,7 @@ would mean the _phase_ is broken, or only that the app did not boot.
   app. Check the manifest's `startedAt` against the diff it is offered as proof for.
 - **`precondition-not-met` is not a defect** and nine reds from one precondition
   mismatch are not nine defects.
-- **`pass-partial` is not `pass`.** Quote verdict lines verbatim; never paraphrase.
+- **`pass-partial` and `pass-incomplete` are not `pass`.** Quote verdict lines verbatim; never paraphrase.
 
 ## Report exactly this
 

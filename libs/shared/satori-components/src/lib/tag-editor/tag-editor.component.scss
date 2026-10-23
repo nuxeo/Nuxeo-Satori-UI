@@ -1,0 +1,66 @@
+:host {
+  --nxs-tag-editor-muted: var(--mat-sys-on-surface-variant);
+  --nxs-tag-editor-new: var(--mat-sys-primary);
+  --mat-chip-container-height: 24px;
+  --mat-chip-label-text-size: 13px;
+  --mat-chip-elevated-container-color: var(--mat-sys-surface-container-high);
+  --mat-chip-label-text-color: var(--mat-sys-on-surface);
+  --mat-chip-disabled-label-text-color: var(--nxs-tag-editor-muted);
+  --mat-chip-disabled-container-opacity: 1;
+  display: block;
+  font-size: 13px;
+}
+
+.nxs-tag-editor__field {
+  width: 100%;
+}
+
+// Below the chips rather than among them, so Material's in-grid flex sizing does not apply.
+:host .nxs-tag-editor__box {
+  width: 100%;
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+// List margins are scoped to the host: the theme's `.mat-typography` rules outrank a single class.
+:host .nxs-tag-editor__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.nxs-tag-editor__empty {
+  color: var(--nxs-tag-editor-muted);
+}
+
+// The glyph comes from its codepoint, not the `cancel` ligature: ligature text inside a button
+// reads to IBM's checker as a visible label the name "Remove tag …" does not contain (WCAG 2.5.3).
+.nxs-tag-editor__remove-icon::before {
+  content: '\e5c9';
+  font:
+    14px/1 'Material Icons',
+    sans-serif;
+}
+
+.nxs-tag-editor__pending nxs-spinner {
+  display: inline-flex;
+  margin-inline-start: 6px;
+  vertical-align: middle;
+}
+
+.nxs-tag-editor__new {
+  font-weight: 500;
+  color: var(--nxs-tag-editor-new);
+}
+
+.nxs-tag-editor__sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

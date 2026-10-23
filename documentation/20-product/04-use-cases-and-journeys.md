@@ -141,10 +141,10 @@ Layer 2, with Layer 3 assistance.
 Problem:        "Add a contract-approval action, visible only to users who can write the
                  document, plus a tab showing approval history."
 Step 1:  Fork apps/nuxeo-satori-template (ships no design system — add yours)
-Step 2:  npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-Step 3:  npx nx g @nuxeo-satori/platform:extension-action  approve-contract --library=...
+Step 2:  npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+Step 3:  npx nx g @nuxeo/satori-platform:extension-action  approve-contract --library=...
 Step 4:  Implement the handler and the rule
-Step 5:  node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/acme-extensions
+Step 5:  node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/acme-extensions
 Step 6:  Add the route for the panel — ExtensionOutletComponent resolves it BY ID
 Step 7:  providers: [ ..., provideAcmeExtensions() ]     ← the whole integration
 Step 8:  Reference the action id from their manifest
@@ -170,7 +170,7 @@ tarball, not the source tree.
 
 ```text
 Problem:        "A new Satori version is out. Will it break what we built?"
-Step 1:  npm version bump of @nuxeo-satori/platform
+Step 1:  npm version bump of @nuxeo/satori-platform
 Step 2:  Reinstall the marketplace package
 System:  install.xml — app overwritten; no configuration file installed or replaced
          Their bootstrap and manifest fragments stay in their own configuration

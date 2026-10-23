@@ -113,7 +113,7 @@ that is a gap worth closing — the client is thin, so the tests would be cheap.
 
 `AI.NlToNxql` produces a **query** which is then executed. An HXQL/NXQL injection was already
 found and fixed in the _hand-built_ search path
-([`hxql-literal.ts`](../../libs/shared/adf-hx-bridge/src/lib/api/hxql-literal.ts)) —
+(`hxql-literal.ts`, since removed with the adf-hx search route) —
 it returned 155 documents against 0 for the plain term by escaping out of a literal and lifting
 its own clause to a top-level `OR`, defeating the `isVersion` and `isTrashed` hygiene filters.
 

@@ -4,8 +4,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -15,7 +15,7 @@ import {
   type DirectoryEntry,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { EditMetadataDialogComponent, type EditMetadataDialogData } from './edit-metadata-dialog';
 
@@ -78,7 +78,6 @@ describe('EditMetadataDialogComponent (NXSAT-192)', () => {
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: BrowseService, useValue: mockBrowseService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     })
       .overrideComponent(EditMetadataDialogComponent, {
@@ -145,7 +144,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
   let getEntries: ReturnType<typeof vi.fn<DirectoryService['getEntries']>>;
   let getAllL10nEntries: ReturnType<typeof vi.fn<DirectoryService['getAllL10nEntries']>>;
   let updateDocument: ReturnType<typeof vi.fn<BrowseService['updateDocument']>>;
-  let snackOpen: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let close: ReturnType<typeof vi.fn>;
 
   async function setup(data: EditMetadataDialogData = dialogData): Promise<void> {
@@ -157,7 +156,8 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     updateDocument = vi.fn<BrowseService['updateDocument']>(() =>
       of({ uid: 'doc-1', title: 'Saved' } as NuxeoDocument),
     );
-    snackOpen = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     close = vi.fn();
 
     await TestBed.configureTestingModule({
@@ -168,7 +168,6 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: DirectoryService, useValue: { getEntries, getAllL10nEntries } },
         { provide: BrowseService, useValue: { updateDocument } },
-        { provide: MatSnackBar, useValue: { open: snackOpen } },
       ],
     })
       .overrideComponent(EditMetadataDialogComponent, {
@@ -392,7 +391,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
       'dc:expired': '2027-05-06T00:00:00.000Z',
     });
     expect(component.saving()).toBe(false);
-    expect(snackOpen).toHaveBeenCalledWith('Document updated', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Document updated');
     expect(close).toHaveBeenCalledWith({ uid: 'doc-1', title: 'Saved' });
   });
 
@@ -425,7 +424,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     await flushAsync();
 
     expect(component.saving()).toBe(false);
-    expect(snackOpen).toHaveBeenCalledWith('Failed to update document', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to update document');
     expect(close).not.toHaveBeenCalled();
   });
 
@@ -495,7 +494,6 @@ describe('EditMetadataDialogComponent Expires typed into the real field', () => 
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: BrowseService, useValue: mockBrowseService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     }).compileComponents();
     const fixture = TestBed.createComponent(EditMetadataDialogComponent);

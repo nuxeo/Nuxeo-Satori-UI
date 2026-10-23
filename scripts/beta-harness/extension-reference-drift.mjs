@@ -23,6 +23,8 @@
  *
  * ## What it checks
  *
+ * IDs are the platform's `app.` ones and the component library's `nxs.` ones.
+ *
  * 1. Every ID the document presents as real is registered in non-spec source.
  * 2. Every ID registered in non-spec source is documented.
  * 3. Every slot-state claim in the document's table matches whether the slot is
@@ -119,7 +121,8 @@ const allSource = [...sources.values()].join('\n');
 const reference = readFileSync(REFERENCE, 'utf8');
 
 /**
- * IDs the document presents as real.
+ * IDs the document presents as real: ours are `app.*`, and the `nxs-` component library's
+ * are `nxs.*`, both one public contract.
  *
  * Only backticked ones, and only outside fenced code blocks: a JSON example may
  * legitimately show `acme.*` IDs a customer would invent, and the security section
@@ -128,7 +131,7 @@ const reference = readFileSync(REFERENCE, 'utf8');
 function documentedIds() {
   const withoutFences = reference.replace(/```[\s\S]*?```/g, '');
   const ids = new Set();
-  for (const match of withoutFences.matchAll(/`(app\.[a-zA-Z0-9.]+)`/g)) {
+  for (const match of withoutFences.matchAll(/`((?:app|nxs)\.[a-zA-Z0-9.]+)`/g)) {
     // `app.routes.ts` and friends are filenames, not IDs.
     if (/\.(ts|mjs|json|html|scss|md)$/.test(match[1])) continue;
     if (match[1].split('.').length !== 3) continue;
@@ -141,7 +144,7 @@ function documentedIds() {
 function registeredIds() {
   const ids = new Set();
   for (const match of allSource.matchAll(
-    /['"`](app\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*)['"`]/g,
+    /['"`]((?:app|nxs)\.[a-zA-Z][a-zA-Z0-9]*\.[a-zA-Z][a-zA-Z0-9]*)['"`]/g,
   )) {
     // `'./app.config.ts'` and friends match the ID shape. A third segment that is a
     // file extension is a path, not an extension point.

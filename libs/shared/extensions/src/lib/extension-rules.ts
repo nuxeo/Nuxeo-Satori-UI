@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * What a rule may inspect.

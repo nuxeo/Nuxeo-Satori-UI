@@ -4,7 +4,7 @@ import {
   AppExtensionsService,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { ACME_EXTENSIONS_EXTENSION_IDS } from '../extensions';
 

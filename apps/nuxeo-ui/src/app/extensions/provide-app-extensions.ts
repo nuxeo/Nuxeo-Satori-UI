@@ -18,15 +18,20 @@ import {
   ExtensionRuleContextService,
   PACKAGED_BROWSE_COLUMNS,
   PACKAGED_BROWSE_CONTEXT_MENU,
+  PACKAGED_ROW_ACTIONS,
   PACKAGED_BULK_ACTIONS,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideExtensionRoutes,
   provideSatoriExtensions,
   type ExtensionActionHandler,
-} from '@nuxeo-satori/platform/extensions';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { SelectionService } from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import {
+  NXS_PERMISSIONS_PANEL_ID,
+  NxsPermissionsPanelComponent,
+} from '@nuxeo/satori-platform/components';
+import { SelectionService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AuthService } from '../auth/auth.service';
 
@@ -36,7 +41,7 @@ type BulkActionModule = typeof import('./bulk-action.services');
  * A handler that loads its action service on first use.
  *
  * The registration runs eagerly, and the action services pull in dialogs from
- * `@nuxeo-satori/platform/ui`. Importing them statically moved ~440 kB of dialog
+ * `@nuxeo/satori-platform/ui`. Importing them statically moved ~440 kB of dialog
  * code out of the lazily-loaded shell chunk and into the initial bundle, which
  * the build budget correctly refused. Deferring the import to the click keeps the
  * registration eager — so the descriptors are always addressable — while the
@@ -110,6 +115,7 @@ function provideAppContributions(): EnvironmentProviders {
         [EXTENSION_SLOTS.toolbar]: PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
         [EXTENSION_SLOTS.tabs]: PACKAGED_DOCUMENT_TABS,
         [EXTENSION_SLOTS.contextMenu]: PACKAGED_BROWSE_CONTEXT_MENU,
+        [EXTENSION_SLOTS.rowActions]: PACKAGED_ROW_ACTIONS,
       },
 
       actions: {
@@ -154,6 +160,12 @@ function provideAppContributions(): EnvironmentProviders {
           import('../features/contracts/contracts-page.component').then(
             (m) => m.ContractsPageComponent,
           ),
+
+        // The local and inherited half of the document-detail and browse Permissions tabs.
+        // Re-registering this ID replaces the panel in both. By class, not behind `import()`:
+        // `app.config.ts` imports the library eagerly for `provideNxsComponents()`, so a lazy
+        // import of it would load nothing later, and the module-boundary rule rejects the mix.
+        [NXS_PERMISSIONS_PANEL_ID]: NxsPermissionsPanelComponent,
       },
     };
   });

@@ -3,7 +3,7 @@ import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/materia
 import { MatButtonModule } from '@angular/material/button';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { NuxeoAce, DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoAce, DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 
 export interface DeletePermissionDialogData {

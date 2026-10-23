@@ -2,14 +2,14 @@ import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
   PACKAGED_BULK_ACTIONS,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { SelectionTopbarComponent } from './selection-topbar.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';

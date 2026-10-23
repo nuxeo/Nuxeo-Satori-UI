@@ -89,11 +89,9 @@ const UPSTREAM_MARKERS = ['adf-datatable', 'adf-enterprise-adf-hx'];
 /**
  * Files that must be **present** in the build, not merely absent from it.
  *
- * adf-core fetches its own strings at runtime from `assets/adf-core/i18n/<lang>.json`, and
- * they are copied in by an asset glob in `angular.json`. Without them every adf-hx
- * component renders raw keys like `ADF-DATATABLE.ACCESSIBILITY.SELECT_ALL` to screen
- * readers — visible to a user, invisible to a compiler, and easy to lose to a stray edit of
- * the glob.
+ * Upstream assets fetched at runtime are copied in by asset globs in `angular.json`, and a
+ * missing one renders raw keys or broken images — visible to a user, invisible to a compiler,
+ * and easy to lose to a stray edit of a glob.
  *
  * Asserted here because this gate already reads the built output, and because the built
  * output is what a customer receives. A local dev server can disagree with it — one
@@ -109,39 +107,24 @@ const UPSTREAM_MARKERS = ['adf-datatable', 'adf-enterprise-adf-hx'];
  * empty catalogue passed. So did a truncated one, and so did a 0-byte file.
  *
  * `key` is a dotted path that must resolve to a non-empty string. Each one is a key the
- * application actually renders, not the first key in the file: `MANAGE_VERSIONS.DIALOG.TITLE`
- * is the heading that shipped raw and is the reason two of these entries exist at all.
+ * application actually renders, not the first key in the file. The list began with adf-hx's
+ * `MANAGE_VERSIONS.DIALOG.TITLE`, a heading that once shipped raw; adf-hx has since been removed.
  */
+// Both catalogues `AppTranslateLoader` fetches at runtime. Each fails silently when missing: the
+// satori-ui fetch is caught to `{}` and the app's falls back to the English map, so a lost glob
+// shows only as raw `sat.*` keys or English in every other language.
 const REQUIRED_FILES = [
   {
-    path: 'assets/adf-core/i18n/en.json',
-    key: 'CORE.PAGINATION.ITEMS_PER_PAGE',
-    why: "adf-core's own translation catalogue; without it adf-hx components render raw keys.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-core/bundles/assets/adf-core in angular.json.',
-  },
-  // The adf-hx side of the same problem, added after the adopted versions panel shipped with
-  // `MANAGE_VERSIONS.DIALOG.TITLE` as its heading. Each path is one that `app-translate-loader.ts`
-  // seeds as a folder: a seeded folder whose file is not shipped fails **silently**, because the
-  // loader catches the 404 and returns `{}`. Nothing else in the pipeline notices.
-  {
-    path: 'assets/adf-enterprise-adf-hx-content-services-ui/i18n/en.json',
-    key: 'MANAGE_VERSIONS.DIALOG.TITLE',
-    why: "adf-hx's UI catalogue — MANAGE_VERSIONS, DOCUMENT_LIST, DOCUMENT_TREE and the rest.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-hx-content-services/ui/assets in angular.json.',
+    path: 'i18n/en.json',
+    key: 'shell.search.placeholder',
+    why: "The app's English catalogue, fetched as i18n/<lang>.json; the header search label reads this key.",
+    fix: 'Check the asset glob for apps/nuxeo-ui/public in angular.json.',
   },
   {
-    path: 'assets/adf-enterprise-adf-hx-content-services-services/i18n/en.json',
-    key: 'PERMISSION_LEVEL.LABEL.READ',
-    why: "adf-hx's services catalogue — DOWNLOAD_STATUS, PERMISSION_LEVEL.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-hx-content-services/services/assets in angular.json.',
-  },
-  {
-    path: 'assets/images/Folder.svg',
-    // Not JSON, so assert the markup instead. A 0-byte or HTML-error-page SVG renders as
-    // a broken image, which is the same class of silent failure as an empty catalogue.
-    contains: '<svg',
-    why: "adf-hx's own icon set, referenced by the document tree and list as assets/images/*.svg.",
-    fix: 'Check the asset glob for node_modules/@alfresco/adf-hx-content-services/icons/assets in angular.json.',
+    path: 'assets/satori-ui/i18n/en.json',
+    key: 'sat.platform-nav.expand',
+    why: "satori-ui's catalogue (UPSTREAM_FOLDERS in app-translate-loader.ts); the platform nav's expand button reads this key.",
+    fix: 'Check the asset glob for node_modules/@hylandsoftware/satori-ui/i18n in angular.json.',
   },
 ];
 
@@ -176,21 +159,22 @@ for await (const file of walk(distDir)) {
   }
 }
 
-/** @type {string[]} */
+/** @type {{ required: (typeof REQUIRED_FILES)[number], reason: string }[]} */
 const missingFiles = [];
 for (const required of REQUIRED_FILES) {
   const full = resolve(distDir, required.path);
   if (!existsSync(full)) {
-    missingFiles.push(`${required.path} — absent`);
+    missingFiles.push({ required, reason: 'absent' });
     continue;
   }
   // Content, not existence. See the note on REQUIRED_FILES: the documented failure mode is
   // a catalogue that resolves to `{}`, which existence cannot distinguish from a good one.
   const text = readFileSync(full, 'utf8');
   if (required.contains && !text.includes(required.contains)) {
-    missingFiles.push(
-      `${required.path} — present (${text.length} bytes) but does not contain \`${required.contains}\``,
-    );
+    missingFiles.push({
+      required,
+      reason: `present (${text.length} bytes) but does not contain \`${required.contains}\``,
+    });
     continue;
   }
   if (required.key) {
@@ -198,15 +182,17 @@ for (const required of REQUIRED_FILES) {
     try {
       value = required.key.split('.').reduce((o, part) => o?.[part], JSON.parse(text));
     } catch (error) {
-      missingFiles.push(`${required.path} — present but is not valid JSON (${error.message})`);
+      missingFiles.push({ required, reason: `present but is not valid JSON (${error.message})` });
       continue;
     }
     if (typeof value !== 'string' || value === '') {
-      missingFiles.push(
-        `${required.path} — present (${text.length} bytes) but \`${required.key}\` is ` +
+      missingFiles.push({
+        required,
+        reason:
+          `present (${text.length} bytes) but \`${required.key}\` is ` +
           `${value === undefined ? 'absent' : JSON.stringify(value)}, so the catalogue is ` +
           'empty or truncated and the UI renders raw keys',
-      );
+      });
     }
   }
 }
@@ -221,9 +207,10 @@ console.log(
     `${(bytesScanned / 1048576).toFixed(2)} MB\n`,
 );
 
-for (const required of REQUIRED_FILES) {
-  if (!missingFiles.includes(required.path)) continue;
-  console.log(`  [FAIL] missing ${required.path}`);
+// Each one by name. This loop used to match `missingFiles` entries against bare paths while
+// they held "path — reason" strings, so a failure printed only the count.
+for (const { required, reason } of missingFiles) {
+  console.log(`  [FAIL] ${required.path}: ${reason}`);
   console.log(`         ${required.why}`);
   console.log(`         ${required.fix}`);
 }
@@ -238,14 +225,14 @@ if (hits.length === 0 && missingFiles.length === 0) {
       `${REQUIRED_FILES.filter((r) => r.contains).length} by markup).`,
   );
   // A green here means nothing unless adf-hx is actually in the bundle: the banned
-  // symbols arrive *through* it. Until an adoption lands, this passes trivially, and
+  // symbols arrived *through* it. With adf-hx removed this passes trivially, and
   // saying so is the difference between a gate and a decoration.
   if (!sawAdfHx) {
     console.log(
       '\n  VACUOUS: no adf-hx code was found in this bundle, so nothing could have\n' +
         '  carried a banned symbol into it. This run does not demonstrate that the\n' +
-        '  ng-mocks stub works — it demonstrates that adf-hx is not yet adopted.\n' +
-        '  It becomes load-bearing when a component imports @alfresco/adf-hx-content-services.',
+        '  ng-mocks stub works — it demonstrates that adf-hx is not in the bundle.\n' +
+        '  It becomes load-bearing again only if a component imports @alfresco/adf-hx-content-services.',
     );
   }
   process.exit(0);

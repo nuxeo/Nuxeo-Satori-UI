@@ -4,7 +4,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { TranslateModule } from '@ngx-translate/core';
-import { PACKAGED_NAV_ITEMS } from '@nuxeo-satori/platform/extensions';
+import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 
 /**
  * Regression test for NXENG-761 — the keyboard focus indicator on the sidebar nav links.
@@ -57,7 +57,6 @@ const NAV_ITEMS_UNDER_TEST = [
   { navId: 'app.navbar.dashboard', ticket: 'NXENG-893' },
   { navId: 'app.navbar.trash', ticket: 'NXENG-932' },
   { navId: 'app.navbar.browse', ticket: 'NXENG-794' },
-  { navId: 'app.navbar.browseAdfHx', ticket: 'NXENG-758' },
   { navId: 'app.navbar.search', ticket: 'NXENG-785' },
   { navId: 'app.navbar.administration', ticket: 'NXENG-795' },
   { navId: 'app.navbar.clipboard', ticket: 'NXENG-873' },

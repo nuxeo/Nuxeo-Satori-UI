@@ -27,16 +27,6 @@
     "toolbar-unlock": "Ontgrendelen",
     "toolbar-unsubscribe": "Uitschrijven"
   },
-  "adf-hx-bridge": {
-    "loading": "Laden",
-    "notify-me": "Mij informeren",
-    "pager": {
-      "no-documents": "Geen documenten",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} van {{ total }}"
-    },
-    "unsubscribe": "Uitschrijven"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "AI-controleafwijkingen",
@@ -709,17 +699,6 @@
       "user-group": "Gebruiker / groep",
       "username": "Gebruikersnaam"
     },
-    "browse-adf-hx-poc": {
-      "columns": "Kolommen",
-      "manage-columns": "Kolommen beheren",
-      "preview": "Voorbeeld",
-      "preview-document": "Voorvertoning van document",
-      "retry": "Opnieuw proberen",
-      "select-a-single-document-in-the": "Selecteer één document op het tabblad Weergeven om de eigenschappen ervan te zien.",
-      "select-a-single-document-in-the-2": "Selecteer één document op het tabblad Weergeven om de versies ervan te zien.",
-      "the-repository-root-carries-no-access": "De hoofdmap van de opslagplaats heeft geen toegangsbeheerlijst. Open een domein of map om de rechten ervan te bekijken en te beheren.",
-      "this-folder-is-empty": "Deze map is leeg"
-    },
     "column": {
       "author": "Auteur",
       "coverage": "Dekking",
@@ -899,17 +878,6 @@
       "export": "Exporteren",
       "notify": "Informeren",
       "share": "Delen"
-    },
-    "search-adf-hx": {
-      "enter-search-term": "Voer een zoekterm in...",
-      "loading": "Laden",
-      "next-page": "Volgende pagina",
-      "no-results-found": "Geen resultaten gevonden",
-      "previous-page": "Vorige pagina",
-      "search": "Zoeken",
-      "search-documents": "Documenten zoeken",
-      "searching": "Bezig met zoeken...",
-      "try-a-different-search-term": "Probeer een andere zoekterm"
     },
     "show-details": "Gegevens weergeven",
     "tab": {
@@ -1112,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "Contract ABC-123.pdf",
     "saved-search-placeholder": "bijv. \"Openstaande beoordelingen contracten K3\"",
-    "showcase-dialog-message": "Dit dialoogvenster wordt geïmporteerd uit @nuxeo-satori/platform/ui. Klanten kunnen het gebruiken voor bevestigingsprompts, waarschuwingen en destructieve acties.",
+    "showcase-dialog-message": "Dit dialoogvenster wordt geïmporteerd uit @nuxeo/satori-platform/ui. Klanten kunnen het gebruiken voor bevestigingsprompts, waarschuwingen en destructieve acties.",
     "showcase-dialog-title": "Demo componentshowcase"
   },
   "dashboard": {
@@ -1548,104 +1516,6 @@
       "loading": "Wordt geladen…"
     }
   },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "Activiteit",
-      "by": "Door",
-      "close-panel": "Deelvenster sluiten",
-      "contributors": "Bijdragers",
-      "created": "Gemaakt",
-      "document-details": "Documentgegevens",
-      "info": "Info",
-      "last-modified": "Laatst aangepast",
-      "no-recent-activity": "Geen recente activiteit",
-      "no-tags-yet": "Nog geen tags",
-      "properties": "Eigenschappen",
-      "search-or-create-a-tag": "Tag zoeken of maken",
-      "state": "Status",
-      "tags": "Tags",
-      "title": "Titel",
-      "type": "Typ"
-    },
-    "hxp-browse-history": {
-      "action": "Actie",
-      "all": "Alle",
-      "category": "Categorie",
-      "comment": "Opmerking",
-      "date": "Datum",
-      "from": "Van",
-      "next": "Volgende",
-      "no-audit-entries-found": "Geen controlevermeldingen gevonden.",
-      "performed-action": "Uitgevoerde actie",
-      "previous": "Vorige",
-      "state": "Status",
-      "to": "Met",
-      "username": "Gebruikersnaam"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "Vernieuwen"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "Pagina's van documentlijst",
-      "next": "Volgende",
-      "next-page": "Volgende pagina",
-      "previous": "Vorige",
-      "previous-page": "Vorige pagina"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "Tabbladen voor bladeren door mappen"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "Alle typen",
-      "card-view": "Kaartweergave",
-      "clear-contributor-filter": "Bijdragerfilter wissen",
-      "clear-title-filter": "Titelfilter wissen",
-      "contributor": "Bijdrager...",
-      "export-csv": "CSV exporteren",
-      "filter-by-title": "Filteren op titel...",
-      "last-contributor": "Laatste bijdrager",
-      "list-view": "Lijstweergave",
-      "modified-from": "Aangepast van",
-      "modified-to": "Aangepast tot",
-      "type": "Typ"
-    },
-    "hxp-browse-trash": {
-      "actions": "Acties",
-      "failed-to-load": "Kan de prullenbak niet laden.",
-      "last-modified": "Laatst aangepast",
-      "name": "Naam",
-      "restore": "Herstellen",
-      "retry": "Opnieuw proberen",
-      "trash-is-empty": "Prullenbak is leeg",
-      "type": "Typ"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "Kolomkiezer sluiten",
-      "column-settings": "Kolominstellingen",
-      "done": "Klaar",
-      "reset": "Opnieuw instellen"
-    },
-    "hxp-folder-header": {
-      "close-menu": "Menu sluiten",
-      "create-folder-upload-files-or-import": "Map maken, bestanden uploaden of CSV importeren",
-      "create-import": "Maken / Importeren",
-      "delete": "Verwijderen",
-      "download-all": "Alles downloaden",
-      "edit": "Bewerk",
-      "export": "Exporteren",
-      "more-actions": "Meer acties",
-      "share": "Delen",
-      "upload-with-nuxeo-drive": "Uploaden met Nuxeo Drive"
-    },
-    "tab": {
-      "history": "Geschiedenis",
-      "permissions": "Rechten",
-      "properties": "Eigenschappen",
-      "trash": "Prullenbak",
-      "versions": "Versies",
-      "view": "Weergeven"
-    }
-  },
   "kd": {
     "content-lake-upload": {
       "checking-for-existing-content-lake-copies": "Controleren op bestaande Content Lake-kopieën...",
@@ -1797,7 +1667,6 @@
       "administration": "Beheer",
       "assets": "Assets",
       "browse": "Bladeren",
-      "browse-adf-hx": "Bladeren",
       "clipboard": "Klembord",
       "collections": "Collecties",
       "dashboard": "Dashboard",

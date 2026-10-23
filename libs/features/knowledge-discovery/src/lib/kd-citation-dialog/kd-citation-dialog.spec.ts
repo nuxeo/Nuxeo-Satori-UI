@@ -5,7 +5,7 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { HttpClientTestingModule, HttpTestingController } from '@angular/common/http/testing';
 import { vi } from 'vitest';
 
-import { DocumentDetailService, NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService, NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { KdCitationDialogComponent } from './kd-citation-dialog';
 

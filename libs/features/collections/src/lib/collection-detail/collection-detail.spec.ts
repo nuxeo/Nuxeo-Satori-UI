@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { HttpErrorResponse } from '@angular/common/http';
 import { provideZonelessChangeDetection } from '@angular/core';
@@ -12,7 +13,6 @@ import {
 import { Subject, of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 
 import { PageEvent } from '@angular/material/paginator';
 import { Sort } from '@angular/material/sort';
@@ -25,9 +25,15 @@ import {
   DirectoryService,
   type NuxeoAce,
   NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { CollectionDetailComponent } from './collection-detail';
+import {
+  NxsDeletePermissionDialogComponent,
+  NxsShareExternalDialogComponent,
+  NxsToastService,
+  NxsUpdatePermissionDialogComponent,
+} from '@nuxeo/satori-platform/components';
 
 const TEST_USERNAME = 'jdoe';
 
@@ -61,6 +67,7 @@ const mockCollectionService = {
 
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument | null> => of(null)),
+  getDocumentPermissions: vi.fn((): Observable<NuxeoDocument> => of({} as NuxeoDocument)),
   fetchThumbnail: vi.fn((): Observable<Blob | null> => of(null)),
   fetchPdfRendition: vi.fn(obs(new Blob())),
   exportXml: vi.fn(obs(new Blob())),
@@ -88,9 +95,7 @@ const mockDialog = {
   })),
 };
 
-const mockSnackBar = {
-  open: vi.fn(),
-};
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const mockCollection: NuxeoDocument = {
   uid: 'collection-1',
@@ -224,6 +229,8 @@ describe('CollectionDetailComponent', () => {
     // one and drove the unhandled error above.
     mockDetailService.fetchThumbnail.mockReturnValue(of(null));
 
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
+
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), CollectionDetailComponent],
       providers: [
@@ -241,8 +248,11 @@ describe('CollectionDetailComponent', () => {
         { provide: CollectionService, useValue: mockCollectionService },
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
+        {
+          provide: AppConfigService,
+          useValue: { featureToggle: (_id: string, fallback: boolean) => fallback },
+        },
         { provide: MatDialog, useValue: mockDialog },
-        { provide: MatSnackBar, useValue: mockSnackBar },
       ],
     })
       .overrideComponent(CollectionDetailComponent, {
@@ -277,10 +287,8 @@ describe('CollectionDetailComponent', () => {
       component.collection.set(mockCollection);
       const items = component.breadcrumbItems();
       expect(items.length).toBeGreaterThan(0);
-      // `SatBreadcrumbsItem` is a union and only one member carries `href`, so narrow rather
-      // than reaching through it.
-      const first = items[0] as { href?: string };
-      expect(first.href).toContain('/browse');
+      expect(items[0].routerLink).toContain('/browse');
+      expect(items.every((item) => item.href === undefined)).toBe(true);
     });
 
     it('should return empty array when collection has no path', () => {
@@ -294,20 +302,6 @@ describe('CollectionDetailComponent', () => {
       // Second call with same path should return cached result
       const secondCall = component.breadcrumbItems();
       expect(firstCall).toBe(secondCall); // Same reference = cache hit
-    });
-
-    it('should compute localAces', () => {
-      component.collection.set(mockCollection);
-      const aces = component.localAces();
-      expect(aces.length).toBeGreaterThan(0);
-      expect(aces[0]?.username).toBe('admin');
-    });
-
-    it('should compute inheritedAces', () => {
-      component.collection.set(mockCollection);
-      const aces = component.inheritedAces();
-      expect(aces.length).toBeGreaterThan(0);
-      expect(aces[0]?.username).toBe('members');
     });
 
     it('should compute externalAces', () => {
@@ -335,21 +329,32 @@ describe('CollectionDetailComponent', () => {
       });
       component.collection.set(colWithExternal);
       const aces = component.externalAces();
-      expect(aces.length).toBeGreaterThan(0);
-      expect(aces[0]?.externalUser).toBe(true);
+      expect(aces.map((a) => [a.id, a.aclName])).toEqual([['ace-external', 'local']]);
     });
 
-    it('should detect blocked inheritance', () => {
-      const colWithoutInherited = docWith({
-        contextParameters: { acls: [{ name: 'local', aces: [] }] },
+    it('lists only the collection’s own pending and effective shares, as Web UI', () => {
+      const share = (id: string, status: NuxeoAce['status']): NuxeoAce => ({
+        id,
+        username: `transient/${id}@example.com`,
+        permission: 'Read',
+        granted: true,
+        creator: 'admin',
+        begin: null,
+        end: '2030-01-01T00:00:00.000Z',
+        status,
+        externalUser: true,
       });
-      component.collection.set(colWithoutInherited);
-      expect(component.isInheritanceBlocked()).toBe(true);
-    });
-
-    it('should detect unblocked inheritance', () => {
-      component.collection.set(mockCollection);
-      expect(component.isInheritanceBlocked()).toBe(false);
+      component.collection.set(
+        docWith({
+          contextParameters: {
+            acls: [
+              { name: 'local', aces: [share('pending', 'pending'), share('archived', 'archived')] },
+              { name: 'inherited', aces: [share('parent', 'effective')] },
+            ],
+          },
+        }),
+      );
+      expect(component.externalAces().map((a) => a.id)).toEqual(['pending']);
     });
 
     it('should check if collection is in clipboard', () => {
@@ -359,30 +364,17 @@ describe('CollectionDetailComponent', () => {
     });
   });
 
-  describe('onBreadcrumbClick', () => {
-    it('should navigate when anchor clicked', () => {
-      const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-      const mockEvent = {
-        target: { closest: () => ({ getAttribute: () => '/browse/test' }) },
-        preventDefault: vi.fn(),
-      } as any;
-
-      component.onBreadcrumbClick(mockEvent);
-
-      expect(mockEvent.preventDefault).toHaveBeenCalled();
-      expect(navigateSpy).toHaveBeenCalledWith('/browse/test');
-    });
-
-    it('should do nothing if no href', () => {
-      const navigateSpy = vi.spyOn(router, 'navigateByUrl');
-      const mockEvent = {
-        target: { closest: () => null },
-        preventDefault: vi.fn(),
-      } as any;
-
-      component.onBreadcrumbClick(mockEvent);
-
-      expect(navigateSpy).not.toHaveBeenCalled();
+  describe('breadcrumbs', () => {
+    it('links each parent folder in the app, and does not throw on a literal percent sign', () => {
+      component.collection.set(
+        docWith({ path: '/default-domain/workspaces/100% done/Q3 collection' }),
+      );
+      expect(component.breadcrumbItems()).toEqual([
+        { label: 'default-domain', routerLink: '/browse/default-domain' },
+        { label: 'workspaces', routerLink: '/browse/default-domain/workspaces' },
+        { label: '100% done', routerLink: '/browse/default-domain/workspaces/100% done' },
+      ]);
+      expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
     });
   });
 
@@ -393,34 +385,6 @@ describe('CollectionDetailComponent', () => {
       component.goToCollections();
 
       expect(navigateSpy).toHaveBeenCalledWith('/collections');
-    });
-  });
-
-  describe('docIcon', () => {
-    it('should return icon for document type', () => {
-      const doc = docWith({ type: 'File' });
-      const icon = component.docIcon(doc);
-      expect(icon).toBeTruthy();
-      expect(typeof icon).toBe('string');
-    });
-  });
-
-  describe('lastContributor', () => {
-    it('should return last contributor from properties', () => {
-      const doc = docWith({ properties: { 'dc:lastContributor': 'john' } });
-      expect(component.lastContributor(doc)).toBe('john');
-    });
-
-    it('should return empty string when missing', () => {
-      const doc = docWith({ properties: {} });
-      expect(component.lastContributor(doc)).toBe('');
-    });
-  });
-
-  describe('contributorInitial', () => {
-    it('should return first character of last contributor', () => {
-      const doc = docWith({ properties: { 'dc:lastContributor': 'admin' } });
-      expect(component.contributorInitial(doc)).toBe('A');
     });
   });
 
@@ -548,14 +512,16 @@ describe('CollectionDetailComponent', () => {
 
       component.toggleLock();
       component['collectionUid'] = 'collection-2';
-      mockSnackBar.open.mockClear();
+      toast.show.mockClear();
+      toast.error.mockClear();
       settle(pending);
 
       expect(mockDetailService.lockDocument).toHaveBeenCalledWith('collection-1');
       expect(component.isLocked()).toBe(false);
       expect(component.lockOwner()).toBeNull();
       expect(component.actionInProgress()).toBeNull();
-      expect(mockSnackBar.open).not.toHaveBeenCalled();
+      expect(toast.show).not.toHaveBeenCalled();
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('offers no lock action while the next collection is still loading', () => {
@@ -659,10 +625,8 @@ describe('CollectionDetailComponent', () => {
       component.toggleLock();
 
       expect(mockDetailService.unlockDocument).not.toHaveBeenCalled();
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
+      expect(toast.error).toHaveBeenCalledWith(
         "You can't unlock this document because it is locked by another user.",
-        'OK',
-        expect.anything(),
       );
     });
 
@@ -709,7 +673,7 @@ describe('CollectionDetailComponent', () => {
 
       component.toggleLock();
 
-      expect(mockSnackBar.open).toHaveBeenCalledWith(message, 'OK', expect.anything());
+      expect(toast.error).toHaveBeenCalledWith(message);
       expect(component.isLocked()).toBe(locked);
       expect(component.actionInProgress()).toBeNull();
     });
@@ -881,34 +845,18 @@ describe('CollectionDetailComponent', () => {
       component.collection.set(mockCollection);
     });
 
-    it('should open the edit dialog and reload when a permission changed', async () => {
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      component.editPermission(ace);
-      await new Promise((r) => setTimeout(r, 10));
-      expect(mockDetailService.getFullDocument).toHaveBeenCalled();
-      expect(mockSnackBar.open).toHaveBeenCalled();
-    });
-
-    it('should not reload when the edit dialog was dismissed', () => {
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
-      mockDetailService.getFullDocument.mockClear();
-      component.editPermission(ace);
-      expect(mockDetailService.getFullDocument).not.toHaveBeenCalled();
-    });
-
-    it('should open the delete dialog with the resolved labels', () => {
-      let captured: { permissionLabel?: string; timeFrameLabel?: string } | undefined;
+    it('should open the delete dialog for the entry and the ACL that holds it', () => {
+      let captured: { ace?: { id: string }; acl?: string } | undefined;
       mockDialog.open.mockImplementation((...args: unknown[]) => {
         captured = (args[1] as { data?: typeof captured })?.data;
         return { afterClosed: () => of(false) };
       });
 
-      component.deletePermission(ace);
+      component.deletePermission({ ...ace, aclName: 'local' });
 
-      // Asserted because these are computed, not passed through: a wrong label here is a
-      // confirmation dialog describing a different permission from the one being removed.
-      expect(captured?.permissionLabel).toBe('Edit');
-      expect(captured?.timeFrameLabel).toBe('Permanent');
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsDeletePermissionDialogComponent);
+      expect(captured?.ace?.id).toBe('ace-1');
+      expect(captured?.acl).toBe('local');
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
     });
 
@@ -919,24 +867,60 @@ describe('CollectionDetailComponent', () => {
       expect(mockDetailService.getFullDocument).toHaveBeenCalled();
     });
 
-    it('should open the external edit dialog flagged as external', () => {
-      let captured: { isExternal?: boolean } | undefined;
+    it('offers a Collection’s own rights in the external dialogs, read from the server', () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(
+        of(
+          docWith({
+            contextParameters: {
+              userVisiblePermissions: ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'],
+            },
+          }),
+        ),
+      );
+      let captured: { permissions?: readonly string[] | null } | undefined;
       mockDialog.open.mockImplementation((...args: unknown[]) => {
         captured = (args[1] as { data?: typeof captured })?.data;
         return { afterClosed: () => of(false) };
       });
 
       component.editExternalPermission(ace);
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsUpdatePermissionDialogComponent);
+      expect(captured?.permissions).toEqual(['Read', 'ReadCanCollect', 'ReadWrite', 'Everything']);
 
-      expect(captured?.isExternal).toBe(true);
+      component.shareWithExternal();
+      expect(mockDialog.open.mock.calls.at(-1)?.[0]).toBe(NxsShareExternalDialogComponent);
+      expect(captured?.permissions).toEqual(['Read', 'ReadCanCollect', 'ReadWrite', 'Everything']);
+      mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
+    });
+
+    it('leaves the dialogs to their default when the rights cannot be read', () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(throwError(() => new Error('500')));
+      let captured: { permissions?: readonly string[] | null } | undefined;
+      mockDialog.open.mockImplementation((...args: unknown[]) => {
+        captured = (args[1] as { data?: typeof captured })?.data;
+        return { afterClosed: () => of(false) };
+      });
+      component.shareWithExternal();
+      expect(captured?.permissions).toBeNull();
       mockDialog.open.mockImplementation(() => ({ afterClosed: () => of(undefined) }));
     });
 
     it('should share with an external user and reload', async () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(of(docWith({})));
       mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
+      mockDetailService.getFullDocument.mockClear();
       component.shareWithExternal();
       await new Promise((r) => setTimeout(r, 10));
       expect(mockDetailService.getFullDocument).toHaveBeenCalled();
+    });
+
+    it('offers no external-share actions to a user without WriteSecurity', () => {
+      component.collection.set(docWith({ contextParameters: { permissions: ['Read', 'Write'] } }));
+      expect(component.canManagePermissions()).toBe(false);
+      component.collection.set(
+        docWith({ contextParameters: { permissions: ['Read', 'WriteSecurity'] } }),
+      );
+      expect(component.canManagePermissions()).toBe(true);
     });
 
     it('should strip the transient/ prefix from a username', () => {
@@ -978,65 +962,9 @@ describe('CollectionDetailComponent', () => {
         expect(mockDetailService.sendNotificationEmailForPermission).not.toHaveBeenCalled();
       });
     });
-
-    describe('toggleInheritance', () => {
-      it('should block inheritance when it is currently inherited', () => {
-        mockDetailService.blockPermissionInheritance.mockReturnValue(of(undefined));
-        mockDetailService.unblockPermissionInheritance.mockReturnValue(of(undefined));
-        component.collection.set(mockCollection); // has an `inherited` acl -> not blocked
-        component.actionInProgress.set(null);
-
-        component.toggleInheritance();
-
-        expect(mockDetailService.blockPermissionInheritance).toHaveBeenCalledWith('collection-1');
-        expect(component.actionInProgress()).toBeNull();
-      });
-
-      it('should unblock inheritance when it is currently blocked', () => {
-        mockDetailService.blockPermissionInheritance.mockReturnValue(of(undefined));
-        mockDetailService.unblockPermissionInheritance.mockReturnValue(of(undefined));
-        component.collection.set(
-          docWith({ contextParameters: { acls: [{ name: 'local', aces: [] }] } }),
-        );
-        component.actionInProgress.set(null);
-
-        component.toggleInheritance();
-
-        expect(mockDetailService.unblockPermissionInheritance).toHaveBeenCalledWith('collection-1');
-      });
-
-      it('should clear the in-progress flag on failure', () => {
-        mockDetailService.blockPermissionInheritance.mockReturnValue(
-          throwError(() => new Error('denied')),
-        );
-        component.collection.set(mockCollection);
-        component.actionInProgress.set(null);
-
-        component.toggleInheritance();
-
-        expect(component.actionInProgress()).toBeNull();
-      });
-
-      it('should do nothing when another action is in progress', () => {
-        mockDetailService.blockPermissionInheritance.mockClear();
-        component.actionInProgress.set('trash');
-        component.toggleInheritance();
-        expect(mockDetailService.blockPermissionInheritance).not.toHaveBeenCalled();
-      });
-    });
   });
 
-  describe('addPermission dialog result', () => {
-    it('should reload when a permission was created', async () => {
-      component['collectionUid'] = 'collection-1';
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      component.addPermission();
-      await new Promise((r) => setTimeout(r, 10));
-      expect(mockDetailService.getFullDocument).toHaveBeenCalled();
-    });
-  });
-
-  describe('thumbnail blob lifecycle', () => {
+  describe('member thumbnails', () => {
     const members: NuxeoDocument[] = [
       docWith({ uid: 'doc1', title: 'Doc 1', type: 'File' }),
       docWith({ uid: 'doc2', title: 'Doc 2', type: 'File' }),
@@ -1050,54 +978,16 @@ describe('CollectionDetailComponent', () => {
       );
     });
 
-    it('should create one blob URL per member and expose it as a SafeUrl', () => {
+    /**
+     * Each member's `nxs-thumbnail` fetches, shows and revokes its own image, so the page must not
+     * mint an object URL for one: the blob-URL rule is held in one place.
+     */
+    it('mints no object URL for a member thumbnail', () => {
       component.loadMembers();
 
-      expect(created.length).toBe(2);
-      const map = component.thumbnailMap();
-      expect(Object.keys(map).sort()).toEqual(['doc1', 'doc2']);
-    });
-
-    it('should revoke the previous batch before loading a new one', () => {
-      component.loadMembers();
-      const firstBatch = [...created];
-      expect(firstBatch.length).toBe(2);
-
-      component.loadMembers();
-
-      // Every URL from the first batch must be revoked. Without this the map was simply
-      // reset to {} and the old blobs stayed alive for the life of the document — one leaked
-      // batch per navigation between collections.
-      for (const url of firstBatch) {
-        expect(revoked, `blob ${url} was never revoked`).toContain(url);
-      }
-    });
-
-    it('should revoke every outstanding blob URL on destroy', () => {
-      component.loadMembers();
-      const outstanding = [...created];
-      expect(outstanding.length).toBeGreaterThan(0);
-
-      fixture.destroy();
-
-      for (const url of outstanding) {
-        expect(revoked, `blob ${url} survived component destruction`).toContain(url);
-      }
-    });
-
-    it('should not create a blob URL when the thumbnail request yields nothing', () => {
-      mockDetailService.fetchThumbnail.mockReturnValue(of(null));
-      component.loadMembers();
-      expect(created.length).toBe(0);
-      expect(component.thumbnailMap()).toEqual({});
-    });
-
-    it('should survive a thumbnail request that errors', () => {
-      mockDetailService.fetchThumbnail.mockReturnValue(throwError(() => new Error('404')));
-
-      // The component catches per-thumbnail so one bad blob cannot empty the listing.
-      expect(() => component.loadMembers()).not.toThrow();
-      expect(component.members().length).toBe(2);
+      expect(component.members()).toHaveLength(2);
+      expect(mockDetailService.fetchThumbnail).not.toHaveBeenCalled();
+      expect(created).toEqual([]);
     });
   });
 
@@ -1323,9 +1213,70 @@ describe('CollectionDetailComponent', () => {
 
       component.loadMembers();
 
-      expect(mockCollectionService.getCollectionMembers).toHaveBeenCalledWith('collection-1', 50);
+      expect(mockCollectionService.getCollectionMembers).toHaveBeenCalledWith('collection-1', 50, {
+        currentPageIndex: 0,
+        sort: [],
+      });
       expect(component.members().length).toBe(2);
       expect(component.totalSize()).toBe(2);
+    });
+
+    it('pages on the server, keeping the order, and reports a next page', () => {
+      component['collectionUid'] = 'collection-1';
+      mockCollectionService.getCollectionMembers.mockReturnValue(
+        of({ entries: [docWith({ uid: 'doc51' })], totalSize: 60, isNextPageAvailable: true }),
+      );
+      component.onMemberSortChange({ key: 'modified', direction: 'desc' });
+      component.goToMemberPage(1);
+
+      expect(mockCollectionService.getCollectionMembers).toHaveBeenLastCalledWith(
+        'collection-1',
+        50,
+        { currentPageIndex: 1, sort: [{ sortBy: 'dc:modified', sortOrder: 'DESC' }] },
+      );
+      expect(component.membersHaveNextPage()).toBe(true);
+      expect(component.totalSize()).toBe(60);
+    });
+
+    it('starts a new order from the first page, and ignores the page on screen', () => {
+      component['collectionUid'] = 'collection-1';
+      mockCollectionService.getCollectionMembers.mockReturnValue(of({ entries: [], totalSize: 0 }));
+      component.goToMemberPage(2);
+      component.onMemberSortChange({ key: 'title', direction: 'asc' });
+      expect(component.memberPageIndex()).toBe(0);
+      expect(mockCollectionService.getCollectionMembers).toHaveBeenLastCalledWith(
+        'collection-1',
+        50,
+        { currentPageIndex: 0, sort: [{ sortBy: 'dc:title', sortOrder: 'ASC' }] },
+      );
+
+      mockCollectionService.getCollectionMembers.mockClear();
+      component.goToMemberPage(0);
+      component.goToMemberPage(-1);
+      expect(mockCollectionService.getCollectionMembers).not.toHaveBeenCalled();
+    });
+
+    it('marks every member column sortable on the server', () => {
+      expect(component.memberColumns().map((column) => [column.key, column.sortable])).toEqual([
+        ['title', true],
+        ['modified', true],
+        ['lastContributor', true],
+      ]);
+    });
+
+    it.each([
+      [403, { status: 403 }],
+      [404, { status: 404 }],
+      [500, new Error('network down')],
+    ] as const)('shows the %i error state when the members fail to load', (status, failure) => {
+      component['collectionUid'] = 'collection-1';
+      mockCollectionService.getCollectionMembers.mockReturnValue(throwError(() => failure));
+
+      component.loadMembers();
+
+      expect(component.loading()).toBe(false);
+      expect(component.errorStatus()).toBe(status);
+      expect(component.error()).toBe('Failed to load collection contents.');
     });
   });
 
@@ -1377,24 +1328,6 @@ describe('CollectionDetailComponent', () => {
     });
   });
 
-  describe('addPermission', () => {
-    it('should open add permission dialog', () => {
-      component['collectionUid'] = 'collection-1';
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(undefined) });
-      component.addPermission();
-      expect(mockDialog.open).toHaveBeenCalled();
-    });
-
-    it('should reload collection after adding permission', async () => {
-      component['collectionUid'] = 'collection-1';
-      mockDialog.open.mockReturnValue({ afterClosed: () => of(true) });
-      component.addPermission();
-
-      await new Promise((resolve) => setTimeout(resolve, 10));
-      expect(mockDetailService.getFullDocument).toHaveBeenCalled();
-    });
-  });
-
   describe('avatarColor', () => {
     it('should have avatarColor function available', () => {
       expect(component.avatarColor).toBeDefined();
@@ -1405,11 +1338,8 @@ describe('CollectionDetailComponent', () => {
   /**
    * A stale members response must not replace a newer collection's.
    *
-   * The thumbnail generation does not cover this: it is minted from *inside* the members response, so
-   * it orders thumbnail batches against each other and leaves the members request itself unguarded.
    * Navigating A -> B starts two member requests; with B resolving first, A's late response overwrote
-   * `members` and `totalSize`, and its `loadThumbnails` then took the newest thumbnail generation and
-   * discarded B's images too — so the older collection won outright.
+   * `members` and `totalSize`, so the older collection won outright.
    */
   describe('overlapping member requests', () => {
     function docs(...uids: string[]): NuxeoDocument[] {

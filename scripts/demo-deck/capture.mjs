@@ -162,10 +162,7 @@ const CUSTOM_PAGES_MANIFEST = {
   extensions: {
     $name: 'acme-insurance',
     overrides: {
-      // `app.navbar.browseAdfHx` is the browse entry the product renders — the
-      // legacy `app.navbar.browse` ships `disabled`, so relabelling it would
-      // photograph a nav with no Claim Files in it.
-      'app.navbar.browseAdfHx': { label: 'Claim Files', order: 10 },
+      'app.navbar.browse': { label: 'Claim Files', order: 10 },
       'app.navbar.knowledgeDiscovery': { visible: false },
     },
     slots: {
@@ -237,10 +234,8 @@ const SHOTS = [
       extensions: {
         $name: 'acme-insurance',
         overrides: {
-          // Every nav id the product renders is relabellable this way. The
-          // fifteenth, `app.navbar.browse`, ships `disabled`, so an override on
-          // it is applied to a descriptor the registry drops — see nav-items.ts.
-          'app.navbar.browseAdfHx': { label: 'Claim Files', order: 10 },
+          // Every nav id the product renders is relabellable this way.
+          'app.navbar.browse': { label: 'Claim Files', order: 10 },
           'app.navbar.collections': { label: 'Policies', order: 20 },
           'app.navbar.tasks': { label: 'Underwriting Queue', order: 30 },
           'app.navbar.favorites': { label: 'Flagged Claims', order: 40 },
@@ -405,7 +400,7 @@ const SHOTS = [
 
   // =====================================================================================
   // TRACK B — build a UI from scratch on the published package. A separate app on :4310,
-  // importing only @nuxeo-satori/platform entry points.
+  // importing only @nuxeo/satori-platform entry points.
   // =====================================================================================
   // The template app authenticates through its OWN login form — it does not share the product's
   // session. Without `signIn`, every one of these captures the login page instead of the page named,
@@ -620,7 +615,9 @@ const context = await browser.newContext({
   // httpCredentials guarantees Basic on every request to the origin. Seeding the session into
   // sessionStorage alone satisfies the route guard but does not reliably authenticate XHRs, which
   // surfaces as intermittent 403s on /nuxeo/api paths — the Phase 0 harness defect.
-  httpCredentials: { username: USER, password: PASS, origin: APP },
+  // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never challenges, so a
+  // challenge-based credential is never sent and `page.request` runs as Anonymous.
+  httpCredentials: { username: USER, password: PASS, origin: APP, send: 'always' },
 });
 
 /**

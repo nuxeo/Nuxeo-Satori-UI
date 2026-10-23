@@ -213,6 +213,54 @@ function auditFile(rel, src, ast) {
 
   const parents = parentMap(ast);
 
+  // The identity guard judges the previous step at `h.step(...)`, and `.then()` timing cannot tell
+  // an `await` from a discarded `Promise.all([h.step(...)])`. So the one accepted form is a
+  // statement that awaits the call itself; any other reference, alias or destructuring is refused.
+  //
+  // `signedInAs`, `signedOut` and `login` are held to the same form for the same reason: each
+  // judges the identity it is leaving before restarting the request window, and each can now
+  // refuse outright when a request is in flight. A floating promise would discard that
+  // verification, or swallow the refusal, without a word — the one failure mode worse than no
+  // guard at all.
+  //
+  // Not in `scripts/collect-evidence/`: the story runner opens steps without the identity guard.
+  const guarded = !rel.startsWith('scripts/collect-evidence/');
+  const MUST_AWAIT = new Set(['step', 'signedInAs', 'signedOut', 'login']);
+  walk(ast, (node) => {
+    if (!guarded) return;
+    const isMember = node.type === 'MemberExpression' && MUST_AWAIT.has(memberName(node));
+    const isPattern =
+      node.type === 'Property' &&
+      parents.get(node)?.type === 'ObjectPattern' &&
+      MUST_AWAIT.has(memberName({ ...node, property: node.key }));
+    if (!isMember && !isPattern) return;
+    const member = isMember ? memberName(node) : memberName({ ...node, property: node.key });
+    const call = parents.get(node);
+    const awaited = call && parents.get(call);
+    if (
+      isMember &&
+      call?.type === 'CallExpression' &&
+      call.callee === node &&
+      awaited?.type === 'AwaitExpression' &&
+      parents.get(awaited)?.type === 'ExpressionStatement'
+    ) {
+      return;
+    }
+    const shown = text(src, isMember && call?.type === 'CallExpression' ? call : node).replace(/\s+/g, ' ');
+    const why =
+      member === 'step'
+        ? 'The identity guard judges the previous step there, and only awaiting the call itself waits for it.'
+        : 'The identity guard judges the outgoing identity there before the request window restarts, ' +
+          'and only awaiting the call itself waits for it.';
+    findings.push({
+      file: rel,
+      line: node.loc?.start.line ?? 0,
+      kind: member === 'step' ? 'unawaited-step' : 'unawaited-identity-transition',
+      severity: 'fail',
+      message: `\`${shown.length > 60 ? `${shown.slice(0, 57)}...` : shown}\` is not \`await h.${member}(...);\`. ${why}`,
+    });
+  });
+
   walk(ast, (node) => {
     if (node.type !== 'CallExpression') return;
     const name = calleeName(node);
@@ -710,6 +758,12 @@ function walk(node, visit) {
     if (key === 'loc' || key === 'range') continue;
     walk(node[key], visit);
   }
+}
+
+/** `h.step` / `h['step']` -> "step"; a computed name that is not a literal -> null */
+function memberName(member) {
+  if (!member.computed) return member.property?.type === 'Identifier' ? member.property.name : null;
+  return member.property?.type === 'Literal' ? String(member.property.value) : null;
 }
 
 /** `h.check(...)` / `check(...)` / `this.check(...)` -> "check" */

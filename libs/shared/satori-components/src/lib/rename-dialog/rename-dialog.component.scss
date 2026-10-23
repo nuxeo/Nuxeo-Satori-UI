@@ -1,0 +1,17 @@
+// As wide as the field needs, and never wider than the pane MatDialog gives the dialog: below 600 px
+// that is `100vw - 32px`, narrower than the `95vw` this once was, which scrolled sideways at 320 px.
+:host {
+  display: block;
+  width: 440px;
+  max-width: 100%;
+}
+
+.nxs-rename-dialog__field {
+  width: 100%;
+}
+
+.nxs-rename-dialog__failure {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-error);
+}

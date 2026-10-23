@@ -49,10 +49,7 @@
   >
     @if (resolvingPath()) {
       <div class="state-row">
-        <mat-spinner
-          diameter="32"
-          [attr.aria-label]="'browse.create-import-dialog.loading' | translate"
-        />
+        <nxs-spinner diameter="32" [label]="'browse.create-import-dialog.loading' | translate" />
         <span>{{ 'browse.create-import-dialog.resolving-target-folder' | translate }}</span>
       </div>
     } @else if (pathError()) {
@@ -60,10 +57,7 @@
     } @else {
       @if (busy()) {
         <div class="state-row">
-          <mat-spinner
-            diameter="32"
-            [attr.aria-label]="'browse.create-import-dialog.loading' | translate"
-          />
+          <nxs-spinner diameter="32" [label]="'browse.create-import-dialog.loading' | translate" />
           <span>{{ 'browse.create-import-dialog.working' | translate }}</span>
         </div>
       }
@@ -93,9 +87,9 @@
               @if (locationDropdownOpen()) {
                 @if (loadingLocationSuggestions()) {
                   <div class="location-dropdown location-dropdown--loading">
-                    <mat-spinner
+                    <nxs-spinner
                       diameter="20"
-                      [attr.aria-label]="'browse.create-import-dialog.loading' | translate"
+                      [label]="'browse.create-import-dialog.loading' | translate"
                     />
                     <span>{{ 'browse.create-import-dialog.loading-folders' | translate }}</span>
                   </div>
@@ -136,9 +130,9 @@
             @if (!locationRestricted()) {
               @if (loadingContext()) {
                 <div class="state-row state-row--compact">
-                  <mat-spinner
+                  <nxs-spinner
                     diameter="24"
-                    [attr.aria-label]="'browse.create-import-dialog.loading' | translate"
+                    [label]="'browse.create-import-dialog.loading' | translate"
                   />
                   <span>{{
                     'browse.create-import-dialog.loading-document-types' | translate
@@ -160,7 +154,7 @@
                       [disabled]="busy() || locationRestricted()"
                       (click)="startCreateFromType(dt)"
                     >
-                      <mat-icon class="doctype-icon" aria-hidden="true">{{ dt.icon }}</mat-icon>
+                      <nxs-doc-type-icon class="doctype-icon" [type]="dt.type" />
                       <span class="doctype-label">{{ dt.label }}</span>
                     </button>
                   }
@@ -179,88 +173,30 @@
               </p>
             } @else {
               <div class="import-tab-panel">
-                <div
-                  class="dropzone dropzone--import"
-                  [class.dropzone--filled]="uploadFiles().length > 0"
-                  [class.dropzone--active]="dragOverUpload()"
-                  (dragover)="onUploadDragOver($event)"
-                  (dragleave)="onUploadDragLeave($event)"
-                  (drop)="onUploadDrop($event)"
-                >
-                  <input
-                    #importFileInput
-                    type="file"
-                    multiple
-                    class="dropzone-file-input"
-                    (change)="onUploadInputChange($event)"
-                    [disabled]="busy()"
-                  />
-
-                  @if (uploadFiles().length === 0) {
-                    <button
-                      type="button"
-                      class="dropzone-inner"
-                      [disabled]="busy()"
-                      (click)="openImportFilePicker()"
-                    >
-                      <span class="dropzone-text">{{
-                        'browse.create-import-dialog.drag-and-drop-or-click-to' | translate
-                      }}</span>
-                    </button>
-                  } @else {
-                    <div class="import-staged-files">
-                      <ul
-                        class="import-staged-grid"
-                        role="list"
-                        [attr.aria-label]="'browse.create-import-dialog.selected-files' | translate"
-                      >
-                        @for (f of uploadFiles(); track $index) {
-                          <li class="import-staged-card" role="listitem">
-                            <div class="import-staged-card__info">
-                              <span class="import-staged-card__name">{{ f.name }}</span>
-                              <span class="import-staged-card__size">{{
-                                formatFileSize(f.size)
-                              }}</span>
-                            </div>
-                            <button
-                              mat-icon-button
-                              type="button"
-                              class="import-staged-card__remove"
-                              [disabled]="busy()"
-                              (click)="removeUploadAt($index)"
-                              [attr.aria-label]="'shared.remove-item' | translate: { name: f.name }"
-                            >
-                              <mat-icon>close</mat-icon>
-                            </button>
-                          </li>
-                        }
-                      </ul>
-                      <button
-                        type="button"
-                        class="import-add-more"
-                        [disabled]="busy()"
-                        (click)="openImportFilePicker()"
-                      >
-                        {{ 'browse.create-import-dialog.add-more-files' | translate }}
-                      </button>
-                    </div>
-                  }
-                </div>
+                <nxs-dropzone
+                  class="import-dropzone"
+                  multiple
+                  [disabled]="busy()"
+                  [label]="'browse.create-import-dialog.drag-and-drop-or-click-to' | translate"
+                  [buttonLabel]="
+                    uploads.items().length > 0
+                      ? ('browse.create-import-dialog.add-more-files' | translate)
+                      : ''
+                  "
+                  (files)="stageImportFiles($event)"
+                />
+                <nxs-upload-queue
+                  class="import-queue"
+                  [items]="uploads.items()"
+                  [label]="'browse.create-import-dialog.selected-files' | translate"
+                  (remove)="uploads.remove($event)"
+                  (retry)="runUpload()"
+                />
 
                 @if (importError()) {
                   <p class="error-text import-error import-error--staged" role="alert">
                     {{ importError() }}
                   </p>
-                }
-                @if (uploadProgress(); as progress) {
-                  <div
-                    class="upload-progress upload-progress--import upload-progress--staged"
-                    role="status"
-                    aria-live="polite"
-                  >
-                    <span class="upload-progress-label">{{ uploadProgressLabel(progress) }}</span>
-                    <mat-progress-bar mode="determinate" [value]="progress.percent" />
-                  </div>
                 }
               </div>
             }
@@ -342,7 +278,7 @@
         @case ('templateForm') {
           @if (selectedDocType(); as dt) {
             <div class="type-form-header">
-              <mat-icon class="type-form-icon" aria-hidden="true">{{ dt.icon }}</mat-icon>
+              <nxs-doc-type-icon class="type-form-icon" [type]="dt.type" />
               <span class="type-form-title">
                 {{ 'browse.create-import-dialog.new-of-type' | translate: { type: dt.label } }}
               </span>
@@ -371,9 +307,9 @@
                   @if (locationDropdownOpen()) {
                     @if (loadingLocationSuggestions()) {
                       <div class="location-dropdown location-dropdown--loading">
-                        <mat-spinner
+                        <nxs-spinner
                           diameter="20"
-                          [attr.aria-label]="'browse.create-import-dialog.loading' | translate"
+                          [label]="'browse.create-import-dialog.loading' | translate"
                         />
                         <span>{{ 'browse.create-import-dialog.loading-folders' | translate }}</span>
                       </div>
@@ -1058,7 +994,7 @@
         >
           {{ 'browse.create-import-dialog.create' | translate }}
         </button>
-      } @else if (view() === 'main' && activeTab() === 'import' && uploadFiles().length > 0) {
+      } @else if (view() === 'main' && activeTab() === 'import' && uploads.pending().length > 0) {
         <button
           mat-stroked-button
           type="button"

@@ -5,7 +5,8 @@
  *
  * Same IBM `style_focus_visible` constraints as NXENG-872 / NXENG-775: standalone `:focus`
  * selector on the focused control. Contrast is measured against the rendered
- * `.detail-tabs .mat-mdc-tab-header` background from production SCSS, not a duplicated colour.
+ * `.detail-tabs .mat-mdc-tab-header` background — `nxs-tabs` painted with the tokens document-detail.scss
+ * sets — not a duplicated colour.
  *
  * Source-level selector contract: `document-detail-panel-toggle-focus-ring.spec.ts`.
  */
@@ -13,10 +14,14 @@ import { Component, provideZonelessChangeDetection, signal } from '@angular/core
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
+import {
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  type NxsTab,
+} from '@nuxeo/satori-platform/components';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -41,7 +46,7 @@ function rgb(css: string): [number, number, number] {
   return [parts[0] ?? 0, parts[1] ?? 0, parts[2] ?? 0];
 }
 
-/** Background painted by `.detail-tabs ::ng-deep .mat-mdc-tab-header` in document-detail.scss. */
+/** Background `nxs-tabs` paints from the `--nxs-tabs-header-surface` document-detail.scss sets. */
 function productionTabHeaderBackground(host: HTMLElement): string {
   const header = host.querySelector('.detail-tabs .mat-mdc-tab-header');
   expect(header)
@@ -56,7 +61,14 @@ function productionTabHeaderBackground(host: HTMLElement): string {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, MatTabsModule, MatTooltipModule, TranslateModule],
+  imports: [
+    MatButtonModule,
+    MatIconModule,
+    MatTooltipModule,
+    NxsTabBodyDirective,
+    NxsTabsComponent,
+    TranslateModule,
+  ],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-toggle-focus.scss',
@@ -65,6 +77,7 @@ function productionTabHeaderBackground(host: HTMLElement): string {
   templateUrl: './panel-toggle-focus-ring.spec.html',
 })
 class PanelToggleFocusHostComponent {
+  readonly tabs: readonly NxsTab[] = [{ id: 'app.tabs.view', label: 'View' }];
   /** Matches production default: properties panel visible on first paint. */
   readonly propertiesPanelOpen = signal(true);
 

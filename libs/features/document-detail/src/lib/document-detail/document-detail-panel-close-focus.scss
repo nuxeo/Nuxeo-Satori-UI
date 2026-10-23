@@ -1,5 +1,0 @@
-// NXENG-830 — standalone stylesheet so the main document-detail bundle stays under the 36 kB cap.
-.panel-close-btn.mat-mdc-icon-button:focus {
-  outline: 2px solid var(--document-detail-properties-label-muted);
-  outline-offset: -2px;
-}

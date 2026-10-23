@@ -1,7 +1,7 @@
 import { HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { TemplateSessionService } from './template-session.service';
 

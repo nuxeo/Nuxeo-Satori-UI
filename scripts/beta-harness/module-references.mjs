@@ -3,6 +3,7 @@
  *
  * Used by the supply-chain gate's unreferenced-dependency check. Its controls live here too, as
  * `selfCheck()`, and `supply-chain.mjs` runs them on every gate run before trusting the result.
+ * Stylesheets are read by `stylesheet-scan.mjs`, the scanner the dependency-tree gate uses too.
  *
  * The regex this replaced accepted a backtick as a quote and read comments as code, so a JSDoc
  * line saying ``from `@alfresco/adf-extensions` `` counted as an import and kept the gate green
@@ -22,6 +23,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import ts from 'typescript';
+import { styleSpecifiers } from './stylesheet-scan.mjs';
 
 /**
  * Import, export, `require()`, dynamic `import()` and triple-slash type references in a code file.
@@ -33,83 +35,6 @@ export function codeSpecifiers(text) {
     ...info.importedFiles.map((f) => f.fileName),
     ...info.typeReferenceDirectives.map((f) => f.fileName),
   ];
-}
-
-/**
- * `text` with comments blanked to spaces and string contents to `_`, quotes and newlines kept, so
- * every offset still maps to `text`.
- *
- * A scanner rather than a regex, because neither construct can be found without knowing whether
- * you are inside the other: the `//` in `$marker: "//"` is not a comment, and the `;` and
- * `@import` in `content: "; @import 'x'"` are not a statement. An unquoted `url(...)` is masked
- * like a string up to its `)`, so neither the `//` in `url(http://cdn/x)` nor the `;` in
- * `url(data:text/css;base64,…)` is read as syntax.
- * @param {string} text
- */
-function maskStylesheet(text) {
-  let out = '';
-  let quote = null;
-  let inUrl = false;
-  for (let i = 0; i < text.length; i += 1) {
-    const c = text[i];
-    if (quote) {
-      if (c === '\\' && i + 1 < text.length) {
-        out += text[i + 1] === '\n' ? '_\n' : '__';
-        i += 1;
-      } else if (c === quote || c === '\n') {
-        quote = null;
-        out += c;
-      } else {
-        out += '_';
-      }
-      continue;
-    }
-    if (!inUrl && /url\(\s*$/i.test(out) && !/["'\s]/.test(c)) inUrl = true;
-    if (inUrl) {
-      if (c === ')') inUrl = false;
-      out += c === ')' || c === '\n' ? c : '_';
-      continue;
-    }
-    if (c === '"' || c === "'") {
-      quote = c;
-      out += c;
-      continue;
-    }
-    const block = c === '/' && text[i + 1] === '*';
-    const line = c === '/' && text[i + 1] === '/';
-    if (block || line) {
-      const end = block ? text.indexOf('*/', i + 2) : text.indexOf('\n', i);
-      const stop = end === -1 ? text.length : block ? end + 2 : end;
-      out += text.slice(i, stop).replace(/[^\n]/g, ' ');
-      i = stop - 1;
-      continue;
-    }
-    out += c;
-  }
-  return out;
-}
-
-/**
- * `@use`, `@forward` and `@import` targets in a stylesheet — only at a statement start, never in a
- * comment, and never inside a string. Every target of an `@import`, not the first: Sass takes
- * `@import 'a', 'b';` and CSS takes an unquoted `url(...)`. Only the first of a `@use` or
- * `@forward`, whose later strings are configuration: `@use 'theme' with ($label: 'x')`.
- * @param {string} text
- */
-export function styleSpecifiers(text) {
-  const mask = maskStylesheet(text);
-  const statement = /(?:^|[;{}])\s*@(use|forward|import)\b([^;{}]*)/dg;
-  const target = /url\(\s*(['"]?)([^'")\s]+)\1\s*\)|(['"])([^'"\n]*)\3/dg;
-  const found = [];
-  for (const s of mask.matchAll(statement)) {
-    const [from, to] = s.indices[2];
-    for (const t of mask.slice(from, to).matchAll(target)) {
-      const span = t.indices[2] ?? t.indices[4];
-      found.push(text.slice(from + span[0], from + span[1]).replace(/^~/, ''));
-      if (s[1] !== 'import') break;
-    }
-  }
-  return found;
 }
 
 /**

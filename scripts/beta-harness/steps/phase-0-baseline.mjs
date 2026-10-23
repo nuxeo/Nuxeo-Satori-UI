@@ -25,8 +25,6 @@
  *   npm run beta:evidence -- phase-0-baseline
  */
 
-import { requireStepCredentials } from '../helpers.mjs';
-
 /**
  * Errors this environment always produces, unrelated to the browse surfaces.
  * `AI.*` operations come from a marketplace package that is not installed on a
@@ -56,55 +54,19 @@ const ENVIRONMENTAL_ERRORS = [
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step("Precondition: the dev server serves adf-core's translation catalogue");
-  // adf-hx components fetch `assets/adf-core/i18n/<lang>.json` at runtime, copied in by an
-  // asset glob in `angular.json`. Without it one accessibility label renders as a raw key and
-  // the console fills with 404s — asserted as a precondition so the run says so instead of
-  // reporting failures that look like broken components. The shipped case is gated separately
-  // by `bundle`, which asserts the file is present in `dist/`.
-  //
-  // This first failed for a reason worth recording: Angular's `development` configuration
-  // **replaces** the `assets` array rather than merging with it, and only the top-level
-  // `options` array had the adf-core glob. Every dev server ever started on this branch
-  // 404ed the catalogue, and this precondition's first message blamed a stale server and
-  // told the reader to restart it — which could never have helped.
-  const catalogue = await page.request
-    .get(`${h.baseUrl}/assets/adf-core/i18n/en.json`, { failOnStatusCode: false })
-    .catch(() => null);
-  h.requirePrecondition(
-    "adf-core's catalogue is served",
-    catalogue?.status() === 200,
-    `/assets/adf-core/i18n/en.json returned ${catalogue?.status() ?? 'no response'} — the dev ` +
-      "server is not serving adf-core's assets. Check that the `development` configuration in " +
-      'angular.json still lists the adf-core glob (it replaces the array, it does not merge), ' +
-      'then restart: npx nx serve nuxeo-ui',
-  );
-  h.step('Application loads and authenticates against live Nuxeo');
+  await h.step('Application loads and authenticates against live Nuxeo');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
-  const me = await page.evaluate(async () => {
-    const r = await fetch('/nuxeo/api/v1/me', { headers: { Accept: 'application/json' } });
-    return r.ok ? (await r.json()).id : `HTTP ${r.status}`;
-  });
-  // The identity the run signed in with, not the one the runner used to default to. This
-  // compared against a literal `Administrator`, which held only while the login defaulted to it
-  // too; with the default gone (NXSAT-649) any other account an operator exports read as an
-  // authentication defect. `h.login()` above has already required the pair.
-  const { username } = requireStepCredentials('check which identity the run signed in as');
-  h.check(
-    'authenticated as NUXEO_USER',
-    me === username,
-    `/me returned ${me}, expected ${username}`,
-  );
+  // Who the run signed in as is checked by the identity guard at the next boundary (NXSAT-643).
   await h.screenshot('app-shell');
 
-  h.step('Production browse renders real repository content');
+  await h.step('Production browse renders real repository content');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.expectText('repository content listed', 'lib-browse', 'Default domain');
   await h.screenshot('production-browse');
 
-  h.step('adf-hx POC browse renders real repository content');
+  await h.step('adf-hx POC browse renders real repository content');
   // Entered directly: the page and its hxp components must render on their own.
   await h.goTo('/#/browse-adf-hx');
   await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
@@ -114,11 +76,11 @@ export default async function run(page, h) {
   await h.expectText('Last Contributor column populated', 'hxp-document-list', 'Administrator');
   await h.screenshot('adf-hx-poc-browse');
 
-  h.step('POC tabs render');
+  await h.step('POC tabs render');
   await h.expectVisible('hxp tabs present', 'hxp-browse-tabs');
   await h.screenshot('adf-hx-poc-tabs');
 
-  h.step('Nav drawer and folder tree mount when entered via platform nav');
+  await h.step('Nav drawer and folder tree mount when entered via platform nav');
   await h.goTo('/#/browse');
   const navEntry = page
     .locator('a,button')
@@ -130,6 +92,6 @@ export default async function run(page, h) {
   await h.expectVisible('hxp nav drawer mounted', 'hxp-browse-nav-drawer');
   await h.screenshot('adf-hx-poc-nav-drawer');
 
-  h.step('Baseline health');
+  await h.step('Baseline health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

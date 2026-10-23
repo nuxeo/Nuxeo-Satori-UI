@@ -89,7 +89,7 @@ The assertion that matters is that configuration alone changes behaviour:
 
 ```js
 h.step('Manifest can hide a toolbar action without a rebuild');
-await h.goTo('/#/browse-adf-hx');
+await h.goToDoc(docUid); // the toolbar slot renders on document detail
 await h.expectVisible('delete action present by default', '[data-action-id="app.toolbar.delete"]');
 await h.screenshot('action-visible-default');
 // apply the override manifest, reload — no recompilation

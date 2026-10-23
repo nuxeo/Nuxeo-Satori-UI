@@ -1,0 +1,99 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ReferenceStories from './document-reference-input.stories';
+
+<Meta of={ReferenceStories} name="Overview" />
+
+# Document reference input
+
+The document reference input finds a document as the user types and returns the uid of the one
+chosen, as Web UI's `nuxeo-document-suggestion` does. Use it for a property that points at another
+document: a related contract, a parent case, a template.
+
+## Key features
+
+- **Searches the repository's full text** from three characters, twenty results at a time, 300
+  milliseconds after the last key — Web UI's `default_document_suggestion` search.
+- **Leaves out what a user should not pick:** hidden documents, versions and the trash. Narrow it
+  further with `documentTypes`, such as `['File', 'Note']`.
+- **Shows where each result is.** Its type icon, title and path, so two documents with one title
+  can be told apart.
+- **The value is what the property stores:** the document's uid, or its path with
+  `idProperty="path"`, as Web UI's `idProperty`. A uid the form already holds is looked up to show its
+  title; one the user may not read, or that is gone, is kept and shown as it is.
+- **Only a document the search returned.** Typing after a choice clears it, and text typed and not
+  chosen is an error on the form, `nxsChooseFromList`.
+
+## Demo showcase
+
+Type `supp` and choose the supplier contract.
+
+<Canvas of={ReferenceStories.ChoosingADocument} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsDocumentReferenceInputComponent,
+  type NxsDocumentReference,
+} from '@nuxeo/satori-platform/components';`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
+/>
+
+export const usageHtml = `<nxs-document-reference-input
+  [label]="'acme.claim.related-contract' | translate"
+  [documentTypes]="['File']"
+  [formControl]="contract"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`label` is the only required input. The value is the chosen document's uid — its path with
+`idProperty="path"` — or `null`, ready to store in the property. `documentChange` emits an
+`NxsDocumentReference` — `uid`, `title`, `type` and `path` — for a host that shows more of it. The input needs the platform's `NuxeoApiBase`.
+Its statuses and the clear button's name are translated under `satori-components.pickers.*`;
+`providePlatformEnglishFallback()` supplies the English. It has no registered ID: place it in a
+template by its selector.
+
+## Where its data comes from
+
+The input runs the NXQL query of Web UI's `default_document_suggestion` page provider through
+`NuxeoApiBase.nxqlSearch`: a full-text prefix match on what was typed, excluding hidden documents,
+versions and trashed ones. `nxsDocumentSuggestionQuery()` builds it; the term and each type are
+escaped, so they stay text in the query. A stored uid or path is looked up with one more query,
+`ecm:uuid = '<uid>'` (or `ecm:path`), escaped the same way. The searches run with the application's
+sign-in, so Nuxeo returns only documents the user may read.
+
+**In these stories** `NuxeoApiBase` is an in-memory fake that matches three documents by title, and
+looks them up by uid.
+
+## Examples
+
+### With a value
+
+<Canvas of={ReferenceStories.WithAValue} />
+
+### A document that cannot be found
+
+<Canvas of={ReferenceStories.AnUnknownDocument} />
+
+### Disabled
+
+<Canvas of={ReferenceStories.Disabled} />
+
+## Accessibility
+
+- **A combobox.** The input is named by its label; the arrow keys move through the results and
+  **Enter** chooses one. **Escape** closes the list.
+- **Each option names the document and its location.** The type icon is hidden from assistive
+  technology; the title and the path are read as separate words.
+- **Statuses are announced.** The number of results, "No results" and a failed search are announced
+  politely, and the hint for too few characters is the field's description.
+- **Clear.** The x button that removes the choice is named "Clear".

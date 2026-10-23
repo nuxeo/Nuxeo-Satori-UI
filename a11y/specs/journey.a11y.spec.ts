@@ -665,7 +665,9 @@ journeyTest('browse', async ({ signedIn: page, a11y }) => {
 
   await expect(page.locator('lib-browse'), 'lib-browse must render').toBeVisible();
   await expect(
-    page.locator('.browse-row, .doc-card-wrapper').first(),
+    page
+      .locator('.browse-row, .doc-card-wrapper, nxs-document-list .nxs-document-list__row')
+      .first(),
     'browse must list at least one document, or this scans an empty table',
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);
@@ -1003,7 +1005,10 @@ journeyTest('collection', async ({ signedIn: page, a11y }) => {
   await expect(host.locator('.collection-unavailable')).toHaveCount(0);
   await expect(host, `the page must be "${collection.title}"`).toContainText(collection.title);
   await expect(
-    host.locator('.member-row').filter({ hasText: member.title }).first(),
+    host
+      .locator('nxs-document-list .nxs-document-list__row')
+      .filter({ hasText: member.title })
+      .first(),
     `the collection must list its member "${member.title}"`,
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-collection-detail', false);
@@ -1130,7 +1135,9 @@ journeyTest('personal-space', async ({ signedIn: page, a11y }) => {
     timeout: 15_000,
   });
   await expect(
-    page.locator('lib-browse .browse-row').first(),
+    page
+      .locator('lib-browse .browse-row, lib-browse nxs-document-list .nxs-document-list__row')
+      .first(),
     `the workspace at ${workspacePath} must list something, or this scans an empty table`,
   ).toBeVisible();
   await waitForScreenSettled(page, 'lib-browse', true);

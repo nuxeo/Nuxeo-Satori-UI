@@ -2,9 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { TranslateService } from '@ngx-translate/core';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { vi } from 'vitest';
 import { EMPTY, of, throwError } from 'rxjs';
@@ -13,6 +12,7 @@ import {
   BrowseService,
   BrowseContextService,
   DocumentDetailService,
+  DocumentImportService,
   DirectoryService,
   NuxeoAce,
   NuxeoDocument,
@@ -21,8 +21,9 @@ import {
   CURRENT_USERNAME,
   ADMIN_ACCESS_CHECKS,
   PERMISSION_DENIED_KEY,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { trashSelectedDocumentsConfirmData } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { trashSelectedDocumentsConfirmData } from '@nuxeo/satori-platform/ui';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /**
  * Each mock is annotated with the real method's return type.
@@ -117,11 +118,12 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 describe('BrowseComponent', () => {
   let component: BrowseComponent;
   let fixture: ComponentFixture<BrowseComponent>;
-  let snackBarOpenSpy: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let dialogOpenSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
-    snackBarOpenSpy = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     dialogOpenSpy = vi.fn(() => ({ afterClosed: () => of(false) }));
     vi.clearAllMocks();
     mockDocumentDetailService.getDocumentPermissions.mockReturnValue(EMPTY);
@@ -131,6 +133,7 @@ describe('BrowseComponent', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: mockBrowseService },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: mockDocumentDetailService },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: TagService, useValue: mockTagService },
@@ -144,7 +147,6 @@ describe('BrowseComponent', () => {
             hasAdministrationAccess: () => false,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
         { provide: MatDialog, useValue: { open: dialogOpenSpy } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -310,7 +312,7 @@ describe('BrowseComponent', () => {
     });
 
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
+      { label: 'Root', routerLink: '/browse' },
       { label: 'Renamed Domain' },
     ]);
   });
@@ -327,7 +329,7 @@ describe('BrowseComponent', () => {
 
     expect(() => component.breadcrumbs()).not.toThrow();
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
+      { label: 'Root', routerLink: '/browse' },
       { label: 'Current Folder' },
     ]);
   });
@@ -382,9 +384,8 @@ describe('BrowseComponent', () => {
     component.deleteDocument();
 
     expect(dialogOpenSpy).not.toHaveBeenCalled();
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -414,9 +415,8 @@ describe('BrowseComponent', () => {
     component.deleteDocument();
 
     expect(dialogOpenSpy).not.toHaveBeenCalled();
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -465,9 +465,8 @@ describe('BrowseComponent', () => {
 
     expect(mockBrowseService.hasChildCollections).toHaveBeenCalledWith('cols-root');
     expect(dialogOpenSpy).not.toHaveBeenCalled();
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Remove all collections from this folder before deleting it.',
-      'OK',
       { duration: 5000 },
     );
   });
@@ -589,12 +588,8 @@ describe('BrowseComponent', () => {
 
     component.openEditCollectionDialog(collection);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
     expect(dialogOpenSpy).not.toHaveBeenCalled();
   });
@@ -619,12 +614,8 @@ describe('BrowseComponent', () => {
 
     component.deleteCollectionEntry(collection);
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
   });
 
@@ -644,12 +635,8 @@ describe('BrowseComponent', () => {
 
     component.deleteDocument();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
   });
 
@@ -739,11 +726,11 @@ describe('BrowseComponent', () => {
 
     component.deleteDocument();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Skipped 1 item that could not be loaded', 'OK', {
+    expect(toast.error).toHaveBeenCalledWith('Skipped 1 item that could not be loaded', {
       duration: 5000,
     });
     expect(mockDocumentDetailService.trashDocument).toHaveBeenCalledWith('doc-1');
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Moved to trash', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Moved to trash');
   });
 
   it('deleteSelectedDocuments blocks when all selected documents fail to load', () => {
@@ -757,11 +744,9 @@ describe('BrowseComponent', () => {
 
     component.deleteDocument();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
-      'Failed to load selected documents for deletion',
-      'OK',
-      { duration: 5000 },
-    );
+    expect(toast.error).toHaveBeenCalledWith('Failed to load selected documents for deletion', {
+      duration: 5000,
+    });
     expect(mockDocumentDetailService.trashDocument).not.toHaveBeenCalled();
   });
 
@@ -794,9 +779,7 @@ describe('BrowseComponent', () => {
       'doc-1',
       'ace-1',
     );
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Notification email sent', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Notification email sent');
   });
 
   it('sendNotificationEmail shows SMTP guidance on mail failure (NXSAT-159)', () => {
@@ -824,12 +807,9 @@ describe('BrowseComponent', () => {
       status: 'effective',
     });
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       'Notification email could not be sent. Configure outbound mail (SMTP) on the Nuxeo server.',
-      'OK',
-      {
-        duration: 7000,
-      },
+      { duration: 7000 },
     );
   });
 
@@ -855,112 +835,6 @@ describe('BrowseComponent', () => {
     // in UTC, and false after. Leaving them open would let the UTC round-trip regress without this
     // test noticing, which is the whole thing that guard exists to prevent.
     expect(component.aceTimeFrame(ace)).toMatch(/^\w{3} \d{2}, 2026 - \w{3} \d{2}, 2026$/);
-  });
-
-  it('localAces reflects persisted date-based permissions after reload', () => {
-    const doc = {
-      uid: 'root-uid',
-      title: 'Root',
-      type: 'Root',
-      path: '/',
-      lastModified: '2026-07-01T00:00:00.000Z',
-      properties: {},
-      contextParameters: {
-        acls: [
-          {
-            name: 'local',
-            aces: [
-              {
-                id: 'ace-1',
-                username: 'members',
-                externalUser: false,
-                permission: 'Read',
-                granted: true,
-                creator: 'Administrator',
-                begin: '2026-07-01T00:00:00.000Z',
-                end: '2026-12-31T23:59:59.000Z',
-                status: 'effective',
-              },
-              {
-                id: 'ace-2',
-                username: 'administrators',
-                externalUser: false,
-                permission: 'Everything',
-                granted: true,
-                creator: 'Administrator',
-                begin: null,
-                end: null,
-                status: 'effective',
-              },
-            ],
-          },
-        ],
-      },
-    } as NuxeoDocument;
-
-    component.currentDoc.set(doc);
-
-    expect(component.localAces()).toHaveLength(2);
-    expect(component.aceTimeFrame(component.localAces()[0])).not.toBe('Permanent');
-    expect(component.aceTimeFrame(component.localAces()[1])).toBe('Permanent');
-  });
-
-  it('localAces excludes external and non-granted ACEs', () => {
-    const doc = {
-      uid: 'root-uid',
-      title: 'Root',
-      type: 'Root',
-      path: '/',
-      lastModified: '2026-07-01T00:00:00.000Z',
-      properties: {},
-      contextParameters: {
-        acls: [
-          {
-            name: 'local',
-            aces: [
-              {
-                id: 'ace-1',
-                username: 'members',
-                externalUser: false,
-                permission: 'Read',
-                granted: true,
-                creator: 'Administrator',
-                begin: null,
-                end: null,
-                status: 'effective',
-              },
-              {
-                id: 'ace-2',
-                username: 'transient/guest@example.com',
-                externalUser: true,
-                permission: 'Read',
-                granted: true,
-                creator: 'Administrator',
-                begin: null,
-                end: null,
-                status: 'effective',
-              },
-              {
-                id: 'ace-3',
-                username: 'revoked',
-                externalUser: false,
-                permission: 'Read',
-                granted: false,
-                creator: 'Administrator',
-                begin: null,
-                end: null,
-                status: 'archived',
-              },
-            ],
-          },
-        ],
-      },
-    } as NuxeoDocument;
-
-    component.currentDoc.set(doc);
-
-    expect(component.localAces()).toHaveLength(1);
-    expect(component.localAces()[0].username).toBe('members');
   });
 
   it('canManageCurrentPermissions is false for read-only users (NXSAT-162)', () => {

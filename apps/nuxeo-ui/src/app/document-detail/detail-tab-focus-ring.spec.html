@@ -1,11 +1,9 @@
 <!--
-  Fixture for detail-tab-focus-ring.spec.ts. Mirrors document-detail.html tab strip:
-  mat-tab-group.detail-tabs with multiple tabs on the white tab header.
+  Fixture for detail-tab-focus-ring.spec.ts. Renders the real nxs-tabs the document page uses,
+  with the page's .detail-tabs token overrides from document-detail.scss.
 -->
 <div class="tabs-header-row detail-tab-focus-ring-host">
-  <mat-tab-group class="detail-tabs">
-    <mat-tab [label]="'app.tabs.view' | translate">View</mat-tab>
-    <mat-tab [label]="'app.tabs.metadata' | translate">Metadata</mat-tab>
-    <mat-tab [label]="'app.tabs.activity' | translate">Activity</mat-tab>
-  </mat-tab-group>
+  <nxs-tabs class="detail-tabs" [tabs]="tabs">
+    <ng-template nxsTabBody let-tab>{{ tab.label }}</ng-template>
+  </nxs-tabs>
 </div>

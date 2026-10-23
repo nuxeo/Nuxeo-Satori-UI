@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { DOCUMENT_RULE_EVALUATORS } from './document-rules';
 import {
@@ -39,10 +39,24 @@ describe('ExtensionRuleRegistry', () => {
       expect.arrayContaining([
         'app.rules.canAddChildren',
         'app.rules.canManagePermissions',
+        'app.rules.canPublish',
         'app.rules.canRemove',
         'app.rules.canWrite',
       ]),
     );
+  });
+
+  it('answers canPublish as Web UI: a version with WriteVersion, never on Write alone', () => {
+    const publishable = (permissions: string[], extra: Partial<NuxeoDocument> = {}) =>
+      context({ document: { ...doc(permissions), facets: ['Publishable'], ...extra } });
+    expect(
+      registry.evaluate('app.rules.canPublish', publishable(['WriteVersion'], { isVersion: true })),
+    ).toBe(true);
+    expect(registry.evaluate('app.rules.canPublish', publishable(['Read', 'Write']))).toBe(false);
+    expect(
+      registry.evaluate('app.rules.canPublish', publishable(['WriteVersion'], { isProxy: true })),
+    ).toBe(false);
+    expect(registry.evaluate('app.rules.canPublish', EMPTY_EXTENSION_RULE_CONTEXT)).toBe(false);
   });
 
   it('delegates to the existing permission predicate rather than reimplementing it', () => {

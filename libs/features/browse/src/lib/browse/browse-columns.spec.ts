@@ -2,24 +2,24 @@ import { TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { EMPTY, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
   PACKAGED_BROWSE_COLUMNS,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   BrowseService,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   SelectionService,
   TagService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { BrowseComponent } from './browse';
 import { ALL_COLUMNS } from '../column-settings-dialog/column-settings-dialog';
@@ -85,11 +85,11 @@ describe('BrowseComponent — documentList slot', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: stub.browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: stub.detail },
         { provide: DirectoryService, useValue: stub.directory },
         { provide: TagService, useValue: stub.tag },
         { provide: SelectionService, useValue: stub.selection },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -184,15 +184,21 @@ describe('BrowseComponent — documentList slot', () => {
   });
 
   it('resets to the manifest defaults, not the packaged const', () => {
-    // Before this change `resetColumns()` read `ALL_COLUMNS`, so Reset silently
-    // discarded the customer's relabelling along with the user's choice.
+    // Reset once read `ALL_COLUMNS`, so a column the manifest hid by default came back the
+    // moment a user pressed it. The picker's defaults are the descriptors'.
+    const component = render({
+      overrides: { 'app.documentList.lastContributor': { visible: false } },
+    });
+
+    expect(component.defaultColumnKeys()).toEqual(['title', 'modified']);
+  });
+
+  it('offers the picker the descriptors’ labels, so a relabelled column keeps its name', () => {
     const component = render({
       overrides: { 'app.documentList.title': { label: 'Name' } },
     });
 
-    component.resetColumns();
-
-    expect(component.pendingColumns().find((c) => c.key === 'title')?.label).toBe('Name');
+    expect(component.pickerColumns().find((c) => c.key === 'title')?.label).toBe('Name');
   });
 
   it('falls back to the packaged columns when nothing is registered', () => {
@@ -205,11 +211,11 @@ describe('BrowseComponent — documentList slot', () => {
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: stub.browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: stub.detail },
         { provide: DirectoryService, useValue: stub.directory },
         { provide: TagService, useValue: stub.tag },
         { provide: SelectionService, useValue: stub.selection },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         { provide: MatDialog, useValue: { open: vi.fn(() => ({ afterClosed: () => of(false) })) } },
         { provide: AppConfigService, useValue: { manifest } },
       ],

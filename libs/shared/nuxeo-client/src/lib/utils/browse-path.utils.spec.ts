@@ -5,16 +5,13 @@ import {
   decodeNuxeoPathSegment,
   expandableNuxeoPathPrefixes,
   normalizeNuxeoPath,
+  nuxeoBreadcrumbTitles,
   nuxeoPathsEqual,
   nuxeoPathsEqualFlexible,
   parentNuxeoFolderPath,
   parseBrowseNuxeoPathFromRouterUrl,
   toBrowseRouterUrl,
   topLevelNuxeoFolderPath,
-  toAdfHxBrowseRouterUrl,
-  parseAdfHxBrowsePathFromRouterUrl,
-  toBrowseRouterUrlForReturnMode,
-  parseBrowseReturnMode,
   isUserWorkspacePath,
   userWorkspaceOwnerFromPath,
   userWorkspaceRootFromPath,
@@ -152,28 +149,6 @@ describe('browse-path.utils', () => {
     });
   });
 
-  describe('adf-hx browse return routing', () => {
-    it('builds adf-hx browse URLs with path query param', () => {
-      expect(toAdfHxBrowseRouterUrl('/')).toBe('/browse-adf-hx');
-      expect(toAdfHxBrowseRouterUrl('/default-domain/workspaces')).toBe(
-        '/browse-adf-hx?path=%2Fdefault-domain%2Fworkspaces',
-      );
-    });
-
-    it('parses adf-hx browse path from router URL', () => {
-      expect(parseAdfHxBrowsePathFromRouterUrl('/#/browse-adf-hx?path=%2Ffoo%2Fbar')).toBe(
-        '/foo/bar',
-      );
-    });
-
-    it('returns adf-hx URLs when browseReturn mode is adf-hx', () => {
-      expect(parseBrowseReturnMode('adf-hx')).toBe('adf-hx');
-      expect(parseBrowseReturnMode(null)).toBe('default');
-      expect(toBrowseRouterUrlForReturnMode('adf-hx', '/foo')).toBe('/browse-adf-hx?path=%2Ffoo');
-      expect(toBrowseRouterUrlForReturnMode('default', '/foo')).toBe('/browse/foo');
-    });
-  });
-
   describe('user workspace path helpers', () => {
     const workspacePath = '/default-domain/UserWorkspaces/jdoe/Collections/demo';
 
@@ -250,6 +225,70 @@ describe('browse-path.utils', () => {
       expect(isCollectionDocument({ type: 'File', facets: ['Collection'] })).toBe(true);
       expect(isCollectionDocument({ type: 'File' }, 'Collection')).toBe(true);
       expect(isCollectionDocument({ type: 'File' })).toBe(false);
+    });
+  });
+
+  describe('nuxeoBreadcrumbTitles', () => {
+    /** The enricher's own shape: one document entity per ancestor, root-most first. */
+    const entry = (path: string, title: string, type = 'Folder'): NuxeoDocument => ({
+      uid: path,
+      title,
+      type,
+      path,
+      lastModified: '2026-01-01T00:00:00.000Z',
+      properties: {},
+    });
+
+    it('keys each entry title by its normalized path', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              entry('/default-domain', 'Domain', 'Domain'),
+              entry('/default-domain/workspaces/', 'Workspaces', 'WorkspaceRoot'),
+            ],
+          },
+        },
+      });
+
+      expect([...titles]).toEqual([
+        ['/default-domain', 'Domain'],
+        ['/default-domain/workspaces', 'Workspaces'],
+      ]);
+    });
+
+    it('never returns the repository root, so its label stays the caller’s translated one', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              entry('/', 'Repository', 'Root'),
+              entry('/default-domain', 'Domain', 'Domain'),
+            ],
+          },
+        },
+      });
+
+      expect(titles.has('/')).toBe(false);
+      expect(titles.get('/default-domain')).toBe('Domain');
+    });
+
+    it('omits an entry with a blank title, leaving the caller its own fallback', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: { entries: [entry('/default-domain', '   ')] },
+        },
+      });
+
+      expect(titles.has('/default-domain')).toBe(false);
+    });
+
+    it('is empty when the enricher was not requested or answered nothing', () => {
+      expect(nuxeoBreadcrumbTitles(null).size).toBe(0);
+      expect(nuxeoBreadcrumbTitles({ contextParameters: {} }).size).toBe(0);
+      expect(
+        nuxeoBreadcrumbTitles({ contextParameters: { breadcrumb: { entries: [] } } }).size,
+      ).toBe(0);
     });
   });
 });

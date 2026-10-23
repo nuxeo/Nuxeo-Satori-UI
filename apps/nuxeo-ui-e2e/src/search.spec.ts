@@ -1,21 +1,216 @@
 import { expect, expectSurfaceWithData, test } from './fixtures';
-import { type Page } from '@playwright/test';
+import { type Page, type Request } from '@playwright/test';
+import { nuxeoCredentials } from './nuxeo-credentials';
 
 /**
- * Search — the path that carries the query translation Phase 3 built, and the one an
- * injection defect was found in.
+ * Search — and the guard for the injection defect once found in the retired POC's search.
  *
- * `escapeHxqlLiteral` has unit specs for the escaping itself; what those cannot show is
- * that a real query reaches a real OpenSearch index and comes back. That is this file.
+ * `escapeNxqlLiteral` has unit specs for the escaping itself; what those cannot show is that a
+ * real query reaches a real OpenSearch index and comes back. That is this file.
  */
+
+/**
+ * The drawer's full-text input: `nxs-search-filters`, rendered by `lib-search-filters-drawer` in the
+ * app shell's navigation drawer, through an extension outlet — not inside `lib-search` — so a
+ * locator scoped to `lib-search` finds nothing.
+ */
+function fullTextInput(page: Page) {
+  return page.locator('lib-search-filters-drawer nxs-search-filters input[type="search"]').first();
+}
+
+const PAGE_PROVIDER = '/search/pp/default_search/execute';
+const NXQL = '/search/lang/NXQL/execute';
+
+/**
+ * Long enough for a delayed duplicate to land inside it: the drawer once sent its own count search
+ * 150 ms after the page's.
+ */
+const QUIET_MS = 1_000;
+
+interface SentSearch {
+  /** `page-provider`: Nuxeo binds the term into the query. `nxql`: the page wrote the query text. */
+  readonly endpoint: 'page-provider' | 'nxql';
+  readonly params: URLSearchParams;
+  /** `null` when no response arrived at all — the request failed at the network level. */
+  readonly status: number | null;
+  readonly resultsCount: number | null;
+  /** `search 2 of 3 (page-provider)`, for assertion messages. */
+  readonly label: string;
+}
+
+/**
+ * Type `term` into the drawer's full-text input, press Enter, and return **every** search request
+ * that produced, once all of them have answered and nothing new has started for `QUIET_MS`.
+ *
+ * Every one, so a duplicate is counted rather than hidden. Enter used to send three identical
+ * requests — `lib-search`'s results, the shell nav drawer's and the filters drawer's count search —
+ * and judging only the first response to arrive let a test pass on a duplicate while the results
+ * request failed. `SearchSession` now sends one, which `one Enter sends one search` asserts.
+ *
+ * Captured after the page has settled and before Enter, which is the only thing that makes the
+ * drawer search. Matched on the endpoint rather than the term, so a term that was dropped, or moved
+ * into hand-built NXQL, is judged by the assertions rather than waited for. A settled page cannot
+ * be awaited with `waitForLoadState('networkidle')` here: the page reached that state on load, so
+ * it resolves at once.
+ */
+async function searchesSentFor(page: Page, term: string): Promise<readonly SentSearch[]> {
+  await page.goto('/#/search', { waitUntil: 'networkidle' });
+
+  const input = fullTextInput(page);
+  await expect(input, 'the search drawer has no full-text input').toBeVisible();
+  await input.fill(term);
+
+  const captured: Promise<Omit<SentSearch, 'label'>>[] = [];
+  let answered = 0;
+  let lastActivity = Date.now();
+  const onRequest = (request: Request) => {
+    const path = new URL(request.url()).pathname;
+    if (!path.endsWith(PAGE_PROVIDER) && !path.endsWith(NXQL)) return;
+    lastActivity = Date.now();
+    captured.push(
+      describeSearch(request).finally(() => {
+        answered += 1;
+        lastActivity = Date.now();
+      }),
+    );
+  };
+
+  page.on('request', onRequest);
+  try {
+    await input.press('Enter');
+    await expect
+      .poll(
+        () =>
+          captured.length > 0 &&
+          answered === captured.length &&
+          Date.now() - lastActivity >= QUIET_MS,
+        { message: 'Enter sent no search to Nuxeo, or one never answered', timeout: 15_000 },
+      )
+      .toBe(true);
+  } finally {
+    page.off('request', onRequest);
+  }
+
+  const searches = await Promise.all(captured);
+  return searches.map((s, i) => ({
+    ...s,
+    label: `search ${i + 1} of ${searches.length} (${s.endpoint})`,
+  }));
+}
+
+async function describeSearch(request: Request): Promise<Omit<SentSearch, 'label'>> {
+  const url = new URL(request.url());
+  const response = await request.response();
+  // A body that is not JSON — a proxy error page — becomes `resultsCount: null` rather than a throw
+  // here, so the spec fails at its own status and count assertions, which name what went wrong.
+  const body: { resultsCount?: unknown } | null = response
+    ? await response.json().catch(() => null)
+    : null;
+  return {
+    endpoint: url.pathname.endsWith(NXQL) ? 'nxql' : 'page-provider',
+    params: url.searchParams,
+    status: response?.status() ?? null,
+    resultsCount: typeof body?.resultsCount === 'number' ? body.resultsCount : null,
+  };
+}
+
 test.describe('search', () => {
+  test('one Enter sends one search', async ({ signedIn: page }) => {
+    const sent = await searchesSentFor(page, 'contract');
+    expect(
+      sent.map((s) => s.label),
+      'the page and the drawer share one request',
+    ).toHaveLength(1);
+    expect(sent[0].params.get('ecm_fulltext')).toBe('contract');
+  });
+
   test('returns results from the index', async ({ signedIn: page }) => {
     await page.goto('/#/search', { waitUntil: 'networkidle' });
 
-    await expectSurfaceWithData(page, 'lib-search', /result\(s\)/);
-    // A result count of zero would satisfy `/result\(s\)/`, so assert a non-zero one. This
+    await expectSurfaceWithData(page, 'lib-search', /\d+\s+results?\b/);
+    // A result count of zero would satisfy the pattern above, so assert a non-zero one. This
     // is the difference between "the page rendered" and "search worked".
-    await expect(page.locator('lib-search')).toContainText(/[1-9]\d*\s+result\(s\)/);
+    await expect(page.locator('lib-search .results-count')).toHaveText(/^[1-9]\d*\s+results?$/);
+  });
+
+  test('pages past the first page, and the count is the server total', async ({
+    signedIn: page,
+  }) => {
+    // Seeding, indexing (up to 120 s), the UI checks and cleanup run longer than the suite's 45 s
+    // default, so this test gets a deadline that covers all of them.
+    test.setTimeout(240_000);
+    // An isolated dataset: 41 notes that share one unique term, in a workspace this test makes
+    // and deletes. The search is for that term, so the result is exactly these notes, past one
+    // page of 40, whatever else the instance holds.
+    const credentials = nuxeoCredentials();
+    const headers = {
+      Authorization: `Basic ${Buffer.from(`${credentials.username}:${credentials.password}`).toString('base64')}`,
+      'Content-Type': 'application/json',
+    };
+    const term = `nxsat641e2e${Date.now().toString(36)}`;
+    // The workspace is named apart from the term: its title would match the search and count as a result.
+    const setName = `nxsat641-set-${Date.now().toString(36)}`;
+    const workspacePath = `/nuxeo/api/v1/path/default-domain/workspaces/${setName}`;
+    const created = await page.request.post('/nuxeo/api/v1/path/default-domain/workspaces/', {
+      headers,
+      data: {
+        'entity-type': 'document',
+        name: setName,
+        type: 'Workspace',
+        properties: { 'dc:title': 'NXSAT-641 e2e set' },
+      },
+    });
+    expect(created.status(), 'the test workspace is created').toBe(201);
+
+    try {
+      for (let i = 1; i <= 41; i++) {
+        const note = await page.request.post(`${workspacePath}/`, {
+          headers,
+          data: {
+            'entity-type': 'document',
+            name: `${term}-${i}`,
+            type: 'Note',
+            properties: { 'dc:title': `${term} ${i}` },
+          },
+        });
+        expect(note.status(), `note ${i} is created`).toBe(201);
+      }
+
+      // Indexing is asynchronous: wait until the term finds all 41 notes before searching for it.
+      await expect
+        .poll(
+          async () => {
+            const res = await page.request.get(
+              `/nuxeo/api/v1/search/pp/default_search/execute?ecm_fulltext=${term}&pageSize=1`,
+              { headers },
+            );
+            return (await res.json()).resultsCount as number;
+          },
+          { timeout: 120_000 },
+        )
+        .toBe(41);
+
+      await page.goto('/#/search', { waitUntil: 'networkidle' });
+      await fullTextInput(page).fill(term);
+      await fullTextInput(page).press('Enter');
+
+      // The count is the server's total, not the rows on screen: 40 rows a page, so 41 matches run
+      // past one page.
+      await expect(page.locator('lib-search .results-count')).toHaveText(/^41\s+results$/);
+
+      const next = page.locator('lib-search nxs-pager .nxs-pager__next');
+      await expect(next, 'the pager offers a next page').toBeEnabled();
+      const [second] = await Promise.all([
+        page.waitForResponse((r) => r.url().includes(PAGE_PROVIDER) && r.status() === 200),
+        next.click(),
+      ]);
+      expect(new URL(second.url()).searchParams.get('currentPageIndex')).toBe('1');
+      await expect(page).toHaveURL(/[?&]page=2\b/);
+      await expect(page.locator('lib-search .results-count')).toHaveText(/^41\s+results$/);
+    } finally {
+      const removed = await page.request.delete(workspacePath, { headers });
+      expect(removed.status(), 'the test workspace is removed').toBe(204);
+    }
   });
 
   test('a term that cannot match returns zero results rather than an error', async ({
@@ -25,120 +220,148 @@ test.describe('search', () => {
     // searching, and this is the assertion that would catch a query being dropped or a
     // filter being ignored. The term goes through the drawer filter input — not `?q=` in
     // the URL, which `search.ts` deliberately does not read for the query text.
-    await page.goto('/#/search', { waitUntil: 'networkidle' });
-
-    const input = page.locator('lib-search input.filter-input').first();
-    await expect(input, 'the search drawer has no full-text input').toBeVisible();
-    await input.fill('zzz-no-such-document-zzz');
-    await input.press('Enter');
-    await page.waitForLoadState('networkidle');
-
-    const host = page.locator('lib-search');
-    await expect(host).not.toContainText(/error|failed/i);
-    await expect(host.locator('.results-empty')).toBeVisible();
+    //
+    // Asserted on the wire, not on the page: `/search` sets an `error()` signal when a search
+    // fails and never renders it, so a 400 shows the same empty state as a genuine zero.
+    for (const sent of await searchesSentFor(page, 'zzz-no-such-document-zzz')) {
+      expect(sent.status, `${sent.label}: Nuxeo did not accept the search`).toBe(200);
+      expect(sent.resultsCount, `${sent.label}: a term that cannot match returned documents`).toBe(
+        0,
+      );
+    }
+    await expect(page.locator('lib-search .results-empty').first()).toBeVisible();
   });
-
 });
 
 /**
- * The regression guard for the HXQL injection fixed in `hxql-literal.ts`.
+ * The regression guard for NXQL injection through the search term.
  *
- * ## Why it drives `/#/search-adf-hx` and not `/#/search`
+ * ## Why `/#/search`
  *
- * It used to navigate to `/#/search?q=O'Brien` and assert that `lib-search` was visible and
- * did not contain the word "error". That could not fail. `search.ts` reads `q` from the
- * drawer service signal — its own comment says "All drawer filters come from the shared
- * service signal (not URL)" — so the apostrophe never reached a query builder, and the spec
- * would have passed with `escapeHxqlLiteral` reverted, with the search page rendering nothing
- * forever, or with the query parameter ignored entirely. It was the audit's one named security
- * finding, and a test that looked like it had been addressed. The smoke test above that checks
- * for zero results on an impossible term now drives the drawer input for the same reason.
+ * These two cases used to drive `/#/search-adf-hx`, which interpolated the term into a
+ * `sys_fulltext = '<term>*'` literal through `escapeHxqlLiteral` — the path the original
+ * adversarial review found the injection in. That route is retired with the rest of adf-hx and
+ * now only redirects here, so the coverage lives on the search page that stays.
  *
- * The one production call site of `escapeHxqlLiteral` is
- * `libs/features/browse/src/lib/search-adf-hx/search-adf-hx.ts:110`, which interpolates the
- * term into a `SELECT * FROM SysContent … sys_fulltext = '<term>*'` string for adf-hx's
- * `SearchService`. That is the vulnerable path, it is reachable at `/#/search-adf-hx`, and the
- * term gets there through the page's own input — so these drive it that way.
+ * `/#/search` writes no query text at all. `SearchService.search` sends the drawer's term to the
+ * `default_search` page provider as the `ecm_fulltext` named parameter, and Nuxeo binds it into
+ * the predicate server-side. There is no client-side escape to assert, so these assert the
+ * property any implementation has to keep — **the term reaches Nuxeo as data, never as query
+ * structure** — on whichever endpoint carries it:
  *
- * ## Why they assert the outgoing query and not a result count
+ *   - page provider: the bound `ecm_fulltext` value is the term verbatim, and no other parameter
+ *     carries it. A client that pre-escapes, strips or rewrites the term fails here;
+ *   - NXQL: the term sits inside an escaped literal, and stripping every literal leaves none of
+ *     it behind. This branch is for a rewrite of the search page that builds NXQL itself, which
+ *     the `nxs-` rebuild of search results could; it does not run against today's page.
  *
- * Because a result count on this surface would be a vacuous assertion, and worse, a moving
- * one. The page's default `ORDER BY sys_modified DESC` translates to `ORDER BY dc:modified
- * DESC`, and that query answers HTTP 200 with `resultsCount: 732` and **zero entries** on this
- * instance, so the surface reads "No results found" even unfiltered. That is a real defect and
- * it is recorded rather than worked around here — changing the application to make a test pass
- * is the opposite of the job.
+ * ## What is load-bearing
  *
- * The security property does not need a result count. It is that nothing the user types
- * becomes query *structure*, and the query on the wire is where that is decided.
+ * The wire, not the page: as above, `/search` never renders its error signal, so a DOM "no error"
+ * check would be vacuous, and there is none. The status Nuxeo answered and the `resultsCount` it
+ * returned are what can fail. Measured on the shared instance on 2026-10-08: the payload below as
+ * the bound value returns 0 documents; the same payload concatenated into an NXQL literal returns
+ * 1,940 — every document — and an unescaped apostrophe in NXQL answers HTTP 400.
  */
-async function nxqlSentFor(page: Page, term: string): Promise<{ query: string; status: number }> {
-  const input = page.locator('lib-search-adf-hx input[type="text"]').first();
-  await expect(input, 'the adf-hx search surface has no text input to type into').toBeVisible();
 
-  // Armed before typing, and matched on the translated field name rather than on the term, so
-  // a query that dropped the term entirely still satisfies the wait and then fails the
-  // assertions — rather than timing out here and reporting as flake.
-  const pending = page.waitForResponse(
-    (response) => {
-      const url = new URL(response.url());
-      if (!url.pathname.endsWith('/search/lang/NXQL/execute')) return false;
-      return (url.searchParams.get('query') ?? '').includes('ecm:fulltext');
-    },
-    { timeout: 15_000 },
-  );
-
-  await input.fill(term);
-  const response = await pending;
-
-  return {
-    query: new URL(response.url()).searchParams.get('query') ?? '',
-    status: response.status(),
-  };
+/** Everything in the request that is not data: the NXQL with every literal stripped, or every page-provider parameter but the bound term. */
+function structureOf(sent: SentSearch): string {
+  if (sent.endpoint === 'nxql') {
+    return (sent.params.get('query') ?? '').replace(/'(?:[^'\\]|\\.)*'/g, "''");
+  }
+  return [...sent.params]
+    .filter(([name]) => name !== 'ecm_fulltext')
+    .map(([name, value]) => `${name}=${value}`)
+    .join('&');
 }
 
-test.describe('HXQL injection guard', () => {
-  test('an apostrophe travels inside the literal and Nuxeo accepts the query', async ({
-    signedIn: page,
-  }) => {
-    await page.goto('/#/search-adf-hx', { waitUntil: 'networkidle' });
+/** On the page provider, the term must be the bound value exactly as typed. */
+function expectBoundVerbatim(sent: SentSearch, term: string) {
+  expect(
+    sent.params.get('ecm_fulltext'),
+    `${sent.label}: the term did not reach Nuxeo as the bound ecm_fulltext value, verbatim`,
+  ).toBe(term);
+}
 
-    const { query, status } = await nxqlSentFor(page, "O'Brien");
+/**
+ * In hand-built NXQL, one literal must hold the whole term — decoded here rather than compared with
+ * the production escaper's output, so a broken escaper cannot vouch for itself — optionally followed
+ * by the `*` wildcard a builder appends. The structure checks alone pass a builder that truncates or
+ * replaces the term, as long as what is left matches nothing.
+ */
+function expectWholeTermInALiteral(sent: SentSearch, term: string) {
+  const literals = [...(sent.params.get('query') ?? '').matchAll(/'((?:[^'\\]|\\.)*)'/g)].map((m) =>
+    m[1].replace(/\\(.)/g, '$1'),
+  );
+  expect(
+    literals.some((literal) => literal === term || literal === `${term}*`),
+    `${sent.label}: no literal in the query holds the whole term; literals were ${JSON.stringify(literals)}`,
+  ).toBe(true);
+}
 
-    // The escaped form, on the wire. Unescaped this reads `'O'Brien*'`, which closes the
-    // literal after `O` and leaves `Brien` as a bare token.
-    expect(query, 'the apostrophe was not escaped on its way into the literal').toContain(
-      "ecm:fulltext = 'O\\'Brien*'",
-    );
-    // And Nuxeo agrees it is a well-formed literal. Unescaped it answers 400.
-    expect(status, 'Nuxeo rejected the query, so the literal was not closed correctly').toBe(200);
-    await expect(
-      page.locator('.hxp-search-page__error'),
-      'the page surfaced a query error',
-    ).toHaveCount(0);
+test.describe('NXQL injection guard', () => {
+  test('an apostrophe travels as data and Nuxeo accepts the query', async ({ signedIn: page }) => {
+    for (const sent of await searchesSentFor(page, "O'Brien")) {
+      if (sent.endpoint === 'page-provider') {
+        expectBoundVerbatim(sent, "O'Brien");
+      } else {
+        // Unescaped this reads `'O'Brien*'`, which closes the literal after `O` and leaves `Brien`
+        // as a bare token.
+        expect(
+          sent.params.get('query'),
+          `${sent.label}: the apostrophe was not escaped on its way into the literal`,
+        ).toContain("'O\\'Brien");
+        expectWholeTermInALiteral(sent, "O'Brien");
+      }
+      expect(
+        structureOf(sent),
+        `${sent.label}: part of the term is outside its literal`,
+      ).not.toContain('Brien');
+      // And Nuxeo agrees it is well-formed. Unescaped in NXQL it answers 400.
+      expect(
+        sent.status,
+        `${sent.label}: Nuxeo rejected the query, so the literal was not closed correctly`,
+      ).toBe(200);
+    }
   });
 
   test('a term shaped like a query cannot become query structure', async ({ signedIn: page }) => {
-    await page.goto('/#/search-adf-hx', { waitUntil: 'networkidle' });
-
     // The payload from the original adversarial review, recorded in `hxql-literal.ts`: it
     // closed the literal and the enclosing parenthesis to reach a top-level `OR`, defeating
     // both hygiene filters the binding adds unconditionally and returning 155 documents where
     // the plain term returned 0.
     const payload = `zzznope') OR (ecm:uuid IS NOT NULL) OR (ecm:fulltext = 'q`;
-    const { query, status } = await nxqlSentFor(page, payload);
 
-    expect(status, 'Nuxeo rejected the query').toBe(200);
+    for (const sent of await searchesSentFor(page, payload)) {
+      expect(sent.status, `${sent.label}: Nuxeo rejected the query`).toBe(200);
 
-    // Strip every literal and what remains is the query's own structure. None of the payload
-    // may appear in it — that is the whole property, stated without reference to how many rows
-    // came back.
-    const structure = query.replace(/'(?:[^'\\]|\\.)*'/g, "''");
-    expect(structure, 'the term lifted a clause out of the literal').not.toContain('ecm:uuid');
-    expect(structure, 'the term introduced a top-level OR').not.toMatch(/\bOR\b/);
-    expect(
-      structure,
-      'the version and trash hygiene filters are no longer ANDed onto the query',
-    ).toContain('ecm:isVersion = 0 AND ecm:isTrashed = 0');
+      if (sent.endpoint === 'page-provider') {
+        expectBoundVerbatim(sent, payload);
+      } else {
+        expectWholeTermInALiteral(sent, payload);
+        expect(
+          structureOf(sent),
+          `${sent.label}: the version and trash hygiene filters are no longer ANDed onto the query`,
+        ).toContain('ecm:isVersion = 0 AND ecm:isTrashed = 0');
+      }
+      // None of the payload may appear in the query's own structure — the property, stated
+      // without reference to how many rows came back.
+      const structure = structureOf(sent);
+      expect(structure, `${sent.label}: the term lifted a clause out of the literal`).not.toContain(
+        'ecm:uuid',
+      );
+      expect(structure, `${sent.label}: the term introduced a top-level OR`).not.toMatch(/\bOR\b/);
+
+      // And the outcome Nuxeo reports. As data the payload matches nothing; as structure it
+      // matched every document on this instance.
+      expect(
+        sent.resultsCount,
+        `${sent.label}: the payload matched documents, so it ran as a query`,
+      ).toBe(0);
+    }
+    await expect(
+      page.locator('lib-search .results-count'),
+      'the page shows a result count for a term that matches nothing',
+    ).toHaveCount(0);
   });
 });

@@ -1,5 +1,5 @@
 {
-  "name": "@nuxeo-satori/platform",
+  "name": "@nuxeo/satori-platform",
   "version": "0.2.0",
   "generators": "./generators.json",
   "description": "Nuxeo Satori platform — the Layer 0/1/2 extensibility contract, configuration loader, Nuxeo client and shared UI.",
@@ -18,6 +18,11 @@
     "@ngx-translate/core": "^17.0.0",
     "date-fns": "^2.30.0",
     "rxjs": "^7.8.0"
+  },
+  "peerDependenciesMeta": {
+    "@hylandsoftware/satori-ui": {
+      "optional": true
+    }
   },
   "dependencies": {
     "tslib": "^2.3.0",

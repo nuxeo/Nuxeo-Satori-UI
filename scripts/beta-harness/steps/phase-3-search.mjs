@@ -43,8 +43,14 @@
  */
 
 import { PreconditionError } from '../helpers.mjs';
+import { checkFetchIdentity, ME_PATH } from '../identity-guard.mjs';
 
-const NUXEO = 'http://localhost:8080/nuxeo';
+/**
+ * The independent answer is asked of Nuxeo directly, not through the app's proxy. `NUXEO_URL`
+ * names it, as for `backend-preflight.mjs`, so a run against a Nuxeo of your own does not compare
+ * the app with a different server; and its identity is checked before its answer is used.
+ */
+const NUXEO = `${(process.env['NUXEO_URL'] ?? 'http://localhost:8080').replace(/\/+$/, '')}/nuxeo`;
 
 /**
  * Credentials from the environment, with **no** fallback.
@@ -99,6 +105,9 @@ async function signIn(page, baseUrl) {
     // as Anonymous, which can see a fraction of the repository.
     sessionStorage.setItem('agentic_ui_signed_out', '1');
   });
+  // And no cookie from that boot: a guest session that has answered an API call outranks the
+  // Basic header the sign-in form is about to send (NXSAT-643).
+  await page.context().clearCookies();
 
   /**
    * A real reload, not a hash navigation.
@@ -170,7 +179,7 @@ const countText = async (page) =>
 
 export default async function run(page, h) {
   // -------------------------------------------------------------------------
-  h.step('Precondition: signed in, and the full-text index has settled on a term');
+  await h.step('Precondition: signed in, and the full-text index has settled on a term');
 
   const signedIn = await signIn(page, h.baseUrl).catch(() => false);
   h.requirePrecondition(
@@ -179,6 +188,15 @@ export default async function run(page, h) {
     'The login form did not complete. This Nuxeo allows anonymous access, so an ' +
       'unauthenticated run would search a fraction of the repository and report a ' +
       'smaller count as though it were the answer.',
+  );
+
+  // The reference channel: a guest-enabled Nuxeo answers a lost header as `Anonymous` with real,
+  // smaller results, which would then read as the right count (NXSAT-643).
+  const reference = await checkFetchIdentity(`${NUXEO.replace(/\/nuxeo$/, '')}${ME_PATH}`, AUTH, USER);
+  h.requirePrecondition(
+    `the REST reference at ${NUXEO} answers as ${USER}`,
+    reference.ok,
+    `${reference.problem}. Set NUXEO_URL to the Nuxeo the app is served against.`,
   );
 
   // Pick a term the index already knows about, rather than creating content and
@@ -235,7 +253,7 @@ export default async function run(page, h) {
   await h.screenshot('search-page-initial');
 
   // -------------------------------------------------------------------------
-  h.step('The gap Phase 3 recorded: a full-text term returns real Nuxeo documents');
+  await h.step('The gap Phase 3 recorded: a full-text term returns real Nuxeo documents');
 
   await search(page, term);
   const titles = await resultTitles(page);
@@ -266,7 +284,7 @@ export default async function run(page, h) {
   await h.screenshot('search-results-real-documents');
 
   // -------------------------------------------------------------------------
-  h.step('The same query twice returns the same count (negative check)');
+  await h.step('The same query twice returns the same count (negative check)');
 
   const first = (await countText(page)).trim();
   await search(page, term);
@@ -279,7 +297,7 @@ export default async function run(page, h) {
   );
 
   // -------------------------------------------------------------------------
-  h.step('A term with no matches renders the empty state, not an empty page');
+  await h.step('A term with no matches renders the empty state, not an empty page');
 
   await search(page, 'zzznomatchzzz' + Date.now());
   const emptyTitles = await resultTitles(page);
@@ -297,7 +315,7 @@ export default async function run(page, h) {
   await h.screenshot('search-empty-state');
 
   // -------------------------------------------------------------------------
-  h.step('Paging drives the port, which was only ever unit-tested');
+  await h.step('Paging drives the port, which was only ever unit-tested');
 
   /**
    * Paged against the **unfiltered** result set, not the search term.
@@ -356,7 +374,7 @@ export default async function run(page, h) {
   }
 
   // -------------------------------------------------------------------------
-  h.step('Health');
+  await h.step('Health');
   h.note(
     'Not covered here: the four upstream search filter components (created-date, ' +
       'document-category, file-type, saved searches) remain unadopted, and the HXQL ' +

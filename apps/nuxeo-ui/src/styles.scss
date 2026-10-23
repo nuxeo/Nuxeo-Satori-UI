@@ -1,13 +1,11 @@
 @use '@angular/material' as mat;
 @use '@hylandsoftware/satori-ui/theme' as sat;
-@use './styles/hxp-theme' as hxp;
 @use './app/document-detail/document-detail-header-toolbar-focus';
 
 html[data-app-theme='nuxeo'],
 html:not([data-app-theme]) {
   color-scheme: light dark;
   @include sat.theme;
-  @include hxp.tokens-from-satori;
 }
 
 html[data-app-theme='dark'] {
@@ -21,7 +19,6 @@ html[data-app-theme='dark'] {
       ),
     )
   );
-  @include hxp.tokens-from-satori;
 }
 
 html[data-app-theme='kawaii'] {
@@ -35,7 +32,6 @@ html[data-app-theme='kawaii'] {
       ),
     )
   );
-  @include hxp.tokens-from-satori;
 }
 
 html[data-app-theme='light'] {
@@ -49,7 +45,6 @@ html[data-app-theme='light'] {
       ),
     )
   );
-  @include hxp.tokens-from-satori;
 }
 
 html,

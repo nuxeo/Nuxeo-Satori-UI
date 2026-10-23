@@ -1,0 +1,74 @@
+// The panel's background, which the list's covers must match.
+$panel-background: var(--mat-sys-surface-container-lowest);
+$scroll-cue: color-mix(in srgb, var(--mat-sys-on-surface) 22%, transparent);
+
+// Both children are positioned, so a box of its own would only be an empty row in the host's
+// layout — and a flex gap around nothing.
+:host {
+  display: contents;
+}
+
+.nxs-column-picker__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+
+.nxs-column-picker__panel {
+  position: absolute;
+  top: 43px;
+  right: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-height: 420px;
+  padding: 14px 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+  background: $panel-background;
+  box-shadow: var(--mat-sys-level3);
+}
+
+.nxs-column-picker__title {
+  margin: 0 0 10px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+}
+
+// A shadow along an edge says more columns lie past it, where an overlay scrollbar shows nothing
+// until the list is scrolled. Two covers in the panel's colour scroll with the columns (`local`)
+// and hide each shadow, which stays on the edge (`scroll`), once that end is reached.
+.nxs-column-picker__list {
+  flex: 1;
+  overflow-y: auto;
+  margin-bottom: 2px;
+  background:
+    linear-gradient($panel-background 30%, transparent) top / 100% 32px no-repeat local,
+    linear-gradient(transparent, $panel-background 70%) bottom / 100% 32px no-repeat local,
+    radial-gradient(farthest-side at 50% 0, $scroll-cue, transparent) top / 100% 12px no-repeat
+      scroll,
+    radial-gradient(farthest-side at 50% 100%, $scroll-cue, transparent) bottom / 100% 12px
+      no-repeat scroll,
+    $panel-background;
+}
+
+.nxs-column-picker__option {
+  display: flex;
+  margin-bottom: 6px;
+}
+
+.nxs-column-picker__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--mat-sys-outline-variant);
+}

@@ -1,7 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { AppExtensionsService } from './app-extensions.service';
 import { ExtensionRuleContextService } from './extension-rule-context.service';
@@ -83,40 +83,49 @@ describe('APP_NAV_ITEMS — Administration gating', () => {
     expect(navIds()).toEqual(enabledPackagedIds());
   });
 
-  it('does not render the legacy Browse entry, leaving only the adf-hx one', () => {
-    // Two entries reading "Browse" was the bug. `disabled` on the descriptor is
-    // what removes it, so this fails the moment that flag is dropped.
-    const ids = navIds();
-    expect(ids).not.toContain('app.navbar.browse');
-    expect(ids).toContain('app.navbar.browseAdfHx');
+  it('renders Browse exactly once, at /browse', () => {
+    // Two entries reading "Browse" — one disabled, one on the adf-hx route — was the shape
+    // until the adf-hx route was retired. Matched by label and by path, so an entry that
+    // reads "Browse" anywhere else, or reaches any `/browse-*` route, also fails this.
+    const browse = TestBed.inject(APP_NAV_ITEMS)().filter(
+      (item) => item.label === 'Browse' || item.path.startsWith('/browse'),
+    );
+    expect(browse.map((item) => [item.id, item.path, item.labelKey])).toEqual([
+      ['app.navbar.browse', '/browse', 'nav.item.browse'],
+    ]);
   });
 
-  it('keeps the disabled descriptor in the packaged list, which the shell reads for titles', () => {
-    // The reason `app.navbar.browse` is `disabled` rather than deleted: the shell's
-    // `pageTitle` matches the route against the **unfiltered** `PACKAGED_NAV_ITEMS`, so
-    // deleting the entry would leave `/#/browse` — still routable, still linked from the
-    // dashboard — headed with the product name instead of "Browse".
-    //
-    // This asserts the descriptor's presence, not the rendered heading; `pageTitle` lives
-    // in `AppShellComponent` and has no spec of its own.
-    const browse = PACKAGED_NAV_ITEMS.find((item) => item.id === 'app.navbar.browse');
-    expect(browse?.path).toBe('/browse');
-    expect(browse?.label).toBe('Browse');
+  it('registers no entry for the retired adf-hx route', () => {
+    const ids = PACKAGED_NAV_ITEMS.map((item) => item.id);
+    expect(ids).not.toContain('app.navbar.browseAdfHx');
+    expect(PACKAGED_NAV_ITEMS.filter((item) => item.path.startsWith('/browse-'))).toEqual([]);
+    expect(PACKAGED_NAV_ITEMS.find((item) => item.id === 'app.navbar.browse')?.disabled).toBe(
+      undefined,
+    );
   });
 
-  it('lets a manifest restore the legacy Browse entry by clearing disabled', () => {
-    // `docs/extension-reference.md` tells a customer who wants both browse
-    // surfaces to re-state the id as a slot addition, and says an `overrides`
-    // entry will not do it. Both halves of that promise are asserted here.
-    manifest.set({ extensionLayers: [{ overrides: { 'app.navbar.browse': { visible: true } } }] });
-    expect(navIds()).not.toContain('app.navbar.browse');
-
-    manifest.set({ extensionLayers: [{ slots: { navbar: [{ id: 'app.navbar.browse' }] } }] });
-    expect(navIds()).not.toContain('app.navbar.browse');
-
+  it('ignores an override still written against the retired app.navbar.browseAdfHx', () => {
+    // `docs/extension-reference.md` used this exact override as its worked example, so
+    // manifests carrying it exist. It must address nothing — least of all Browse.
     manifest.set({
-      extensionLayers: [{ slots: { navbar: [{ id: 'app.navbar.browse', disabled: false }] } }],
+      extensionLayers: [{ overrides: { 'app.navbar.browseAdfHx': { visible: false } } }],
     });
+    expect(navIds()).toEqual(
+      enabledPackagedIds().filter((id) => id !== 'app.navbar.administration'),
+    );
     expect(navIds()).toContain('app.navbar.browse');
+  });
+
+  it('adds a navbar slot entry naming the retired ID as an entry of its own', () => {
+    // With no packaged descriptor left to patch, a manifest's `{ id, order }` is an addition.
+    // The CHANGELOG tells a customer to delete such an entry for exactly this reason, rather
+    // than calling it inert as it does an `overrides` key.
+    manifest.set({
+      extensionLayers: [{ slots: { navbar: [{ id: 'app.navbar.browseAdfHx', order: 5 }] } }],
+    });
+    const added = TestBed.inject(APP_NAV_ITEMS)().find(
+      (item) => item.id === 'app.navbar.browseAdfHx',
+    );
+    expect(added).toEqual({ id: 'app.navbar.browseAdfHx', order: 5 });
   });
 });

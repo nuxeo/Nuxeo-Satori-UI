@@ -6,7 +6,7 @@ import {
   APP_CONFIG_FORMAT,
   AppConfigService,
   PRESET_STORAGE_KEY,
-} from '@nuxeo-satori/platform/app-config';
+} from '@nuxeo/satori-platform/app-config';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';

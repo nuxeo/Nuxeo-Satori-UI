@@ -1,10 +1,13 @@
 name: SonarCloud Analysis
 
 on:
+  # PRs into an `integration/<ticket>` branch get the same analysis as PRs into `main`, and the
+  # push trigger gives the integration branch an analysis of its own. SonarCloud keeps that
+  # analysis as a long-lived branch only if the project's long-lived branch pattern matches it.
   pull_request:
-    branches: [main]
+    branches: [main, 'integration/**']
   push:
-    branches: [main, 'feature/**', 'fix/**']
+    branches: [main, 'feature/**', 'fix/**', 'integration/**']
   workflow_dispatch:
 
 concurrency:
@@ -302,3 +305,12 @@ jobs:
               // should be red; the quality gate itself stays non-blocking in the step above.
               core.setFailed(`Failed to post SonarCloud results to PR: ${error.message}`);
             }
+
+      # The coverage gate: the per-project ratchet against .ai/state/coverage-baseline.json plus
+      # the hard floors in FLOORS (90% for satori-components, NXSAT-308). It reads the
+      # coverage-final.json files the Vitest step above wrote, so the tests run once.
+      #
+      # Last on purpose. It was in no workflow and not in `beta:gate`, so nothing enforced it; a red
+      # gate placed earlier would also skip the Sonar scan and the PR comment above it.
+      - name: Coverage gate (ratchet and floors)
+        run: npm run beta:coverage

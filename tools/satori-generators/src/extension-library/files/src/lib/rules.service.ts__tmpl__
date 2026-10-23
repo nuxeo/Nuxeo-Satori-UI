@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 
-import type { ExtensionRuleContext } from '@nuxeo-satori/platform/extensions';
+import type { ExtensionRuleContext } from '@nuxeo/satori-platform/extensions';
 
 /**
  * The logic behind this library's rule and action.

@@ -1,0 +1,153 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ErrorStateStories from './error-state.stories';
+
+<Meta of={ErrorStateStories} name="Overview" />
+
+# Error state
+
+The error state is what a folder listing, a document page or a set of search results shows when it
+failed to load. It says what failed, explains why in words the user can act on, and offers Retry
+when trying again can help. Use it in place of the content the user was waiting for. For a list that
+loaded and has nothing in it, use the empty state; for an action that failed, such as a save, use an
+error toast.
+
+## Key features
+
+- **Four variants, by status.** 401 says the session has ended, 403 that the user has no access, 404
+  that the item is not there, and 500 that something went wrong. `nxsErrorStatus(error)` picks one
+  from a failed request: 401, 403 and 404 stay as they are, and anything else — a 5xx, a network
+  failure, an error with no status — is 500.
+- **Your heading, its explanation.** Pass what failed ("Failed to load folder contents.") as
+  `heading`; the variant explains it underneath. With no heading, the variant's own shows.
+- **Retry only where it helps.** With `retryable`, a Retry button appears for a 500 and emits
+  `retry`. A 401, 403 or 404 never shows it, because asking again gets the same answer.
+- **Your other actions.** Anything else you offer, such as **Go Back**, is placed inside the
+  component as content.
+- **A real heading.** The heading is a native `<h1>` to `<h6>`, at the level you choose: `1` when it
+  replaces the whole page.
+- **Theme colours.** The text takes the theme's `on-surface` colours, not its error red, so it reads
+  like the rest of the page; only the icon takes the error colour.
+- **Replaceable by ID.** It is registered as `nxs.primitives.errorState`, so your own error state can
+  take its place on every screen that renders the ID.
+
+## Demo showcase
+
+The listing the server failed to answer. Press **Retry**: the Actions panel records `retry`.
+
+<Canvas of={ErrorStateStories.ServerErrorWithRetry} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsErrorStateComponent,
+  nxsErrorStatus,
+  type NxsErrorStatus,
+} from '@nuxeo/satori-platform/components';
+
+readonly error = signal<string | null>(null);
+readonly errorStatus = signal<NxsErrorStatus>(500);
+
+load(): void {
+  this.claims
+    .list()
+    .pipe(takeUntilDestroyed(this.destroyRef))
+    .subscribe({
+      next: (rows) => this.rows.set(rows),
+      error: (err: unknown) => {
+        this.errorStatus.set(nxsErrorStatus(err));
+        this.error.set(this.translate.instant('acme.claims.failed-to-load'));
+      },
+    });
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
+/>
+
+export const usageHtml = `@if (error(); as message) {
+  <nxs-error-state [status]="errorStatus()" [heading]="message" retryable (retry)="load()" />
+}`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`status` is `401`, `403`, `404` or `500` (the default). `heading` is text you have already
+translated; leave it blank to show the variant's own. `headingLevel` defaults to `2`. `retryable` is
+a bare attribute, and `retry` is emitted when Retry is pressed.
+
+The error state needs no providers. Its variants' headings, explanations and Retry are translated
+with ngx-translate, under `satori-components.error-state.*`; `providePlatformEnglishFallback()`
+supplies the English when your catalogue does not.
+
+Place it in a template by its selector, or render the ID `nxs.primitives.errorState`
+(`NXS_PRIMITIVE_IDS.errorState`) through `lib-extension-outlet` with the same inputs. The outlet binds
+no outputs, so a host rendering the ID passes `retryHandler`, a function called when Retry is pressed.
+A replacement you register under the ID implements `NxsErrorStateInputs`. Satori's own error states
+arrive with Satori 1.0, which needs a newer Angular than this package supports, so until then the ID
+renders this component with or without `provideNxsSatoriComponents()`.
+
+## Where its data comes from
+
+The error state loads nothing. Your component passes the status of the request that failed, through
+`nxsErrorStatus()`, which reads the `status` of Angular's `HttpErrorResponse` — the status Nuxeo
+answered with, or `0` when the request never reached it. Nuxeo decides whether the user may see an
+item; the error state only reports its answer. The heading is yours; the explanations and Retry come
+from the application's catalogue.
+
+**In these stories** no request is made: each sets its status directly, and the text comes from the
+application's English catalogue.
+
+## Examples
+
+### A network failure
+
+The request never reached the server (status `0`), so `nxsErrorStatus` gives the 500 variant and
+Retry.
+
+<Canvas of={ErrorStateStories.NetworkFailure} />
+
+### No access
+
+A 403. `retryable` is set, as a listing sets it, and Retry still does not show.
+
+<Canvas of={ErrorStateStories.Forbidden} />
+
+### In place of a page
+
+A document that does not exist (404). The heading is the page's `<h1>`, and **Go Back** is placed
+inside.
+
+<Canvas of={ErrorStateStories.NotFoundAsThePageHeading} />
+
+### The variant's own heading
+
+A 401 with no heading of the screen's own.
+
+<Canvas of={ErrorStateStories.SessionEnded} />
+
+### By registered ID
+
+Rendered through `lib-extension-outlet` by its ID. Press Retry: the `retryHandler` the host passes is
+called.
+
+<Canvas of={ErrorStateStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Alert role.** The component has the `alert` role, so a screen reader announces it as soon as it
+  appears: it replaces content the user was waiting for.
+- **Heading.** The heading is a native heading element at `headingLevel`. Use `1` when the error
+  state is the whole page, otherwise one below the heading of the section it replaces.
+- **Icon.** The icon is decorative and hidden from assistive technology; the heading and explanation
+  say what happened.
+- **Keyboard.** The component itself takes no focus. Retry, and any button you place inside it, are
+  reached with **Tab** and pressed with **Enter** or **Space**.
+- **Contrast.** The heading and explanation use the theme's `on-surface` colours rather than the
+  error colour, so their contrast is the theme's body-text contrast, not that of a light red on
+  white.

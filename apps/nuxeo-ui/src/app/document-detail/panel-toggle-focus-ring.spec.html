@@ -1,11 +1,11 @@
 <!--
   Fixture for panel-toggle-focus-ring.spec.ts. Mirrors document-detail.html: `.tabs-header-row`
-  with `.detail-tabs` (Material tab header) and the overlay `.panel-toggle-btn`.
+  with `nxs-tabs.detail-tabs` (the Material tab header) and the overlay `.panel-toggle-btn`.
 -->
 <div class="tabs-header-row panel-toggle-focus-ring-host">
-  <mat-tab-group class="detail-tabs">
-    <mat-tab [label]="'app.tabs.view' | translate">Tab body</mat-tab>
-  </mat-tab-group>
+  <nxs-tabs class="detail-tabs" [tabs]="tabs">
+    <ng-template nxsTabBody>Tab body</ng-template>
+  </nxs-tabs>
   <button
     type="button"
     mat-icon-button
@@ -13,8 +13,6 @@
     [matTooltip]="detailsPanelToggleLabelKey() | translate"
     [attr.aria-label]="detailsPanelToggleLabelKey() | translate"
   >
-    <mat-icon aria-hidden="true">{{
-      propertiesPanelOpen() ? 'info' : 'info_outline'
-    }}</mat-icon>
+    <mat-icon aria-hidden="true">{{ propertiesPanelOpen() ? 'info' : 'info_outline' }}</mat-icon>
   </button>
 </div>

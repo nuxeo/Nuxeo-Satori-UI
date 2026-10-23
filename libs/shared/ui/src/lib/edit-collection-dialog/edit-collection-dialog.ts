@@ -11,7 +11,6 @@ import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatChipsModule } from '@angular/material/chips';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { forkJoin } from 'rxjs';
 
 import {
@@ -29,9 +28,10 @@ import {
   l10nEntryLabel,
   PERMISSION_DENIED_KEY,
   isPermissionDeniedError,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 import { DateMaskPipe } from '../date-adapter/date-mask.pipe';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
@@ -55,9 +55,8 @@ export interface EditCollectionDialogData {
     MatProgressSpinnerModule,
     MatChipsModule,
     MatIconModule,
-    MatSnackBarModule,
   ],
-  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './edit-collection-dialog.html',
   styleUrl: './edit-collection-dialog.scss',
 })
@@ -68,9 +67,9 @@ export class EditCollectionDialogComponent implements OnInit {
   private readonly collectionService = inject(CollectionService);
   private readonly directoryService = inject(DirectoryService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly toast = inject(NxsToastService);
   private readonly dateAdapter = inject<DateAdapter<Date>>(DateAdapter);
   private readonly dateFormats = inject(MAT_DATE_FORMATS);
-  private readonly snackBar = inject(MatSnackBar);
 
   readonly l10nEntryLabel = l10nEntryLabel;
   protected readonly directoryPickerLabel = directoryPickerLabel;
@@ -130,10 +129,8 @@ export class EditCollectionDialogComponent implements OnInit {
           this.coverageEntries.set(coverage);
         },
         error: () => {
-          this.snackBar.open(
+          this.toast.error(
             this.translate.instant('shared-ui.message.failed-to-load-vocabulary-options'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
         },
       });
@@ -267,12 +264,10 @@ export class EditCollectionDialogComponent implements OnInit {
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
+          this.toast.error(
             isPermissionDeniedError(err)
               ? this.translate.instant(PERMISSION_DENIED_KEY)
               : this.translate.instant('shared-ui.message.failed-to-update-collection'),
-            this.translate.instant('common.ok'),
-            { duration: 4000 },
           );
         },
       });

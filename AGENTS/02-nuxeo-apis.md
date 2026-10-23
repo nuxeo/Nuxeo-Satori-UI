@@ -26,7 +26,8 @@ Pass via request headers to augment the response:
 
 ```
 enrichers-document: thumbnail          → adds @rendition/thumbnail URL
-enrichers-document: permissions        → adds @permissions array
+enrichers-document: permissions        → adds @permissions array: every permission the server defines that the caller holds
+enrichers-document: userVisiblePermissions → the server's permission list for the document type (permissionsVisibility)
 enrichers-document: subtypes           → adds @subtypes for allowed child types
 enrichers-document: hasContent         → adds @hasContent boolean
 enrichers-document: collections        → adds @collections membership
@@ -112,7 +113,8 @@ Automation operations use `POST /nuxeo/api/v1/automation/:operationId` with body
 | Lock document           | `Document.Lock`                         | —                                                                                                                               |
 | Unlock document         | `Document.Unlock`                       | —                                                                                                                               |
 | Add permission          | `Document.AddPermission`                | `username`, `permission`, `notify`, `comment`, `begin`, `end`, `creator` (logged-in user — populates "Granted by")              |
-| Replace permission      | `Document.ReplacePermission`            | `id`, `username`, `permission`, `notify`, `comment`, `begin`, `end`                                                             |
+| Replace permission      | `Document.ReplacePermission`            | `id`, `username`, `permission`, `notify`, `comment`, `begin`, `end` — an unknown `id` is a 200 no-op; omitted dates are cleared |
+| Remove permission       | `Document.RemovePermission`             | `id` removes one ACE; `user` removes **every** ACE of that principal (an unknown `id` is a 200 no-op)                           |
 | Add permission (legacy) | `Document.AddACE`                       | `user`, `permission` — client may pass `notify`/`comment`/`begin`/`end` but Nuxeo ignores them; prefer `Document.AddPermission` |
 | Block inheritance       | `Document.BlockPermissionInheritance`   | —                                                                                                                               |
 | Unblock inheritance     | `Document.UnblockPermissionInheritance` | —                                                                                                                               |

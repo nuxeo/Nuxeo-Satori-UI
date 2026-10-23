@@ -1,4 +1,4 @@
-import type { NavItemDescriptor } from '@nuxeo-satori/platform/extensions';
+import type { NavItemDescriptor } from '@nuxeo/satori-platform/extensions';
 import type { SatNavigationItemWithIcon } from '@hylandsoftware/satori-ui/platform-nav';
 
 /**

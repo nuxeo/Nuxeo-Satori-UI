@@ -16,6 +16,8 @@ export interface NuxeoDocument {
   isCheckedOut?: boolean;
   /** True on a version snapshot, false on the live document. */
   isVersion?: boolean;
+  /** True on a proxy — a published copy or a live proxy — rather than the document itself. */
+  isProxy?: boolean;
   /**
    * The **live** document this version was cut from.
    *
@@ -31,6 +33,12 @@ export interface NuxeoDocument {
     acls?: NuxeoAcl[];
     favorites?: { isFavorite: boolean };
     subscribedNotifications?: string[];
+    /**
+     * Ancestor chain from the `breadcrumb` enricher, root-most first and ending at this
+     * document. Each entry carries `title`, which is what a trail renders; the enricher sends
+     * no `properties`, so asking for it costs one small object per ancestor and no extra request.
+     */
+    breadcrumb?: { entries?: NuxeoDocument[] };
     [key: string]: unknown;
   };
 }

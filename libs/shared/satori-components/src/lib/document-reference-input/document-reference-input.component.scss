@@ -1,0 +1,11 @@
+@use '../pickers/picker';
+
+:host {
+  @include picker.field;
+}
+
+@include picker.options;
+
+.nxs-document-reference-input__icon {
+  margin-inline-end: 12px;
+}

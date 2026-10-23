@@ -22,7 +22,7 @@ only as a new version of this package, built from reviewed source.
 | `package/package.xml`                      | Package name, version, and the dependency on `nuxeo-agentic-ui`          |
 | `schema/`                                  | JSON schemas your editor uses to check the fragments as you type         |
 
-The keys each fragment accepts are documented in `@nuxeo-satori/platform`'s
+The keys each fragment accepts are documented in `@nuxeo/satori-platform`'s
 `extension-reference.md`.
 
 ## Change, build, install

@@ -9,7 +9,7 @@ import {
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
-import { DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo-satori/platform/app-config';
+import { DEFAULT_APP_BOOTSTRAP_CONFIG } from '@nuxeo/satori-platform/app-config';
 import { de, enGB, enUS, fr, frCA, zhCN } from 'date-fns/locale';
 import { describe, expect, it, vi } from 'vitest';
 

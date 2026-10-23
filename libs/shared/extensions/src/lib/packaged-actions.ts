@@ -222,7 +222,9 @@ export const PACKAGED_DOCUMENT_TOOLBAR_ACTIONS: readonly ExtensionActionDescript
     icon: 'publish',
     order: 70,
     overflow: true,
-    rule: every('app.rules.isNotTrashed', 'app.rules.hasVersion', 'app.rules.canWrite'),
+    // Web UI's `isPublishable`, which offers a version too: `canWrite` would read the live
+    // document's `Write` off a version's enricher, and `hasVersion` is not Web UI's condition.
+    rule: every('app.rules.isNotTrashed', 'app.rules.canPublish'),
   },
   {
     id: 'app.toolbar.subscribe',
@@ -324,5 +326,65 @@ export const PACKAGED_BROWSE_CONTEXT_MENU: readonly ExtensionActionDescriptor[] 
     label: 'Export',
     icon: 'ios_share',
     order: 30,
+  },
+];
+
+/**
+ * The menu on each row of browse's document list, acting on that row's document.
+ *
+ * Each row resolves this slot with the row's document as the focused one, so `rule` and
+ * `enabledRule` read that document's own permissions and properties, not the folder's. Rename
+ * changes `dc:title`, as Web UI's title edit does; Copy to and Move to choose a destination folder
+ * and run `Document.Copy` and `Document.Move`; Delete moves the document to the trash.
+ *
+ * As everywhere, these rules decide what the interface offers. Nuxeo checks the permission on the
+ * request itself.
+ */
+export const PACKAGED_ROW_ACTIONS: readonly ExtensionActionDescriptor[] = [
+  {
+    id: 'app.rowActions.download',
+    labelKey: 'action.row-actions-download',
+    label: 'Download',
+    icon: 'download',
+    order: 10,
+    rule: every('app.rules.isNotTrashed', 'app.rules.hasFile'),
+  },
+  {
+    id: 'app.rowActions.rename',
+    labelKey: 'action.row-actions-rename',
+    label: 'Rename',
+    icon: 'drive_file_rename_outline',
+    order: 20,
+    // Not `Immutable`, as Edit: a version's or publication's `permissions` still list `Write`
+    // while the server refuses to change its title.
+    rule: every(
+      'app.rules.isNotTrashed',
+      'app.rules.canWrite',
+      not({ type: 'app.rules.hasFacet', parameters: ['Immutable'] }),
+    ),
+  },
+  {
+    id: 'app.rowActions.copyTo',
+    labelKey: 'action.row-actions-copy-to',
+    label: 'Copy to…',
+    icon: 'file_copy',
+    order: 30,
+    rule: 'app.rules.isNotTrashed',
+  },
+  {
+    id: 'app.rowActions.moveTo',
+    labelKey: 'action.row-actions-move-to',
+    label: 'Move to…',
+    icon: 'drive_file_move',
+    order: 40,
+    rule: every('app.rules.isNotTrashed', 'app.rules.canRemove'),
+  },
+  {
+    id: 'app.rowActions.delete',
+    labelKey: 'action.row-actions-delete',
+    label: 'Delete',
+    icon: 'delete',
+    order: 50,
+    rule: every('app.rules.isNotTrashed', 'app.rules.canRemove'),
   },
 ];

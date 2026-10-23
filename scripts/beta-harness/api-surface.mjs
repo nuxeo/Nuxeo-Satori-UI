@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Public API surface gate for `@nuxeo-satori/platform`.
+ * Public API surface gate for `@nuxeo/satori-platform`.
  *
  * ## Why this exists
  *

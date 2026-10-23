@@ -11,6 +11,10 @@
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
     "sourceMap": false,
+    // So `src/fixtures.ts` can import the identity guard both harness sides share
+    // (`scripts/beta-harness/identity-guard.mjs`, NXSAT-643) instead of keeping a TypeScript copy
+    // of a security check. Its JSDoc types are enforced where it is `checkJs`'d: `a11y/`.
+    "allowJs": true,
     // `@playwright/test` is installed with `--no-save`, so on a machine that has not run
     // that install its types are absent and every spec would report TS2307. That is an
     // environment fact, not a code defect, and failing the repo-wide typecheck on it would

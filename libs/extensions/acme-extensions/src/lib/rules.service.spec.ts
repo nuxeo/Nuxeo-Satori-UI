@@ -1,8 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 
-import { EMPTY_EXTENSION_RULE_CONTEXT } from '@nuxeo-satori/platform/extensions';
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { EMPTY_EXTENSION_RULE_CONTEXT } from '@nuxeo/satori-platform/extensions';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { AcmeRulesService } from './rules.service';
 

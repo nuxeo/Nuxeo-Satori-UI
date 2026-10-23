@@ -1,0 +1,136 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as ActionMenuStories from './action-menu.stories';
+
+<Meta of={ActionMenuStories} name="Overview" />
+
+# Action menu
+
+The action menu is an icon button, three dots by default, that opens a list of actions: browse's
+"More actions" menu in a folder's header, with Share, Notify Me and Export. Use it where a screen has
+more actions than it has room to show as buttons, and in particular to render an action slot whose
+entries a manifest can add, hide or disable. It shows the entries you give it and tells you which one
+was chosen; your component runs it.
+
+## Key features
+
+- **Entries you resolve.** Each entry is an `NxsMenuAction`: the action's registered ID, its label
+  already translated, an optional icon, and whether it is disabled.
+- **Reports, does not run.** Choosing an entry emits `selected` with that entry. Your component looks
+  up the action behind the ID and runs it, so the library needs no extension registry of its own.
+- **Disabled, not hidden.** A disabled entry is shown, cannot be chosen, and the arrow keys pass over
+  it. Leave an entry out of the list to hide it.
+- **No empty menu.** With no entries, for example when a manifest hides every one, no button renders,
+  rather than one that opens an empty menu.
+- **Addressable entries.** Each entry carries its ID as `data-action-id`, so a test can find "Export"
+  whatever language the page is in.
+
+## Demo showcase
+
+Open the menu and choose an entry: the Actions panel records `selected` with it.
+
+<Canvas of={ActionMenuStories.BrowseHeader} />
+
+## Usage
+
+export const usageTs = `import { NxsActionMenuComponent, type NxsMenuAction } from '@nuxeo/satori-platform/components';
+import {
+  EXTENSION_SLOTS,
+  descriptorLabel,
+  type ExtensionActionDescriptor,
+} from '@nuxeo/satori-platform/extensions';
+
+readonly actions = computed<readonly ExtensionActionDescriptor[]>(() =>
+  this.extensions.resolve<ExtensionActionDescriptor>(
+    EXTENSION_SLOTS.contextMenu,
+    this.ruleContext.context(),
+  ),
+);
+
+readonly entries = computed<readonly NxsMenuAction[]>(() =>
+  this.actions().map((action) => ({
+    id: action.id,
+    label: descriptorLabel(action, (key) => this.translate.instant(key)),
+    icon: action.icon,
+    disabled: !this.extensions.evaluateRule(action.enabledRule, this.ruleContext.context()),
+  })),
+);
+
+run(entry: NxsMenuAction): void {
+  const action = this.actions().find((candidate) => candidate.id === entry.id);
+  if (action) this.registry.execute(action, this.ruleContext.context());
+}`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
+/>
+
+export const usageHtml = `<nxs-action-menu
+  [actions]="entries()"
+  [label]="'acme.claims.more-actions' | translate"
+  (selected)="run($event)"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`actions` and `label` are required. `label` is the button's accessible name and tooltip, already
+translated. A blank one, or one that is only whitespace, is a mistake in the calling code; the
+button is then named "More actions" rather than left with no name, and the entries stay reachable.
+`icon` is the button's Material icon, `more_vert` by default. `selected` carries the entry chosen,
+never a disabled one.
+
+The action menu needs no providers. Every word it shows is one you pass, except that fallback name,
+which is translated with ngx-translate under `satori-components.action-menu.more-actions`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not. It has no
+registered ID: place it in a template by its selector.
+
+## Where its data comes from
+
+The action menu reads nothing. Your component supplies the entries, usually from an action slot of
+the extension manifest: the slot's descriptors give the IDs, labels and icons, and each descriptor's
+`rule` and `enabledRule` decide whether an entry is listed and whether it can be chosen. Whatever the
+menu shows, Nuxeo still checks the request an action makes: hiding or disabling an entry is not a
+permission.
+
+**In these stories** the entries are a fixed list, browse's three for a folder the user does not
+follow, and choosing one only records it in the Actions panel.
+
+## Examples
+
+### A disabled entry
+
+Export is disabled: it is shown and cannot be chosen.
+
+<Canvas of={ActionMenuStories.WithADisabledEntry} />
+
+### Opened from the keyboard
+
+The **Opened from the keyboard** story in the sidebar opens the menu with **Enter** from the focused
+button, so the first entry has keyboard focus. It runs only on its own story page, because opening
+a menu here would move this page's focus.
+
+### Every entry hidden
+
+No entries: nothing renders.
+
+<Canvas of={ActionMenuStories.EveryEntryHidden} />
+
+## Accessibility
+
+- **A menu button.** The button is named by `label`, or "More actions" when `label` is blank, so
+  it is never an unnamed icon button. It says it opens a menu
+  (`aria-haspopup="menu"`, with `aria-expanded` while it is open). The entries are `menuitem`s in a
+  `menu`. Icons are hidden from assistive technology; each entry is named by its label.
+- **Keyboard.** **Tab** reaches the button, and **Enter** or **Space** opens the menu with focus on
+  the first entry. **Up** and **Down** move between entries, skipping disabled ones; **Home** and
+  **End** go to the first and last; typing a letter moves to the next entry that starts with it.
+  **Enter** or **Space** chooses an entry. **Escape** closes the menu and returns focus to the
+  button, and **Tab** closes it.
+- **Disabled entries.** A disabled entry is announced as unavailable and cannot be chosen.
+- **Tooltip.** The button's label also shows as a tooltip on hover and keyboard focus.

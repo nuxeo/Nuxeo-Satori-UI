@@ -1,0 +1,44 @@
+<label class="nxs-saved-search-select__label" [for]="inputId">{{
+  'satori-components.saved-search-select.label' | translate
+}}</label>
+<div class="nxs-saved-search-select__wrap">
+  <input
+    class="nxs-saved-search-select__input"
+    type="text"
+    [id]="inputId"
+    [placeholder]="'satori-components.saved-search-select.placeholder' | translate"
+    [value]="text()"
+    [matAutocomplete]="panel"
+    (focus)="load()"
+    (input)="onInput($any($event.target).value)"
+  />
+  <mat-icon class="nxs-saved-search-select__arrow" aria-hidden="true">arrow_drop_down</mat-icon>
+</div>
+<mat-autocomplete
+  #panel="matAutocomplete"
+  class="nxs-saved-search-select__panel"
+  [displayWith]="display"
+  (optionSelected)="choose($event.option.value)"
+  (closed)="restore()"
+>
+  @if (state() !== 'loaded') {
+    <mat-option disabled>{{
+      'satori-components.saved-search-select.loading' | translate
+    }}</mat-option>
+  } @else if (searches().length === 0) {
+    <mat-option disabled>{{ 'satori-components.saved-search-select.none' | translate }}</mat-option>
+  } @else {
+    @for (search of options(); track search.id) {
+      <mat-option
+        [value]="search.id"
+        [class.nxs-saved-search-select__current]="search.id === selectedId()"
+      >
+        <mat-icon aria-hidden="true">bookmark</mat-icon>{{ search.title }}
+      </mat-option>
+    } @empty {
+      <mat-option disabled>{{
+        'satori-components.saved-search-select.no-match' | translate
+      }}</mat-option>
+    }
+  }
+</mat-autocomplete>

@@ -1,17 +1,19 @@
-# `@nuxeo-satori/platform`
+# `@nuxeo/satori-platform`
 
 The customer-facing package. Installable via npm (once published), ships the Layer 0/1/2
 extensibility contract, the Nuxeo client, shared UI components, and bootstrap config.
 
 ## Entry points
 
-| Import specifier                      | What it is                                                |
-| ------------------------------------- | --------------------------------------------------------- |
-| `@nuxeo-satori/platform`              | Package metadata and entry point list                     |
-| `@nuxeo-satori/platform/extensions`   | Layer 1/2 — slots, rules, actions, component registration |
-| `@nuxeo-satori/platform/app-config`   | Layer 0 — bootstrap config and runtime manifest           |
-| `@nuxeo-satori/platform/nuxeo-client` | Nuxeo REST services and document models                   |
-| `@nuxeo-satori/platform/ui`           | Shared components and dialogs                             |
+| Import specifier                           | What it is                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------- |
+| `@nuxeo/satori-platform`                   | Package metadata and entry point list                                                 |
+| `@nuxeo/satori-platform/extensions`        | Layer 1/2 — slots, rules, actions, component registration                             |
+| `@nuxeo/satori-platform/app-config`        | Layer 0 — bootstrap config and runtime manifest                                       |
+| `@nuxeo/satori-platform/components`        | `nxs-` components, Material-backed, no Satori import                                  |
+| `@nuxeo/satori-platform/components-satori` | The same primitive IDs on Satori; needs the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo/satori-platform/nuxeo-client`      | Nuxeo REST services and document models                                               |
+| `@nuxeo/satori-platform/ui`                | Shared components and dialogs                                                         |
 
 Sub-entry points are deliberate: importing the extension contract does not drag the Nuxeo
 client or Angular Material in with it.
@@ -28,6 +30,8 @@ libs/platform/
     ng-package.json
   app-config/
     ng-package.json
+  components/
+    ng-package.json
   nuxeo-client/
     ng-package.json
   ui/
@@ -37,7 +41,7 @@ libs/platform/
 **The sources are not here.** Each secondary entry point's `ng-package.json` points its
 `entryFile` at the existing `libs/shared/*/src/index.ts` sources. ng-packagr accepts this
 — proven by probe before use — so the 200+ files in `libs/shared/{extensions, app-config,
-nuxeo-client, ui}` did not need to be moved.
+nuxeo-client, ui, satori-components}` did not need to be moved.
 
 ## Building
 
@@ -62,15 +66,15 @@ npm install /tmp/nuxeo-satori-platform-0.2.0.tgz
 Once installed:
 
 ```ts
-import { PLATFORM_ENTRY_POINTS } from '@nuxeo-satori/platform';
+import { PLATFORM_ENTRY_POINTS } from '@nuxeo/satori-platform';
 import {
   provideSatoriExtensions,
   EXTENSION_SLOTS,
   type SatoriExtensionContributions,
-} from '@nuxeo-satori/platform/extensions';
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { docTypeIcon } from '@nuxeo-satori/platform/nuxeo-client';
-import { ConfirmDialogComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { docTypeIcon } from '@nuxeo/satori-platform/nuxeo-client';
+import { ConfirmDialogComponent } from '@nuxeo/satori-platform/ui';
 
 const contributions: SatoriExtensionContributions = {
   slots: { [EXTENSION_SLOTS.toolbar]: [{ id: 'acme.export', order: 10 }] },
@@ -93,7 +97,7 @@ English copy, so it renders English rather than raw keys:
 
 ```ts
 import { provideTranslateService } from '@ngx-translate/core';
-import { providePlatformEnglishFallback } from '@nuxeo-satori/platform/ui';
+import { providePlatformEnglishFallback } from '@nuxeo/satori-platform/ui';
 
 provideTranslateService({ missingTranslationHandler: providePlatformEnglishFallback() });
 ```
@@ -123,13 +127,12 @@ Automated: `npm run beta:gate` includes it after `build`.
 **One versioned package** with sub-entry points, not four independent packages. The
 distribution model in [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md) promises
 "an npm version bump for the platform" — singular. Four packages make that four bumps and
-a cross-compatibility matrix. This shape also matches `@alfresco/adf-hx-content-services`,
-which this codebase already consumes.
+a cross-compatibility matrix.
 
 ## Publish readiness
 
 - [x] Builds to `dist/`
-- [x] All 5 entry points resolve through the exports map
+- [x] All 6 entry points resolve through the exports map
 - [x] Installable from tarball
 - [x] Typechecks from installed `.d.ts` (verified via probe, not assumed)
 - [x] API surface pinned and gated

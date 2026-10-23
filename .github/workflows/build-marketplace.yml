@@ -2,10 +2,12 @@ name: Build Marketplace Package
 
 on:
   # Build-only validation, so a PR that breaks the Maven package is caught before merge.
-  # Never publishes — see the `if` on `push-to-preprod`.
+  # Never publishes — see the `if` on `push-to-preprod`. PRs into an `integration/<ticket>`
+  # branch get the same validation as PRs into `main`.
   pull_request:
     branches:
       - main
+      - 'integration/**'
 
   # The only lane that can publish, and the only lane that runs for `main`. There is
   # deliberately no `push` trigger: every merge to `main` used to build and publish a

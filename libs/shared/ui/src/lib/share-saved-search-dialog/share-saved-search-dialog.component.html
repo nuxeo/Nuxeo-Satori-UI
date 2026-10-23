@@ -16,10 +16,10 @@
 <mat-dialog-content>
   @if (loading()) {
     <div class="loading-container">
-      <mat-spinner
+      <nxs-spinner
         diameter="40"
-        [attr.aria-label]="'shared-ui.share-saved-search-dialog.loading' | translate"
-      ></mat-spinner>
+        [label]="'shared-ui.share-saved-search-dialog.loading' | translate"
+      />
       <p>{{ 'shared-ui.share-saved-search-dialog.loading-permissions' | translate }}</p>
     </div>
   } @else {
@@ -76,6 +76,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.remove-permission' | translate
                     "
+                    [disabled]="saving() || !row.aceId"
                     (click)="removeRow(row.id)"
                   >
                     <mat-icon>delete_outline</mat-icon>
@@ -223,7 +224,7 @@
                     [attr.aria-label]="
                       'shared-ui.share-saved-search-dialog.remove-external-permission' | translate
                     "
-                    [disabled]="saving()"
+                    [disabled]="saving() || !row.aceId"
                     (click)="removeExternalPermission(row)"
                   >
                     <mat-icon>delete_outline</mat-icon>

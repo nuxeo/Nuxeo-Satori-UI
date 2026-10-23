@@ -1,6 +1,14 @@
+import { Component, input } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
-import { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import {
+  AppExtensionsService,
+  EXTENSION_SLOTS,
+  ExtensionComponentRegistry,
+  type ExtensionDocumentLayoutDescriptor,
+  type ExtensionRuleContext,
+} from '@nuxeo/satori-platform/extensions';
+import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { Observable, Subject, of } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
@@ -56,8 +64,24 @@ const layout = (overrides: Partial<ResolvedLayout> = {}): ResolvedLayout => ({
   ...overrides,
 });
 
+@Component({
+  selector: 'lib-acme-claim-panel',
+  standalone: true,
+  template: `<p class="acme-claim-panel">{{ heading() }}: {{ document()?.title }}</p>`,
+})
+class ClaimPanelComponent {
+  readonly document = input<NuxeoDocument | null>(null);
+  readonly heading = input('');
+}
+
 describe('DocumentLayoutComponent', () => {
   let fixture: ComponentFixture<DocumentLayoutComponent>;
+  let slotEntries: Record<string, ExtensionDocumentLayoutDescriptor[]>;
+  let resolve: ReturnType<
+    typeof vi.fn<
+      (slot: string, context?: ExtensionRuleContext) => ExtensionDocumentLayoutDescriptor[]
+    >
+  >;
   let layoutFor: ReturnType<
     typeof vi.fn<
       (
@@ -93,12 +117,17 @@ describe('DocumentLayoutComponent', () => {
 
   beforeEach(() => {
     layoutFor = vi.fn();
+    slotEntries = {};
+    resolve = vi.fn((slot: string) => slotEntries[slot] ?? []);
     vocabularyLabel = vi.fn((directory: string, id: string) =>
       of(LABELS[`${directory}/${id}`] ?? null),
     );
     TestBed.configureTestingModule({
       imports: [DocumentLayoutComponent],
-      providers: [{ provide: DocumentLayoutService, useValue: { layoutFor, vocabularyLabel } }],
+      providers: [
+        { provide: DocumentLayoutService, useValue: { layoutFor, vocabularyLabel } },
+        { provide: AppExtensionsService, useValue: { resolve } },
+      ],
     });
   });
 
@@ -303,5 +332,58 @@ describe('DocumentLayoutComponent', () => {
       ['claim_status', 'pending'],
       ['claim_status', 'approved'],
     ]);
+  });
+
+  describe('the documentMetadata slot', () => {
+    beforeEach(() => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        'acme.components.claimPanel': ClaimPanelComponent,
+      });
+    });
+
+    it('renders the entry its rule admits in place of the layout, given the document', async () => {
+      slotEntries[EXTENSION_SLOTS.documentMetadata] = [
+        { id: 'acme.documentMetadata.missing', componentId: 'acme.components.notBuilt', order: 1 },
+        {
+          id: 'acme.documentMetadata.claim',
+          componentId: 'acme.components.claimPanel',
+          inputs: { heading: 'Claim', document: null },
+        },
+      ];
+      await render(claimDocument());
+      expect(text('.acme-claim-panel')).toBe('Claim: Claim CLM-1');
+      expect(
+        host().querySelector('[data-layout-entry="acme.documentMetadata.claim"]'),
+      ).not.toBeNull();
+      expect(host().querySelector('.document-layout')).toBeNull();
+      expect(layoutFor).not.toHaveBeenCalled();
+      const [slot, context] = resolve.mock.calls.at(-1) ?? [];
+      expect(slot).toBe(EXTENSION_SLOTS.documentMetadata);
+      expect(context?.document?.uid).toBe('c1');
+    });
+
+    it('keeps the layout when no entry has a component this build registers', async () => {
+      slotEntries[EXTENSION_SLOTS.documentMetadata] = [
+        { id: 'acme.documentMetadata.claim', componentId: 'acme.components.notBuilt' },
+      ];
+      await render(claimDocument());
+      expect(host().querySelector('[data-section-id="claim"]')).not.toBeNull();
+    });
+
+    it("shows the layout when the entry's component fails to load", async () => {
+      TestBed.inject(ExtensionComponentRegistry).register({
+        'acme.components.brokenPanel': () => Promise.reject(new Error('chunk failed to load')),
+      });
+      slotEntries[EXTENSION_SLOTS.documentMetadata] = [
+        { id: 'acme.documentMetadata.claim', componentId: 'acme.components.brokenPanel' },
+      ];
+      await render(claimDocument());
+      await fixture.whenStable();
+      fixture.detectChanges();
+      expect(
+        host().querySelector('[data-layout-entry="acme.documentMetadata.claim"]'),
+      ).not.toBeNull();
+      expect(host().querySelector('[data-section-id="claim"]')).not.toBeNull();
+    });
   });
 });

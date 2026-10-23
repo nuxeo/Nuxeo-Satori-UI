@@ -122,8 +122,8 @@ back to the type's own name, camel case split, for a custom type — never a raw
 English text this change alters, and invisible in HTML text, which collapses whitespace anyway.
 
 **Deliberately left hard-coded**, each for a stated reason: CSV export header rows (a file format
-downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialogs,
-which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
+downstream tools key on); `Manage everything` / `Can collect` in the share-saved-search dialog's API
+mapping and its external-user dialog, which double as data values mapped back to API rights; `versionLabel: 'Current'`, which is also the
 publish dialog's form value; adf-hx port errors, which are diagnostics returned to the upstream
 library; product names (`Nuxeo Drive`, the Layer 0 branding defaults); and `apps/nuxeo-satori-template`
 (slice 11).
@@ -885,7 +885,7 @@ fails any source that is not.
   `libs/shared/extensions` reference **120 distinct keys** (`shared-ui.*`, `extensions.*`) that exist
   only in `apps/nuxeo-ui/public/i18n/en.json`. Neither library ships an `i18n/` directory and
   `libs/platform/ng-package.json` packages no catalogue, so someone installing
-  `@nuxeo-satori/platform/ui` gets templates asking for keys nothing supplies.
+  `@nuxeo/satori-platform/ui` gets templates asking for keys nothing supplies.
 
   Adding `@ngx-translate/core` as a peer dependency made the pipe resolvable; it did not make the
   STRINGS available, and those are two different problems that look like one.
@@ -896,7 +896,7 @@ fails any source that is not.
   required per-library catalogues, so the requirement is not new, only unmet.
 
   **Partly closed, 29 Sep 2026: English travels with the package.** `PLATFORM_EN_TRANSLATIONS` in
-  `@nuxeo-satori/platform/ui` is the English for the 299 keys the package's entry points reference,
+  `@nuxeo/satori-platform/ui` is the English for the 299 keys the package's entry points reference,
   generated from `en.json` by `tools/i18n/platform-english.mjs`. A host opts in with
   `providePlatformEnglishFallback()`, a missing-translation handler that answers only keys its own
   catalogues lack and can hand anything else to the host's existing handler. `nuxeo-ui` does not opt

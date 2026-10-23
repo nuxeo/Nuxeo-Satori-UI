@@ -238,7 +238,7 @@ watched fail on purpose.
 
 ### Phase 4: the shipped package
 
-`@nuxeo-satori/platform` builds with `@nx/angular:package` — one publishable library with
+`@nuxeo/satori-platform` builds with `@nx/angular:package` — one publishable library with
 four secondary entry points, `./app-config`, `./extensions`, `./nuxeo-client` and `./ui`,
 pointing at the existing shared library sources. A 347 kB tarball of 25 files: FESM
 bundles, rolled-up declarations, the customer `AGENTS.md`, the extension reference, and the
@@ -472,6 +472,27 @@ Raised deliberately and recorded here rather than discovered in CI. The panels s
 1.2 MB chunk — verified by reading the built bundle — which is the root-injector consequence
 above, not a new boundary break.
 
+**`maximumError` was raised a third time, 4.0 → 4.25 MB (2026-10-14, NXSAT-308 wave 3).**
+Combining the four wave-3 batches took the initial bundle to **4.07 MB**; each batch on its own,
+and the three without B2, built at 3.91 MB. The cause was measured, and it is not adf-hx: the app
+imports `@nuxeo/satori-platform/components` eagerly — `provideNxsComponents()` in `app.config.ts`,
+and the spinner, toast and thumbnail in `libs/shared/ui` — and esbuild assigns a module to a chunk
+by the import edges that reach it. So every `nxs-` component a lazy route uses sits in a 492 kB
+chunk that `main` imports. Declaring the library's sources free of side effects, as the published
+package already does, recovered only 40 kB. The fix is the bridge's: a secondary entry point, or
+an app shell that does not import the barrel. 4.25 MB leaves 180 kB of headroom, so the next
+increase still fails the build. The ADF removal takes adf-core, adf-hx, the bridge and the hxcs
+client — about 540 kB of the initial bundle — out, and the budget returns to 4.0 MB with it.
+NXSAT-636 removes adf-core's wiring and its asset glob; the glob copies files and is not part of
+the initial bundle, so the budget is unchanged there and NXSAT-638 sets it once the merged removal
+is measured.
+
+**Back to 4.0 MB (2026-10-14, NXSAT-638).** Measured on the merged removal, with production builds
+on Node 20 and the Nx cache off: integration at `735dbea26` builds an initial bundle of **4.07 MB**
+(842 kB transfer), and the removal branch **2.96 MB** (616 kB transfer). The removal took
+**1.11 MB** out, about twice the 540 kB estimated above. `maximumError` is 4.0 MB again, leaving
+1.04 MB of headroom. `maximumWarning` stays at 2.5 MB, which the build still exceeds by 456 kB.
+
 Unavoidable rather than chosen — see the root-injector decision above. Practically:
 unnoticeable on an office network, a second or two on a first load over a slow link. The
 budget was raised deliberately (`maximumWarning` 1.5 → 2.5 MB, `maximumError` 2.0 → 3.5 MB)
@@ -661,8 +682,8 @@ what it costs to keep waiting.
 | #   | Decision                                                                                                                                                                                                                                                                         | Options                                                                                                                                                                                                                     | Cost of not deciding                                                                                                                                                                                    | Who                   |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------- |
 | D-1 | **Contributor display name vs username.** Columns and panels read `jdoe`, not `Jane Doe`.                                                                                                                                                                                        | (a) accept the username; (b) resolve display names through the `USER` port. Cheaper than first assessed: upstream's `UserService.resolveUser` already **caches per id**, and that path is live in the versions panel today. | Ships with internal identifiers where a person's name belongs. Low risk, visible in every list.                                                                                                         | Product               |
-| D-2 | **Route strategy.** The adopted components live on `/#/browse-adf-hx`, parallel to production `/#/browse`.                                                                                                                                                                       | (a) keep both, and carry two browse implementations; (b) cut `/#/browse` over to the adf-hx stack.                                                                                                                          | Two browse surfaces to maintain and test, and evidence that proves the POC route rather than the product route. Cost grows with every component adopted.                                                | Product + eng lead    |
-| D-3 | **Telling leadership the bundle figure.** Initial bundle 1.70 → **3.49 MB**; the Angular budget has been raised twice, 2.0 → 3.5 → 4.0 MB.                                                                                                                                       | Present it, with the root-injector reason and the two alternatives (trim existing startup weight — real work, uncertain payoff; or do not adopt adf-hx, which abandons the Beta's premise).                                 | The number is not secret but it has never been said out loud. Discovering it late reads as concealment, and it is the single largest cost of adoption.                                                  | Eng lead → leadership |
+| D-2 | ~~**Route strategy.** The adopted components live on `/#/browse-adf-hx`, parallel to production `/#/browse`.~~ **Decided by the removal, NXSAT-635, 2026-10-14:** the POC route was removed and redirects to `/#/browse`, the one browse surface.                                | (a) keep both, and carry two browse implementations; (b) cut `/#/browse` over to the adf-hx stack.                                                                                                                          | Two browse surfaces to maintain and test, and evidence that proves the POC route rather than the product route. Cost grows with every component adopted.                                                | Product + eng lead    |
+| D-3 | **Telling leadership the bundle figure.** Initial bundle 1.70 → **3.49 MB**, 4.07 MB with wave 3 and **2.96 MB** without ADF; the Angular budget went 2.0 → 3.5 → 4.0 → 4.25 MB and is back at 4.0 MB (see "Initial bundle").                                                    | Present it, with the root-injector reason and the two alternatives (trim existing startup weight — real work, uncertain payoff; or do not adopt adf-hx, which abandons the Beta's premise).                                 | The number is not secret but it has never been said out loud. Discovering it late reads as concealment, and it is the single largest cost of adoption.                                                  | Eng lead → leadership |
 | D-4 | **Independent validation has never run** for Phase 1 or Phase 2, and the multi-model review gate has never run at all.                                                                                                                                                           | Schedule it, or accept self-review for those phases and say so.                                                                                                                                                             | Every phase so far has self-reported green **and** contained at least one overstated claim. Phase 1's would have shipped a dead feature to every customer. This is the control that catches that class. | Eng lead              |
 | D-5 | ~~**The marketplace package has never been installed or upgraded on a real server.**~~ **Decided by rehearsal, 2026-10-07:** install, customise and upgrade were run with `nuxeoctl mp-install`; the non-overwriting design failed and NXSAT-317 replaced it with a sample file. | Remaining choice: rehearse the Admin Center / Update Center path too, or accept it as untested.                                                                                                                             | Risk R7 is Low for the NXSAT-317 installer via `nuxeoctl`; the Admin Center path is unproven.                                                                                                           | Eng lead              |
 

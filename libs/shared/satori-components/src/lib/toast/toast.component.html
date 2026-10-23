@@ -1,0 +1,17 @@
+<div matSnackBarLabel class="nxs-toast__message">{{ data.message }}</div>
+<div matSnackBarActions class="nxs-toast__actions">
+  @if (data.action; as action) {
+    <button mat-button matSnackBarAction type="button" class="nxs-toast__action" (click)="act()">
+      {{ action.label }}
+    </button>
+  }
+  <button
+    mat-icon-button
+    type="button"
+    class="nxs-toast__dismiss"
+    [attr.aria-label]="'satori-components.toast.dismiss' | translate"
+    (click)="dismiss()"
+  >
+    <mat-icon aria-hidden="true">close</mat-icon>
+  </button>
+</div>

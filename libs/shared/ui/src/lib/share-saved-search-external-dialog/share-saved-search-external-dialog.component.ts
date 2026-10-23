@@ -1,5 +1,5 @@
 import { Component, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -9,7 +9,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatDatepickerModule } from '@angular/material/datepicker';
 import { catchError, of } from 'rxjs';
 
-import { DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';

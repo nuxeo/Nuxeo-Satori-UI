@@ -2,16 +2,23 @@
 title: Extensibility Contract
 parent: Engineering
 order: 7
-last_reviewed: 2026-10-08
-repo_commit: 5abcd50
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # The Extensibility Contract — four layers
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `5abcd50` (`feature/nxsat-308-replace-adf-extensions`)
-> Only "Our rule context is deliberately not upstream's" in §5 was re-verified at that commit; the
-> rest of the page as of 2026-08-24 · `77265f9`.
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
+> Only "The six guardrail checks" was verified at that commit, against
+> `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
+> `@nuxeo/satori-platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
+> The `@nuxeo/satori-platform/components` row in §6 was re-verified at
+> `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
+> upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
+> in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.
 > Customer-facing companion: [`docs/extension-reference.md`](../../docs/extension-reference.md),
 > which is drift-gated by `npm run beta:reference`.
 
@@ -27,7 +34,7 @@ promise checkable rather than aspirational.
 | -------------------------- | --------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------ |
 | **0 — Configuration**      | JSON + CSS custom properties: theme tokens, branding, languages             | No                     | Yes — it is a fragment in the customer's package |
 | **1 — Declarative wiring** | JSON referencing components, rules, actions and routes **by registered ID** | No                     | Yes — it is a fragment in the customer's package |
-| **2 — Customer code**      | A TypeScript library against `@nuxeo-satori/platform`                       | Yes, in **their** repo | Yes — npm semver                                 |
+| **2 — Customer code**      | A TypeScript library against `@nuxeo/satori-platform`                       | Yes, in **their** repo | Yes — npm semver                                 |
 | **3 — Agent harness**      | Prompts. The generators and guardrails ship inside the package              | Yes, in their repo     | Yes                                              |
 
 Layers 0 and 1 are expected to absorb most customer requests and need no build of the application:
@@ -190,17 +197,17 @@ only that check goes red.
 
 Declared in [`libs/shared/extensions/src/lib/extension-slots.ts`](../../libs/shared/extensions/src/lib/extension-slots.ts).
 
-| Slot           | State                                                            | Evidence                                                                    |
-| -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `navbar`       | **Live** — packaged descriptors + a host that renders them       | 17 documented IDs                                                           |
-| `bulk-actions` | **Live** — packaged descriptors + host                           |                                                                             |
-| `documentList` | **Live** — 12 packaged columns, resolved by _both_ browse routes | `provide-app-extensions.ts:93`, `browse.ts:373`, `browse-adf-hx-poc.ts:133` |
-| `sidebar`      | Resolved, **no packaged descriptor**                             | 3 documented IDs                                                            |
-| `routes`       | Resolved, **no packaged descriptor**                             | `extension-reference.md` section 11                                         |
-| `toolbar`      | **Live** — 16 packaged actions on document detail                | `extension-reference.md` section 8                                          |
-| `contextMenu`  | **Live** — 4 packaged actions in the browse "More actions" menu  | `extension-reference.md` section 10                                         |
-| `tabs`         | **Live** — 6 packaged document-detail tabs                       | `extension-reference.md` section 9                                          |
-| `documentView` | Resolved, **no packaged descriptor** — the View tab body         | `extension-reference.md` section 9a                                         |
+| Slot           | State                                                           | Evidence                                         |
+| -------------- | --------------------------------------------------------------- | ------------------------------------------------ |
+| `navbar`       | **Live** — packaged descriptors + a host that renders them      | 17 documented IDs                                |
+| `bulk-actions` | **Live** — packaged descriptors + host                          |                                                  |
+| `documentList` | **Live** — 12 packaged columns, resolved by the browse route    | `provide-app-extensions.ts:108`, `browse.ts:481` |
+| `sidebar`      | Resolved, **no packaged descriptor**                            | 3 documented IDs                                 |
+| `routes`       | Resolved, **no packaged descriptor**                            | `extension-reference.md` section 11              |
+| `toolbar`      | **Live** — 16 packaged actions on document detail               | `extension-reference.md` section 8               |
+| `contextMenu`  | **Live** — 4 packaged actions in the browse "More actions" menu | `extension-reference.md` section 10              |
+| `tabs`         | **Live** — 6 packaged document-detail tabs                      | `extension-reference.md` section 9               |
+| `documentView` | Resolved, **no packaged descriptor** — the View tab body        | `extension-reference.md` section 9a              |
 
 This table read "Reserved — nothing reads it" for `routes`, `toolbar`, `contextMenu` and
 `tabs` well after each gained a host. `npm run beta:reference` checks the states in
@@ -269,17 +276,20 @@ upstream's output.
 
 ---
 
-## 6. Layer 2 — `@nuxeo-satori/platform`
+## 6. Layer 2 — `@nuxeo/satori-platform`
 
-One publishable library, four secondary entry points, 347 kB tarball of 25 files.
+One publishable library, six secondary entry points; `npm pack --dry-run` on the build gives a
+556 kB tarball of 70 files (measured 2026-10-08).
 
-| Entry point                           | Wraps                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| `@nuxeo-satori/platform`              | Root — `PLATFORM_ENTRY_POINTS`, shared types                          |
-| `@nuxeo-satori/platform/extensions`   | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent` |
-| `@nuxeo-satori/platform/app-config`   | Layer 0 loader and tokens                                             |
-| `@nuxeo-satori/platform/nuxeo-client` | Services and models                                                   |
-| `@nuxeo-satori/platform/ui`           | Shared presentational components                                      |
+| Entry point                                | Wraps                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@nuxeo/satori-platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
+| `@nuxeo/satori-platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
+| `@nuxeo/satori-platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
+| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo/satori-platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo/satori-platform/nuxeo-client`      | Services and models                                                                                                                              |
+| `@nuxeo/satori-platform/ui`                | Shared presentational components                                                                                                                 |
 
 ### One declarative object reaches four registries
 
@@ -332,16 +342,16 @@ compiler reported either. If you touch
 Four Nx generators, shipped **inside** the package at its root as a proper plugin:
 
 ```bash
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-component claim-summary --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
 ```
 
 Plus the guardrail a customer runs in their own CI:
 
 ```bash
-node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/<their-library>
+node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/<their-library>
 ```
 
 > Until 2026-08-24 the customer guide told customers to run
@@ -350,17 +360,18 @@ node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs 
 > could not be run by its audience. Verified fixed by unpacking the tarball into
 > `node_modules` and generating a library from it.
 
-### The five guardrail checks, and what each one caught
+### The six guardrail checks, and what each one caught
 
-| #   | Check                                               | Origin                                                                                                                                                                      |
-| --- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Registered IDs carry the library's own owner prefix | An ID is a public contract                                                                                                                                                  |
-| 2   | No import reaches past a published entry point      | Deep paths break without being breaking changes                                                                                                                             |
-| 3   | A spec asserts **registry state**                   | Three generators once spliced every registration _inside a comment_, reported success, printed the IDs they had "registered" — and lint, typecheck and six specs all passed |
-| 4   | Gating rules are declared fail-closed               | An unregistered rule ID permits                                                                                                                                             |
-| 5   | No component exported from the barrel               | A host that can import the class depends on a name that should stay free to change                                                                                          |
+| #   | Check                                                                                                                                                          | Origin                                                                                                                                                                      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Registered IDs carry the library's own owner prefix                                                                                                            | An ID is a public contract                                                                                                                                                  |
+| 2   | No import reaches past a published entry point                                                                                                                 | Deep paths break without being breaking changes                                                                                                                             |
+| 3   | A spec asserts **registry state**                                                                                                                              | Three generators once spliced every registration _inside a comment_, reported success, printed the IDs they had "registered" — and lint, typecheck and six specs all passed |
+| 4   | Gating rules are declared fail-closed                                                                                                                          | An unregistered rule ID permits                                                                                                                                             |
+| 5   | No component exported from the barrel                                                                                                                          | A host that can import the class depends on a name that should stay free to change                                                                                          |
+| 6   | Each registered component resolves, is named by a spec, uses the owner's selector prefix, and implements the `Nxs…Inputs` contract of a primitive it overrides | The registry swallows a failed lazy load on purpose, so a misspelt path is a blank slot with no error anywhere; an override missing an input has it silently dropped        |
 
-Three of those five were once satisfiable **without doing the thing they check** — a comment
+Three of the first five were once satisfiable **without doing the thing they check** — a comment
 mentioning a registry counted as an assertion, a dynamic `import()` evaded check 2, and
 `export * from './leaky'` evaded check 5. All three probed and closed.
 

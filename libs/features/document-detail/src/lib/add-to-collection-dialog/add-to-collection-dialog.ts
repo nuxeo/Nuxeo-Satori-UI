@@ -8,13 +8,15 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { NuxeoDocument, DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoDocument, DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
+import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'lib-add-to-collection-dialog',
   standalone: true,
   imports: [
+    NxsSpinnerComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,

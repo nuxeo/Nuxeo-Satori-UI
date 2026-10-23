@@ -2,15 +2,16 @@
 title: Nuxeo Agentic UI — the short version
 parent: Product
 order: 0
-last_reviewed: 2026-10-07
-repo_commit: 8be3182
+last_reviewed: 2026-10-09
+repo_commit: 97c6794
 audience: presales, customers, partners
 ---
 
 # Nuxeo Agentic UI — the short version
 
 For presales engineers, customers and partners. It takes about five minutes, describes the
-product as it is today (checked on 7 October 2026), and leaves the longer documents to the end.
+product as it is today (checked on 7 October 2026; the permission-level item under "What it does
+not do today" was re-checked on 9 October), and leaves the longer documents to the end.
 
 ## What it is
 
@@ -145,11 +146,14 @@ shows Administration to administrators only:
   but read-only. The edit form is the same standard fields for every type.
 - **Install from a public registry.** The Marketplace package has only been published to Nuxeo's
   pre-production Marketplace. The developer package your own code builds against,
-  `@nuxeo-satori/platform`, is not on any npm registry yet.
+  `@nuxeo/satori-platform`, is not on any npm registry yet.
 - **Run your own code inside the shipped application.** See the next section.
-- **Edit every permission level.** The Permissions tab on the Browse page handles Nuxeo's Read,
-  ReadWrite and Everything. On a folder that also carries any other permission it refuses to save
-  rather than delete that entry; manage those in Nuxeo.
+- **Edit every permission level on the rail's Browse page.** That page is still the adf-hx proof
+  of concept, and its Permissions tab handles only Nuxeo's Read, ReadWrite and Everything. On a
+  folder that also carries any other permission it refuses to save rather than delete that entry.
+  The Permissions tab on a document's own page, and on `/browse`, offers all of Nuxeo's standard
+  permissions and the others the server reports
+  ([extension reference, section 13](../../docs/extension-reference.md#13-what-beta-does-not-yet-address)).
 
 ## What needs code
 
@@ -160,7 +164,7 @@ shows Administration to administrators only:
 - changing what a shipped button does;
 - screens specific to your document types, and a form that edits their own fields.
 
-Today a developer writes an Angular library against `@nuxeo-satori/platform`, starting from the
+Today a developer writes an Angular library against `@nuxeo/satori-platform`, starting from the
 code generators that ship with it, and adds it to an application built from our template app,
 `apps/nuxeo-satori-template`. That code does not plug into the shipped application, and because
 the package is not published yet, you build it from this repository. Publishing it is planned.

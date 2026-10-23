@@ -66,7 +66,7 @@ agentic-ui-poc/
 | Layer               | Technology                                           | Version  |
 | ------------------- | ---------------------------------------------------- | -------- |
 | Frontend framework  | Angular                                              | 20.3     |
-| UI design system    | Hyland Satori UI (`@hylandsoftware/satori-ui`)       | 0.2.0    |
+| UI design system    | Hyland Satori UI (`@hylandsoftware/satori-ui`)       | 0.2.1    |
 | Material components | Angular Material                                     | 20.2     |
 | State management    | Angular Signals (`signal`, `computed`, `effect`)     | built-in |
 | HTTP                | Angular `HttpClient` with functional interceptors    | built-in |

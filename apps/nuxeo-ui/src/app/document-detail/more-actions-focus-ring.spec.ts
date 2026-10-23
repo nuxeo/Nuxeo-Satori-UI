@@ -2,7 +2,8 @@
  * NXSAT-535 / IBM 2589851771 — document-detail header "More actions" menu trigger keyboard focus
  * styling contract. Material icon buttons suppress the default ring; the overflow trigger is a
  * header toolbar `mat-icon-button` styled via `document-detail-header-toolbar-focus.scss` (same
- * path as prod). Host markup mirrors production `document-detail.html` (see
+ * path as prod). The host renders the real `nxs-document-toolbar` as `.header-actions`, as
+ * production `document-detail.html` does (see
  * `document-detail-more-actions-focus-ring.spec.ts` and `document-detail-slots.spec.ts`).
  *
  * Karma loads `apps/nuxeo-ui/src/styles.scss` (see `angular.json`), which `@use`s the shared
@@ -12,29 +13,41 @@
  * belongs to a11y-scout (`docs/accessibility.md` §28–33); this Karma suite only asserts SCSS
  * wiring and computed outline geometry on a synthetic host.
  */
-import { CdkAriaLive } from '@angular/cdk/a11y';
 import { Component, provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatMenuModule } from '@angular/material/menu';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { TranslatePipe } from '@ngx-translate/core';
+import {
+  NxsDocumentToolbarComponent,
+  type NxsToolbarAction,
+} from '@nuxeo/satori-platform/components';
+
+import { testTranslateModule } from '../i18n/translate-testing';
 
 @Component({
   standalone: true,
-  imports: [CdkAriaLive, MatButtonModule, MatIconModule, MatMenuModule],
+  imports: [MatButtonModule, MatIconModule, NxsDocumentToolbarComponent, TranslatePipe],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './more-actions-focus-ring.fixture.scss',
   ],
   templateUrl: './more-actions-focus-ring.spec.html',
 })
-class MoreActionsFocusHostComponent {}
+class MoreActionsFocusHostComponent {
+  readonly actions: readonly NxsToolbarAction[] = [
+    { id: 'app.toolbar.export', label: 'Export', icon: 'download', overflow: true },
+  ];
+}
 
 describe('Document detail More actions — focus ring SCSS contract (NXSAT-535 / IBM 2589851771)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [MoreActionsFocusHostComponent],
+      imports: [
+        MoreActionsFocusHostComponent,
+        testTranslateModule({ 'document-detail.document-detail.more-actions': 'More actions' }),
+      ],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });

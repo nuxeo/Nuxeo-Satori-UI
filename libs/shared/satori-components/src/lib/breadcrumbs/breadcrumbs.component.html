@@ -1,0 +1,91 @@
+<nav class="nxs-breadcrumbs__nav" [attr.aria-label]="name() || null">
+  <ol class="nxs-breadcrumbs__list">
+    @for (entry of entries(); track entry.kind === 'item' ? entry.index : -1; let last = $last) {
+      @if (entry.kind === 'overflow') {
+        @let more = 'satori-components.breadcrumbs.show-more' | translate;
+        <li class="nxs-breadcrumbs__item nxs-breadcrumbs__overflow-item">
+          <button
+            mat-icon-button
+            type="button"
+            class="nxs-breadcrumbs__overflow"
+            [matMenuTriggerFor]="hiddenMenu"
+            [matTooltip]="more"
+            [attr.aria-label]="more"
+          >
+            <mat-icon aria-hidden="true">more_horiz</mat-icon>
+          </button>
+          <mat-icon class="nxs-breadcrumbs__separator" aria-hidden="true">chevron_right</mat-icon>
+        </li>
+      } @else {
+        <li
+          class="nxs-breadcrumbs__item"
+          [class.nxs-breadcrumbs__item--first]="entry.index === 0 && !last"
+          [class.nxs-breadcrumbs__item--last]="last"
+        >
+          @switch (linkKind(entry.item)) {
+            @case ('router') {
+              <a
+                class="nxs-breadcrumbs__link"
+                [routerLink]="entry.item.routerLink"
+                [queryParams]="entry.item.queryParams"
+                [attr.title]="last || entry.index === 0 ? entry.item.label : null"
+                >{{ entry.item.label }}</a
+              >
+            }
+            @case ('href') {
+              <a
+                class="nxs-breadcrumbs__link"
+                [href]="entry.item.href"
+                [attr.title]="last || entry.index === 0 ? entry.item.label : null"
+                >{{ entry.item.label }}</a
+              >
+            }
+            @default {
+              <span
+                class="nxs-breadcrumbs__text"
+                [attr.aria-current]="last ? 'page' : null"
+                [attr.title]="last || entry.index === 0 ? entry.item.label : null"
+                >{{ entry.item.label }}</span
+              >
+            }
+          }
+          @if (!last) {
+            <mat-icon class="nxs-breadcrumbs__separator" aria-hidden="true">chevron_right</mat-icon>
+          }
+        </li>
+      }
+    }
+  </ol>
+  <mat-menu #hiddenMenu="matMenu">
+    @for (item of hiddenItems(); track $index) {
+      @switch (linkKind(item)) {
+        @case ('router') {
+          <a mat-menu-item [routerLink]="item.routerLink" [queryParams]="item.queryParams">{{
+            item.label
+          }}</a>
+        }
+        @case ('href') {
+          <a mat-menu-item [href]="item.href">{{ item.label }}</a>
+        }
+        @default {
+          <button mat-menu-item type="button" disabled>{{ item.label }}</button>
+        }
+      }
+    }
+  </mat-menu>
+</nav>
+<!-- The whole trail at its natural width, for measuring only. -->
+<ol class="nxs-breadcrumbs__list nxs-breadcrumbs__measure" aria-hidden="true">
+  @for (item of items(); track $index; let last = $last) {
+    <li class="nxs-breadcrumbs__item">
+      <span class="nxs-breadcrumbs__text">{{ item.label }}</span>
+      @if (!last) {
+        <mat-icon class="nxs-breadcrumbs__separator">chevron_right</mat-icon>
+      }
+    </li>
+  }
+  <li class="nxs-breadcrumbs__item nxs-breadcrumbs__overflow-item">
+    <span class="nxs-breadcrumbs__overflow-measure"></span>
+    <mat-icon class="nxs-breadcrumbs__separator">chevron_right</mat-icon>
+  </li>
+</ol>

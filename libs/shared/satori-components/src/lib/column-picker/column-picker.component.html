@@ -1,0 +1,36 @@
+<button
+  type="button"
+  class="nxs-column-picker__backdrop"
+  [attr.aria-label]="'satori-components.column-picker.close' | translate"
+  (click)="cancel()"
+></button>
+<div
+  #panel
+  class="nxs-column-picker__panel"
+  role="dialog"
+  aria-modal="true"
+  [attr.aria-label]="'satori-components.column-picker.title' | translate"
+  tabindex="-1"
+  cdkTrapFocus
+>
+  <p class="nxs-column-picker__title">{{ 'satori-components.column-picker.title' | translate }}</p>
+  <div class="nxs-column-picker__list">
+    @for (column of columns(); track column.key) {
+      <mat-checkbox
+        class="nxs-column-picker__option"
+        [checked]="isChosen(column.key) || isRequired(column.key)"
+        [disabled]="isRequired(column.key)"
+        (change)="toggle(column.key)"
+        >{{ column.label }}</mat-checkbox
+      >
+    }
+  </div>
+  <div class="nxs-column-picker__actions">
+    <button mat-button type="button" (click)="reset()">
+      {{ 'satori-components.column-picker.reset' | translate }}
+    </button>
+    <button mat-flat-button color="primary" type="button" (click)="commit()">
+      {{ 'satori-components.column-picker.done' | translate }}
+    </button>
+  </div>
+</div>

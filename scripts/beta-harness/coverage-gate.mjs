@@ -27,20 +27,27 @@
  * Unmeasurable is neither a pass nor a fail: it is *untested*. A baseline entry for one
  * **fails** this gate, because the entry is itself the defect.
  *
+ * ## Hard floors, beside the ratchet
+ *
+ * A project named in `FLOORS` must clear its floor on every run, from its first commit, rather
+ * than enter at whatever it measures. That is for code written against the bar rather than
+ * catching up to it — `satori-components`, the `nxs-` library NXSAT-308 builds new.
+ *
  * Usage:
  *   node scripts/beta-harness/coverage-gate.mjs                    # check the ratchet
  *   node scripts/beta-harness/coverage-gate.mjs --update-baseline  # re-record after a rise
  *   node scripts/beta-harness/coverage-gate.mjs --run              # run the tests first
  *   node scripts/beta-harness/coverage-gate.mjs --json
  *
- * Exit 1 if any project's line coverage dropped by more than the tolerance, or if
- * --update-baseline is needed and has not been given.
+ * Exit 1 if any project's line coverage dropped by more than the tolerance, if a floor in
+ * `FLOORS` is not met, or if --update-baseline is needed and has not been given.
  */
 
 import { spawnSync } from 'node:child_process';
 import { readFile, writeFile, mkdir, readdir, stat } from 'node:fs/promises';
 import { existsSync, readFileSync } from 'node:fs';
-import { resolve, relative } from 'node:path';
+import { resolve, relative, sep } from 'node:path';
+import ts from 'typescript';
 
 const repoRoot = resolve(import.meta.dirname, '..', '..');
 const argv = process.argv.slice(2);
@@ -104,6 +111,24 @@ const OUT_OF_SCOPE = Object.freeze({
  * without a line of production code changing. That is the exact reason the bar is scope-aware and
  * the scope lives in the plan rather than here: changing this map is not how scope gets decided.
  */
+
+/**
+ * Per-project line-coverage floors, enforced on every run and separate from the ratchet.
+ *
+ * The number is NXENG-615's "Unit tests coverage > 90%", the bar `TARGET` already reports
+ * against. A floor project is also held to two things the ratchet excuses:
+ *
+ * - **It must be measured this run.** No report, or a report that measures nothing, is a failed
+ *   floor rather than "outside the affected set".
+ * - **None of its files may sit outside the measurement.** v8 lists a file no spec imports with
+ *   an empty statement map, so it cannot lower the percentage. The ratchet accepts a dated
+ *   allowlist entry for that; a floor that did the same could be met by not testing a new
+ *   component at all. Only `noStatements` entries — files with nothing to execute — are excused.
+ */
+const FLOORS = Object.freeze({
+  'satori-components': TARGET,
+  'satori-components-satori': TARGET,
+});
 
 /** @param {string} project */
 function inBetaScope(project) {
@@ -190,7 +215,8 @@ const vacuous = [];
  *
  * Both were mistakes of the same shape, made twice in one session, which is what a check is
  * for. Compared against every `.ts` under the project root: a source file edited after the
- * report was written means the report does not describe the code on disk.
+ * report was written means the report does not describe the code on disk. So does a report that
+ * counts a file under the project root which no longer exists — a deletion leaves nothing newer.
  */
 const stale = [];
 
@@ -205,6 +231,146 @@ if (measured.length === 0) {
   process.exit(1);
 }
 
+/**
+ * Uninstrumented source files, checked against a dated allowlist.
+ *
+ * See `findUninstrumented()` for what this catches and why the percentage alone could not.
+ * The allowlist is dated on purpose: an undated exception is indistinguishable from an
+ * oversight six weeks later, and this repository has already had gates whose exceptions
+ * outlived their reasons.
+ *
+ * Three failure modes, all blocking:
+ *   1. a file is uninstrumented and not in the allowlist  — new untested code
+ *   2. a file is uninstrumented and its entry has expired — accepted debt, now due
+ *   3. the allowlist names a file that is now instrumented or gone — stale entry, so the
+ *      file is deleted from the list rather than left as false reassurance
+ */
+const uninstrumentedAllowlistPath = resolve(
+  repoRoot,
+  '.ai/state/coverage-uninstrumented-allowlist.json',
+);
+const rawAllowlist = existsSync(uninstrumentedAllowlistPath)
+  ? JSON.parse(await readFile(uninstrumentedAllowlistPath, 'utf8'))
+  : {};
+/** Dated debt: files with real code that no test reaches. */
+const datedAllowlist = rawAllowlist.files ?? {};
+/**
+ * Permanent exemptions for files that genuinely contain no executable statements — pure type
+ * declarations, `export *` barrels, constant tables. A deadline for these would be a lie, since
+ * there is nothing to test. Self-policing: if one ever gains a statement its entry is stale, so
+ * the list cannot quietly become a dumping ground.
+ */
+const noStatementsAllowlist = new Set(Object.keys(rawAllowlist.noStatements ?? {}));
+
+/**
+ * Executable top-level statements in a source file, read from the source, not the coverage map.
+ *
+ * A `noStatements` exemption is otherwise checked only against coverage, and a file no spec
+ * imports has an empty coverage map whatever it holds — so a barrel that gained a function would
+ * stay exempt. For a floor project the exemption is re-derived from the code instead. Imports,
+ * re-exports, interfaces, type aliases and `declare` forms carry no runtime code.
+ */
+function executableStatements(text) {
+  const source = ts.createSourceFile('file.ts', text, ts.ScriptTarget.Latest, false);
+  return source.statements.filter(
+    (statement) =>
+      !ts.isImportDeclaration(statement) &&
+      !ts.isExportDeclaration(statement) &&
+      !ts.isInterfaceDeclaration(statement) &&
+      !ts.isTypeAliasDeclaration(statement) &&
+      !ts.getModifiers(statement)?.some((m) => m.kind === ts.SyntaxKind.DeclareKeyword),
+  ).length;
+}
+
+/** A percentage truncated to two places, so a figure below a floor never prints as meeting it. */
+function truncatedPercent(covered, total) {
+  return Math.floor((covered / total) * 10000) / 100;
+}
+
+// Regression case, run on every invocation: nine covered statements on one line and an uncovered
+// one on the next are 90% of statements but 50% of lines.
+{
+  const at = (line) => ({ start: { line, column: 0 }, end: { line, column: 1 } });
+  const ids = [...Array(10).keys()];
+  const got = summarise({
+    'case.ts': {
+      statementMap: Object.fromEntries(ids.map((i) => [i, at(i < 9 ? 1 : 2)])),
+      s: Object.fromEntries(ids.map((i) => [i, i < 9 ? 1 : 0])),
+    },
+  });
+  if (got.sCovered !== 9 || got.sTotal !== 10 || got.lCovered !== 1 || got.lTotal !== 2) {
+    throw new Error(`coverage-gate: summarise counted lines wrongly: ${JSON.stringify(got)}`);
+  }
+}
+
+// Regression cases, run on every invocation so the exemption check cannot regress unnoticed.
+for (const [text, want] of [
+  ["export { A } from './a';\nexport * from './b';\nexport type { T } from './t';\n", 0],
+  ['export interface I {\n  a: string;\n}\nexport type U = 1 | 2;\n', 0],
+  ["export { A } from './a';\nexport function f(): number {\n  return 1;\n}\n", 1],
+  ['export const x = 1;\n', 1],
+  ['export enum E {\n  A,\n}\n', 1],
+]) {
+  const got = executableStatements(text);
+  if (got !== want) {
+    throw new Error(`coverage-gate: executableStatements found ${got}, not ${want}, in:\n${text}`);
+  }
+}
+
+/**
+ * Computed before either baseline write, so `--update-baseline` can reset the ratchet without
+ * resetting a floor: a write still exits 1 when a floor is not met.
+ *
+ * @type {{ project: string, floor: number, why: string }[]}
+ */
+const floorFailures = [];
+for (const [project, floor] of Object.entries(FLOORS)) {
+  const fails = (why) => floorFailures.push({ project, floor, why });
+  if (!projects.some((p) => p.name === project && p.kind === 'vitest')) {
+    fails('there is no Vitest project of that name, so the floor guards nothing');
+    continue;
+  }
+  const empty = vacuous.find((v) => v.project === project);
+  if (empty) {
+    fails(`its coverage report measures nothing (${empty.why})`);
+    continue;
+  }
+  const m = measured.find((x) => x.project === project);
+  if (!m) {
+    fails('it has no coverage report this run, so the floor was not measured');
+    continue;
+  }
+  const staleReport = stale.find((t) => t.project === project);
+  if (staleReport) {
+    fails(
+      staleReport.gone?.length
+        ? `its coverage report counts ${staleReport.gone.length} source file(s) that no longer ` +
+            `exist (${staleReport.gone.join(', ')}), so the floor was measured on old code`
+        : 'its coverage report is older than its source, so the floor was measured on old code',
+    );
+    continue;
+  }
+  // Lines, not statements, because the floor is a line floor — see `summarise()`. Compared on the
+  // counts, because a rounded percentage would let 89.996% round its way to 90.
+  if (m.lCovered * 100 < floor * m.lTotal) {
+    fails(
+      `${truncatedPercent(m.lCovered, m.lTotal)}% of lines covered (${m.lCovered} of ${m.lTotal} lines)`,
+    );
+  }
+  for (const u of m.unmeasured ?? []) {
+    if (noStatementsAllowlist.has(u.file)) {
+      const code = executableStatements(readFileSync(resolve(repoRoot, u.file), 'utf8'));
+      if (code === 0) continue;
+      fails(
+        `${u.file} is exempt under noStatements but has ${code} executable top-level ` +
+          'statement(s), and no spec reaches it',
+      );
+      continue;
+    }
+    fails(`${u.file} contributes no statements [${u.why}] — no spec reaches it`);
+  }
+}
+
 const baseline = existsSync(baselinePath) ? JSON.parse(await readFile(baselinePath, 'utf8')) : null;
 
 if (!baseline) {
@@ -216,6 +382,7 @@ if (!baseline) {
     process.exit(1);
   }
   await write(measured, 'initial baseline');
+  exitOnFloorFailures();
   process.exit(0);
 }
 
@@ -319,37 +486,6 @@ const orphaned = baselineNames.filter((p) => !projectNames.has(p));
  */
 const falseCredit = vacuous.filter((v) => baselineNames.includes(v.project));
 
-/**
- * Uninstrumented source files, checked against a dated allowlist.
- *
- * See `findUninstrumented()` for what this catches and why the percentage alone could not.
- * The allowlist is dated on purpose: an undated exception is indistinguishable from an
- * oversight six weeks later, and this repository has already had gates whose exceptions
- * outlived their reasons.
- *
- * Three failure modes, all blocking:
- *   1. a file is uninstrumented and not in the allowlist  — new untested code
- *   2. a file is uninstrumented and its entry has expired — accepted debt, now due
- *   3. the allowlist names a file that is now instrumented or gone — stale entry, so the
- *      file is deleted from the list rather than left as false reassurance
- */
-const uninstrumentedAllowlistPath = resolve(
-  repoRoot,
-  '.ai/state/coverage-uninstrumented-allowlist.json',
-);
-const rawAllowlist = existsSync(uninstrumentedAllowlistPath)
-  ? JSON.parse(await readFile(uninstrumentedAllowlistPath, 'utf8'))
-  : {};
-/** Dated debt: files with real code that no test reaches. */
-const datedAllowlist = rawAllowlist.files ?? {};
-/**
- * Permanent exemptions for files that genuinely contain no executable statements — pure type
- * declarations, `export *` barrels, constant tables. A deadline for these would be a lie, since
- * there is nothing to test. Self-policing: if one ever gains a statement its entry is stale, so
- * the list cannot quietly become a dumping ground.
- */
-const noStatementsAllowlist = new Set(Object.keys(rawAllowlist.noStatements ?? {}));
-
 const todayArg = argv[argv.indexOf('--today') + 1];
 const today =
   argv.includes('--today') && todayArg ? todayArg : new Date().toISOString().slice(0, 10);
@@ -399,6 +535,7 @@ if (updateBaseline) {
         ? `, pruned ${vacuous.length} unmeasurable entr(ies): ${vacuous.map((v) => v.project).join(', ')}`
         : ''),
   );
+  exitOnFloorFailures();
   process.exit(0);
 }
 
@@ -419,6 +556,7 @@ report();
  */
 process.exit(
   stale.length ||
+    floorFailures.length ||
     regressions.length ||
     orphaned.length ||
     unratcheted.length ||
@@ -458,6 +596,24 @@ async function collect() {
       data = JSON.parse(await readFile(file, 'utf8'));
     } catch {
       continue;
+    }
+    // Deleting a source leaves no newer file behind, so the mtime test above cannot see it, and
+    // the report goes on counting the deleted file's statements.
+    const rootAbs = resolve(repoRoot, p.root);
+    const gone = Object.keys(data)
+      .map((f) => resolve(repoRoot, f))
+      .filter((f) => f.startsWith(`${rootAbs}${sep}`) && !existsSync(f))
+      .map((f) => relative(repoRoot, f));
+    if (gone.length) {
+      const entry = stale.find((t) => t.project === p.name);
+      if (entry) entry.gone = gone;
+      else
+        stale.push({
+          project: p.name,
+          report: new Date(reportAge).toISOString(),
+          source: null,
+          gone,
+        });
     }
     const s = summarise(data);
     if (s.files === 0) continue;
@@ -530,8 +686,11 @@ async function findUnmeasured(root, data) {
   const out = [];
   for await (const f of walk(abs, ['node_modules', 'dist', 'coverage', '.nx'])) {
     if (!f.endsWith('.ts')) continue;
-    // Specs, type-only declarations and the test harness carry no shippable statements.
-    if (/\.spec\.ts$|\.d\.ts$|(^|\/)test-setup\.ts$/.test(f)) continue;
+    // Specs, type-only declarations, the test harness, stories and the Storybook config carry no
+    // shippable statements: each is excluded from the project's `tsconfig.lib.json`.
+    if (/\.spec\.ts$|\.d\.ts$|(^|\/)test-setup\.ts$|\.stories\.ts$|\/\.storybook\//.test(f)) {
+      continue;
+    }
     const n = statementsByFile.get(f);
     if (n === undefined) out.push({ file: relative(repoRoot, f), why: 'absent' });
     else if (n === 0) out.push({ file: relative(repoRoot, f), why: 'empty' });
@@ -564,13 +723,22 @@ async function discoverProjects() {
 
 /**
  * Vitest's v8 provider writes istanbul-shaped data: `s`/`b`/`f` are hit counts
- * keyed by entries in `statementMap`/`branchMap`/`fnMap`. Line coverage is derived
- * from statements, which is what istanbul's own summary does for v8 data.
+ * keyed by entries in `statementMap`/`branchMap`/`fnMap`.
+ *
+ * Two line figures. The ratchet's `lines` is the statement percentage, as recorded in the
+ * baseline since the gate began. `lTotal`/`lCovered` are exact, the way istanbul derives lines:
+ * each distinct start line is one line, covered if any statement on it ran. A floor reads those,
+ * because it is a line floor and nine statements on one line are still one line. Under v8 the two
+ * agree — it emits one statement per line, and on 2026-10-09 every one of 28,593 statements in
+ * 308 files started on a line of its own — so this changes no figure today; it stops the floor
+ * depending on that.
  * @param {Record<string, any>} data
  */
 function summarise(data) {
   let sTotal = 0,
     sCovered = 0,
+    lTotal = 0,
+    lCovered = 0,
     bTotal = 0,
     bCovered = 0,
     fTotal = 0,
@@ -589,10 +757,15 @@ function summarise(data) {
     // Statements and lines were never affected, which is why this hid: the headline number the
     // ratchet acts on was right while the two beside it were not.
     const hasStatements = Object.keys(entry.s ?? {}).length > 0;
-    for (const hits of Object.values(entry.s ?? {})) {
+    const lineHits = new Map();
+    for (const [id, hits] of Object.entries(entry.s ?? {})) {
       sTotal += 1;
       if (hits > 0) sCovered += 1;
+      const line = entry.statementMap?.[id]?.start?.line;
+      if (line !== undefined) lineHits.set(line, Math.max(lineHits.get(line) ?? 0, hits));
     }
+    lTotal += lineHits.size;
+    for (const hits of lineHits.values()) if (hits > 0) lCovered += 1;
     if (hasStatements) {
       for (const arr of Object.values(entry.b ?? {})) {
         for (const hits of arr ?? []) {
@@ -628,6 +801,8 @@ function summarise(data) {
     // percentage alone cannot tell "tests were deleted" from "a previously uninstrumented
     // file entered the denominator" — see the comparability check in the main flow.
     sCovered,
+    lTotal,
+    lCovered,
     statements: stmts,
     branches: pct(bCovered, bTotal),
     functions: pct(fCovered, fTotal),
@@ -745,6 +920,7 @@ function report() {
           // would have let an evidence manifest record a clean pass while the gate had failed.
           ok:
             stale.length === 0 &&
+            floorFailures.length === 0 &&
             regressions.length === 0 &&
             orphaned.length === 0 &&
             unratcheted.length === 0 &&
@@ -754,6 +930,7 @@ function report() {
             staleAllowlist.length === 0,
           stale,
           target: TARGET,
+          floors: { configured: FLOORS, failures: floorFailures },
           rows,
           meetingTarget: rows.filter((r) => r.target <= 0).map((r) => r.project),
           // Scope-aware view of the bar. `meetingTarget` above counts every project,
@@ -941,10 +1118,15 @@ function report() {
 
   if (stale.length) {
     console.log(
-      `\n  STALE REPORTS — ${stale.length} project(s) have source newer than their coverage report:`,
+      `\n  STALE REPORTS — ${stale.length} project(s) have source newer than their coverage report, ` +
+        'or a report counting deleted files:',
     );
     for (const t of stale) {
-      console.log(`    ${t.project.padEnd(24)} report ${t.report}  source ${t.source}`);
+      const parts = [`report ${t.report}`];
+      if (t.source) parts.push(`source ${t.source}`);
+      if (t.gone?.length)
+        parts.push(`counts ${t.gone.length} deleted file(s): ${t.gone.join(', ')}`);
+      console.log(`    ${t.project.padEnd(24)} ${parts.join('  ')}`);
     }
     console.log(
       '    These numbers describe code that has since changed, so nothing below can be\n' +
@@ -959,9 +1141,12 @@ function report() {
     for (const f of staleAllowlist) console.log(`    ${f}`);
   }
 
+  reportFloors();
+
   console.log('');
   if (
     stale.length ||
+    floorFailures.length ||
     orphaned.length ||
     unratcheted.length ||
     falseCredit.length ||
@@ -971,6 +1156,7 @@ function report() {
   ) {
     const parts = [];
     if (stale.length) parts.push(`${stale.length} stale coverage report(s)`);
+    if (floorFailures.length) parts.push(`${floorFailures.length} unmet coverage floor(s)`);
     if (orphaned.length) parts.push(`${orphaned.length} orphaned baseline entr(ies)`);
     if (unratcheted.length) parts.push(`${unratcheted.length} unratcheted project(s)`);
     if (falseCredit.length) parts.push(`${falseCredit.length} unmeasurable baseline entr(ies)`);
@@ -1056,6 +1242,42 @@ function report() {
   } else {
     console.log(`coverage-gate: pass — no project regressed by more than ${TOLERANCE}pp.`);
     reportBetaBar(rows);
+  }
+}
+
+/** After a baseline write: a floor is not something `--update-baseline` can record its way past. */
+function exitOnFloorFailures() {
+  if (floorFailures.length === 0) return;
+  reportFloors();
+  console.log(`\ncoverage-gate: FAIL — ${floorFailures.length} unmet coverage floor(s).`);
+  process.exit(1);
+}
+
+/** The `FLOORS` verdict, printed on every run so a met floor is visible as well as a missed one. */
+function reportFloors() {
+  const projectsWithFloors = Object.keys(FLOORS);
+  if (projectsWithFloors.length === 0) return;
+  console.log('\n  Hard floors — must be met on every run, not ratcheted:');
+  for (const project of projectsWithFloors) {
+    const failures = floorFailures.filter((f) => f.project === project);
+    const m = measured.find((x) => x.project === project);
+    if (failures.length === 0) {
+      console.log(
+        `    ${project.padEnd(24)} ${String(truncatedPercent(m.lCovered, m.lTotal)).padStart(6)}%  ` +
+          `meets ${FLOORS[project]}% (${m.lCovered} of ${m.lTotal} lines; every unmeasured file ` +
+          'is statement-free)',
+      );
+      continue;
+    }
+    console.log(`    ${project.padEnd(24)} FAIL — floor ${FLOORS[project]}%:`);
+    for (const f of failures) console.log(`      - ${f.why}`);
+  }
+  if (floorFailures.length) {
+    console.log(
+      '\n  Write the missing tests. A floor project cannot take a dated allowlist entry or a\n' +
+        '  lower baseline: the floor applies from its first commit, so each component brings\n' +
+        '  its specs with it.',
+    );
   }
 }
 

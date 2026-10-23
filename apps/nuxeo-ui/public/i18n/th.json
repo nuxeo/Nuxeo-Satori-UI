@@ -27,16 +27,6 @@
     "toolbar-unlock": "ปลดล็อก",
     "toolbar-unsubscribe": "ยกเลิกการแจ้งเตือน"
   },
-  "adf-hx-bridge": {
-    "loading": "กำลังโหลด",
-    "notify-me": "แจ้งเตือนฉัน",
-    "pager": {
-      "no-documents": "ไม่มีเอกสาร",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} จาก {{ total }}"
-    },
-    "unsubscribe": "ยกเลิกการแจ้งเตือน"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "ความผิดปกติในการตรวจสอบโดย AI",
@@ -709,17 +699,6 @@
       "user-group": "ผู้ใช้ / กลุ่ม",
       "username": "ชื่อผู้ใช้"
     },
-    "browse-adf-hx-poc": {
-      "columns": "คอลัมน์",
-      "manage-columns": "จัดการคอลัมน์",
-      "preview": "แสดงตัวอย่าง",
-      "preview-document": "แสดงตัวอย่างเอกสาร",
-      "retry": "ลองใหม่",
-      "select-a-single-document-in-the": "เลือกเอกสารเดียวในแท็บมุมมองเพื่อดูคุณสมบัติ.",
-      "select-a-single-document-in-the-2": "เลือกเอกสารเดียวในแท็บมุมมองเพื่อดูเวอร์ชัน.",
-      "the-repository-root-carries-no-access": "รูทของที่เก็บข้อมูลไม่มีรายการควบคุมการเข้าถึง เปิดโดเมนหรือโฟลเดอร์เพื่อดูและจัดการสิทธิ์.",
-      "this-folder-is-empty": "โฟลเดอร์นี้ว่างเปล่า"
-    },
     "column": {
       "author": "ผู้เขียน",
       "coverage": "ขอบเขต",
@@ -899,17 +878,6 @@
       "export": "ส่งออก",
       "notify": "แจ้งเตือน",
       "share": "แชร์"
-    },
-    "search-adf-hx": {
-      "enter-search-term": "ป้อนคำค้นหา...",
-      "loading": "กำลังโหลด",
-      "next-page": "หน้าต่อไป",
-      "no-results-found": "ไม่พบผลลัพธ์",
-      "previous-page": "หน้าก่อนหน้า",
-      "search": "ค้นหา",
-      "search-documents": "ค้นหาเอกสาร",
-      "searching": "กำลังค้นหา...",
-      "try-a-different-search-term": "ลองใช้คำค้นหาอื่น"
     },
     "show-details": "แสดงรายละเอียด",
     "tab": {
@@ -1112,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "สัญญา ABC-123.pdf",
     "saved-search-placeholder": "เช่น \"สัญญาไตรมาส 3 ที่รอการตรวจทาน\"",
-    "showcase-dialog-message": "กล่องโต้ตอบนี้นำเข้าจาก @nuxeo-satori/platform/ui ลูกค้าสามารถใช้สำหรับข้อความแจ้งยืนยัน คำเตือน และการดำเนินการที่ไม่สามารถย้อนกลับได้.",
+    "showcase-dialog-message": "กล่องโต้ตอบนี้นำเข้าจาก @nuxeo/satori-platform/ui ลูกค้าสามารถใช้สำหรับข้อความแจ้งยืนยัน คำเตือน และการดำเนินการที่ไม่สามารถย้อนกลับได้.",
     "showcase-dialog-title": "การสาธิตคอมโพเนนต์"
   },
   "dashboard": {
@@ -1548,104 +1516,6 @@
       "loading": "กำลังโหลด…"
     }
   },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "กิจกรรม",
-      "by": "โดย",
-      "close-panel": "ปิดแผง",
-      "contributors": "ผู้มีส่วนร่วม",
-      "created": "วันที่สร้าง",
-      "document-details": "รายละเอียดเอกสาร",
-      "info": "ข้อมูล",
-      "last-modified": "แก้ไขล่าสุด",
-      "no-recent-activity": "ไม่มีกิจกรรมล่าสุด",
-      "no-tags-yet": "ยังไม่มีแท็ก",
-      "properties": "คุณสมบัติ",
-      "search-or-create-a-tag": "ค้นหาหรือสร้างแท็ก",
-      "state": "สถานะ",
-      "tags": "แท็ก",
-      "title": "ชื่อเรื่อง",
-      "type": "ประเภท"
-    },
-    "hxp-browse-history": {
-      "action": "การกระทำ",
-      "all": "ทั้งหมด",
-      "category": "หมวดหมู่",
-      "comment": "ความคิดเห็น",
-      "date": "วันที่",
-      "from": "จาก",
-      "next": "ถัดไป",
-      "no-audit-entries-found": "ไม่พบรายการการตรวจสอบ",
-      "performed-action": "การดำเนินการที่ทำ",
-      "previous": "ก่อนหน้า",
-      "state": "สถานะ",
-      "to": "ถึง",
-      "username": "ชื่อผู้ใช้"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "รีเฟรช"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "หน้ารายการเอกสาร",
-      "next": "ถัดไป",
-      "next-page": "หน้าต่อไป",
-      "previous": "ก่อนหน้า",
-      "previous-page": "หน้าก่อนหน้า"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "แท็บโฟลเดอร์สำหรับเรียกดู"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "ทุกประเภท",
-      "card-view": "มุมมองการ์ด",
-      "clear-contributor-filter": "ล้างตัวกรองผู้มีส่วนร่วม",
-      "clear-title-filter": "ล้างตัวกรองชื่อเรื่อง",
-      "contributor": "ผู้มีส่วนร่วม...",
-      "export-csv": "ส่งออก CSV",
-      "filter-by-title": "กรองตามชื่อเรื่อง...",
-      "last-contributor": "ผู้มีส่วนร่วมล่าสุด",
-      "list-view": "มุมมองรายการ",
-      "modified-from": "แก้ไขตั้งแต่",
-      "modified-to": "แก้ไขถึง",
-      "type": "ประเภท"
-    },
-    "hxp-browse-trash": {
-      "actions": "การดำเนินการ",
-      "failed-to-load": "ไม่สามารถโหลดถังขยะได้",
-      "last-modified": "แก้ไขล่าสุด",
-      "name": "ชื่อ",
-      "restore": "กู้คืน",
-      "retry": "ลองใหม่",
-      "trash-is-empty": "ถังขยะว่างเปล่า",
-      "type": "ประเภท"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "ปิดตัวเลือกคอลัมน์",
-      "column-settings": "การตั้งค่าคอลัมน์",
-      "done": "เสร็จสิ้น",
-      "reset": "รีเซ็ต"
-    },
-    "hxp-folder-header": {
-      "close-menu": "ปิดเมนู",
-      "create-folder-upload-files-or-import": "สร้างโฟลเดอร์ อัปโหลดไฟล์ หรือนำเข้า CSV",
-      "create-import": "สร้าง / นำเข้า",
-      "delete": "ลบ",
-      "download-all": "ดาวน์โหลดทั้งหมด",
-      "edit": "แก้ไข",
-      "export": "ส่งออก",
-      "more-actions": "การดำเนินการเพิ่มเติม",
-      "share": "แชร์",
-      "upload-with-nuxeo-drive": "อัปโหลดด้วย Nuxeo Drive"
-    },
-    "tab": {
-      "history": "ประวัติ",
-      "permissions": "สิทธิ์",
-      "properties": "คุณสมบัติ",
-      "trash": "ถังขยะ",
-      "versions": "เวอร์ชัน",
-      "view": "มุมมอง"
-    }
-  },
   "kd": {
     "content-lake-upload": {
       "checking-for-existing-content-lake-copies": "กำลังตรวจสอบสำเนาที่มีอยู่ใน Content Lake...",
@@ -1797,7 +1667,6 @@
       "administration": "การดูแลระบบ",
       "assets": "สื่อดิจิทัล",
       "browse": "เรียกดู",
-      "browse-adf-hx": "เรียกดู",
       "clipboard": "คลิปบอร์ด",
       "collections": "คอลเลกชัน",
       "dashboard": "แดชบอร์ด",

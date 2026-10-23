@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { Observable, map, tap } from 'rxjs';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** What the template keeps about a signed-in user. */
 interface TemplateSession {
@@ -61,7 +61,7 @@ function readStoredSession(): TemplateSession | null {
  *
  * All of it. A customer on SAML/OIDC keeps the signals and the
  * `isSignedIn()`/`username()` surface, and swaps the body for their identity
- * provider. Nothing in `@nuxeo-satori/platform` depends on this class.
+ * provider. Nothing in `@nuxeo/satori-platform` depends on this class.
  */
 @Injectable({ providedIn: 'root' })
 export class TemplateSessionService {

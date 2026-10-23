@@ -7,14 +7,24 @@ import {
   inject,
   input,
   signal,
+  viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed, toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { MatTabsModule } from '@angular/material/tabs';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import {
+  AppExtensionsService,
+  ExtensionComponentRegistry,
+  ExtensionOutletComponent,
+  ExtensionRuleContextService,
+  type ExtensionDocumentLayoutDescriptor,
+} from '@nuxeo/satori-platform/extensions';
+import { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 import { forkJoin, map, merge, of, startWith, switchMap } from 'rxjs';
 
 import { DocumentLayoutService } from '../document-layout.service';
+import { layoutLabelText } from '../layout-label';
+import { layoutSlotEntry } from '../layout-slot';
 import { DocumentSchemaRef, LayoutLabel, LayoutMode, ResolvedLayout } from '../layout.model';
 import { humanize, readDocumentSchemas } from '../resolve-layout';
 import { FieldView, VocabularyValue, describeField, vocabularyValues } from './field-view';
@@ -81,7 +91,8 @@ const NO_VOCABULARIES: Vocabularies = new Map();
 /**
  * Renders a document's per-type layout: the file a configuration package contributed for its
  * type and mode, or the layout generated from the type's own schemas and those the document's
- * dynamic facets add.
+ * dynamic facets add. A `documentMetadata` entry whose rule admits the document renders its
+ * component in place of either, and the layout comes back if that component cannot be loaded.
  *
  * Read-only. Each value is shown by its schema type, and a vocabulary-bound value by its entry's
  * label. Hiding a field here hides it from this panel only — the REST API still returns it.
@@ -89,7 +100,7 @@ const NO_VOCABULARIES: Vocabularies = new Map();
 @Component({
   selector: 'lib-document-layout',
   standalone: true,
-  imports: [MatTabsModule, NgTemplateOutlet, TranslatePipe],
+  imports: [ExtensionOutletComponent, MatTabsModule, NgTemplateOutlet, TranslatePipe],
   templateUrl: './document-layout.html',
   styleUrl: './document-layout.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -101,6 +112,32 @@ export class DocumentLayoutComponent {
   private readonly layouts = inject(DocumentLayoutService);
   private readonly translate = inject(TranslateService);
   private readonly locale = inject(LOCALE_ID);
+  private readonly extensions = inject(AppExtensionsService);
+  private readonly components = inject(ExtensionComponentRegistry);
+  private readonly ruleContext = inject(ExtensionRuleContextService);
+
+  /** The `documentMetadata` entry that takes this document's section, or `null` for the layout. */
+  readonly entry = computed<ExtensionDocumentLayoutDescriptor | null>(() => {
+    const document = this.document();
+    if (!document?.type) return null;
+    return layoutSlotEntry(this.extensions, this.components, 'metadata', {
+      ...this.ruleContext.context(),
+      document,
+    });
+  });
+
+  /** `document` last, so a manifest `inputs.document` cannot stand in for the one on screen. */
+  readonly entryInputs = computed<Readonly<Record<string, unknown>>>(() => ({
+    ...this.entry()?.inputs,
+    document: this.document(),
+  }));
+
+  private readonly outlet = viewChild(ExtensionOutletComponent);
+
+  /** The entry's component is on screen. When it fails to load, the layout shows instead. */
+  private readonly usesEntry = computed(
+    () => this.entry() !== null && !(this.outlet()?.unresolved() ?? false),
+  );
 
   /**
    * Re-resolved per document, not per type: the service caches what it read successfully, and
@@ -110,7 +147,7 @@ export class DocumentLayoutComponent {
   private readonly target = computed<LayoutTarget | null>(
     () => {
       const document = this.document();
-      if (!document?.type) return null;
+      if (!document?.type || this.usesEntry()) return null;
       return {
         uid: document.uid,
         type: document.type,
@@ -221,11 +258,6 @@ export class DocumentLayoutComponent {
   }
 
   private text(label: LayoutLabel): string | null {
-    if (label.literal) return label.literal;
-    for (const key of label.keys) {
-      const translated: unknown = this.translate.instant(key);
-      if (typeof translated === 'string' && translated !== key) return translated;
-    }
-    return label.fallback;
+    return layoutLabelText(this.translate, label);
   }
 }

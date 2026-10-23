@@ -2,15 +2,18 @@
 title: Technology Stack
 parent: Engineering
 order: 5
-last_reviewed: 2026-10-08
-repo_commit: 2898046
+last_reviewed: 2026-10-14
+repo_commit: d36176c
 audience: engineering
 ---
 
 # Technology Stack
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `5abcd50` (`feature/nxsat-308-replace-adf-extensions`)
-> Only the `@alfresco/adf-extensions` row was re-verified at that commit; the rest of the page as of
+> **Last reviewed:** 2026-10-14 · **Repository:** `d36176c` (`feature/nxsat-308-remove-adf-packages`)
+> Only the ADF package rows, the version-pin rows, "The adf-hx dependency, in detail" and the
+> registry section were re-verified at that commit, for NXSAT-637. Before that, on 2026-10-08 at
+> `5abcd50` (`feature/nxsat-308-replace-adf-extensions`), the `@alfresco/adf-extensions` row, and the
+> `@hylandsoftware/satori-ui` row at `d500aae` (NXSAT-308, #332); the rest of the page as of
 > 2026-08-24 · `77265f9`.
 > The repository link to `.npmrc` was made relative on 2026-10-08 at `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`),
 > rather than pinned to `feature/adf-hx-browse-poc`.
@@ -21,45 +24,41 @@ audience: engineering
 
 ## The matrix
 
-| Technology                               | Version                             | Purpose                                                | Where used                                       | Why chosen                                                                                                                                                                                               |
-| ---------------------------------------- | ----------------------------------- | ------------------------------------------------------ | ------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Angular**                              | ~20.3                               | Application framework                                  | Everywhere                                       | RFC positions the ageing Polymer Web UI as the problem; Angular is `adf-hx`'s framework, so sharing components requires it                                                                               |
-| **TypeScript**                           | via Angular                         | Language                                               | Everywhere                                       | Type safety is load-bearing — the `api-surface` gate exists to police public _types_                                                                                                                     |
-| **Nx**                                   | 22.6.3                              | Monorepo, task graph, affected calculation, generators | Workspace                                        | 26 projects with enforced boundaries and `affected` builds; generators are also the customer-facing Layer 3 mechanism                                                                                    |
-| **RxJS**                                 | ~7.8                                | Async HTTP                                             | Services                                         | Angular's `HttpClient` is Observable-based                                                                                                                                                               |
-| **Angular signals**                      | 20.x                                | UI state                                               | Components                                       | Convention: `signal()` for mutable UI state, **never** `BehaviorSubject`. No global store                                                                                                                |
-| **`@alfresco/adf-hx-content-services`**  | **7.20.0-automate.292** (exact pin) | Real content components + 12 overridable API ports     | `adf-hx-bridge`, browse, search                  | **The strategic dependency.** Shares component investment with Alfresco. All 12 ports are overridable injection tokens — verified in the published artifact, and the mechanism the whole plan depends on |
-| **`@alfresco/adf-core`**                 | 9.0.0                               | adf-hx's runtime dependency                            | Transitively                                     | Not chosen — arrives with adf-hx. **Eager**, costing +1.15 MB initial bundle                                                                                                                             |
-| **`@alfresco/adf-extensions`**           | 9.0.0                               | adf-core's and adf-hx's runtime dependency             | Transitively                                     | Not imported by our source since NXSAT-308: `libs/shared/extensions` owns the three helpers it used, pinned to 9.0.0's output. Its `RuleContext` was never used — it is typed on ACS objects             |
-| **`@hylandsoftware/satori-ui`**          | ^0.2.0                              | Hyland design system                                   | `nuxeo-ui` only                                  | First-party design system. **Deliberately absent from the customer template** so a fork brings its own                                                                                                   |
-| **`@hylandsoftware/hxcs-js-client`**     | 2.0.111                             | HxCS contracts                                         | `adf-hx-bridge`                                  | The contracts the bridge implements. Largely `import type`                                                                                                                                               |
-| **Angular Material**                     | ~20.2                               | UI components                                          | `nuxeo-ui`, feature libs                         | adf-hx imports 48 Material sites itself, so it is unavoidable. Not in the template                                                                                                                       |
-| **`@ngx-translate/core`**                | ^17                                 | i18n                                                   | App + libs                                       | adf-core and adf-hx use it, so catalogues must layer onto the same loader                                                                                                                                |
-| **Vitest**                               | via `@nx/vitest`                    | Unit tests                                             | 19 projects                                      | Fast. **Caveat: strips types through esbuild, so a green `test` is not type safety**                                                                                                                     |
-| **Playwright**                           | untracked, `--no-save`              | E2E + evidence capture                                 | `nuxeo-ui-e2e`, `scripts/beta-harness`           | **Deliberately not a tracked dependency** so CI installs are not burdened with a browser download                                                                                                        |
-| **`@axe-core/playwright`**               | untracked                           | WCAG scanning                                          | `phase-6-a11y`                                   | Same reason. Absence is a **failed check**, never a silent skip                                                                                                                                          |
-| **ESLint + `@nx/eslint-plugin`**         | 9.x                                 | Lint + **module boundaries**                           | Workspace                                        | `enforce-module-boundaries` with real `depConstraints` is what makes the layer model enforceable                                                                                                         |
-| **Prettier**                             | 3.x                                 | Formatting                                             | Workspace                                        | `docs/api/platform.api.md` is in `.prettierignore` — Prettier reformats fenced blocks and silently corrupted the snapshot                                                                                |
-| **Husky + lint-staged**                  |                                     | Pre-commit                                             | Workspace                                        | ESLint `--fix` on `.ts`, Prettier on the rest                                                                                                                                                            |
-| **ng-packagr** via `@nx/angular:package` |                                     | Builds the publishable package                         | `libs/platform`                                  | **`ng-packagr-lite` was tried and rejected** — it skips FESM bundling and produced 4 unresolvable subpaths                                                                                               |
-| **Quill**                                | ^2.0.3                              | Rich-text notes                                        | `note-editor`                                    | Note authoring. Current `npm audit`: **1 low (XSS)**                                                                                                                                                     |
-| **DOMPurify**                            | ^3.3.3                              | HTML sanitisation                                      | Notes, comments                                  | XSS defence where user HTML is rendered                                                                                                                                                                  |
-| **`pdfjs-dist`**                         | 6.2.108                             | PDF rendering                                          | Preview                                          | Arrives with the adf-core peer set (RFC R5)                                                                                                                                                              |
-| **`cropperjs`**                          | 1.6.2                               | Image cropping                                         | Assets                                           |                                                                                                                                                                                                          |
-| **`date-fns`** + Material adapter        | 2.30                                | Dates                                                  | Forms                                            | adf-hx imports `date-fns`                                                                                                                                                                                |
-| **`angular-oauth2-oidc`**                | 19.0.0                              | OAuth/OIDC                                             | Auth                                             | SSO support                                                                                                                                                                                              |
-| **`@mat-datetimepicker/core`**           | 16.0.1                              | Date-time picker                                       | Forms                                            | Arrives with the adf-core peer set (RFC R5)                                                                                                                                                              |
-| **`minimatch`**                          | 10.2.6                              | Glob matching                                          |                                                  |                                                                                                                                                                                                          |
-| **`dotenv`**                             | ^17.4.1                             | Env loading                                            | Scripts                                          |                                                                                                                                                                                                          |
-| **`cors`**                               | ^2.8.6                              |                                                        | —                                                | See "unused" below                                                                                                                                                                                       |
-| **`tslib`, `zone.js`**                   |                                     | Angular runtime                                        | Everywhere                                       | Required                                                                                                                                                                                                 |
-| **Java + Maven**                         | 17+, 3.9+                           | Marketplace package + OSGi bundle                      | `nuxeo-agentic-core`, `nuxeo-agentic-ui-package` | The deliverable is a Nuxeo marketplace package                                                                                                                                                           |
-| **Docker Compose**                       |                                     | ARender, Mailpit                                       | Local dev                                        | Document viewer and local SMTP                                                                                                                                                                           |
-| **Nuxeo Server + OpenSearch**            | local, `:8080`                      | The backend                                            | —                                                | The product this is a UI for                                                                                                                                                                             |
-| **ARender**                              | `${ARENDER_VERSION}`                | Rich document viewing                                  | Preview                                          | Licensed Arondor component                                                                                                                                                                               |
-| **Mailpit**                              | v1.22.3                             | Local SMTP capture                                     | Permission notifications                         | Test email without a real relay                                                                                                                                                                          |
-| **GitHub Actions**                       |                                     | CI + 7 automation workflows                            | `.github/workflows`                              |                                                                                                                                                                                                          |
-| **Node.js**                              | **20.x, pinned**                    | Runtime                                                | Everything                                       | **Not optional** — Node 22+ shadows jsdom's `localStorage` and breaks specs on correct code                                                                                                              |
+| Technology                               | Version                | Purpose                                                | Where used                                       | Why chosen                                                                                                                                          |
+| ---------------------------------------- | ---------------------- | ------------------------------------------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Angular**                              | ~20.3                  | Application framework                                  | Everywhere                                       | RFC positions the ageing Polymer Web UI as the problem; Angular is `adf-hx`'s framework, so sharing components requires it                          |
+| **TypeScript**                           | via Angular            | Language                                               | Everywhere                                       | Type safety is load-bearing — the `api-surface` gate exists to police public _types_                                                                |
+| **Nx**                                   | 22.6.3                 | Monorepo, task graph, affected calculation, generators | Workspace                                        | 26 projects with enforced boundaries and `affected` builds; generators are also the customer-facing Layer 3 mechanism                               |
+| **RxJS**                                 | ~7.8                   | Async HTTP                                             | Services                                         | Angular's `HttpClient` is Observable-based                                                                                                          |
+| **Angular signals**                      | 20.x                   | UI state                                               | Components                                       | Convention: `signal()` for mutable UI state, **never** `BehaviorSubject`. No global store                                                           |
+| **`@hylandsoftware/satori-ui`**          | ^0.2.1                 | Hyland design system                                   | `nuxeo-ui` only                                  | First-party design system. **Deliberately absent from the customer template** so a fork brings its own                                              |
+| **Angular Material**                     | ~20.2                  | UI components                                          | `nuxeo-ui`, feature libs                         | adf-hx imports 48 Material sites itself, so it is unavoidable. Not in the template                                                                  |
+| **`@ngx-translate/core`**                | ^17                    | i18n                                                   | App + libs                                       | adf-core and adf-hx use it, so catalogues must layer onto the same loader                                                                           |
+| **Vitest**                               | via `@nx/vitest`       | Unit tests                                             | 19 projects                                      | Fast. **Caveat: strips types through esbuild, so a green `test` is not type safety**                                                                |
+| **Playwright**                           | untracked, `--no-save` | E2E + evidence capture                                 | `nuxeo-ui-e2e`, `scripts/beta-harness`           | **Deliberately not a tracked dependency** so CI installs are not burdened with a browser download                                                   |
+| **`@axe-core/playwright`**               | untracked              | WCAG scanning                                          | `phase-6-a11y`                                   | Same reason. Absence is a **failed check**, never a silent skip                                                                                     |
+| **ESLint + `@nx/eslint-plugin`**         | 9.x                    | Lint + **module boundaries**                           | Workspace                                        | `enforce-module-boundaries` with real `depConstraints` is what makes the layer model enforceable                                                    |
+| **Prettier**                             | 3.x                    | Formatting                                             | Workspace                                        | `docs/api/platform.api.md` is in `.prettierignore` — Prettier reformats fenced blocks and silently corrupted the snapshot                           |
+| **Husky + lint-staged**                  |                        | Pre-commit                                             | Workspace                                        | ESLint `--fix` on `.ts`, Prettier on the rest                                                                                                       |
+| **ng-packagr** via `@nx/angular:package` |                        | Builds the publishable package                         | `libs/platform`                                  | **`ng-packagr-lite` was tried and rejected** — it skips FESM bundling and produced 4 unresolvable subpaths                                          |
+| **Quill**                                | ^2.0.3                 | Rich-text notes                                        | `note-editor`                                    | Note authoring. Current `npm audit`: **1 low (XSS)**                                                                                                |
+| **DOMPurify**                            | ^3.3.3                 | HTML sanitisation                                      | Notes, comments                                  | XSS defence where user HTML is rendered                                                                                                             |
+| **`pdfjs-dist`**                         | 6.2.108                | Version pin                                            | —                                                | Left over from the adf-core peer set (RFC R5). Nothing depends on it since NXSAT-637 removed adf-core; NXSAT-672 drops it                           |
+| **`cropperjs`**                          | 1.6.2                  | Version pin                                            | `angular.json` styles only                       | Left over from adf-core, which depended on it; `angular.json` still loads its stylesheet. Nothing depends on it since NXSAT-637; NXSAT-672 drops it |
+| **`date-fns`** + Material adapter        | 2.30                   | Version pins                                           | —                                                | Left over from the adf-core peer set. Only the adapter's peer reaches `date-fns` since NXSAT-637; NXSAT-672 drops both                              |
+| **`angular-oauth2-oidc`**                | 19.0.0                 | Version pin                                            | —                                                | Left over from adf-core, which depended on it. Nothing depends on it since NXSAT-637; NXSAT-672 drops it                                            |
+| **`@mat-datetimepicker/core`**           | 16.0.1                 | Version pin                                            | —                                                | Left over from the adf-core peer set (RFC R5). Nothing depends on it since NXSAT-637; NXSAT-672 drops it                                            |
+| **`minimatch`**                          | 10.2.6                 | Version pin                                            | Dev tooling                                      | Left over from the adf-core peer set. It still decides the root copy that typescript-eslint and test-exclude resolve to, so NXSAT-672 re-decides it |
+| **`dotenv`**                             | ^17.4.1                | Env loading                                            | Scripts                                          |                                                                                                                                                     |
+| **`cors`**                               | ^2.8.6                 |                                                        | —                                                | See "unused" below                                                                                                                                  |
+| **`tslib`, `zone.js`**                   |                        | Angular runtime                                        | Everywhere                                       | Required                                                                                                                                            |
+| **Java + Maven**                         | 17+, 3.9+              | Marketplace package + OSGi bundle                      | `nuxeo-agentic-core`, `nuxeo-agentic-ui-package` | The deliverable is a Nuxeo marketplace package                                                                                                      |
+| **Docker Compose**                       |                        | ARender, Mailpit                                       | Local dev                                        | Document viewer and local SMTP                                                                                                                      |
+| **Nuxeo Server + OpenSearch**            | local, `:8080`         | The backend                                            | —                                                | The product this is a UI for                                                                                                                        |
+| **ARender**                              | `${ARENDER_VERSION}`   | Rich document viewing                                  | Preview                                          | Licensed Arondor component                                                                                                                          |
+| **Mailpit**                              | v1.22.3                | Local SMTP capture                                     | Permission notifications                         | Test email without a real relay                                                                                                                     |
+| **GitHub Actions**                       |                        | CI + 7 automation workflows                            | `.github/workflows`                              |                                                                                                                                                     |
+| **Node.js**                              | **20.x, pinned**       | Runtime                                                | Everything                                       | **Not optional** — Node 22+ shadows jsdom's `localStorage` and breaks specs on correct code                                                         |
 
 ---
 
@@ -84,7 +83,12 @@ of someone concluding this product makes direct LLM calls. It does not — see
 
 ## The adf-hx dependency, in detail
 
-The strategic dependency, and the riskiest. Established first-hand (RFC §14):
+**Removed.** NXSAT-637 took `@alfresco/adf-hx-content-services`, `@alfresco/adf-core`,
+`@alfresco/adf-extensions`, `@alfresco/js-api` and `@hylandsoftware/hxcs-js-client` out of
+`package.json` and the lock, as part of the NXSAT-308 ADF removal. This section is kept as the
+record of why they were pinned the way they were.
+
+It was the strategic dependency, and the riskiest. Established first-hand (RFC §14):
 
 | Fact                                   | Value                                                        |
 | -------------------------------------- | ------------------------------------------------------------ |
@@ -96,37 +100,34 @@ The strategic dependency, and the riskiest. Established first-hand (RFC §14):
 | Packages actually imported             | **13**                                                       |
 | Test artifacts in the published bundle | **Yes** — `ng-mocks`, and `api/index.d.ts` exports a mock    |
 
-Consequences carried in this repository:
+Consequences it left in this repository:
 
 - **Pin exact versions, never a dist-tag.** A hard stop in the phase skill.
-- **We maintain the true peer set ourselves**, because upstream does not declare it. A missing pin
-  surfaces as a _build_ error, not a dependency error.
-- **`tools/stubs/ng-mocks`** replaces the real `ng-mocks` because adf-hx imports a test library
+- **We maintained the true peer set ourselves**, because upstream did not declare it. A missing pin
+  surfaced as a _build_ error, not a dependency error. Those pins outlive adf-core — see the
+  matrix — until NXSAT-672 drops them.
+- **`tools/stubs/ng-mocks`** replaced the real `ng-mocks` because adf-hx imported a test library
   from its shipped runtime bundle — which put its implementation and **two `eval()` calls** into a
-  customer-facing chunk. Guarded by `npm run beta:bundle`, now reporting 0 `eval()`.
-- **`@alfresco/js-api` is a devDependency**, not a runtime one: it is a mandatory peer but a
-  **types-only** import — the runtime `.mjs` never references it. That keeps a 7 MB Alfresco REST
+  customer-facing chunk. Guarded by `npm run beta:bundle`. The stub is still a root `file:`
+  dependency until NXSAT-672.
+- **`@alfresco/js-api` was a devDependency**, not a runtime one: it was a mandatory peer but a
+  **types-only** import — the runtime `.mjs` never referenced it. That kept a 7 MB Alfresco REST
   client out of a Nuxeo product.
 
 ---
 
 ## Registry configuration
 
-[`.npmrc`](../../.npmrc) maps
-**both** `@alfresco` and `@hylandsoftware` to GitHub Packages. All four Alfresco packages we need
-download from there — verified twice by fetching the tarballs with only that mapping present.
+[`.npmrc`](../../.npmrc) maps `@hylandsoftware` to GitHub Packages. The four packages resolved
+from there are `@hylandsoftware/satori-ui` and the `satori-fonts`, `satori-icons` and
+`satori-tokens` it depends on. The `@alfresco` mapping went in NXSAT-637 with the last `@alfresco`
+package, so `SATORI_GH_READONLY_TOKEN` needs `read:packages` on the Hyland org only.
 
-Two rules:
+One rule:
 
-- **Do not repoint `@alfresco` at public npm.** `adf-hx-content-services` is
-  GitHub-Packages-exclusive. `adf-extensions`, `adf-core` and `js-api` _are_ also on public npm,
-  which makes a two-registry split look necessary. It is not.
 - **`.npmrc` does not decide where CI fetches from — `package-lock.json` does.** `npm ci` installs
   from each entry's `resolved` URL and ignores the registry mapping. Change a scope's registry and
   you must regenerate the lock, or any claim about token scope is untested.
-
-`SATORI_GH_READONLY_TOKEN` needs `read:packages` on the **Alfresco** org as well as Hyland,
-because `@alfresco/adf-extensions` is a production dependency.
 
 ---
 

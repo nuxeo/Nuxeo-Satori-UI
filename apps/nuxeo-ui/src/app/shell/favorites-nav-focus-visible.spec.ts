@@ -5,7 +5,7 @@ import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { TranslateModule } from '@ngx-translate/core';
 
-import { PACKAGED_NAV_ITEMS } from '@nuxeo-satori/platform/extensions';
+import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 

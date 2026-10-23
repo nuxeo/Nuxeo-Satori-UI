@@ -1,0 +1,93 @@
+:host {
+  --nxs-details-panel-surface: var(--mat-sys-surface);
+  --nxs-details-panel-text: var(--mat-sys-on-surface);
+  --nxs-details-panel-divider: var(--mat-sys-outline-variant);
+  --nxs-details-panel-muted: var(--mat-sys-on-surface-variant);
+  --nxs-details-panel-accent: var(--mat-sys-primary);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--nxs-details-panel-surface);
+}
+
+.nxs-details-panel__header {
+  display: flex;
+  align-items: center;
+  padding: 12px 8px 12px 16px;
+  border-bottom: 1px solid var(--nxs-details-panel-divider);
+  flex-shrink: 0;
+}
+
+.nxs-details-panel__title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--nxs-details-panel-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+// IBM Equal Access `style_focus_visible` reads `:focus` only, so each ring is a standalone `:focus`
+// rule rather than a list with `:focus-visible`. Inset, so it stays inside the panel.
+.nxs-details-panel__close:focus {
+  outline: 2px solid var(--nxs-details-panel-muted);
+  outline-offset: -2px;
+}
+
+.nxs-details-panel__tabs {
+  display: flex;
+  border-bottom: 1px solid var(--nxs-details-panel-divider);
+  flex-shrink: 0;
+}
+
+.nxs-details-panel__tab {
+  flex: 1;
+  padding: 10px 16px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--nxs-details-panel-muted);
+  cursor: pointer;
+  text-align: center;
+  position: relative;
+
+  &:hover {
+    color: var(--nxs-details-panel-text);
+  }
+
+  &--active {
+    color: var(--nxs-details-panel-accent);
+
+    &::after {
+      content: '';
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: var(--nxs-details-panel-accent);
+    }
+  }
+}
+
+.nxs-details-panel__tab:focus {
+  outline: 2px solid var(--nxs-details-panel-muted);
+  outline-offset: -2px;
+}
+
+.nxs-details-panel__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+.nxs-details-panel__body:focus {
+  outline: 2px solid var(--nxs-details-panel-muted);
+  outline-offset: -2px;
+}

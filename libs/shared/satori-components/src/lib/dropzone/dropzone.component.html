@@ -1,0 +1,30 @@
+<mat-icon class="nxs-dropzone__icon" aria-hidden="true">upload_file</mat-icon>
+<span class="nxs-dropzone__label">{{ label() }}</span>
+<button
+  mat-stroked-button
+  type="button"
+  class="nxs-dropzone__button"
+  [id]="buttonId"
+  [disabled]="disabled()"
+  (click)="choose()"
+>
+  {{
+    buttonLabel().trim() ||
+      ((multiple()
+        ? 'satori-components.dropzone.choose-files'
+        : 'satori-components.dropzone.choose-file'
+      ) | translate)
+  }}
+</button>
+<input
+  #picker
+  type="file"
+  class="nxs-dropzone__input"
+  tabindex="-1"
+  aria-hidden="true"
+  [attr.aria-labelledby]="buttonId"
+  [multiple]="multiple()"
+  [attr.accept]="accept() || null"
+  [disabled]="disabled()"
+  (change)="onPicked($event)"
+/>

@@ -26,6 +26,23 @@ export function resolveAcePrincipal(value: unknown): string {
 }
 
 /**
+ * The display name of an extended ACE principal (`fetch-acls: extended`): a user's first and last
+ * name, or a group's label. Empty when the server sent only the id, or no name beyond it.
+ */
+function resolveAcePrincipalLabel(value: unknown): string {
+  if (!value || typeof value !== 'object') return '';
+  const entity = value as {
+    grouplabel?: unknown;
+    properties?: { firstName?: unknown; lastName?: unknown; grouplabel?: unknown };
+  };
+  const text = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const person = [text(entity.properties?.firstName), text(entity.properties?.lastName)]
+    .filter(Boolean)
+    .join(' ');
+  return person || text(entity.grouplabel) || text(entity.properties?.grouplabel);
+}
+
+/**
  * Prefer a non-empty enricher value from `updated`; fall back to `existing`.
  * Empty arrays are treated as absent so a PUT without enrichers (or with
  * `permissions: []`) does not wipe known permissions — including masking a
@@ -94,11 +111,15 @@ export function normalizeDocumentAcls(doc: NuxeoDocument): NuxeoDocument {
 
   const normalizedAcls = acls.map((acl) => ({
     ...acl,
-    aces: acl.aces.map((ace) => ({
-      ...ace,
-      username: resolveAcePrincipal(ace.username),
-      creator: ace.creator ? resolveAcePrincipal(ace.creator) : null,
-    })),
+    aces: acl.aces.map((ace) => {
+      const label = resolveAcePrincipalLabel(ace.username);
+      return {
+        ...ace,
+        username: resolveAcePrincipal(ace.username),
+        ...(label ? { usernameLabel: label } : {}),
+        creator: ace.creator ? resolveAcePrincipal(ace.creator) : null,
+      };
+    }),
   }));
 
   return {

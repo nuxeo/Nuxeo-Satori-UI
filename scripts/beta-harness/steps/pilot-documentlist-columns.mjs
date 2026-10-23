@@ -49,7 +49,7 @@ function manifestDocument(extensions) {
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  h.step('Precondition: a backend is reachable, so browse renders real rows');
+  await h.step('Precondition: a backend is reachable, so browse renders real rows');
   const probe = await page.request
     .get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false })
     .catch(() => null);
@@ -102,7 +102,7 @@ export default async function run(page, h) {
     await page.waitForTimeout(2000);
   };
 
-  h.step('Default: the packaged columns render exactly as before Layer 1');
+  await h.step('Default: the packaged columns render exactly as before Layer 1');
   await h.login();
   // A user preference would mask the packaged defaults, and a previous capture on
   // this origin may have left one behind.
@@ -118,7 +118,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('columns-packaged-default');
 
-  h.step('A manifest relabels a column, with no rebuild');
+  await h.step('A manifest relabels a column, with no rebuild');
   await applyManifest({
     overrides: { 'app.documentList.lastContributor': { label: 'Last edited by' } },
   });
@@ -137,7 +137,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('columns-manifest-relabelled');
 
-  h.step('A manifest hides a column');
+  await h.step('A manifest hides a column');
   await applyManifest({ overrides: { 'app.documentList.modified': { visible: false } } });
   await h.goTo('/#/browse');
   await page.waitForTimeout(1500);
@@ -154,7 +154,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('columns-manifest-hidden');
 
-  h.step('A manifest reorders columns');
+  await h.step('A manifest reorders columns');
   await applyManifest({ overrides: { 'app.documentList.lastContributor': { order: 5 } } });
   await h.goTo('/#/browse');
   await page.waitForTimeout(1500);
@@ -166,7 +166,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('columns-manifest-reordered');
 
-  h.step('A manifest switches on a column that ships hidden');
+  await h.step('A manifest switches on a column that ships hidden');
   await applyManifest({
     slots: { documentList: [{ id: 'app.documentList.version', hiddenByDefault: false }] },
   });
@@ -180,7 +180,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('columns-manifest-switched-on');
 
-  h.step('An absent manifest falls back to the packaged columns');
+  await h.step('An absent manifest falls back to the packaged columns');
   await applyManifest(null);
   await h.goTo('/#/browse');
   await page.waitForTimeout(1500);
@@ -196,6 +196,6 @@ export default async function run(page, h) {
   );
   await h.screenshot('columns-fallback-after-absent-manifest');
 
-  h.step('Health');
+  await h.step('Health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

@@ -34,6 +34,10 @@
  * assurance than it is.
  *
  * Usage:  node scripts/review-guardrails.selftest.mjs
+ *         GUARDRAIL_SELFTEST_ONLY=checkA,checkB node scripts/review-guardrails.selftest.mjs
+ *
+ * The second form runs only the named guardrails' controls, for iterating on one; the report says
+ * it was filtered, and CI never sets it.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -46,6 +50,8 @@ const GUARDRAILS = join(ROOT, 'scripts', 'review-guardrails.mjs');
 
 let negative = 0;
 let positive = 0;
+const ONLY = process.env.GUARDRAIL_SELFTEST_ONLY?.split(',').map((name) => name.trim());
+const selected = (guardrail) => !ONLY || ONLY.includes(guardrail);
 /**
  * Positive controls that specifically assert a NON-violation is not flagged.
  *
@@ -162,6 +168,7 @@ function withFixture(files, mutate, run) {
 
 /** Asserts the guardrail goes red, and that the message says why. */
 function expectRed(label, guardrail, files, mutate, expected) {
+  if (!selected(guardrail)) return;
   negative += 1;
   withFixture(files, mutate, (runGuardrail) => {
     const { code, out } = runGuardrail(guardrail);
@@ -188,6 +195,7 @@ function expectRed(label, guardrail, files, mutate, expected) {
  * a demoted check quietly becomes no check at all.
  */
 function expectWarn(label, guardrail, files, mutate, expected) {
+  if (!selected(guardrail)) return;
   negative += 1;
   withFixture(files, mutate, (runGuardrail) => {
     const { code, out } = runGuardrail(guardrail);
@@ -206,6 +214,7 @@ function expectWarn(label, guardrail, files, mutate, expected) {
 
 /** Asserts a correct tree is green — the control that stops a guardrail failing on everything. */
 function expectGreen(label, guardrail, files) {
+  if (!selected(guardrail)) return;
   positive += 1;
   withFixture(files, null, (runGuardrail) => {
     const { code, out } = runGuardrail(guardrail);
@@ -262,13 +271,17 @@ expectRed(
 );
 
 falsePositiveControls += 1;
-expectGreen('a catalogue with carriage return as JSON whitespace between tokens', 'checkTranslationCatalogues', {
-  'apps/nuxeo-ui/public/i18n/en.json':
-    '{\r "app": { "title": "Hyland Nuxeo", "nav": { "toggle": "Toggle navigation menu" } }, ' +
-    '"settings": { "themes": { "search": "Search themes" } } }\n',
-  'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK,
-  'apps/nuxeo-ui/src/app/shell/app-shell.component.html': GOOD_TEMPLATE,
-});
+expectGreen(
+  'a catalogue with carriage return as JSON whitespace between tokens',
+  'checkTranslationCatalogues',
+  {
+    'apps/nuxeo-ui/public/i18n/en.json':
+      '{\r "app": { "title": "Hyland Nuxeo", "nav": { "toggle": "Toggle navigation menu" } }, ' +
+      '"settings": { "themes": { "search": "Search themes" } } }\n',
+    'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK,
+    'apps/nuxeo-ui/src/app/shell/app-shell.component.html': GOOD_TEMPLATE,
+  },
+);
 
 expectWarn(
   'locale missing a key the reference has — warns, because English is the fallback',
@@ -480,7 +493,12 @@ expectRed(
   {
     'apps/nuxeo-ui/public/i18n/en.json': EN_PLACEHOLDERS,
     'apps/nuxeo-ui/public/i18n/fr.json': `${JSON.stringify(
-      { browse: { deleted: '{{count}} documents supprimés de {{ folder }}', title: 'Parcourir {{  count  }}' } },
+      {
+        browse: {
+          deleted: '{{count}} documents supprimés de {{ folder }}',
+          title: 'Parcourir {{  count  }}',
+        },
+      },
       null,
       2,
     )}\n`,
@@ -689,6 +707,60 @@ expectRed(
   /maps it to an empty string/,
 );
 
+/**
+ * `[label]` on an `nxs-` component is an accessible name — `nxs-spinner`'s progressbar,
+ * `nxs-icon`'s image — so its key needs a fallback too. The binding pattern read only HTML
+ * attributes and passed this tree; the note image picker's spinner key was missing from the
+ * fallback for that reason until someone noticed by hand. Wrapped across lines, as spinners are.
+ */
+const NXS_LABEL_APP = {
+  ...APP,
+  'apps/nuxeo-ui/public/i18n/en.json': EN_JSON.replace(
+    '"title": "Hyland Nuxeo",',
+    '"title": "Hyland Nuxeo",\n    "loading": "Loading",',
+  ),
+  'libs/features/browse/src/lib/browse/browse.html':
+    '<nxs-spinner\n  diameter="36"\n  [label]="\'app.loading\' | translate"\n/>\n',
+};
+
+expectRed(
+  'an nxs- component label key missing from the fallback',
+  'checkAccessibleNameFallbacks',
+  NXS_LABEL_APP,
+  null,
+  /binds label to `app\.loading`.*omits/s,
+);
+
+expectRed(
+  'an nxs- component label key missing from the fallback, after a quoted ">"',
+  'checkAccessibleNameFallbacks',
+  {
+    ...NXS_LABEL_APP,
+    'libs/features/browse/src/lib/browse/browse.html':
+      '<nxs-spinner\n  [diameter]="size > 0 ? 36 : 24"\n  [label]="\'app.loading\' | translate"\n/>\n',
+  },
+  null,
+  /binds label to `app\.loading`.*omits/s,
+);
+
+expectGreen('an nxs- component label key in the fallback', 'checkAccessibleNameFallbacks', {
+  ...NXS_LABEL_APP,
+  'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': EN_FALLBACK.replace(
+    '};',
+    "  'app.loading': 'Loading',\n};",
+  ),
+});
+
+expectGreen(
+  'a [label] on a non-nxs element is not an accessible name this gate owns',
+  'checkAccessibleNameFallbacks',
+  {
+    ...NXS_LABEL_APP,
+    'libs/features/browse/src/lib/browse/browse.html':
+      '<mat-tab [label]="\'app.loading\' | translate"></mat-tab>\n',
+  },
+);
+
 expectRed(
   'no accessible names bound at all must not read as a pass',
   'checkAccessibleNameFallbacks',
@@ -864,11 +936,15 @@ class TestHost {}
 it('renders', () => expect(TestHost).toBeTruthy());
 `;
 
-expectGreen('a fixture referenced by exactly one sibling spec is exempt', 'checkNoHardcodedUiText', {
-  ...APP,
-  'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
-  'apps/nuxeo-ui/src/app/shell/widget.spec.ts': hostingSpec('widget.host.html'),
-});
+expectGreen(
+  'a fixture referenced by exactly one sibling spec is exempt',
+  'checkNoHardcodedUiText',
+  {
+    ...APP,
+    'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
+    'apps/nuxeo-ui/src/app/shell/widget.spec.ts': hostingSpec('widget.host.html'),
+  },
+);
 
 // Copilot's case. `dashboard/widget.host.html` is referenced by nothing, but under basename
 // matching it saw `shell/widget.spec.ts` — a spec for a DIFFERENT file — and was exempted on
@@ -890,13 +966,17 @@ expectRed(
 // rule: two fixtures that legitimately share a basename each have their own hosting spec. Under
 // basename matching both saw two specs, failed the "exactly one" test, and NEITHER was exempt —
 // a false rejection. Resolution gives each its own proof.
-expectGreen('two same-named fixtures each with their own hosting spec are both exempt', 'checkNoHardcodedUiText', {
-  ...APP,
-  'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
-  'apps/nuxeo-ui/src/app/shell/widget.spec.ts': hostingSpec('widget.host.html'),
-  'apps/nuxeo-ui/src/app/dashboard/widget.host.html': FIXTURE_PROSE,
-  'apps/nuxeo-ui/src/app/dashboard/widget.spec.ts': hostingSpec('widget.host.html'),
-});
+expectGreen(
+  'two same-named fixtures each with their own hosting spec are both exempt',
+  'checkNoHardcodedUiText',
+  {
+    ...APP,
+    'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
+    'apps/nuxeo-ui/src/app/shell/widget.spec.ts': hostingSpec('widget.host.html'),
+    'apps/nuxeo-ui/src/app/dashboard/widget.host.html': FIXTURE_PROSE,
+    'apps/nuxeo-ui/src/app/dashboard/widget.spec.ts': hostingSpec('widget.host.html'),
+  },
+);
 
 // A mention is not a reference. Under basename matching, a spec that only talked ABOUT the file
 // — in a comment, in a string, in a variable name — proved it was a fixture.
@@ -907,8 +987,8 @@ expectRed(
     ...APP,
     'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
     'apps/nuxeo-ui/src/app/shell/unrelated.spec.ts':
-      '// See widget.host.html for the markup that reproduced this.\nit('
-      + "'passes', () => expect(true).toBe(true));\n",
+      '// See widget.host.html for the markup that reproduced this.\nit(' +
+      "'passes', () => expect(true).toBe(true));\n",
   },
   null,
   /shell\/widget\.host\.html:1 introduces the text `Show details` as hard-coded English/,
@@ -925,8 +1005,8 @@ expectRed(
     ...APP,
     'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
     'apps/nuxeo-ui/src/app/shell/unrelated.spec.ts':
-      "// See './widget.host.html' for the markup that reproduced this.\nit("
-      + "'passes', () => expect(true).toBe(true));\n",
+      "// See './widget.host.html' for the markup that reproduced this.\nit(" +
+      "'passes', () => expect(true).toBe(true));\n",
   },
   null,
   /shell\/widget\.host\.html:1 introduces the text `Show details` as hard-coded English/,
@@ -935,13 +1015,17 @@ expectRed(
 // ...and the other side of that: a reference in real code must still count, or the parser change
 // would simply have disabled the exemption. `hostingSpec` puts it in a `templateUrl`, so this is
 // the positive control for the AST path specifically.
-expectGreen('a fixture referenced from a block-commented spec’s live code is still exempt', 'checkNoHardcodedUiText', {
-  ...APP,
-  'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
-  'apps/nuxeo-ui/src/app/shell/widget.spec.ts':
-    "/* Hosts './other.host.html' in an older revision — kept for context. */\n" +
-    hostingSpec('widget.host.html'),
-});
+expectGreen(
+  'a fixture referenced from a block-commented spec’s live code is still exempt',
+  'checkNoHardcodedUiText',
+  {
+    ...APP,
+    'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
+    'apps/nuxeo-ui/src/app/shell/widget.spec.ts':
+      "/* Hosts './other.host.html' in an older revision — kept for context. */\n" +
+      hostingSpec('widget.host.html'),
+  },
+);
 
 // Round four: `..` that climbs above the repository root. `resolveRef` walked segments and
 // popped on `..`, and `pop()` on an empty array is a no-op — so a path that really resolves
@@ -1047,10 +1131,13 @@ expectRed(
 
 // The other side of it, or the resolution would just have disabled the exemption for anyone
 // who renames the import. An alias is still the same binding.
-expectGreen('a fixture hosted through an aliased @angular/core Component import is exempt', 'checkNoHardcodedUiText', {
-  ...APP,
-  'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
-  'apps/nuxeo-ui/src/app/shell/widget.spec.ts': `import { Component as NgComponent } from '@angular/core';
+expectGreen(
+  'a fixture hosted through an aliased @angular/core Component import is exempt',
+  'checkNoHardcodedUiText',
+  {
+    ...APP,
+    'apps/nuxeo-ui/src/app/shell/widget.host.html': FIXTURE_PROSE,
+    'apps/nuxeo-ui/src/app/shell/widget.spec.ts': `import { Component as NgComponent } from '@angular/core';
 
 @NgComponent({
   standalone: true,
@@ -1061,7 +1148,8 @@ class TestHost {}
 
 it('renders', () => expect(TestHost).toBeTruthy());
 `,
-});
+  },
+);
 
 // Round two's property, also never controlled: a shipped component compiling the file means its
 // text is not test data, so the fixture cannot hold the proof of its own exemption.
@@ -1110,6 +1198,7 @@ const NOT_PROSE = [
 ];
 
 for (const [label, line] of NOT_PROSE) {
+  if (!selected('checkNoHardcodedUiText')) break;
   positive += 1;
   falsePositiveControls += 1;
   withFixture(
@@ -1153,6 +1242,27 @@ expectRed(
       `${GOOD_DESCRIPTORS}export const EXTRA = [{ id: 'x', label: 'Knowledge Discovery' }];\n`,
     ),
   /carries `label: 'Knowledge Discovery'` — a user-facing string in a descriptor/,
+);
+
+// A story's args are documentation sample data, like a spec's fixtures.
+falsePositiveControls += 1;
+expectGreen('a literal label in a story arg', 'checkNoHardcodedDescriptorText', {
+  ...WITH_DESCRIPTORS,
+  'libs/shared/satori-components/src/lib/tag/tag.stories.ts':
+    "export const Default = { args: { label: 'Invoice' } };\n",
+});
+
+// …but only a `.stories.ts` file: the same literal in a neighbouring source file is still caught.
+expectRed(
+  'a literal label in a file merely named like a story',
+  'checkNoHardcodedDescriptorText',
+  WITH_DESCRIPTORS,
+  (write) =>
+    write(
+      'libs/shared/satori-components/src/lib/tag/tag.stories-data.ts',
+      "export const TAGS = [{ id: 'x', label: 'Invoice' }];\n",
+    ),
+  /tag\.stories-data\.ts:1 carries `label: 'Invoice'`/,
 );
 
 const SHELL = (title) =>
@@ -1532,10 +1642,10 @@ expectRed(
   'checkShippedDefaultLanguage',
   {
     ...CATALOGUES,
-    'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP('zz', [
-      'en',
-      'fr',
-    ]),
+    'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP(
+      'zz',
+      ['en', 'fr'],
+    ),
   },
   null,
   /GENERATED pseudo-locale/,
@@ -1546,11 +1656,10 @@ expectRed(
   'checkShippedDefaultLanguage',
   {
     ...CATALOGUES,
-    'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP('de', [
-      'en',
-      'fr',
+    'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP(
       'de',
-    ]),
+      ['en', 'fr', 'de'],
+    ),
   },
   null,
   /no catalogue exists for it/,
@@ -1561,7 +1670,10 @@ expectRed(
   'checkShippedDefaultLanguage',
   {
     ...CATALOGUES,
-    'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP('fr', ['en']),
+    'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP(
+      'fr',
+      ['en'],
+    ),
   },
   null,
   /absent from/,
@@ -1569,7 +1681,10 @@ expectRed(
 
 expectGreen('a real shipped default', 'checkShippedDefaultLanguage', {
   ...CATALOGUES,
-  'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP('en', ['en', 'fr']),
+  'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json': BOOTSTRAP(
+    'en',
+    ['en', 'fr'],
+  ),
 });
 
 // A gate that cannot find the file it checks must say so, not pass.
@@ -1704,6 +1819,7 @@ for (const [label, line] of [
   ['a commented-out label', `// label: 'Knowledge Discovery'`],
   ['a docblock mentioning one', ` * label: 'Knowledge Discovery'`],
 ]) {
+  if (!selected('checkNoHardcodedDescriptorText')) break;
   positive += 1;
   falsePositiveControls += 1;
   withFixture(
@@ -2001,7 +2117,10 @@ const INSTALL_XML_BEFORE = `<install>
 `;
 
 /** NXSAT-317's installer: the config directory carried only a sample, replaced on upgrade. */
-const INSTALL_XML_SAMPLE = INSTALL_XML_BEFORE.replace(/overwrite="false" \/>/, 'overwrite="true" />');
+const INSTALL_XML_SAMPLE = INSTALL_XML_BEFORE.replace(
+  /overwrite="false" \/>/,
+  'overwrite="true" />',
+);
 
 /** NXSAT-312's: configuration is contributed to the configuration service, nothing is copied. */
 const INSTALL_XML_AFTER = `<install>
@@ -2112,9 +2231,13 @@ expectGreen('the NXSAT-312 installer', 'checkInstallerOwnsNoCustomerFile', {
 });
 
 falsePositiveControls += 1;
-expectGreen('overwrite="TRUE", which parseBoolean reads as true', 'checkInstallerOwnsNoCustomerFile', {
-  [INSTALL_XML]: INSTALL_XML_AFTER.replace(/overwrite="true" \/>/, 'overwrite="TRUE" />'),
-});
+expectGreen(
+  'overwrite="TRUE", which parseBoolean reads as true',
+  'checkInstallerOwnsNoCustomerFile',
+  {
+    [INSTALL_XML]: INSTALL_XML_AFTER.replace(/overwrite="true" \/>/, 'overwrite="TRUE" />'),
+  },
+);
 
 expectRed(
   'no installer found at all',
@@ -4040,11 +4163,15 @@ expectRed(
 // prove the matcher works. This one proves the attribute's quotes do not manufacture one; the
 // red controls above are what prove the matcher still bites.
 falsePositiveControls += 1;
-expectGreen('a single-quoted key inside a double-quoted attribute', 'checkNoTranslatableDatePatterns', {
-  ...APP,
-  'libs/features/x/src/lib/x.html':
-    '<span [title]="entry.eventDate | date: (\'longDate\')">{{ entry.name }}</span>\n',
-});
+expectGreen(
+  'a single-quoted key inside a double-quoted attribute',
+  'checkNoTranslatableDatePatterns',
+  {
+    ...APP,
+    'libs/features/x/src/lib/x.html':
+      '<span [title]="entry.eventDate | date: (\'longDate\')">{{ entry.name }}</span>\n',
+  },
+);
 
 // The exemption must not become a loophole. `common.date-mask` is allowed to BE a date pattern;
 // it is not allowed to be USED as one in a template. Arm 2 is what makes that distinction real
@@ -4561,7 +4688,8 @@ expectRed(
  * languages it could not render, and the gate was looking somewhere else entirely.
  */
 const TEMPLATE_CONFIG = 'apps/nuxeo-satori-template/public/agentic-ui-config/bootstrap.json';
-const PACKAGED_CONFIG = 'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json';
+const PACKAGED_CONFIG =
+  'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json';
 const EN_ONLY = '{\n  "defaultLanguage": "en",\n  "availableLanguages": ["en"]\n}\n';
 
 expectRed(
@@ -4763,8 +4891,7 @@ const METHOD_BINDING_TS = `export class XComponent {
   }
 }
 `;
-const METHOD_BINDING_HTML =
-  `<button type="button" [attr.aria-label]="panelLabelKey() | translate"></button>\n`;
+const METHOD_BINDING_HTML = `<button type="button" [attr.aria-label]="panelLabelKey() | translate"></button>\n`;
 const METHOD_BINDING_APP = {
   'apps/nuxeo-ui/public/i18n/en.json': METHOD_BINDING_CATALOGUE,
   'apps/nuxeo-ui/src/app/i18n/en-fallback.ts': METHOD_BINDING_FALLBACK,
@@ -4791,8 +4918,7 @@ expectGreen(
   METHOD_BINDING_APP,
 );
 
-const METHOD_PLACEHOLDER_HTML =
-  `<input [placeholder]="inputLabelKey() | translate" />\n`;
+const METHOD_PLACEHOLDER_HTML = `<input [placeholder]="inputLabelKey() | translate" />\n`;
 const METHOD_PLACEHOLDER_TS = `export class XComponent {
   inputLabelKey(): 'x.panel.hide' | 'x.panel.show' {
     return this.open ? 'x.panel.hide' : 'x.panel.show';
@@ -5063,8 +5189,7 @@ expectRed(
   /panelLabelKey\(\).*control-flow path does not return a resolvable/s,
 );
 
-const METHOD_PARAM_HTML =
-  `<button type="button" [attr.aria-label]="panelLabelKey() | translate: { name: itemName() }"></button>\n`;
+const METHOD_PARAM_HTML = `<button type="button" [attr.aria-label]="panelLabelKey() | translate: { name: itemName() }"></button>\n`;
 expectRed(
   'a parameterised method-bound accessible name whose keys are missing from the fallback map',
   'checkAccessibleNameFallbacks',
@@ -5543,6 +5668,2719 @@ expectGreen(
     'export const label = (k: string) => `shared-ui.${k}`;\n',
   ),
 );
+
+/* ---------------- libs/shared/satori-components (NXSAT-308) ---------------- */
+
+const NXS_ROOT = 'libs/shared/satori-components';
+const NXS_COMPONENT = `${NXS_ROOT}/src/lib/thing/thing.component.ts`;
+const NXS_STYLES = `${NXS_ROOT}/src/lib/thing/thing.component.scss`;
+const nxsComponent = ({ imports = '', config = "selector: 'nxs-thing', standalone: true," } = {}) =>
+  `import { Component } from '@angular/core';\n${imports}\n` +
+  `@Component({\n  ${config}\n  templateUrl: './thing.component.html',\n` +
+  `  styleUrl: './thing.component.scss',\n})\nexport class NxsThingComponent {}\n`;
+
+/** The package root, listing the given subpaths in `PLATFORM_ENTRY_POINTS`. */
+const PLATFORM_INDEX = 'libs/platform/src/index.ts';
+const platformIndex = (...subpaths) =>
+  `export const PLATFORM_ENTRY_POINTS = Object.freeze([${subpaths
+    .map((subpath) => `'${subpath}'`)
+    .join(', ')}] as const);\n`;
+
+/** A correct library: one standalone component behind its barrel, published and aliased. */
+const NXS_LIB = (extra = {}, paths = {}) => ({
+  'tsconfig.base.json': `${JSON.stringify(
+    {
+      compilerOptions: {
+        paths: {
+          '@nuxeo/satori-platform/components': [`${NXS_ROOT}/src/index.ts`],
+          '@nuxeo/satori-platform/nuxeo-client': ['libs/shared/nuxeo-client/src/index.ts'],
+          ...paths,
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`,
+  'libs/platform/components/ng-package.json':
+    '{ "lib": { "entryFile": "../../shared/satori-components/src/index.ts" } }\n',
+  [PLATFORM_INDEX]: platformIndex('components'),
+  [`${NXS_ROOT}/src/index.ts`]:
+    "export { NxsThingComponent } from './lib/thing/thing.component';\n",
+  [NXS_COMPONENT]: nxsComponent(),
+  [`${NXS_ROOT}/src/lib/thing/thing.component.html`]: '<p>{{ 1 }}</p>\n',
+  [NXS_STYLES]: ':host {\n  display: block;\n}\n',
+  'libs/shared/nuxeo-client/src/index.ts': "export * from './lib/clean';\n",
+  'libs/shared/nuxeo-client/src/lib/clean.ts': 'export const clean = 1;\n',
+  ...extra,
+});
+
+// checkSatoriComponentsDependencies
+
+expectGreen('a library importing only Angular', 'checkSatoriComponentsDependencies', NXS_LIB());
+
+// A workspace import is followed, not refused: a clean shared library is fine to depend on.
+falsePositiveControls += 1;
+expectGreen(
+  'a library importing a clean workspace library',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { clean } from '@nuxeo/satori-platform/nuxeo-client';",
+    }),
+  }),
+);
+
+/**
+ * The real `nuxeo-client` and `extensions` barrels, not stand-ins.
+ *
+ * A fixture that stubs a library proves the walk, not that the shipped library is clean, and the
+ * walk skips an alias whose target is absent — so the fixture carries every non-spec source in
+ * `libs/` and the real `tsconfig.base.json`. The two red controls after it re-introduce the
+ * imports each barrel once carried, two hops deep, so the green cannot come from a walk that never
+ * entered either library.
+ */
+const REAL_LIBS = (() => {
+  const listed = spawnSync('git', ['ls-files', '-z', 'libs', 'tsconfig.base.json'], {
+    cwd: ROOT,
+    encoding: 'utf8',
+  });
+  if (listed.status !== 0) throw new Error(`git ls-files failed: ${listed.stderr}`);
+  const files = {};
+  for (const file of listed.stdout.split('\0')) {
+    if (
+      file === 'tsconfig.base.json' ||
+      (/\.(ts|mts|scss)$/.test(file) && !/\.(spec|test)\.ts$/.test(file))
+    ) {
+      files[file] = readFileSync(join(ROOT, file), 'utf8');
+    }
+  }
+  return files;
+})();
+const NXS_PROBE = `${NXS_ROOT}/src/lib/probe/probe.ts`;
+const REAL_LIBS_WITH_PROBE = {
+  ...REAL_LIBS,
+  [NXS_PROBE]:
+    "import { avatarColor } from '@nuxeo/satori-platform/nuxeo-client';\n" +
+    "import { ExtensionRuleRegistry } from '@nuxeo/satori-platform/extensions';\n" +
+    'export const probe = [avatarColor, ExtensionRuleRegistry];\n',
+};
+const AVATAR_COLORS = 'libs/shared/nuxeo-client/src/lib/constants/avatar-colors.ts';
+const EXTENSION_RULES = 'libs/shared/extensions/src/lib/extension-rules.ts';
+/**
+ * Interpolated into the control below, never spelled out in it. `supply-chain` reads a
+ * `from '<dep>'` anywhere under `scripts/` as a real import, and this dependency is excused there
+ * as unreferenced — a literal specifier in a fixture would make it look used, and that gate is
+ * right to refuse it.
+ */
+const ADF_EXTENSIONS = '@alfresco/adf-extensions';
+
+falsePositiveControls += 1;
+expectGreen(
+  'the real nuxeo-client and extensions barrels',
+  'checkSatoriComponentsDependencies',
+  REAL_LIBS_WITH_PROBE,
+);
+
+expectRed(
+  'the real nuxeo-client barrel reaching a Satori type again',
+  'checkSatoriComponentsDependencies',
+  REAL_LIBS_WITH_PROBE,
+  (write) =>
+    write(
+      AVATAR_COLORS,
+      "import type { SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';\n" +
+        REAL_LIBS[AVATAR_COLORS],
+    ),
+  /avatar-colors\.ts imports `@hylandsoftware\/satori-ui\/avatar`, and the library reaches that file through libs\/shared\/satori-components\/src\/.* -> libs\/shared\/nuxeo-client\/src\/index\.ts -> libs\/shared\/nuxeo-client\/src\/lib\/constants\/avatar-colors\.ts\./,
+);
+
+expectRed(
+  'the real extensions barrel reaching adf-extensions again',
+  'checkSatoriComponentsDependencies',
+  REAL_LIBS_WITH_PROBE,
+  (write) =>
+    write(
+      EXTENSION_RULES,
+      `import type { RuleContext } from '${ADF_EXTENSIONS}';\n` + REAL_LIBS[EXTENSION_RULES],
+    ),
+  /extension-rules\.ts imports `@alfresco\/adf-extensions`, and the library reaches that file through libs\/shared\/satori-components\/src\/.* -> libs\/shared\/extensions\/src\/index\.ts -> /,
+);
+
+expectRed(
+  'a direct satori-ui import',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { SatAvatar } from '@hylandsoftware/satori-ui/avatar';",
+    }),
+  }),
+  null,
+  /thing\.component\.ts imports `@hylandsoftware\/satori-ui\/avatar`\. .*`\/components-satori` entry point/,
+);
+
+expectRed(
+  'a direct adf-core import',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { FileSizePipe } from '@alfresco/adf-core';",
+    }),
+  }),
+  null,
+  /thing\.component\.ts imports `@alfresco\/adf-core`\. .*ADF leaves the dependency tree/,
+);
+
+expectRed(
+  'a direct hxcs-js-client import',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import type { Document } from '@hylandsoftware/hxcs-js-client';",
+    }),
+  }),
+  null,
+  /thing\.component\.ts imports `@hylandsoftware\/hxcs-js-client`\. .*HxCS client exists only for the adf-hx bridge/,
+);
+
+expectRed(
+  'a dynamic import of an ADF package',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/lazy.ts`]:
+      "export const load = () => import('@alfresco/adf-core');\n",
+  }),
+  null,
+  /lazy\.ts imports `@alfresco\/adf-core`/,
+);
+
+// The shape that exists on main today: nuxeo-client's avatar-colors.ts imports a Satori TYPE.
+expectRed(
+  'a type-only Satori import one workspace hop away',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { clean } from '@nuxeo/satori-platform/nuxeo-client';",
+    }),
+    'libs/shared/nuxeo-client/src/lib/clean.ts':
+      "import type { SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';\n" +
+      'export const clean: SatAvatarCategory | 1 = 1;\n',
+  }),
+  null,
+  /nuxeo-client\/src\/lib\/clean\.ts imports `@hylandsoftware\/satori-ui\/avatar`, and the library reaches that file through .*thing\.component\.ts -> libs\/shared\/nuxeo-client\/src\/index\.ts -> libs\/shared\/nuxeo-client\/src\/lib\/clean\.ts\./,
+);
+
+// TypeScript maps an explicit `.js` specifier back to the `.ts` source; the walk must too.
+expectRed(
+  'a Satori import behind a `.js` re-export one workspace hop away',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { clean } from '@nuxeo/satori-platform/nuxeo-client';",
+    }),
+    'libs/shared/nuxeo-client/src/index.ts': "export * from './lib/clean.js';\n",
+    'libs/shared/nuxeo-client/src/lib/clean.ts':
+      "import { SatTag } from '@hylandsoftware/satori-ui/tag';\nexport const clean = SatTag;\n",
+  }),
+  null,
+  /nuxeo-client\/src\/lib\/clean\.ts imports `@hylandsoftware\/satori-ui\/tag`/,
+);
+
+// Sass resolves a bare `@use 'theme'` against the current file first.
+expectRed(
+  'a Satori theme behind a bare local Sass @use',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_STYLES]: "@use 'theme';\n",
+    [`${NXS_ROOT}/src/lib/thing/_theme.scss`]: "@use '@hylandsoftware/satori-ui/theme' as sat;\n",
+  }),
+  null,
+  /thing\/_theme\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori theme behind a local Sass @use with its .scss extension',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_STYLES]: "@use 'theme.scss';\n",
+    [`${NXS_ROOT}/src/lib/thing/_theme.scss`]: "@use '@hylandsoftware/satori-ui/theme' as sat;\n",
+  }),
+  null,
+  /thing\/_theme\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori theme in a component stylesheet',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({ [NXS_STYLES]: "@use '@hylandsoftware/satori-ui/theme' as sat;\n" }),
+  null,
+  /thing\.component\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori import in a library spec',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.component.spec.ts`]:
+      "import { SatTag } from '@hylandsoftware/satori-ui/tag';\n",
+  }),
+  null,
+  /thing\.component\.spec\.ts imports `@hylandsoftware\/satori-ui\/tag`/,
+);
+
+/** A library component whose metadata, after `templateUrl`, is exactly `metadata`. */
+const nxsComponentWith = (metadata, preamble = '') =>
+  `import { Component } from '@angular/core';\n${preamble}@Component({\n  selector: 'nxs-thing',\n` +
+  `  standalone: true,\n  templateUrl: './thing.component.html',\n${metadata}\n})\n` +
+  'export class NxsThingComponent {}\n';
+const SATORI_THEME = "@use '@hylandsoftware/satori-ui/theme' as sat;\n";
+
+// Every spelling Angular accepts for a stylesheet path is followed.
+for (const [how, metadata] of [
+  ['a quoted styleUrl key', "  'styleUrl': './thing.component.scss',"],
+  ['a double-quoted styleUrls key', '  "styleUrls": [\'./thing.component.scss\'],'],
+  ['a computed styleUrl key', "  ['styleUrl']: './thing.component.scss',"],
+  ['a backtick styleUrl path', '  styleUrl: `./thing.component.scss`,'],
+  ['a backtick path in styleUrls', '  styleUrls: [`./thing.component.scss`],'],
+]) {
+  expectRed(
+    `a Satori theme in a stylesheet named by ${how}`,
+    'checkSatoriComponentsDependencies',
+    NXS_LIB({ [NXS_COMPONENT]: nxsComponentWith(metadata), [NXS_STYLES]: SATORI_THEME }),
+    null,
+    /thing\.component\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+  );
+}
+
+// A path the guardrail cannot read statically fails, rather than passing a stylesheet unread.
+expectRed(
+  'a stylesheet named by a constant',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponentWith(
+      '  styleUrl: STYLE,',
+      "const STYLE = './thing.component.scss';\n",
+    ),
+  }),
+  null,
+  /thing\.component\.ts:7 `styleUrl` is not a string literal, so the stylesheet it names was not checked/,
+);
+
+expectRed(
+  'component metadata spread from a constant',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponentWith(
+      '  ...STYLES,',
+      "const STYLES = { styleUrl: './thing.component.scss' };\n",
+    ),
+  }),
+  null,
+  /thing\.component\.ts:7 @Component metadata is not an object literal the guardrail can read/,
+);
+
+// The app builds the library's components with `inlineStyleLanguage: scss`.
+expectRed(
+  'a Satori theme in inline styles',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponentWith(
+      "  styles: [`@use '@hylandsoftware/satori-ui/theme' as sat;`],",
+    ),
+  }),
+  null,
+  /thing\.component\.ts \(inline styles\) imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'decorators without metadata objects, and a styles key outside any decorator',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]:
+      "import { Component, HostListener, Input } from '@angular/core';\n" +
+      'const theme = { styles: [String(1)] };\n' +
+      "@Component({\n  selector: 'nxs-thing',\n  standalone: true,\n" +
+      "  templateUrl: './thing.component.html',\n  styleUrl: './thing.component.scss',\n})\n" +
+      "export class NxsThingComponent {\n  @Input('alias') value = theme;\n" +
+      "  @HostListener('click', ['$event']) onClick(): void {}\n}\n",
+  }),
+);
+
+// The package ban is on the specifier, whatever a tsconfig alias maps it to.
+expectRed(
+  'a Satori specifier a tsconfig alias maps to a workspace file',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB(
+    {
+      [NXS_COMPONENT]: nxsComponent({
+        imports: "import { SatTag } from '@hylandsoftware/satori-ui/tag';",
+      }),
+      'libs/shared/shims/src/satori-tag.ts': 'export const SatTag = 1;\n',
+    },
+    { '@hylandsoftware/satori-ui/tag': ['libs/shared/shims/src/satori-tag.ts'] },
+  ),
+  null,
+  /thing\.component\.ts imports `@hylandsoftware\/satori-ui\/tag`\. .*`\/components-satori` entry point/,
+);
+
+// A project's own tsconfig `paths` is followed too, against the directory that declares it.
+expectRed(
+  'a Satori import behind a project-level tsconfig alias',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({ imports: "import { dirty } from '@shim/dirty';" }),
+    [`${NXS_ROOT}/tsconfig.json`]: `${JSON.stringify({
+      extends: '../../../tsconfig.base.json',
+      compilerOptions: { paths: { '@shim/dirty': ['../other/src/dirty.ts'] } },
+    })}\n`,
+    'libs/shared/other/src/dirty.ts':
+      "import { SatTag } from '@hylandsoftware/satori-ui/tag';\nexport const dirty = SatTag;\n",
+  }),
+  null,
+  /other\/src\/dirty\.ts imports `@hylandsoftware\/satori-ui\/tag`, and the library reaches that file through/,
+);
+
+// Sass's own resolution order: file, `_` partial, then `index` or `_index`, as .scss or .sass.
+expectRed(
+  'a Satori theme behind a non-partial Sass directory index',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_STYLES]: "@use './theme';\n",
+    [`${NXS_ROOT}/src/lib/thing/theme/index.scss`]: SATORI_THEME,
+  }),
+  null,
+  /thing\/theme\/index\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori theme behind an indented-syntax Sass partial',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_STYLES]: "@use 'theme';\n",
+    [`${NXS_ROOT}/src/lib/thing/_theme.sass`]: "@use '@hylandsoftware/satori-ui/theme' as sat\n",
+  }),
+  null,
+  /thing\/_theme\.sass imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori theme through a pkg: URL',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({ [NXS_STYLES]: "@use 'pkg:@hylandsoftware/satori-ui/theme' as sat;\n" }),
+  null,
+  /thing\.component\.scss imports `pkg:@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori theme second in an @import list',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_STYLES]: "@import 'local', '@hylandsoftware/satori-ui/theme';\n",
+    [`${NXS_ROOT}/src/lib/thing/_local.scss`]: ':root {\n  display: block;\n}\n',
+  }),
+  null,
+  /thing\.component\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a Satori theme loaded with meta.load-css',
+  'checkSatoriComponentsDependencies',
+  NXS_LIB({
+    [NXS_STYLES]:
+      "@use 'sass:meta';\n:host {\n  @include meta.load-css('@hylandsoftware/satori-ui/theme');\n}\n",
+  }),
+  null,
+  /thing\.component\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'no library sources at all',
+  'checkSatoriComponentsDependencies',
+  { 'libs/shared/ui/src/index.ts': 'export {};\n' },
+  null,
+  /asserted nothing/,
+);
+
+// checkSatoriComponentsEntryPoint
+
+const NXS_CONSUMER = 'libs/features/x/src/lib/x.ts';
+
+expectGreen(
+  'a consumer importing through the entry point',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    [NXS_CONSUMER]: "import { NxsThingComponent } from '@nuxeo/satori-platform/components';\n",
+  }),
+);
+
+expectRed(
+  'a subpath under the entry specifier',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    [NXS_CONSUMER]:
+      "import { NxsThingComponent } from '@nuxeo/satori-platform/components/lib/thing/thing.component';\n",
+  }),
+  null,
+  /x\.ts imports `@nuxeo\/satori-platform\/components\/lib\/thing\/thing\.component`, which reaches into libs\/shared\/satori-components past its entry point/,
+);
+
+expectRed(
+  'a relative path into the library',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    [NXS_CONSUMER]:
+      "import { NxsThingComponent } from '../../../../shared/satori-components/src/lib/thing/thing.component';\n",
+  }),
+  null,
+  /x\.ts imports `\.\.\/\.\.\/\.\.\/\.\.\/shared\/satori-components\/src\/lib\/thing\/thing\.component`, which reaches into/,
+);
+
+expectRed(
+  'a second alias into the library',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({}, { '@agentic-ui/shared/satori-components/*': [`${NXS_ROOT}/src/*`] }),
+  null,
+  /alias `@agentic-ui\/shared\/satori-components\/\*` points into libs\/shared\/satori-components/,
+);
+
+expectRed(
+  'the entry alias pointing past the barrel',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB(
+    {},
+    { '@nuxeo/satori-platform/components': [`${NXS_ROOT}/src/lib/thing/thing.component.ts`] },
+  ),
+  null,
+  /must map `@nuxeo\/satori-platform\/components` to exactly `libs\/shared\/satori-components\/src\/index\.ts`/,
+);
+
+expectRed(
+  'the published ng-package pointing past the barrel',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    'libs/platform/components/ng-package.json':
+      '{ "lib": { "entryFile": "../../shared/satori-components/src/lib/thing/thing.component.ts" } }\n',
+  }),
+  null,
+  /ng-package\.json must publish `libs\/shared\/satori-components\/src\/index\.ts`/,
+);
+
+// A project's own tsconfig `paths` is an alias like any other. Its targets resolve against its
+// `baseUrl` — its own, else the one it inherits — or, with none, its own directory.
+const projectTsconfig = (compilerOptions) =>
+  `${JSON.stringify({ extends: '../../../tsconfig.base.json', compilerOptions })}\n`;
+
+expectRed(
+  'a project-level alias into the library, against its own baseUrl',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    'libs/features/x/tsconfig.json': projectTsconfig({
+      baseUrl: '../../..',
+      paths: { '@x/thing': [`${NXS_ROOT}/src/lib/thing/thing.component.ts`] },
+    }),
+  }),
+  null,
+  /libs\/features\/x\/tsconfig\.json alias `@x\/thing` points into libs\/shared\/satori-components/,
+);
+
+expectRed(
+  'a project-level alias into the library, against an inherited baseUrl',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    'tsconfig.base.json': `${JSON.stringify({
+      compilerOptions: {
+        baseUrl: '.',
+        paths: { '@nuxeo/satori-platform/components': [`${NXS_ROOT}/src/index.ts`] },
+      },
+    })}\n`,
+    'libs/features/x/tsconfig.json': projectTsconfig({
+      paths: { '@x/thing': [`${NXS_ROOT}/src/lib/thing/thing.component.ts`] },
+    }),
+  }),
+  null,
+  /libs\/features\/x\/tsconfig\.json alias `@x\/thing` points into libs\/shared\/satori-components/,
+);
+
+expectRed(
+  'a consumer reaching into the library through a project-level wildcard alias',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    'libs/features/x/tsconfig.json': projectTsconfig({ paths: { '@libs/*': ['../../*'] } }),
+    [NXS_CONSUMER]:
+      "import { NxsThingComponent } from '@libs/shared/satori-components/src/lib/thing/thing.component';\n",
+  }),
+  null,
+  /x\.ts imports `@libs\/shared\/satori-components\/src\/lib\/thing\/thing\.component`, which reaches into/,
+);
+
+expectRed(
+  'a project-level entry alias pointing past the barrel',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    'libs/features/x/tsconfig.json': projectTsconfig({
+      paths: {
+        '@nuxeo/satori-platform/components': [
+          '../../shared/satori-components/src/lib/thing/thing.component.ts',
+        ],
+      },
+    }),
+  }),
+  null,
+  /libs\/features\/x\/tsconfig\.json maps `@nuxeo\/satori-platform\/components` to \["libs\/shared\/satori-components\/src\/lib\/thing\/thing\.component\.ts"\]/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a project tsconfig re-declaring the entry alias',
+  'checkSatoriComponentsEntryPoint',
+  NXS_LIB({
+    'libs/features/x/tsconfig.json': projectTsconfig({
+      paths: {
+        '@nuxeo/satori-platform/components': ['../../shared/satori-components/src/index.ts'],
+      },
+    }),
+    [NXS_CONSUMER]: "import { NxsThingComponent } from '@nuxeo/satori-platform/components';\n",
+  }),
+);
+
+expectRed(
+  'no barrel at all',
+  'checkSatoriComponentsEntryPoint',
+  { [NXS_COMPONENT]: nxsComponent() },
+  null,
+  /has no entry point and the no-deep-imports rule asserted nothing/,
+);
+
+// checkSatoriComponentsFederationReadiness
+
+expectGreen('a standalone component', 'checkSatoriComponentsFederationReadiness', NXS_LIB());
+
+// An explicitly provided service is the pattern the rule asks for, so it must not be flagged.
+falsePositiveControls += 1;
+expectGreen(
+  'an @Injectable with no providedIn',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.service.ts`]:
+      "import { Injectable } from '@angular/core';\n@Injectable()\nexport class ThingService {}\n",
+  }),
+);
+
+// A test host is not part of the library.
+falsePositiveControls += 1;
+expectGreen(
+  'a spec host component and a root service in a spec',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.component.spec.ts`]:
+      "import { Component, Injectable } from '@angular/core';\n" +
+      "@Component({ template: '' })\nclass Host {}\n" +
+      "@Injectable({ providedIn: 'root' })\nclass Fake {}\n",
+  }),
+);
+
+expectRed(
+  'an NgModule in the library',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.module.ts`]:
+      "import { NgModule } from '@angular/core';\n@NgModule({})\nexport class ThingModule {}\n",
+  }),
+  null,
+  /thing\.module\.ts:2 declares an @NgModule/,
+);
+
+expectRed(
+  'a component with standalone: false',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({ config: "selector: 'nxs-thing', standalone: false," }),
+  }),
+  null,
+  /thing\.component\.ts:3 @Component does not say `standalone: true`/,
+);
+
+expectRed(
+  'an aliased Component decorator with standalone: false',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [NXS_COMPONENT]:
+      "import { Component as C } from '@angular/core';\n" +
+      "@C({ selector: 'nxs-thing', standalone: false, templateUrl: './thing.component.html' })\n" +
+      'export class NxsThingComponent {}\n',
+  }),
+  null,
+  /thing\.component\.ts:2 @Component does not say `standalone: true`/,
+);
+
+expectRed(
+  'an NgModule through a namespace import',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.module.ts`]:
+      "import * as ng from '@angular/core';\n@ng.NgModule({})\nexport class ThingModule {}\n",
+  }),
+  null,
+  /thing\.module\.ts:2 declares an @NgModule/,
+);
+
+expectRed(
+  'a component that leaves standalone to the default',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({ [NXS_COMPONENT]: nxsComponent({ config: "selector: 'nxs-thing'," }) }),
+  null,
+  /@Component does not say `standalone: true`/,
+);
+
+expectRed(
+  'a root-provided service',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.service.ts`]:
+      "import { Injectable } from '@angular/core';\n" +
+      "@Injectable({ providedIn: 'root' })\nexport class ThingService {}\n",
+  }),
+  null,
+  /thing\.service\.ts:2 uses `providedIn`/,
+);
+
+expectRed(
+  'a root-provided service with a quoted key',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.service.ts`]:
+      "import { Injectable } from '@angular/core';\n" +
+      "@Injectable({ 'providedIn': 'root' })\nexport class ThingService {}\n",
+  }),
+  null,
+  /thing\.service\.ts:2 uses `providedIn`/,
+);
+
+expectRed(
+  'a root-provided service with a computed key',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.service.ts`]:
+      "import { Injectable } from '@angular/core';\n" +
+      "@Injectable({ ['providedIn']: 'root' })\nexport class ThingService {}\n",
+  }),
+  null,
+  /thing\.service\.ts:2 uses `providedIn`/,
+);
+
+// A quoted `'standalone': true` is still standalone.
+falsePositiveControls += 1;
+expectGreen(
+  'a component whose standalone key is quoted',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [NXS_COMPONENT]: nxsComponent({ config: "selector: 'nxs-thing', 'standalone': true," }),
+  }),
+);
+
+expectRed(
+  'a root-provided InjectionToken',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/thing.token.ts`]:
+      "import { InjectionToken } from '@angular/core';\n" +
+      "export const THING = new InjectionToken<number>('thing', {\n" +
+      "  providedIn: 'platform',\n  factory: () => 1,\n});\n",
+  }),
+  null,
+  /thing\.token\.ts:3 uses `providedIn`/,
+);
+
+expectRed(
+  'no non-spec library sources',
+  'checkSatoriComponentsFederationReadiness',
+  { [`${NXS_ROOT}/src/lib/thing/thing.component.spec.ts`]: 'export {};\n' },
+  null,
+  /federation-readiness rules asserted nothing/,
+);
+
+// checkSatoriComponentsDependencies — the Storybook build is held to the same rule
+
+const NXS_STORYBOOK_MAIN = `${NXS_ROOT}/.storybook/main.ts`;
+const NXS_STORYBOOK_PROJECT = ({ styles, satoriStyles } = {}) =>
+  `${JSON.stringify(
+    {
+      name: 'satori-components',
+      targets: {
+        'build-storybook': {
+          options: { styles: styles ?? [`${NXS_ROOT}/.storybook/material-theme.scss`] },
+          configurations: {
+            satori: { styles: satoriStyles ?? [`${NXS_ROOT}/.storybook/satori-theme.scss`] },
+          },
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+const NXS_STORYBOOK = (extra = {}) =>
+  NXS_LIB({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../src/**/*.stories.ts'], framework: { name: '@storybook/angular', options: {} } };\n",
+    [`${NXS_ROOT}/.storybook/preview.ts`]:
+      "import type { Preview } from '@storybook/angular';\nexport default {} satisfies Preview;\n",
+    [`${NXS_ROOT}/.storybook/material-theme.scss`]: "@use '@angular/material' as mat;\n",
+    [`${NXS_ROOT}/.storybook/satori-theme.scss`]:
+      "@use '@hylandsoftware/satori-ui/theme' as sat;\n",
+    ...extra,
+  });
+
+// The opt-in `:satori` configuration is the one place under `.storybook/` that may need a token.
+falsePositiveControls += 1;
+expectGreen(
+  'a Satori theme named only by the opt-in :satori Storybook configuration',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK(),
+);
+
+expectRed(
+  'a Satori import in the Storybook preview',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/.storybook/preview.ts`]:
+      "import { provideSatori } from '@hylandsoftware/satori-ui/providers';\nexport const p = provideSatori;\n",
+  }),
+  null,
+  /\.storybook\/preview\.ts imports `@hylandsoftware\/satori-ui\/providers`/,
+);
+
+expectRed(
+  "a Satori theme in the default build-storybook configuration's styles",
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      styles: [`${NXS_ROOT}/.storybook/satori-theme.scss`],
+    }),
+  }),
+  null,
+  /\.storybook\/satori-theme\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a default Storybook theme that @uses a Satori partial',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/.storybook/material-theme.scss`]: "@use 'tokens';\n",
+    [`${NXS_ROOT}/.storybook/_tokens.scss`]: "@forward '@hylandsoftware/satori-ui/theme';\n",
+  }),
+  null,
+  /\.storybook\/_tokens\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a default Storybook style that does not exist',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      styles: [`${NXS_ROOT}/.storybook/missing.scss`],
+    }),
+  }),
+  null,
+  /names `libs\/shared\/satori-components\/\.storybook\/missing\.scss` in build-storybook's styles, and it does not exist/,
+);
+
+// Angular compiles every `styles` entry, not only `.scss`: a CSS or indented-Sass default theme is
+// held to the same rule.
+expectRed(
+  'a default Storybook theme written in CSS that imports Satori',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      styles: [`${NXS_ROOT}/.storybook/material-theme.css`],
+    }),
+    [`${NXS_ROOT}/.storybook/material-theme.css`]:
+      "@import '@hylandsoftware/satori-ui/theme.css';\n",
+  }),
+  null,
+  /\.storybook\/material-theme\.css imports `@hylandsoftware\/satori-ui\/theme\.css`/,
+);
+
+expectRed(
+  'a default CSS theme reaching Satori through a relative url() import',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      styles: [`${NXS_ROOT}/.storybook/material-theme.css`],
+    }),
+    [`${NXS_ROOT}/.storybook/material-theme.css`]: "@import './tokens.css';\n",
+    [`${NXS_ROOT}/.storybook/tokens.css`]: '@import url(@hylandsoftware/satori-ui/tokens.css);\n',
+  }),
+  null,
+  /\.storybook\/tokens\.css imports `@hylandsoftware\/satori-ui\/tokens\.css`/,
+);
+
+expectRed(
+  'a default indented-Sass theme whose second @use is Satori',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      styles: [`${NXS_ROOT}/.storybook/material-theme.sass`],
+    }),
+    [`${NXS_ROOT}/.storybook/material-theme.sass`]:
+      "@use '@angular/material' as mat\n@use '@hylandsoftware/satori-ui/theme' as sat\n",
+  }),
+  null,
+  /\.storybook\/material-theme\.sass imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+// The `:satori` configuration's theme is the one stylesheet that may reach Satori — exactly that one.
+const storybookProjectWith = (configurations) =>
+  `${JSON.stringify(
+    {
+      name: 'satori-components',
+      targets: {
+        'build-storybook': {
+          options: { styles: [`${NXS_ROOT}/.storybook/material-theme.scss`] },
+          configurations,
+        },
+      },
+    },
+    null,
+    2,
+  )}\n`;
+
+expectRed(
+  'another named Storybook configuration whose theme reaches Satori',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: storybookProjectWith({
+      satori: { styles: [`${NXS_ROOT}/.storybook/satori-theme.scss`] },
+      print: { styles: [`${NXS_ROOT}/.storybook/print-theme.scss`] },
+    }),
+    [`${NXS_ROOT}/.storybook/print-theme.scss`]: "@use '@hylandsoftware/satori-ui/theme';\n",
+  }),
+  null,
+  /\.storybook\/print-theme\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'the Satori theme named by a configuration other than :satori',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: storybookProjectWith({
+      satori: { styles: [`${NXS_ROOT}/.storybook/satori-theme.scss`] },
+      print: { styles: [`${NXS_ROOT}/.storybook/satori-theme.scss`] },
+    }),
+  }),
+  null,
+  /\.storybook\/satori-theme\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+expectRed(
+  'a second stylesheet in the :satori configuration that reaches Satori',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      satoriStyles: [
+        `${NXS_ROOT}/.storybook/satori-theme.scss`,
+        `${NXS_ROOT}/.storybook/satori-extra.scss`,
+      ],
+    }),
+    [`${NXS_ROOT}/.storybook/satori-extra.scss`]: "@use '@hylandsoftware/satori-ui/tokens';\n",
+  }),
+  null,
+  /\.storybook\/satori-extra\.scss imports `@hylandsoftware\/satori-ui\/tokens`/,
+);
+
+expectRed(
+  'a stylesheet under .storybook that no configuration names, reaching Satori',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/.storybook/extra.scss`]: "@use '@hylandsoftware/satori-ui/theme';\n",
+  }),
+  null,
+  /\.storybook\/extra\.scss imports `@hylandsoftware\/satori-ui\/theme`/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a default indented-Sass theme on Material only',
+  'checkSatoriComponentsDependencies',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/project.json`]: NXS_STORYBOOK_PROJECT({
+      styles: [`${NXS_ROOT}/.storybook/material-theme.sass`],
+    }),
+    [`${NXS_ROOT}/.storybook/material-theme.sass`]:
+      "@use '@angular/material' as mat\n@use 'tokens'\n",
+    [`${NXS_ROOT}/.storybook/_tokens.sass`]: '$gap: 8px\n',
+  }),
+);
+
+// checkSatoriComponentsHaveStories
+
+const NXS_STORY = `${NXS_ROOT}/src/lib/thing/thing.stories.ts`;
+const nxsStory = ({
+  imports = "import { NxsThingComponent } from './thing.component';",
+  meta = "const meta: Meta<NxsThingComponent> = { component: NxsThingComponent, tags: ['autodocs'] };\nexport default meta;",
+  stories = 'export const Basic: StoryObj<NxsThingComponent> = {};',
+} = {}) =>
+  `import type { Meta, StoryObj } from '@storybook/angular';\n${imports}\n${meta}\n${stories}\n`;
+
+expectGreen(
+  'an exported component with a story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory() }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story whose meta is the default export itself, behind satisfies',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "export default { component: NxsThingComponent, tags: ['autodocs'] } satisfies Meta<NxsThingComponent>;",
+    }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story importing the component through the published entry point',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports: "import { NxsThingComponent } from '@nuxeo/satori-platform/components';",
+    }),
+  }),
+);
+
+// Two `export … from` statements naming one module must both be read.
+falsePositiveControls += 1;
+expectGreen(
+  'a barrel re-exporting one module twice, each component storied',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/src/index.ts`]:
+      "export { NxsThingComponent } from './lib/thing/thing.component';\n" +
+      "export { NxsOtherComponent } from './lib/thing/thing.component';\n",
+    [NXS_COMPONENT]:
+      nxsComponent() +
+      "@Component({ selector: 'nxs-other', standalone: true, template: '' })\n" +
+      'export class NxsOtherComponent {}\n',
+    [NXS_STORY]: nxsStory(),
+    [`${NXS_ROOT}/src/lib/thing/other.stories.ts`]: nxsStory({
+      imports: "import { NxsOtherComponent } from './thing.component';",
+      meta: "export default { component: NxsOtherComponent, tags: ['autodocs'] } as Meta<NxsOtherComponent>;",
+      stories: 'export const Basic: StoryObj<NxsOtherComponent> = {};',
+    }),
+  }),
+);
+
+expectRed(
+  'an exported component with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK(),
+  null,
+  /exports `NxsThingComponent` \(libs\/shared\/satori-components\/src\/lib\/thing\/thing\.component\.ts\), and no story documents it/,
+);
+
+expectRed(
+  'a component exported through export * with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/src/index.ts`]: "export * from './lib/thing/thing.component';\n",
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a component exported by a bare export of an import, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/src/index.ts`]:
+      "import { NxsThingComponent } from './lib/thing/thing.component';\nexport { NxsThingComponent };\n",
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+// A class declared without `export` and exported later by a bare `export { X }` is exported all the same.
+const nxsComponentExportedLater = () =>
+  `${nxsComponent().replace('export class', 'class')}export { NxsThingComponent };\n`;
+
+expectRed(
+  'a component the barrel declares itself and exports by a bare export, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/src/index.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-local', standalone: true, template: '' })\n" +
+      'class NxsLocalComponent {}\nexport { NxsLocalComponent };\n' +
+      "export { NxsThingComponent } from './lib/thing/thing.component';\n",
+    [NXS_STORY]: nxsStory(),
+  }),
+  null,
+  /exports `NxsLocalComponent` \(libs\/shared\/satori-components\/src\/index\.ts\), and no story documents it/,
+);
+
+expectRed(
+  'a component its module declares and exports by a bare export, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_COMPONENT]: nxsComponentExportedLater() }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component its module declares and exports by a bare export, with a story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_COMPONENT]: nxsComponentExportedLater(), [NXS_STORY]: nxsStory() }),
+);
+
+expectRed(
+  'a story file that mentions the component but documents another',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports:
+        "import { NxsThingComponent } from './thing.component';\nimport { Other } from './other';",
+      meta: "export default { component: Other, title: `${NxsThingComponent.name}`, tags: ['autodocs'] };",
+    }),
+    [`${NXS_ROOT}/src/lib/thing/other.ts`]: 'export class Other {}\n',
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a meta that names the component with no story exported',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory({ stories: '' }) }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a story outside src, where Storybook does not look',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [`${NXS_ROOT}/stories/thing.stories.ts`]: nxsStory({
+      imports: "import { NxsThingComponent } from '../src/lib/thing/thing.component';",
+    }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a Storybook main.ts that does not load the stories counted',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]: "export default { stories: ['../docs/**/*.mdx'] };\n",
+  }),
+  null,
+  /main\.ts does not load `\.\.\/src\/\*\*\/\*\.stories\.ts`/,
+);
+
+// A story is a named export Storybook renders, after the meta's `includeStories`/`excludeStories`.
+const filteredMeta = (filter) =>
+  `export default { component: NxsThingComponent, tags: ['autodocs'], ${filter} } satisfies Meta<NxsThingComponent>;`;
+
+expectRed(
+  'a meta whose excludeStories filters out its only export',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: filteredMeta("excludeStories: ['fixture']"),
+      stories: 'export const fixture = {};',
+    }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a meta whose includeStories names no export',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({ meta: filteredMeta("includeStories: ['Other']") }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a meta whose excludeStories regex matches every export',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory({ meta: filteredMeta('excludeStories: /.*/') }) }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a meta whose excludeStories the guardrail cannot read',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: `const FILTERS = ['Basic'];\n${filteredMeta('excludeStories: FILTERS')}`,
+    }),
+  }),
+  null,
+  /thing\.stories\.ts sets `excludeStories` to something other than a list of names or a regex literal/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a meta that excludes a fixture export and keeps a story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: filteredMeta("excludeStories: ['fixture']"),
+      stories: 'export const fixture = {};\nexport const Basic: StoryObj<NxsThingComponent> = {};',
+    }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a meta whose includeStories regex matches its story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory({ meta: filteredMeta('includeStories: /^Bas/') }) }),
+);
+
+expectRed(
+  'a shorthand excludeStories that filters out the only export',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: `const excludeStories = ['fixture'];\n${filteredMeta('excludeStories')}`,
+      stories: 'export const fixture = {};',
+    }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a shorthand excludeStories that keeps a story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: `const excludeStories = ['fixture'];\n${filteredMeta('excludeStories')}`,
+      stories: 'export const fixture = {};\nexport const Basic: StoryObj<NxsThingComponent> = {};',
+    }),
+  }),
+);
+
+expectRed(
+  'a shorthand excludeStories naming an import the guardrail cannot read',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports:
+        "import { NxsThingComponent } from './thing.component';\nimport { excludeStories } from './filters';",
+      meta: filteredMeta('excludeStories'),
+    }),
+  }),
+  null,
+  /thing\.stories\.ts sets `excludeStories` to something other than a list of names or a regex literal/,
+);
+
+expectRed(
+  'a meta that spreads another object in',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: `const shared = { excludeStories: ['Basic'] };\n${filteredMeta('...shared')}`,
+    }),
+  }),
+  null,
+  /thing\.stories\.ts spreads another object into its default-exported meta/,
+);
+
+// Meta keys are read as JavaScript reads them, so a computed or repeated key filters as Storybook does.
+expectRed(
+  'a computed excludeStories key that filters out the only story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory({ meta: filteredMeta("['excludeStories']: ['Basic']") }) }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a meta key computed from an expression the guardrail cannot read',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: `const KEY = 'excludeStories';\n${filteredMeta("[KEY]: ['Basic']")}`,
+    }),
+  }),
+  null,
+  /thing\.stories\.ts computes a key of its default-exported meta/,
+);
+
+expectRed(
+  'a repeated excludeStories whose later value filters out the only story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: filteredMeta("excludeStories: ['fixture'], ['excludeStories']: ['Basic']"),
+    }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+expectRed(
+  'an excludeStories accessor',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({ meta: filteredMeta("get excludeStories() { return ['Basic']; }") }),
+  }),
+  null,
+  /thing\.stories\.ts sets `excludeStories` to something other than a list of names or a regex literal/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a computed excludeStories key that keeps a story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: filteredMeta("['excludeStories']: ['fixture']"),
+      stories: 'export const fixture = {};\nexport const Basic: StoryObj<NxsThingComponent> = {};',
+    }),
+  }),
+);
+
+// Every story meta that names a component carries `autodocs`, so the component has its API page.
+expectRed(
+  'a story meta with no tags',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: 'const meta: Meta<NxsThingComponent> = { component: NxsThingComponent };\nexport default meta;',
+    }),
+  }),
+  null,
+  /thing\.stories\.ts has no `tags` list of string literals on its default-exported meta/,
+);
+
+expectRed(
+  'a story meta whose tags leave out autodocs',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "export default { component: NxsThingComponent, tags: ['dev'] } satisfies Meta<NxsThingComponent>;",
+    }),
+  }),
+  null,
+  /thing\.stories\.ts does not tag its meta `autodocs`/,
+);
+
+expectRed(
+  'a story meta that tags autodocs and then removes it',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "export default { component: NxsThingComponent, tags: ['autodocs', '!autodocs'] } satisfies Meta<NxsThingComponent>;",
+    }),
+  }),
+  null,
+  /thing\.stories\.ts does not tag its meta `autodocs`/,
+);
+
+expectRed(
+  'a story meta whose tags the guardrail cannot read',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports:
+        "import { NxsThingComponent } from './thing.component';\nimport { TAGS } from './tags';",
+      meta: 'export default { component: NxsThingComponent, tags: TAGS } satisfies Meta<NxsThingComponent>;',
+    }),
+  }),
+  null,
+  /thing\.stories\.ts has no `tags` list of string literals on its default-exported meta/,
+);
+
+// The exported component is documented by a tagged file; a second, untagged one still fails.
+expectRed(
+  'an untagged story file beside a tagged one for the same component',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [`${NXS_ROOT}/src/lib/thing/thing-states.stories.ts`]: nxsStory({
+      meta: 'export default { component: NxsThingComponent } satisfies Meta<NxsThingComponent>;',
+    }),
+  }),
+  null,
+  /thing-states\.stories\.ts has no `tags` list of string literals/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story meta whose tags are a top-level constant, as a shorthand and by name',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "const tags = ['autodocs', 'dev'];\nexport default { component: NxsThingComponent, tags } satisfies Meta<NxsThingComponent>;",
+    }),
+    [`${NXS_ROOT}/src/lib/thing/thing-states.stories.ts`]: nxsStory({
+      meta: "const TAGS = ['autodocs'];\nexport default { component: NxsThingComponent, tags: TAGS } satisfies Meta<NxsThingComponent>;",
+    }),
+  }),
+);
+
+// Every named-export form Storybook renders is a story, under the name it is exported as.
+falsePositiveControls += 1;
+expectGreen(
+  'a story exported by a bare export',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      stories: 'const Basic: StoryObj<NxsThingComponent> = {};\nexport { Basic };',
+    }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story exported under an alias that includeStories names',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: filteredMeta("includeStories: ['Basic']"),
+      stories: 'const story: StoryObj<NxsThingComponent> = {};\nexport { story as Basic };',
+    }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story exported as a function',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({ stories: 'export function Basic() {\n  return {};\n}' }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a meta exported as default by a bare export',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      meta: "const meta: Meta<NxsThingComponent> = { component: NxsThingComponent, tags: ['autodocs'] };\nexport { meta as default };",
+    }),
+  }),
+);
+
+expectRed(
+  'a type-only export, which Storybook does not render',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      stories: 'type Basic = StoryObj<NxsThingComponent>;\nexport { type Basic };',
+    }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no story documents it/,
+);
+
+// `.storybook/main.ts` is read for its exported `stories` list, not searched for the glob's text.
+expectRed(
+  'a Storybook main.ts that mentions the glob only in a comment',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "// '../src/**/*.stories.ts'\nexport default { stories: ['../docs/**/*.mdx'] };\n",
+  }),
+  null,
+  /main\.ts does not load `\.\.\/src\/\*\*\/\*\.stories\.ts`/,
+);
+
+expectRed(
+  'a Storybook main.ts whose stories list is not literal',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "const globs = () => ['../src/**/*.stories.ts'];\nexport default { stories: globs() };\n",
+  }),
+  null,
+  /main\.ts does not export a `stories` list of string literals/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a Storybook main.ts exporting a typed constant, as the library does',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "import type { StorybookConfig } from '@storybook/angular';\n" +
+      "const config: StorybookConfig = { stories: ['../src/**/*.stories.ts'], addons: [] };\n" +
+      'export default config;\n',
+  }),
+);
+
+// The config's keys are read as JavaScript reads them: the last `stories` wins, and a spread or a
+// computed key could be the one that replaces it.
+expectRed(
+  'a Storybook main.ts whose spread replaces the stories glob',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../src/**/*.stories.ts'], ...{ stories: ['../docs/**/*.mdx'] } };\n",
+  }),
+  null,
+  /main\.ts does not export a `stories` list of string literals, with no spread or computed key/,
+);
+
+expectRed(
+  'a Storybook main.ts whose later stories key replaces the glob',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../src/**/*.stories.ts'], ['stories']: ['../docs/**/*.mdx'] };\n",
+  }),
+  null,
+  /main\.ts does not load `\.\.\/src\/\*\*\/\*\.stories\.ts`/,
+);
+
+expectRed(
+  'a Storybook main.ts with a key computed from an expression',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "const KEY = 'stories';\n" +
+      "export default { stories: ['../src/**/*.stories.ts'], [KEY]: ['../docs/**/*.mdx'] };\n",
+  }),
+  null,
+  /main\.ts does not export a `stories` list of string literals, with no spread or computed key/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a Storybook main.ts whose last stories key loads the glob',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_STORYBOOK_MAIN]:
+      "export default { stories: ['../docs/**/*.mdx'], ['stories']: ['../src/**/*.stories.ts'] };\n",
+  }),
+);
+
+expectRed(
+  'exported components and no Storybook at all',
+  'checkSatoriComponentsHaveStories',
+  NXS_LIB({ [NXS_STORY]: nxsStory() }),
+  null,
+  /\.storybook\/main\.ts does not exist/,
+);
+
+// A meta that names no component has no inputs to list, so it needs no `autodocs` API page.
+const NXS_BY_ID_STORY = `${NXS_ROOT}/src/lib/by-id.stories.ts`;
+const NXS_BY_ID_STORY_SOURCE =
+  "import type { Meta, StoryObj } from '@storybook/angular';\n" +
+  "const meta: Meta = { title: 'By ID' };\nexport default meta;\n" +
+  'export const Registered: StoryObj = {};\n';
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story meta that names no component and has no tags',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory(), [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE }),
+);
+
+// checkSatoriComponentsHaveOverviews — the docs-coverage check
+
+const NXS_OVERVIEW = `${NXS_ROOT}/src/lib/thing/thing.mdx`;
+const NXS_OVERVIEW_SECTIONS = [
+  'Key features',
+  'Demo showcase',
+  'Usage',
+  'Examples',
+  'Accessibility',
+];
+const nxsOverview = ({
+  imports = "import * as Stories from './thing.stories';",
+  meta = '<Meta of={Stories} name="Overview" />',
+  sections = NXS_OVERVIEW_SECTIONS,
+  canvas = '<Canvas of={Stories.Basic} />',
+  extra = '',
+} = {}) =>
+  `import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';\n\n${imports}\n\n${meta}\n\n` +
+  `# Thing\n\n${sections.map((section) => `## ${section}\n\nText.\n`).join('\n')}\n${canvas}\n${extra}\n`;
+const NXS_DOCS_MAIN =
+  "export default { stories: ['../src/**/*.mdx', '../src/**/*.stories.ts'], framework: { name: '@storybook/angular', options: {} } };\n";
+const NXS_DOCS = (extra = {}) =>
+  NXS_STORYBOOK({
+    [NXS_STORYBOOK_MAIN]: NXS_DOCS_MAIN,
+    [NXS_STORY]: nxsStory(),
+    [NXS_OVERVIEW]: nxsOverview(),
+    ...extra,
+  });
+
+expectGreen(
+  'an exported component with an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(),
+);
+
+expectRed(
+  'an exported component with stories and no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_STORYBOOK({ [NXS_STORYBOOK_MAIN]: NXS_DOCS_MAIN, [NXS_STORY]: nxsStory() }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'a Storybook main.ts that does not load the MDX pages',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_STORYBOOK_MAIN]: "export default { stories: ['../src/**/*.stories.ts'] };\n" }),
+  null,
+  /main\.ts does not load `\.\.\/src\/\*\*\/\*\.mdx`/,
+);
+
+expectRed(
+  'an Overview with a section missing',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ sections: NXS_OVERVIEW_SECTIONS.slice(0, 4) }) }),
+  null,
+  /thing\.mdx is the Overview of .*thing\.stories\.ts and has no `## Accessibility` section/,
+);
+
+// Code samples are not page structure: a heading inside one is not a section.
+expectRed(
+  'an Overview whose missing section appears only inside a code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      sections: NXS_OVERVIEW_SECTIONS.slice(0, 4),
+      extra: '<Source code={`\n## Accessibility\n`} />\n\n```md\n## Accessibility\n```',
+    }),
+  }),
+  null,
+  /has no `## Accessibility` section/,
+);
+
+expectRed(
+  'an Overview with no live preview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ canvas: '' }) }),
+  null,
+  /thing\.mdx is the Overview of .* and shows none of its stories/,
+);
+
+expectRed(
+  'a preview of a story the file does not export',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ canvas: '<Canvas of={Stories.Missing} />' }) }),
+  null,
+  /refers to `Stories\.Missing` in a <Canvas>, which .*thing\.stories\.ts does not export/,
+);
+
+expectRed(
+  'a page attached under another name, which is not an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_OVERVIEW]: nxsOverview({ meta: '<Meta of={Stories} name="Guide" />' }) }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'an Overview whose Meta is commented out',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({ meta: '{/* <Meta of={Stories} name="Overview" /> */}' }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'an Overview attached to a module that is not a story file',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({ imports: "import * as Stories from './thing.component';" }),
+  }),
+  null,
+  /thing\.mdx attaches to `Stories`, which is not a namespace import of a story file/,
+);
+
+expectRed(
+  'an Overview with two Meta blocks',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      meta: '<Meta of={Stories} name="Overview" />\n<Meta of={Stories} name="Other" />',
+    }),
+  }),
+  null,
+  /thing\.mdx has 2 <Meta> blocks/,
+);
+
+// The Overview counts for the component its story file's meta names, not for whatever is nearby.
+expectRed(
+  'an Overview of a story file that documents a different component',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_COMPONENT]:
+      nxsComponent() +
+      "@Component({ selector: 'nxs-other', standalone: true, template: '' })\n" +
+      'export class NxsOtherComponent {}\n',
+    [`${NXS_ROOT}/src/lib/thing/other.stories.ts`]: nxsStory({
+      imports: "import { NxsOtherComponent } from './thing.component';",
+      meta: "export default { component: NxsOtherComponent, tags: ['autodocs'] } satisfies Meta<NxsOtherComponent>;",
+    }),
+    [NXS_OVERVIEW]: nxsOverview({ imports: "import * as Stories from './other.stories';" }),
+  }),
+  null,
+  /exports `NxsThingComponent` .* no Overview page documents it/,
+);
+
+expectRed(
+  'a story file naming no component, with no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({ [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE }),
+  null,
+  /by-id\.stories\.ts names no component, so it has no API page, and no Overview page attaches/,
+);
+
+// The library's MDX has no GitHub-flavoured Markdown, so a Markdown table renders as text.
+expectRed(
+  'a Markdown table on an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({ extra: '| Input | Type |\n| ----- | ---- |\n| a | b |' }),
+  }),
+  null,
+  /thing\.mdx writes a Markdown table/,
+);
+
+expectRed(
+  'a Markdown table on a page under .storybook/',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [`${NXS_ROOT}/.storybook/getting-started.mdx`]:
+      'import { Meta } from \'@storybook/addon-docs/blocks\';\n\n<Meta title="Getting started" />\n\n| a | b |\n| - | - |\n',
+  }),
+  null,
+  /\.storybook\/getting-started\.mdx writes a Markdown table/,
+);
+
+expectRed(
+  'a page under .storybook/ previewing a story the file does not export',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [`${NXS_ROOT}/.storybook/getting-started.mdx`]:
+      "import { Canvas, Meta } from '@storybook/addon-docs/blocks';\n\n" +
+      "import * as ThingStories from '../src/lib/thing/thing.stories';\n\n" +
+      '<Meta title="Getting started" />\n\n<Canvas of={ThingStories.Gone} />\n',
+  }),
+  null,
+  /getting-started\.mdx refers to `ThingStories\.Gone` in a <Canvas>, which .* does not export/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a table written as <table> markup, and pipes inside a code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      extra:
+        '<table>\n  <tr>\n    <td>a</td>\n  </tr>\n</table>\n\n<Source code={`| a | b |\n| - | - |`} />',
+    }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a story file naming no component, with its own Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE,
+    [`${NXS_ROOT}/src/lib/by-id.mdx`]: nxsOverview({
+      imports: "import * as Stories from './by-id.stories';",
+      canvas: '<Canvas of={Stories.Registered} />',
+    }),
+  }),
+);
+
+// A multi-line code sample lives in an `export const`, because MDX strips leading spaces from an
+// attribute's continuation lines; what it holds is code, not page structure.
+expectRed(
+  'an Overview whose missing section appears only inside an exported code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      sections: NXS_OVERVIEW_SECTIONS.slice(0, 4),
+      extra: 'export const sampleTs = `const a = 1;\n## Accessibility\n`;\n',
+    }),
+  }),
+  null,
+  /has no `## Accessibility` section/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'pipes inside an exported code sample',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS({
+    [NXS_OVERVIEW]: nxsOverview({
+      extra: 'export const sampleTs = `type A =\n  | a | b |\n  | c | d |`;\n',
+    }),
+  }),
+);
+
+/*
+ * A component the library ships without exporting it: a module the barrel exports opens it, as
+ * `NxsToastService` opens `NxsToastComponent`. Removing both its stories and its Overview used to
+ * leave both checks green, because each read only the components the barrel names.
+ */
+const NXS_NOTICE = `${NXS_ROOT}/src/lib/notice`;
+const NXS_NOTICE_STORY = `${NXS_NOTICE}/notice.stories.ts`;
+const NXS_NOTICE_OVERVIEW = `${NXS_NOTICE}/notice.mdx`;
+const nxsNoticeStory = (imports = "import { NxsNoticeService } from './notice.service';") =>
+  `import type { Meta, StoryObj } from '@storybook/angular';\n${imports}\n` +
+  "const meta: Meta = { title: 'States/Notice' };\nexport default meta;\n" +
+  'export const Shown: StoryObj = { render: () => ({ props: { open: NxsNoticeService } }) };\n';
+// The service module also exports a constant that opens nothing, as `NXS_TOAST_DURATION` does.
+const NXS_NOTICE_LIB = (extra = {}) => ({
+  [`${NXS_ROOT}/src/index.ts`]:
+    "export { NxsThingComponent } from './lib/thing/thing.component';\n" +
+    'export {\n  NxsNoticeService,\n  provideNxsNotice,\n  NXS_NOTICE_DURATION,\n' +
+    "} from './lib/notice/notice.service';\n",
+  [`${NXS_NOTICE}/notice.component.ts`]:
+    "import { Component } from '@angular/core';\n" +
+    "@Component({ selector: 'nxs-notice', standalone: true, template: '' })\n" +
+    'export class NxsNoticeComponent {}\n',
+  [`${NXS_NOTICE}/notice.service.ts`]:
+    "import { Injectable } from '@angular/core';\n" +
+    "import { NxsNoticeComponent } from './notice.component';\n" +
+    'export const NXS_NOTICE_DURATION = 4000;\n' +
+    '@Injectable()\nexport class NxsNoticeService {\n  readonly content = NxsNoticeComponent;\n}\n' +
+    'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+  ...extra,
+});
+const nxsNoticeOverview = (imports = "import * as Stories from './notice.stories';") =>
+  nxsOverview({ imports, canvas: '<Canvas of={Stories.Shown} />' });
+
+expectRed(
+  'a component a service opens, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({ [NXS_STORY]: nxsStory(), ...NXS_NOTICE_LIB() }),
+  null,
+  /ships `NxsNoticeComponent` \(.*notice\.component\.ts\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no story documents it/,
+);
+
+expectGreen(
+  'a component a service opens, with a story importing the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({ [NXS_NOTICE_STORY]: nxsNoticeStory() }),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, with a story importing it through the published entry point',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { NxsNoticeService } from '@nuxeo/satori-platform/components';",
+      ),
+    }),
+  }),
+);
+
+// A library whose only components are ones a service opens is held to the same rule.
+const NXS_SERVICE_ONLY_BARREL = {
+  [`${NXS_ROOT}/src/index.ts`]:
+    'export {\n  NxsNoticeService,\n  provideNxsNotice,\n  NXS_NOTICE_DURATION,\n' +
+    "} from './lib/notice/notice.service';\n",
+};
+
+expectRed(
+  'a library that exports no component and ships one through a service, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK(NXS_NOTICE_LIB(NXS_SERVICE_ONLY_BARREL)),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a library that exports no component and ships one through a service, with no Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(NXS_NOTICE_LIB({ ...NXS_SERVICE_ONLY_BARREL, [NXS_NOTICE_STORY]: nxsNoticeStory() })),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+expectGreen(
+  'a library that exports no component and ships one through a service, storied and documented',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      ...NXS_SERVICE_ONLY_BARREL,
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+);
+
+// A namespace import of a component module opens what it exports, as a named import does.
+const NXS_NOTICE_SERVICE_VIA = (importLine, use) => ({
+  [`${NXS_NOTICE}/notice.service.ts`]:
+    `import { Injectable } from '@angular/core';\n${importLine}\n` +
+    'export const NXS_NOTICE_DURATION = 4000;\n' +
+    `@Injectable()\nexport class NxsNoticeService {\n  readonly content = ${use};\n}\n` +
+    'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+});
+
+// What opens the component is the export whose declaration reaches it, not any sibling export.
+expectRed(
+  'a component a service opens, whose only story imports a constant that opens nothing',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory("import { NXS_NOTICE_DURATION } from './notice.service';"),
+    }),
+  }),
+  null,
+  /ships `NxsNoticeComponent` \(.*\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no story documents it/,
+);
+
+expectRed(
+  'a component a service opens, whose Overview attaches to a story importing a constant that opens nothing',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { NXS_NOTICE_DURATION } from '@nuxeo/satori-platform/components';",
+      ),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, with a story importing only the provider that returns the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory("import { provideNxsNotice } from './notice.service';"),
+    }),
+  }),
+);
+
+expectRed(
+  'a component a service opens through a namespace import, with no story',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB(
+      NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+    ),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+expectRed(
+  'a component a service opens through a namespace import, with neither a story nor an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB(
+      NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+    ),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+expectGreen(
+  'a component a service opens through a namespace import, with a story importing the service',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      ...NXS_NOTICE_SERVICE_VIA(
+        "import * as Notice from './notice.component';",
+        'Notice.NxsNoticeComponent',
+      ),
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+    }),
+  }),
+);
+
+// A default import cannot be followed to the class it names, so it is refused, not read as nothing.
+expectRed(
+  'a service that imports the default export of a component module',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      ...NXS_NOTICE_SERVICE_VIA("import Notice from './notice.component';", 'Notice'),
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+    }),
+  }),
+  null,
+  /notice\.service\.ts imports the default export of .*notice\.component\.ts, which exports components, so which component it opens was not read/,
+);
+
+// A type-only import is erased, so a story that has one opens nothing.
+expectRed(
+  'a component a service opens, whose only story imports the service as a type',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import type { NxsNoticeService } from './notice.service';",
+      ),
+    }),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+// A story of another component that happens to use the service does not document what it opens.
+expectRed(
+  'a component a service opens, whose only story names another component',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory({
+      imports:
+        "import { NxsThingComponent } from './thing.component';\n" +
+        "import { NxsNoticeService } from '../notice/notice.service';",
+    }),
+    ...NXS_NOTICE_LIB(),
+  }),
+  null,
+  /ships `NxsNoticeComponent` .* no story documents it/,
+);
+
+// A component an exported component's own module uses is part of that component, not shipped.
+falsePositiveControls += 1;
+expectGreen(
+  "a component imported by an exported component's module, with no story of its own",
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [NXS_COMPONENT]: nxsComponent({ imports: "import { NxsPartComponent } from './part';" }),
+    [`${NXS_ROOT}/src/lib/thing/part.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-part', standalone: true, template: '' })\n" +
+      'export class NxsPartComponent {}\n',
+  }),
+);
+
+// Exporting a constant beside the component does not make the component's module an opener.
+falsePositiveControls += 1;
+expectGreen(
+  "a component imported by an exported component's module that also exports a constant",
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    [`${NXS_ROOT}/src/index.ts`]:
+      "export { NXS_THING_ID, NxsThingComponent } from './lib/thing/thing.component';\n",
+    [NXS_COMPONENT]:
+      nxsComponent({ imports: "import { NxsPartComponent } from './part';" }) +
+      "export const NXS_THING_ID = 'nxs.components.thing';\n",
+    [`${NXS_ROOT}/src/lib/thing/part.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-part', standalone: true, template: '' })\n" +
+      'export class NxsPartComponent {}\n',
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a service that imports a component only as a type',
+  'checkSatoriComponentsHaveStories',
+  NXS_STORYBOOK({
+    [NXS_STORY]: nxsStory(),
+    ...NXS_NOTICE_LIB({
+      [`${NXS_NOTICE}/notice.service.ts`]:
+        "import { Injectable } from '@angular/core';\n" +
+        "import type { NxsNoticeComponent } from './notice.component';\n" +
+        '@Injectable()\nexport class NxsNoticeService {\n  content?: NxsNoticeComponent;\n}\n' +
+        'export function provideNxsNotice() {\n  return NxsNoticeService;\n}\n',
+    }),
+  }),
+);
+
+expectRed(
+  'a component a service opens, with neither a story nor an Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(NXS_NOTICE_LIB()),
+  null,
+  /ships `NxsNoticeComponent` \(.*notice\.component\.ts\) through `NxsNoticeService`, `provideNxsNotice` \(.*notice\.service\.ts\), and no Overview page documents it/,
+);
+
+expectGreen(
+  'a component a service opens, with a story importing the service and its Overview',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+);
+
+expectRed(
+  'a component a service opens, whose Overview attaches to a story importing the service as a type',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_NOTICE_STORY]: nxsNoticeStory(
+        "import { type NxsNoticeService } from './notice.service';",
+      ),
+      [NXS_NOTICE_OVERVIEW]: nxsNoticeOverview(),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+// An Overview counts for what its own story file opens, not for whatever sits beside it.
+expectRed(
+  'a component a service opens, whose only Overview attaches to a story file that does not open it',
+  'checkSatoriComponentsHaveOverviews',
+  NXS_DOCS(
+    NXS_NOTICE_LIB({
+      [NXS_BY_ID_STORY]: NXS_BY_ID_STORY_SOURCE,
+      [`${NXS_ROOT}/src/lib/by-id.mdx`]: nxsOverview({
+        imports: "import * as Stories from './by-id.stories';",
+        canvas: '<Canvas of={Stories.Registered} />',
+      }),
+    }),
+  ),
+  null,
+  /ships `NxsNoticeComponent` .* no Overview page documents it/,
+);
+
+// `/components-satori` — the one place in the family allowed to import @hylandsoftware/satori-ui
+
+const NXS_SAT_ROOT = 'libs/shared/satori-components-satori';
+const NXS_SAT_PROVIDER = `${NXS_SAT_ROOT}/src/lib/provide.ts`;
+const NXS_FALLBACK = (extra = {}, paths = {}) =>
+  NXS_LIB(
+    {
+      'libs/platform/components-satori/ng-package.json':
+        '{ "lib": { "entryFile": "../../shared/satori-components-satori/src/index.ts" } }\n',
+      [PLATFORM_INDEX]: platformIndex('components', 'components-satori'),
+      [`${NXS_SAT_ROOT}/src/index.ts`]: "export { provide } from './lib/provide';\n",
+      [NXS_SAT_PROVIDER]:
+        "import { SatTag } from '@hylandsoftware/satori-ui/tag';\n" +
+        "import { NxsThingComponent } from '@nuxeo/satori-platform/components';\n" +
+        'export const provide = () => [SatTag, NxsThingComponent];\n',
+      ...extra,
+    },
+    { '@nuxeo/satori-platform/components-satori': [`${NXS_SAT_ROOT}/src/index.ts`], ...paths },
+  );
+
+// checkSatoriFallbackDependencies
+
+expectGreen(
+  'the Satori entry point importing satori-ui and the base library',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK(),
+);
+
+expectRed(
+  'the Satori entry point importing another GitHub Packages package',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK({
+    [NXS_SAT_PROVIDER]:
+      "import { tokens } from '@hylandsoftware/satori-tokens';\nexport const provide = tokens;\n",
+  }),
+  null,
+  /provide\.ts imports `@hylandsoftware\/satori-tokens`\. .*only `@hylandsoftware\/satori-ui` is a peer/,
+);
+
+expectRed(
+  'the Satori entry point importing ADF',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK({
+    [NXS_SAT_PROVIDER]:
+      "import { FileSizePipe } from '@alfresco/adf-core';\nexport const provide = FileSizePipe;\n",
+  }),
+  null,
+  /provide\.ts imports `@alfresco\/adf-core`\. .*ADF leaves the dependency tree/,
+);
+
+expectRed(
+  'the Satori entry point reaching the HxCS client through a workspace library',
+  'checkSatoriFallbackDependencies',
+  NXS_FALLBACK({
+    [NXS_SAT_PROVIDER]:
+      "import { clean } from '@nuxeo/satori-platform/nuxeo-client';\nexport const provide = clean;\n",
+    'libs/shared/nuxeo-client/src/lib/clean.ts':
+      "import type { Document } from '@hylandsoftware/hxcs-js-client';\nexport const clean: Document | 1 = 1;\n",
+  }),
+  null,
+  /nuxeo-client\/src\/lib\/clean\.ts imports `@hylandsoftware\/hxcs-js-client`, and the library reaches that file through libs\/shared\/satori-components-satori/,
+);
+
+expectRed(
+  'no Satori entry point sources at all',
+  'checkSatoriFallbackDependencies',
+  NXS_LIB(),
+  null,
+  /satori-components-satori has no TypeScript sources, so the rule that it alone may import/,
+);
+
+// The base library must not reach Satori by importing the Satori entry point either.
+expectRed(
+  'the base library importing the Satori entry point',
+  'checkSatoriComponentsDependencies',
+  NXS_FALLBACK({
+    [NXS_COMPONENT]: nxsComponent({
+      imports: "import { provide } from '@nuxeo/satori-platform/components-satori';",
+    }),
+  }),
+  null,
+  /satori-components-satori\/src\/lib\/provide\.ts imports `@hylandsoftware\/satori-ui\/tag`, and the library reaches that file through .*thing\.component\.ts/,
+);
+
+// checkSatoriFallbackEntryPoint
+
+expectGreen(
+  'a consumer importing the Satori entry point by its specifier',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    [NXS_CONSUMER]: "import { provide } from '@nuxeo/satori-platform/components-satori';\n",
+  }),
+);
+
+expectRed(
+  'a deep import into the Satori entry point',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    [NXS_CONSUMER]:
+      "import { provide } from '@nuxeo/satori-platform/components-satori/lib/provide';\n",
+  }),
+  null,
+  /x\.ts imports `@nuxeo\/satori-platform\/components-satori\/lib\/provide`, which reaches into libs\/shared\/satori-components-satori past its entry point/,
+);
+
+expectRed(
+  'the Satori entry point published from somewhere other than its barrel',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    'libs/platform/components-satori/ng-package.json':
+      '{ "lib": { "entryFile": "../../shared/satori-components-satori/src/lib/provide.ts" } }\n',
+  }),
+  null,
+  /components-satori\/ng-package\.json must publish `libs\/shared\/satori-components-satori\/src\/index\.ts`/,
+);
+
+expectRed(
+  'the Satori entry point not aliased',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({}, { '@nuxeo/satori-platform/components-satori': [] }),
+  null,
+  /must map `@nuxeo\/satori-platform\/components-satori` to exactly/,
+);
+
+expectRed(
+  'the Satori entry point missing from PLATFORM_ENTRY_POINTS',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({ [PLATFORM_INDEX]: platformIndex('components') }),
+  null,
+  /libs\/platform\/src\/index\.ts does not list 'components-satori' in `PLATFORM_ENTRY_POINTS`/,
+);
+
+expectRed(
+  'PLATFORM_ENTRY_POINTS built from a variable the guardrail cannot read',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK({
+    [PLATFORM_INDEX]:
+      "const names = ['components', 'components-satori'] as const;\n" +
+      'export const PLATFORM_ENTRY_POINTS = Object.freeze(names);\n',
+  }),
+  null,
+  /does not export `PLATFORM_ENTRY_POINTS` as a literal list of strings, so whether it lists `components-satori` was not checked/,
+);
+
+expectRed(
+  'a package root that no longer declares PLATFORM_ENTRY_POINTS',
+  'checkSatoriFallbackEntryPoint',
+  NXS_FALLBACK(),
+  (write) => write(PLATFORM_INDEX, '// PLATFORM_ENTRY_POINTS moved elsewhere\n'),
+  /does not export `PLATFORM_ENTRY_POINTS` as a literal list of strings/,
+);
+
+// The base library's own entry-point rule is unaffected by a sibling whose name it prefixes.
+falsePositiveControls += 1;
+expectGreen(
+  'the base entry point check beside the Satori entry point',
+  'checkSatoriComponentsEntryPoint',
+  NXS_FALLBACK({
+    [NXS_CONSUMER]: "import { provide } from '@nuxeo/satori-platform/components-satori';\n",
+  }),
+);
+
+// checkSatoriComponentsFederationReadiness covers the Satori entry point too
+
+expectRed(
+  'a root-provided service in the Satori entry point',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_FALLBACK({
+    [`${NXS_SAT_ROOT}/src/lib/thing.service.ts`]:
+      "import { Injectable } from '@angular/core';\n" +
+      "@Injectable({ providedIn: 'root' })\nexport class ThingService {}\n",
+  }),
+  null,
+  /satori-components-satori\/src\/lib\/thing\.service\.ts:2 uses `providedIn`/,
+);
+
+// checkSatoriPrimitivesRegisteredInOrder
+
+const APP_CONFIG_FIXTURE = 'apps/nuxeo-ui/src/app/app.config.ts';
+const appConfig = (providers) =>
+  "import { ApplicationConfig } from '@angular/core';\n" +
+  `export const appConfig: ApplicationConfig = {\n  providers: [\n${providers
+    .map((p) => `    ${p},`)
+    .join('\n')}\n  ],\n};\n`;
+
+expectGreen('Material registration before Satori', 'checkSatoriPrimitivesRegisteredInOrder', {
+  [APP_CONFIG_FIXTURE]: appConfig([
+    'provideRouter([])',
+    'provideNxsComponents()',
+    'provideNxsSatoriComponents()',
+  ]),
+});
+
+expectRed(
+  'Satori registration before Material',
+  'checkSatoriPrimitivesRegisteredInOrder',
+  { [APP_CONFIG_FIXTURE]: appConfig(['provideNxsSatoriComponents()', 'provideNxsComponents()']) },
+  null,
+  /lists `provideNxsSatoriComponents\(\)` before `provideNxsComponents\(\)`\. Later registrations win/,
+);
+
+expectRed(
+  'no Satori registration in the product',
+  'checkSatoriPrimitivesRegisteredInOrder',
+  { [APP_CONFIG_FIXTURE]: appConfig(['provideNxsComponents()']) },
+  null,
+  /does not call `provideNxsSatoriComponents\(\)` in its providers/,
+);
+
+expectRed(
+  'the Material registration present only in a comment',
+  'checkSatoriPrimitivesRegisteredInOrder',
+  {
+    [APP_CONFIG_FIXTURE]: appConfig(['// provideNxsComponents()', 'provideNxsSatoriComponents()']),
+  },
+  null,
+  /does not call `provideNxsComponents\(\)` in its providers/,
+);
+
+// checkNoProseInComponentInputs scans `nxs-` elements too, or the library's own selector prefix
+// would be the one place hard-coded English could hide.
+expectRed(
+  'prose in an input on an nxs- component',
+  'checkNoProseInComponentInputs',
+  {
+    'libs/features/x/src/lib/x.html':
+      '<nxs-empty-state heading="Nothing here"></nxs-empty-state>\n',
+  },
+  null,
+  /sets `heading="Nothing here"` on `<nxs-empty-state>`/,
+);
+
+// checkSatoriComponentsHaveSpecs (register item 21)
+
+const NXS_SPEC = `${NXS_ROOT}/src/lib/thing/thing.component.spec.ts`;
+const nxsSpec = (head, body = 'it("renders", () => expect(1).toBe(1));') => `${head}\n${body}\n`;
+const THING_IMPORT = "import { NxsThingComponent } from './thing.component';";
+const SPEC_NAMES =
+  /thing\.component\.ts declares the component `NxsThingComponent`, and no spec imports it/;
+
+expectGreen(
+  'a component whose spec imports it from its module',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({ [NXS_SPEC]: nxsSpec(THING_IMPORT, 'it("renders", () => create(NxsThingComponent));') }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component whose spec imports it through the published entry point',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({
+    [NXS_SPEC]: nxsSpec("import { NxsThingComponent } from '@nuxeo/satori-platform/components';"),
+  }),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a component a service opens, covered by a spec importing the service',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({
+    ...NXS_NOTICE_LIB(),
+    [NXS_SPEC]: nxsSpec(THING_IMPORT),
+    [`${NXS_NOTICE}/notice.service.spec.ts`]: nxsSpec(
+      "import { NxsNoticeService } from './notice.service';",
+    ),
+  }),
+);
+
+for (const [variant, spec] of [
+  ['no spec at all', undefined],
+  ['a spec naming it only in a comment', nxsSpec('// NxsThingComponent is covered elsewhere')],
+  ['a spec naming it only in a string', nxsSpec('it("NxsThingComponent", () => undefined);')],
+  [
+    'a spec declaring a same-named fake',
+    nxsSpec('class NxsThingComponent {}', 'it("x", () => new NxsThingComponent());'),
+  ],
+  [
+    'a spec importing it as a type only',
+    nxsSpec("import type { NxsThingComponent } from './thing.component';"),
+  ],
+  [
+    'a spec importing it with an inline type modifier',
+    nxsSpec("import { type NxsThingComponent } from './thing.component';"),
+  ],
+  [
+    'a spec importing a longer-named class',
+    nxsSpec("import { NxsThingComponentFake } from './thing.component';"),
+  ],
+]) {
+  expectRed(
+    `[spec] ${variant}`,
+    'checkSatoriComponentsHaveSpecs',
+    NXS_LIB(spec === undefined ? {} : { [NXS_SPEC]: spec }),
+    null,
+    SPEC_NAMES,
+  );
+}
+
+expectRed(
+  '[spec] a component the barrel does not export, with no spec',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({
+    [NXS_SPEC]: nxsSpec(THING_IMPORT),
+    [`${NXS_ROOT}/src/lib/thing/thing-row.component.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-thing-row', standalone: true, template: '' })\n" +
+      'export class NxsThingRowComponent {}\n',
+  }),
+  null,
+  /thing-row\.component\.ts declares the component `NxsThingRowComponent`, and no spec imports it/,
+);
+
+expectRed(
+  '[spec] a component a service opens, when no spec imports the service',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_LIB({ ...NXS_NOTICE_LIB(), [NXS_SPEC]: nxsSpec(THING_IMPORT) }),
+  null,
+  /notice\.component\.ts declares the component `NxsNoticeComponent`, and no spec imports it/,
+);
+
+expectRed(
+  '[spec] a component in the Satori entry point with no spec',
+  'checkSatoriComponentsHaveSpecs',
+  NXS_FALLBACK({
+    [NXS_SPEC]: nxsSpec(THING_IMPORT),
+    [`${NXS_SAT_ROOT}/src/lib/sat-thing.component.ts`]:
+      "import { Component } from '@angular/core';\n" +
+      "@Component({ selector: 'nxs-satori-thing', standalone: true, template: '' })\n" +
+      'export class NxsSatoriThingComponent {}\n',
+  }),
+  null,
+  /sat-thing\.component\.ts declares the component `NxsSatoriThingComponent`, and no spec imports it/,
+);
+
+// checkSatoriLibrariesKeepHostDateAdapter (NXSAT-649)
+
+const DATE_FIELD = `${NXS_ROOT}/src/lib/when/when.component.ts`;
+/** A date field component with `head` above it and `metadata` in its decorator. */
+const dateField = (head, metadata) =>
+  `${head}\nimport { Component } from '@angular/core';\n` +
+  `@Component({ selector: 'nxs-when', standalone: true, templateUrl: './when.component.html', ${metadata} })\n` +
+  'export class NxsWhenComponent {}\n';
+const MATERIAL_CORE = "from '@angular/material/core';";
+const NATIVE_RED = (what) =>
+  new RegExp(
+    `when\\.component\\.ts:\\d+ puts Material's native date adapter in an injector \\(\`${what}\`\\)`,
+  );
+
+expectGreen(
+  "a date field providing the library's own adapter, beside an adapter extending the native one",
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField(
+      "import { provideNxsDateAdapter } from '../date-input/locale-date';",
+      'providers: [provideNxsDateAdapter()]',
+    ),
+    [`${NXS_ROOT}/src/lib/date-input/locale-date.ts`]:
+      `import { DateAdapter, NativeDateAdapter, inject } ${MATERIAL_CORE}\n` +
+      'export class NxsLocaleDateAdapter extends NativeDateAdapter {}\n' +
+      'export const host = (adapter: DateAdapter<unknown>) =>\n' +
+      '  adapter instanceof NativeDateAdapter && adapter.parse === NativeDateAdapter.prototype.parse;\n',
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'the native adapter named only in a comment, a string and a member',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField(
+      `import { provideNativeDateAdapter } ${MATERIAL_CORE}\n` +
+        '// Unlike provideNativeDateAdapter(), this keeps the host adapter.\n' +
+        "const why = 'MatNativeDateModule reads dates as American';\n" +
+        'const config = { provideNativeDateAdapter: () => [] };\n' +
+        'config.provideNativeDateAdapter();',
+      'providers: []',
+    ),
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a spec and a story providing it, as a host would',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField('', 'providers: []'),
+    [`${NXS_ROOT}/src/lib/when/when.component.spec.ts`]: `import { provideNativeDateAdapter } ${MATERIAL_CORE}\nconst providers = [provideNativeDateAdapter()];\n`,
+    [`${NXS_ROOT}/src/lib/when/when.stories.ts`]: `import { provideNativeDateAdapter } ${MATERIAL_CORE}\nconst providers = [provideNativeDateAdapter()];\n`,
+  },
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  "a local function of the same name, which is not Material's",
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField(
+      'function provideNativeDateAdapter() { return []; }',
+      'providers: [provideNativeDateAdapter()]',
+    ),
+  },
+);
+
+for (const [variant, head, metadata, what] of [
+  [
+    'provideNativeDateAdapter() in its providers',
+    `import { provideNativeDateAdapter } ${MATERIAL_CORE}`,
+    'providers: [provideNativeDateAdapter()]',
+    'provideNativeDateAdapter\\(\\)',
+  ],
+  [
+    'MatNativeDateModule in its imports',
+    `import { MatNativeDateModule } ${MATERIAL_CORE}`,
+    'imports: [MatNativeDateModule]',
+    'MatNativeDateModule',
+  ],
+  [
+    'NativeDateAdapter as a provider class',
+    `import { DateAdapter, NativeDateAdapter } ${MATERIAL_CORE}`,
+    'providers: [{ provide: DateAdapter, useClass: NativeDateAdapter }]',
+    'useClass: NativeDateAdapter',
+  ],
+  [
+    'NativeDateAdapter made by a factory',
+    `import { DateAdapter, NativeDateAdapter } ${MATERIAL_CORE}`,
+    'providers: [{ provide: DateAdapter, useFactory: () => new NativeDateAdapter() }]',
+    'new NativeDateAdapter\\(\\)',
+  ],
+  [
+    'provideNativeDateAdapter() imported under another name',
+    `import { provideNativeDateAdapter as nativeDates } ${MATERIAL_CORE}`,
+    'providers: [nativeDates()]',
+    'provideNativeDateAdapter\\(\\)',
+  ],
+  [
+    'provideNativeDateAdapter() through a namespace import',
+    `import * as core ${MATERIAL_CORE}`,
+    'providers: [core.provideNativeDateAdapter()]',
+    'provideNativeDateAdapter\\(\\)',
+  ],
+]) {
+  expectRed(
+    `[native date adapter] ${variant}`,
+    'checkSatoriLibrariesKeepHostDateAdapter',
+    { [DATE_FIELD]: dateField(head, metadata) },
+    null,
+    NATIVE_RED(what),
+  );
+}
+
+expectRed(
+  '[native date adapter] provideNativeDateAdapter() in the Satori entry point',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  {
+    [DATE_FIELD]: dateField('', 'providers: []'),
+    [`${NXS_SAT_ROOT}/src/lib/sat-when.component.ts`]: `import { provideNativeDateAdapter } ${MATERIAL_CORE}\nexport const providers = [provideNativeDateAdapter()];\n`,
+  },
+  null,
+  /sat-when\.component\.ts:2 puts Material's native date adapter in an injector/,
+);
+
+expectRed(
+  '[native date adapter] a tree with no library sources',
+  'checkSatoriLibrariesKeepHostDateAdapter',
+  { 'README.md': '# fixture\n' },
+  null,
+  /checkSatoriLibrariesKeepHostDateAdapter asserted nothing/,
+);
+
+// checkPlatformEntryPointsListed (register item 23)
+
+expectGreen('every published entry point listed', 'checkPlatformEntryPointsListed', NXS_LIB());
+
+expectRed(
+  '[entry] a published entry point the list leaves out',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({ 'libs/platform/ui/ng-package.json': '{ "lib": { "entryFile": "x.ts" } }\n' }),
+  null,
+  /libs\/platform\/ui\/ng-package\.json publishes `@nuxeo\/satori-platform\/ui`, and .* does not list 'ui'/,
+);
+
+expectRed(
+  '[entry] a listed entry point nothing publishes',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({ [PLATFORM_INDEX]: platformIndex('components', 'extras') }),
+  null,
+  /lists 'extras' in `PLATFORM_ENTRY_POINTS`, and no libs\/platform\/extras\/ng-package\.json publishes it/,
+);
+
+expectRed(
+  '[entry] a list the guardrail cannot read',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({
+    [PLATFORM_INDEX]:
+      "const names = ['components'];\nexport const PLATFORM_ENTRY_POINTS = names;\n",
+  }),
+  null,
+  /does not export `PLATFORM_ENTRY_POINTS` as a literal list of strings, so whether it matches/,
+);
+
+// The package root's own ng-package.json is not an entry point under a subpath.
+falsePositiveControls += 1;
+expectGreen(
+  'the package root ng-package.json beside the listed entry points',
+  'checkPlatformEntryPointsListed',
+  NXS_LIB({ 'libs/platform/ng-package.json': '{ "lib": { "entryFile": "src/index.ts" } }\n' }),
+);
+
+// checkMdxCodeSamplesFormatted (register item 38)
+
+const PRETTIER_RC = `${readFileSync(join(ROOT, '.prettierrc'), 'utf8')}`;
+const MDX_PAGE = `${NXS_ROOT}/src/lib/thing/thing.mdx`;
+const mdx = (body) => ({
+  '.prettierrc': PRETTIER_RC,
+  [MDX_PAGE]: `import { Source } from '@storybook/addon-docs/blocks';\n\n# Thing\n\n${body}\n`,
+});
+const MDX_RED =
+  /thing\.mdx: (the sample `\w+`|an inline sample) \(\w+\) is not formatted as Prettier formats it/;
+
+expectGreen(
+  'formatted samples: html in a constant, a one-line inline import, and class members',
+  'checkMdxCodeSamplesFormatted',
+  mdx(
+    'export const usageHtml = `<nxs-thing\n  [heading]="title()"\n  [subheading]="typeName()"\n  [documentType]="type()"\n  (selected)="open($event)"\n/>`;\n\n' +
+      '<Source language="html" code={usageHtml} />\n\n' +
+      '<Source language="typescript" code={`import { NxsThingComponent } from \'@nuxeo/satori-platform/components\';`} />\n\n' +
+      "export const usageTs = `import { signal } from '@angular/core';\n\nreadonly open = signal(false);\n\ntoggle(): void {\n  this.open.update((open) => !open);\n}`;\n\n" +
+      '<Source language="typescript" code={usageTs} />',
+  ),
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a formatted fenced TypeScript block, and a fenced bash one',
+  'checkMdxCodeSamplesFormatted',
+  mdx('```ts\nconst answer = 42;\n```\n\n```bash\nnpx   nx   test\n```'),
+);
+
+expectRed(
+  '[mdx] an unformatted fenced TypeScript block',
+  'checkMdxCodeSamplesFormatted',
+  mdx('```typescript\nconst answer=42\n```'),
+  null,
+  /a fenced typescript block is not formatted as Prettier formats it/,
+);
+
+falsePositiveControls += 1;
+expectGreen(
+  'a bash sample, which is not checked',
+  'checkMdxCodeSamplesFormatted',
+  mdx('<Source language="bash" code={`npx   nx   test`} />'),
+);
+
+for (const [variant, body, reason] of [
+  [
+    'an unformatted html constant',
+    'export const usageHtml = `<nxs-thing [heading]="title()" [subheading]="typeName()" [documentType]="type()" (selected)="open($event)" />`;\n\n<Source language="html" code={usageHtml} />',
+    MDX_RED,
+  ],
+  // The sample's own `/>` must not end the block: a pattern stopping there reads no code at all.
+  [
+    'an unformatted inline html sample that closes its own element',
+    '<Source language="html" code={`<nxs-thing   heading="x" />`} />',
+    MDX_RED,
+  ],
+  [
+    'unformatted class members',
+    'export const usageTs = `import { signal } from \'@angular/core\';\n\nreadonly open=signal( false );`;\n\n<Source language="typescript" code={usageTs} />',
+    MDX_RED,
+  ],
+  [
+    'a multi-line inline sample, whose indentation MDX strips',
+    '<Source language="html" code={`<div>\n  <nxs-thing />\n</div>`} />',
+    /an inline sample spans lines with indentation, which MDX strips/,
+  ],
+  [
+    'a sample that does not parse',
+    '<Source language="typescript" code={`const = ;`} />',
+    /an inline sample \(typescript\) does not parse as typescript/,
+  ],
+  [
+    'a sample with no language, beside one inside its code',
+    '<Source code={`<p language="html">x</p>`} />',
+    /an inline sample has no `language`/,
+  ],
+  [
+    'a sample naming a constant the page does not declare',
+    '<Source language="html" code={missingHtml} />',
+    /the sample `missingHtml` is not an `export const` template literal on this page/,
+  ],
+  [
+    'a Source block that never closes',
+    '<Source language="html" code={`<p>x</p>`}',
+    /a <Source> block does not close/,
+  ],
+]) {
+  expectRed(`[mdx] ${variant}`, 'checkMdxCodeSamplesFormatted', mdx(body), null, reason);
+}
 
 /* ---------------- checkNoNuxeoCredentialDefaults ---------------- */
 
@@ -6176,7 +9014,8 @@ const total = negative + positive;
 console.log(
   `review-guardrails selftest: ${total} controls — ${negative} negative (a broken tree must go ` +
     `red, for the stated reason) and ${positive} positive (a correct tree must stay green), ` +
-    `of which ${falsePositiveControls} assert that a specific non-violation is NOT flagged.`,
+    `of which ${falsePositiveControls} assert that a specific non-violation is NOT flagged.` +
+    (ONLY ? ` FILTERED to ${ONLY.join(', ')} — not a full run.` : ''),
 );
 
 if (failures.length) {

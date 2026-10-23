@@ -844,7 +844,7 @@ control(
     // case, covered below.
     //
     // The alias must also be RE-EXPORTED from the package barrel. Without that step this control was
-    // passing for the wrong reason: `@nuxeo-satori/platform/nuxeo-client` maps to `src/index.ts`,
+    // passing for the wrong reason: `@nuxeo/satori-platform/nuxeo-client` maps to `src/index.ts`,
     // whose export list is explicit, so the import resolved to the error type, check 4 fell back to
     // its `unresolvable type in a NONE context` finding, and that finding names the same file — which
     // satisfied a bare `document-viewer.component.html` expectation. The control therefore proved the
@@ -861,17 +861,20 @@ control(
         throw new Error('navigable-url barrel export changed — update this control');
       return s.replace(anchor, `  type CrossFileMediaUrl,\n${anchor}`);
     });
-    edit(VIEWER_TS, (s) =>
-      s
+    // Both anchors are checked: a `replace` that matches nothing leaves the alias unimported, and
+    // the control then went red for the unresolvable-type reason described above.
+    edit(VIEWER_TS, (s) => {
+      const importAnchor = "import { TranslatePipe } from '@ngx-translate/core';";
+      const inputAnchor = 'readonly posterUrl = input<string | null>(null);';
+      if (!s.includes(importAnchor) || !s.includes(inputAnchor))
+        throw new Error('document-viewer imports or posterUrl input changed — update this control');
+      return s
         .replace(
-          "import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';",
-          "import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';\nimport type { CrossFileMediaUrl } from '@nuxeo-satori/platform/nuxeo-client';",
+          importAnchor,
+          `${importAnchor}\nimport type { CrossFileMediaUrl } from '@nuxeo/satori-platform/nuxeo-client';`,
         )
-        .replace(
-          'readonly posterUrl = input<string | null>(null);',
-          'readonly posterUrl = input<CrossFileMediaUrl | null>(null);',
-        ),
-    );
+        .replace(inputAnchor, 'readonly posterUrl = input<CrossFileMediaUrl | null>(null);');
+    });
   },
   // The SPECIFIC finding, not merely the file name. `unresolvable type` would also name this file,
   // and accepting that is exactly how the control came to assert nothing.

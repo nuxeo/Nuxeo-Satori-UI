@@ -1,0 +1,108 @@
+<mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
+  <mat-label>{{ label() }}</mat-label>
+  @if (multiple()) {
+    <mat-chip-grid
+      #grid
+      [disabled]="isDisabled()"
+      [required]="required()"
+      [errorStateMatcher]="errorState"
+    >
+      @for (id of chosen(); track id) {
+        <mat-chip-row [attr.data-entry]="id" (removed)="remove(id)">
+          {{ labelOf(id) }}
+          <button
+            matChipRemove
+            type="button"
+            [attr.aria-label]="
+              'satori-components.pickers.remove' | translate: { name: labelOf(id) }
+            "
+          >
+            <mat-icon aria-hidden="true">cancel</mat-icon>
+          </button>
+        </mat-chip-row>
+      }
+      <input
+        autocomplete="off"
+        [id]="inputId"
+        [matChipInputFor]="grid"
+        [matAutocomplete]="auto"
+        [value]="text()"
+        (input)="onInput($event)"
+        (focus)="opened()"
+        (blur)="blurred()"
+      />
+    </mat-chip-grid>
+  } @else {
+    <input
+      matInput
+      type="text"
+      autocomplete="off"
+      [id]="inputId"
+      [matAutocomplete]="auto"
+      [value]="text()"
+      [required]="required()"
+      [disabled]="isDisabled()"
+      [errorStateMatcher]="errorState"
+      (input)="onInput($event)"
+      (focus)="opened()"
+      (blur)="blurred()"
+    />
+    @if (chosen().length && !isDisabled()) {
+      <button
+        matIconSuffix
+        mat-icon-button
+        type="button"
+        class="nxs-picker__clear"
+        [attr.aria-label]="'satori-components.pickers.clear' | translate"
+        (click)="clear()"
+      >
+        <mat-icon aria-hidden="true">close</mat-icon>
+      </button>
+    }
+  }
+  @if (unmatched()) {
+    <mat-error>{{ 'satori-components.pickers.choose-from-list' | translate }}</mat-error>
+  } @else if (missing()) {
+    <mat-error>{{ 'satori-components.pickers.required' | translate }}</mat-error>
+  }
+  @if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+  <mat-autocomplete #auto="matAutocomplete" (optionSelected)="choose($event.option.value)">
+    @switch (loaded().status) {
+      @case ('loading') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.loading' | translate
+        }}</mat-option>
+      }
+      @case ('failed') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.vocabulary-select.failed' | translate
+        }}</mat-option>
+      }
+      @default {
+        @for (group of groups(); track group.label) {
+          @if (group.label) {
+            <mat-optgroup [label]="group.label">
+              @for (entry of group.entries; track entry.id) {
+                <mat-option [value]="entry.id" [attr.data-entry]="entry.id">{{
+                  entry.label
+                }}</mat-option>
+              }
+            </mat-optgroup>
+          } @else {
+            @for (entry of group.entries; track entry.id) {
+              <mat-option [value]="entry.id" [attr.data-entry]="entry.id">{{
+                entry.label
+              }}</mat-option>
+            }
+          }
+        } @empty {
+          <mat-option disabled class="nxs-picker__status">{{
+            'satori-components.pickers.no-results' | translate
+          }}</mat-option>
+        }
+      }
+    }
+  </mat-autocomplete>
+</mat-form-field>

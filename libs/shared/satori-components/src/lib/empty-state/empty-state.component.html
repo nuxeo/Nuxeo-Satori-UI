@@ -1,0 +1,29 @@
+@if (icon()) {
+  <mat-icon class="nxs-empty-state__icon" aria-hidden="true">{{ icon() }}</mat-icon>
+}
+@switch (headingLevel()) {
+  @case (1) {
+    <h1 class="nxs-empty-state__heading">{{ heading() }}</h1>
+  }
+  @case (3) {
+    <h3 class="nxs-empty-state__heading">{{ heading() }}</h3>
+  }
+  @case (4) {
+    <h4 class="nxs-empty-state__heading">{{ heading() }}</h4>
+  }
+  @case (5) {
+    <h5 class="nxs-empty-state__heading">{{ heading() }}</h5>
+  }
+  @case (6) {
+    <h6 class="nxs-empty-state__heading">{{ heading() }}</h6>
+  }
+  @default {
+    <h2 class="nxs-empty-state__heading">{{ heading() }}</h2>
+  }
+}
+@if (message()) {
+  <p class="nxs-empty-state__message">{{ message() }}</p>
+}
+<div class="nxs-empty-state__actions">
+  <ng-content />
+</div>

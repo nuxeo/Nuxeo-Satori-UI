@@ -123,7 +123,9 @@ const context = await browser.newContext({
   ...(skipHttpCredentials
     ? {}
     : {
-        httpCredentials: { username: nuxeoUser, password: nuxeoPass, origin: baseUrl },
+        // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never challenges, so a
+        // challenge-based credential is never sent and `page.request` runs as Anonymous.
+        httpCredentials: { username: nuxeoUser, password: nuxeoPass, origin: baseUrl, send: 'always' },
       }),
 });
 

@@ -14,7 +14,7 @@ import {
   NuxeoGroup,
   PrincipalPermissionPage,
   PrincipalPermissionRow,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { AdminGroupDetailsPageComponent } from './admin-group-details-page.component';
 import { PageEvent } from '@angular/material/paginator';
 

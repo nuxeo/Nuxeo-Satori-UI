@@ -2,10 +2,7 @@
   @if (readOnly()) {
     @if (loading()) {
       <div class="note-editor-loading">
-        <mat-spinner
-          diameter="36"
-          [attr.aria-label]="'document-detail.note-editor.loading' | translate"
-        />
+        <nxs-spinner diameter="36" [label]="'document-detail.note-editor.loading' | translate" />
       </div>
     } @else {
       <div class="note-body note-body--read-only">
@@ -24,10 +21,7 @@
     }
   } @else if (loading()) {
     <div class="note-editor-loading">
-      <mat-spinner
-        diameter="36"
-        [attr.aria-label]="'document-detail.note-editor.loading' | translate"
-      />
+      <nxs-spinner diameter="36" [label]="'document-detail.note-editor.loading' | translate" />
     </div>
   } @else {
     <div class="note-body">
@@ -35,7 +29,7 @@
         <div class="note-quill-shell">
           @if (imageUploading()) {
             <div class="note-image-upload-overlay" aria-live="polite">
-              <mat-spinner diameter="28" />
+              <nxs-spinner diameter="28" />
               <span>{{ 'document-detail.note-editor.uploading-image' | translate }}</span>
             </div>
           }

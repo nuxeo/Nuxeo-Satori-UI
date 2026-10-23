@@ -1,9 +1,11 @@
 name: Dependency Review
 
 on:
+  # PRs into an `integration/<ticket>` branch get the same gate as PRs into `main`.
   pull_request:
     branches:
       - main
+      - 'integration/**'
 
 permissions:
   contents: read

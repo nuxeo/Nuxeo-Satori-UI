@@ -4,6 +4,7 @@ import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { sassLoadedUrls } from './beta-harness/stylesheet-scan.mjs';
 
 const repoRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
   encoding: 'utf8',
@@ -1778,34 +1779,24 @@ function checkAdfHxWorkaroundIds() {
  *    versioning, which is the opposite of what the four-layer contract promises.
  * 2. **Bundle boundary.** A barrel is one module. The moment anything it re-exports imports
  *    `@alfresco/*`, adf-core becomes reachable from the app shell and lands in the **initial**
- *    bundle — measured at 1.70 → 2.65 MB when that happened, which is why
- *    `libs/shared/adf-hx-bridge/src/providers.ts` exists as a separate entry point.
- *
- * The bridge's `providers.ts` is the secondary entry point for adf-hx-facing code. Most consumers
- * are lazy (the POC route); the shell nav drawer and `app.config.ts` also import it eagerly on
- * purpose — see the allowlist below — so the gate watches the main barrel, not "never import
- * providers at startup".
+ *    bundle — measured at 1.70 → 2.65 MB when that happened, which is why the adf-hx bridge kept
+ *    its upstream-facing code behind a secondary entry point until it was removed.
  */
 function checkNoAdfHxInPublicApi() {
   // Scoped to the two heavy packages, deliberately. `@alfresco/adf-extensions` is also an
   // `@alfresco` scope, but it is a small library that leaks no type and moves no bundle, and since
   // NXSAT-308 nothing in `libs/` imports it at all: `libs/shared/extensions` owns the three
-  // functions it used to import. It remains installed only because adf-core and adf-hx need it.
+  // functions it used to import. It left the dependency tree with adf-core and adf-hx in NXSAT-637.
   const ALFRESCO = /from\s+['"]@alfresco\/(adf-hx-content-services|adf-core)/;
 
   /**
    * Known, deliberate exceptions — each with the reason, because an allowlist without one becomes
-   * a dumping ground.
+   * a dumping ground. Empty since the adf-hx bridge, whose shell nav drawer was the one entry, was
+   * removed.
+   *
+   * @type {Map<string, string>}
    */
-  const ALLOWED = new Map([
-    [
-      'libs/shared/adf-hx-bridge/src/lib/ui/hxp-browse-nav-drawer/hxp-browse-nav-drawer.component.ts',
-      "The app shell's nav drawer renders adf-hx's document tree, so the shell genuinely needs " +
-        'adf-hx eagerly. This is a product decision, not a barrel accident, and it means the eager ' +
-        'bundle has TWO causes — this and CONTEXT_MENU_ACTIONS_PROVIDERS in app.config.ts. Removing ' +
-        'it requires deferring the tree behind an outlet, which is Phase 4 work.',
-    ],
-  ]);
+  const ALLOWED = new Map();
   const barrels = git(['ls-files', '--cached', '--others', '--exclude-standard'])
     .split('\n')
     .filter((file) => /^libs\/.+\/src\/index\.ts$/.test(file));
@@ -1855,7 +1846,7 @@ function checkNoAdfHxInPublicApi() {
           `${barrel} via ${offender.from.slice(1).join(' -> ') || 'a direct export'}. That both ` +
           'leaks an adf-hx type into our public API and makes adf-core reachable from anything ' +
           'importing the barrel, which puts it in the initial bundle. Move it behind a secondary ' +
-          'entry point, as `libs/shared/adf-hx-bridge/src/providers.ts` does.',
+          'entry point.',
       );
     }
   }
@@ -2697,10 +2688,14 @@ function checkNoHardcodedDescriptorText() {
     /^libs\/core\//,
   ];
 
+  // Stories as well as specs: a story's args are the sample input a component's documentation
+  // shows, standing in for text a caller has already translated, and never render in the product.
   const sources = [
     ...walk('apps', (path) => /\.ts$/.test(path)),
     ...walk('libs', (path) => /\.ts$/.test(path)),
-  ].filter((path) => !/\.spec\.ts$/.test(path) && !EXEMPT.some((pattern) => pattern.test(path)));
+  ].filter(
+    (path) => !/\.(spec|stories)\.ts$/.test(path) && !EXEMPT.some((pattern) => pattern.test(path)),
+  );
 
   if (sources.length === 0) {
     fail('No TypeScript sources were found under apps/ or libs/, so this gate asserted nothing.');
@@ -3527,7 +3522,7 @@ function checkTranslatorNotesFlagProductsAndAcronyms() {
 }
 
 /**
- * The English `@nuxeo-satori/platform` ships must be the application's English, for exactly the
+ * The English `@nuxeo/satori-platform` ships must be the application's English, for exactly the
  * keys the package uses.
  *
  * The package's entry points reference ~300 keys that live only in `apps/nuxeo-ui/public/i18n/en.json`,
@@ -4025,6 +4020,15 @@ function checkAccessibleNameFallbacks() {
   const METHOD_BINDING =
     /\[(?:matTooltip|(?:attr\.)?(?:aria-label|title|placeholder))\]="\s*(\w+)\(\)\s*\|\s*translate(?::\s*\{[^{}]*\})?\s*"/g;
 
+  // `[label]` on an `nxs-` component is that component's accessible name: `nxs-spinner` puts it on
+  // its progressbar, `nxs-icon` and `nxs-doc-type-icon` on their image. BINDING above reads only the
+  // HTML attributes, so a spinner's key could leave EN_FALLBACK_TRANSLATIONS with this gate green —
+  // and the core slice names its loaders that way. Matched per opening tag (spinners wrap across
+  // lines), and only on `nxs-` elements: `[label]` on a `mat-tab` is visible text, not this gate's.
+  // Quoted values are consumed whole, so a `>` in a bound expression does not end the tag.
+  const NXS_OPENING_TAG = /<nxs-[\w-]+\b(?:[^>"']|"[^"]*"|'[^']*')*>/g;
+  const NXS_LABEL_BINDING = /\[label\]="\s*'([^']+)'\s*\|\s*translate(?::\s*\{[^{}]*\})?\s*"/g;
+
   // NXENG-798: global search names via a visible `<label>`, not `[placeholder]`. Only this control
   // is wired here — a repo-wide `<label>{{ … | translate }}</label>` scan would surface dozens of
   // pre-existing catalogue keys that never passed through the attribute binding pattern.
@@ -4307,6 +4311,11 @@ function checkAccessibleNameFallbacks() {
     const html = read(template);
     for (const [, attribute, key] of html.matchAll(BINDING)) {
       recordBinding(template, attribute, key);
+    }
+    for (const [tag] of html.matchAll(NXS_OPENING_TAG)) {
+      for (const [, key] of tag.matchAll(NXS_LABEL_BINDING)) {
+        recordBinding(template, 'label', key);
+      }
     }
     const methodBindings = [...html.matchAll(METHOD_BINDING)];
     if (methodBindings.length === 0) continue;
@@ -5956,7 +5965,7 @@ function checkNoProseInComponentInputs() {
     'fontSet',
     'svgIcon',
   ]);
-  const ELEMENT = /<((?:mat|hxp|app|sat|adf|nx|lib)-[\w-]+|[A-Z][\w-]*)\b([^>]*)>/gs;
+  const ELEMENT = /<((?:mat|hxp|nxs|app|sat|adf|nx|lib)-[\w-]+|[A-Z][\w-]*)\b([^>]*)>/gs;
   const ATTRIBUTE = /(?<![[(\w.-])([a-zA-Z][\w-]*)="([A-Z][^"<>{}]*)"/g;
 
   const templates = [
@@ -7373,6 +7382,2211 @@ function checkTranslateIsInjectedWhereUsed() {
   }
 }
 
+/* ---------------- libs/shared/satori-components (NXSAT-308) ---------------- */
+
+/**
+ * The `nxs-` component library, published as `@nuxeo/satori-platform/components`.
+ *
+ * Three rules hold it to the plan of record (`satori_component_library` plan, sections 3 and 7):
+ * it builds and ships with no ADF, no HxCS client and no Satori, because Satori is to enter only
+ * through a separate `/components-satori` entry point — so that once Satori is an optional peer of
+ * the package, a customer without GitHub Packages access still gets the Material implementations; it is reached only through its entry point; and
+ * it stays cheap to turn into a federated remote later.
+ */
+const SATORI_COMPONENTS_ROOT = 'libs/shared/satori-components';
+const SATORI_COMPONENTS_ENTRY = '@nuxeo/satori-platform/components';
+const SATORI_COMPONENTS_BARREL = `${SATORI_COMPONENTS_ROOT}/src/index.ts`;
+
+/**
+ * `@nuxeo/satori-platform/components-satori`: the same primitive IDs re-registered on Satori, and
+ * the one place in the library family allowed to import `@hylandsoftware/satori-ui` (plan section 3).
+ * Its own project, so the base library's no-Satori rule needs no exception carved into it.
+ */
+const SATORI_FALLBACK_ROOT = 'libs/shared/satori-components-satori';
+const SATORI_FALLBACK_ENTRY = '@nuxeo/satori-platform/components-satori';
+const SATORI_FALLBACK_BARREL = `${SATORI_FALLBACK_ROOT}/src/index.ts`;
+
+/** Each library in the family, with its entry point and the `ng-package.json` that publishes it. */
+const SATORI_LIBRARIES = [
+  {
+    root: SATORI_COMPONENTS_ROOT,
+    entry: SATORI_COMPONENTS_ENTRY,
+    barrel: SATORI_COMPONENTS_BARREL,
+    ngPackage: 'libs/platform/components/ng-package.json',
+  },
+  {
+    root: SATORI_FALLBACK_ROOT,
+    entry: SATORI_FALLBACK_ENTRY,
+    barrel: SATORI_FALLBACK_BARREL,
+    ngPackage: 'libs/platform/components-satori/ng-package.json',
+  },
+];
+
+const isTsconfig = (path) => /(^|\/)tsconfig[^/]*\.json$/.test(path);
+
+/**
+ * `paths`, `baseUrl` and the config that declared `paths`, as TypeScript computes them for one
+ * config: its own values, else the nearest inherited ones. `baseUrl` is resolved against the
+ * config that sets it. Only relative `extends` are followed — a package config is not ours.
+ */
+function effectiveCompilerPaths(config, seen = new Set()) {
+  if (seen.has(config) || !fileExists(config)) return {};
+  const parsed = ts.parseConfigFileTextToJson(config, read(config)).config ?? {};
+  let effective = {};
+  for (const parent of [parsed.extends ?? []].flat()) {
+    if (typeof parent !== 'string' || !parent.startsWith('.')) continue;
+    const file = toPosixRel(
+      join(dirname(config), parent.endsWith('.json') ? parent : `${parent}.json`),
+    );
+    effective = { ...effective, ...effectiveCompilerPaths(file, new Set([...seen, config])) };
+  }
+  const options = parsed.compilerOptions ?? {};
+  if (typeof options.baseUrl === 'string') {
+    effective.baseUrl = toPosixRel(join(dirname(config), options.baseUrl));
+  }
+  if (options.paths && typeof options.paths === 'object') {
+    effective.paths = options.paths;
+    effective.declaredIn = config;
+  }
+  return effective;
+}
+
+/**
+ * Every `paths` map a compilation in this repository sees, its targets made repo-relative.
+ *
+ * Not only `tsconfig.base.json`'s: a project's own tsconfig may declare `paths`, which replaces the
+ * inherited map for that project, and an alias declared there is as real as one in the base.
+ * Targets resolve against the effective `baseUrl`, or with none against the directory of the
+ * config that declared `paths`; `${configDir}` is the config being compiled.
+ */
+function tsconfigPathMaps() {
+  const configs = [
+    ...readdirSync(repoRoot).filter(isTsconfig),
+    ...walk('apps', isTsconfig),
+    ...walk('libs', isTsconfig),
+  ];
+  const maps = new Map();
+  for (const config of configs) {
+    const { paths, baseUrl, declaredIn } = effectiveCompilerPaths(config);
+    if (!paths) continue;
+    const from = baseUrl ?? dirname(declaredIn);
+    const usesConfigDir = JSON.stringify(paths).includes('${configDir}');
+    const key = `${declaredIn}|${from}|${usesConfigDir ? config : ''}`;
+    if (maps.has(key)) continue;
+    const rebase = (target) =>
+      target.startsWith('${configDir}')
+        ? toPosixRel(join(dirname(config), target.slice('${configDir}'.length).replace(/^\//, '')))
+        : toPosixRel(join(from, target));
+    maps.set(key, {
+      declaredIn,
+      paths: Object.fromEntries(
+        Object.entries(paths).map(([alias, targets]) => [
+          alias,
+          (Array.isArray(targets) ? targets : []).map(rebase),
+        ]),
+      ),
+    });
+  }
+  return [...maps.values()];
+}
+
+/** The first file a list of targets resolves to, as TypeScript tries them, or `null`. */
+function firstExistingTarget(targets) {
+  for (const target of targets) {
+    const base = toPosixRel(join(target)).replace(/^\.\//, '');
+    // TypeScript maps an explicit `.js`/`.mjs` specifier back to its `.ts`/`.mts` source.
+    const source = base.replace(/\.js$/, '.ts').replace(/\.mjs$/, '.mts');
+    for (const candidate of [source, base, `${base}.ts`, `${base}.mts`, `${base}/index.ts`]) {
+      if (fileExists(candidate) && statSync(join(repoRoot, candidate)).isFile()) return candidate;
+    }
+  }
+  return null;
+}
+
+/**
+ * The repo-relative files a specifier resolves to — `[]` if it names no file, `undefined` if it is
+ * neither relative nor matched by any alias, so a package.
+ *
+ * Every alias in every map is tried, not only the one TypeScript would pick for `fromFile`:
+ * over-approximating what a file can reach adds files to a walk and never hides one.
+ */
+function resolveSpecifier(fromFile, specifier, pathMaps) {
+  if (specifier.startsWith('.')) {
+    const hit = firstExistingTarget([toPosixRel(join(dirname(fromFile), specifier))]);
+    return hit ? [hit] : [];
+  }
+  let matched = false;
+  const out = new Set();
+  for (const { paths } of pathMaps) {
+    for (const [alias, aliasTargets] of Object.entries(paths)) {
+      let targets = aliasTargets;
+      if (alias !== specifier) {
+        const star = alias.indexOf('*');
+        if (star === -1) continue;
+        const [prefix, suffix] = [alias.slice(0, star), alias.slice(star + 1)];
+        if (
+          specifier.length < prefix.length + suffix.length ||
+          !specifier.startsWith(prefix) ||
+          !specifier.endsWith(suffix)
+        ) {
+          continue;
+        }
+        const middle = specifier.slice(prefix.length, specifier.length - suffix.length);
+        targets = aliasTargets.map((target) => target.replaceAll('*', middle));
+      }
+      matched = true;
+      const hit = firstExistingTarget(targets);
+      if (hit) out.add(hit);
+    }
+  }
+  return matched ? [...out] : undefined;
+}
+
+/** Every module specifier in a source file, type-only and dynamic imports included. */
+function importSpecifiers(text) {
+  return ts.preProcessFile(text, true, true).importedFiles.map((entry) => entry.fileName);
+}
+
+/**
+ * A decorator's `@angular/core` name, so `import { Component as C }` and `import * as ng`
+ * classify the same as a plain `@Component`.
+ */
+function angularDecoratorNamer(source) {
+  const names = new Map();
+  const namespaces = new Set();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (statement.moduleSpecifier.text !== '@angular/core') continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    else {
+      for (const element of bindings.elements) {
+        names.set(element.name.text, (element.propertyName ?? element.name).text);
+      }
+    }
+  }
+  return (callee) => {
+    if (ts.isIdentifier(callee)) return names.get(callee.text) ?? callee.text;
+    if (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text)
+    ) {
+      return callee.name.text;
+    }
+    return callee.getText(source);
+  };
+}
+
+/**
+ * A metadata key by name, however it is spelled: `providedIn`, `'providedIn'` and
+ * `['providedIn']` are one key to Angular, so they are one key here.
+ */
+function metadataKey(property, source) {
+  const name = property.name;
+  if (!name) return null;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name)) return name.text;
+  if (ts.isComputedPropertyName(name) && ts.isStringLiteralLike(name.expression)) {
+    return name.expression.text;
+  }
+  return name.getText(source);
+}
+
+const STYLE_KEYS = new Set(['styleUrl', 'styleUrls', 'styles']);
+
+/**
+ * The stylesheets a file's decorators name: `styleUrl` / `styleUrls` paths and inline `styles`.
+ *
+ * Read from the syntax tree, not matched by pattern, because every spelling a pattern missed was a
+ * stylesheet never opened: a quoted or computed key, a backtick path. What cannot be read
+ * statically — a constant, an interpolated template, `@Component` metadata that is not an object
+ * literal or spreads one in — is returned as `unreadable`, so the caller fails rather than passing
+ * a stylesheet it never saw.
+ */
+function stylesOf(file, text) {
+  const source = ts.createSourceFile(file, text, ts.ScriptTarget.Latest, true);
+  const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const decoratorName = angularDecoratorNamer(source);
+  const out = { files: [], inline: [], unreadable: [] };
+  const visit = (node) => {
+    if (ts.isDecorator(node) && ts.isCallExpression(node.expression)) {
+      const isComponent = decoratorName(node.expression.expression) === 'Component';
+      const [metadata] = node.expression.arguments;
+      if (metadata && !ts.isObjectLiteralExpression(metadata) && isComponent) {
+        out.unreadable.push({ line: lineOf(metadata), key: null });
+      }
+      for (const property of metadata && ts.isObjectLiteralExpression(metadata)
+        ? metadata.properties
+        : []) {
+        if (ts.isSpreadAssignment(property)) {
+          if (isComponent) out.unreadable.push({ line: lineOf(property), key: null });
+          continue;
+        }
+        const key = metadataKey(property, source);
+        if (!STYLE_KEYS.has(key)) continue;
+        const value = ts.isPropertyAssignment(property) ? property.initializer : undefined;
+        const items = value && ts.isArrayLiteralExpression(value) ? value.elements : [value];
+        for (const item of items) {
+          if (!item || !ts.isStringLiteralLike(item)) {
+            out.unreadable.push({ line: lineOf(property), key });
+          } else if (key === 'styles') {
+            out.inline.push(item.text);
+          } else {
+            out.files.push(toPosixRel(join(dirname(file), item.text)));
+          }
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return out;
+}
+
+/**
+ * The files a local Sass URL can load, in Sass's own order: the file, its `_` partial, then the
+ * directory's `index` or `_index` — each as `.scss` or `.sass`. A URL with a Sass extension names
+ * the file and its partial only; a `.css` URL names that file, which Sass leaves as a CSS `@import`
+ * and the application build then follows.
+ */
+function sassCandidates(base) {
+  const dir = dirname(base);
+  const name = base.split('/').pop();
+  if (/\.css$/.test(name)) return [base];
+  if (/\.(scss|sass)$/.test(name)) return [base, toPosixRel(join(dir, `_${name}`))];
+  return [
+    ...['scss', 'sass'].flatMap((ext) => [
+      `${base}.${ext}`,
+      toPosixRel(join(dir, `_${name}.${ext}`)),
+    ]),
+    ...['scss', 'sass'].flatMap((ext) => [`${base}/index.${ext}`, `${base}/_index.${ext}`]),
+  ];
+}
+
+function satoriComponentsSources() {
+  return walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) => /\.(ts|mts)$/.test(path));
+}
+
+const SATORI_COMPONENTS_STORYBOOK = `${SATORI_COMPONENTS_ROOT}/.storybook`;
+const SATORI_COMPONENTS_PROJECT = `${SATORI_COMPONENTS_ROOT}/project.json`;
+
+/** The one Storybook stylesheet that may reach Satori: the opt-in `:satori` configuration's theme. */
+const SATORI_COMPONENTS_STORYBOOK_SATORI_THEME = `${SATORI_COMPONENTS_STORYBOOK}/satori-theme.scss`;
+
+/**
+ * The Storybook stylesheets held to the no-Satori rule: everything any `build-storybook`
+ * configuration names, and every stylesheet under `.storybook/` — all but the opt-in `:satori`
+ * configuration's theme.
+ *
+ * The exception is exact. Named by the default or any other configuration, that theme is checked
+ * like the rest, and anything else the `:satori` configuration names is checked too. Every entry,
+ * whatever its extension — Angular compiles `.css` and indented `.sass` as well as `.scss`. An
+ * unreadable project.json still leaves the `.storybook/` stylesheets and the library sources.
+ */
+function satoriComponentsStorybookStyles() {
+  const entries = (styles) =>
+    (Array.isArray(styles) ? styles : [])
+      .map((style) => (typeof style === 'string' ? style : style?.input))
+      .filter((style) => typeof style === 'string');
+  let target = {};
+  if (fileExists(SATORI_COMPONENTS_PROJECT)) {
+    try {
+      target = JSON.parse(read(SATORI_COMPONENTS_PROJECT)).targets?.['build-storybook'] ?? {};
+    } catch {
+      target = {};
+    }
+  }
+  const tokenFree = [
+    ...entries(target.options?.styles),
+    ...Object.entries(target.configurations ?? {})
+      .filter(([name]) => name !== 'satori')
+      .flatMap(([, configuration]) => entries(configuration?.styles)),
+  ];
+  const optIn = entries(target.configurations?.satori?.styles);
+  const onDisk = walk(SATORI_COMPONENTS_STORYBOOK, (path) => /\.(s?css|sass)$/.test(path));
+  const exempt = tokenFree.includes(SATORI_COMPONENTS_STORYBOOK_SATORI_THEME)
+    ? null
+    : SATORI_COMPONENTS_STORYBOOK_SATORI_THEME;
+  return [...new Set([...tokenFree, ...optIn, ...onDisk])].filter((style) => style !== exempt);
+}
+
+/**
+ * No `@alfresco/*`, no `@hylandsoftware/*` — reached directly **or through anything it imports**.
+ *
+ * Transitive on purpose. `libs/shared/nuxeo-client` once imported a Satori type in `avatar-colors.ts`
+ * and `libs/shared/extensions` imported `@alfresco/adf-extensions`, so a component importing either
+ * barrel needed both packages to compile while a direct-import check stayed green. A type-only
+ * import counts: it still needs the package installed to compile. The ban is on the specifier, so
+ * a tsconfig alias that maps a banned name to a workspace file does not lift it — the emitted code
+ * still names the package. Stylesheets count too, because
+ * `@use '@hylandsoftware/satori-ui/theme'` needs the package as much as an import does, and so do
+ * inline `styles`, which the app compiles as SCSS.
+ *
+ * The Storybook build is held to the same rule, because it has to build without a token (plan
+ * section 9.4): `.storybook/*.ts` are roots, and so is every stylesheet a `build-storybook`
+ * configuration names or `.storybook/` holds, except the opt-in `:satori` configuration's theme.
+ */
+function checkSatoriComponentsDependencies() {
+  const sources = satoriComponentsSources();
+  if (sources.length === 0) {
+    fail(
+      `${SATORI_COMPONENTS_ROOT} has no TypeScript sources, so the no-ADF / no-Satori rule for ` +
+        'the component library asserted nothing.',
+    );
+    return;
+  }
+  checkDependencyClosure({
+    root: SATORI_COMPONENTS_ROOT,
+    roots: [...sources, ...walk(SATORI_COMPONENTS_STORYBOOK, (path) => /\.(ts|mts)$/.test(path))],
+    styleRoots: satoriComponentsStorybookStyles(),
+    banned: (specifier) => {
+      const common = bannedForSatoriLibraries(specifier);
+      if (common) return common;
+      if (/^@hylandsoftware\//.test(specifier)) {
+        return (
+          'Satori may enter only through a separate `/components-satori` entry point, so this ' +
+          'library never needs the Satori package itself'
+        );
+      }
+      return null;
+    },
+  });
+}
+
+/** ADF and the HxCS client are out of the whole library family, the Satori entry point included. */
+function bannedForSatoriLibraries(specifier) {
+  if (/^@alfresco\//.test(specifier)) {
+    return 'ADF leaves the dependency tree in NXSAT-308, and nothing new may be built on it';
+  }
+  if (/^@hylandsoftware\/hxcs-js-client(\/|$)/.test(specifier)) {
+    return 'the HxCS client exists only for the adf-hx bridge and leaves with it';
+  }
+  return null;
+}
+
+/**
+ * `/components-satori` may import `@hylandsoftware/satori-ui` — exactly that package, and only here.
+ *
+ * It is the package's one optional peer from GitHub Packages, so nothing else from that registry
+ * may enter even through this library: `satori-tokens` or `satori-icons` imported directly would be
+ * a second, undeclared dependency a customer's install could not satisfy. Followed transitively,
+ * like the base library's rule, so it also holds for anything this library reaches.
+ */
+function checkSatoriFallbackDependencies() {
+  const sources = walk(`${SATORI_FALLBACK_ROOT}/src`, (path) => /\.(ts|mts)$/.test(path));
+  if (sources.length === 0) {
+    fail(
+      `${SATORI_FALLBACK_ROOT} has no TypeScript sources, so the rule that it alone may import ` +
+        '`@hylandsoftware/satori-ui` asserted nothing.',
+    );
+    return;
+  }
+  checkDependencyClosure({
+    root: SATORI_FALLBACK_ROOT,
+    roots: sources,
+    banned: (specifier) => {
+      const common = bannedForSatoriLibraries(specifier);
+      if (common) return common;
+      if (/^@hylandsoftware\/satori-ui(\/|$)/.test(specifier)) return null;
+      if (/^@hylandsoftware\//.test(specifier)) {
+        return (
+          'only `@hylandsoftware/satori-ui` is a peer of the package, and an optional one, so ' +
+          'nothing else from GitHub Packages may enter, even here'
+        );
+      }
+      return null;
+    },
+  });
+}
+
+/**
+ * Walk every import, stylesheet `@use` and component `styleUrl` reachable from `roots`, through
+ * workspace aliases and relative paths, and fail each external specifier `banned` names a reason for.
+ */
+function checkDependencyClosure({ root, roots, styleRoots = [], banned }) {
+  const pathMaps = tsconfigPathMaps();
+  const reportedFor = new Set();
+  const project = `${root}/project.json`;
+  // One report per offending import, however many library files reach it.
+  const report = (chain, specifier, why) => {
+    const holder = chain[chain.length - 1];
+    const key = `${holder}|${specifier}`;
+    if (reportedFor.has(key)) return;
+    reportedFor.add(key);
+    const outside = !holder.startsWith(`${root}/`);
+    fail(
+      `${holder} imports \`${specifier}\`` +
+        (outside ? `, and the library reaches that file through ${chain.join(' -> ')}` : '') +
+        `. ${root} may not depend on it: ${why}.` +
+        (outside
+          ? '\n    The import is not in the library itself — move what you need behind a ' +
+            'boundary that does not carry the package, or remove the package from that file.'
+          : ''),
+    );
+  };
+
+  // `label` names the stylesheet in a report; `at` is where its relative URLs resolve from.
+  const scanStyleText = (body, at, label, chain, seen) => {
+    for (const url of sassLoadedUrls(body, { indented: at.endsWith('.sass') })) {
+      // `~` is webpack's package prefix and `pkg:` Sass's; either way the URL names a package.
+      const why = banned(url.replace(/^~/, '').replace(/^pkg:/, ''));
+      if (why) {
+        report([...chain, label], url, why);
+        continue;
+      }
+      // Sass resolves a bare URL (`@use 'theme'`) against the current file first, like `./theme`.
+      // A package URL starts with `@` or `~`; `sass:`, `pkg:` and any other scheme are not files.
+      if (/^[@~]|^[a-z][a-z0-9+.-]*:/i.test(url)) continue;
+      const base = toPosixRel(join(dirname(at), url));
+      const found = sassCandidates(base).find(
+        (candidate) => fileExists(candidate) && statSync(join(repoRoot, candidate)).isFile(),
+      );
+      if (found) scanStyles(found, [...chain, label], seen);
+    }
+  };
+  const scanStyles = (styleFile, chain, seen) => {
+    if (seen.has(styleFile) || !fileExists(styleFile)) return;
+    seen.add(styleFile);
+    scanStyleText(read(styleFile), styleFile, styleFile, chain, seen);
+  };
+
+  const storybookStyles = new Set();
+  for (const styleFile of styleRoots) {
+    if (!fileExists(styleFile)) {
+      fail(
+        `${project} names \`${styleFile}\` in build-storybook's styles, and it ` +
+          'does not exist, so the token-free Storybook theme was not checked.',
+      );
+      continue;
+    }
+    scanStyles(styleFile, [project], storybookStyles);
+  }
+
+  for (const root of roots) {
+    const seen = new Set();
+    const styles = new Set();
+    const queue = [[root]];
+    while (queue.length > 0) {
+      const chain = queue.shift();
+      const file = chain[chain.length - 1];
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const text = read(file);
+      const sheets = stylesOf(file, text);
+      for (const { line, key } of sheets.unreadable) {
+        const where = `${file}:${line}`;
+        if (reportedFor.has(where)) continue;
+        reportedFor.add(where);
+        fail(
+          key
+            ? `${where} \`${key}\` is not a string literal, so the stylesheet it names was not ` +
+                `checked for ADF or Satori. Write it as a literal.`
+            : `${where} @Component metadata is not an object literal the guardrail can read — a ` +
+                'constant, or a spread — so its stylesheets were not checked for ADF or Satori. ' +
+                'Write the metadata inline.',
+        );
+      }
+      for (const styleFile of sheets.files) scanStyles(styleFile, chain, styles);
+      for (const css of sheets.inline) {
+        scanStyleText(css, file, `${file} (inline styles)`, chain.slice(0, -1), styles);
+      }
+      for (const specifier of importSpecifiers(text)) {
+        const why = banned(specifier);
+        if (why) {
+          report(chain, specifier, why);
+          continue;
+        }
+        for (const resolved of resolveSpecifier(file, specifier, pathMaps) ?? []) {
+          if (!seen.has(resolved)) queue.push([...chain, resolved]);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Each library is reached through its entry point and nothing else —
+ * `@nuxeo/satori-platform/components`, and `@nuxeo/satori-platform/components-satori`.
+ *
+ * A deep import into a library cannot be versioned — the reason the customer guardrail rejects
+ * deep platform imports — and across a federation boundary it cannot be loaded at all. So: no
+ * subpath under the entry specifier, no relative path into the library from outside it, no second
+ * alias into it in any tsconfig — a project's own `paths` included — and the alias and the
+ * published `ng-package.json` both name the barrel. The package root lists the subpath in
+ * `PLATFORM_ENTRY_POINTS`, which customers and the docs read as the set of entry points.
+ */
+function checkSatoriComponentsEntryPoint() {
+  checkLibraryEntryPoint(SATORI_LIBRARIES[0]);
+}
+
+/** `/components-satori` is held to the same single-entry-point rule as the base library. */
+function checkSatoriFallbackEntryPoint() {
+  checkLibraryEntryPoint(SATORI_LIBRARIES[1]);
+}
+
+const PLATFORM_INDEX = 'libs/platform/src/index.ts';
+
+/**
+ * The subpaths `PLATFORM_ENTRY_POINTS` lists, or `null` when the package root does not export it as
+ * a literal list of strings, optionally `as const` and wrapped in `Object.freeze(...)`.
+ */
+function platformEntryPoints() {
+  if (!fileExists(PLATFORM_INDEX)) return null;
+  const source = ts.createSourceFile(
+    PLATFORM_INDEX,
+    read(PLATFORM_INDEX),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const unwrap = (node) => {
+    let current = node;
+    while (
+      current &&
+      (ts.isAsExpression(current) ||
+        ts.isSatisfiesExpression(current) ||
+        ts.isParenthesizedExpression(current))
+    ) {
+      current = current.expression;
+    }
+    return current;
+  };
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+    if (!statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)) continue;
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.name.text !== 'PLATFORM_ENTRY_POINTS') {
+        continue;
+      }
+      let list = unwrap(declaration.initializer);
+      if (
+        list &&
+        ts.isCallExpression(list) &&
+        list.expression.getText(source) === 'Object.freeze' &&
+        list.arguments.length === 1
+      ) {
+        list = unwrap(list.arguments[0]);
+      }
+      if (!list || !ts.isArrayLiteralExpression(list)) return null;
+      if (!list.elements.every((element) => ts.isStringLiteralLike(element))) return null;
+      return list.elements.map((element) => element.text);
+    }
+  }
+  return null;
+}
+
+function checkLibraryEntryPoint({ root, entry, barrel, ngPackage }) {
+  if (!fileExists(barrel)) {
+    fail(
+      `${barrel} does not exist, so the library has no entry point ` +
+        'and the no-deep-imports rule asserted nothing.',
+    );
+    return;
+  }
+
+  const pathMaps = tsconfigPathMaps();
+  const inLibrary = (path) => path === root || path.startsWith(`${root}/`);
+  const isBarrelOnly = (targets) => targets.length === 1 && targets[0] === barrel;
+
+  const base = pathMaps.find((map) => map.declaredIn === 'tsconfig.base.json')?.paths ?? {};
+  const entryTargets = base[entry] ?? [];
+  if (!isBarrelOnly(entryTargets)) {
+    fail(
+      `tsconfig.base.json must map \`${entry}\` to exactly ` +
+        `\`${barrel}\`; it maps it to ${JSON.stringify(entryTargets)}.`,
+    );
+  }
+  for (const { declaredIn, paths } of pathMaps) {
+    for (const [alias, targets] of Object.entries(paths)) {
+      if (alias === entry) {
+        // A project that declares `paths` must re-declare the entry, and may — to the barrel.
+        if (declaredIn !== 'tsconfig.base.json' && !isBarrelOnly(targets)) {
+          fail(
+            `${declaredIn} maps \`${entry}\` to ${JSON.stringify(targets)}; ` +
+              `like tsconfig.base.json it must name exactly \`${barrel}\`.`,
+          );
+        }
+        continue;
+      }
+      const into = targets.filter(inLibrary);
+      if (into.length > 0) {
+        fail(
+          `${declaredIn} alias \`${alias}\` points into ${root} ` +
+            `(${into.join(', ')}). The library has one entry point, \`${entry}\`; ` +
+            'a second alias is a deep import with a name.',
+        );
+      }
+    }
+  }
+
+  if (!fileExists(ngPackage)) {
+    fail(`${ngPackage} is missing, so \`${entry}\` is not published.`);
+  } else {
+    let entryFile;
+    try {
+      entryFile = JSON.parse(read(ngPackage)).lib?.entryFile;
+    } catch {
+      entryFile = undefined;
+    }
+    const resolved = entryFile ? toPosixRel(join(dirname(ngPackage), entryFile)) : null;
+    if (resolved !== barrel) {
+      fail(
+        `${ngPackage} must publish \`${barrel}\`; its entryFile resolves to ` +
+          `${resolved ?? '(none)'}.`,
+      );
+    }
+  }
+
+  const subpath = entry.slice('@nuxeo/satori-platform/'.length);
+  const listed = platformEntryPoints();
+  if (!listed) {
+    fail(
+      `${PLATFORM_INDEX} does not export \`PLATFORM_ENTRY_POINTS\` as a literal list of strings, ` +
+        `so whether it lists \`${subpath}\` was not checked.`,
+    );
+  } else if (!listed.includes(subpath)) {
+    fail(
+      `${PLATFORM_INDEX} does not list '${subpath}' in \`PLATFORM_ENTRY_POINTS\`, so the package ` +
+        `root does not advertise \`${entry}\`, which ${ngPackage} publishes.`,
+    );
+  }
+
+  const consumers = [
+    ...walk('apps', (path) => /\.(ts|mts|js|mjs)$/.test(path)),
+    ...walk('libs', (path) => /\.(ts|mts|js|mjs)$/.test(path)),
+  ].filter((path) => !inLibrary(path));
+  for (const file of consumers) {
+    for (const specifier of importSpecifiers(read(file))) {
+      if (specifier === entry) continue;
+      let target = null;
+      if (specifier.startsWith(`${entry}/`)) {
+        target = specifier;
+      } else if (specifier.startsWith('.')) {
+        const path = toPosixRel(join(dirname(file), specifier));
+        if (inLibrary(path)) target = path;
+      } else {
+        target = (resolveSpecifier(file, specifier, pathMaps) ?? []).find(inLibrary) ?? null;
+      }
+      if (target) {
+        fail(
+          `${file} imports \`${specifier}\`, which reaches into ${root} past its ` +
+            `entry point. Import from \`${entry}\`, and export what you need from ` +
+            `${barrel} if it is not there yet.`,
+        );
+      }
+    }
+  }
+}
+
+/**
+ * The two federation-readiness rules a static check can hold today (plan section 7).
+ *
+ * - **Standalone only.** A remote exposes standalone components; an NgModule does not survive the
+ *   boundary cleanly. So no `@NgModule`, and every `@Component`, `@Directive` and `@Pipe` says
+ *   `standalone: true` — the repo convention, stated rather than left to the Angular 19+ default.
+ * - **No `providedIn` singletons.** A root-provided service is one instance per Angular platform,
+ *   and a host and a remote are two, so the "singleton" silently becomes two. That is the trap that
+ *   forced the adf-hx ports into root-injector binding. Shared state goes behind an
+ *   `InjectionToken` with an explicit `provide…()` function, so host and remote can share one
+ *   instance. Every `providedIn` value is refused, `'platform'` and `'any'` included.
+ *
+ * Specs are exempt: a test host is not part of the library. `/components-satori` ships in the same
+ * package and is held to the same rules; its absence is `checkSatoriFallbackDependencies`' to report.
+ */
+function checkSatoriComponentsFederationReadiness() {
+  const nonSpec = (path) => /\.(ts|mts)$/.test(path) && !/\.(spec|test)\.ts$/.test(path);
+  const sources = satoriComponentsSources().filter(nonSpec);
+  if (sources.length === 0) {
+    fail(
+      `${SATORI_COMPONENTS_ROOT} has no non-spec TypeScript sources, so the federation-readiness ` +
+        'rules asserted nothing.',
+    );
+    return;
+  }
+
+  for (const file of [...sources, ...walk(`${SATORI_FALLBACK_ROOT}/src`, nonSpec)]) {
+    const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+    const lineOf = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+    const decoratorName = angularDecoratorNamer(source);
+    const keyOf = (property) => metadataKey(property, source);
+
+    const visit = (node) => {
+      if (ts.isDecorator(node) && ts.isCallExpression(node.expression)) {
+        const name = decoratorName(node.expression.expression);
+        if (name === 'NgModule') {
+          fail(
+            `${file}:${lineOf(node)} declares an @NgModule. The component library is standalone ` +
+              'only — an NgModule does not cross a federation boundary cleanly. Export the ' +
+              'standalone pieces, or a `provide…()` function for their providers.',
+          );
+        } else if (['Component', 'Directive', 'Pipe'].includes(name)) {
+          const [config] = node.expression.arguments;
+          const standalone =
+            config && ts.isObjectLiteralExpression(config)
+              ? config.properties.find(
+                  (p) => ts.isPropertyAssignment(p) && keyOf(p) === 'standalone',
+                )
+              : undefined;
+          if (!standalone || standalone.initializer.kind !== ts.SyntaxKind.TrueKeyword) {
+            fail(
+              `${file}:${lineOf(node)} @${name} does not say \`standalone: true\`. Every component, ` +
+                'directive and pipe in the library is standalone, and says so.',
+            );
+          }
+        }
+      }
+      if (
+        (ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node)) &&
+        keyOf(node) === 'providedIn'
+      ) {
+        fail(
+          `${file}:${lineOf(node)} uses \`providedIn\`. A provided-in singleton becomes two ` +
+            'instances across a federation boundary. Put shared state behind an InjectionToken ' +
+            'and export an explicit `provide…()` function instead.',
+        );
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(source);
+  }
+}
+
+/** The local names `@angular/core`'s `Component` is imported under in a source file. */
+function componentDecoratorNames(source) {
+  const names = new Set();
+  const namespaces = new Set();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (statement.moduleSpecifier.text !== '@angular/core') continue;
+    // A type-only import is erased, so it cannot decorate anything.
+    if (statement.importClause?.isTypeOnly) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    else {
+      for (const element of bindings.elements) {
+        if (element.isTypeOnly) continue;
+        if ((element.propertyName ?? element.name).text === 'Component') {
+          names.add(element.name.text);
+        }
+      }
+    }
+  }
+  return { names, namespaces };
+}
+
+/** The first file `resolveSpecifier` finds for a specifier, or `null` if it names none. */
+function resolveFile(fromFile, specifier, pathMaps) {
+  return resolveSpecifier(fromFile, specifier, pathMaps)?.[0] ?? null;
+}
+
+/**
+ * An object literal member's key as JavaScript reads it: `stories`, `'stories'` and `['stories']`
+ * are one key. `undefined` for a spread, or for a key computed any other way.
+ */
+function staticPropertyKey(member) {
+  const name = member.name;
+  if (!name) return undefined;
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  if (!ts.isComputedPropertyName(name)) return undefined;
+  let key = name.expression;
+  while (
+    ts.isParenthesizedExpression(key) ||
+    ts.isAsExpression(key) ||
+    ts.isSatisfiesExpression(key)
+  ) {
+    key = key.expression;
+  }
+  return ts.isStringLiteralLike(key) ? key.text : undefined;
+}
+
+/**
+ * The `@Component` classes a module exports, by public name, following re-exports.
+ *
+ * `export class X` with a `@Component` decorator, `export { a as b } from './m'`,
+ * `export * from './m'`, and an imported or locally declared class exported by a bare
+ * `export { X }`.
+ */
+function exportedComponentClasses(file, pathMaps, ancestors = new Set()) {
+  // `ancestors` guards a re-export cycle along one path only: a module re-exported twice from
+  // one barrel must be read twice, or the second statement finds nothing.
+  const seen = ancestors;
+  const found = new Map();
+  if (seen.has(file) || !fileExists(file)) return found;
+  seen.add(file);
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const imported = new Map();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
+      continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      imported.set(element.name.text, {
+        specifier: statement.moduleSpecifier.text,
+        name: (element.propertyName ?? element.name).text,
+      });
+    }
+  }
+  const { names, namespaces } = componentDecoratorNames(source);
+  const isComponentDecorator = (decorator) => {
+    if (!ts.isCallExpression(decorator.expression)) return false;
+    const callee = decorator.expression.expression;
+    if (ts.isIdentifier(callee)) return names.has(callee.text);
+    return (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text) &&
+      callee.name.text === 'Component'
+    );
+  };
+  const declared = new Set(
+    source.statements
+      .filter(
+        (statement) =>
+          ts.isClassDeclaration(statement) &&
+          statement.name &&
+          (ts.getDecorators(statement) ?? []).some(isComponentDecorator),
+      )
+      .map((statement) => statement.name.text),
+  );
+
+  for (const statement of source.statements) {
+    if (ts.isClassDeclaration(statement) && statement.name) {
+      const exported = statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+      if (exported && declared.has(statement.name.text)) {
+        found.set(statement.name.text, { file, className: statement.name.text });
+      }
+      continue;
+    }
+    if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) continue;
+    if (!statement.moduleSpecifier) {
+      if (!statement.exportClause || !ts.isNamedExports(statement.exportClause)) continue;
+      for (const element of statement.exportClause.elements) {
+        if (element.isTypeOnly) continue;
+        const localName = (element.propertyName ?? element.name).text;
+        if (declared.has(localName)) {
+          found.set(element.name.text, { file, className: localName });
+          continue;
+        }
+        const local = imported.get(localName);
+        if (!local) continue;
+        const target = resolveFile(file, local.specifier, pathMaps);
+        const origin =
+          target && exportedComponentClasses(target, pathMaps, new Set(seen)).get(local.name);
+        if (origin) found.set(element.name.text, origin);
+      }
+      continue;
+    }
+    if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
+    const target = resolveFile(file, statement.moduleSpecifier.text, pathMaps);
+    if (!target) continue;
+    const inner = exportedComponentClasses(target, pathMaps, new Set(seen));
+    if (!statement.exportClause) {
+      for (const [name, origin] of inner) found.set(name, origin);
+    } else if (ts.isNamedExports(statement.exportClause)) {
+      for (const element of statement.exportClause.elements) {
+        if (element.isTypeOnly) continue;
+        const origin = inner.get((element.propertyName ?? element.name).text);
+        if (origin) found.set(element.name.text, origin);
+      }
+    }
+  }
+  return found;
+}
+
+/**
+ * Where each value a module exports is declared, by public name, as `{ file, name }` — the module
+ * and the name it is declared under there — following re-exports: `export class|function|const|
+ * let|var|enum X`, `export { a as b } from './m'`, `export * from './m'` and a bare `export { X }`
+ * of a local declaration or an import. Type-only exports are left out.
+ */
+function valueExportOrigins(file, pathMaps, ancestors = new Set()) {
+  const found = new Map();
+  if (ancestors.has(file) || !fileExists(file)) return found;
+  const seen = new Set(ancestors).add(file);
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const imported = new Map();
+  const declared = new Set();
+  const isExported = (statement) =>
+    statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const bindings = statement.importClause?.namedBindings;
+      if (statement.importClause?.isTypeOnly || !bindings || !ts.isNamedImports(bindings)) continue;
+      for (const element of bindings.elements) {
+        if (element.isTypeOnly) continue;
+        imported.set(element.name.text, {
+          specifier: statement.moduleSpecifier.text,
+          name: (element.propertyName ?? element.name).text,
+        });
+      }
+    } else if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        const name = declaration.name.text;
+        declared.add(name);
+        if (isExported(statement)) found.set(name, { file, name });
+      }
+    } else if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    ) {
+      const name = statement.name.text;
+      declared.add(name);
+      if (isExported(statement)) found.set(name, { file, name });
+    }
+  }
+  for (const statement of source.statements) {
+    if (!ts.isExportDeclaration(statement) || statement.isTypeOnly) continue;
+    const target =
+      statement.moduleSpecifier && ts.isStringLiteral(statement.moduleSpecifier)
+        ? resolveFile(file, statement.moduleSpecifier.text, pathMaps)
+        : null;
+    if (!statement.exportClause) {
+      if (target)
+        for (const [name, origin] of valueExportOrigins(target, pathMaps, seen))
+          found.set(name, origin);
+      continue;
+    }
+    if (!ts.isNamedExports(statement.exportClause)) continue;
+    for (const element of statement.exportClause.elements) {
+      if (element.isTypeOnly) continue;
+      const local = (element.propertyName ?? element.name).text;
+      let origin = null;
+      if (statement.moduleSpecifier) {
+        origin = target ? (valueExportOrigins(target, pathMaps, seen).get(local) ?? null) : null;
+      } else if (declared.has(local)) {
+        origin = { file, name: local };
+      } else if (imported.has(local)) {
+        const { specifier, name } = imported.get(local);
+        const from = resolveFile(file, specifier, pathMaps);
+        origin = from ? (valueExportOrigins(from, pathMaps, seen).get(name) ?? null) : null;
+      }
+      if (origin) found.set(element.name.text, origin);
+    }
+  }
+  return found;
+}
+
+/**
+ * The components the library ships without exporting them, keyed `file#className`.
+ *
+ * A module the barrel exports something other than a component from can still put a component on
+ * screen: `NxsToastService` opens `NxsToastComponent` through `MatSnackBar`, and no host names the
+ * component. Such a component is any `@Component` class one of those modules imports by value —
+ * by name, or through a namespace import of its module, which counts every component that module
+ * exports — and the barrel does not export. A default import from a module that exports components
+ * cannot be followed to a class, so it fails rather than reading as opening nothing. A module that
+ * declares an exported component is left out, whatever else it exports: what it imports is part of
+ * that component, documented with it.
+ *
+ * Each comes with the exports that open it, per module: those whose declaration reaches the
+ * component's import, directly or through the module's other declarations — `provideNxsToast()`
+ * returns `NxsToastService`, which opens the toast — and not a sibling such as
+ * `NXS_TOAST_DURATION`. Its stories and Overview are reached through one of those.
+ * `satori-comparison-doc.mjs` follows the same edge for its page, by module.
+ */
+function openedComponentClasses(barrel, pathMaps, exported) {
+  const shipped = new Set(
+    [...exported.values()].map(({ file, className }) => `${file}#${className}`),
+  );
+  const exportedNames = new Set(exported.keys());
+  const componentModules = new Set([...exported.values()].map(({ file }) => file));
+  // Opener module → the names it declares that the barrel exports → their public names.
+  const openers = new Map();
+  for (const [name, origin] of valueExportOrigins(barrel, pathMaps)) {
+    if (exportedNames.has(name) || componentModules.has(origin.file)) continue;
+    const declarations = openers.get(origin.file) ?? new Map();
+    declarations.set(origin.name, [...(declarations.get(origin.name) ?? []), name]);
+    openers.set(origin.file, declarations);
+  }
+  const opened = new Map();
+  for (const [module, declarations] of openers) {
+    const source = ts.createSourceFile(module, read(module), ts.ScriptTarget.Latest, true);
+    const reach = localReach(source);
+    for (const statement of source.statements) {
+      if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier))
+        continue;
+      const clause = statement.importClause;
+      if (!clause || clause.isTypeOnly) continue;
+      const target = resolveFile(module, statement.moduleSpecifier.text, pathMaps);
+      if (!target) continue;
+      const components = exportedComponentClasses(target, pathMaps);
+      if (clause.name && components.size > 0) {
+        fail(
+          `${module} imports the default export of ${target}, which exports components, so which ` +
+            'component it opens was not read. Import the component by name.',
+        );
+      }
+      // Each imported component, with the local name the module's declarations refer to it by.
+      const bindings = clause.namedBindings;
+      const imported = !bindings
+        ? []
+        : ts.isNamespaceImport(bindings)
+          ? [...components.keys()].map((name) => [name, bindings.name.text])
+          : bindings.elements
+              .filter((element) => !element.isTypeOnly)
+              .map((element) => [(element.propertyName ?? element.name).text, element.name.text]);
+      for (const [name, local] of imported) {
+        const declared = components.get(name);
+        if (!declared) continue;
+        const key = `${declared.file}#${declared.className}`;
+        if (shipped.has(key)) continue;
+        const through = [...declarations].filter(([declaration]) =>
+          reach.get(declaration)?.has(local),
+        );
+        if (through.length === 0) continue;
+        const entry = opened.get(key) ?? { ...declared, openers: new Map() };
+        const byModule = entry.openers.get(module) ?? new Map();
+        for (const [declaration, names] of through) byModule.set(declaration, names);
+        entry.openers.set(module, byModule);
+        opened.set(key, entry);
+      }
+    }
+  }
+  return opened;
+}
+
+/**
+ * The names each top-level declaration of a module reaches: every identifier in it, and every one
+ * the module's other declarations it names reach in turn. Generous on purpose — a property or a
+ * type that happens to share a name counts — so a component is never missed, only over-counted.
+ */
+function localReach(source) {
+  const direct = new Map();
+  const identifiers = (node, into) => {
+    if (ts.isIdentifier(node)) into.add(node.text);
+    // `forEachChild` stops at the first callback that returns something truthy.
+    ts.forEachChild(node, (child) => {
+      identifiers(child, into);
+    });
+    return into;
+  };
+  for (const statement of source.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          direct.set(declaration.name.text, identifiers(declaration, new Set()));
+        }
+      }
+    } else if (
+      (ts.isClassDeclaration(statement) ||
+        ts.isFunctionDeclaration(statement) ||
+        ts.isEnumDeclaration(statement)) &&
+      statement.name
+    ) {
+      direct.set(statement.name.text, identifiers(statement, new Set()));
+    }
+  }
+  const reach = new Map();
+  for (const name of direct.keys()) {
+    const seen = new Set();
+    const queue = [name];
+    while (queue.length > 0) {
+      for (const next of direct.get(queue.pop()) ?? []) {
+        if (seen.has(next)) continue;
+        seen.add(next);
+        if (direct.has(next)) queue.push(next);
+      }
+    }
+    reach.set(name, seen);
+  }
+  return reach;
+}
+
+/**
+ * The opened components (see `openedComponentClasses`) a story file reaches through its value
+ * imports: an import counts when it is one of the exports that open the component. A type-only
+ * import is erased, so it opens nothing.
+ */
+function openedThrough(imports, opened, pathMaps) {
+  const keys = new Set();
+  for (const { file, name, typeOnly } of imports.values()) {
+    if (typeOnly) continue;
+    const origin = valueExportOrigins(file, pathMaps).get(name);
+    if (!origin) continue;
+    for (const [key, { openers }] of opened) {
+      if (openers.get(origin.file)?.has(origin.name)) keys.add(key);
+    }
+  }
+  return keys;
+}
+
+/** How a component the barrel ships only through `openers` is reached, for a failure message. */
+const openedVia = (openers) =>
+  [...openers]
+    .map(
+      ([module, declarations]) =>
+        `${[...declarations.values()]
+          .flat()
+          .map((n) => `\`${n}\``)
+          .join(', ')} (${module})`,
+    )
+    .join(' or ');
+
+/**
+ * A story file's default-exported meta and its top-level names, read from its syntax tree.
+ *
+ * `meta` is the object literal Storybook reads — the default export itself, a variable it names, or
+ * `export { meta as default }`, behind `satisfies`, `as` or parentheses — or `null` when there is no
+ * object literal to read. `metaProperty(name)` is one of its keys' value: the last one, as JavaScript
+ * keeps it when a key repeats, and for a shorthand (`{ excludeStories }`) the file's top-level
+ * constant of that name. `null` when the key is absent; `undefined` when there is nothing to read, or
+ * the key is a method or an accessor. With `resolveIdentifier`, a value that is a bare name is
+ * replaced by the top-level constant it names (`tags: TAGS`).
+ *
+ * `imports` maps each named import to the file it resolves to, the name it is exported under and
+ * whether it is type-only;
+ * `namedExports` lists the file's named exports, under the names they are exported as.
+ */
+function readStoryFile(storyFile, pathMaps) {
+  const source = ts.createSourceFile(storyFile, read(storyFile), ts.ScriptTarget.Latest, true);
+
+  const imports = new Map();
+  const variables = new Map();
+  let defaultExport = null;
+  const namedExports = [];
+  const unwrap = (node) => {
+    let current = node;
+    while (
+      current &&
+      (ts.isSatisfiesExpression(current) ||
+        ts.isAsExpression(current) ||
+        ts.isParenthesizedExpression(current))
+    ) {
+      current = current.expression;
+    }
+    return current;
+  };
+
+  for (const statement of source.statements) {
+    if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+      const bindings = statement.importClause?.namedBindings;
+      if (!bindings || !ts.isNamedImports(bindings)) continue;
+      const target = resolveFile(storyFile, statement.moduleSpecifier.text, pathMaps);
+      if (!target) continue;
+      for (const element of bindings.elements) {
+        imports.set(element.name.text, {
+          file: target,
+          name: (element.propertyName ?? element.name).text,
+          typeOnly: Boolean(statement.importClause.isTypeOnly || element.isTypeOnly),
+        });
+      }
+    } else if (ts.isVariableStatement(statement)) {
+      const exported = statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword);
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name)) continue;
+        variables.set(declaration.name.text, declaration.initializer);
+        if (exported) namedExports.push(declaration.name.text);
+      }
+    } else if (ts.isFunctionDeclaration(statement) && statement.name) {
+      const kinds = (statement.modifiers ?? []).map((m) => m.kind);
+      if (
+        kinds.includes(ts.SyntaxKind.ExportKeyword) &&
+        !kinds.includes(ts.SyntaxKind.DefaultKeyword)
+      ) {
+        namedExports.push(statement.name.text);
+      }
+    } else if (
+      ts.isExportDeclaration(statement) &&
+      !statement.moduleSpecifier &&
+      !statement.isTypeOnly &&
+      statement.exportClause &&
+      ts.isNamedExports(statement.exportClause)
+    ) {
+      // `export { Basic }`, `export { story as Basic }` and `export { meta as default }`: Storybook
+      // reads each under the name it is exported as.
+      for (const element of statement.exportClause.elements) {
+        if (element.isTypeOnly) continue;
+        if (element.name.text === 'default') {
+          defaultExport = ts.factory.createIdentifier((element.propertyName ?? element.name).text);
+        } else {
+          namedExports.push(element.name.text);
+        }
+      }
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      defaultExport = unwrap(statement.expression);
+    }
+  }
+
+  if (defaultExport && ts.isIdentifier(defaultExport)) {
+    defaultExport = unwrap(variables.get(defaultExport.text));
+  }
+  const meta = defaultExport && ts.isObjectLiteralExpression(defaultExport) ? defaultExport : null;
+  const metaProperty = (name, { resolveIdentifier = false } = {}) => {
+    if (!meta) return null;
+    const property = meta.properties.findLast((p) => staticPropertyKey(p) === name);
+    if (!property) return null;
+    let value;
+    if (ts.isPropertyAssignment(property)) value = unwrap(property.initializer);
+    else if (ts.isShorthandPropertyAssignment(property)) value = unwrap(variables.get(name));
+    else return undefined;
+    return resolveIdentifier && value && ts.isIdentifier(value)
+      ? unwrap(variables.get(value.text))
+      : value;
+  };
+  return { meta, imports, namedExports, metaProperty };
+}
+
+/**
+ * The component classes a story file documents: `{ file, className }` keys, as `file#className`.
+ *
+ * A story counts when its default-exported meta names the class as `component:`, the class is
+ * imported from the module that declares it, and the file exports at least one story. The meta may
+ * be the default export itself or a variable it names, optionally behind `satisfies` or `as`.
+ *
+ * A story is a named export Storybook renders — `export const`, `export function` or a local
+ * `export { … }`, under the name it is exported as: the meta's `includeStories` and
+ * `excludeStories` apply, as a list of names or a regex literal. One the guardrail cannot read is a
+ * failure.
+ *
+ * Every readable meta that names a component must also be tagged `autodocs`, so the component has
+ * its API page; that is checked here because this is where the meta is read. A missing tag fails
+ * the file; it does not change which components the file is counted as documenting. A meta that
+ * names no component has no inputs or outputs to list, so it needs no API page — it is documented
+ * by an Overview instead, which `checkSatoriComponentsHaveOverviews` requires. Such a file counts
+ * for the components in `opened` its imports reach: the toast's stories import `NxsToastService`.
+ */
+function storiedComponents(storyFile, pathMaps, opened = new Map()) {
+  const covered = new Set();
+  const {
+    meta: defaultExport,
+    imports,
+    namedExports,
+    metaProperty,
+  } = readStoryFile(storyFile, pathMaps);
+  if (!defaultExport) return covered;
+  // A spread can carry `excludeStories` this cannot see, so the file counts no story.
+  if (defaultExport.properties.some(ts.isSpreadAssignment)) {
+    fail(
+      `${storyFile} spreads another object into its default-exported meta, so which of its ` +
+        'exports are stories was not read and none was counted. Write the meta inline.',
+    );
+    return covered;
+  }
+  // A computed key can be `excludeStories` as easily as anything else, so the file counts no story.
+  if (defaultExport.properties.some((p) => staticPropertyKey(p) === undefined)) {
+    fail(
+      `${storyFile} computes a key of its default-exported meta, so which of its exports are ` +
+        'stories was not read and none was counted. Write each key as a name or a string.',
+    );
+    return covered;
+  }
+  // Storybook generates a component's API page from a meta tagged `autodocs`: `main.ts` names that
+  // page "API" and `preview.ts` renders it from Compodoc. Without the tag the component's inputs and
+  // outputs are listed nowhere. A meta that names no component has none to list, so it is left to
+  // its Overview. Read for every story file, whether or not the component is an exported one.
+  if (metaProperty('component') !== null) {
+    const tags = metaProperty('tags', { resolveIdentifier: true });
+    if (
+      !tags ||
+      !ts.isArrayLiteralExpression(tags) ||
+      !tags.elements.every(ts.isStringLiteralLike)
+    ) {
+      fail(
+        `${storyFile} has no \`tags\` list of string literals on its default-exported meta, so ` +
+          "whether it carries `autodocs` was not read. Add `tags: ['autodocs']` — Storybook " +
+          'generates the API page that lists the component’s inputs and outputs from a meta ' +
+          'tagged `autodocs`.',
+      );
+    } else {
+      const names = tags.elements.map((element) => element.text);
+      if (!names.includes('autodocs') || names.includes('!autodocs')) {
+        fail(
+          `${storyFile} does not tag its meta \`autodocs\`, so Storybook generates no API page ` +
+            "for it and the component's inputs and outputs are not listed. Add `'autodocs'` to " +
+            "the meta's `tags`.",
+        );
+      }
+    }
+  }
+
+  // `includeStories` / `excludeStories` as Storybook applies them; `undefined` when unreadable.
+  const storyFilter = (name) => {
+    const value = metaProperty(name);
+    if (value === null) return null;
+    if (!value) return undefined;
+    if (ts.isArrayLiteralExpression(value) && value.elements.every(ts.isStringLiteralLike)) {
+      const names = new Set(value.elements.map((element) => element.text));
+      return (exportName) => names.has(exportName);
+    }
+    if (ts.isRegularExpressionLiteral(value)) {
+      const [, pattern, flags] = /^\/(.*)\/([a-z]*)$/s.exec(value.text) ?? [];
+      try {
+        const regex = new RegExp(pattern, flags.replace(/[gy]/g, ''));
+        return (exportName) => regex.test(exportName);
+      } catch {
+        return undefined;
+      }
+    }
+    return undefined;
+  };
+  const include = storyFilter('includeStories');
+  const exclude = storyFilter('excludeStories');
+  for (const [name, filter] of [
+    ['includeStories', include],
+    ['excludeStories', exclude],
+  ]) {
+    if (filter === undefined) {
+      fail(
+        `${storyFile} sets \`${name}\` to something other than a list of names or a regex ` +
+          'literal, so which of its exports are stories was not read and none was counted.',
+      );
+      return covered;
+    }
+  }
+  const stories = namedExports.filter(
+    (name) =>
+      name !== '__namedExportsOrder' && (!include || include(name)) && !(exclude && exclude(name)),
+  );
+  if (stories.length === 0) return covered;
+
+  const value = metaProperty('component');
+  if (value === null) {
+    for (const key of openedThrough(imports, opened, pathMaps)) covered.add(key);
+    return covered;
+  }
+  if (!value || !ts.isIdentifier(value)) return covered;
+  const origin = imports.get(value.text);
+  if (!origin) return covered;
+
+  // The import may itself be a barrel; resolve the name to the module that declares the class.
+  const declared = exportedComponentClasses(origin.file, pathMaps).get(origin.name);
+  if (declared) covered.add(`${declared.file}#${declared.className}`);
+  return covered;
+}
+
+/**
+ * The `stories` globs a Storybook `main.ts` exports, read from its syntax tree — the default export
+ * or the constant it names, behind `satisfies` or `as` — so a comment mentioning a glob does not
+ * count. The last `stories` key is the one JavaScript keeps. `null` when the list is not string
+ * literals the guardrail can read, or the config has a spread or a computed key that could replace
+ * it.
+ */
+function storybookStoryGlobs(main) {
+  const source = ts.createSourceFile(main, read(main), ts.ScriptTarget.Latest, true);
+  const unwrap = (node) => {
+    let current = node;
+    while (
+      current &&
+      (ts.isSatisfiesExpression(current) ||
+        ts.isAsExpression(current) ||
+        ts.isParenthesizedExpression(current))
+    ) {
+      current = current.expression;
+    }
+    return current;
+  };
+  const variables = new Map();
+  let config = null;
+  for (const statement of source.statements) {
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name)) {
+          variables.set(declaration.name.text, declaration.initializer);
+        }
+      }
+    } else if (ts.isExportAssignment(statement) && !statement.isExportEquals) {
+      config = unwrap(statement.expression);
+    }
+  }
+  const resolve = (node) =>
+    node && ts.isIdentifier(node) ? unwrap(variables.get(node.text)) : node;
+  config = resolve(config);
+  if (!config || !ts.isObjectLiteralExpression(config)) return null;
+  if (config.properties.some((p) => staticPropertyKey(p) === undefined)) return null;
+  const property = config.properties.findLast((p) => staticPropertyKey(p) === 'stories');
+  if (!property) return null;
+  if (!ts.isPropertyAssignment(property) && !ts.isShorthandPropertyAssignment(property))
+    return null;
+  const value = resolve(
+    ts.isPropertyAssignment(property) ? unwrap(property.initializer) : property.name,
+  );
+  if (!value || !ts.isArrayLiteralExpression(value)) return null;
+  if (!value.elements.every(ts.isStringLiteralLike)) return null;
+  return value.elements.map((element) => element.text);
+}
+
+/**
+ * Every component the library exports has a story (plan section 9.4).
+ *
+ * Storybook is the library's human documentation and the agent's usage reference, so a component
+ * without a story ships undocumented. Read from the barrel, because an exported component is a
+ * published one. A story is a `*.stories.ts` under `src/` — the glob `.storybook/main.ts` loads,
+ * which is checked too — whose meta names the class as `component:`; a file that only mentions the
+ * class, or names it with no story exported, does not count. Every story meta that names a
+ * component must carry the `autodocs` tag, so the component has its API page (see
+ * `storiedComponents`).
+ *
+ * A component the library ships without exporting it — opened by a module the barrel exports, as
+ * `NxsToastService` opens `NxsToastComponent` (see `openedComponentClasses`) — needs a story too:
+ * one whose meta names no component and that imports what opens it.
+ */
+function checkSatoriComponentsHaveStories() {
+  if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
+  const pathMaps = tsconfigPathMaps();
+  const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
+  const opened = openedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps, exported);
+  if (exported.size === 0 && opened.size === 0) return;
+
+  const STORY_GLOB = '../src/**/*.stories.ts';
+  const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;
+  if (!fileExists(main)) {
+    fail(
+      `${main} does not exist, so the ${exported.size + opened.size} component(s) ` +
+        `${SATORI_COMPONENTS_BARREL} ships have no Storybook to be documented in.`,
+    );
+  } else {
+    const globs = storybookStoryGlobs(main);
+    if (globs === null) {
+      fail(
+        `${main} does not export a \`stories\` list of string literals, with no spread or ` +
+          'computed key beside it, so whether Storybook loads the stories this check counts was ' +
+          'not read.',
+      );
+    } else if (!globs.includes(STORY_GLOB)) {
+      fail(
+        `${main} does not load \`${STORY_GLOB}\`, so the stories this check counts are not the ` +
+          'ones Storybook renders.',
+      );
+    }
+  }
+
+  const covered = new Set();
+  for (const story of walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) =>
+    path.endsWith('.stories.ts'),
+  )) {
+    for (const key of storiedComponents(story, pathMaps, opened)) covered.add(key);
+  }
+  for (const [name, { file, className }] of exported) {
+    if (covered.has(`${file}#${className}`)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} exports \`${name}\` (${file}), and no story documents it. Add ` +
+        `a \`*.stories.ts\` beside it whose default-exported meta says \`component: ${className}\`, ` +
+        'with at least one story exported — Storybook is the library’s documentation and the ' +
+        'agent’s usage reference.',
+    );
+  }
+  for (const [key, { file, className, openers }] of opened) {
+    if (covered.has(key)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} ships \`${className}\` (${file}) through ${openedVia(openers)}, ` +
+        'and no story documents it. Add a `*.stories.ts` whose default-exported meta names no ' +
+        'component and that imports what opens it, with at least one story exported.',
+    );
+  }
+}
+
+/** The sections every Overview page has, as `##` headings, in any order. */
+const SATORI_COMPONENTS_OVERVIEW_SECTIONS = [
+  'Key features',
+  'Demo showcase',
+  'Usage',
+  'Examples',
+  'Accessibility',
+];
+
+/**
+ * An MDX page's structure, read from its text once code and comments are taken out: fenced code
+ * blocks, `{/* … *\/}` comments, every template literal inside braces (`code={`…`}`) and every
+ * one an `export const` holds, which is where the pages put their code samples — a multi-line one
+ * in an `export const`, because MDX strips leading spaces from an attribute's continuation lines.
+ * What is left is the page's imports, its blocks and its headings.
+ *
+ * `namespaces` maps each `import * as X from '…'` to the file it resolves to (`null` when it names
+ * none); `metas` lists each `<Meta … />` with its `of={X}` (`undefined` when `of` is not a plain
+ * name) and `name`; `sections` lists the `##` headings; `references` lists every `of={X.Y}`;
+ * `tableRows` counts lines written as a Markdown table row (`| … |`).
+ */
+function readMdxPage(mdxFile, pathMaps) {
+  const text = read(mdxFile)
+    .replace(/^```[\s\S]*?^```/gm, '')
+    .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
+    .replace(/^export\s+const\s+\w+\s*=\s*`(?:\\[\s\S]|[^`\\])*`;?/gm, '')
+    .replace(/\{\s*`(?:\\[\s\S]|[^`\\])*`\s*\}/g, '{}');
+  const namespaces = new Map();
+  for (const [, name, , specifier] of text.matchAll(
+    /^import\s+\*\s+as\s+(\w+)\s+from\s+(['"])(.+?)\2;?\s*$/gm,
+  )) {
+    namespaces.set(name, resolveFile(mdxFile, specifier, pathMaps));
+  }
+  const metas = [...text.matchAll(/<Meta\b([^>]*?)\/>/g)].map(([, attributes]) => ({
+    of: /\bof=/.test(attributes) ? /\bof=\{\s*(\w+)\s*\}/.exec(attributes)?.[1] : null,
+    name: /\bname="([^"]*)"/.exec(attributes)?.[1] ?? null,
+  }));
+  const sections = [...text.matchAll(/^##\s+(.+?)\s*$/gm)].map(([, heading]) => heading);
+  const references = [...text.matchAll(/<(\w+)\b[^>]*?\bof=\{\s*(\w+)\.(\w+)\s*\}/g)].map(
+    ([, block, namespace, story]) => ({ block, namespace, story }),
+  );
+  const tableRows = text.split('\n').filter((line) => /^\s*\|.*\|\s*$/.test(line)).length;
+  return { namespaces, metas, sections, references, tableRows };
+}
+
+/**
+ * Every component the library exports has an Overview page (the docs-coverage check).
+ *
+ * The API page is generated, so it cannot be missing; what a component is for, how to use it and
+ * how it behaves for assistive technology has to be written. An Overview is an `*.mdx` under `src/`
+ * — the glob `.storybook/main.ts` loads, which is checked too — that namespace-imports a story file
+ * and attaches to it with `<Meta of={Stories} name="Overview" />`. It counts for the component that
+ * story file's meta names as `component:`. A story file whose meta names no component has no API
+ * page (see `storiedComponents`), so it needs an Overview of its own, which counts for the
+ * components its imports open: a component the library ships without exporting it (see
+ * `openedComponentClasses`) needs an Overview attached to such a story file.
+ *
+ * Each Overview has the sections in `SATORI_COMPONENTS_OVERVIEW_SECTIONS` and at least one live
+ * preview, `<Canvas of={Stories.Name} />`. Two faults Storybook builds without complaint are read on
+ * every page under `src/` and `.storybook/`: an `of={X.Y}` naming a story the imported file does
+ * not export, which shows an error where the preview should be, and a Markdown table, which renders
+ * as a paragraph of pipes because the library's MDX has no GitHub-flavoured Markdown.
+ */
+function checkSatoriComponentsHaveOverviews() {
+  if (!fileExists(SATORI_COMPONENTS_BARREL)) return;
+  const pathMaps = tsconfigPathMaps();
+  const exported = exportedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps);
+  const opened = openedComponentClasses(SATORI_COMPONENTS_BARREL, pathMaps, exported);
+  if (exported.size === 0 && opened.size === 0) return;
+
+  const OVERVIEW_GLOB = '../src/**/*.mdx';
+  const main = `${SATORI_COMPONENTS_STORYBOOK}/main.ts`;
+  const globs = fileExists(main) ? storybookStoryGlobs(main) : null;
+  if (!globs?.includes(OVERVIEW_GLOB)) {
+    fail(
+      `${main} does not load \`${OVERVIEW_GLOB}\` (or could not be read), so the Overview pages ` +
+        'this check counts are not the ones Storybook renders.',
+    );
+  }
+
+  // What each story file documents: a `file#className`, `null` for a meta naming no component,
+  // `undefined` when the meta is not readable or names something the library does not declare.
+  const storyFiles = new Map();
+  for (const story of walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) =>
+    path.endsWith('.stories.ts'),
+  )) {
+    const { meta, imports, namedExports, metaProperty } = readStoryFile(story, pathMaps);
+    let documents;
+    const value = metaProperty('component');
+    if (!meta) documents = undefined;
+    else if (value === null) documents = null;
+    else if (value && ts.isIdentifier(value) && imports.has(value.text)) {
+      const origin = imports.get(value.text);
+      const declared = exportedComponentClasses(origin.file, pathMaps).get(origin.name);
+      documents = declared ? `${declared.file}#${declared.className}` : undefined;
+    }
+    const opens = documents === null ? openedThrough(imports, opened, pathMaps) : new Set();
+    storyFiles.set(story, { documents, opens, exports: new Set(namedExports), overview: false });
+  }
+
+  const sectionList = SATORI_COMPONENTS_OVERVIEW_SECTIONS.map((s) => `\`## ${s}\``).join(', ');
+  const pages = [
+    ...walk(`${SATORI_COMPONENTS_ROOT}/src`, (path) => path.endsWith('.mdx')),
+    ...walk(SATORI_COMPONENTS_STORYBOOK, (path) => path.endsWith('.mdx')),
+  ];
+  for (const page of pages) {
+    const { namespaces, metas, sections, references, tableRows } = readMdxPage(page, pathMaps);
+
+    if (tableRows > 0) {
+      fail(
+        `${page} writes a Markdown table, which this Storybook renders as a paragraph of pipes: ` +
+          'its MDX has no GitHub-flavoured Markdown. Write the table as `<table>` markup.',
+      );
+    }
+
+    for (const { block, namespace, story } of references) {
+      const file = namespaces.get(namespace);
+      const target = file ? storyFiles.get(file) : undefined;
+      if (!target) {
+        fail(
+          `${page} refers to \`${namespace}.${story}\` in a <${block}>, and \`${namespace}\` is ` +
+            'not a namespace import of a story file under src/, so the reference was not checked.',
+        );
+      } else if (!target.exports.has(story)) {
+        fail(
+          `${page} refers to \`${namespace}.${story}\` in a <${block}>, which ${file} does not ` +
+            'export, so the page shows an error where that preview should be.',
+        );
+      }
+    }
+
+    const overviews = metas.filter((meta) => meta.name === 'Overview');
+    if (overviews.length === 0) continue;
+    if (metas.length !== 1 || !overviews[0].of) {
+      fail(
+        `${page} has ${metas.length} <Meta> blocks, or attaches to something other than a plain ` +
+          'namespace name, so which story file it is the Overview of was not read. Write one ' +
+          '`<Meta of={Stories} name="Overview" />`.',
+      );
+      continue;
+    }
+    const attached = overviews[0].of;
+    const file = namespaces.get(attached);
+    const target = file ? storyFiles.get(file) : undefined;
+    if (!target) {
+      fail(
+        `${page} attaches to \`${attached}\`, which is not a namespace import of a story file ` +
+          'under src/, so it is the Overview of nothing this check counts.',
+      );
+      continue;
+    }
+    const missing = SATORI_COMPONENTS_OVERVIEW_SECTIONS.filter((s) => !sections.includes(s));
+    if (missing.length) {
+      fail(
+        `${page} is the Overview of ${file} and has no ${missing.map((s) => `\`## ${s}\``).join(', ')} ` +
+          `section. Every Overview has ${sectionList}.`,
+      );
+    }
+    if (!references.some((ref) => ref.block === 'Canvas' && ref.namespace === attached)) {
+      fail(
+        `${page} is the Overview of ${file} and shows none of its stories. Add at least one ` +
+          `\`<Canvas of={${attached}.<Story>} />\`, the live preview with its code.`,
+      );
+    }
+    target.overview = true;
+  }
+
+  const documented = new Set(
+    [...storyFiles.values()].filter((s) => s.overview && s.documents).map((s) => s.documents),
+  );
+  for (const [name, { file, className }] of exported) {
+    if (documented.has(`${file}#${className}`)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} exports \`${name}\` (${file}), and no Overview page documents ` +
+        `it. Add an \`*.mdx\` beside its stories that does \`import * as Stories from ` +
+        `'./<name>.stories'\` and \`<Meta of={Stories} name="Overview" />\`, whose story file's ` +
+        `meta says \`component: ${className}\`, with ${sectionList} and at least one ` +
+        '`<Canvas of={Stories.<Story>} />`.',
+    );
+  }
+  const documentedOpened = new Set(
+    [...storyFiles.values()].filter((s) => s.overview).flatMap((s) => [...s.opens]),
+  );
+  for (const [key, { file, className, openers }] of opened) {
+    if (documentedOpened.has(key)) continue;
+    fail(
+      `${SATORI_COMPONENTS_BARREL} ships \`${className}\` (${file}) through ${openedVia(openers)}, ` +
+        'and no Overview page documents it. Add an `*.mdx` with `<Meta of={Stories} ' +
+        'name="Overview" />` attached to a story file whose meta names no component and that ' +
+        `imports what opens it, with ${sectionList} and at least one ` +
+        '`<Canvas of={Stories.<Story>} />`.',
+    );
+  }
+  for (const [story, { documents, overview }] of storyFiles) {
+    if (documents !== null || overview) continue;
+    fail(
+      `${story} names no component, so it has no API page, and no Overview page attaches to it. ` +
+        'Add an `*.mdx` beside it with `<Meta of={Stories} name="Overview" />`.',
+    );
+  }
+}
+
+/** The `@Component` classes `file` declares, exported or not. */
+function declaredComponentClasses(file) {
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const { names, namespaces } = componentDecoratorNames(source);
+  const isComponentDecorator = (decorator) => {
+    if (!ts.isCallExpression(decorator.expression)) return false;
+    const callee = decorator.expression.expression;
+    if (ts.isIdentifier(callee)) return names.has(callee.text);
+    return (
+      ts.isPropertyAccessExpression(callee) &&
+      ts.isIdentifier(callee.expression) &&
+      namespaces.has(callee.expression.text) &&
+      callee.name.text === 'Component'
+    );
+  };
+  return source.statements
+    .filter(
+      (statement) =>
+        ts.isClassDeclaration(statement) &&
+        statement.name &&
+        (ts.getDecorators(statement) ?? []).some(isComponentDecorator),
+    )
+    .map((statement) => statement.name.text);
+}
+
+/**
+ * Every component in the library family has a spec that imports it (register item 21).
+ *
+ * The coverage floor cannot ask this: a component whose class has no logic is covered in full the
+ * moment anything imports its module, so a template-only component with no spec at all passes 90%.
+ * Read from each library's sources, every `@Component` class whether the barrel exports it or not;
+ * Storybook stories and specs are not components. A spec covers a component when it imports the
+ * class by value — from its own module, or through a module that re-exports it, such as the barrel
+ * or `@nuxeo/satori-platform/components` — so a same-named fake declared in the spec, a type-only
+ * import, or a name in a comment or a string covers nothing. A component the barrel ships only by
+ * opening it, as `NxsToastService` opens `NxsToastComponent` (see `openedComponentClasses`), is
+ * covered by a spec that imports what opens it.
+ */
+function checkSatoriComponentsHaveSpecs() {
+  const pathMaps = tsconfigPathMaps();
+  const isSource = (path) =>
+    /\.ts$/.test(path) && !/\.(spec|test|stories)\.ts$/.test(path) && !path.endsWith('.d.ts');
+  for (const { root, barrel } of SATORI_LIBRARIES) {
+    const sources = walk(`${root}/src`, isSource);
+    if (sources.length === 0) continue;
+    const components = sources.flatMap((file) =>
+      declaredComponentClasses(file).map((className) => ({ file, className })),
+    );
+    if (components.length === 0) continue;
+    const exported = fileExists(barrel) ? exportedComponentClasses(barrel, pathMaps) : new Map();
+    const opened = fileExists(barrel)
+      ? openedComponentClasses(barrel, pathMaps, exported)
+      : new Map();
+
+    const covered = new Set();
+    for (const spec of walk(root, (path) => /\.(spec|test)\.ts$/.test(path))) {
+      const { imports } = readStoryFile(spec, pathMaps);
+      for (const { file, name, typeOnly } of imports.values()) {
+        if (typeOnly) continue;
+        const declared = exportedComponentClasses(file, pathMaps).get(name);
+        if (declared) covered.add(`${declared.file}#${declared.className}`);
+      }
+      for (const key of openedThrough(imports, opened, pathMaps)) covered.add(key);
+    }
+    for (const { file, className } of components) {
+      if (covered.has(`${file}#${className}`)) continue;
+      fail(
+        `${file} declares the component \`${className}\`, and no spec imports it. The coverage ` +
+          'floor passes a component nothing tests once anything imports its module, so add a ' +
+          `\`*.spec.ts\` that imports \`${className}\` by value and renders it.`,
+      );
+    }
+  }
+}
+
+/** What Material exports that puts its native date adapter in an injector, by exported name. */
+const NATIVE_DATE_ADAPTER_PROVIDERS = new Set([
+  'provideNativeDateAdapter',
+  'MatNativeDateModule',
+  'NativeDateModule',
+]);
+
+/**
+ * Where `file` puts Material's native date adapter in an injector, as `{ line, what }`.
+ *
+ * Names are resolved through the file's imports from `@angular/material/core` (or the deprecated
+ * `@angular/material`), so an alias is still caught and a same-named local is not. A use is a call
+ * or reference to one of `NATIVE_DATE_ADAPTER_PROVIDERS`, `new NativeDateAdapter(...)`, or a
+ * provider's `useClass` or `useExisting: NativeDateAdapter`. Extending the class, comparing with it
+ * or reading its prototype is not: that is how a library adapter keeps the native one's formatting
+ * and replaces its parsing. Comments and strings are not code, so they are never read.
+ */
+function nativeDateAdapterUses(file) {
+  const source = ts.createSourceFile(file, read(file), ts.ScriptTarget.Latest, true);
+  const imported = new Map();
+  const namespaces = new Set();
+  for (const statement of source.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    if (!/^@angular\/material(\/core)?$/.test(statement.moduleSpecifier.text)) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings && ts.isNamespaceImport(bindings)) namespaces.add(bindings.name.text);
+    if (bindings && ts.isNamedImports(bindings)) {
+      for (const element of bindings.elements) {
+        imported.set(element.name.text, (element.propertyName ?? element.name).text);
+      }
+    }
+  }
+  /** The Material export `expression` names, or `null`. */
+  const materialName = (expression) => {
+    if (ts.isIdentifier(expression)) return imported.get(expression.text) ?? null;
+    if (
+      ts.isPropertyAccessExpression(expression) &&
+      ts.isIdentifier(expression.expression) &&
+      namespaces.has(expression.expression.text)
+    ) {
+      return expression.name.text;
+    }
+    return null;
+  };
+  /** A property or member name, which names nothing in scope: `x.provideNativeDateAdapter`. */
+  const isMemberName = (node) =>
+    (ts.isPropertyAccessExpression(node.parent) && node.parent.name === node) ||
+    ((ts.isPropertyAssignment(node.parent) ||
+      ts.isPropertyDeclaration(node.parent) ||
+      ts.isMethodDeclaration(node.parent)) &&
+      node.parent.name === node);
+
+  const uses = [];
+  const at = (node) => source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node)) return;
+    let what = null;
+    if (
+      (ts.isIdentifier(node) || ts.isPropertyAccessExpression(node)) &&
+      !(ts.isIdentifier(node) && isMemberName(node)) &&
+      NATIVE_DATE_ADAPTER_PROVIDERS.has(materialName(node))
+    ) {
+      what =
+        ts.isCallExpression(node.parent) && node.parent.expression === node
+          ? `${materialName(node)}()`
+          : materialName(node);
+    } else if (ts.isNewExpression(node) && materialName(node.expression) === 'NativeDateAdapter') {
+      what = 'new NativeDateAdapter()';
+    } else if (
+      ts.isPropertyAssignment(node) &&
+      ts.isIdentifier(node.name) &&
+      ['useClass', 'useExisting'].includes(node.name.text) &&
+      materialName(node.initializer) === 'NativeDateAdapter'
+    ) {
+      what = `${node.name.text}: NativeDateAdapter`;
+    }
+    if (what) {
+      uses.push({ line: at(node), what });
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return uses;
+}
+
+/**
+ * No library in the family puts Material's native date adapter in an injector (NXSAT-649).
+ *
+ * A component that lists `provideNativeDateAdapter()` or `MatNativeDateModule` hides the adapter a
+ * host provides and reads every typed date with `Date.parse`, as American: `03/04/2026` typed in
+ * French was stored as 4 March (NXSAT-629). Four `nxs-` components carried one until NXSAT-649 gave
+ * them `provideNxsDateAdapter()`, which keeps a host's adapter and otherwise reads in the locale,
+ * and only their own specs stopped the next date field from bringing one back.
+ *
+ * Read from each library's sources. Specs and stories are exempt: there the native adapter stands
+ * for a host's, which the library has to cope with, not one it imposes. A tree with no sources to
+ * read fails, rather than passing having read nothing.
+ */
+function checkSatoriLibrariesKeepHostDateAdapter() {
+  const isSource = (path) =>
+    /\.ts$/.test(path) && !/\.(spec|test|stories)\.ts$/.test(path) && !path.endsWith('.d.ts');
+  let scanned = 0;
+  for (const { root } of SATORI_LIBRARIES) {
+    for (const file of walk(`${root}/src`, isSource)) {
+      scanned += 1;
+      for (const { line, what } of nativeDateAdapterUses(file)) {
+        fail(
+          `${file}:${line} puts Material's native date adapter in an injector (\`${what}\`). It ` +
+            "hides the host's date adapter and reads every typed date as American: `03/04/2026` " +
+            'typed in French is stored as 4 March (NXSAT-629). Use `provideNxsDateAdapter()` ' +
+            "from `date-input/locale-date`, which keeps a host's adapter and otherwise reads in " +
+            'the locale.',
+        );
+      }
+    }
+  }
+  if (scanned === 0) {
+    fail(
+      `No sources were found under ${SATORI_LIBRARIES.map(({ root }) => `${root}/src`).join(' or ')}, ` +
+        'so checkSatoriLibrariesKeepHostDateAdapter asserted nothing.',
+    );
+  }
+}
+
+/**
+ * `PLATFORM_ENTRY_POINTS` lists exactly the entry points the package publishes (register item 23).
+ *
+ * The package root exports the list for customers and docs to read, and its comment promises it
+ * matches the `ng-package.json` files on disk. `checkLibraryEntryPoint` holds that for the two
+ * component entry points only; this holds it for every one, in both directions: each
+ * `libs/platform/<subpath>/ng-package.json` is listed, and each listed subpath has one.
+ */
+function checkPlatformEntryPointsListed() {
+  if (!fileExists(PLATFORM_INDEX)) return;
+  const listed = platformEntryPoints();
+  if (!listed) {
+    fail(
+      `${PLATFORM_INDEX} does not export \`PLATFORM_ENTRY_POINTS\` as a literal list of strings, ` +
+        'so whether it matches the published entry points was not checked.',
+    );
+    return;
+  }
+  const published = walk('libs/platform', (path) =>
+    /^libs\/platform\/[^/]+\/ng-package\.json$/.test(path),
+  )
+    .map((path) => path.split('/')[2])
+    .sort();
+  if (published.length === 0) {
+    fail(
+      `No libs/platform/<subpath>/ng-package.json was found, so ${PLATFORM_INDEX}'s ` +
+        '`PLATFORM_ENTRY_POINTS` was compared with nothing.',
+    );
+    return;
+  }
+  for (const subpath of published.filter((name) => !listed.includes(name))) {
+    fail(
+      `libs/platform/${subpath}/ng-package.json publishes \`@nuxeo/satori-platform/${subpath}\`, ` +
+        `and ${PLATFORM_INDEX} does not list '${subpath}' in \`PLATFORM_ENTRY_POINTS\`.`,
+    );
+  }
+  for (const subpath of listed.filter((name) => !published.includes(name))) {
+    fail(
+      `${PLATFORM_INDEX} lists '${subpath}' in \`PLATFORM_ENTRY_POINTS\`, and no ` +
+        `libs/platform/${subpath}/ng-package.json publishes it.`,
+    );
+  }
+}
+
+/** Prettier's parser for each `language` a Storybook `<Source>` sample is written in. */
+const MDX_SAMPLE_PARSERS = {
+  typescript: 'typescript',
+  ts: 'typescript',
+  javascript: 'babel',
+  js: 'babel',
+  html: 'angular',
+  scss: 'scss',
+  css: 'css',
+  json: 'json',
+};
+
+/** A template literal's text as the string it evaluates to, for the escapes MDX samples use. */
+const templateLiteralValue = (raw) => raw.replace(/\\([`$\\])/g, '$1');
+
+/**
+ * Prettier's output for a sample, or the reason it has none. A TypeScript sample may be a class's
+ * members under its imports, as Usage samples are; that is formatted inside a class and unwrapped,
+ * so it is held to the same layout as the component it is pasted into.
+ */
+async function formatMdxSample(prettier, code, parser, options) {
+  const format = async (text) => (await prettier.format(text, { ...options, parser })).trimEnd();
+  try {
+    return { formatted: await format(code) };
+  } catch (error) {
+    if (parser !== 'typescript') return { error };
+    const lines = code.split('\n');
+    let split = 0;
+    for (let at = 0; at < lines.length; at += 1) {
+      if (lines[at].trim() === '' && /^import\b/.test(lines[0])) {
+        split = at;
+        break;
+      }
+    }
+    const head = split ? lines.slice(0, split).join('\n') : '';
+    const members = lines.slice(split ? split + 1 : 0).join('\n');
+    const marker = 'class NxsMdxSample {';
+    try {
+      const wrapped = await format(`${head}${head ? '\n\n' : ''}${marker}\n${members}\n}`);
+      const start = wrapped.indexOf(marker);
+      const body = wrapped
+        .slice(start + marker.length, wrapped.lastIndexOf('}'))
+        .replace(/^\n/, '')
+        .trimEnd()
+        .split('\n')
+        .map((line) => line.replace(/^ {2}/, ''))
+        .join('\n');
+      const before = wrapped.slice(0, start).trimEnd();
+      return { formatted: before ? `${before}\n\n${body}` : body };
+    } catch {
+      return { error };
+    }
+  }
+}
+
+/**
+ * Each `<Source … />` block on an MDX page, read with a scanner rather than a pattern, because a
+ * sample's own markup — `<nxs-tag … />` — contains the `/>` that would end a pattern early and leave
+ * the sample unread. Braces, quotes and template literals are followed, so the block ends at the
+ * first `/>` outside them. `language` is the attribute's value; `inline` is the raw text of a
+ * template literal passed to `code`, and `named` the identifier passed instead. `unread` marks a block
+ * that never closes.
+ */
+function* mdxSourceBlocks(text) {
+  for (const start of [...text.matchAll(/<Source\b/g)].map((m) => m.index + m[0].length)) {
+    let depth = 0;
+    let quote = null;
+    let at = start;
+    let end = -1;
+    while (at < text.length) {
+      const char = text[at];
+      if (quote) {
+        if (char === '\\') at += 1;
+        else if (char === quote) quote = null;
+      } else if (char === '`' || ((char === '"' || char === "'") && depth === 0)) {
+        quote = char;
+      } else if (char === '{') depth += 1;
+      else if (char === '}') depth -= 1;
+      else if (depth === 0 && char === '/' && text[at + 1] === '>') {
+        end = at;
+        break;
+      }
+      at += 1;
+    }
+    if (end === -1) {
+      yield { unread: true };
+      continue;
+    }
+    const attributes = text.slice(start, end);
+    // The sample's own text is not an attribute: a `language="…"` inside it says nothing.
+    const outside = attributes.replace(/`(?:\\[\s\S]|[^`\\])*`/g, '``');
+    yield {
+      language: /\blanguage=["'](\w+)["']/.exec(outside)?.[1],
+      inline: /\bcode=\{\s*`((?:\\[\s\S]|[^`\\])*)`\s*\}/.exec(attributes)?.[1],
+      named: /\bcode=\{\s*(\w+)\s*\}/.exec(outside)?.[1],
+      unread: false,
+    };
+  }
+}
+
+/**
+ * The code samples on the library's Storybook pages are formatted as Prettier formats the code they
+ * show (register item 38).
+ *
+ * Prettier no longer formats `*.mdx`: it parses MDX 1, and Storybook compiles MDX 3, so it damaged
+ * samples with a blank line in them (`.prettierignore`). That left the samples — what a developer
+ * copies into their component — formatted by nobody. So each `<Source language="…" code={…} />`,
+ * whether the code is written inline or in an `export const` it names, is formatted here with the
+ * repository's Prettier options and the parser its language calls for, and fails when the result
+ * differs or the sample does not parse. A fenced code block is held to the same rule by its info
+ * string. `bash`, `text` and any other language are not checked. An inline sample with an indented
+ * continuation line fails whatever its language: MDX strips that indentation, so what renders is
+ * not what was written. An inline sample on several unindented lines renders as written and passes.
+ */
+async function checkMdxCodeSamplesFormatted() {
+  const pages = [
+    ...walk('libs', (path) => path.endsWith('.mdx')),
+    ...walk('apps', (path) => path.endsWith('.mdx')),
+  ];
+  if (pages.length === 0) return;
+  const prettier = await import('prettier');
+  for (const page of pages) {
+    const text = read(page);
+    const constants = new Map(
+      [...text.matchAll(/^export\s+const\s+(\w+)\s*=\s*`((?:\\[\s\S]|[^`\\])*)`;?/gm)].map(
+        ([, name, raw]) => [name, raw],
+      ),
+    );
+    const options = (await prettier.resolveConfig(join(repoRoot, page))) ?? {};
+    for (const [, language, code] of text.matchAll(/^```(\w+)[^\n]*\n([\s\S]*?)^```\s*$/gm)) {
+      const parser = MDX_SAMPLE_PARSERS[language];
+      if (!parser) continue;
+      const sample = code.replace(/\n$/, '');
+      const { formatted, error } = await formatMdxSample(prettier, sample, parser, options);
+      if (error) {
+        fail(
+          `${page}: a fenced ${language} block does not parse: ${String(error.message).split('\n')[0]}`,
+        );
+      } else if (formatted !== sample) {
+        fail(
+          `${page}: a fenced ${language} block is not formatted as Prettier formats it. Prettier gives:\n${formatted}`,
+        );
+      }
+    }
+    for (const { language, inline, named, unread } of mdxSourceBlocks(text)) {
+      const where = named ? `the sample \`${named}\`` : 'an inline sample';
+      if (unread) {
+        fail(`${page}: a <Source> block does not close, so its sample was not checked.`);
+        continue;
+      }
+      if (inline !== undefined && /\n[ \t]+\S/.test(inline)) {
+        fail(
+          `${page}: ${where} spans lines with indentation, which MDX strips from an attribute's ` +
+            'continuation lines. Move it into an `export const` and pass that to `code`.',
+        );
+        continue;
+      }
+      if (inline === undefined && !named) continue;
+      if (!language) {
+        fail(`${page}: ${where} has no \`language\`, so its formatting was not checked.`);
+        continue;
+      }
+      const parser = MDX_SAMPLE_PARSERS[language];
+      if (!parser) continue;
+      const raw = inline ?? constants.get(named);
+      if (raw === undefined) {
+        fail(
+          `${page}: ${where} is not an \`export const\` template literal on this page, so its ` +
+            'formatting was not checked.',
+        );
+        continue;
+      }
+      const code = templateLiteralValue(raw);
+      const { formatted, error } = await formatMdxSample(prettier, code, parser, options);
+      if (error) {
+        fail(
+          `${page}: ${where} (${language}) does not parse as ${language}: ` +
+            `${String(error.message).split('\n')[0]}`,
+        );
+      } else if (formatted !== code) {
+        const at = code.split('\n').findIndex((line, i) => line !== formatted.split('\n')[i]);
+        fail(
+          `${page}: ${where} (${language}) is not formatted as Prettier formats it; it first ` +
+            `differs on its line ${at + 1}. Prettier gives:\n${formatted}`,
+        );
+      }
+    }
+  }
+}
+
+const NUXEO_UI_APP_CONFIG = 'apps/nuxeo-ui/src/app/app.config.ts';
+
+/**
+ * The product registers the primitives on Material, then on Satori (plan section 3).
+ *
+ * Registration layers in provider order and later wins, so the order is the whole mechanism: listed
+ * the other way round, Material silently replaces every Satori primitive and nothing else goes red.
+ * Read from the AST of the `providers` array — its element order is the provider order — so a call
+ * in a comment or a string counts for nothing.
+ */
+function checkSatoriPrimitivesRegisteredInOrder() {
+  if (!fileExists(NUXEO_UI_APP_CONFIG)) {
+    fail(
+      `${NUXEO_UI_APP_CONFIG} does not exist, so the primitive registration order was not checked.`,
+    );
+    return;
+  }
+  const source = ts.createSourceFile(
+    NUXEO_UI_APP_CONFIG,
+    read(NUXEO_UI_APP_CONFIG),
+    ts.ScriptTarget.Latest,
+    true,
+  );
+  const calls = ['provideNxsComponents', 'provideNxsSatoriComponents'];
+  let positions = null;
+  const visit = (node) => {
+    if (positions) return;
+    if (
+      ts.isPropertyAssignment(node) &&
+      node.name.getText(source) === 'providers' &&
+      ts.isArrayLiteralExpression(node.initializer)
+    ) {
+      const names = node.initializer.elements.map((element) =>
+        ts.isCallExpression(element) && ts.isIdentifier(element.expression)
+          ? element.expression.text
+          : null,
+      );
+      positions = calls.map((call) => names.indexOf(call));
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  if (!positions) {
+    fail(
+      `${NUXEO_UI_APP_CONFIG} has no \`providers\` array, so the registration order was not checked.`,
+    );
+    return;
+  }
+  const [material, satori] = positions;
+  for (const [index, call] of calls.entries()) {
+    if (positions[index] === -1) {
+      fail(
+        `${NUXEO_UI_APP_CONFIG} does not call \`${call}()\` in its providers. The product includes ` +
+          'both registrations: Material from `/components`, re-registered on Satori by `/components-satori`.',
+      );
+    }
+  }
+  if (material !== -1 && satori !== -1 && satori < material) {
+    fail(
+      `${NUXEO_UI_APP_CONFIG} lists \`provideNxsSatoriComponents()\` before \`provideNxsComponents()\`. ` +
+        'Later registrations win, so Material replaces every Satori primitive. Swap them.',
+    );
+  }
+}
+
 const GUARDRAILS = [
   checkThemeTokens,
   checkDocsNumbering,
@@ -7412,6 +9626,18 @@ const GUARDRAILS = [
   checkShippedDefaultLanguage,
   checkAccessibleNameFallbacks,
   checkLocaleDataRegistered,
+  checkSatoriComponentsDependencies,
+  checkSatoriComponentsEntryPoint,
+  checkSatoriComponentsFederationReadiness,
+  checkSatoriComponentsHaveStories,
+  checkSatoriComponentsHaveOverviews,
+  checkSatoriComponentsHaveSpecs,
+  checkSatoriLibrariesKeepHostDateAdapter,
+  checkMdxCodeSamplesFormatted,
+  checkPlatformEntryPointsListed,
+  checkSatoriFallbackDependencies,
+  checkSatoriFallbackEntryPoint,
+  checkSatoriPrimitivesRegisteredInOrder,
 ];
 
 /**

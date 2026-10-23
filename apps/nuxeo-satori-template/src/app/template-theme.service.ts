@@ -1,6 +1,6 @@
 import { Injectable, effect, inject, signal } from '@angular/core';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 /**
  * Applies Layer 0 theme tokens to `<html>`, so a rebrand is a JSON edit.

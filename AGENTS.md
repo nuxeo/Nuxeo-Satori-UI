@@ -50,7 +50,7 @@ project cannot depend on anything**, so a new library needs tags before it can i
 
 ## 3. Key Services (quick reference)
 
-All in `libs/shared/nuxeo-client/src/lib/services/` · Import: `@nuxeo-satori/platform/nuxeo-client`
+All in `libs/shared/nuxeo-client/src/lib/services/` · Import: `@nuxeo/satori-platform/nuxeo-client`
 
 | Service                    | Primary use                                                                  |
 | -------------------------- | ---------------------------------------------------------------------------- |
@@ -126,6 +126,7 @@ Feature flag: **on by default** — gated by `AiFeatureFlagService`, with an exp
 | Change auth behavior    | `apps/nuxeo-ui/src/app/auth/`                                                                  |
 | Add a data model        | `libs/shared/nuxeo-client/src/lib/models/`                                                     |
 | Add a shared component  | `libs/shared/ui/src/lib/`                                                                      |
+| Add an `nxs-` component | `libs/shared/satori-components/src/lib/` — rules in `AGENTS/00-architecture.md`                |
 
 ---
 
@@ -143,6 +144,9 @@ Feature flag: **on by default** — gated by `AiFeatureFlagService`, with an exp
 - [ ] `docs/ai-features.md` updated if AI backend changed
 - [ ] `AGENTS/01-services.md` updated if a new service method was added
 - [ ] `AGENTS/00-architecture.md` updated if architecture changed
+- [ ] A new `nxs-` component has its section in `docs/satori-components/with-and-without-satori.md`,
+      then `npm run docs:satori-comparison:capture` and `npm run docs:satori-comparison:publish`
+      (`AGENTS/00-architecture.md`, "Adding a component", step 10)
 - [ ] PR created on `feature/*` or `fix/*` branch (never commit to `main` directly)
 
 ---

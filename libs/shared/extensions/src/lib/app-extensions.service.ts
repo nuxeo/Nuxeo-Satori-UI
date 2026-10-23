@@ -1,6 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import {
   resolveExtensionLayers,

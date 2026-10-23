@@ -30,6 +30,7 @@ import { spawnSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { classify, summarize } from './gate-summary.mjs';
 
 const args = new Map();
 for (let i = 2; i < process.argv.length; i += 1) {
@@ -63,8 +64,9 @@ const ALL_GATES = [
     echoOnPass: true,
   },
   // Next because it is the next cheapest and because Phase 2 proved it is the one
-  // failure none of the others can see: nothing downstream reads the lockfile,
-  // so a lock that `npm ci` will refuse on Linux leaves every local gate green.
+  // failure none of the others can see: nothing downstream checks that the lock's
+  // dependency edges resolve, so a lock that `npm ci` will refuse on Linux leaves
+  // every local gate green.
   {
     id: 'lockfile',
     label: 'Lockfile integrity',
@@ -81,6 +83,28 @@ const ALL_GATES = [
     label: 'Lockfile integrity controls',
     cmd: 'node',
     argv: ['scripts/beta-harness/lockfile-integrity.selftest.mjs'],
+  },
+  // NXSAT-308 criterion 3: none of adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client in
+  // the lock, the installed tree, a manifest, `.npmrc` or an import. Next to `lockfile` because both
+  // read the dependency tree. BLOCKING since the ADF removal (NXSAT-638) set `BLOCKING` in the
+  // script: any finding fails it, and so does a location that cannot be read. It echoes on a pass
+  // so the verdict line, which names the mode, is in the log.
+  {
+    id: 'dependency-tree',
+    label: 'Dependency tree (ADF removal)',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/dependency-tree.mjs'],
+    echoOnPass: true,
+  },
+  // Its negative controls. A report-only gate is green whatever it finds, so without these it could
+  // regress into a scanner that finds nothing and stay green until the day it became blocking.
+  {
+    id: 'dependency-tree-selftest',
+    label: 'Dependency tree controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/dependency-tree.selftest.mjs'],
+    // The negative/quiet/listing split is the evidence, so surface it on a pass too.
+    echoOnPass: true,
   },
   // Phase 6 step 4 gate: SCA with teeth, next to `lockfile` because both read the dependency
   // tree — one asks whether it resolves, this one asks whether it is safe to ship.
@@ -105,12 +129,15 @@ const ALL_GATES = [
   //
   // Sits next to `supply-chain` because they answer the two halves of the same question — is what
   // we depend on safe, and is what we wrote safe. Needs `gh` and network access, so it is the only
-  // gate with an explicit skip (`BETA_SKIP_CODE_SCANNING=1`), which prints NOT RUN rather than pass.
+  // gate with an explicit skip (`BETA_SKIP_CODE_SCANNING=1`). Skipped, it exits with
+  // NOT_RUN_EXIT_CODE, which the runner records as NOT RUN: never green, and the run is then
+  // `pass-incomplete` rather than `pass`.
   {
     id: 'code-scanning',
     label: 'Code scanning (CodeQL)',
     cmd: 'node',
     argv: ['scripts/beta-harness/code-scanning.mjs'],
+    mayNotRun: true,
     // The ref, the analysis count and the alert count are the evidence.
     echoOnPass: true,
   },
@@ -192,6 +219,53 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/assertion-audit.mjs'],
   },
+  // The assertion audit above asks whether a check can fail. It cannot ask whether the check is
+  // reading the surface it claims to, and the parity steps are the one file where that question
+  // decides everything: they capture the same claims on two sets of components, one of which can
+  // never be captured again. The run was unable to finish for two months — a crumb selected by a
+  // label that was itself under test aborted it on a timeout — and no gate was in a position to
+  // notice, because every defect was in a steps file nothing audited.
+  {
+    id: 'parity-surface',
+    label: 'Parity surface adapter audit',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/parity-surface-audit.mjs'],
+  },
+  // Static and synthetic: the controls are written to a temporary directory, so unlike the
+  // sanitizer selftest this one cannot leave the tree dirty.
+  {
+    id: 'parity-surface-selftest',
+    label: 'Parity surface audit controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/parity-surface-audit.selftest.mjs'],
+  },
+  // The parity steps' own step-11 controls. `parity-surface` above audits that file's *shape* —
+  // selectors in adapters, no unguarded click, no adapter gap. It cannot ask whether a verdict in
+  // it is capable of being wrong, and step 11's was: "parity-user's AddChildren survives the save"
+  // was green on the nxs surface while nothing had been saved, because the option filter matched
+  // no option, so no change was staged, no Save appeared, and the entry survived an ACL nobody
+  // touched. `aclSaveVerdict` is the fix, and this runs it in process against each situation step
+  // 11 can observe, printing beside each what the old predicate would have concluded. Its second
+  // group covers the root cause rather than the verdict: `showsPermission` against the strings the
+  // panel actually emits — "Manage everything Everything", "Edit ReadWrite" — which is where
+  // matching a translated label went wrong twice.
+  //
+  // It is here because it was registered nowhere. `beta:parity-selftest` existed in `package.json`
+  // and was wired into neither this list nor `ci.yml`, so the only demonstration that the step-11
+  // control can go red was a script a human had to remember to run — and an edit that dropped the
+  // control would have been caught by nothing.
+  //
+  // In process and synthetic: no browser, no backend, no file written, ~50 ms. Next to the audit
+  // above because both read the same steps file and neither compiles anything.
+  {
+    id: 'parity-selftest',
+    label: 'Parity step 11 save-verdict and option-match controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs'],
+    // How many controls passed the old predicate while no save had happened is the evidence, so
+    // surface it on a pass too.
+    echoOnPass: true,
+  },
   {
     id: 'lint',
     label: 'Affected lint',
@@ -257,7 +331,7 @@ const ALL_GATES = [
   },
   // The gate that asserts the package can be *published*, by running a real
   // `npm publish --dry-run` on a copy of the built bytes. Nothing above it runs a
-  // publish, so for the whole of Phase 4 `@nuxeo-satori/platform` was unpublishable —
+  // publish, so for the whole of Phase 4 `@nuxeo/satori-platform` was unpublishable —
   // ng-packagr had written a `prepublishOnly` that hard-fails full-mode packages — while
   // every gate here was green and the phase claimed "an upgrade is an npm version bump".
   {
@@ -266,6 +340,19 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/publishability.mjs'],
     // Names which of its five checks are load-bearing; that belongs in the log.
+    echoOnPass: true,
+  },
+  // Publishable is not installable. Every gate above runs inside this monorepo, whose
+  // node_modules already holds `@hylandsoftware/satori-ui` from GitHub Packages; a customer's does
+  // not, and npm installs every non-optional peer. This installs the built tarball from public npm
+  // with no credentials, and re-runs it with the Satori peer made required, which must fail — the
+  // risk `docs/publish-readiness.md` §5 recorded as uncovered. Needs registry.npmjs.org.
+  {
+    id: 'peer-installability',
+    label: 'Installs without GitHub Packages',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/peer-installability.mjs'],
+    // The control's outcome is the evidence that the pass means anything.
     echoOnPass: true,
   },
   // Compiles the template against the **built** declarations instead of the source
@@ -302,6 +389,34 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/extension-reference-drift.mjs'],
   },
+  // The same question for the page that shows each `nxs-` component with and without Satori: it
+  // lives on Confluence, so a component added without a section there is missed in review. Fails
+  // on a barrel component with no section, a section with no component, and a section whose ID,
+  // story or image disagrees with the code.
+  {
+    id: 'nxs-comparison',
+    label: 'Satori comparison page covers every nxs- component',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/satori-comparison-doc.mjs'],
+  },
+  // Its negative controls, in memory and under `os.tmpdir()`, so safe to run beside anything.
+  {
+    id: 'nxs-comparison-selftest',
+    label: 'Satori comparison page controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/satori-comparison-doc.selftest.mjs'],
+    // The negative/positive split is the evidence, so surface it on a pass too.
+    echoOnPass: true,
+  },
+  // The controls of the gate that keeps Satori out of the Storybook published to GitHub Pages. The
+  // gate itself needs a Storybook build, so it runs in CI and in storybook-pages.yml, not here.
+  {
+    id: 'storybook-publication-selftest',
+    label: 'Storybook publication gate controls',
+    cmd: 'node',
+    argv: ['scripts/storybook-publication-gate.selftest.mjs'],
+    echoOnPass: true,
+  },
   // `.cursor/` is the source for the agent configuration and `.claude/` and `.agent/` are
   // generated copies, so three copies of every skill exist with nothing comparing them. That
   // is the shape of drift this repository keeps paying for, and it is worse here than usual:
@@ -333,11 +448,11 @@ const ALL_GATES = [
   {
     id: 'customer-guardrails',
     label: 'Customer extension guardrails',
-    cmd: 'node',
-    argv: [
-      'libs/platform/guardrails/check-extension-library.mjs',
-      'libs/extensions/acme-extensions',
-    ],
+    // The npm script, so the gate and CI run the same two things: the guardrail against our
+    // reference library, which proves it passes, and its selftest, which proves it can fail.
+    cmd: 'npm',
+    argv: ['run', '--silent', 'beta:customer-guardrails'],
+    echoOnPass: true,
   },
 ];
 
@@ -370,7 +485,6 @@ if (notRequested.length) {
 console.log('');
 
 const results = [];
-let firstFailure = null;
 
 for (const gate of selected) {
   process.stdout.write(`[run ] ${gate.label} ... `);
@@ -387,11 +501,14 @@ for (const gate of selected) {
   });
   const ms = Date.now() - started;
   const output = `${proc.stdout ?? ''}${proc.stderr ?? ''}`;
-  const passed = proc.status === 0;
+  const status = classify(gate, proc.status);
+  const passed = status === 'pass';
 
-  console.log(`${passed ? 'pass' : 'FAIL'} (${(ms / 1000).toFixed(1)}s)`);
+  console.log(
+    `${passed ? 'pass' : status === 'not-run' ? 'NOT RUN' : 'FAIL'} (${(ms / 1000).toFixed(1)}s)`,
+  );
 
-  if (passed && gate.echoOnPass && output.trim()) {
+  if (status !== 'fail' && gate.echoOnPass && output.trim()) {
     for (const line of output.trimEnd().split('\n')) console.log(`       ${line}`);
     console.log('');
   }
@@ -399,6 +516,7 @@ for (const gate of selected) {
   results.push({
     id: gate.id,
     label: gate.label,
+    status,
     passed,
     exitCode: proc.status,
     durationMs: ms,
@@ -406,13 +524,10 @@ for (const gate of selected) {
     outputTail: lastLines(output, tail),
   });
 
-  if (!passed) {
-    firstFailure = results.at(-1);
-    break;
-  }
+  if (status === 'fail') break;
 }
 
-const allPassed = results.every((r) => r.passed);
+const anyFailed = results.some((r) => r.status === 'fail');
 const skipped = selected.slice(results.length).map((g) => g.id);
 const full = notRequested.length === 0;
 
@@ -425,8 +540,22 @@ const full = notRequested.length === 0;
  * `results` by hand. The skills tell an agent to quote the verdict line verbatim;
  * making the verdict itself carry the coverage means a partial run cannot be
  * quoted as if it were complete.
+ *
+ * `pass-incomplete` exists for the same reason one level down: a full run in which a gate
+ * reported NOT RUN used to print "all 29 gates green" with code scanning skipped.
  */
-const verdict = !allPassed ? 'fail' : full ? 'pass' : 'pass-partial';
+const {
+  verdict,
+  counts,
+  notRun,
+  lines: summaryLines,
+} = summarize({
+  total: ALL_GATES.length,
+  notRequested,
+  skipped,
+  results,
+  tail,
+});
 
 /**
  * The commit the gate actually ran against, and whether the tree was dirty.
@@ -449,10 +578,15 @@ const report = {
   commit: gitFact(['rev-parse', 'HEAD'], null),
   // A green gate on a dirty tree describes something no commit contains.
   dirty: gitFact(['status', '--porcelain'], '') !== '',
+  // Green, not run and failed, of all gates. A not-run gate is never in `green`.
+  counts,
   gates: {
     available: ALL_GATES.map((g) => g.id),
     requested: selected.map((g) => g.id),
-    ran: results.map((r) => r.id),
+    // Gates that reached a verdict, pass or fail.
+    ran: results.filter((r) => r.status !== 'not-run').map((r) => r.id),
+    // Started, but reported that they checked nothing (NOT_RUN_EXIT_CODE).
+    notRun,
     // Selected but never reached, because an earlier gate failed.
     skipped,
     // Never asked for. This run says nothing at all about these.
@@ -470,27 +604,10 @@ const reportPath = resolve(outDir, `${stamp}-${phase}.json`);
 await writeFile(reportPath, `${JSON.stringify(report, null, 2)}\n`, 'utf8');
 
 console.log('');
-if (allPassed && full) {
-  console.log(`verdict  PASS — all ${ALL_GATES.length} gates green`);
-} else if (allPassed) {
-  console.log(`verdict  PASS (PARTIAL) — ${results.length} of ${ALL_GATES.length} gates green`);
-  console.log(`         NOT RUN: ${notRequested.join(', ')}`);
-  console.log(
-    '         A partial run is a fast inner loop, not a phase gate. Do not sign off on this.',
-  );
-} else {
-  console.log(`verdict  FAIL — first failing gate: ${firstFailure.id}`);
-  if (skipped.length) {
-    console.log(`skipped  ${skipped.join(', ')} (not run because an earlier gate failed)`);
-  }
-  console.log(`\ncommand  ${firstFailure.command}`);
-  console.log(`--- last ${tail} lines ---`);
-  console.log(firstFailure.outputTail);
-  console.log('--- end ---');
-}
+for (const line of summaryLines) console.log(line);
 console.log(`\nreport   ${reportPath}`);
 
-process.exit(allPassed ? 0 : 1);
+process.exit(anyFailed ? 1 : 0);
 
 /**
  * Node 22 added a built-in `localStorage` that requires `--localstorage-file` and

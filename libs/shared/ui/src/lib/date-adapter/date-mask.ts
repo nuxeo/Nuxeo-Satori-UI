@@ -9,7 +9,7 @@ import { dateFnsLocaleFor } from './satori-date-adapter';
  * `common.date-mask` is a translation key, so it resolves per **language** — `mm/dd/yyyy` for
  * `en`, `jj/mm/aaaa` for `fr`. The adapter resolves per **locale tag**, region included, and a
  * region can reorder the fields outright: `en-GB` parses `dd/MM/yyyy`. These dialogs are
- * exported from `@nuxeo-satori/platform/ui`, so a host's `LOCALE_ID` reaches the adapter
+ * exported from `@nuxeo/satori-platform/ui`, so a host's `LOCALE_ID` reaches the adapter
  * unclamped while the catalogue still answers for the bare language. A host on `en-GB` using
  * the documented English fallback was therefore told to type month-first while its field read
  * day-first — the silent swap this adapter exists to remove, wearing a different locale id.

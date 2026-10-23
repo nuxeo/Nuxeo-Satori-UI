@@ -1,4 +1,4 @@
-import { APP_CONFIG_FORMAT } from '@nuxeo-satori/platform/app-config';
+import { APP_CONFIG_FORMAT } from '@nuxeo/satori-platform/app-config';
 
 import { LayoutDisplay } from './layout.model';
 
@@ -32,6 +32,8 @@ export interface LayoutFileField {
   readonly field: string;
   readonly label?: string;
   readonly labelKey?: string;
+  /** In the edit and create forms, the field must have a value. Only `true` counts. */
+  readonly required?: boolean;
 }
 
 export interface LayoutFileSection {
@@ -167,5 +169,10 @@ function readField(entry: unknown): LayoutFileField | null {
   if (!isRecord(entry)) return null;
   const field = entry['field'];
   if (typeof field !== 'string' || !XPATH.test(field)) return null;
-  return { field, label: optionalText(entry['label']), labelKey: optionalText(entry['labelKey']) };
+  return {
+    field,
+    label: optionalText(entry['label']),
+    labelKey: optionalText(entry['labelKey']),
+    ...(entry['required'] === true ? { required: true } : {}),
+  };
 }

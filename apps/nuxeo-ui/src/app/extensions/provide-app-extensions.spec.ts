@@ -3,14 +3,19 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 
-import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo/satori-platform/app-config';
+import {
+  NXS_PERMISSIONS_PANEL_ID,
+  NxsPermissionsPanelComponent,
+} from '@nuxeo/satori-platform/components';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
+  ExtensionComponentRegistry,
   type ExtensionActionDescriptor,
   type ExtensionRouteDescriptor,
   type ExtensionTabDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';
@@ -94,6 +99,13 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
       'app.tabs.publishing',
     ]);
     expect(ids(EXTENSION_SLOTS.contextMenu)).toContain('app.contextMenu.share');
+  });
+
+  it('registers the packaged permissions panel under the ID the library exports', async () => {
+    await loadManifest({});
+    const components = TestBed.inject(ExtensionComponentRegistry);
+    expect(components.has(NXS_PERMISSIONS_PANEL_ID)).toBe(true);
+    expect(await components.resolve(NXS_PERMISSIONS_PANEL_ID)).toBe(NxsPermissionsPanelComponent);
   });
 
   it('merges manifest contributions into all four slots', async () => {

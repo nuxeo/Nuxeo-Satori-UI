@@ -2,16 +2,20 @@
 title: Deployment & Troubleshooting
 parent: Engineering
 order: 13
-last_reviewed: 2026-10-08
-repo_commit: 2898046
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Deployment & Troubleshooting
 
-> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
-> Only the repository links were re-verified at that commit: made relative rather than pinned to
-> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the Runtime table's i18n row was re-verified at that commit, for NXSAT-648, and its
+> `NG0201` row, about adf-hx's API ports, was removed with them. On 2026-10-14 at `d36176c`
+> (`feature/nxsat-308-remove-adf-packages`) the `E404` row was re-verified, for NXSAT-637. On 2026-10-08 at `2898046`
+> (`feature/nxsat-308-ci-cold-cache-tooling`) the repository links were made relative rather than
+> pinned to `feature/adf-hx-browse-poc`, every target present. The rest of the page as of
+> 2026-08-24 · `77265f9`.
 > Packaging detail: [`NUXEO_MARKETPLACE_GUIDE.md`](../../NUXEO_MARKETPLACE_GUIDE.md)
 
 ---
@@ -24,7 +28,7 @@ Three artifacts:
 | ---------------------------- | ---------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
 | **Marketplace package**      | Maven — `nuxeo-agentic-ui-package` | The built Angular app, the OSGi bundle, and the seed config                                                           |
 | **`nuxeo-agentic-core`**     | Maven                              | 189 lines of Java/OSGi: an `AgenticNotificationDocumentIdCodec`, an auth-config fragment, a login start-page fragment |
-| **`@nuxeo-satori/platform`** | `nx build platform`                | The npm package customers depend on. 347 kB, 25 files, 4 entry points. **`private: true` — not yet published**        |
+| **`@nuxeo/satori-platform`** | `nx build platform`                | The npm package customers depend on. 347 kB, 25 files, 4 entry points. **`private: true` — not yet published**        |
 
 `pom.xml` is a Maven parent over three modules: `apps/nuxeo-ui`, `nuxeo-agentic-core`,
 `nuxeo-agentic-ui-package`.
@@ -115,7 +119,7 @@ with Node 20 alone — no `npm ci`, no registry token — and `node config-packa
 checks its fragments and writes the zip `nuxeoctl mp-install` takes, to `config-packages/<name>/dist/`.
 Where Nx is installed, the `config-package` generator writes the same files
 (`npx nx g ./tools/satori-generators:config-package <name> --owner=<owner>` after a full install,
-or `npx nx g @nuxeo-satori/platform:config-package …` from the published package) and
+or `npx nx g @nuxeo/satori-platform:config-package …` from the published package) and
 `npx nx build <name>` runs the same `build.mjs`. `config-packages/presales-demo` is the demo
 package presales installs.
 
@@ -195,7 +199,7 @@ Verify with `npm run beta:backend`.
 
 | Symptom                                                                                                       | Cause                                                                                            | Fix                                                                                                         |
 | ------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
-| `E404` on `@alfresco/*`                                                                                       | Token missing or lacks `read:packages` on the **Alfresco** org                                   | It needs both orgs, not just Hyland                                                                         |
+| `E404` on `@hylandsoftware/*`                                                                                 | Token missing or lacks `read:packages` on the **Hyland** org                                     | Set `SATORI_GH_READONLY_TOKEN`; it needs `read:packages` on the Hyland org                                  |
 | `npm ci` fails on CI, green locally                                                                           | A bare `npm install` on macOS pruned Linux-only optional entries                                 | Restore a known-good lock, merge only new entries, run the lockfile gate                                    |
 | CI fetches from the wrong registry after an `.npmrc` change                                                   | `npm ci` installs from each entry's `resolved` URL and **ignores** the mapping                   | Regenerate the lock                                                                                         |
 | `/nuxeo/agentic-ui-config/bootstrap.json` 404s                                                                | The servlet is not mapped: `nuxeo-agentic-core` not deployed, or `web.xml` not regenerated       | `nuxeoctl mp-list`; `nuxeo.war/WEB-INF/web.xml` must name "Agentic UI Configuration". Restart. See §2       |
@@ -208,22 +212,21 @@ Verify with `npm run beta:backend`.
 
 ### Runtime
 
-| Symptom                                                    | Cause                                                                                                         | Fix                                                                                                  |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `NG0201: No provider for …`                                | An upstream `providedIn: 'root'` service resolving a port from the root injector                              | Provide the port in the **root** injector. See the comment at `app.config.ts:37`                     |
-| Raw i18n keys — `MANAGE_VERSIONS.DIALOG.TITLE`             | A seeded catalogue folder whose file is not shipped. The loader catches the 404 and returns `{}` **silently** | `npm run beta:bundle` — asserts required assets present **and non-empty**                            |
-| An edited manifest Note has no effect                      | The application no longer reads it (NXSAT-312), with no migration                                             | Re-create its content as a `manifest` fragment in a configuration package                            |
-| `?preset=` does nothing and no badge appears               | No package sets `presales.presetSwitching: true`, or the preset name is not defined                           | The console shows `[agentic-ui-config] preset … ignored: …`; enable it in the demo package only      |
-| Under `nx serve`, configuration falls back to the defaults | `public/agentic-ui-config/*.json` missing, created after the server started, or not an envelope               | `npm run config:dev`, then restart `nx serve`                                                        |
-| Empty lists; intermittent 403 on `/nuxeo/api`              | XHRs unauthenticated                                                                                          | Session satisfies the _guard_; `httpCredentials` authenticates _requests_. Both needed               |
-| HTTP 500 from `AI.*`                                       | The AI backend is a **separate package not in this repo**                                                     | Expected. Install it, or accept the 500                                                              |
-| Broken image, or an internal API URL in the DOM            | `<img [src]>` bound to a Nuxeo URL — bypasses the interceptor entirely                                        | Fetch the blob via a service, use a blob URL, revoke on destroy                                      |
-| Memory growth over a session                               | An un-revoked blob URL                                                                                        | Track the raw URL at creation — a `SafeUrl` cannot be read back — and revoke on destroy and on reset |
-| A nav entry lands on the wrong page                        | A registered path with **no route** — it falls through the wildcard                                           | The host must map the path; `ExtensionOutletComponent` resolves the component by ID                  |
-| A manifest entry silently does nothing                     | The slot is **reserved** (`routes`, `toolbar`, `contextMenu`, `tabs`) or was renamed                          | Check the slot list. `beta:upgrade` catches the rename class                                         |
-| Preview fails for rich formats                             | ARender not running                                                                                           | Start the compose stack                                                                              |
-| Permission emails not arriving                             | No SMTP locally                                                                                               | Start Mailpit                                                                                        |
-| A rule permits when it should deny                         | Unregistered rule IDs **fail open** by design                                                                 | Add it to `failClosedRules` if it gates a surface                                                    |
+| Symptom                                                    | Cause                                                                                                         | Fix                                                                                                                              |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Unresolved `sat.*` keys, or English in another language    | Missing from the build: satori-ui's catalogue is caught to `{}`; the app's falls back to English **silently** | `npm run beta:bundle` — asserts both runtime catalogues ship, each resolving a key the app renders                               |
+| An edited manifest Note has no effect                      | The application no longer reads it (NXSAT-312), with no migration                                             | Re-create its content as a `manifest` fragment in a configuration package                                                        |
+| `?preset=` does nothing and no badge appears               | No package sets `presales.presetSwitching: true`, or the preset name is not defined                           | The console shows `[agentic-ui-config] preset … ignored: …`; enable it in the demo package only                                  |
+| Under `nx serve`, configuration falls back to the defaults | `public/agentic-ui-config/*.json` missing, created after the server started, or not an envelope               | `npm run config:dev`, then restart `nx serve`                                                                                    |
+| Empty lists; intermittent 403 on `/nuxeo/api`              | XHRs unauthenticated                                                                                          | Session satisfies the _guard_ and the app's XHRs; `httpCredentials` (`send: 'always'`) authenticates `page.request`. Both needed |
+| HTTP 500 from `AI.*`                                       | The AI backend is a **separate package not in this repo**                                                     | Expected. Install it, or accept the 500                                                                                          |
+| Broken image, or an internal API URL in the DOM            | `<img [src]>` bound to a Nuxeo URL — bypasses the interceptor entirely                                        | Fetch the blob via a service, use a blob URL, revoke on destroy                                                                  |
+| Memory growth over a session                               | An un-revoked blob URL                                                                                        | Track the raw URL at creation — a `SafeUrl` cannot be read back — and revoke on destroy and on reset                             |
+| A nav entry lands on the wrong page                        | A registered path with **no route** — it falls through the wildcard                                           | The host must map the path; `ExtensionOutletComponent` resolves the component by ID                                              |
+| A manifest entry silently does nothing                     | The slot is **reserved** (`routes`, `toolbar`, `contextMenu`, `tabs`) or was renamed                          | Check the slot list. `beta:upgrade` catches the rename class                                                                     |
+| Preview fails for rich formats                             | ARender not running                                                                                           | Start the compose stack                                                                                                          |
+| Permission emails not arriving                             | No SMTP locally                                                                                               | Start Mailpit                                                                                                                    |
+| A rule permits when it should deny                         | Unregistered rule IDs **fail open** by design                                                                 | Add it to `failClosedRules` if it gates a surface                                                                                |
 
 ### Diagnosis limits, stated honestly
 
