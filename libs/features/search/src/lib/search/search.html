@@ -257,7 +257,7 @@
                 >
                   {{ row.name }}
                 </button>
-                <span class="result-type-pill" [title]="row.type | docTypeLabel">
+                <span class="result-type" [title]="row.type | docTypeLabel">
                   <ng-container
                     *ngTemplateOutlet="
                       primitiveTag;
@@ -451,7 +451,7 @@
               >
                 {{ row.name }}
               </button>
-              <span class="simple-list-type-badge" [title]="row.type | docTypeLabel">
+              <span class="simple-list-type" [title]="row.type | docTypeLabel">
                 <ng-container
                   *ngTemplateOutlet="
                     primitiveTag;

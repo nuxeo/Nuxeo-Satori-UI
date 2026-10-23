@@ -1324,7 +1324,7 @@ describe('SearchComponent', () => {
   /**
    * NXSAT-652. A result's type renders through `nxs.primitives.tag` in the grid and the list, so a
    * component registered under the ID replaces it; with nothing registered, `nxs-tag` renders.
-   * Seen red on purpose by restoring the plain `.result-type-pill` text.
+   * Seen red on purpose by restoring the plain-text type pill.
    */
   describe('the type tag', () => {
     async function renderResults(view: 'grid' | 'list', providers: unknown[]): Promise<void> {
@@ -1352,23 +1352,23 @@ describe('SearchComponent', () => {
     it('renders the grid card’s type through nxs.primitives.tag', async () => {
       await renderResults('grid', [override]);
 
-      const tag = el('.result-type-pill .acme-tag');
+      const tag = el('.result-type .acme-tag');
       expect(tag?.textContent?.trim()).toBe('File');
       expect(tag?.dataset['color']).toBe('gray');
-      expect(el('.result-type-pill')?.getAttribute('title')).toBe('File');
+      expect(el('.result-type')?.getAttribute('title')).toBe('File');
     });
 
     it('renders the list row’s type through nxs.primitives.tag', async () => {
       await renderResults('list', [override]);
 
-      expect(el('.simple-list-type-badge .acme-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.simple-list-type .acme-tag')?.textContent?.trim()).toBe('File');
     });
 
     it('falls back to nxs-tag when nothing is registered under the ID', async () => {
       await renderResults('grid', []);
 
-      expect(el('.result-type-pill nxs-tag')?.textContent?.trim()).toBe('File');
-      expect(el('.result-type-pill .acme-tag')).toBeNull();
+      expect(el('.result-type nxs-tag')?.textContent?.trim()).toBe('File');
+      expect(el('.result-type .acme-tag')).toBeNull();
     });
   });
 

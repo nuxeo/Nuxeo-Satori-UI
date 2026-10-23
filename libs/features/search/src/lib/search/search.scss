@@ -479,8 +479,9 @@
   text-overflow: ellipsis;
 }
 
-// Only the box: the tag inside is `nxs.primitives.tag`, which paints itself.
-.result-type-pill {
+// Only the box: the tag inside is `nxs.primitives.tag`, which paints itself. Not `.result-type-pill`,
+// which the app stylesheet paints as a pill of its own and would draw a second chip around the tag.
+.result-type {
   display: inline-flex;
   max-width: 120px;
   overflow: hidden;
@@ -848,8 +849,8 @@
   min-width: 0;
 }
 
-// Only the box, as `.result-type-pill`.
-.simple-list-type-badge {
+// Only the box, as `.result-type`.
+.simple-list-type {
   display: inline-flex;
   max-width: 120px;
   overflow: hidden;
