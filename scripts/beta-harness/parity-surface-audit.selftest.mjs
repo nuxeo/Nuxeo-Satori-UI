@@ -126,11 +126,16 @@ const controls = [
     // `{ ...ADF_HX, ...{ search: {} } }` replaces the whole group at run time. Skipping the inline
     // spread read `search.pageSize` as still inherited, so a step reading it got no finding on a
     // surface where it is undefined.
+    //
+    // `...ADF_HX` is load-bearing in this control, not scenery. Without it NXS has no `search` at
+    // all and `adapter-gap` fires either way — so the control passed whether or not inline spreads
+    // were resolved, which is the one thing a negative control may not do. With the inheritance in
+    // place, ignoring the inline override retains `pageSize` and this control fails, as it must.
     expectExit: 1,
     expectRule: 'adapter-gap',
     file: stepsFile({
       adfExtra: `  search: { pageSize: 50 },`,
-      nxsExtra: `  ...{ search: {} },`,
+      nxsExtra: `  ...ADF_HX,\n  ...{ search: {} },`,
       steps: `  h.check('page size', A.search.pageSize > 0, String(A.search.pageSize));`,
     }),
   },
