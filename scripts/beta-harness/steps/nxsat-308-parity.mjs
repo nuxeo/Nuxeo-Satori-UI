@@ -209,8 +209,12 @@ export function showsPermission(permission, shown) {
  * Any non-GET would be the looser test, and it is the one to avoid: the request window opens before
  * the access control is touched, so an unrelated write landing in it would stand in for the save
  * and the claim below would be made about the wrong request.
+ *
+ * `SendNotificationEmailForPermission` also matches /Permission/ but sends mail without changing
+ * the ACL (`document-detail.service.ts:597–600`), so match the ACL-mutating operations explicitly.
  */
-const PERMISSION_WRITE = /Permission|@acl(\b|\/)/i;
+const PERMISSION_WRITE =
+  /(AddPermission|ReplacePermission|RemovePermission|BlockPermissionInheritance|@acl(\b|\/))/i;
 
 /**
  * What a permissions save is allowed to claim, from what was observed around it.
