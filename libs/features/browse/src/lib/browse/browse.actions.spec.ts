@@ -1135,7 +1135,7 @@ describe('BrowseComponent — actions', () => {
     ]);
   });
 
-  it('keeps the repository root as a single first crumb under the browse.breadcrumb.root label', () => {
+  it('keeps the repository root as a single first crumb, labelled from browse.breadcrumb.root', () => {
     component.currentDoc.set(
       doc({
         uid: 'dom',

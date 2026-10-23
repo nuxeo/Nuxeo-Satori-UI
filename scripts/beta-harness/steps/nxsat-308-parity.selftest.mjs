@@ -33,7 +33,11 @@ import { aclSaveVerdict, PERMISSION_OPTION } from './nxsat-308-parity.mjs';
 /** The predicate step 11 carried before this change, for the comparison controls 1 and 2 make. */
 const oldPredicate = ({ afterAcl }) => afterAcl.includes('parity-user:AddChildren');
 
-const POST = [{ method: 'POST' }];
+const POST = [{ method: 'POST', url: '/nuxeo/api/v1/automation/Document.ReplacePermission' }];
+/** A write in the same window that is not the save — an unrelated one must not stand in for it. */
+const UNRELATED_POST = [
+  { method: 'POST', url: '/nuxeo/api/v1/automation/Document.AddToFavorites' },
+];
 const SEEDED_ACL = ['parity-user:AddChildren', 'members:ReadWrite'];
 const SAVED_ACL = ['parity-user:AddChildren', 'members:Everything'];
 
@@ -84,6 +88,19 @@ const CONTROLS = [
     name: '5. a change was staged but no request ever reached the server',
     why: 'a click that did not land must not be read as a save',
     observed: { everythingOffered: 1, saveOffered: 1, writes: [], afterAcl: SEEDED_ACL },
+    attempted: false,
+    survives: false,
+    oldVerdict: true,
+  },
+  {
+    name: '6. a change was staged and the only write in the window was an unrelated one',
+    why: 'the request window opens before the control is touched; a stray write must not stand in for the save',
+    observed: {
+      everythingOffered: 1,
+      saveOffered: 1,
+      writes: UNRELATED_POST,
+      afterAcl: SEEDED_ACL,
+    },
     attempted: false,
     survives: false,
     oldVerdict: true,

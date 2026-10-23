@@ -257,6 +257,22 @@ describe('browse-path.utils', () => {
       ]);
     });
 
+    it('never returns the repository root, so its label stays the caller’s translated one', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              entry('/', 'Repository', 'Root'),
+              entry('/default-domain', 'Domain', 'Domain'),
+            ],
+          },
+        },
+      });
+
+      expect(titles.has('/')).toBe(false);
+      expect(titles.get('/default-domain')).toBe('Domain');
+    });
+
     it('omits an entry with a blank title, leaving the caller its own fallback', () => {
       const titles = nuxeoBreadcrumbTitles({
         contextParameters: {

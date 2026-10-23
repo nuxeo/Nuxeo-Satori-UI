@@ -165,18 +165,32 @@ export const PERMISSION_OPTION = {
 };
 
 /**
+ * A write that is a permissions write, by the endpoint it went to: Nuxeo's permission operations
+ * (`Document.AddPermission`, `ReplacePermission`, `RemovePermission`,
+ * `BlockPermissionInheritance`) and the ACL resource. Both surfaces go through the same server API.
+ *
+ * Any non-GET would be the looser test, and it is the one to avoid: the request window opens before
+ * the access control is touched, so an unrelated write landing in it would stand in for the save
+ * and the claim below would be made about the wrong request.
+ */
+const PERMISSION_WRITE = /Permission|@acl(\b|\/)/i;
+
+/**
  * What a permissions save is allowed to claim, from what was observed around it.
  *
  * `attempted` is the structural guard: a staged change (an option matched *and* a Save control was
- * offered, both read before the click) and a non-GET request at the wire. `survives` conjoins it,
+ * offered, both read before the click) and a permissions write at the wire. `survives` conjoins it,
  * so the surviving-entry claim cannot be satisfied by a run in which nothing was saved — which is
  * how it used to pass. Exported, and covered by `nxsat-308-parity.selftest.mjs`, so the inversion
  * can be shown going red rather than asserted.
  *
- * @param {{everythingOffered: number, saveOffered: number, writes: {method: string}[], afterAcl: string[]}} observed
+ * @param {{everythingOffered: number, saveOffered: number, writes: {method: string, url: string}[], afterAcl: string[]}} observed
  */
 export function aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAcl }) {
-  const attempted = everythingOffered > 0 && saveOffered > 0 && writes.length > 0;
+  const attempted =
+    everythingOffered > 0 &&
+    saveOffered > 0 &&
+    writes.some((w) => PERMISSION_WRITE.test(w.url ?? ''));
   return { attempted, survives: attempted && afterAcl.includes('parity-user:AddChildren') };
 }
 
@@ -1866,7 +1880,7 @@ export default async function run(page, h, outDir) {
     }
   }
   h.check(
-    `${LB} members' locally defined entry and its inherited one are rows of their own, not one row carrying both`,
+    `${LB} members has both an editable row and a non-editable one, so its locally defined entry and its inherited one are separate rows`,
     membersRowCount >= 2 && membersEditable >= 1 && membersEditable < membersRowCount,
     `${membersRowCount} members row(s), ${membersEditable} of them with an access control; rows read ${JSON.stringify(groupRows)}`,
   );

@@ -18,11 +18,13 @@ export function decodeNuxeoPathSegment(segment: string): string {
  * ancestor. An entry without a usable title is left out, so the caller's own fallback decides what
  * that crumb reads rather than it coming back blank.
  *
- * There is deliberately no `Root`-type case. Web UI's `_title()` maps a Root entry to its
- * `browse.root` label, and a caller here does the same thing by giving the trail a first crumb of
- * its own — a Root entry's path is `/`, which no ancestor lookup asks for, so a branch for it would
- * never run. (Measured on Nuxeo 2025.21: `/`'s own breadcrumb is `entries: []` and a descendant's
- * chain starts at its Domain, so the server does not send one either.)
+ * The repository root is never in the map, whatever the server calls it. Web UI's `_title()` maps a
+ * `Root` entry to its `browse.root` label rather than to the document's title, and a trail here does
+ * the same by giving the root a first crumb of its own; returning the server's title under `/` would
+ * let a caller label the root "Repository" and lose the translation. It is dropped here, in the one
+ * place that reads the enricher, rather than left to each caller to remember. (Measured on Nuxeo
+ * 2025.21: `/`'s own breadcrumb is `entries: []` and a descendant's chain starts at its Domain, so
+ * the server does not send a root entry either — this is for one that does.)
  */
 export function nuxeoBreadcrumbTitles(
   doc: Pick<NuxeoDocument, 'contextParameters'> | null | undefined,
@@ -30,8 +32,9 @@ export function nuxeoBreadcrumbTitles(
   const titles = new Map<string, string>();
   for (const entry of doc?.contextParameters?.breadcrumb?.entries ?? []) {
     if (!entry?.path) continue;
+    const path = normalizeNuxeoPath(entry.path);
     const title = entry.title?.trim();
-    if (title) titles.set(normalizeNuxeoPath(entry.path), title);
+    if (path !== '/' && title) titles.set(path, title);
   }
   return titles;
 }
