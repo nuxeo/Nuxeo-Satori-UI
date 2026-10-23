@@ -4,6 +4,7 @@ export {
   type KeCicOperations,
 } from './lib/ke.config';
 export { KeClientService, KeEnrichmentError } from './lib/ke-client.service';
+export { KE_TAG_ENTITY_CATEGORIES, toKeEntityTags } from './lib/ke-entity-tags';
 export type {
   KeAction,
   KeActionConfig,
