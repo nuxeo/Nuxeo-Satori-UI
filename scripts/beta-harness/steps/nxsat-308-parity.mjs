@@ -40,7 +40,6 @@
  * - `adf-hx-as-target` — negative control: `adf-hx` with no known gaps, so every gap check is
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
  * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
-<<<<<<< HEAD
  *   renders it, and against the app as it is actually configured: `app.config.ts` calls
  *   `provideNxsSatoriComponents()`, which re-registers the breadcrumbs primitive on Satori, so the
  *   browse route renders `nxs-satori-breadcrumbs` and not `nxs-breadcrumbs`. A selector read from
@@ -59,11 +58,10 @@
  * So a surface-specific selector, wording, size or interaction belongs in the adapter, and a step
  * asserts the claim through it. `parity-surface-audit.mjs` holds this: it fails if a step body
  * names a surface's element, and if a surface does not define every adapter key the steps read.
-=======
- *   renders it, not from the table-primitive decision it was first drafted from. Change the
- *   adapter, not the steps or the expected values — unless an expected value contradicts the
- *   reference, in which case correct it and disclose the asymmetry on the step, as above.
->>>>>>> origin/integration/nxsat-308
+ *
+ * The one thing the adapter cannot absorb is an expected value that contradicts the reference.
+ * Correct that one, and disclose the asymmetry on the step itself, as the NXSAT-644 section above
+ * does — never by quietly rewriting what the before-half was measured against.
  *
  * ## Reading the checks
  *
@@ -117,29 +115,37 @@ const deepTitle = (n) =>
 const PAGED = { path: `${ROOT}/paged`, title: 'Paged folder', count: 125, pageSize: 50 };
 
 /**
- * The search page size the app uses: `SEARCH_PAGE_SIZE` in
+ * The search page size this app uses: `SEARCH_PAGE_SIZE` in
  * `libs/features/search/src/lib/search-session/search-session.ts`, set deliberately by NXSAT-641.
  * `PAGED.pageSize` above is the *browse* list's `PAGE_SIZE` (`browse.ts`), which is 50 — the two
- * surfaces page differently and the steps must not share one number.
+ * listings page differently and the steps must not share one number.
+ *
+ * It is the `nxs` surface's size, so no step takes an expected page length from it — those come
+ * from the running surface's own `search.pageSize`. The adf-hx POC's search pages by 50, and a
+ * step expecting one surface's size is the defect the whole adapter exists to prevent. Step 13's
+ * note names it as the provenance of the correction, which is prose about why and not an
+ * expectation.
  */
 const SEARCH_PAGE_SIZE = 40;
 
-/** Page lengths for `total` items at `pageSize`: whole pages, then whatever is left over. */
+/**
+ * Page lengths for `total` items at `pageSize`: whole pages, then whatever is left over.
+ *
+ * The plan is derived rather than written out, because the expectation it replaces was written out:
+ * it read 50 / 50 / 25, which is neither this app's search page size nor Nuxeo Web UI's (whose only
+ * page-size literal is 20), and a hand-written correction of it got as far as "40 / 40 / 45" — a
+ * page longer than the page size, which cannot happen. Arithmetic cannot make that mistake.
+ *
+ * What the steps assert from it is the partition of the fixture's hits — complete, disjoint and
+ * page-sized — which 50 / 50 / 25 satisfies as well, so the before-half's recorded run still
+ * meets it.
+ */
 function pagePlan(total, pageSize) {
   const plan = Array.from({ length: Math.floor(total / pageSize) }, () => pageSize);
   if (total % pageSize) plan.push(total % pageSize);
   return plan;
 }
 
-/**
- * `[40, 40, 40, 5]` — 125 hits over four pages.
- *
- * Derived rather than written out, because the expectation it replaces was written out: it read
- * 50 / 50 / 25, which is neither this app's page size nor Nuxeo Web UI's (whose only page-size
- * literal is 20), and a hand-written correction of it got as far as "40 / 40 / 45" — a page longer
- * than the page size, which cannot happen. Arithmetic cannot make that mistake.
- */
-const SEARCH_PAGE_PLAN = pagePlan(PAGED.count, SEARCH_PAGE_SIZE);
 const pagedTitle = (n) => `Paged item ${String(n).padStart(3, '0')}`;
 const VERSIONS = {
   path: `${ROOT}/versions`,
@@ -170,15 +176,6 @@ const MEDIA = {
 const EMPTY = { path: `${ROOT}/empty` };
 const COLLECTION = { title: 'Parity collection', memberTitle: 'Paged item 001' };
 const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secret' };
-/**
- * The search feature's page size, from `SEARCH_PAGE_SIZE` in
- * `libs/features/search/src/lib/search-session/search-session.ts`. It is 40, not the 50 the
- * DocumentList pages a folder by, so the paging expectation is read from the surface and not
- * from `PAGED.pageSize`. The steps assert the partition of the fixture's 125 hits — complete,
- * disjoint and page-sized — which 50 / 50 / 25 satisfies as well, so the before-half's recorded
- * run still meets it.
- */
-const SEARCH_PAGE_SIZE_NXS = 40;
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
 /**
@@ -465,22 +462,16 @@ const ADF_HX = {
     oneRowPerPrincipal: true,
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
-<<<<<<< HEAD
-    /** Upstream labels an option with the permission itself, so the name is the way to choose it. */
-    option: (permission) => ({
-      selector: '.cdk-overlay-container mat-option',
-      hasText: new RegExp(`^\\s*${permission}\\s*$`),
-    }),
-=======
     // Upstream's option and trigger markup cannot be read first-hand — NXSAT-637 removed the
     // packages — so no identifier handle can be claimed for this surface and its translated label
-    // is the only thing left to match. `permissionId: null` is what makes showsPermission fall back.
+    // is the only thing left to match. `permissionId: null` is what makes showsPermission fall back,
+    // and the pattern is the one from PERMISSION_OPTION, not the permission's own name: upstream
+    // labels ReadWrite "Read & Write", which `/^\s*ReadWrite\s*$/` matches nothing of.
     permissionId: null,
     option: (page, permission) =>
       page
         .locator('.cdk-overlay-container mat-option')
         .filter({ hasText: PERMISSION_OPTION[permission] }),
->>>>>>> origin/integration/nxsat-308
     save: 'hxp-permissions-management-panel button',
     feedback: 'mat-snack-bar-container',
   },
@@ -816,25 +807,17 @@ const NXS = {
     oneRowPerPrincipal: false,
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
-<<<<<<< HEAD
-    // Each option carries its Nuxeo permission in `data-permission`, so a change is staged by the
-    // permission rather than by its label. The labels are translated and are not the permission:
-    // ReadWrite reads "Edit" and Everything reads "Manage everything", so matching the option text
-    // against the permission name staged nothing, and every later check on the save then read an
-    // ACL that had never been written.
-    option: (permission) => ({
-      selector: `.cdk-overlay-container mat-option[data-permission="${permission}"]`,
-    }),
-=======
     // permissions-panel.component.html:387-389 — the trigger and the read-only cell append the
     // permission identifier in this span wherever it differs from the translated label.
     permissionId: '.nxs-permissions-panel__id',
     // :392 and :400 — every option carries its identifier in data-permission. Selecting on that
-    // rather than on text is the whole point: the rendered text is label *and* identifier
-    // ("Manage everything Everything"), which no pattern over either part alone matches.
+    // rather than on text is the whole point: the labels are translated and are not the permission
+    // (ReadWrite reads "Edit", Everything reads "Manage everything"), and the rendered text is
+    // label *and* identifier — "Manage everything Everything" — which no pattern over either part
+    // alone matches. Matching the text staged nothing, and every later check on the save then read
+    // an ACL that had never been written.
     option: (page, permission) =>
       page.locator(`.cdk-overlay-container mat-option[data-permission="${permission}"]`),
->>>>>>> origin/integration/nxsat-308
     save: 'nxs-permissions-panel button',
     // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
     // clicks the first status or alert button: the status text after a save, and after a refusal
@@ -989,7 +972,7 @@ const NXS = {
     async submit(page, A) {
       await page.locator(A.search.input).first().press('Enter');
     },
-    pageSize: SEARCH_PAGE_SIZE_NXS,
+    pageSize: SEARCH_PAGE_SIZE,
     rows: 'lib-search .result-list .list-row',
     title: '.row-name-text',
     next: 'lib-search [aria-label="Next page"]',
@@ -2315,58 +2298,38 @@ export default async function run(page, h, outDir) {
     .click({ timeout: 10_000 })
     .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
-<<<<<<< HEAD
-  const everything = A.permissions.option('Everything');
-  const everythingOption = everything.hasText
-    ? page.locator(everything.selector).filter({ hasText: everything.hasText })
-    : page.locator(everything.selector);
-  // Whether the option was there to choose, before the click: Save only appears once a change is
-  // staged, so an option that matched nothing left the ACL untouched — and then "AddChildren
-  // survives the save" passed because nothing had been saved. The gap checks below read the ACL
-  // after a save that never happened, so this condition has to be recorded, not assumed.
-  const everythingStaged = (await everythingOption.count()) > 0;
-  h.check(
-    `${LB} the panel offers Everything, so the save under test can be staged at all`,
-    everythingStaged,
-    `looked for ${JSON.stringify(everything.selector)}${
-      everything.hasText ? ` matching ${everything.hasText}` : ''
-    }; the panel offered ${JSON.stringify(options)}`,
-  );
-  await everythingOption.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
-  await page.waitForTimeout(600);
-  const saveButton = page
-    .locator(A.permissions.save)
-    .filter({ hasText: /^\s*Save\s*$/ })
-    .first();
-  // Enabled, not merely present: a disabled Save is a Save that cannot be pressed, and the ACL
-  // left untouched behind it would look exactly like one that survived a save.
-  const saveOffered =
-    (await saveButton.count()) > 0 && (await saveButton.isEnabled().catch(() => false));
-  h.check(
-    `${LB} staging the change offers a Save that can be pressed`,
-    saveOffered,
-    `Save present=${(await saveButton.count()) > 0}, enabled=${saveOffered}`,
-  );
-  await saveButton.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
-=======
   // Selected by the surface's most stable handle for the permission, not by its label: on the nxs
   // surface that is data-permission, because the option's text is "Manage everything Everything".
+  // Whether the option was there to choose is read *before* the click, because Save only appears
+  // once a change is staged: an option that matched nothing left the ACL untouched, and then
+  // "AddChildren survives the save" passed because nothing had been saved. The gap checks below
+  // read the ACL after the save, so this has to be observed and not assumed.
   const grantEverything = A.permissions.option(page, 'Everything');
   const everythingOffered = await grantEverything.count();
-  await grantEverything.first().click().catch(leaveItToTheNextCheck);
+  await grantEverything.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
   const saveControl = page.locator(A.permissions.save).filter({ hasText: /^\s*Save\s*$/ });
   // Counted before the click and never after. A save that lands takes its own button away, so a
   // count taken afterwards reads zero exactly when the save worked — the inversion this replaced.
-  const saveOffered = await saveControl.count();
+  // Pressable, not merely present: a disabled Save is a Save that cannot be pressed, and the ACL
+  // left untouched behind it looks exactly like one that survived a save.
+  const savePresent = await saveControl.count();
+  const saveOffered =
+    savePresent > 0 &&
+    (await saveControl
+      .first()
+      .isEnabled()
+      .catch(() => false))
+      ? savePresent
+      : 0;
   h.check(
-    `${LB} choosing Everything for members stages a save`,
+    `${LB} choosing Everything for members stages a save that can be pressed`,
     everythingOffered > 0 && saveOffered > 0,
     `${everythingOffered} option(s) offered Everything by this surface's handle for it;` +
-      ` ${saveOffered} Save control(s) offered before the click`,
+      ` ${savePresent} Save control(s) offered before the click, ${saveOffered} of them pressable;` +
+      ` the panel offered ${JSON.stringify(options)}`,
   );
-  await saveControl.first().click().catch(leaveItToTheNextCheck);
->>>>>>> origin/integration/nxsat-308
+  await saveControl.first().click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
   await page.waitForTimeout(3500);
   const feedback = (
     await page
@@ -2378,27 +2341,19 @@ export default async function run(page, h, outDir) {
     .replace(/\s+/g, ' ');
   const afterAcl = localAces((await getJson(`/path${enc(ACL.path)}/@acl`)).data);
   const writes = wire.slice(beforeSave).filter((w) => w.method !== 'GET');
-<<<<<<< HEAD
-  // The save has to have *happened*, which is a thing the run can observe rather than infer:
-  // either a write left the browser, or the panel said why it refused one. Staging and a pressable
-  // Save are necessary and not sufficient — a click swallowed by an overlay, or a handler that
-  // does nothing, leaves both of those true and the ACL untouched, which is indistinguishable
-  // from an entry that survived. That is the shape of the original false pass, one step further
-  // in: an unmatched option meant nothing was staged, no request went out, and this check read an
-  // untouched ACL and certified that an entry had survived an operation that never ran.
-  const saveOutcome = writes.length > 0 || feedback.trim().length > 0;
-  h.check(
-    `${LB} parity-user's AddChildren survives the save — nothing outside the panel's vocabulary is silently dropped`,
-    everythingStaged && saveOffered && saveOutcome && afterAcl.includes('parity-user:AddChildren'),
-    `staged=${everythingStaged}, save pressable=${saveOffered}, ${writes.length} write request(s), ` +
-      `panel said ${JSON.stringify(feedback.slice(0, 80))}; local ACL after save ${JSON.stringify(afterAcl)}`,
-=======
+  // Staging and a pressable Save are necessary and not sufficient — a click swallowed by an
+  // overlay, or a handler that does nothing, leaves both true and the ACL untouched, which is
+  // indistinguishable from an entry that survived. `aclSaveVerdict` is the one owner of that
+  // judgement, and `nxsat-308-parity.selftest.mjs` runs it against each situation so the inversion
+  // is shown going red rather than asserted. The panel's own feedback is recorded beside the
+  // verdict but does not stand in for a write: a refusal message is not a save.
   const save = aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAcl });
   h.check(
     `${LB} parity-user's AddChildren survives the save — nothing outside the panel's vocabulary is silently dropped`,
     save.survives,
-    `${save.attempted ? '' : 'no save was attempted — '}${writes.length} write request(s); local ACL after save ${JSON.stringify(afterAcl)}`,
->>>>>>> origin/integration/nxsat-308
+    `${save.attempted ? '' : 'no save was attempted — '}staged=${everythingOffered > 0},` +
+      ` save pressable=${saveOffered > 0}, ${writes.length} write request(s), panel said` +
+      ` ${JSON.stringify(feedback.slice(0, 80))}; local ACL after save ${JSON.stringify(afterAcl)}`,
   );
   const refused =
     /error/i.test(feedback) &&
@@ -2548,19 +2503,11 @@ export default async function run(page, h, outDir) {
         .click({ timeout: 10_000 })
         .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(600);
-<<<<<<< HEAD
-      const read = A.permissions.option('Read');
-      await (
-        read.hasText
-          ? page.locator(read.selector).filter({ hasText: read.hasText })
-          : page.locator(read.selector)
-      )
+      await A.permissions
+        .option(page, 'Read')
         .first()
         .click({ timeout: 10_000 })
         .catch(leaveItToTheNextCheck);
-=======
-      await A.permissions.option(page, 'Read').first().click();
->>>>>>> origin/integration/nxsat-308
       await page.waitForTimeout(600);
     }
     const narrowSaveVisible = await page
@@ -2753,31 +2700,27 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.unknown);
 
   // ── 13. Search listing ───────────────────────────────────────────────────────────────────────
-<<<<<<< HEAD
-  // The page sizes the surface's own paging produces over the fixture's 125 hits. The step used to
-  // name 50 / 50 / 25 outright, which is one surface's `SEARCH_PAGE_SIZE` written into an
-  // expectation: on a surface that pages by 40 the first check failed for a listing that was
-  // paging perfectly. What is asserted is the partition — every page its own size, the pages
-  // disjoint, and the 125 hits covered exactly — which 50 / 50 / 25 satisfies as before.
-  const searchPageSizes = [];
-  for (let left = PAGED.count; left > 0; left -= A.search.pageSize) {
-    searchPageSizes.push(Math.min(left, A.search.pageSize));
-  }
-  await h.step(`Search listing — ${PAGED.count} hits paged ${searchPageSizes.join(' / ')}`);
-=======
-  // The page lengths here were corrected after the before-half was captured; see the step note.
+  // Computed from the surface's own page size and the fixture's count, never typed. Typed, it read
+  // 50 / 50 / 25 — one surface's page size written into an expectation, so on a surface that pages
+  // by 40 the first check failed for a listing that was paging perfectly — and a hand-written
+  // correction of it got as far as "40 / 40 / 45", a page longer than the page size. Arithmetic
+  // can make neither mistake, and reading the size from the adapter keeps the one number that
+  // differs between the halves where every other surface-specific fact lives.
+  const searchPageSizes = pagePlan(PAGED.count, A.search.pageSize);
   await h.step(
-    `Search listing — ${PAGED.count} hits paged ${SEARCH_PAGE_PLAN.join(' / ')} across ${SEARCH_PAGE_PLAN.length} pages`,
+    `Search listing — ${PAGED.count} hits paged ${searchPageSizes.join(' / ')} across ${searchPageSizes.length} pages`,
   );
   h.note(
-    `this step's expected page lengths were corrected from 50 / 50 / 25 to ${SEARCH_PAGE_PLAN.join(' / ')}` +
-      ` after the before-half had been captured: the app's search page size is ${SEARCH_PAGE_SIZE}` +
-      ` (SEARCH_PAGE_SIZE, NXSAT-641) and 50 matched neither it nor Web UI's 20. The before results` +
-      ' were produced against the old expectation and cannot be re-measured, because NXSAT-637' +
-      ' removed the upstream packages, so this step compares against a corrected expectation rather' +
-      ' than a re-measured baseline.',
+    `this step's page lengths are computed from this surface's search page size` +
+      ` (${A.search.pageSize}) and the fixture's ${PAGED.count} hits, giving` +
+      ` ${searchPageSizes.join(' / ')}. They replace a typed 50 / 50 / 25, which was one surface's` +
+      ` page size written into the expectation: the app's search page size is ${SEARCH_PAGE_SIZE}` +
+      " (NXSAT-641) and 50 matched neither it nor Web UI's 20. The before-half was captured against" +
+      ' the typed values and cannot be re-measured, because NXSAT-637 removed the upstream packages,' +
+      ' so this step compares against a corrected expectation rather than a re-measured baseline —' +
+      ' what it asserts is the partition (every page its own size, the pages disjoint, the hits' +
+      ' covered exactly), which 50 / 50 / 25 satisfied too.',
   );
->>>>>>> origin/integration/nxsat-308
   await h.goTo(A.search.route);
   const searchFor = async (term) => {
     await page.locator(A.search.input).first().fill(term);
@@ -2794,16 +2737,11 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(500);
   };
   await searchFor(SEARCH.token);
-<<<<<<< HEAD
-=======
-  const searchPages = [await readRows(page, A.search.rows, A.search.title)];
->>>>>>> origin/integration/nxsat-308
   const countText = await page
     .locator(A.search.count)
     .first()
     .innerText()
     .catch(() => '');
-<<<<<<< HEAD
   const searchPages = [];
   let firstPageVisible = false;
   for (let i = 0; i < searchPageSizes.length; i++) {
@@ -2857,44 +2795,6 @@ export default async function run(page, h, outDir) {
       Array.from({ length: PAGED.count }, (_, i) => pagedTitle(i + 1)),
     ) && seen.length === PAGED.count,
     `${union.size} distinct titles across ${seen.length} rows`,
-=======
-  h.check(
-    `${LB} the first page lists ${SEARCH_PAGE_PLAN[0]} hits, all of them paged items`,
-    searchPages[0].length === SEARCH_PAGE_PLAN[0] &&
-      searchPages[0].every((r) => r.title.startsWith('Paged item')) &&
-      (await page
-        .locator(A.search.rows)
-        .first()
-        .isVisible()
-        .catch(() => false)),
-    `${searchPages[0].length} rows`,
-  );
-  h.check(
-    `${CTX} the result count is ${PAGED.count}`,
-    new RegExp(String(PAGED.count)).test(countText),
-    JSON.stringify(countText),
-  );
-  await h.screenshot('search-results-page-1');
-  for (let i = 1; i < SEARCH_PAGE_PLAN.length; i++) {
-    await page.locator(A.search.next).first().click().catch(leaveItToTheNextCheck);
-    await page.waitForTimeout(3000);
-    searchPages.push(await readRows(page, A.search.rows, A.search.title));
-  }
-  const searchRowCount = searchPages.reduce((n, rows) => n + rows.length, 0);
-  const union = new Set(searchPages.flat().map((r) => r.title));
-  h.check(
-    `${LB} the remaining pages hold ${SEARCH_PAGE_PLAN.slice(1).join(' then ')} hits`,
-    searchPages.slice(1).every((rows, i) => rows.length === SEARCH_PAGE_PLAN[i + 1]),
-    `page lengths ${JSON.stringify(searchPages.map((rows) => rows.length))}`,
-  );
-  h.check(
-    `${LB} the ${SEARCH_PAGE_PLAN.length} pages are disjoint and cover exactly Paged item 001 to ${PAGED.count}`,
-    sameSet(
-      [...union],
-      Array.from({ length: PAGED.count }, (_, i) => pagedTitle(i + 1)),
-    ) && searchRowCount === PAGED.count,
-    `${union.size} distinct titles across ${searchRowCount} rows`,
->>>>>>> origin/integration/nxsat-308
   );
   await h.screenshot('search-results-last-page');
 
