@@ -249,12 +249,19 @@ function adapterKeys(object, objects, seen = new Set()) {
     const name = propertyName(prop);
     if (!name) continue;
     // A group defined here replaces an inherited one outright, exactly as the spread does.
-    keys.set(
-      name,
-      prop.value.type === 'ObjectExpression'
-        ? new Set(prop.value.properties.map(propertyName).filter(Boolean))
-        : null,
-    );
+    if (prop.value.type === 'ObjectExpression') {
+      // Check for computed keys inside group members before collecting them
+      for (const member of prop.value.properties) {
+        if (member.computed && member.key?.type !== 'Literal') {
+          throw new UnresolvedSpread(
+            `computed key inside adapter group ${JSON.stringify(name)} cannot be resolved statically`,
+          );
+        }
+      }
+      keys.set(name, new Set(prop.value.properties.map(propertyName).filter(Boolean)));
+    } else {
+      keys.set(name, null);
+    }
   }
   return keys;
 }

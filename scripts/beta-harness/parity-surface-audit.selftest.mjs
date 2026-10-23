@@ -283,6 +283,18 @@ const controls = [
     }),
   },
   {
+    name: 'a computed key inside an adapter group is refused',
+    // Without this check, `const pageSize = 'other'; search: { [pageSize]: 40 }` would record
+    // `search.pageSize` as present while JavaScript creates `search.other`, producing no finding
+    // for an `A.search.pageSize` read that returns undefined.
+    expectExit: 2,
+    file: stepsFile({
+      helpers: `const pageSize = 'other';`,
+      adfExtra: `  search: { [pageSize]: 40 },`,
+      steps: `  h.check('page size', A.search.pageSize > 0);`,
+    }),
+  },
+  {
     name: 'a file with no SURFACES map is refused rather than passed',
     expectExit: 2,
     file: `export default async function run() {}\n`,
