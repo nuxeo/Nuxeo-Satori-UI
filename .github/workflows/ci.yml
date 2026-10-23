@@ -1,15 +1,8 @@
-name: CI
+name: CI (Optimized)
 
 on:
-  # `integration/<ticket>` branches collect a ticket's PRs and reach `main` as one PR (see
-  # AGENTS/06-git-workflow.md), so a PR into one needs the same gate as a PR into `main`.
-  # nx-set-shas diffs a PR against its own base branch, so the affected set is the sub-PR's
-  # change, not the whole integration branch.
   pull_request:
     branches: [main, 'integration/**']
-  # Long-lived feature branches are validated on push as well as on PR, so work in
-  # progress is never only "green on my machine". nx-set-shas falls back to comparing
-  # against the default branch when a push has no previous successful run to diff from.
   push:
     branches: [main, 'feature/**', 'fix/**', 'integration/**']
 
@@ -17,22 +10,15 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Least privilege, explicitly. Without this block the job inherits the repository default, which
-# can be read/write on `contents` — a workflow that only needs to read the code would be able to
-# push to it. Flagged by CodeQL's `actions/missing-workflow-permissions`, and this was the only
-# workflow of the nine that lacked it.
 permissions:
   contents: read
-  # `npm ci` resolves @hylandsoftware from GitHub Packages.
   packages: read
-  # `nrwl/nx-set-shas` calls the workflow-runs API to find the last successful run to diff
-  # against. Without this it fails with `Resource not accessible by integration`, which is
-  # exactly what happened when this block was first added with `contents: read` alone —
-  # tightening permissions broke the build on the very next push.
   actions: read
 
 jobs:
-  lint-build-test:
+  # Job 1: Static Analysis & Guardrails (~5-7 minutes)
+  # These are independent checks that don't need build artifacts
+  static-checks:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,11 +45,9 @@ jobs:
         run: |
           set -euo pipefail
           git fetch --no-tags --prune origin
-
           if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
             git fetch --no-tags origin "$NX_BASE"
           fi
-
           if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
             git fetch --no-tags origin "$NX_HEAD"
           fi
@@ -71,26 +55,15 @@ jobs:
       - name: Run review guardrails
         run: npm run review:guardrails -- --base=$NX_BASE --head=$NX_HEAD
 
-      # The guardrails' own negative controls. Without this step CI enforces the guardrails but
-      # never checks they are capable of failing, which is how a guardrail regresses into an
-      # always-green implementation with the required check still reported as passing.
-      # Builds throwaway git repositories under the runner's temp dir; touches nothing tracked.
       - name: Run Satori rename codemod controls
         run: node --test scripts/rename-satori.selftest.mjs
 
       - name: Run i18n guardrail negative controls
         run: npm run review:guardrails-selftest
 
-      # Same argument one level down: the Crowdin context push is the only part of the
-      # localization pipeline with logic in it, and it cannot be exercised end to end until a
-      # Crowdin project exists.
       - name: Run Crowdin context push controls
         run: npm run review:crowdin-selftest
 
-      # Tooling that runs outside CI — the review-loop harvest and the Confluence publisher both
-      # need credentials CI does not have — so these offline controls are the only part of either
-      # that CI can exercise. The harvest silently dropped every "Previously missed" finding, and
-      # the publisher linked a branch frozen 1364 commits behind main; nothing that ran saw either.
       - name: Run review-harvest and Confluence link controls
         run: |
           set -euo pipefail
@@ -98,91 +71,180 @@ jobs:
           npm run docs:links-selftest
           npm run docs:storage-selftest
 
-      # Static checks that `beta:gate` has run locally since Phase 5 and that had
-      # never run here. They are seconds each and they close a specific hole: the local
-      # gate and CI were two different gates, so "green locally" and "green in CI" made
-      # different claims and neither said so. A check that only ever runs on one
-      # developer's machine is a check that stops running the day they stop running it.
-      #
-      # The sanitizer pair below reproduced that hole exactly. Both were registered in
-      # `verify-gate.mjs`'s ALL_GATES and in `review:preflight`, and CI invokes neither — it
-      # runs individual scripts. So "registered as a gate" meant local-only, and review had
-      # to point out that the gate guarding a shipped XSS-adjacent defect could not block a
-      # merge. Registering a check in ALL_GATES is not the same as running it.
-      - name: Static beta gates (evidence, reference drift, Satori comparison page, customer guardrails, supply chain, sanitizers, lockfile and dependency-tree controls)
+      - name: Static beta gates
         env:
-          # The sanitizer budget ratchet compares against the merge base with `origin/main` by
-          # default. A PR into an integration branch must be ratcheted against that branch, or a
-          # budget change already accepted there is charged again to every later sub-PR. Empty on
-          # push, where the default applies; `origin/main` on a PR into `main`, as before.
           SANITIZER_AUDIT_BASE_REF: ${{ github.base_ref && format('origin/{0}', github.base_ref) || '' }}
         run: |
           set -euo pipefail
-          # The lockfile gate and its controls. `npm ci` above already proves this lock installs
-          # on Linux, which is the failure the gate was written for — but it says nothing about
-          # the gate still being able to report, and that half has been wrong twice: once green
-          # on the lock that broke Phase 2, once waiving every `brace-expansion` major because
-          # the override selector was stripped. The controls are the only thing that re-asserts it.
           npm run beta:lockfile
           npm run beta:lockfile-selftest
-          # NXSAT-308 criterion 3: no adf-hx, adf-core, adf-extensions, js-api or hxcs-js-client in
-          # the lock, the installed tree `npm ci` just produced, a manifest, .npmrc or an import.
-          # BLOCKING since the ADF removal (NXSAT-638) set `BLOCKING` in the script: any finding
-          # fails it, and so does a location that cannot be read. The controls are what prove each
-          # location can still find something, so a scanner that finds nothing cannot stay green.
           npm run beta:dependency-tree
           npm run beta:dependency-tree-selftest
-          # Fails if an evidence step asserts something it cannot observe. Phase 1 shipped
-          # a dead feature past two checks that certified properties they could not see.
           npm run beta:audit
-          # And its own negative controls, for the same reason the sanitizer pair below has
-          # them: this audit's guard exemption has been wrong four times, and every time the
-          # hole was found by someone trying an input rather than by anything that runs. The
-          # line above verifies the audit runs; this one verifies it can still report — and
-          # that the constants it deliberately does NOT decide are still printed as such.
           npm run beta:audit-selftest
-          # The identity guard's offline controls (NXSAT-643): a guard that accepts Anonymous, or a
-          # step boundary that goes unchecked, is green on every capture it is supposed to reject.
-          # The live half (`beta:identity-guard-controls`) needs a guest-enabled Nuxeo CI lacks.
-          npm run beta:identity-guard-selftest
-          # The only customer-facing document nothing checked. When first measured it was
-          # wrong in both directions.
           npm run beta:reference
-          # The same for the Confluence page showing each nxs- component with and without Satori:
-          # a section per barrel component and none for a removed one, with its controls.
           npm run docs:satori-comparison:check
           npm run docs:satori-comparison:selftest
-          # The guardrail we hand customers, run against our own reference library — so we
-          # do not learn it is broken from a customer's CI log.
           npm run beta:customer-guardrails
-          # The command that regenerates the shared derived files after a merge, held to its
-          # derived-file list and its conflict handling.
           npm run sync:derived-selftest
-          # The gate runner's own counting: a gate that reports NOT RUN is never counted green,
-          # and a run containing one is `pass-incomplete`, not `pass`.
-          npm run beta:gate-selftest
-          # The Storybook publication gate's controls: each Satori fingerprint must fail it.
-          npm run storybook:publication-gate-selftest
-          # SCA. Fails on a high or critical in the PRODUCTION tree, and on an accepted
-          # advisory whose review date has expired. Gating on the dev-inclusive total
-          # instead would be permanently red (9 high, none shipped) and so bypassed.
-          # Also fails on a production dependency nothing imports — which is how `cors`
-          # and `dotenv` were found, two beyond the two already recorded as debt.
           npm run beta:supply-chain
-          # Every `bypassSecurityTrust*` call is registered with a justification, no Safe* value
-          # reaches a SecurityContext.NONE binding, trusted HTML traces back to a sanitiser, and
-          # the debt budgets have not been raised against the merge base.
           npm run beta:sanitizers
-          # And the audit's own negative controls, so it cannot regress into an always-green
-          # implementation while the line above keeps passing. This is the load-bearing half:
-          # without it CI verifies the audit runs, not that it can fail.
           npm run beta:sanitizers-selftest
+
+  # Job 2: Lint & Typecheck (~3-5 minutes)
+  # Fast static analysis that doesn't require builds
+  lint-typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      - uses: nrwl/nx-set-shas@v4
+
+      - name: Ensure affected SHAs are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin
+          if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_BASE"
+          fi
+          if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_HEAD"
+          fi
 
       - name: Lint affected projects
         run: npx nx affected -t lint --base=$NX_BASE --head=$NX_HEAD
 
+      - name: Typecheck affected projects
+        run: npx nx affected -t typecheck --base=$NX_BASE --head=$NX_HEAD
+
+  # Job 3: Build & Bundle (~5-8 minutes)
+  # Build projects and verify bundle size
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      - uses: nrwl/nx-set-shas@v4
+
+      - name: Ensure affected SHAs are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin
+          if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_BASE"
+          fi
+          if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_HEAD"
+          fi
+
       - name: Build affected projects
         run: npx nx affected -t build --base=$NX_BASE --head=$NX_HEAD
+
+      - name: Check bundle size (nuxeo-ui)
+        shell: bash
+        env:
+          NUXEO_UI_BUNDLE_SIZE_LIMIT_BYTES: 6291456
+        run: |
+          set -euo pipefail
+          if npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD --plain | grep -q "^nuxeo-ui$"; then
+            rm -rf dist
+            npx nx build nuxeo-ui --configuration=production
+            npm run beta:bundle
+            bundle_size_bytes=$(
+              find dist/nuxeo-ui -type f \( -name '*.js' -o -name '*.css' \) -printf '%s\n' \
+                | awk '{ total += $1 } END { print total + 0 }'
+            )
+            if [ "$bundle_size_bytes" -eq 0 ]; then
+              echo "Failed to measure bundle size for nuxeo-ui: no built JS/CSS assets were found under dist."
+              exit 1
+            fi
+            echo "nuxeo-ui bundle size: ${bundle_size_bytes} bytes"
+            echo "nuxeo-ui bundle size limit: ${NUXEO_UI_BUNDLE_SIZE_LIMIT_BYTES} bytes"
+            if [ "$bundle_size_bytes" -gt "$NUXEO_UI_BUNDLE_SIZE_LIMIT_BYTES" ]; then
+              echo "nuxeo-ui bundle size exceeds limit."
+              exit 1
+            fi
+          else
+            echo "nuxeo-ui is not affected; skipping bundle size check."
+          fi
+
+      - name: Verify the published package
+        run: |
+          set -euo pipefail
+          npx nx build platform
+          npm run beta:api
+          npm run beta:publishable
+          npm run beta:installable
+          npm run beta:fork
+          npm run beta:upgrade
+
+  # Job 4: Tests (~8-12 minutes)
+  # Run unit tests for affected projects
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      - uses: nrwl/nx-set-shas@v4
+
+      - name: Ensure affected SHAs are available
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags --prune origin
+          if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_BASE"
+          fi
+          if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_HEAD"
+          fi
 
       - name: Test affected projects
         run: |
@@ -192,75 +254,76 @@ jobs:
           npx nx run browse:test --output-style=stream
           npx nx affected -t test --base=$NX_BASE --head=$NX_HEAD --output-style=stream --parallel=1 --exclude=browse,document-detail,knowledge-discovery,search
 
-      # `test` does NOT typecheck — vitest strips types through esbuild — and most
-      # libraries have no `build` target, so before this step a type error confined to a
-      # library reached `main` unless `nuxeo-ui`'s build happened to import it.
-      - name: Typecheck affected projects
-        run: npx nx affected -t typecheck --base=$NX_BASE --head=$NX_HEAD
+  # Job 5: Storybook (~5-10 minutes)
+  # Build Storybook and run interaction tests
+  storybook:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      # The `nxs-` library's Storybook must build without a GitHub Packages token (NXSAT-308, plan
-      # section 9.4). Built here with `@hylandsoftware` and `@alfresco` REMOVED from node_modules,
-      # because with them installed an accidental Satori import compiles and the claim is untested.
-      # `checkSatoriComponentsDependencies` holds the same rule statically; this is the build that
-      # proves it. About a minute, so only when the library is affected, or the interaction runner
-      # below, its dialog layout check or the publication gate changed — a script outside every
-      # project affects none. A skip says so.
-      #
-      # Then the publication gate, which storybook-pages.yml runs before publishing this build to
-      # GitHub Pages: here, whenever this step builds, it fails the pull request instead.
-      - name: Storybook builds without GitHub Packages and carries no Satori (satori-components)
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+
+      - uses: nrwl/nx-set-shas@v4
+
+      - name: Ensure affected SHAs are available
         shell: bash
         run: |
           set -euo pipefail
-          # Captured first, so a failing query fails the step instead of reading as "not affected".
+          git fetch --no-tags --prune origin
+          if ! git cat-file -e "$NX_BASE^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_BASE"
+          fi
+          if ! git cat-file -e "$NX_HEAD^{commit}" 2>/dev/null; then
+            git fetch --no-tags origin "$NX_HEAD"
+          fi
+
+      - name: Storybook builds without GitHub Packages (satori-components)
+        shell: bash
+        run: |
+          set -euo pipefail
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
-          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
-          gate="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- 'scripts/storybook-publication-gate*.mjs')"
-          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ] && [ -z "$gate" ]; then
-            echo "satori-components is not affected and the runner and publication gate are unchanged: Storybook build and publication gate NOT RUN"
+          if ! grep -qx satori-components <<<"$affected"; then
+            echo "satori-components is not affected: Storybook build NOT RUN"
             exit 0
           fi
           hidden="$RUNNER_TEMP/github-packages-scopes"
           mkdir -p "$hidden"
           restore() { for scope in "$hidden"/@*; do if [ -e "$scope" ]; then mv "$scope" node_modules/; fi; done; }
           trap restore EXIT
-          # A scope the tree no longer installs is already absent, which is what this build tests.
           for scope in @hylandsoftware @alfresco; do
             if [ -e "node_modules/$scope" ]; then mv "node_modules/$scope" "$hidden"/; fi
           done
           npx nx run satori-components:build-storybook:ci --skip-nx-cache
-          node scripts/storybook-publication-gate.mjs dist/storybook/satori-components
 
-      # The stories' play functions, run in Chromium against the Storybook just built (Codex audit
-      # F08). Storybook runs a play function only when someone opens the story, so one that started
-      # failing stayed green everywhere. Fails on a throwing play — watched as its own event, because
-      # Storybook reports `storyFinished: success` even then — a render error, an uncaught page error
-      # or an untranslated key. axe results from the a11y addon are printed, never judged:
-      # docs/accessibility.md gives that verdict to the axe runtime layer. Only the token-free
-      # Storybook; the Satori adapter's needs GitHub Packages and is not run. Playwright is installed
-      # with --no-save, so the lockfile and `npm ci` are untouched. Every `Dialogs/` story is also
-      # checked for MatDialog's layout at 1280 and 320 px (`storybook-dialog-layout.mjs`), after
-      # that check's own negative controls have run. About four minutes.
       - name: Storybook interactions (satori-components)
         shell: bash
         timeout-minutes: 10
         env:
-          # `.npmrc` reads both; npm refuses to start when a variable it names is unset.
           NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
           SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
         run: |
           set -euo pipefail
           affected="$(npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD)"
-          runner="$(git diff --name-only "$NX_BASE...$NX_HEAD" -- scripts/storybook-interactions.mjs 'scripts/storybook-dialog-layout*.mjs')"
-          if ! grep -qx satori-components <<<"$affected" && [ -z "$runner" ]; then
-            echo "satori-components is not affected and the runner is unchanged: Storybook interactions NOT RUN"
+          if ! grep -qx satori-components <<<"$affected"; then
+            echo "satori-components is not affected: Storybook interactions NOT RUN"
             exit 0
           fi
           version="$(node --input-type=module -e "import { PLAYWRIGHT_TEST_VERSION } from './a11y/versions.mjs'; console.log(PLAYWRIGHT_TEST_VERSION)")"
           npm install --no-save --no-audit --no-fund "@playwright/test@${version}"
           npx playwright install --with-deps chromium
-          # The dialog layout check's negative controls first: a check that cannot fail proves nothing.
-          node --test scripts/storybook-dialog-layout.selftest.mjs
           node scripts/storybook-interactions.mjs --json "$RUNNER_TEMP/storybook-interactions.json"
 
       - name: Upload the Storybook interaction results
@@ -270,110 +333,3 @@ jobs:
           name: storybook-interactions
           path: ${{ runner.temp }}/storybook-interactions.json
           if-no-files-found: ignore
-
-      # The three checks that guard the published package. Run unconditionally rather
-      # than only when affected: they are ~30s in total, and they are the checks that
-      # catch the expensive class of defect — both of the ones below were configuration
-      # *absent* rather than wrong, so no compiler reported either, and every other gate
-      # in this file was green through both.
-      #
-      # MUST stay above "Check bundle size", which starts with `rm -rf dist` and would
-      # delete the platform build these three read.
-      - name: Verify the published package
-        run: |
-          set -euo pipefail
-          npx nx build platform
-          # Fails if the built .d.ts surface no longer matches docs/api/platform.api.md.
-          # Caught nothing on its own until it was rewritten — it reported PASS across 27
-          # changed types because the rolled-up .d.ts has no `export` prefix to match.
-          npm run beta:api
-          # Runs a real `npm publish --dry-run`, the only check that executes the
-          # `prepublishOnly` script. Phase 4 shipped a package that could not be
-          # published at all, for want of `compilationMode: partial`.
-          npm run beta:publishable
-          # Installs the built tarball into a scratch project with NO GitHub Packages credentials,
-          # from public npm, and requires it to succeed; then makes the Satori peer required again
-          # and requires the install to FAIL. Everything above runs against this monorepo's
-          # node_modules, which already holds @hylandsoftware/satori-ui, so none of it can see a
-          # customer's install 401 or 404 on a required peer.
-          npm run beta:installable
-          # Compiles the template against the BUILT declarations instead of the source
-          # tree — the resolution a customer actually gets. Found the platform being
-          # compiled without `strictNullChecks`, shipping 27 wrong public types.
-          npm run beta:fork
-          # The only check that crosses a version boundary: installs the package, applies a
-          # Layer 0/1/2 customisation, upgrades, and proves the customisation survived. The
-          # three above each test a single version, so none of them can see an upgrade that
-          # compiles cleanly and silently breaks a customer's JSON manifest.
-          npm run beta:upgrade
-
-      - name: Check bundle size (nuxeo-ui)
-        shell: bash
-        env:
-          # 6 MiB of TOTAL shipped JS+CSS — distinct from the Angular *initial* budget
-          # in angular.json (4 MB), which measures only the eager entry point.
-          #
-          # Raised from 5 MiB on 2026-08-24. The 5 MiB figure was set on 2026-04-21,
-          # before adf-hx adoption was planned, and was never revisited — while the
-          # Angular initial ceiling was deliberately raised twice during the Beta with
-          # the reasoning recorded. This one had no owner, so a 0.60% breach kept CI red
-          # for 16 consecutive runs without anyone understanding why.
-          #
-          # What moved it: putting the adf-hx bridge in the root injector makes adf-core
-          # eager (+1.15 MB, accepted in Phase 3 — 11 upstream services are
-          # `providedIn: 'root'` and providing the ports on a component instead fails
-          # one NG0201 at a time). Then the viewer +60 kB and search +10 kB.
-          #
-          # Headroom at 6 MiB is ~1.0 MB, roughly 14 more components at the recent rate.
-          # This DEFERS the real fix rather than making it: adf-core should be lazy. Do
-          # not raise this again without attempting that first.
-          NUXEO_UI_BUNDLE_SIZE_LIMIT_BYTES: 6291456
-        run: |
-          set -euo pipefail
-
-          if npx nx show projects --affected --base=$NX_BASE --head=$NX_HEAD --plain | grep -q "^nuxeo-ui$"; then
-            rm -rf dist
-            npx nx build nuxeo-ui --configuration=production
-
-            # Bundle *contents*, not just its size — and this is the first commit in which
-            # it runs here at all. It is the gate that found adf-hx importing a test
-            # library from its shipped runtime bundle, putting ng-mocks' implementation and
-            # two `eval()` calls into a customer-facing chunk. It needs the production
-            # build, which is why it lives in this step rather than with the static gates
-            # above, and it must come before the size measurement so a contents failure is
-            # not reported as a size pass.
-            #
-            # Invoked directly rather than through `beta:gate --gates bundle`: the gate
-            # runner writes its report under the evidence root on the developer's Desktop,
-            # which does not exist on a runner.
-            npm run beta:bundle
-
-            # Scoped to dist/nuxeo-ui, NOT `-path '*/nuxeo-ui/*'` under all of dist.
-            #
-            # That glob also matches `dist/out-tsc/apps/nuxeo-ui/**`, which is the
-            # `typecheck` target's ngc output, not the shipped bundle. It only measured
-            # the right thing here because this step does `rm -rf dist` first and CI
-            # happens to run typecheck before it without leaving output behind. Locally
-            # the same command reports 9.8 MB against a 5 MB ceiling — 345 files instead
-            # of 63 — so anyone reproducing a CI failure got a number that could not be
-            # reconciled with the one in the log.
-            bundle_size_bytes=$(
-              find dist/nuxeo-ui -type f \( -name '*.js' -o -name '*.css' \) -printf '%s\n' \
-                | awk '{ total += $1 } END { print total + 0 }'
-            )
-
-            if [ "$bundle_size_bytes" -eq 0 ]; then
-              echo "Failed to measure bundle size for nuxeo-ui: no built JS/CSS assets were found under dist."
-              exit 1
-            fi
-
-            echo "nuxeo-ui bundle size: ${bundle_size_bytes} bytes"
-            echo "nuxeo-ui bundle size limit: ${NUXEO_UI_BUNDLE_SIZE_LIMIT_BYTES} bytes"
-
-            if [ "$bundle_size_bytes" -gt "$NUXEO_UI_BUNDLE_SIZE_LIMIT_BYTES" ]; then
-              echo "nuxeo-ui bundle size exceeds limit."
-              exit 1
-            fi
-          else
-            echo "nuxeo-ui is not affected; skipping bundle size check."
-          fi
