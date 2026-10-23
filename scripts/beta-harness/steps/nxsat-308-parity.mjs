@@ -4,8 +4,28 @@
  *
  * Plan section 10 makes build-alongside conditional on parity being demonstrated, not asserted.
  * The "before" half needs the upstream packages to install; once adf-hx access is gone it cannot
- * be produced again. So the steps below are written once and never edited between the halves:
- * only the surface adapter changes.
+ * be produced again. So the steps below are written once and the surface adapter is what changes
+ * between the halves.
+ *
+ * ## Where that rule has been broken, and why (NXSAT-644)
+ *
+ * It is a rule about comparability, not a rule that an expectation contradicting the reference
+ * must be kept. Three were corrected after the before-half had been captured:
+ *
+ * - **step 11**, the members row — it expected one row carrying both an inherited Read and a local
+ *   Read & Write. Web UI renders two separate cards, `documentPermissions.locallyDefined` and
+ *   `documentPermissions.inherited`, one row per entry, as `nxs-permissions-panel` does.
+ * - **step 13**, the search page lengths — they read 50 / 50 / 25, which is neither this app's
+ *   search page size (40) nor Web UI's (20), and the step walked three pages where 125 hits make
+ *   four.
+ * - **step 10**, `versions.restore-offered` — it counted restore controls inside
+ *   `nxs-manage-versions`, which deliberately has none; the confirmed restore is on the document
+ *   page, where Web UI puts it too.
+ *
+ * The before results were produced against the old expectations and cannot be re-measured, because
+ * NXSAT-637 removed the upstream packages. Those steps therefore compare against corrected
+ * expectations rather than a re-measured baseline, and each says so in a note of its own, so the
+ * asymmetry reaches the report and not only this header.
  *
  * ## Surfaces (`PARITY_SURFACE`)
  *
@@ -21,7 +41,8 @@
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
  * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
  *   renders it, not from the table-primitive decision it was first drafted from. Change the
- *   adapter only; never the steps or the expected values.
+ *   adapter, not the steps or the expected values — unless an expected value contradicts the
+ *   reference, in which case correct it and disclose the asymmetry on the step, as above.
  *
  * ## Reading the checks
  *
@@ -324,6 +345,20 @@ const ADF_HX = {
   versions: {
     provenance:
       'production document page version menu (hand-written): upstream hxp-manage-versions-sidebar is not mounted on main',
+    /**
+     * Where this surface offers to restore a listed version: in the version list itself, which
+     * `read` has already opened and counted. Nothing further to visit, so this reports exactly the
+     * observation the gap check was made from before it was given a place to look — the before-half
+     * reading is unchanged.
+     */
+    async restoreOffer(_page, _h, _versions, v) {
+      return {
+        where: 'the version list itself',
+        offered: v.restore,
+        listed: v.labels.length,
+        detail: `${v.restore} restore control(s); version menus ${JSON.stringify(v.menus ?? null)}`,
+      };
+    },
     async open(page, h, uid) {
       await h.goToDoc(uid);
       await page
@@ -426,6 +461,8 @@ const ADF_HX_REMOUNT = {
   },
   versions: {
     provenance: 'upstream hxp-manage-versions-sidebar, re-mounted as the browse POC Versions tab',
+    // Upstream puts restore in each version's own menu, which `read` opens; same reading as `ADF_HX`.
+    restoreOffer: ADF_HX.versions.restoreOffer,
     async open(page, h, _uid, title = VERSIONS.docTitle) {
       await adfHxOpenRowTab(page, h, VERSIONS.path, title, 'Versions');
       await page
@@ -594,6 +631,45 @@ const NXS = {
   versions: {
     provenance: 'nxs-manage-versions',
     root: 'nxs-manage-versions',
+    /**
+     * Restore is **not** in `nxs-manage-versions`, by design: choosing a version there opens it
+     * read-only, because a destructive operation on the entry you click is bug-pattern §21 — one
+     * misclick replaced a live document's content. The confirmed restore lives on the document
+     * page of the version being viewed (`document-detail.html` `.version-banner-restore` →
+     * `confirmRestoreVersion()` → `DocumentDetailService.restoreVersion`), which is also where
+     * Nuxeo Web UI puts it: `Document.RestoreVersion` behind a `nuxeo-confirm-button`
+     * (`versions.confirm.title`).
+     *
+     * So this opens each listed version and looks there. Counting roles inside the menu that
+     * deliberately has none measured the wrong surface and would have reported a design decision
+     * as a missing capability — and the fix for that reading would have been to add the very
+     * button §21 forbids.
+     */
+    async restoreOffer(page, h, versions, v) {
+      if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
+      const seen = [];
+      for (const version of versions) {
+        if (!version?.uid) continue;
+        await h.goToDoc(version.uid);
+        await page.waitForTimeout(2000);
+        // Visible, not merely present: an attached control nobody can reach is not an offer. It is
+        // never clicked — the confirmation it opens is covered by
+        // `document-detail.versions.spec.ts`, and a click here would rewrite the fixture if it
+        // turned out not to be confirmed.
+        const restore = page.locator('lib-document-detail .version-banner-restore').first();
+        const visible = await restore.isVisible().catch(() => false);
+        seen.push({ version: version.versionLabel ?? version.uid, restore: visible });
+      }
+      return {
+        where: "each version's own document page",
+        offered: seen.filter((s) => s.restore).length,
+        listed: v.labels.length,
+        detail: `restore control visible per version page ${JSON.stringify(seen)}`,
+      };
+    },
     async open(page, h, uid) {
       // The previous read leaves its menu open for the screenshot; a stale menu must not be read.
       if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
@@ -616,11 +692,6 @@ const NXS = {
       const menu = page.locator('.cdk-overlay-container .nxs-manage-versions__menu').first();
       const scope = hasMenu ? menu : root;
       const rootText = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
-      // A version item is a menuitemradio; a restore could be any of the three roles.
-      let restore = 0;
-      for (const role of ['menuitem', 'menuitemradio', 'button']) {
-        restore += await scope.getByRole(role, { name: /restore/i }).count();
-      }
       const text = hasMenu
         ? (await menu.innerText().catch(() => '')).replace(/\s+/g, ' ')
         : rootText;
@@ -634,7 +705,9 @@ const NXS = {
             ).map((t) => t.trim())
           : [],
         live: rootText.match(/1\.0\+|current version/i)?.[0] ?? '',
-        restore,
+        // No `restore` here on purpose. This used to scan the menu for a menuitem, menuitemradio or
+        // button named /restore/i; the menu deliberately has none, so the count was always zero and
+        // measured a surface the capability is not on. `restoreOffer` above looks where it is.
         create: await scope.locator('.nxs-manage-versions__create:not([disabled])').count(),
         empty: /no (previous )?versions/i.test(text) ? text.slice(0, 120) : '',
         text: text.slice(0, 300),
@@ -1684,16 +1757,6 @@ export default async function run(page, h, outDir) {
     /1\.0\+|current/i.test(v.live),
     JSON.stringify(v.live),
   );
-  gap('versions.restore-offered', {
-    correct: v.labels.length === 3 && v.restore >= 3,
-    wrongObserved:
-      v.labels.length === 3 &&
-      v.restore === 0 &&
-      Array.isArray(v.menus) &&
-      v.menus.every((m) => m.length === 0),
-    expect: 'offer a restore action on each listed version',
-    observed: `${v.restore} restore control(s); version menus ${JSON.stringify(v.menus ?? null)}`,
-  });
   gap('versions.create-offered', {
     correct: v.create >= 1,
     wrongObserved:
@@ -1706,6 +1769,25 @@ export default async function run(page, h, outDir) {
   });
   h.note('restore is not clicked: it rewrites the live document and the remaining steps read it');
   await h.screenshot('versions-list');
+  // After the screenshot, because on the nxs surface this navigates to each version's own page —
+  // which is where the restore is — and would otherwise take the versions list off screen.
+  const restoreOffer = await A.versions.restoreOffer(page, h, versionList?.entries ?? [], v);
+  h.note(
+    `a restore of a listed version is offered on ${restoreOffer.where} — on the nxs surface that is` +
+      ' the document page, not nxs-manage-versions, which deliberately offers none (bug-pattern §21);' +
+      ' whether that restore is confirmed first is asserted by document-detail.versions.spec.ts, not' +
+      ' here, because confirming it by clicking would rewrite the fixture if it were not',
+  );
+  gap('versions.restore-offered', {
+    correct: restoreOffer.listed === 3 && restoreOffer.offered >= 3,
+    wrongObserved:
+      v.labels.length === 3 &&
+      restoreOffer.offered === 0 &&
+      Array.isArray(v.menus) &&
+      v.menus.every((m) => m.length === 0),
+    expect: `offer a restore action for each listed version, on ${restoreOffer.where}`,
+    observed: restoreOffer.detail,
+  });
   await A.versions.open(page, h, unversioned.data?.uid, 'Unversioned memo');
   const v0 = await A.versions.read(page);
   h.check(
@@ -1784,7 +1866,7 @@ export default async function run(page, h, outDir) {
     }
   }
   h.check(
-    `${LB} members' locally defined entry and its inherited one are rows of their own, one per entry`,
+    `${LB} members' locally defined entry and its inherited one are rows of their own, not one row carrying both`,
     membersRowCount >= 2 && membersEditable >= 1 && membersEditable < membersRowCount,
     `${membersRowCount} members row(s), ${membersEditable} of them with an access control; rows read ${JSON.stringify(groupRows)}`,
   );
