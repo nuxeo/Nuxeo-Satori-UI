@@ -28,21 +28,14 @@
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
-      <!-- The trail's links are hrefs; `onBreadcrumbClick` routes them in the app, from whichever
-           component `nxs.primitives.breadcrumbs` resolves to. -->
       @let trailLabel = 'document-detail.document-detail.breadcrumbs' | translate;
       <lib-extension-outlet
         #breadcrumbsOutlet
         [componentId]="primitiveIds.breadcrumbs"
         [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
-        (click)="onBreadcrumbClick($event)"
       />
       @if (breadcrumbsOutlet.unresolved()) {
-        <nxs-breadcrumbs
-          [items]="breadcrumbItems()"
-          [label]="trailLabel"
-          (click)="onBreadcrumbClick($event)"
-        />
+        <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
       }
     </div>
     <nxs-document-toolbar

@@ -333,14 +333,10 @@ describe('DocumentDetailComponent — versions (NXSAT-332)', () => {
       await render(live(), { query: { browseReturn: 'adf-hx' } });
       await openVersionsList();
 
-      expect(
-        fixture.componentInstance
-          .breadcrumbItems()
-          .map((item) => ('href' in item ? item.href : undefined)),
-      ).toEqual([
-        '/browse/default-domain',
-        '/browse/default-domain/workspaces',
-        '/browse/default-domain/workspaces/ws',
+      expect(fixture.componentInstance.breadcrumbItems().map((item) => item.routerLink)).toEqual([
+        ['/browse', 'default-domain'],
+        ['/browse', 'default-domain', 'workspaces'],
+        ['/browse', 'default-domain', 'workspaces', 'ws'],
       ]);
 
       versionItem('0.1')?.click();

@@ -1537,44 +1537,14 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       expect(component.detailsPanelToggleLabelKey()).toBe('document-detail.hide-details');
     });
 
-    it('routes a breadcrumb anchor through the router instead of a full page load', async () => {
-      await build();
-      const spy = vi.spyOn(Router.prototype, 'navigateByUrl');
-      const anchor = document.createElement('a');
-      anchor.setAttribute('href', '/browse/workspaces');
-      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
-      anchor.dispatchEvent(event);
-
-      component.onBreadcrumbClick(event);
-
-      expect(event.defaultPrevented).toBe(true);
-      expect(spy).toHaveBeenCalledWith('/browse/workspaces');
-      spy.mockRestore();
-    });
-
-    it('leaves a click that hit no anchor alone', async () => {
-      await build();
-      const spy = vi.spyOn(Router.prototype, 'navigateByUrl');
-      const div = document.createElement('div');
-      const event = new MouseEvent('click', { bubbles: true, cancelable: true });
-      div.dispatchEvent(event);
-
-      component.onBreadcrumbClick(event);
-
-      expect(event.defaultPrevented).toBe(false);
-      expect(spy).not.toHaveBeenCalled();
-      spy.mockRestore();
-    });
-
-    it('builds breadcrumb links for every ancestor folder but not the document itself', async () => {
+    it('builds router links for every ancestor folder but not the document itself', async () => {
       await build(doc({ path: '/default-domain/workspaces/ws/report', title: 'Report' }));
 
-      expect(
-        component.breadcrumbItems().map((i) => [i.label, 'href' in i ? i.href : undefined]),
-      ).toEqual([
-        ['default-domain', '/browse/default-domain'],
-        ['workspaces', '/browse/default-domain/workspaces'],
-        ['ws', '/browse/default-domain/workspaces/ws'],
+      // Router links rather than hrefs, so every link routes in the app whoever renders it.
+      expect(component.breadcrumbItems()).toEqual([
+        { label: 'default-domain', routerLink: ['/browse', 'default-domain'] },
+        { label: 'workspaces', routerLink: ['/browse', 'default-domain', 'workspaces'] },
+        { label: 'ws', routerLink: ['/browse', 'default-domain', 'workspaces', 'ws'] },
       ]);
     });
 

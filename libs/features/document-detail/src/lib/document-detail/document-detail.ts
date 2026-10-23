@@ -96,7 +96,6 @@ import {
   BrowseContextService,
   decodeNuxeoPathSegment,
   noteFormatLabel,
-  normalizeNuxeoPath,
   parentNuxeoFolderPath,
   renderNoteMarkdown,
   isMailSendError,
@@ -781,28 +780,18 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     const parts = path.split('/').filter(Boolean);
     parts.pop();
     this.breadcrumbPathCache = cacheKey;
-    let accumulated = '/';
-    this.breadcrumbItemsCache = parts.map((s) => {
-      accumulated = normalizeNuxeoPath(`${accumulated}/${s}`);
-      return {
-        label: decodeNuxeoPathSegment(s),
-        href: toBrowseRouterUrl(accumulated),
-      };
-    });
+    // Router links, not hrefs: whichever component `nxs.primitives.breadcrumbs` resolves to routes
+    // them itself — the folded ones too, which Material's trail lists in a menu outside its host.
+    // One command per segment, so the router encodes each exactly once.
+    this.breadcrumbItemsCache = parts.map((s, index) => ({
+      label: decodeNuxeoPathSegment(s),
+      routerLink: ['/browse', ...parts.slice(0, index + 1)],
+    }));
     return this.breadcrumbItemsCache;
   });
 
   private browseUrlForPath(nuxeoPath: string): string {
     return toBrowseRouterUrl(nuxeoPath);
-  }
-
-  onBreadcrumbClick(event: MouseEvent): void {
-    const anchor = (event.target as HTMLElement).closest('a');
-    const href = anchor?.getAttribute('href');
-    if (href) {
-      event.preventDefault();
-      void this.router.navigateByUrl(href);
-    }
   }
 
   readonly versionLabel = computed(() => {

@@ -14,6 +14,8 @@ import { MatDialog } from '@angular/material/dialog';
 import {
   ActivatedRoute,
   Router,
+  RouterLink,
+  UrlTree,
   convertToParamMap,
   provideRouter,
   withDisabledInitialNavigation,
@@ -129,9 +131,10 @@ class CustomPermissionsComponent {
 @Component({
   standalone: true,
   selector: 'lib-test-acme-trail',
+  imports: [RouterLink],
   template: `<nav class="acme-trail" [attr.aria-label]="label()">
     @for (item of items(); track $index) {
-      <a [attr.href]="item.href">{{ item.label }}</a>
+      <a [routerLink]="item.routerLink">{{ item.label }}</a>
     }
   </nav>`,
 })
@@ -1383,16 +1386,71 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(header().querySelector('nxs-breadcrumbs')).toBeNull();
     });
 
+    /** Clicks `link` and returns the URL the router was asked for, or null for none. */
+    function routedTo(link: HTMLAnchorElement): string | null {
+      const router = TestBed.inject(Router);
+      const navigate = vi.spyOn(router, 'navigateByUrl').mockResolvedValue(true);
+      const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+      link.dispatchEvent(click);
+      const [target] = navigate.mock.calls[0] ?? [];
+      navigate.mockRestore();
+      // A click the router did not take leaves the browser to load the href itself.
+      expect(click.defaultPrevented).toBe(true);
+      return target instanceof UrlTree ? router.serializeUrl(target) : (target ?? null);
+    }
+
     it('routes a click on the override’s link inside the app', async () => {
       await render({}, doc(), { [NXS_PRIMITIVE_IDS.breadcrumbs]: AcmeTrailComponent });
-      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl').mockResolvedValue(true);
 
       const link = header().querySelector('.acme-trail a') as HTMLAnchorElement;
-      const click = new MouseEvent('click', { bubbles: true, cancelable: true });
-      link.dispatchEvent(click);
+      expect(routedTo(link)).toBe('/browse/default-domain');
+    });
 
-      expect(navigate).toHaveBeenCalledWith('/browse/default-domain');
-      expect(click.defaultPrevented).toBe(true);
+    /**
+     * The fallback folds the middle of a long trail into a menu, which renders in the CDK overlay
+     * — outside the trail and the page header — so a link there is only routed if it routes
+     * itself. Laid out as `breadcrumbs.component.spec.ts` does: 100 px an item in a 150 px box.
+     */
+    it('routes a folded ancestor in the fallback trail inside the app', async () => {
+      const observers = globalThis as unknown as { ResizeObserver: unknown };
+      const jsdomObserver = observers.ResizeObserver;
+      const resize: { run: (() => void) | null } = { run: null };
+      observers.ResizeObserver = class {
+        constructor(callback: () => void) {
+          resize.run = callback;
+        }
+        observe(): void {
+          /* the test calls `resize.run` itself */
+        }
+        disconnect(): void {
+          /* no-op */
+        }
+      };
+      try {
+        await render({});
+        const trail = header().querySelector('nxs-breadcrumbs') as HTMLElement;
+        Object.defineProperty(trail, 'clientWidth', { configurable: true, value: 150 });
+        for (const li of trail.querySelectorAll<HTMLElement>('.nxs-breadcrumbs__measure > li')) {
+          const width = li.classList.contains('nxs-breadcrumbs__overflow-item') ? 30 : 100;
+          li.getBoundingClientRect = () => ({ width }) as DOMRect;
+        }
+        resize.run?.();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        (trail.querySelector('.nxs-breadcrumbs__overflow') as HTMLButtonElement).click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        const folded = [...document.querySelectorAll<HTMLAnchorElement>('a[role="menuitem"]')].find(
+          (link) => link.textContent?.trim() === 'workspaces',
+        );
+        expect(folded).toBeTruthy();
+        expect(trail.contains(folded as HTMLAnchorElement)).toBe(false);
+        expect(routedTo(folded as HTMLAnchorElement)).toBe('/browse/default-domain/workspaces');
+      } finally {
+        observers.ResizeObserver = jsdomObserver;
+      }
     });
 
     it('falls back to nxs-breadcrumbs when nothing is registered under the ID', async () => {
