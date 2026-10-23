@@ -676,12 +676,15 @@ the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An ov
 implements the matching `Nxs…Inputs` interface.
 
 **Where packaged screens render them.** Browse and the collection page render their breadcrumb
-trail through `nxs.primitives.breadcrumbs`, browse, the collection page, document detail and task
-detail render their status tags through `nxs.primitives.statusTag`, and `nxs-document-list` renders
-each row's type through `nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`,
-so an override of those IDs reaches them. Every other screen still uses the `sat-*` elements directly
-until it moves onto these IDs; there the IDs render only where a host resolves them — a
-`lib-extension-outlet` with a `componentId` — and in the library's Storybook.
+trail through `nxs.primitives.breadcrumbs`. Browse, the collection page, document detail and task
+detail render their status tags through `nxs.primitives.statusTag`. `nxs-document-list` renders each
+row's type through `nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An
+override of those IDs reaches these screens.
+
+Other `sat-*` uses in packaged screens are not yet on these IDs, so an override does not reach them.
+Those elements render directly until they move onto the IDs. Where a host resolves an ID through a
+`lib-extension-outlet` with a `componentId`, and in the library's Storybook, the IDs render as
+described above.
 
 ### `nxs-` components registered for a slot
 

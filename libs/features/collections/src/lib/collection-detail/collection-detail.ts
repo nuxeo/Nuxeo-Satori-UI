@@ -51,7 +51,6 @@ import {
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
-import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ShareDialogComponent,
   ShareDialogData,
@@ -141,7 +140,6 @@ const MEMBER_PAGE_SIZE = 50;
     MatSelectModule,
     MatDatepickerModule,
     SatAvatarModule,
-    SatTagModule,
   ],
   templateUrl: './collection-detail.html',
   styleUrl: './collection-detail.scss',
