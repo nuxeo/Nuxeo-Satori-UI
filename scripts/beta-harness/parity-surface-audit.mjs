@@ -174,7 +174,7 @@ function findSurfaces(ast, objects) {
       return { problem: `SURFACES holds a ${prop.type} this audit cannot resolve. ${mustBeNamed}` };
     }
     const id = propertyName(prop);
-    if (!id || prop.value.type !== 'Identifier') {
+    if (prop.computed || !id || prop.value.type !== 'Identifier') {
       return {
         problem: `SURFACES entry ${JSON.stringify(id ?? '(computed)')} is not \`id: NAME\`. ${mustBeNamed}`,
       };
