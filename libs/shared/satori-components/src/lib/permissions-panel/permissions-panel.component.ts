@@ -46,6 +46,7 @@ import {
   type NxsPermissionRefusal,
   type NxsPermissionsSnapshot,
 } from './permissions-model';
+import { nxsOfferedRights } from '../permission-dialog-support';
 import { NxsPermissionsService, type NxsSaveOutcome } from './permissions-panel.service';
 
 /** The ID the panel is registered under, so a customer library can re-register a replacement. */
@@ -81,9 +82,9 @@ interface EditorState {
 
 /**
  * A document's permissions: local and inherited ACEs, blocked inheritance, and each ACE's time
- * frame and status, with add, edit and remove over the server's list for the document type. Under
- * **All permissions**, Nuxeo's standard permissions and every other permission the server reports
- * to the user are offered too.
+ * frame and status, with add, edit and remove over the server's list for the document type by
+ * default. **All permissions**, or `offer` set to `all`, adds Nuxeo's standard permissions and every
+ * other permission the server reports to the user.
  *
  * **Every write addresses one ACE.** Changes are staged and applied on Save as one
  * `Document.AddPermission`, `ReplacePermission` or `RemovePermission`-by-id per change, so an
@@ -132,6 +133,14 @@ export class NxsPermissionsPanelComponent {
    * ACL-derived content — the external-user shares this panel leaves to it — can read it again.
    */
   readonly permissionsChanged = input<(() => void) | null>(null);
+  /**
+   * Which permissions the selects offer. `type`, the default: the type's `userVisiblePermissions`,
+   * as Web UI offers them, with All permissions available. `all`: that list, then Nuxeo's standard
+   * permissions, then every other permission the server reports, with the All permissions checkbox
+   * fixed on. Either way an entry holding a permission outside the list keeps it in its own select,
+   * so editing never changes it silently.
+   */
+  readonly offer = input<'all' | 'type'>('type');
 
   private readonly service = inject(NxsPermissionsService);
   private readonly translate = inject(TranslateService);
@@ -208,20 +217,12 @@ export class NxsPermissionsPanelComponent {
   protected readonly pendingCount = computed(() => this.staged().size);
 
   /**
-   * Whether every select offers the whole grantable set, not only the server's list for this
-   * document type. Off by default, as Web UI offers only its `userVisiblePermissions`.
+   * Whether the All permissions checkbox is ticked: every select offers the whole grantable set, not
+   * only the type's list. Off by default, as Web UI offers only its `userVisiblePermissions`.
    */
   protected readonly allPermissions = signal(false);
-  /**
-   * The whole set is offered when asked for, and also when the type suggests nothing, so that no
-   * select is left with no option to pick.
-   */
-  protected readonly typeSuggestsNothing = computed(
-    () => (this.snapshot()?.catalogue.suggested.length ?? 0) === 0,
-  );
-  protected readonly offersAll = computed(
-    () => this.allPermissions() || this.typeSuggestsNothing(),
-  );
+  /** The whole set is offered when ticked, or when `offer` is `all`. */
+  protected readonly offersAll = computed(() => this.offer() === 'all' || this.allPermissions());
 
   /** The permission groups every select offers, in the server's order. */
   protected readonly permissionGroups = computed(() => {
@@ -230,7 +231,7 @@ export class NxsPermissionsPanelComponent {
     const groups = [
       {
         label: 'satori-components.permissions-panel.group.suggested',
-        permissions: catalogue.suggested,
+        permissions: nxsOfferedRights(catalogue.suggested),
       },
     ];
     if (this.offersAll()) {
@@ -252,7 +253,9 @@ export class NxsPermissionsPanelComponent {
   private readonly offered = computed(() => {
     const catalogue = this.snapshot()?.catalogue;
     if (!catalogue) return new Set<string>();
-    return new Set(this.offersAll() ? offeredPermissions(catalogue) : catalogue.suggested);
+    return new Set(
+      this.offersAll() ? offeredPermissions(catalogue) : nxsOfferedRights(catalogue.suggested),
+    );
   });
 
   protected readonly localItems = computed<LocalItem[]>(() => {

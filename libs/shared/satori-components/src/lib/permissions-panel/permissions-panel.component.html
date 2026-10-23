@@ -158,7 +158,7 @@
         @if (canManage()) {
           <mat-checkbox
             [checked]="offersAll()"
-            [disabled]="typeSuggestsNothing()"
+            [disabled]="offer() === 'all'"
             (change)="allPermissions.set($event.checked)"
           >
             {{ 'satori-components.permissions-panel.all-permissions' | translate }}

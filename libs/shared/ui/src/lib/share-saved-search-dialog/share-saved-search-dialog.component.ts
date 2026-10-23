@@ -1,4 +1,4 @@
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -8,7 +8,8 @@ import {
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSelectModule } from '@angular/material/select';
-import { catchError, of, forkJoin } from 'rxjs';
+import { catchError, finalize, of, forkJoin, map, switchMap } from 'rxjs';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {
   CURRENT_USERNAME,
   UserService,
@@ -18,6 +19,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   ShareSavedSearchAddPermissionDialogComponent,
+  type ShareSavedSearchAddPermissionDialogData,
   type ShareSavedSearchAddPermissionResult,
 } from '../share-saved-search-add-permission-dialog/share-saved-search-add-permission-dialog.component';
 import { ShareSavedSearchExternalDialogComponent } from '../share-saved-search-external-dialog/share-saved-search-external-dialog.component';
@@ -26,6 +28,8 @@ import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 export interface PermissionEntry {
   id: string;
+  /** Nuxeo's id for the ACE the row shows; absent for a row not read from the ACL. */
+  aceId?: string;
   userGroup: string;
   right: string;
   timeFrame: string;
@@ -41,6 +45,7 @@ interface PermissionSummary {
 
 interface ExternalPermissionEntry extends PermissionSummary {
   id: string;
+  aceId?: string;
   email: string;
   begin?: string | null;
   end?: string | null;
@@ -86,11 +91,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   private readonly currentUsername = inject(CURRENT_USERNAME);
   private readonly userService = inject(UserService);
   private readonly detailService = inject(DocumentDetailService);
+  private readonly destroyRef = inject(DestroyRef);
 
   readonly permissions = signal<PermissionEntry[]>([]);
   readonly inheritedPermissions = signal<PermissionSummary[]>([]);
   readonly externalPermissions = signal<ExternalPermissionEntry[]>([]);
   readonly isInheritanceBlocked = signal(false);
+  /** The saved search's `userVisiblePermissions`, the rights the add and edit dialogs offer. */
+  private readonly visiblePermissions = signal<readonly string[] | null>(null);
   readonly saving = signal(false);
   readonly loading = signal(false);
 
@@ -120,6 +128,8 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   }
 
   private parsePermissionsFromDocument(doc: NuxeoDocument): void {
+    const visible = doc.contextParameters?.['userVisiblePermissions'];
+    this.visiblePermissions.set(Array.isArray(visible) ? (visible as string[]) : null);
     const allAcls = ((doc.contextParameters?.acls as unknown) ?? []) as Array<{
       name: string;
       aces: AceLike[];
@@ -129,20 +139,13 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     const localAcl = allAcls.find((acl) => acl.name === 'local') || allAcls[0];
     const localAces = localAcl?.aces ?? [];
 
-    const localRows: PermissionEntry[] = localAces
-      .filter((ace) => !ace.externalUser)
-      .map((ace, index: number) => ({
-        id: String(index),
-        userGroup: ace.username || ace.email || 'Unknown',
-        right: ace.permission || 'Read',
-        timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
-        grantedBy: ace.creator || 'System',
-      }));
+    const localRows = this.localRowsOf(localAces);
 
     const externalRows: ExternalPermissionEntry[] = localAces
       .filter((ace) => !!ace.externalUser)
       .map((ace, index) => ({
         id: ace.id || `external-${index}`,
+        aceId: ace.id,
         email: ace.email || ace.username || '',
         userGroup: ace.email || ace.username || 'Unknown',
         right: ace.permission || 'Read',
@@ -168,6 +171,43 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     this.externalPermissions.set(externalRows);
     this.inheritedPermissions.set(inheritedRows);
     this.nextId = localRows.length + 1;
+  }
+
+  private localRowsOf(aces: readonly AceLike[]): PermissionEntry[] {
+    return aces
+      .filter((ace) => !ace.externalUser)
+      .map((ace, index: number) => ({
+        // The ACE id, not the position: a re-read must not move an open edit onto another row.
+        id: ace.id || `local-${index}`,
+        aceId: ace.id,
+        userGroup: ace.username || ace.email || 'Unknown',
+        right: ace.permission || 'Read',
+        timeFrame: this.toTimeFrameLabel(ace.begin, ace.end),
+        grantedBy: ace.creator || 'System',
+      }));
+  }
+
+  /**
+   * Replaces the local rows with the server's, keeping the unsaved edit of any row whose entry is
+   * still there. Nuxeo answers 200 to removing an id it no longer holds, so only a re-read shows
+   * whether a removal took.
+   */
+  private reconcileLocalRows(doc: NuxeoDocument): void {
+    const acls = ((doc.contextParameters?.acls as unknown) ?? []) as Array<{
+      name: string;
+      aces: AceLike[];
+    }>;
+    const local = acls.find((acl) => acl.name === 'local') || acls[0];
+    const shown = new Map(
+      this.permissions()
+        .filter((row) => row.aceId)
+        .map((row) => [row.aceId, row]),
+    );
+    const rows = this.localRowsOf(local?.aces ?? []).map(
+      (row) => (row.aceId ? shown.get(row.aceId) : undefined) ?? row,
+    );
+    this.permissions.set(rows);
+    this.nextId = rows.length + 1;
   }
 
   openExternalPermissionDialog(): void {
@@ -244,15 +284,12 @@ export class ShareSavedSearchDialogComponent implements OnInit {
   }
 
   removeExternalPermission(row: ExternalPermissionEntry): void {
-    if (!this.data.id || this.saving()) return;
+    // By id: removing by user would also take every other entry the same address holds.
+    if (!this.data.id || this.saving() || !row.aceId) return;
 
     this.saving.set(true);
     this.detailService
-      .removePermission(this.data.id, {
-        user: row.email || row.userGroup,
-        permission: this.normalizePermissionForApi({ right: row.right } as PermissionEntry).right,
-        acl: 'local',
-      })
+      .removePermissionById(this.data.id, row.aceId)
       .pipe(
         catchError((error) => {
           console.error('Error removing external permission:', error);
@@ -355,11 +392,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     this.dialog
       .open<
         ShareSavedSearchAddPermissionDialogComponent,
-        { title: string },
+        ShareSavedSearchAddPermissionDialogData,
         ShareSavedSearchAddPermissionResult[] | null
       >(ShareSavedSearchAddPermissionDialogComponent, {
         width: '720px',
-        data: { title: this.translate.instant('confirm.add-a-permission') },
+        data: {
+          title: this.translate.instant('confirm.add-a-permission'),
+          permissions: this.visiblePermissions(),
+        },
       })
       .afterClosed()
       .subscribe((result) => {
@@ -367,16 +407,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
         this.saving.set(true);
 
-        // Call addPermission API for each new permission
+        // The dialog returns the server's own identifiers, so they are sent as they are: the
+        // display-label mapping would turn `Write` into the broader `ReadWrite`.
         const requests = result.map((entry) => {
-          const { right } = this.normalizePermissionForApi({
-            right: entry.right,
-          } as PermissionEntry);
           const [begin, end] = this.parseTimeFrame(entry.timeFrame);
 
           return this.detailService.addPermission(this.data.id, {
             username: entry.userGroup,
-            permission: right,
+            permission: entry.right,
             begin: begin || null,
             end: end || null,
             notify: false,
@@ -402,32 +440,41 @@ export class ShareSavedSearchDialogComponent implements OnInit {
 
   removeRow(id: string): void {
     const row = this.permissions().find((r) => r.id === id);
-    if (!row || !this.data.id) return;
+    // By id: removing by user would also take every other entry that user or group holds.
+    // One removal and its re-read at a time, so an older read cannot restore a later removal.
+    if (!row || !this.data.id || !row.aceId || this.saving()) return;
 
     // Remove from local state first
     this.permissions.update((rows) => rows.filter((r) => r.id !== id));
 
-    // Call API to delete the permission
-    const username = row.userGroup;
-    const permission = this.normalizePermissionForApi({
-      right: row.right,
-    } as PermissionEntry).right;
-
+    const uid = this.data.id;
+    this.saving.set(true);
     this.detailService
-      .removePermission(this.data.id, {
-        user: username,
-        permission: permission,
-        acl: 'local',
-      })
+      .removePermissionById(uid, row.aceId)
       .pipe(
+        map(() => true),
         catchError((error) => {
           console.error('Error removing permission:', error);
           // Revert the removal on error
           this.permissions.update((rows) => [...rows, row]);
-          return of(null);
+          return of(false);
         }),
+        switchMap((removed) =>
+          !removed
+            ? of(null)
+            : this.detailService.getDocumentPermissions(uid).pipe(
+                catchError((error) => {
+                  console.error('Error re-reading permissions after a removal:', error);
+                  return of(null);
+                }),
+              ),
+        ),
+        finalize(() => this.saving.set(false)),
+        takeUntilDestroyed(this.destroyRef),
       )
-      .subscribe();
+      .subscribe((doc) => {
+        if (doc) this.reconcileLocalRows(doc);
+      });
   }
 
   editRow(id: string): void {
@@ -437,13 +484,14 @@ export class ShareSavedSearchDialogComponent implements OnInit {
     this.dialog
       .open<
         ShareSavedSearchAddPermissionDialogComponent,
-        { title: string; initialData: PermissionEntry },
+        ShareSavedSearchAddPermissionDialogData,
         ShareSavedSearchAddPermissionResult[] | null
       >(ShareSavedSearchAddPermissionDialogComponent, {
         width: '720px',
         data: {
           title: this.translate.instant('confirm.update'),
           initialData: row,
+          permissions: this.visiblePermissions(),
         },
       })
       .afterClosed()

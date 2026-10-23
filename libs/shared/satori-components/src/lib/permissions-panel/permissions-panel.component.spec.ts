@@ -128,6 +128,29 @@ class HostComponent {
 })
 class TwoPanelsHostComponent {}
 
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  template: `<nxs-permissions-panel documentId="doc-1" offer="type" />`,
+})
+class TypeOfferHostComponent {}
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  template: `<nxs-permissions-panel documentId="doc-1" offer="all" />`,
+})
+class AllOfferHostComponent {}
+
+/** A Collection as a stock server reads it: its type's four, and 34 permissions held. */
+function collectionDoc(local: Ace[], visible: string[] | undefined): NuxeoDocument {
+  const doc = serverDoc(local, { permissions: [...ALL, 'ReadCanCollect'] });
+  const context = contextOf(doc);
+  if (visible) context['userVisiblePermissions'] = visible;
+  else delete context['userVisiblePermissions'];
+  return { ...doc, type: 'Collection' };
+}
+
 describe('NxsPermissionsPanelComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let documents: {
@@ -256,19 +279,27 @@ describe('NxsPermissionsPanelComponent', () => {
       }
     });
 
-    it('offers the whole set, with no empty select, when the type suggests nothing', async () => {
+    it("offers Web UI's three rights, with no empty select, when the type suggests nothing", async () => {
       const doc = serverDoc([{ username: 'jdoe', permission: 'Read' }]);
       contextOf(doc)['userVisiblePermissions'] = [];
       await mount(doc);
       const checkbox = el().querySelector<HTMLInputElement>('mat-checkbox input');
-      expect(checkbox?.checked).toBe(true);
-      expect(checkbox?.disabled).toBe(true);
+      expect(checkbox?.checked).toBe(false);
+      expect(checkbox?.disabled).toBe(false);
       const overlay = await openFirstEntrySelect();
-      expect(groupLabels(overlay)).toEqual([
-        'Standard permissions',
-        'Other permissions on this server',
-      ]);
-      expect(offeredNames(overlay)).toContain('Write');
+      expect(groupLabels(overlay)).toEqual(['Suggested for this document type']);
+      expect(offeredNames(overlay)).toEqual(['Read', 'ReadWrite', 'Everything']);
+    });
+
+    it('starts with the whole set ticked, and fixed, when offer is all', async () => {
+      documents.getDocumentPermissions.mockReturnValue(of(PARITY));
+      const page = TestBed.createComponent(AllOfferHostComponent);
+      page.detectChanges();
+      await page.whenStable();
+      page.detectChanges();
+      const checkbox = page.nativeElement.querySelector('mat-checkbox input') as HTMLInputElement;
+      expect(checkbox.checked).toBe(true);
+      expect(checkbox.disabled).toBe(true);
     });
 
     it('keeps a staged change to a permission outside the default list selectable', async () => {
@@ -320,6 +351,98 @@ describe('NxsPermissionsPanelComponent', () => {
       panel()['allPermissions'].set(false);
       await render();
       expect(panel()['editorExtraPermissions']()).toEqual(['Write', 'Unlock']);
+    });
+
+    describe('with offer="type"', () => {
+      const COLLECTION_FOUR = ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'];
+
+      async function mountTyped(doc: NuxeoDocument) {
+        documents.getDocumentPermissions.mockReturnValue(of(doc));
+        const page = TestBed.createComponent(TypeOfferHostComponent);
+        page.detectChanges();
+        await page.whenStable();
+        page.detectChanges();
+        return {
+          page,
+          typed: page.debugElement.query(By.directive(NxsPermissionsPanelComponent))
+            .componentInstance as NxsPermissionsPanelComponent,
+        };
+      }
+
+      const offeredIn = (page: ComponentFixture<unknown>) => {
+        const trigger = (page.nativeElement as HTMLElement).querySelector<HTMLElement>(
+          'tr[role="row"] .mat-mdc-select-trigger',
+        );
+        trigger?.click();
+        page.detectChanges();
+        const overlay = document.querySelector('.cdk-overlay-container') as HTMLElement;
+        return Array.from(overlay.querySelectorAll('mat-option[data-permission]')).map((o) =>
+          o.getAttribute('data-permission'),
+        );
+      };
+
+      it("offers only the type's userVisiblePermissions, not the standard or other groups", async () => {
+        const { page, typed } = await mountTyped(
+          collectionDoc([{ username: 'members', permission: 'Read' }], COLLECTION_FOUR),
+        );
+        expect(typed['permissionGroups']()).toEqual([
+          {
+            label: 'satori-components.permissions-panel.group.suggested',
+            permissions: COLLECTION_FOUR,
+          },
+        ]);
+        expect(offeredIn(page)).toEqual(COLLECTION_FOUR);
+      });
+
+      it('keeps an entry holding a permission outside the list in its own select', async () => {
+        const { page, typed } = await mountTyped(
+          collectionDoc([{ username: 'powerusers', permission: 'Write' }], COLLECTION_FOUR),
+        );
+        typed['openEdit'](typed['localItems']()[0]);
+        expect(typed['editorExtraPermissions']()).toEqual(['Write']);
+        expect(offeredIn(page)).toEqual(['Write', ...COLLECTION_FOUR]);
+      });
+
+      it('refuses a permission the server does not define, naming the entry and why, and writes nothing', async () => {
+        const doc = collectionDoc(
+          [
+            { username: 'members', permission: 'ReadCanCollect' },
+            { username: 'powerusers', permission: 'Remove' },
+          ],
+          COLLECTION_FOUR,
+        );
+        const { page, typed } = await mountTyped(doc);
+        typed['setPermission'](typed['localItems']()[0], 'NoSuchPermission300');
+        page.detectChanges();
+        const save = Array.from(
+          (page.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+        ).find((b) => b.textContent?.trim() === 'Save');
+        save?.click();
+        page.detectChanges();
+        await page.whenStable();
+        page.detectChanges();
+
+        const alert = (page.nativeElement as HTMLElement).querySelector('[role="alert"]');
+        expect(alert?.textContent).toContain(
+          "Nothing was saved. These entries can't be saved from this panel:",
+        );
+        expect(alert?.textContent).toContain('members — NoSuchPermission300');
+        expect(alert?.textContent).toContain("this server doesn't define that permission.");
+        expect(documents.replacePermission).not.toHaveBeenCalled();
+        expect(documents.addPermission).not.toHaveBeenCalled();
+        expect(documents.removePermissionById).not.toHaveBeenCalled();
+      });
+
+      it("falls back to Nuxeo's default three when the read carries no list", async () => {
+        const { typed } = await mountTyped(
+          collectionDoc([{ username: 'members', permission: 'Read' }], undefined),
+        );
+        expect(typed['permissionGroups']()[0].permissions).toEqual([
+          'Read',
+          'ReadWrite',
+          'Everything',
+        ]);
+      });
     });
 
     it('shows a permission the server does not list, so its entry can still be kept', async () => {

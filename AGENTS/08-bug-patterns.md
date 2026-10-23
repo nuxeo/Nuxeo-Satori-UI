@@ -692,6 +692,71 @@ that calls `restoreVersion()` directly asserts the defect. See
 
 ---
 
+## 22. A border token used as a text colour (WCAG 1.4.3)
+
+`--mat-sys-outline` is Material's **non-text** role: borders, dividers, the edge of an unfilled
+control. WCAG grades those under 1.4.11 at **3:1**, and the token is built to clear exactly that.
+Text is 1.4.3 at **4.5:1**, so the token is a quarter of a point short — close enough to look
+deliberate on screen, and far enough to be a violation.
+
+Measured in this application's light theme, where `--mat-sys-outline` is `rgb(119, 118, 131)`,
+on `--mat-sys-surface` (`rgb(249, 249, 252)`):
+
+| Token                          | Ratio      | 1.4.11 (3:1) | 1.4.3 (4.5:1) |
+| ------------------------------ | ---------- | ------------ | ------------- |
+| `--mat-sys-outline`            | **4.25:1** | pass         | **fail**      |
+| `--mat-sys-on-surface-variant` | 8.93:1     | pass         | pass          |
+
+Check the background you are actually on before quoting a ratio. Both nodes axe reported for
+`.task-due-prefix` sat on that one surface — `.task-item.active` looks like a different
+background and is not, because it differs only by an inset `box-shadow`.
+
+```scss
+// BAD ❌ — a non-text token on 12px body text
+.task-due-prefix {
+  color: var(--mat-sys-outline);
+}
+
+// GOOD ✅ — the text-weight equivalent of the same role
+.task-due-prefix {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ALSO GOOD ✅ — genuinely non-text, and it says so, so the guardrail allows it
+.empty-icon {
+  font-size: 32px;
+  color: var(--mat-sys-outline); /* non-text: a 32px decorative glyph, so 1.4.11's 3:1 applies */
+}
+```
+
+What makes this one worth cataloguing is **how it resists being fixed by the symptom**. Four
+measured instances reached `integration/nxsat-308`, and three further text uses are still
+untriaged (`docs/accessibility.md` gap 7). A sweep driven by an axe run found and fixed two of
+the four —
+the tasks hint at 4.46:1 and `.rv-sep` at 4.24:1 — and left the other two standing, because axe
+only judges what is rendered while it is scanning: `.task-due-prefix` needs a task with a due
+date on screen, and `.expired-sep` lives in a drawer panel that `phase-6-a11y` never opens. So
+do not fix this by searching for the violation; search for the **token**, and note that the
+fallback form hides from a naive search — `var(--mat-sys-outline, #777683)` is the same defect
+as `var(--mat-sys-outline)`:
+
+```bash
+# grep -E, not rg: Rust's regex engine has no lookbehind, and the lookbehind is what keeps
+# `border-color`, `background-color` and `text-decoration-color` out of the results.
+grep -rnE '(^|[^-[:alnum:]_])color[[:space:]]*:[[:space:]]*var\(--mat-sys-outline' \
+  --include='*.scss' --include='*.html' libs apps
+```
+
+There is **no static gate for this yet.** One was written under NXSAT-647 and withdrawn: over
+seven review rounds it produced ten valid findings, all in its text matching, ending at SCSS
+property nesting — where `border: { color: … }` _is_ `border-color`, a correct non-text use it
+called a violation. A rule for this needs a real Sass parser rather than a regex, tracked as
+**NXSAT-709**; `docs/accessibility.md` records the ten cases so a second attempt does not
+restart from zero.
+Until then this pattern is the check: search for the token, not for the symptom.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -709,3 +774,4 @@ Fix proactively to avoid a review cycle:
 - "SVG has no accessible name" → if the link around it is already named, mark the graphic decorative with `aria-hidden="true"` on the wrapper; an `aria-label` on the host element does not reach the `<svg>`
 - "Focus indicator may not be visible" → set the vendor's focus-outline custom property to its own foreground token; left unset it falls back to a low-emphasis divider colour and misses 3:1
 - "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
+- "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio
