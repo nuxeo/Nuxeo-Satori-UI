@@ -273,10 +273,17 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Request Headers:**
 
-| Header          | Value                                        |
-| --------------- | -------------------------------------------- |
-| `Authorization` | `Basic <credentials>` (added by interceptor) |
-| `properties`    | `dublincore`                                 |
+| Header               | Value                                                           |
+| -------------------- | --------------------------------------------------------------- |
+| `Authorization`      | `Basic <credentials>` (added by interceptor)                    |
+| `properties`         | `*` (all schemas)                                               |
+| `enrichers.document` | `acls,permissions,favorites,subscribedNotifications,breadcrumb` |
+
+`breadcrumb` is what gives the browse trail its ancestors' **titles**. Without it the trail can
+only decode the folders' URL path segments, so every crumb above the current folder reads as a
+name rather than a title. Nuxeo Web UI's `nuxeo-breadcrumb` reads the same enricher, so the whole
+trail still costs one request; the entries carry no `properties`, so the cost is one small document
+entity per ancestor.
 
 **Request Payload:** None (GET request).
 
@@ -299,11 +306,12 @@ This document tracks all Nuxeo REST API integrations used in the application. Wh
 
 **Key response fields used:**
 
-| Field   | Usage                                           |
-| ------- | ----------------------------------------------- |
-| `title` | Shown in breadcrumbs and nav drawer folder tree |
-| `type`  | Used to determine folderish status and icon     |
-| `path`  | Used for breadcrumb construction and navigation |
+| Field                                  | Usage                                                                              |
+| -------------------------------------- | ---------------------------------------------------------------------------------- |
+| `title`                                | The current folder's own crumb, and its heading and nav-drawer tree label          |
+| `type`                                 | Used to determine folderish status and icon                                        |
+| `path`                                 | Used for crumb router links and navigation                                         |
+| `contextParameters.breadcrumb.entries` | Each ancestor's `title`, keyed by its `path` — the labels above the current folder |
 
 ---
 

@@ -148,7 +148,11 @@ export class BrowseService {
     const safePath = nuxeoPath.replace(/\/+$/, '') || '/';
     return this.api.get<NuxeoDocument>(`/nuxeo/api/v1/path${safePath}`, undefined, {
       properties: '*',
-      'enrichers.document': 'acls,permissions,favorites,subscribedNotifications',
+      // `breadcrumb` is what gives the trail its ancestors' *titles*. Without it a breadcrumb can
+      // only decode path segments, which are the folders' names, not their titles — a renamed
+      // folder reads as its old URL segment for every crumb above the current one. Nuxeo Web UI's
+      // `nuxeo-breadcrumb` reads the same enricher, so the whole trail still costs one request.
+      'enrichers.document': 'acls,permissions,favorites,subscribedNotifications,breadcrumb',
     });
   }
 

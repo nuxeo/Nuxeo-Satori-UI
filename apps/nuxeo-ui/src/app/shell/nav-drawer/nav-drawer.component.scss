@@ -426,8 +426,12 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+// Text, not a border — the same `&middot;` separator as `.rv-sep` above, which measured 4.24:1
+// with the outline token. `.expired-card` is `background: none`, so this sits on the same drawer
+// surface and the same ratio applies. Missed when `.rv-sep` was corrected; `expired-queue` is a
+// scanned journey screen.
 .expired-sep {
-  color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .expired-date {
@@ -786,8 +790,12 @@
   line-height: 1.4;
 }
 
+// Measured with the outline token at 4.25:1 on the drawer surface (`--mat-sys-surface`), against
+// WCAG AA's 4.5:1 for this 12px/400 text; on-surface-variant clears it at 8.93:1. Both nodes axe
+// reported sit on that same background — `.task-item.active` differs only by an inset box-shadow,
+// not its fill. The outline token is for borders and dividers, which only need 3:1.
 .task-due-prefix {
-  color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface-variant);
   margin-right: 4px;
 }
 

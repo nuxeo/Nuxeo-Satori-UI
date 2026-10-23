@@ -4,8 +4,28 @@
  *
  * Plan section 10 makes build-alongside conditional on parity being demonstrated, not asserted.
  * The "before" half needs the upstream packages to install; once adf-hx access is gone it cannot
- * be produced again. So the steps below are written once and never edited between the halves:
- * only the surface adapter changes.
+ * be produced again. So the steps below are written once and the surface adapter is what changes
+ * between the halves.
+ *
+ * ## Where that rule has been broken, and why (NXSAT-644)
+ *
+ * It is a rule about comparability, not a rule that an expectation contradicting the reference
+ * must be kept. Three were corrected after the before-half had been captured:
+ *
+ * - **step 11**, the members row — it expected one row carrying both an inherited Read and a local
+ *   Read & Write. Web UI renders two separate cards, `documentPermissions.locallyDefined` and
+ *   `documentPermissions.inherited`, one row per entry, as `nxs-permissions-panel` does.
+ * - **step 13**, the search page lengths — they read 50 / 50 / 25, which is neither this app's
+ *   search page size (40) nor Web UI's (20), and the step walked three pages where 125 hits make
+ *   four.
+ * - **step 10**, `versions.restore-offered` — it counted restore controls inside
+ *   `nxs-manage-versions`, which deliberately has none; the confirmed restore is on the document
+ *   page, where Web UI puts it too.
+ *
+ * The before results were produced against the old expectations and cannot be re-measured, because
+ * NXSAT-637 removed the upstream packages. Those steps therefore compare against corrected
+ * expectations rather than a re-measured baseline, and each says so in a note of its own, so the
+ * asymmetry reaches the report and not only this header.
  *
  * ## Surfaces (`PARITY_SURFACE`)
  *
@@ -20,6 +40,7 @@
  * - `adf-hx-as-target` — negative control: `adf-hx` with no known gaps, so every gap check is
  *   judged as a parity target and must fail. Run it to see the gap checks go red.
  * - `nxs` — the replacements. Each of the adapter's selectors was read from the template that
+<<<<<<< HEAD
  *   renders it, and against the app as it is actually configured: `app.config.ts` calls
  *   `provideNxsSatoriComponents()`, which re-registers the breadcrumbs primitive on Satori, so the
  *   browse route renders `nxs-satori-breadcrumbs` and not `nxs-breadcrumbs`. A selector read from
@@ -38,6 +59,11 @@
  * So a surface-specific selector, wording, size or interaction belongs in the adapter, and a step
  * asserts the claim through it. `parity-surface-audit.mjs` holds this: it fails if a step body
  * names a surface's element, and if a surface does not define every adapter key the steps read.
+=======
+ *   renders it, not from the table-primitive decision it was first drafted from. Change the
+ *   adapter, not the steps or the expected values — unless an expected value contradicts the
+ *   reference, in which case correct it and disclose the asymmetry on the step, as above.
+>>>>>>> origin/integration/nxsat-308
  *
  * ## Reading the checks
  *
@@ -89,6 +115,31 @@ const deepTitle = (n) =>
     ? 'Deep L5 with a deliberately long folder title to exercise breadcrumb truncation'
     : `Deep L${n}`;
 const PAGED = { path: `${ROOT}/paged`, title: 'Paged folder', count: 125, pageSize: 50 };
+
+/**
+ * The search page size the app uses: `SEARCH_PAGE_SIZE` in
+ * `libs/features/search/src/lib/search-session/search-session.ts`, set deliberately by NXSAT-641.
+ * `PAGED.pageSize` above is the *browse* list's `PAGE_SIZE` (`browse.ts`), which is 50 — the two
+ * surfaces page differently and the steps must not share one number.
+ */
+const SEARCH_PAGE_SIZE = 40;
+
+/** Page lengths for `total` items at `pageSize`: whole pages, then whatever is left over. */
+function pagePlan(total, pageSize) {
+  const plan = Array.from({ length: Math.floor(total / pageSize) }, () => pageSize);
+  if (total % pageSize) plan.push(total % pageSize);
+  return plan;
+}
+
+/**
+ * `[40, 40, 40, 5]` — 125 hits over four pages.
+ *
+ * Derived rather than written out, because the expectation it replaces was written out: it read
+ * 50 / 50 / 25, which is neither this app's page size nor Nuxeo Web UI's (whose only page-size
+ * literal is 20), and a hand-written correction of it got as far as "40 / 40 / 45" — a page longer
+ * than the page size, which cannot happen. Arithmetic cannot make that mistake.
+ */
+const SEARCH_PAGE_PLAN = pagePlan(PAGED.count, SEARCH_PAGE_SIZE);
 const pagedTitle = (n) => `Paged item ${String(n).padStart(3, '0')}`;
 const VERSIONS = {
   path: `${ROOT}/versions`,
@@ -129,6 +180,96 @@ const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secre
  */
 const SEARCH_PAGE_SIZE_NXS = 40;
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
+
+/**
+ * Fallback only: how a surface's access control *reads* when it discloses no permission identifier.
+ *
+ * Matching rendered text for this was the original defect and then, corrected, the defect again.
+ * `/^\s*Everything\s*$/` matched nothing on the nxs surface, whose label is "Manage everything";
+ * widening it to `/^\s*(Manage everything|Everything)\s*$/` still matched nothing, because
+ * `permissions-panel.component.html:385-405` appends the identifier next to the label wherever the
+ * two differ — the Everything option renders "Manage everything Everything" and the ReadWrite
+ * trigger renders "Edit ReadWrite", and an anchored alternation over the parts matches neither
+ * whole. A filter that selects nothing stages nothing, so no Save appears and every claim about
+ * what the save did is made about a save that never happened.
+ *
+ * So text is no longer the primary test. A surface that discloses the identifier is matched on the
+ * identifier — `permissionId` and `option` in its adapter — which is the permission's own name and
+ * cannot be re-translated. This is kept for the surface that discloses none: upstream's, whose
+ * markup cannot be read first-hand since NXSAT-637 removed the packages, leaving its label
+ * ("Read & Write", "Everything") the only handle there is.
+ *
+ * `Read` is here for the 11b edit; our label for it *is* `Read`, so no identifier is appended and
+ * the text and the identifier coincide.
+ */
+export const PERMISSION_OPTION = {
+  Read: /^\s*Read\s*$/i,
+  ReadWrite: /^\s*(Read & Write|Read and write|ReadWrite|Edit)\s*$/i,
+  Everything: /^\s*(Manage everything|Everything)\s*$/i,
+};
+
+/**
+ * Does an access control that rendered `shown` currently grant `permission`?
+ *
+ * `shown.identifier` is the text of the element the surface uses to disclose the permission
+ * identifier beside the translated label — its adapter's `permissionId`, which on the nxs panel is
+ * the `<span class="nxs-permissions-panel__id">` of `permissions-panel.component.html:387-389`.
+ * Where there is one, this is an exact comparison against the identifier and no change to
+ * `permissions.right.*` can break it.
+ *
+ * `shown.text` is the control's whole rendered text and is only consulted when no identifier was
+ * disclosed — either because the surface appends none, or because the label and the identifier are
+ * equal and the template's `@if` therefore omits the span. Matching it is strictly the weaker test:
+ * see PERMISSION_OPTION.
+ *
+ * @param {string} permission
+ * @param {{identifier?: string, text?: string}} shown
+ */
+export function showsPermission(permission, shown) {
+  const identifier = (shown.identifier ?? '').trim();
+  if (identifier) return identifier === permission;
+  return PERMISSION_OPTION[permission].test(shown.text ?? '');
+}
+
+/**
+ * A write that is a permissions write, by the endpoint it went to: Nuxeo's permission operations
+ * (`Document.AddPermission`, `ReplacePermission`, `RemovePermission`,
+ * `BlockPermissionInheritance`) and the ACL resource. Both surfaces go through the same server API.
+ *
+ * Any non-GET would be the looser test, and it is the one to avoid: the request window opens before
+ * the access control is touched, so an unrelated write landing in it would stand in for the save
+ * and the claim below would be made about the wrong request.
+ *
+ * `SendNotificationEmailForPermission` also matches /Permission/ but sends mail without changing
+ * the ACL (`document-detail.service.ts:597–600`), so match the ACL-mutating operations explicitly.
+ */
+const PERMISSION_WRITE =
+  /(AddPermission|ReplacePermission|RemovePermission|BlockPermissionInheritance|@acl(\b|\/))/i;
+
+/**
+ * What a permissions save is allowed to claim, from what was observed around it.
+ *
+ * `attempted` is the structural guard: a staged change (an option matched *and* a Save control was
+ * offered, both read before the click) and a permissions write at the wire. `survives` conjoins it,
+ * so the surviving-entry claim cannot be satisfied by a run in which nothing was saved — which is
+ * how it used to pass. Exported, and covered by `nxsat-308-parity.selftest.mjs`, so the inversion
+ * can be shown going red rather than asserted.
+ *
+ * @param {{everythingOffered: number, saveOffered: number, writes: {method: string, url: string}[], afterAcl: string[]}} observed
+ */
+export function aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAcl }) {
+  const attempted =
+    everythingOffered > 0 &&
+    saveOffered > 0 &&
+    writes.some((w) => PERMISSION_WRITE.test(w.url ?? ''));
+  return {
+    attempted,
+    survives:
+      attempted &&
+      afterAcl.includes('members:Everything') &&
+      afterAcl.includes('parity-user:AddChildren'),
+  };
+}
 
 /**
  * For a wait or a click that may not land. Its failure is never the finding: the check after it
@@ -324,11 +465,22 @@ const ADF_HX = {
     oneRowPerPrincipal: true,
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
+<<<<<<< HEAD
     /** Upstream labels an option with the permission itself, so the name is the way to choose it. */
     option: (permission) => ({
       selector: '.cdk-overlay-container mat-option',
       hasText: new RegExp(`^\\s*${permission}\\s*$`),
     }),
+=======
+    // Upstream's option and trigger markup cannot be read first-hand — NXSAT-637 removed the
+    // packages — so no identifier handle can be claimed for this surface and its translated label
+    // is the only thing left to match. `permissionId: null` is what makes showsPermission fall back.
+    permissionId: null,
+    option: (page, permission) =>
+      page
+        .locator('.cdk-overlay-container mat-option')
+        .filter({ hasText: PERMISSION_OPTION[permission] }),
+>>>>>>> origin/integration/nxsat-308
     save: 'hxp-permissions-management-panel button',
     feedback: 'mat-snack-bar-container',
   },
@@ -374,6 +526,20 @@ const ADF_HX = {
   versions: {
     provenance:
       'production document page version menu (hand-written): upstream hxp-manage-versions-sidebar is not mounted on main',
+    /**
+     * Where this surface offers to restore a listed version: in the version list itself, which
+     * `read` has already opened and counted. Nothing further to visit, so this reports exactly the
+     * observation the gap check was made from before it was given a place to look — the before-half
+     * reading is unchanged.
+     */
+    async restoreOffer(_page, _h, _versions, v) {
+      return {
+        where: 'the version list itself',
+        offered: v.restore,
+        listed: v.labels.length,
+        detail: `${v.restore} restore control(s); version menus ${JSON.stringify(v.menus ?? null)}`,
+      };
+    },
     async open(page, h, uid) {
       await h.goToDoc(uid);
       await page
@@ -484,6 +650,8 @@ const ADF_HX_REMOUNT = {
   },
   versions: {
     provenance: 'upstream hxp-manage-versions-sidebar, re-mounted as the browse POC Versions tab',
+    // Upstream puts restore in each version's own menu, which `read` opens; same reading as `ADF_HX`.
+    restoreOffer: ADF_HX.versions.restoreOffer,
     async open(page, h, _uid, title = VERSIONS.docTitle) {
       await adfHxOpenRowTab(page, h, VERSIONS.path, title, 'Versions');
       await page
@@ -648,6 +816,7 @@ const NXS = {
     oneRowPerPrincipal: false,
     accessControl: 'mat-select',
     options: '.cdk-overlay-container mat-option',
+<<<<<<< HEAD
     // Each option carries its Nuxeo permission in `data-permission`, so a change is staged by the
     // permission rather than by its label. The labels are translated and are not the permission:
     // ReadWrite reads "Edit" and Everything reads "Manage everything", so matching the option text
@@ -656,6 +825,16 @@ const NXS = {
     option: (permission) => ({
       selector: `.cdk-overlay-container mat-option[data-permission="${permission}"]`,
     }),
+=======
+    // permissions-panel.component.html:387-389 — the trigger and the read-only cell append the
+    // permission identifier in this span wherever it differs from the translated label.
+    permissionId: '.nxs-permissions-panel__id',
+    // :392 and :400 — every option carries its identifier in data-permission. Selecting on that
+    // rather than on text is the whole point: the rendered text is label *and* identifier
+    // ("Manage everything Everything"), which no pattern over either part alone matches.
+    option: (page, permission) =>
+      page.locator(`.cdk-overlay-container mat-option[data-permission="${permission}"]`),
+>>>>>>> origin/integration/nxsat-308
     save: 'nxs-permissions-panel button',
     // The panel's own outcome, never another feature's snack bar. Where the step closes a toast it
     // clicks the first status or alert button: the status text after a save, and after a refusal
@@ -716,6 +895,45 @@ const NXS = {
   versions: {
     provenance: 'nxs-manage-versions',
     root: 'nxs-manage-versions',
+    /**
+     * Restore is **not** in `nxs-manage-versions`, by design: choosing a version there opens it
+     * read-only, because a destructive operation on the entry you click is bug-pattern §21 — one
+     * misclick replaced a live document's content. The confirmed restore lives on the document
+     * page of the version being viewed (`document-detail.html` `.version-banner-restore` →
+     * `confirmRestoreVersion()` → `DocumentDetailService.restoreVersion`), which is also where
+     * Nuxeo Web UI puts it: `Document.RestoreVersion` behind a `nuxeo-confirm-button`
+     * (`versions.confirm.title`).
+     *
+     * So this opens each listed version and looks there. Counting roles inside the menu that
+     * deliberately has none measured the wrong surface and would have reported a design decision
+     * as a missing capability — and the fix for that reading would have been to add the very
+     * button §21 forbids.
+     */
+    async restoreOffer(page, h, versions, v) {
+      if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
+        await page.keyboard.press('Escape');
+        await page.waitForTimeout(300);
+      }
+      const seen = [];
+      for (const version of versions) {
+        if (!version?.uid) continue;
+        await h.goToDoc(version.uid);
+        await page.waitForTimeout(2000);
+        // Visible, not merely present: an attached control nobody can reach is not an offer. It is
+        // never clicked — the confirmation it opens is covered by
+        // `document-detail.versions.spec.ts`, and a click here would rewrite the fixture if it
+        // turned out not to be confirmed.
+        const restore = page.locator('lib-document-detail .version-banner-restore').first();
+        const visible = await restore.isVisible().catch(() => false);
+        seen.push({ version: version.versionLabel ?? version.uid, restore: visible });
+      }
+      return {
+        where: "each version's own document page",
+        offered: seen.filter((s) => s.restore).length,
+        listed: v.labels.length,
+        detail: `restore control visible per version page ${JSON.stringify(seen)}`,
+      };
+    },
     async open(page, h, uid) {
       // The previous read leaves its menu open for the screenshot; a stale menu must not be read.
       if (await page.locator('.cdk-overlay-container .nxs-manage-versions__menu').count()) {
@@ -738,11 +956,6 @@ const NXS = {
       const menu = page.locator('.cdk-overlay-container .nxs-manage-versions__menu').first();
       const scope = hasMenu ? menu : root;
       const rootText = (await root.innerText().catch(() => '')).replace(/\s+/g, ' ');
-      // A version item is a menuitemradio; a restore could be any of the three roles.
-      let restore = 0;
-      for (const role of ['menuitem', 'menuitemradio', 'button']) {
-        restore += await scope.getByRole(role, { name: /restore/i }).count();
-      }
       const text = hasMenu
         ? (await menu.innerText().catch(() => '')).replace(/\s+/g, ' ')
         : rootText;
@@ -756,7 +969,9 @@ const NXS = {
             ).map((t) => t.trim())
           : [],
         live: rootText.match(/1\.0\+|current version/i)?.[0] ?? '',
-        restore,
+        // No `restore` here on purpose. This used to scan the menu for a menuitem, menuitemradio or
+        // button named /restore/i; the menu deliberately has none, so the count was always zero and
+        // measured a surface the capability is not on. `restoreOffer` above looks where it is.
         create: await scope.locator('.nxs-manage-versions__create:not([disabled])').count(),
         empty: /no (previous )?versions/i.test(text) ? text.slice(0, 120) : '',
         text: text.slice(0, 300),
@@ -1883,16 +2098,6 @@ export default async function run(page, h, outDir) {
     /1\.0\+|current/i.test(v.live),
     JSON.stringify(v.live),
   );
-  gap('versions.restore-offered', {
-    correct: v.labels.length === 3 && v.restore >= 3,
-    wrongObserved:
-      v.labels.length === 3 &&
-      v.restore === 0 &&
-      Array.isArray(v.menus) &&
-      v.menus.every((m) => m.length === 0),
-    expect: 'offer a restore action on each listed version',
-    observed: `${v.restore} restore control(s); version menus ${JSON.stringify(v.menus ?? null)}`,
-  });
   gap('versions.create-offered', {
     correct: v.create >= 1,
     wrongObserved:
@@ -1905,6 +2110,38 @@ export default async function run(page, h, outDir) {
   });
   h.note('restore is not clicked: it rewrites the live document and the remaining steps read it');
   await h.screenshot('versions-list');
+  // After the screenshot, because on the nxs surface this navigates to each version's own page —
+  // which is where the restore is — and would otherwise take the versions list off screen.
+  const restoreOffer = await A.versions.restoreOffer(page, h, versionList?.entries ?? [], v);
+  h.note(
+    `a restore of a listed version is offered on ${restoreOffer.where} — on the nxs surface that is` +
+      ' the document page, not nxs-manage-versions, which deliberately offers none (bug-pattern §21);' +
+      ' whether that restore is confirmed first is asserted by document-detail.versions.spec.ts, not' +
+      ' here, because confirming it by clicking would rewrite the fixture if it were not. The' +
+      ' expectation for where restore is offered was corrected after the before-half had been' +
+      ' captured (it counted restore controls inside nxs-manage-versions, where none are offered).' +
+      ' The before results were produced against the old expectation and cannot be re-measured,' +
+      ' because NXSAT-637 removed the upstream packages, so this step compares against a corrected' +
+      ' expectation rather than a re-measured baseline.',
+  );
+  h.note(
+    "this step's versions.restore-offered expectation was corrected after the before-half had been" +
+      ' captured: it counted restore controls inside the versions sidebar, which nxs-manage-versions' +
+      ' deliberately has none of, rather than on the document page where the confirmed restore is and' +
+      ' where Nuxeo Web UI puts it too. The before results were produced against the old expectation' +
+      ' and cannot be re-measured, because NXSAT-637 removed the upstream packages, so this step' +
+      ' compares against a corrected expectation rather than a re-measured baseline.',
+  );
+  gap('versions.restore-offered', {
+    correct: restoreOffer.listed === 3 && restoreOffer.offered >= 3,
+    wrongObserved:
+      v.labels.length === 3 &&
+      restoreOffer.offered === 0 &&
+      Array.isArray(v.menus) &&
+      v.menus.every((m) => m.length === 0),
+    expect: `offer a restore action for each listed version, on ${restoreOffer.where}`,
+    observed: restoreOffer.detail,
+  });
   await A.versions.open(page, h, unversioned.data?.uid, 'Unversioned memo');
   const v0 = await A.versions.read(page);
   h.check(
@@ -1947,27 +2184,77 @@ export default async function run(page, h, outDir) {
     ).map((t) => t.replace(/\s+/g, ' ').trim());
   await A.permissions.showTab(page, 'User Groups');
   const groupRows = await rowText();
-  const membersRow = groupRows.find((t) => /members/i.test(t)) ?? '';
-  const membersLocal = (await rowText(A.permissions.localRows)).find((t) => /members/i.test(t));
-  const membersInherited = (await rowText(A.permissions.inheritedRows)).find((t) =>
-    /members/i.test(t),
+  h.note(
+    'the expectation for the members row was corrected after the before-half had been captured: it' +
+      ' read "members shows inherited Read and its local Read & Write" and tested one row for both.' +
+      " Nuxeo Web UI 2025.21.0's main.bundle.js renders two separate cards —" +
+      ' documentPermissions.locallyDefined (id="localPermissions") and documentPermissions.inherited' +
+      ' (inheritedAces) — one row per entry, which is what nxs-permissions-panel does too. The' +
+      ' before results were produced against the old expectation and cannot be re-measured, because' +
+      ' NXSAT-637 removed the upstream packages, so this step compares against a corrected' +
+      ' expectation rather than a re-measured baseline.',
+  );
+  /**
+   * The two entries are read from the rows rather than from a section selector: only this surface's
+   * section markup can be verified first-hand, and what actually distinguishes the entries is that
+   * only a locally defined one can be changed.
+   */
+  const membersRowLocator = page.locator(A.permissions.rows).filter({ hasText: /members/i });
+  const membersRowCount = await membersRowLocator.count();
+  let membersEditable = 0;
+  let localMembersPermission = '';
+  let localMembersPermissionId = '';
+  let inheritedMembersRow = '';
+  for (let i = 0; i < membersRowCount; i++) {
+    const row = membersRowLocator.nth(i);
+    const control = row.locator(A.permissions.accessControl);
+    if (await control.count()) {
+      membersEditable += 1;
+      localMembersPermission = (
+        await control
+          .first()
+          .innerText()
+          .catch(() => '')
+      ).trim();
+      // The identifier the trigger discloses beside the label, where the surface discloses one.
+      // Read separately rather than parsed out of the text above: the text is the two concatenated
+      // and splitting it would be guessing at where the boundary is.
+      const idSpan = A.permissions.permissionId
+        ? control.first().locator(A.permissions.permissionId)
+        : null;
+      localMembersPermissionId =
+        idSpan && (await idSpan.count())
+          ? (
+              await idSpan
+                .first()
+                .innerText()
+                .catch(() => '')
+            ).trim()
+          : '';
+    } else {
+      inheritedMembersRow = (await row.innerText().catch(() => '')).replace(/\s+/g, ' ');
+    }
+  }
+  h.check(
+    `${LB} members has both an editable row and a non-editable one, so its locally defined entry and its inherited one are separate rows`,
+    membersRowCount >= 2 && membersEditable >= 1 && membersEditable < membersRowCount,
+    `${membersRowCount} members row(s), ${membersEditable} of them with an access control; rows read ${JSON.stringify(groupRows)}`,
   );
   h.check(
-    `${LB} members shows inherited Read and its local Read & Write`,
-    // A surface that puts both grants in one row is read as one row; a surface that splits them
-    // into a local and an inherited table is read as two. Concatenating every row of both tables
-    // could not tell the two grants apart, so this read as a parity failure on a panel that
-    // renders both correctly.
-    A.permissions.oneRowPerPrincipal
-      ? // Inherited is the column before the local one; a bare /Read/ would match "Read & Write" alone.
-        /\bRead\b(?! &| and)[\s\S]*(Read & Write|ReadWrite|Read and write)/i.test(membersRow)
-      : Boolean(membersInherited) &&
-          /\bRead\b(?! &| and)/i.test(membersInherited) &&
-          Boolean(membersLocal) &&
-          /Read & Write|ReadWrite|Read and write/i.test(membersLocal),
-    A.permissions.oneRowPerPrincipal
-      ? JSON.stringify(groupRows)
-      : JSON.stringify({ local: membersLocal ?? null, inherited: membersInherited ?? null }),
+    `${LB} the locally defined members row grants ReadWrite and the inherited one grants Read`,
+    // The local row's permission is read from its access control, not from the row's text: the
+    // actions column renders Material icon ligatures, and "edit" there is not the "Edit" label.
+    // Within that control it is read from the identifier the trigger discloses where there is one,
+    // because the trigger's text is label *and* identifier — "Edit ReadWrite".
+    // `Read` is matched only where it is the whole permission — upstream's ReadWrite label is
+    // "Read & Write", which a bare \bRead\b would match.
+    showsPermission('ReadWrite', {
+      identifier: localMembersPermissionId,
+      text: localMembersPermission,
+    }) && /\bRead\b(?! ?&| and)/i.test(inheritedMembersRow),
+    `access control reads ${JSON.stringify(localMembersPermission)}` +
+      ` (identifier ${JSON.stringify(localMembersPermissionId) || 'not disclosed'});` +
+      ` inherited row reads ${JSON.stringify(inheritedMembersRow)}`,
   );
   await A.permissions.showTab(page, 'Individual Users');
   const userRows = await rowText();
@@ -2028,6 +2315,7 @@ export default async function run(page, h, outDir) {
     .click({ timeout: 10_000 })
     .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
+<<<<<<< HEAD
   const everything = A.permissions.option('Everything');
   const everythingOption = everything.hasText
     ? page.locator(everything.selector).filter({ hasText: everything.hasText })
@@ -2060,6 +2348,25 @@ export default async function run(page, h, outDir) {
     `Save present=${(await saveButton.count()) > 0}, enabled=${saveOffered}`,
   );
   await saveButton.click({ timeout: 10_000 }).catch(leaveItToTheNextCheck);
+=======
+  // Selected by the surface's most stable handle for the permission, not by its label: on the nxs
+  // surface that is data-permission, because the option's text is "Manage everything Everything".
+  const grantEverything = A.permissions.option(page, 'Everything');
+  const everythingOffered = await grantEverything.count();
+  await grantEverything.first().click().catch(leaveItToTheNextCheck);
+  await page.waitForTimeout(600);
+  const saveControl = page.locator(A.permissions.save).filter({ hasText: /^\s*Save\s*$/ });
+  // Counted before the click and never after. A save that lands takes its own button away, so a
+  // count taken afterwards reads zero exactly when the save worked — the inversion this replaced.
+  const saveOffered = await saveControl.count();
+  h.check(
+    `${LB} choosing Everything for members stages a save`,
+    everythingOffered > 0 && saveOffered > 0,
+    `${everythingOffered} option(s) offered Everything by this surface's handle for it;` +
+      ` ${saveOffered} Save control(s) offered before the click`,
+  );
+  await saveControl.first().click().catch(leaveItToTheNextCheck);
+>>>>>>> origin/integration/nxsat-308
   await page.waitForTimeout(3500);
   const feedback = (
     await page
@@ -2071,6 +2378,7 @@ export default async function run(page, h, outDir) {
     .replace(/\s+/g, ' ');
   const afterAcl = localAces((await getJson(`/path${enc(ACL.path)}/@acl`)).data);
   const writes = wire.slice(beforeSave).filter((w) => w.method !== 'GET');
+<<<<<<< HEAD
   // The save has to have *happened*, which is a thing the run can observe rather than infer:
   // either a write left the browser, or the panel said why it refused one. Staging and a pressable
   // Save are necessary and not sufficient — a click swallowed by an overlay, or a handler that
@@ -2084,6 +2392,13 @@ export default async function run(page, h, outDir) {
     everythingStaged && saveOffered && saveOutcome && afterAcl.includes('parity-user:AddChildren'),
     `staged=${everythingStaged}, save pressable=${saveOffered}, ${writes.length} write request(s), ` +
       `panel said ${JSON.stringify(feedback.slice(0, 80))}; local ACL after save ${JSON.stringify(afterAcl)}`,
+=======
+  const save = aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAcl });
+  h.check(
+    `${LB} parity-user's AddChildren survives the save — nothing outside the panel's vocabulary is silently dropped`,
+    save.survives,
+    `${save.attempted ? '' : 'no save was attempted — '}${writes.length} write request(s); local ACL after save ${JSON.stringify(afterAcl)}`,
+>>>>>>> origin/integration/nxsat-308
   );
   const refused =
     /error/i.test(feedback) &&
@@ -2091,7 +2406,9 @@ export default async function run(page, h, outDir) {
     !afterAcl.includes('members:Everything');
   gap('perm.save-applied', {
     correct:
-      afterAcl.includes('members:Everything') && afterAcl.includes('parity-user:AddChildren'),
+      save.attempted &&
+      afterAcl.includes('members:Everything') &&
+      afterAcl.includes('parity-user:AddChildren'),
     wrongObserved: refused && writes.length === 0,
     expect: 'apply a change to members while preserving the AddChildren entry',
     observed: `feedback ${JSON.stringify(feedback.slice(0, 120))}, ${writes.length} write request(s), ACL ${JSON.stringify(afterAcl)}`,
@@ -2106,9 +2423,13 @@ export default async function run(page, h, outDir) {
       expect: 'say why the save was refused (which entry it cannot express)',
       observed: JSON.stringify(feedback.slice(0, 160)),
     });
-  } else {
+  } else if (save.attempted) {
     h.note(
       'the save was not refused, so whether a refusal explains itself is not observable on this surface',
+    );
+  } else {
+    h.note(
+      'no save reached the server, so neither a refusal nor its wording is observable here; what the save did is reported only by the checks above, which require it to have happened',
     );
   }
   await h.screenshot('permissions-save-refused');
@@ -2227,6 +2548,7 @@ export default async function run(page, h, outDir) {
         .click({ timeout: 10_000 })
         .catch(leaveItToTheNextCheck);
       await page.waitForTimeout(600);
+<<<<<<< HEAD
       const read = A.permissions.option('Read');
       await (
         read.hasText
@@ -2236,6 +2558,9 @@ export default async function run(page, h, outDir) {
         .first()
         .click({ timeout: 10_000 })
         .catch(leaveItToTheNextCheck);
+=======
+      await A.permissions.option(page, 'Read').first().click();
+>>>>>>> origin/integration/nxsat-308
       await page.waitForTimeout(600);
     }
     const narrowSaveVisible = await page
@@ -2428,6 +2753,7 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.unknown);
 
   // ── 13. Search listing ───────────────────────────────────────────────────────────────────────
+<<<<<<< HEAD
   // The page sizes the surface's own paging produces over the fixture's 125 hits. The step used to
   // name 50 / 50 / 25 outright, which is one surface's `SEARCH_PAGE_SIZE` written into an
   // expectation: on a surface that pages by 40 the first check failed for a listing that was
@@ -2438,6 +2764,20 @@ export default async function run(page, h, outDir) {
     searchPageSizes.push(Math.min(left, A.search.pageSize));
   }
   await h.step(`Search listing — ${PAGED.count} hits paged ${searchPageSizes.join(' / ')}`);
+=======
+  // The page lengths here were corrected after the before-half was captured; see the step note.
+  await h.step(
+    `Search listing — ${PAGED.count} hits paged ${SEARCH_PAGE_PLAN.join(' / ')} across ${SEARCH_PAGE_PLAN.length} pages`,
+  );
+  h.note(
+    `this step's expected page lengths were corrected from 50 / 50 / 25 to ${SEARCH_PAGE_PLAN.join(' / ')}` +
+      ` after the before-half had been captured: the app's search page size is ${SEARCH_PAGE_SIZE}` +
+      ` (SEARCH_PAGE_SIZE, NXSAT-641) and 50 matched neither it nor Web UI's 20. The before results` +
+      ' were produced against the old expectation and cannot be re-measured, because NXSAT-637' +
+      ' removed the upstream packages, so this step compares against a corrected expectation rather' +
+      ' than a re-measured baseline.',
+  );
+>>>>>>> origin/integration/nxsat-308
   await h.goTo(A.search.route);
   const searchFor = async (term) => {
     await page.locator(A.search.input).first().fill(term);
@@ -2454,11 +2794,16 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(500);
   };
   await searchFor(SEARCH.token);
+<<<<<<< HEAD
+=======
+  const searchPages = [await readRows(page, A.search.rows, A.search.title)];
+>>>>>>> origin/integration/nxsat-308
   const countText = await page
     .locator(A.search.count)
     .first()
     .innerText()
     .catch(() => '');
+<<<<<<< HEAD
   const searchPages = [];
   let firstPageVisible = false;
   for (let i = 0; i < searchPageSizes.length; i++) {
@@ -2512,8 +2857,46 @@ export default async function run(page, h, outDir) {
       Array.from({ length: PAGED.count }, (_, i) => pagedTitle(i + 1)),
     ) && seen.length === PAGED.count,
     `${union.size} distinct titles across ${seen.length} rows`,
+=======
+  h.check(
+    `${LB} the first page lists ${SEARCH_PAGE_PLAN[0]} hits, all of them paged items`,
+    searchPages[0].length === SEARCH_PAGE_PLAN[0] &&
+      searchPages[0].every((r) => r.title.startsWith('Paged item')) &&
+      (await page
+        .locator(A.search.rows)
+        .first()
+        .isVisible()
+        .catch(() => false)),
+    `${searchPages[0].length} rows`,
   );
-  await h.screenshot('search-results-page-3');
+  h.check(
+    `${CTX} the result count is ${PAGED.count}`,
+    new RegExp(String(PAGED.count)).test(countText),
+    JSON.stringify(countText),
+  );
+  await h.screenshot('search-results-page-1');
+  for (let i = 1; i < SEARCH_PAGE_PLAN.length; i++) {
+    await page.locator(A.search.next).first().click().catch(leaveItToTheNextCheck);
+    await page.waitForTimeout(3000);
+    searchPages.push(await readRows(page, A.search.rows, A.search.title));
+  }
+  const searchRowCount = searchPages.reduce((n, rows) => n + rows.length, 0);
+  const union = new Set(searchPages.flat().map((r) => r.title));
+  h.check(
+    `${LB} the remaining pages hold ${SEARCH_PAGE_PLAN.slice(1).join(' then ')} hits`,
+    searchPages.slice(1).every((rows, i) => rows.length === SEARCH_PAGE_PLAN[i + 1]),
+    `page lengths ${JSON.stringify(searchPages.map((rows) => rows.length))}`,
+  );
+  h.check(
+    `${LB} the ${SEARCH_PAGE_PLAN.length} pages are disjoint and cover exactly Paged item 001 to ${PAGED.count}`,
+    sameSet(
+      [...union],
+      Array.from({ length: PAGED.count }, (_, i) => pagedTitle(i + 1)),
+    ) && searchRowCount === PAGED.count,
+    `${union.size} distinct titles across ${searchRowCount} rows`,
+>>>>>>> origin/integration/nxsat-308
+  );
+  await h.screenshot('search-results-last-page');
 
   await h.step('Search listing — no results, and a match the administrator can see');
   await searchFor(SEARCH.none);
