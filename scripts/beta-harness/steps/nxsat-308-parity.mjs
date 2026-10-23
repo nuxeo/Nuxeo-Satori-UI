@@ -73,6 +73,31 @@ const deepTitle = (n) =>
     ? 'Deep L5 with a deliberately long folder title to exercise breadcrumb truncation'
     : `Deep L${n}`;
 const PAGED = { path: `${ROOT}/paged`, title: 'Paged folder', count: 125, pageSize: 50 };
+
+/**
+ * The search page size the app uses: `SEARCH_PAGE_SIZE` in
+ * `libs/features/search/src/lib/search-session/search-session.ts`, set deliberately by NXSAT-641.
+ * `PAGED.pageSize` above is the *browse* list's `PAGE_SIZE` (`browse.ts`), which is 50 — the two
+ * surfaces page differently and the steps must not share one number.
+ */
+const SEARCH_PAGE_SIZE = 40;
+
+/** Page lengths for `total` items at `pageSize`: whole pages, then whatever is left over. */
+function pagePlan(total, pageSize) {
+  const plan = Array.from({ length: Math.floor(total / pageSize) }, () => pageSize);
+  if (total % pageSize) plan.push(total % pageSize);
+  return plan;
+}
+
+/**
+ * `[40, 40, 40, 5]` — 125 hits over four pages.
+ *
+ * Derived rather than written out, because the expectation it replaces was written out: it read
+ * 50 / 50 / 25, which is neither this app's page size nor Nuxeo Web UI's (whose only page-size
+ * literal is 20), and a hand-written correction of it got as far as "40 / 40 / 45" — a page longer
+ * than the page size, which cannot happen. Arithmetic cannot make that mistake.
+ */
+const SEARCH_PAGE_PLAN = pagePlan(PAGED.count, SEARCH_PAGE_SIZE);
 const pagedTitle = (n) => `Paged item ${String(n).padStart(3, '0')}`;
 const VERSIONS = {
   path: `${ROOT}/versions`,
@@ -1723,12 +1748,55 @@ export default async function run(page, h, outDir) {
     ).map((t) => t.replace(/\s+/g, ' ').trim());
   await A.permissions.showTab(page, 'User Groups');
   const groupRows = await rowText();
-  const membersRow = groupRows.find((t) => /members/i.test(t)) ?? '';
+  h.note(
+    'the expectation for the members row was corrected after the before-half had been captured: it' +
+      ' read "members shows inherited Read and its local Read & Write" and tested one row for both.' +
+      " Nuxeo Web UI 2025.21.0's main.bundle.js renders two separate cards —" +
+      ' documentPermissions.locallyDefined (id="localPermissions") and documentPermissions.inherited' +
+      ' (inheritedAces) — one row per entry, which is what nxs-permissions-panel does too. The' +
+      ' before results were produced against the old expectation and cannot be re-measured, because' +
+      ' NXSAT-637 removed the upstream packages, so this step compares against a corrected' +
+      ' expectation rather than a re-measured baseline.',
+  );
+  /**
+   * The two entries are read from the rows rather than from a section selector: only this surface's
+   * section markup can be verified first-hand, and what actually distinguishes the entries is that
+   * only a locally defined one can be changed.
+   */
+  const membersRowLocator = page.locator(A.permissions.rows).filter({ hasText: /members/i });
+  const membersRowCount = await membersRowLocator.count();
+  let membersEditable = 0;
+  let localMembersPermission = '';
+  let inheritedMembersRow = '';
+  for (let i = 0; i < membersRowCount; i++) {
+    const row = membersRowLocator.nth(i);
+    const control = row.locator(A.permissions.accessControl);
+    if (await control.count()) {
+      membersEditable += 1;
+      localMembersPermission = (
+        await control
+          .first()
+          .innerText()
+          .catch(() => '')
+      ).trim();
+    } else {
+      inheritedMembersRow = (await row.innerText().catch(() => '')).replace(/\s+/g, ' ');
+    }
+  }
   h.check(
-    `${LB} members shows inherited Read and its local Read & Write`,
-    // Inherited is the column before the local one; a bare /Read/ would match "Read & Write" alone.
-    /\bRead\b(?! &| and)[\s\S]*(Read & Write|ReadWrite|Read and write)/i.test(membersRow),
-    JSON.stringify(groupRows),
+    `${LB} members' locally defined entry and its inherited one are rows of their own, one per entry`,
+    membersRowCount >= 2 && membersEditable >= 1 && membersEditable < membersRowCount,
+    `${membersRowCount} members row(s), ${membersEditable} of them with an access control; rows read ${JSON.stringify(groupRows)}`,
+  );
+  h.check(
+    `${LB} the locally defined members row grants ReadWrite and the inherited one grants Read`,
+    // The local row's permission is read from its access control, not from the row's text: the
+    // actions column renders Material icon ligatures, and "edit" there is not the "Edit" label.
+    // `Read` is matched only where it is the whole permission — upstream's ReadWrite label is
+    // "Read & Write", which a bare \bRead\b would match.
+    PERMISSION_OPTION.ReadWrite.test(localMembersPermission) &&
+      /\bRead\b(?! ?&| and)/i.test(inheritedMembersRow),
+    `access control reads ${JSON.stringify(localMembersPermission)}; inherited row reads ${JSON.stringify(inheritedMembersRow)}`,
   );
   await A.permissions.showTab(page, 'Individual Users');
   const userRows = await rowText();
@@ -2079,7 +2147,18 @@ export default async function run(page, h, outDir) {
   await A.viewer.close(page, A, MEDIA.unknown);
 
   // ── 13. Search listing ───────────────────────────────────────────────────────────────────────
-  await h.step('Search listing — 125 hits paged 50 / 50 / 25');
+  // The page lengths here were corrected after the before-half was captured; see the step note.
+  await h.step(
+    `Search listing — ${PAGED.count} hits paged ${SEARCH_PAGE_PLAN.join(' / ')} across ${SEARCH_PAGE_PLAN.length} pages`,
+  );
+  h.note(
+    `this step's expected page lengths were corrected from 50 / 50 / 25 to ${SEARCH_PAGE_PLAN.join(' / ')}` +
+      ` after the before-half had been captured: the app's search page size is ${SEARCH_PAGE_SIZE}` +
+      ` (SEARCH_PAGE_SIZE, NXSAT-641) and 50 matched neither it nor Web UI's 20. The before results` +
+      ' were produced against the old expectation and cannot be re-measured, because NXSAT-637' +
+      ' removed the upstream packages, so this step compares against a corrected expectation rather' +
+      ' than a re-measured baseline.',
+  );
   await h.goTo(A.search.route);
   const searchFor = async (term) => {
     await page.locator(A.search.input).first().fill(term);
@@ -2092,46 +2171,50 @@ export default async function run(page, h, outDir) {
     await page.waitForTimeout(500);
   };
   await searchFor(SEARCH.token);
-  const s1 = await readRows(page, A.search.rows, A.search.title);
+  const searchPages = [await readRows(page, A.search.rows, A.search.title)];
   const countText = await page
     .locator(A.search.count)
     .first()
     .innerText()
     .catch(() => '');
   h.check(
-    `${LB} the first page lists 50 hits, all of them paged items`,
-    s1.length === 50 &&
-      s1.every((r) => r.title.startsWith('Paged item')) &&
+    `${LB} the first page lists ${SEARCH_PAGE_PLAN[0]} hits, all of them paged items`,
+    searchPages[0].length === SEARCH_PAGE_PLAN[0] &&
+      searchPages[0].every((r) => r.title.startsWith('Paged item')) &&
       (await page
         .locator(A.search.rows)
         .first()
         .isVisible()
         .catch(() => false)),
-    `${s1.length} rows`,
+    `${searchPages[0].length} rows`,
   );
-  h.check(`${CTX} the result count is 125`, /125/.test(countText), JSON.stringify(countText));
+  h.check(
+    `${CTX} the result count is ${PAGED.count}`,
+    new RegExp(String(PAGED.count)).test(countText),
+    JSON.stringify(countText),
+  );
   await h.screenshot('search-results-page-1');
-  await page.locator(A.search.next).first().click();
-  await page.waitForTimeout(3000);
-  const s2 = await readRows(page, A.search.rows, A.search.title);
-  await page.locator(A.search.next).first().click();
-  await page.waitForTimeout(3000);
-  const s3 = await readRows(page, A.search.rows, A.search.title);
-  const union = new Set([...s1, ...s2, ...s3].map((r) => r.title));
+  for (let i = 1; i < SEARCH_PAGE_PLAN.length; i++) {
+    await page.locator(A.search.next).first().click().catch(leaveItToTheNextCheck);
+    await page.waitForTimeout(3000);
+    searchPages.push(await readRows(page, A.search.rows, A.search.title));
+  }
+  const searchRowCount = searchPages.reduce((n, rows) => n + rows.length, 0);
+  const union = new Set(searchPages.flat().map((r) => r.title));
   h.check(
-    `${LB} pages 2 and 3 hold 50 and 25 hits`,
-    s2.length === 50 && s3.length === 25,
-    `${s2.length} and ${s3.length}`,
+    `${LB} the remaining pages hold ${SEARCH_PAGE_PLAN.slice(1).join(' then ')} hits`,
+    searchPages.slice(1).every((rows, i) => rows.length === SEARCH_PAGE_PLAN[i + 1]),
+    `page lengths ${JSON.stringify(searchPages.map((rows) => rows.length))}`,
   );
   h.check(
-    `${LB} the three pages are disjoint and cover exactly Paged item 001 to 125`,
+    `${LB} the ${SEARCH_PAGE_PLAN.length} pages are disjoint and cover exactly Paged item 001 to ${PAGED.count}`,
     sameSet(
       [...union],
       Array.from({ length: PAGED.count }, (_, i) => pagedTitle(i + 1)),
-    ) && s1.length + s2.length + s3.length === PAGED.count,
-    `${union.size} distinct titles across ${s1.length + s2.length + s3.length} rows`,
+    ) && searchRowCount === PAGED.count,
+    `${union.size} distinct titles across ${searchRowCount} rows`,
   );
-  await h.screenshot('search-results-page-3');
+  await h.screenshot('search-results-last-page');
 
   await h.step('Search listing — no results, and a match the administrator can see');
   await searchFor(SEARCH.none);
