@@ -208,21 +208,49 @@ test.describe('authentication and authorisation', () => {
     ).toBe(true);
   });
 
-  test('an anonymous visitor is not granted administration access', async ({ page }) => {
+  test.describe('without the suite-wide credentials', () => {
     /**
-     * The privilege boundary. `adminGuard` admits only `hasAdministrationAccess()` and sends
-     * everyone else to `/dashboard`. With anonymous auth enabled server-side, an unauthenticated
-     * visitor reaches the app as `Anonymous` — so this is the assertion that keeps that from
-     * meaning "reaches administration".
+     * This test needs a context with **no** `httpCredentials`, which cannot be expressed as
+     * `test.use({ httpCredentials: undefined })` — Playwright treats the undefined as "not
+     * overridden" and the config's value survives. Measured: still red that way. So the
+     * context is built explicitly, which is the only form that actually drops them.
      *
-     * `httpCredentials` off, or the dev-server basic-auth credentials in the Playwright config would
-     * grant exactly the access this test exists to deny.
+     * `baseURL` and `viewport` are restated because `browser.newContext()` starts from the
+     * browser, not from this project's `use` block, so a relative `goto` would otherwise
+     * have no origin to resolve against.
      */
-    await page.goto('/#/administration', { waitUntil: 'networkidle' });
-    await page.waitForTimeout(1500);
+    test('an anonymous visitor is not granted administration access', async ({ browser }) => {
+      /**
+       * The privilege boundary. `adminGuard` admits only `hasAdministrationAccess()` and sends
+       * everyone else to `/dashboard`. With anonymous auth enabled server-side, an unauthenticated
+       * visitor reaches the app as `Anonymous` — so this is the assertion that keeps that from
+       * meaning "reaches administration".
+       *
+       * The config sends Basic auth to the app origin on **every** request (`send: 'always'`,
+       * NXSAT-643) because a guest-enabled Nuxeo never issues a 401 challenge. Correct for the
+       * rest of the suite, and fatal here: it authenticates this "anonymous visitor" as the
+       * administrator and grants exactly the access this test exists to deny. The test then
+       * failed reporting that `Anonymous` reached administration, when what reached it was a
+       * fully privileged session. The paragraph above this one predicted that in prose —
+       * "`httpCredentials` off … would grant exactly the access this test exists to deny" —
+       * while nothing enforced it. Now the context does.
+       */
+      const context = await browser.newContext({
+        httpCredentials: undefined,
+        baseURL: process.env['E2E_BASE_URL'] ?? 'http://localhost:4200',
+        viewport: { width: 1440, height: 900 },
+      });
+      const page = await context.newPage();
+      try {
+        await page.goto('/#/administration', { waitUntil: 'networkidle' });
+        await page.waitForTimeout(1500);
 
-    expect(page.url(), 'Anonymous should be redirected off /administration').not.toMatch(
-      /#\/administration/,
-    );
+        expect(page.url(), 'Anonymous should be redirected off /administration').not.toMatch(
+          /#\/administration/,
+        );
+      } finally {
+        await context.close();
+      }
+    });
   });
 });
