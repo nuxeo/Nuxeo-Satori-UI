@@ -4,7 +4,8 @@ import type { NxsErrorStatus } from './error-state/error-status';
 import type { NxsHeadingLevel } from './heading-level';
 
 /**
- * The IDs of the primitives Satori also ships, registered by `provideNxsComponents()`.
+ * The IDs of the primitives this library registers by `provideNxsComponents()`. The first four and
+ * `errorState` are primitives Satori also ships; `banner` and `chipSet` have no Satori twin yet.
  *
  * Each ID resolves to a Material implementation from this entry point, and the first four to a
  * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`

@@ -213,7 +213,7 @@ trashed-document and version banners in document detail, the two location hints 
 search's AI error. The rows below that name them are the record as measured on 2026-10-08. Still on
 Material, as the scope column says: the KD and AI banners, the workflow and task-action banners
 (NXSAT-327), and the collection page's unavailable state, which is a page-level error state rather
-than a banner (see §4.12).
+than a banner.
 
 | Site                                                                                                      | What it is                                   | Scope                      |
 | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------- |
@@ -473,7 +473,7 @@ A suggested order for NXSAT-308, with the core-slice sites each wrapper takes ov
 6. **`nxs-tabs`**: 4 sites. It needs the navigational-tabs design decision first (section 3, item 3).
 7. **`nxs-card`**: 2 sites, plus DocumentCards.
 
-Not wrappers: chips, which go with the §5 J/K inputs (section 3, item 1); tables, which go into `nxs-document-list`,
+Not wrappers: the input chip grids, which go with the §5 J/K inputs (section 3, item 1); display chip sets are wrapped as `nxs-chip-set` (NXSAT-677); tables, which go into `nxs-document-list`,
 History and PermissionsPanel; split panes, which nobody has asked for.
 
 ## 6. How this was produced
