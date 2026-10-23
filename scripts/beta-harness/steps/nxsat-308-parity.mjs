@@ -106,6 +106,35 @@ const SEARCH = { token: 'paritytoken', none: 'zzznoparityresult', secret: 'secre
 const SESSION_KEY = 'agentic_ui_nuxeo_session';
 
 /**
+ * How each surface's access control names the permission underneath it, for a step that has to
+ * pick one. Ours translates through `permissions.right.*` — `ReadWrite` reads "Edit" and
+ * `Everything` reads "Manage everything"; upstream's reads "Read & Write" and "Everything". A
+ * filter that matches neither selects nothing, so nothing is staged, no Save appears, and every
+ * claim about what the save did is made about a save that never happened. `/^\s*Everything\s*$/`
+ * was exactly that on the nxs surface.
+ */
+export const PERMISSION_OPTION = {
+  ReadWrite: /^\s*(Read & Write|Read and write|ReadWrite|Edit)\s*$/i,
+  Everything: /^\s*(Manage everything|Everything)\s*$/i,
+};
+
+/**
+ * What a permissions save is allowed to claim, from what was observed around it.
+ *
+ * `attempted` is the structural guard: a staged change (an option matched *and* a Save control was
+ * offered, both read before the click) and a non-GET request at the wire. `survives` conjoins it,
+ * so the surviving-entry claim cannot be satisfied by a run in which nothing was saved — which is
+ * how it used to pass. Exported, and covered by `nxsat-308-parity.selftest.mjs`, so the inversion
+ * can be shown going red rather than asserted.
+ *
+ * @param {{everythingOffered: number, saveOffered: number, writes: {method: string}[], afterAcl: string[]}} observed
+ */
+export function aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAcl }) {
+  const attempted = everythingOffered > 0 && saveOffered > 0 && writes.length > 0;
+  return { attempted, survives: attempted && afterAcl.includes('parity-user:AddChildren') };
+}
+
+/**
  * For a wait or a click that may not land. Its failure is never the finding: the check after it
  * observes what is actually on screen and records why, which a thrown timeout would pre-empt by
  * aborting the run before that check could say anything.
@@ -1754,19 +1783,22 @@ export default async function run(page, h, outDir) {
     .click()
     .catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
-  await page
+  const grantEverything = page
     .locator(A.permissions.options)
-    .filter({ hasText: /^\s*Everything\s*$/ })
-    .first()
-    .click()
-    .catch(leaveItToTheNextCheck);
+    .filter({ hasText: PERMISSION_OPTION.Everything });
+  const everythingOffered = await grantEverything.count();
+  await grantEverything.first().click().catch(leaveItToTheNextCheck);
   await page.waitForTimeout(600);
-  await page
-    .locator(A.permissions.save)
-    .filter({ hasText: /^\s*Save\s*$/ })
-    .first()
-    .click()
-    .catch(leaveItToTheNextCheck);
+  const saveControl = page.locator(A.permissions.save).filter({ hasText: /^\s*Save\s*$/ });
+  // Counted before the click and never after. A save that lands takes its own button away, so a
+  // count taken afterwards reads zero exactly when the save worked — the inversion this replaced.
+  const saveOffered = await saveControl.count();
+  h.check(
+    `${LB} choosing Everything for members stages a save`,
+    everythingOffered > 0 && saveOffered > 0,
+    `${everythingOffered} option(s) matched ${PERMISSION_OPTION.Everything}; ${saveOffered} Save control(s) offered before the click`,
+  );
+  await saveControl.first().click().catch(leaveItToTheNextCheck);
   await page.waitForTimeout(3500);
   const feedback = (
     await page
@@ -1778,10 +1810,11 @@ export default async function run(page, h, outDir) {
     .replace(/\s+/g, ' ');
   const afterAcl = localAces((await getJson(`/path${enc(ACL.path)}/@acl`)).data);
   const writes = wire.slice(beforeSave).filter((w) => w.method !== 'GET');
+  const save = aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAcl });
   h.check(
     `${LB} parity-user's AddChildren survives the save — nothing outside the panel's vocabulary is silently dropped`,
-    afterAcl.includes('parity-user:AddChildren'),
-    `local ACL after save ${JSON.stringify(afterAcl)}`,
+    save.survives,
+    `${save.attempted ? '' : 'no save was attempted — '}${writes.length} write request(s); local ACL after save ${JSON.stringify(afterAcl)}`,
   );
   const refused =
     /error/i.test(feedback) &&
@@ -1789,7 +1822,9 @@ export default async function run(page, h, outDir) {
     !afterAcl.includes('members:Everything');
   gap('perm.save-applied', {
     correct:
-      afterAcl.includes('members:Everything') && afterAcl.includes('parity-user:AddChildren'),
+      save.attempted &&
+      afterAcl.includes('members:Everything') &&
+      afterAcl.includes('parity-user:AddChildren'),
     wrongObserved: refused && writes.length === 0,
     expect: 'apply a change to members while preserving the AddChildren entry',
     observed: `feedback ${JSON.stringify(feedback.slice(0, 120))}, ${writes.length} write request(s), ACL ${JSON.stringify(afterAcl)}`,
@@ -1804,9 +1839,13 @@ export default async function run(page, h, outDir) {
       expect: 'say why the save was refused (which entry it cannot express)',
       observed: JSON.stringify(feedback.slice(0, 160)),
     });
-  } else {
+  } else if (save.attempted) {
     h.note(
       'the save was not refused, so whether a refusal explains itself is not observable on this surface',
+    );
+  } else {
+    h.note(
+      'no save reached the server, so neither a refusal nor its wording is observable here; what the save did is reported only by the checks above, which require it to have happened',
     );
   }
   await h.screenshot('permissions-save-refused');

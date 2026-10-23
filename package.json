@@ -5,6 +5,7 @@
     "beta:api": "node scripts/beta-harness/api-surface.mjs",
     "beta:audit": "node scripts/beta-harness/assertion-audit.mjs",
     "beta:audit-selftest": "node scripts/beta-harness/assertion-audit.selftest.mjs",
+    "beta:parity-selftest": "node scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs",
     "beta:backend": "node scripts/beta-harness/backend-preflight.mjs",
     "beta:bundle": "node scripts/beta-harness/no-test-libs-in-bundle.mjs",
     "beta:coverage": "node scripts/beta-harness/coverage-gate.mjs",
