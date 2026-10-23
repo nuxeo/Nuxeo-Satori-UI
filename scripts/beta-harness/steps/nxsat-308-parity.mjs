@@ -286,7 +286,7 @@ const noAnswer = () => null;
  * lowercase hyphenated keys such as `satori-components.properties-panel.last-modified`, so an
  * entirely untranslated nxs panel matched nothing and was judged translated.
  */
-const isRawKeyLabel = (label) => /^[\w-]+(?:[._][\w-]+)+$/.test(label.trim());
+const isRawKeyLabel = (label) => /^\w[\w-]*(?:[._]\w[\w-]*)+$/.test(label.trim());
 
 /** Keys of both styles, and labels no reader may mistake for one; the control below reads these. */
 const RAW_KEY_LABELS = [
