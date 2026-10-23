@@ -205,7 +205,7 @@ are `npm run beta:identity-guard-selftest` and, against a guest-enabled Nuxeo,
 `npm run beta:identity-guard-controls`. Specs that do not use `signedIn` (`auth.spec.ts`) test
 signed-out behaviour on purpose and are not guarded.
 
-### Negative control and evidence retention
+### Vacuity control and evidence retention
 
 ```bash
 npm run beta:e2e-negative-control
@@ -225,15 +225,37 @@ if Git is installed elsewhere):
 npm_config_script_shell='C:/Program Files/Git/bin/bash.exe' npm run beta:e2e-negative-control
 ```
 
-The command first runs preflight with correct credentials, then runs the full Chromium suite
-with a deliberately wrong password. The underlying Playwright run should exit 1. The control
-wrapper exits 0 when at least five tests fail at an assertion of their own; hook, fixture and
-navigation failures do not count. Exit 1 means the sensitivity threshold was not met; exit 2
-means an environment prerequisite was missing. A successful control establishes credential
-sensitivity, not that every assertion read repository data.
+The command runs preflight with correct credentials, then runs the full Chromium suite
+**twice**: a baseline, and again with `E2E_STARVE_APP=1`, which makes the app's own
+`/nuxeo/api` calls answer 200-but-empty while leaving the specs' discovery context untouched.
+A spec counts as data-sensitive when it **passed the baseline and then failed at an `expect()`
+of its own** when starved. The wrapper exits 0 at or above five such specs, 1 below, and 2 when
+an environment prerequisite was missing. The verdict comes from
+`scripts/beta-harness/vacuity-verdict.mjs`, whose selftest is `npm run beta:e2e-vacuity-selftest`.
+
+It used to run once with a deliberately wrong password and count the same kind of failure.
+NXSAT-643's identity guard ended that: a wrong password now fails inside the `signedIn`
+fixture and in `test.beforeAll`, and the assertion reporter excludes hook and fixture failures
+by design, so the counted population became empty and the control could only report FAIL.
+The two runs also remove a second problem a single run cannot see — a spec that was already
+red counts as sensitive when it is red either way.
+
+Specs that pass **both** runs are listed by name as a standing vacuity list. That is a finding,
+not a failure: chrome, redirect and negative-case assertions legitimately survive an empty
+repository, while anything claiming to read repository data and appearing there is a defect.
+
+Starvation rides on the `signedIn` fixture, so specs that do not use it — `auth.spec.ts`, which
+tests the guards that fixture defeats — are never starved. The fixture annotates each test it
+starves and the verdict lists the rest as **not perturbed**, because counting them as having
+survived an empty repository would claim a perturbation they never saw.
+
+A successful control establishes data-sensitivity for the specs it counted, and says nothing
+about the ones it lists as vacuous, not perturbed, inconclusive or not measured.
 
 Archive `dist/e2e/results.json`, `dist/e2e/assertion-failures.json` and `dist/e2e/artifacts/`
-after each build/browser run and before the negative control: later runs overwrite them.
+after each build/browser run and before the vacuity control: later runs overwrite them. The
+control keeps its own two runs apart under `dist/e2e/vacuity-baseline/` and
+`dist/e2e/vacuity-starved/`.
 The committed config retains screenshots and recordings only on failure. For successful-run
 media, use a local config importing the committed config and changing only retention to
 `screenshot: 'on'` and `video: 'on'`; pass that config with `-c`. Keep local configs, media and

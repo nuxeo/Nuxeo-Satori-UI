@@ -1,6 +1,6 @@
 import { formatAceDateRange } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { nxsAceTimeFrame, offeredRights } from './permission-dialog-support';
+import { nxsAceTimeFrame, nxsOfferedRights } from './permission-dialog-support';
 
 const translate = (key: string, params?: Record<string, unknown>): string =>
   params ? `${key} ${Object.values(params).join(' - ')}` : key;
@@ -31,8 +31,8 @@ describe('nxsAceTimeFrame', () => {
   });
 });
 
-describe('offeredRights', () => {
+describe('nxsOfferedRights', () => {
   it('does not repeat an entry’s right the type already lists', () => {
-    expect(offeredRights(['Read', 'ReadWrite'], 'Read')).toEqual(['Read', 'ReadWrite']);
+    expect(nxsOfferedRights(['Read', 'ReadWrite'], 'Read')).toEqual(['Read', 'ReadWrite']);
   });
 });

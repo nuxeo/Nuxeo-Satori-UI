@@ -1,4 +1,4 @@
-import { aRootChild, expect, expectSurfaceWithData, newNuxeoApiContext, test } from './fixtures';
+import { aRootChild, expect, expectRowWithData, newNuxeoApiContext, test } from './fixtures';
 import { type APIRequestContext } from '@playwright/test';
 
 /**
@@ -98,7 +98,7 @@ test.describe('cross-engine behaviour', () => {
     await page.goto('/#/browse', { waitUntil: 'networkidle' });
 
     const rootChild = await aRootChild(api);
-    await expectSurfaceWithData(page, 'lib-browse', rootChild.title);
+    await expectRowWithData(page, 'lib-browse', rootChild.title);
     await page.waitForTimeout(2000);
 
     // Two assertions, because "no blob images" has two very different causes: an instance with
@@ -148,14 +148,16 @@ test.describe('cross-engine behaviour', () => {
     await page.goto('/#/browse', { waitUntil: 'networkidle' });
 
     const rootChild = await aRootChild(api);
-    await expectSurfaceWithData(page, 'lib-browse', rootChild.title);
+    await expectRowWithData(page, 'lib-browse', rootChild.title);
 
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForTimeout(1500);
 
-    // Still authenticated: the guard did not bounce us, and repository data arrived again.
+    // Still authenticated: the guard did not bounce us, and a repository row arrived again.
+    // Asserted as a row rather than as surface text, or an empty listing whose copy happens
+    // to name the expected title would satisfy it (NXSAT-708).
     expect(page.url(), 'a reload should not redirect to sign-in').not.toMatch(/sign-?in|login/i);
-    await expectSurfaceWithData(page, 'lib-browse', rootChild.title);
+    await expectRowWithData(page, 'lib-browse', rootChild.title);
   });
 
   /**

@@ -219,12 +219,14 @@
               [componentInputs]="{
                 documentId: current.uid,
                 permissionsChanged: onPermissionsChanged,
+                offer: 'type',
               }"
             />
             @if (permissionsPanelOutlet.unresolved()) {
               <nxs-permissions-panel
                 [documentId]="current.uid"
                 [permissionsChanged]="onPermissionsChanged"
+                offer="type"
               />
             }
           }
