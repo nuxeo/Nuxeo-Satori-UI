@@ -141,6 +141,16 @@ jobs:
           # line above verifies the audit runs; this one verifies it can still report — and
           # that the constants it deliberately does NOT decide are still printed as such.
           npm run beta:audit-selftest
+          # The one steps file that captures the same claims on two sets of components, held to
+          # the rule that only its surface adapter differs between the halves. Nothing enforced
+          # that, and the nxs parity run could not finish for two months: a crumb selected by a
+          # label that was itself under test aborted it on a timeout, eleven of twenty-four steps
+          # never ran, and a permission option matched by its translated label staged no change —
+          # so the save under test never happened and the check on it passed on an untouched ACL.
+          npm run beta:parity-surface
+          # And its controls, for the reason the pair above has them: the defects it guards were
+          # in a file nothing audited, so a guard that could not itself go red is the same mistake.
+          npm run beta:parity-surface-selftest
           # The identity guard's offline controls (NXSAT-643): a guard that accepts Anonymous, or a
           # step boundary that goes unchecked, is green on every capture it is supposed to reject.
           # The live half (`beta:identity-guard-controls`) needs a guest-enabled Nuxeo CI lacks.

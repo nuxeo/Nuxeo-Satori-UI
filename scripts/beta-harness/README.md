@@ -254,10 +254,11 @@ npm run beta:gate -- --gates guardrails,lint        # fast inner loop
 npm run beta:gate -- --base main --tail 80
 ```
 
-Every gate in `ALL_GATES` (26 today — an unknown `--gates` id prints the current
+Every gate in `ALL_GATES` (32 today — an unknown `--gates` id prints the current
 list), cheapest first, stopping at the first failure and printing only its output
 tail: `node`, the `lockfile` and `dependency-tree` pairs, `supply-chain`,
-`code-scanning`, the guardrails and sanitizer pairs, `assertions`, then affected
+`code-scanning`, the guardrails and sanitizer pairs, `assertions`, the
+`parity-surface` pair, then affected
 `lint`, `test`, `build`, `typecheck`, then `spec-types`, `bundle` and the packaging
 and drift gates. [Dev Harness & Gates](../../documentation/30-engineering/08-dev-harness-and-gates.md)
 has the table. That ordering is deliberate — a lint error usually explains the test
@@ -297,6 +298,38 @@ files suppress Phase 1's own deliverables.
 
 It cannot tell you whether a falsifiable assertion asserts the _right_ thing. That
 is `AGENTS/12-review-agents.md`.
+
+### The `parity-surface` gate
+
+`npm run beta:parity-surface` audits the one steps file that captures the same claims
+twice — `steps/nxsat-308-parity.mjs`, on the upstream adf-hx components and on their
+nxs- replacements. The upstream half cannot be captured again, so that file's rule is
+that the steps and the expected values are written once and only the **surface adapter**
+changes between the halves.
+
+Nothing enforced the rule, and the `nxs` run was unable to finish for two months. A
+breadcrumb crumb was selected by its label; the label was itself under test, so the one
+real defect — a trail labelled with path segments rather than document titles — became a
+30 s `locator.click` timeout, `verdict: error`, and eleven of twenty-four steps that never
+ran. Separately, the fallback element, the properties labels, the search page size, how a
+search is submitted, the no-results wording and how a permission option is chosen were all
+written into the step bodies as one surface's answer, and each read as a parity failure on a
+surface that behaved correctly. One was worse than a false red: a permission option matched
+by its translated label staged nothing, so the save under test never ran — and the check
+that `AddChildren` survived it passed against an untouched ACL.
+
+Three rules, one per failure: `unguarded-click` (a `.click()` with no `.catch()`),
+`surface-selector-in-step` (a selector naming `nxs-`, `hxp-`, `adf-`, `sat-` or `lib-`
+from outside an adapter, in the runner or inside a `page.evaluate`), and `adapter-gap`
+(a surface missing an adapter key the steps read). A helper that only the adapters call
+counts as adapter code; one the steps also call does not.
+
+It does not decide a surface-specific CSS class with no element prefix, and it cannot
+tell you whether an adapter's selector matches anything on the running app — `nxs-breadcrumbs`
+was a real element of this repository and matched nothing, because `app.config.ts`
+re-registers that primitive on Satori. Both limits are printed on every run.
+`npm run beta:parity-surface-selftest` is its negative controls; they are synthetic files in
+a temporary directory, so unlike the sanitizer controls they cannot leave the tree dirty.
 
 ### Coverage ratchet
 
