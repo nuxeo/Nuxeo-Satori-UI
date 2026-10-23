@@ -1059,17 +1059,106 @@ describe('BrowseComponent — actions', () => {
 
   it('breadcrumbs link every ancestor and leave the current folder unlinked', () => {
     component.currentDoc.set(
-      doc({ uid: 'ws-1', title: 'My Workspace', path: '/default-domain/workspaces/ws-1' }),
+      doc({
+        uid: 'ws-1',
+        title: 'My Workspace',
+        path: '/default-domain/workspaces/ws-1',
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              doc({ uid: 'dom', title: 'Domain', type: 'Domain', path: '/default-domain' }),
+              doc({
+                uid: 'wsr',
+                title: 'Workspaces',
+                type: 'WorkspaceRoot',
+                path: '/default-domain/workspaces',
+              }),
+              doc({ uid: 'ws-1', title: 'My Workspace', path: '/default-domain/workspaces/ws-1' }),
+            ],
+          },
+        },
+      }),
     );
 
     // Router links: a crumb navigates in the app, and the router's NavigationEnd moves the tree.
+    expect(component.breadcrumbs()).toEqual([
+      { label: 'Root', routerLink: '/browse' },
+      { label: 'Domain', routerLink: '/browse/default-domain' },
+      { label: 'Workspaces', routerLink: '/browse/default-domain/workspaces' },
+      { label: 'My Workspace' },
+    ]);
+    expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
+  });
+
+  it('falls back to path segments for a folder fetched without the breadcrumb enricher', () => {
+    component.currentDoc.set(
+      doc({ uid: 'ws-1', title: 'My Workspace', path: '/default-domain/workspaces/ws-1' }),
+    );
+
+    // Not the defect this replaced, which showed segments even when titles were available: with no
+    // enricher the segment is all there is, and a blank crumb would be worse.
     expect(component.breadcrumbs()).toEqual([
       { label: 'Root', routerLink: '/browse' },
       { label: 'default-domain', routerLink: '/browse/default-domain' },
       { label: 'workspaces', routerLink: '/browse/default-domain/workspaces' },
       { label: 'My Workspace' },
     ]);
-    expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
+  });
+
+  it('falls back per crumb when an enricher entry carries no title', () => {
+    component.currentDoc.set(
+      doc({
+        uid: 'ws-1',
+        title: 'My Workspace',
+        path: '/default-domain/workspaces/ws-1',
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              doc({ uid: 'dom', title: '', type: 'Domain', path: '/default-domain' }),
+              doc({
+                uid: 'wsr',
+                title: 'Workspaces',
+                type: 'WorkspaceRoot',
+                path: '/default-domain/workspaces',
+              }),
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(component.breadcrumbs().map((c) => c.label)).toEqual([
+      'Root',
+      'default-domain',
+      'Workspaces',
+      'My Workspace',
+    ]);
+  });
+
+  it('keeps the repository root as a single first crumb under the browse.breadcrumb.root label', () => {
+    component.currentDoc.set(
+      doc({
+        uid: 'dom',
+        title: 'Domain',
+        type: 'Domain',
+        path: '/default-domain',
+        // Web UI's `_title()` labels a Root entry `browse.root`; the trail's own first crumb is
+        // that label, so a root the enricher happens to send must not become a crumb of its own.
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              doc({ uid: 'repo-root', title: 'Repository', type: 'Root', path: '/' }),
+              doc({ uid: 'dom', title: 'Domain', type: 'Domain', path: '/default-domain' }),
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(component.breadcrumbs()).toEqual([
+      { label: 'Root', routerLink: '/browse' },
+      { label: 'Domain' },
+    ]);
   });
 
   // ── Context menu handlers ──

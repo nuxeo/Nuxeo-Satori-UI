@@ -10,6 +10,32 @@ export function decodeNuxeoPathSegment(segment: string): string {
   }
 }
 
+/**
+ * Ancestor titles from Nuxeo's `breadcrumb` enricher, keyed by normalized repository path.
+ *
+ * Nuxeo Web UI's `nuxeo-breadcrumb` renders `contextParameters.breadcrumb.entries` and uses each
+ * entry's `title`; this reads the same list, so a trail built from it needs no request per
+ * ancestor. An entry without a usable title is left out, so the caller's own fallback decides what
+ * that crumb reads rather than it coming back blank.
+ *
+ * There is deliberately no `Root`-type case. Web UI's `_title()` maps a Root entry to its
+ * `browse.root` label, and a caller here does the same thing by giving the trail a first crumb of
+ * its own — a Root entry's path is `/`, which no ancestor lookup asks for, so a branch for it would
+ * never run. (Measured on Nuxeo 2025.21: `/`'s own breadcrumb is `entries: []` and a descendant's
+ * chain starts at its Domain, so the server does not send one either.)
+ */
+export function nuxeoBreadcrumbTitles(
+  doc: Pick<NuxeoDocument, 'contextParameters'> | null | undefined,
+): Map<string, string> {
+  const titles = new Map<string, string>();
+  for (const entry of doc?.contextParameters?.breadcrumb?.entries ?? []) {
+    if (!entry?.path) continue;
+    const title = entry.title?.trim();
+    if (title) titles.set(normalizeNuxeoPath(entry.path), title);
+  }
+  return titles;
+}
+
 /** True when the router URL is a browse main-view route. */
 export function isBrowseRouterUrl(routerUrl: string): boolean {
   const withoutQuery = routerUrl.split('?')[0];

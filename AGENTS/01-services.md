@@ -69,7 +69,7 @@ sendNotificationEmailForPermission(uid: string, aceId: string): Observable<Nuxeo
 ## BrowseService (`browse.service.ts`)
 
 ```typescript
-getByPath(nuxeoPath: string): Observable<NuxeoDocument>
+getByPath(nuxeoPath: string): Observable<NuxeoDocument>  // enrichers acls, permissions, favorites, subscribedNotifications, breadcrumb — `breadcrumb` carries every ancestor's title, read with nuxeoBreadcrumbTitles()
 getUserWorkspace(): Observable<NuxeoDocument>  // POST automation/User.GetUserWorkspace (Web UI)
 getRepositoryRoot(): Observable<NuxeoDocument>  // falls back to NXQL when GET /path/ is denied
 getNavTreeBootstrap(pageSize?: number): Observable<NavTreeBootstrap>  // root + top-level folders for all permission profiles
