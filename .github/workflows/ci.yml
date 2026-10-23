@@ -151,6 +151,12 @@ jobs:
           # And its controls, for the reason the pair above has them: the defects it guards were
           # in a file nothing audited, so a guard that could not itself go red is the same mistake.
           npm run beta:parity-surface-selftest
+          # And step 11's own save verdict, which the audit above structurally cannot judge: it
+          # checks the file's shape, not whether a verdict in it can be wrong. This runs
+          # `aclSaveVerdict` against each situation the step can observe and prints what the old
+          # predicate — the one that passed on an ACL nobody had touched — would have concluded.
+          # ~50 ms, in process, no browser and no backend.
+          npm run beta:parity-selftest
           # The identity guard's offline controls (NXSAT-643): a guard that accepts Anonymous, or a
           # step boundary that goes unchecked, is green on every capture it is supposed to reject.
           # The live half (`beta:identity-guard-controls`) needs a guest-enabled Nuxeo CI lacks.
