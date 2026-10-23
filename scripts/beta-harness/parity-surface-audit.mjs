@@ -241,6 +241,11 @@ function adapterKeys(object, objects, seen = new Set()) {
       for (const [group, members] of inline) keys.set(group, members);
       continue;
     }
+    if (prop.computed && prop.key?.type !== 'Literal') {
+      throw new UnresolvedSpread(
+        'a computed adapter property cannot be resolved statically',
+      );
+    }
     const name = propertyName(prop);
     if (!name) continue;
     // A group defined here replaces an inherited one outright, exactly as the spread does.
