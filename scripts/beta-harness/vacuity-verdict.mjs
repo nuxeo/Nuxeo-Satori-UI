@@ -97,8 +97,13 @@ import { pathToFileURL } from 'node:url';
  * identically — verified against a real run, where every title in
  * `assertion-failures.json` appears verbatim among the chains built from `results.json`.
  *
- * `basename` because the two sources spell the path differently: `results.json` says
- * `auth.spec.ts` and `assertion-failures.json` says `src/auth.spec.ts`.
+ * The two sources spell the path differently — `results.json` says `auth.spec.ts`, relative
+ * to the config's `testDir`, and `assertion-failures.json` says `src/auth.spec.ts`, relative
+ * to the project root — so one of them is normalised onto the other rather than reduced to a
+ * `basename`. `basename` was the first attempt and it collapses subdirectories:
+ * `browse/smoke.spec.ts` and `search/smoke.spec.ts` would have shared a key, and the join
+ * would have crossed two different specs silently. The suite is flat today, which is the
+ * only reason it did not.
  */
 export function loadSpecs(results) {
   const specs = [];
@@ -136,8 +141,20 @@ export function loadSpecs(results) {
   return specs;
 }
 
+/**
+ * The spec path as `results.json` spells it: relative to the e2e `testDir`, subdirectories
+ * intact. Only a leading `src/` is removed, because that is exactly the prefix the assertion
+ * reporter adds; nothing else about the path is discarded.
+ */
+export function normalizeSpecFile(file) {
+  return String(file ?? '')
+    .replace(/\\/g, '/')
+    .replace(/^\.?\//, '')
+    .replace(/^src\//, '');
+}
+
 export function specKey(file, line, project, title) {
-  return `${basename(String(file))}:${line}:${project ?? ''}:${String(title ?? '').trim()}`;
+  return `${normalizeSpecFile(file)}:${line}:${project ?? ''}:${String(title ?? '').trim()}`;
 }
 
 /**

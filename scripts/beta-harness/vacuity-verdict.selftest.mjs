@@ -16,7 +16,14 @@
  * Usage: node scripts/beta-harness/vacuity-verdict.selftest.mjs
  * Exit: 0 all expectations met, 1 otherwise.
  */
-import { classify, loadSpecs, parseThreshold, report, specKey } from './vacuity-verdict.mjs';
+import {
+  classify,
+  loadSpecs,
+  normalizeSpecFile,
+  parseThreshold,
+  report,
+  specKey,
+} from './vacuity-verdict.mjs';
 
 let failures = 0;
 const ok = (name, condition, detail = '') => {
@@ -142,6 +149,20 @@ ok('a never-starved spec that FAILED at its own assertion is NOT counted',
     });
     return c.counted.length === 0 && c.notPerturbed.length === 1 && c.inconclusive.length === 0;
   })());
+
+ok('the spec key keeps subdirectories, so two same-named specs in different folders differ',
+  specKey('browse/smoke.spec.ts', 1, 'chromium', 't') !==
+    specKey('search/smoke.spec.ts', 1, 'chromium', 't'));
+
+ok('the spec key still joins the two sources across the reporter\'s `src/` prefix, with a subdirectory',
+  specKey('browse/smoke.spec.ts', 1, 'chromium', 't') ===
+    specKey('src/browse/smoke.spec.ts', 1, 'chromium', 't'));
+
+ok('normalizeSpecFile strips only the src/ prefix and normalises separators',
+  normalizeSpecFile('src/a/b.spec.ts') === 'a/b.spec.ts' &&
+    normalizeSpecFile('a/b.spec.ts') === 'a/b.spec.ts' &&
+    normalizeSpecFile('./src/a.spec.ts') === 'a.spec.ts' &&
+    normalizeSpecFile('src\\a\\b.spec.ts') === 'a/b.spec.ts');
 
 ok('the spec key separates two parameterized describes sharing a line and a leaf title',
   specKey('a.spec.ts', 1, 'chromium', 'case A > does the thing') !==
