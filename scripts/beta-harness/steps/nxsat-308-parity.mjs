@@ -158,10 +158,15 @@ const SESSION_KEY = 'agentic_ui_nuxeo_session';
  * filter that matches neither selects nothing, so nothing is staged, no Save appears, and every
  * claim about what the save did is made about a save that never happened. `/^\s*Everything\s*$/`
  * was exactly that on the nxs surface.
+ *
+ * The nxs panel appends the permission identifier when it differs from the translated label
+ * (permissions-panel.component.html:386–404), so `ReadWrite` renders "Edit ReadWrite" and
+ * `Everything` renders "Manage everything Everything". The patterns accept an optional identifier
+ * suffix.
  */
 export const PERMISSION_OPTION = {
-  ReadWrite: /^\s*(Read & Write|Read and write|ReadWrite|Edit)\s*$/i,
-  Everything: /^\s*(Manage everything|Everything)\s*$/i,
+  ReadWrite: /^\s*(Read & Write|Read and write|ReadWrite|Edit)(\s+ReadWrite)?\s*$/i,
+  Everything: /^\s*(Manage everything|Everything)(\s+Everything)?\s*$/i,
 };
 
 /**
@@ -1790,7 +1795,12 @@ export default async function run(page, h, outDir) {
     `a restore of a listed version is offered on ${restoreOffer.where} — on the nxs surface that is` +
       ' the document page, not nxs-manage-versions, which deliberately offers none (bug-pattern §21);' +
       ' whether that restore is confirmed first is asserted by document-detail.versions.spec.ts, not' +
-      ' here, because confirming it by clicking would rewrite the fixture if it were not',
+      ' here, because confirming it by clicking would rewrite the fixture if it were not. The' +
+      ' expectation for where restore is offered was corrected after the before-half had been' +
+      ' captured (it counted restore controls inside nxs-manage-versions, where none are offered).' +
+      ' The before results were produced against the old expectation and cannot be re-measured,' +
+      ' because NXSAT-637 removed the upstream packages, so this step compares against a corrected' +
+      ' expectation rather than a re-measured baseline.',
   );
   gap('versions.restore-offered', {
     correct: restoreOffer.listed === 3 && restoreOffer.offered >= 3,
