@@ -74,7 +74,22 @@ jobs:
       # rather than from `args`: passing them as secrets meant an unset secret expanded to
       # an empty string and the scanner failed with `"" is not a valid project key`, which
       # is exactly how the first run of this workflow broke. Neither value is a secret.
+      # Secrets are empty for forks and bot-authored runs; the scanner then fails with
+      # "Not authorized or organization not found" rather than saying the token is absent.
+      - name: Check SonarCloud token
+        id: sonar-token
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          if [ -z "$SONAR_TOKEN" ]; then
+            echo "::warning::SONAR_TOKEN is not available to this run; skipping SonarCloud analysis."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: SonarCloud Scan
+        if: steps.sonar-token.outputs.available == 'true'
         uses: SonarSource/sonarqube-scan-action@v8.2.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
@@ -107,6 +122,7 @@ jobs:
       # Remove `continue-on-error` once the ratings are addressed, or narrow the gate's new-code
       # definition in the SonarCloud project settings so it stops treating the whole beta as new.
       - name: SonarCloud Quality Gate Check
+        if: steps.sonar-token.outputs.available == 'true'
         uses: SonarSource/sonarqube-quality-gate-action@v1.2.1
         timeout-minutes: 5
         continue-on-error: true
@@ -116,7 +132,7 @@ jobs:
           scanMetadataReportFile: .scannerwork/report-task.txt
 
       - name: Post SonarCloud Results to PR
-        if: github.event_name == 'pull_request'
+        if: github.event_name == 'pull_request' && steps.sonar-token.outputs.available == 'true'
         uses: actions/github-script@v7
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
