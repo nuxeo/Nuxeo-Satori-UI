@@ -131,20 +131,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 .location-hint {
-  display: flex;
-  align-items: stretch;
-  gap: 10px;
-  margin: 10px 0 0;
-  font-size: 0.8125rem;
-  line-height: 1.45;
-  color: var(--mat-sys-on-surface-variant, #6b7280);
-}
-
-.location-hint-bar {
-  width: 3px;
-  flex-shrink: 0;
-  background: var(--mat-sys-error, #b3261e);
-  border-radius: 1px;
+  margin-top: 10px;
 }
 
 .location-label {

@@ -14,6 +14,8 @@ import {
 import { provideTranslateService } from '@ngx-translate/core';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
+import { NxsBannerComponent } from './banner/banner.component';
+import { NxsChipSetComponent } from './chip-set/chip-set.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
@@ -37,7 +39,9 @@ describe('provideNxsComponents', () => {
     expect(components.peek(NXS_PRIMITIVE_IDS.tag)).toBe(NxsTagComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.richTooltip)).toBe(NxsRichTooltipComponent);
     expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
-    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(5);
+    expect(components.peek(NXS_PRIMITIVE_IDS.banner)).toBe(NxsBannerComponent);
+    expect(components.peek(NXS_PRIMITIVE_IDS.chipSet)).toBe(NxsChipSetComponent);
+    expect(Object.keys(NXS_PRIMITIVE_IDS)).toHaveLength(7);
   });
 
   it('registers nothing under those IDs when it is not provided', () => {

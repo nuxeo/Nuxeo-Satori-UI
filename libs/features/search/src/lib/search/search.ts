@@ -43,6 +43,7 @@ import {
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
+  NxsBannerComponent,
   NxsColumnPickerComponent,
   NxsErrorStateComponent,
   NxsFavoriteToggleComponent,
@@ -184,6 +185,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   selector: 'lib-search',
   standalone: true,
   imports: [
+    NxsBannerComponent,
     NxsColumnPickerComponent,
     NxsErrorStateComponent,
     NxsFavoriteToggleComponent,

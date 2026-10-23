@@ -208,6 +208,13 @@ notice, so it is a card here rather than a `banner`.
 
 ### 4.6 Banners and inline notices → `banner` → `nxs-banner`
 
+**Migrated under NXSAT-677** (`nxs-banner` now exists, registered as `nxs.primitives.banner`): the
+trashed-document and version banners in document detail, the two location hints in create-import, and
+search's AI error. The rows below that name them are the record as measured on 2026-10-08. Still on
+Material, as the scope column says: the KD and AI banners, the workflow and task-action banners
+(NXSAT-327), and the collection page's unavailable state, which is a page-level error state rather
+than a banner (see §4.12).
+
 | Site                                                                                                      | What it is                                   | Scope                      |
 | --------------------------------------------------------------------------------------------------------- | -------------------------------------------- | -------------------------- |
 | `libs/features/browse/src/lib/browse/browse.html:95`                                                      | Domain hint (`role="note"`), DomainHint      | NXSAT-308                  |
@@ -243,6 +250,8 @@ for elsewhere or are not banners:
   is a status badge.
 
 ### 4.7 Chips → no Satori target → stay Material, owned by the §5 J/K inputs
+
+**Wrapped under NXSAT-677** (`nxs-chip-set`, registered as `nxs.primitives.chipSet`): the display chip sets of removable values. These are the trigger chips in the metadata, collection and create-import dialogs, the metadata editor's trigger, and the search filters' chips. The input chip grids (`mat-chip-grid`: tag editor, tag input, vocabulary select, and the metadata editor's grid) are not display chips and stay on Material. Wrapping them is the §5 J/K work.
 
 | Site                                                                                                                         | What it is                                      | Scope     |
 | ---------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | --------- |

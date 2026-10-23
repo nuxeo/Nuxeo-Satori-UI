@@ -375,29 +375,11 @@
       (openedChange)="panelToggled()"
     >
       <mat-select-trigger>
-        <mat-chip-set class="nxs-metadata-editor__trigger-chips">
-          @for (id of multiple ? listValue(control) : [control.value]; track $index) {
-            @if (id) {
-              <mat-chip
-                (removed)="multiple ? removeItem(control, $index) : clearValue(control, false)"
-              >
-                {{ vocabularyLabel(definition.directory, id) }}
-                <button
-                  type="button"
-                  matChipRemove
-                  [disabled]="control.disabled"
-                  [attr.aria-label]="
-                    'satori-components.metadata-editor.remove-value'
-                      | translate: { name: vocabularyLabel(definition.directory, id) }
-                  "
-                  (click)="$event.stopPropagation()"
-                >
-                  <mat-icon aria-hidden="true">cancel</mat-icon>
-                </button>
-              </mat-chip>
-            }
-          }
-        </mat-chip-set>
+        <nxs-chip-set
+          class="nxs-metadata-editor__trigger-chips"
+          [items]="triggerChips(control, definition.directory, multiple)"
+          (removed)="removeTrigger(control, multiple, $event)"
+        />
       </mat-select-trigger>
       <div class="nxs-vocabulary-panel__search">
         <input

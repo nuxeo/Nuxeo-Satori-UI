@@ -9,8 +9,10 @@ import type { NxsHeadingLevel } from './heading-level';
  * Each ID resolves to a Material implementation from this entry point, and the first four to a
  * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
  * is provided after it. `errorState` stays on Material there: Satori's error states arrive in
- * Satori 1.0, which needs a newer Angular than this package supports. Both implement the same `Nxs…Inputs` contract below, so whoever renders an ID — a
- * `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
+ * Satori 1.0, which needs a newer Angular than this package supports. `banner` stays on Material
+ * too, until its Satori twin is written. Both implement the same `Nxs…Inputs` contract below, so
+ * whoever renders an ID — a `lib-extension-outlet` with `componentInputs` — gets the same inputs
+ * whichever is registered.
  * A customer overriding an ID implements that contract too.
  */
 export const NXS_PRIMITIVE_IDS = Object.freeze({
@@ -19,6 +21,8 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   tag: 'nxs.primitives.tag',
   richTooltip: 'nxs.primitives.richTooltip',
   errorState: 'nxs.primitives.errorState',
+  banner: 'nxs.primitives.banner',
+  chipSet: 'nxs.primitives.chipSet',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -89,6 +93,65 @@ export interface NxsErrorStateInputs {
    * this, because the outlet sets inputs and binds no outputs.
    */
   readonly retryHandler: InputSignal<(() => void) | null>;
+}
+
+/** The tone of a banner: what kind of notice it is. The icon and colours follow from it. */
+export type NxsBannerTone = 'info' | 'warning' | 'error';
+
+/**
+ * Whether a screen reader announces a banner as it appears: `alert` interrupts, `status` waits for
+ * a pause, and `none` leaves it to be read in place.
+ */
+export type NxsBannerAnnounce = 'none' | 'status' | 'alert';
+
+/** One button a banner offers, after its message. */
+export interface NxsBannerAction {
+  /** The button's text, already translated. */
+  readonly label: string;
+  /** A Material icon ligature shown before the label. */
+  readonly icon?: string;
+  /** `filled` is the one the banner recommends; `text` is the quietest. */
+  readonly emphasis: 'text' | 'outlined' | 'filled';
+  /** Destructive: drawn in the error colour. */
+  readonly danger?: boolean;
+  readonly disabled?: boolean;
+  /** A class added to the button, for the host's own styling or a test to find it by. */
+  readonly cssClass?: string;
+  /** Called when the button is pressed. */
+  readonly press: () => void;
+}
+
+/**
+ * `nxs.primitives.banner`: a notice within content, with the message and the actions it offers.
+ * Text arrives already translated.
+ */
+export interface NxsBannerInputs {
+  readonly message: InputSignal<string>;
+  readonly tone: InputSignal<NxsBannerTone>;
+  readonly announce: InputSignal<NxsBannerAnnounce>;
+  readonly actions: InputSignal<readonly NxsBannerAction[]>;
+}
+
+/** One chip in a chip set. Its labels arrive already translated. */
+export interface NxsChipItem {
+  readonly id: string;
+  readonly label: string;
+  /** The remove button's accessible name, such as "Remove Europe". */
+  readonly removeLabel: string;
+  readonly disabled?: boolean;
+}
+
+/**
+ * `nxs.primitives.chipSet`: a row of removable chips, such as the values a vocabulary field holds.
+ * Pressing a chip's remove button removes it from the set; the host drops it from its own list.
+ */
+export interface NxsChipSetInputs {
+  /** The chips, in order. */
+  readonly items: InputSignal<readonly NxsChipItem[]>;
+  /** The set's accessible name, or blank for none. */
+  readonly label: InputSignal<string>;
+  /** Called when a chip's remove button is pressed, for a host rendering the ID, which binds no outputs. */
+  readonly removeHandler: InputSignal<((item: NxsChipItem) => void) | null>;
 }
 
 /** `nxs.primitives.richTooltip`: a trigger button and a titled panel. Text arrives translated. */

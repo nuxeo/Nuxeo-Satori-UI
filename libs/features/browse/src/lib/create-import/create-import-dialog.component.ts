@@ -66,6 +66,9 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import {
+  NxsBannerComponent,
+  NxsChipSetComponent,
+  type NxsChipItem,
   NxsDocTypeIconComponent,
   NxsDropzoneComponent,
   NxsSpinnerComponent,
@@ -169,6 +172,8 @@ const DIALOG_SIZE = {
   standalone: true,
   imports: [
     DateMaskPipe,
+    NxsBannerComponent,
+    NxsChipSetComponent,
     NxsDocTypeIconComponent,
     NxsDropzoneComponent,
     NxsSpinnerComponent,
@@ -777,6 +782,18 @@ export class CreateImportDialogComponent implements OnInit {
     const parent = this.subjectEntries().find((e) => e.id === parentId);
     const parentLabel = parent?.properties.label_en ?? parentId;
     return `${parentLabel}/${label}`;
+  }
+
+  /** The subject chips, one per subject the file holds, in the order it holds them. */
+  subjectChips(): NxsChipItem[] {
+    return this.subjects.map((id) => {
+      const label = this.subjectPillLabel(id);
+      return {
+        id,
+        label,
+        removeLabel: this.translate.instant('shared.remove-item', { name: label }),
+      };
+    });
   }
 
   naturePillLabel(id: string): string {

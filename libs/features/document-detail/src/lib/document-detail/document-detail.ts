@@ -182,6 +182,7 @@ import {
   NxsDeletePermissionDialogComponent,
   NxsShareExternalDialogComponent,
   NxsUpdatePermissionDialogComponent,
+  NxsBannerComponent,
   NxsDetailsPanelComponent,
   NxsDocumentHistoryComponent,
   NxsDocumentToolbarComponent,
@@ -199,6 +200,7 @@ import {
   nxsErrorStatus,
   nxsToggleFavorite,
   provideNxsToast,
+  type NxsBannerAction,
   type NxsDeletePermissionDialogData,
   type NxsDetailsPanelTab,
   type NxsDriveDialogData,
@@ -338,6 +340,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     DocumentLayoutComponent,
     DocumentViewerComponent,
     ExtensionOutletComponent,
+    NxsBannerComponent,
     NxsPermissionsPanelComponent,
     NoteEditorComponent,
     SatAvatarModule,
@@ -351,7 +354,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     './document-detail-go-back-icon.scss',
     './document-detail-go-back-focus.scss',
     './document-detail-panel-toggle-focus.scss',
-    './document-detail-version-banner.scss',
   ],
 })
 export class DocumentDetailComponent implements OnInit, OnDestroy {
@@ -913,6 +915,63 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly canRestoreVersion = computed(
     () => this.isVersionView() && hasDocumentPermission(this.doc(), WRITE_VERSION),
   );
+
+  /** The trashed banner's buttons: Restore for a writer, Delete permanently for one who may remove. */
+  readonly trashedBannerActions = computed<readonly NxsBannerAction[]>(() => {
+    const restoring = this.actionInProgress() === 'restore';
+    const deleting = this.actionInProgress() === 'permanentDelete';
+    return [
+      ...(this.canWriteDoc()
+        ? [
+            {
+              label: this.translate.instant('document-detail.document-detail.restore'),
+              icon: 'restore_from_trash',
+              emphasis: 'outlined' as const,
+              disabled: restoring,
+              cssClass: 'trashed-banner-btn',
+              press: () => this.restoreFromTrash(),
+            },
+          ]
+        : []),
+      ...(this.canRemoveDoc()
+        ? [
+            {
+              label: this.translate.instant('document-detail.document-detail.delete-permanently'),
+              icon: 'delete_forever',
+              emphasis: 'outlined' as const,
+              danger: true,
+              disabled: deleting,
+              cssClass: 'trashed-banner-btn trashed-banner-btn--danger',
+              press: () => this.permanentlyDelete(),
+            },
+          ]
+        : []),
+    ];
+  });
+
+  /** The version banner's buttons: Go to latest, and Restore for a version the user may restore. */
+  readonly versionBannerActions = computed<readonly NxsBannerAction[]>(() => [
+    {
+      label: this.translate.instant('document-detail.version-go-to-latest'),
+      emphasis: 'text',
+      cssClass: 'version-banner-latest',
+      press: () => this.showLatestVersion(),
+    },
+    ...(this.canRestoreVersion()
+      ? [
+          {
+            label: this.translate.instant('document-detail.version-restore', {
+              version: this.versionLabel(),
+            }),
+            icon: 'restore',
+            emphasis: 'filled' as const,
+            disabled: this.actionInProgress() === 'restore',
+            cssClass: 'version-banner-restore',
+            press: () => this.confirmRestoreVersion(),
+          },
+        ]
+      : []),
+  ]);
   /** The Publishing tab's own Publish, gated as the toolbar's is (`app.rules.canPublish`). */
   readonly canPublish = computed(() => canPublishDocument(this.doc()));
 

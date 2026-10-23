@@ -1062,51 +1062,6 @@ sat-breadcrumbs {
   padding: 0;
   max-height: none;
 }
-/* ─── Trashed document banner (blue) ─── */
-.trashed-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 16px;
-  background: #e3f2fd;
-  border-bottom: 1px solid #90caf9;
-  flex-shrink: 0;
-
-  .trashed-banner-icon {
-    color: #1565c0;
-    font-size: 22px;
-    width: 22px;
-    height: 22px;
-  }
-
-  .trashed-banner-text {
-    font-size: 13px;
-    color: #0d47a1;
-    font-weight: 500;
-  }
-
-  .trashed-banner-spacer {
-    flex: 1;
-  }
-
-  .trashed-banner-btn {
-    white-space: nowrap;
-    font-size: 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    mat-icon {
-      font-size: 16px;
-      width: 16px;
-      height: 16px;
-    }
-    &--danger {
-      color: #d32f2f;
-      border-color: #d32f2f;
-    }
-  }
-}
-
 .action-danger {
   color: #d32f2f !important;
 }

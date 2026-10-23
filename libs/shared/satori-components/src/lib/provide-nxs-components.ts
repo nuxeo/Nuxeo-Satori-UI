@@ -2,7 +2,9 @@ import type { EnvironmentProviders } from '@angular/core';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsAvatarComponent } from './avatar/avatar.component';
+import { NxsBannerComponent } from './banner/banner.component';
 import { NxsBreadcrumbsComponent } from './breadcrumbs/breadcrumbs.component';
+import { NxsChipSetComponent } from './chip-set/chip-set.component';
 import { NxsErrorStateComponent } from './error-state/error-state.component';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
@@ -33,6 +35,8 @@ export function provideNxsComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.tag]: NxsTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsRichTooltipComponent,
       [NXS_PRIMITIVE_IDS.errorState]: NxsErrorStateComponent,
+      [NXS_PRIMITIVE_IDS.banner]: NxsBannerComponent,
+      [NXS_PRIMITIVE_IDS.chipSet]: NxsChipSetComponent,
       // satori:register:components — `satori-component` inserts above this line
     },
   });

@@ -2,6 +2,8 @@ export {
   NxsActionMenuComponent,
   type NxsMenuAction,
 } from './lib/action-menu/action-menu.component';
+export { NxsBannerComponent } from './lib/banner/banner.component';
+export { NxsChipSetComponent } from './lib/chip-set/chip-set.component';
 export {
   NxsColumnPickerComponent,
   type NxsPickableColumn,
@@ -143,6 +145,12 @@ export {
   type NxsAvatarInputs,
   type NxsAvatarSize,
   type NxsBreadcrumbItem,
+  type NxsBannerAction,
+  type NxsBannerAnnounce,
+  type NxsBannerInputs,
+  type NxsBannerTone,
+  type NxsChipItem,
+  type NxsChipSetInputs,
   type NxsBreadcrumbsInputs,
   type NxsErrorStateInputs,
   type NxsRichTooltipInputs,

@@ -1,0 +1,121 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as BannerStories from './banner.stories';
+
+<Meta of={BannerStories} name="Overview" />
+
+# Banner
+
+A banner is a notice within content: a message the reader should see, with the actions that answer
+it. It sits above a page or inside a panel, where it stays until the reader acts or the situation
+changes. Use it for a state the content is in, such as a document in the trash or an older version
+being viewed. For a region that failed to load, use the error state; for an action that failed, such
+as a save, use an error toast.
+
+## Key features
+
+- **Three tones.** `info` for a state the reader should know about, `warning` for a condition that
+  may need attention, and `error` for a failure the content still survives. The tone picks the icon
+  and the colours.
+- **Your message, already translated.** The message is text you pass in; the banner ships no
+  catalogue of its own.
+- **Actions in order.** Each action is a button with an optional icon, an emphasis (`filled`,
+  `outlined` or `text`), and a `danger` flag for a destructive one. Pressing it calls its `press`.
+- **Announced when it matters.** `alert` tells a screen reader at once, for a failure that has just
+  appeared; `status` announces it politely, for progress; `none` leaves it to be read in place.
+- **Replaceable by ID.** It is registered as `nxs.primitives.banner`, so your own banner can take its
+  place on every screen that renders the ID.
+
+## Demo showcase
+
+A trashed document: **Restore** is the recommended action, and **Delete permanently** is destructive.
+
+<Canvas of={BannerStories.TrashedDocument} />
+
+## Usage
+
+export const usageTs = `import { NxsBannerComponent, type NxsBannerAction } from '@nuxeo/satori-platform/components';
+
+readonly trashed = computed(() => this.document().isTrashed);
+readonly restoreAction: NxsBannerAction = {
+  label: this.translate.instant('acme.document.restore'),
+  icon: 'restore_from_trash',
+  emphasis: 'outlined',
+  press: () => this.restore(),
+};`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
+/>
+
+export const usageHtml = `@if (trashed()) {
+  <nxs-banner [message]="'acme.document.trashed' | translate" [actions]="[restoreAction]" />
+}`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`message` is text you have already translated. `tone` defaults to `info`, and `announce` to `none`.
+`actions` is the list of buttons, in order; leave it empty, the default, for a message alone.
+
+The banner needs no providers and no translation catalogue. Its icons are Material ligatures, which
+the application's icon font supplies.
+
+Place it in a template by its selector, or render the ID `nxs.primitives.banner`
+(`NXS_PRIMITIVE_IDS.banner`) through `lib-extension-outlet` with the same inputs. The outlet passes
+inputs only, so every action arrives as an object with its `press` function, which is why the banner
+takes its actions as data rather than as projected buttons. A replacement you register under the ID
+implements `NxsBannerInputs`.
+
+## Where its data comes from
+
+The banner loads nothing. The host decides whether the notice applies and what its actions do. Nuxeo
+still decides whether an action is allowed: a Restore the user may not perform fails on the server,
+so disabling the button is presentation, not a control.
+
+**In these stories** no request is made: each sets its inputs directly, and the text is English.
+
+## Examples
+
+### An older version
+
+A version other than the latest. **Go to latest** is the quiet action; **Restore 0.1** is filled,
+because it is what the reader is most likely to want.
+
+<Canvas of={BannerStories.OlderVersion} />
+
+### A warning on arrival
+
+A warning the reader meets as they work. It is announced politely, as a status.
+
+<Canvas of={BannerStories.Warning} />
+
+### A failure the content still survives
+
+An AI search that could not run while the results still show. It is an alert, so a screen reader
+announces it as it appears.
+
+<Canvas of={BannerStories.ErrorAlert} />
+
+### By registered ID
+
+Rendered through `lib-extension-outlet` by its ID, with the same inputs.
+
+<Canvas of={BannerStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Live region.** Set `announce` to `alert` or `status` only for a notice that appears while the
+  reader is working; a banner that is already on the page when it loads needs no announcement, so
+  leave it at `none`.
+- **Icon.** The icon is decorative and hidden from assistive technology. The message says what the
+  notice is, so the tone is never the only signal.
+- **Keyboard.** The banner takes no focus itself. Its buttons are reached with **Tab** and pressed
+  with **Enter** or **Space**, in the order given.
+- **Contrast.** The colours come from the theme's container and on-container tokens, so the text
+  keeps the contrast the theme sets for each tone.

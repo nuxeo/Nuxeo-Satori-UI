@@ -182,59 +182,19 @@
   }
 
   @if (isTrashed()) {
-    <div class="trashed-banner">
-      <mat-icon class="trashed-banner-icon">info</mat-icon>
-      <span class="trashed-banner-text">{{
-        'document-detail.document-detail.you-are-viewing-a-trashed-document' | translate
-      }}</span>
-      <span class="trashed-banner-spacer"></span>
-      @if (canWriteDoc()) {
-        <button
-          mat-stroked-button
-          class="trashed-banner-btn"
-          (click)="restoreFromTrash()"
-          [disabled]="actionInProgress() === 'restore'"
-        >
-          <mat-icon>restore_from_trash</mat-icon>
-          {{ 'document-detail.document-detail.restore' | translate }}
-        </button>
-      }
-      @if (canRemoveDoc()) {
-        <button
-          mat-stroked-button
-          class="trashed-banner-btn trashed-banner-btn--danger"
-          (click)="permanentlyDelete()"
-          [disabled]="actionInProgress() === 'permanentDelete'"
-        >
-          <mat-icon>delete_forever</mat-icon>
-          {{ 'document-detail.document-detail.delete-permanently' | translate }}
-        </button>
-      }
-    </div>
+    <nxs-banner
+      class="trashed-banner"
+      [message]="'document-detail.document-detail.you-are-viewing-a-trashed-document' | translate"
+      [actions]="trashedBannerActions()"
+    />
   }
 
   @if (isVersionView()) {
-    <div class="version-banner">
-      <mat-icon class="version-banner-icon">info</mat-icon>
-      <span class="version-banner-text">{{
-        'document-detail.version-viewing' | translate: { version: versionLabel() }
-      }}</span>
-      <button mat-button type="button" class="version-banner-latest" (click)="showLatestVersion()">
-        {{ 'document-detail.version-go-to-latest' | translate }}
-      </button>
-      @if (canRestoreVersion()) {
-        <button
-          mat-flat-button
-          type="button"
-          class="version-banner-restore"
-          (click)="confirmRestoreVersion()"
-          [disabled]="actionInProgress() === 'restore'"
-        >
-          <mat-icon>restore</mat-icon>
-          {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
-        </button>
-      }
-    </div>
+    <nxs-banner
+      class="version-banner"
+      [message]="'document-detail.version-viewing' | translate: { version: versionLabel() }"
+      [actions]="versionBannerActions()"
+    />
   }
 
   <!-- Workflow info banner (yellow) — one per running workflow -->

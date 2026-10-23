@@ -1,0 +1,16 @@
+<mat-chip-set [attr.aria-label]="label() || null">
+  @for (item of items(); track item.id) {
+    <mat-chip [disabled]="item.disabled ?? false" (removed)="pressRemove(item)">
+      {{ item.label }}
+      <button
+        type="button"
+        matChipRemove
+        [disabled]="item.disabled ?? false"
+        [attr.aria-label]="item.removeLabel"
+        (click)="$event.stopPropagation()"
+      >
+        <mat-icon aria-hidden="true">cancel</mat-icon>
+      </button>
+    </mat-chip>
+  }
+</mat-chip-set>
