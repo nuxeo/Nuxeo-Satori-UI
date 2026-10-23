@@ -17,6 +17,11 @@
  * Exit: 0 all expectations met, 1 otherwise.
  */
 import { classify, loadSpecs, parseThreshold, report, specKey } from './vacuity-verdict.mjs';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 let failures = 0;
 const ok = (name, condition, detail = '') => {
@@ -205,6 +210,22 @@ for (const bad of ['0', '-1', 'five', '', '2.5', ' ']) {
 }
 ok('a threshold of 1 is accepted', parseThreshold('1') === 1);
 ok('a threshold of 5 is accepted', parseThreshold(5) === 5);
+
+const symlinkDir = mkdtempSync(join(tmpdir(), 'vacuity-verdict-selftest-'));
+try {
+  const symlinkPath = join(symlinkDir, 'vacuity-verdict.mjs');
+  symlinkSync(fileURLToPath(new URL('./vacuity-verdict.mjs', import.meta.url)), symlinkPath);
+  const run = spawnSync(process.execPath, [symlinkPath, '--check-threshold', '0'], {
+    encoding: 'utf8',
+  });
+  ok(
+    'a symlinked CLI entry still validates the threshold',
+    run.status === 2 && run.stderr.includes('min-expected must be at least 1'),
+    `status=${run.status}, stderr=${run.stderr}`,
+  );
+} finally {
+  rmSync(symlinkDir, { recursive: true, force: true });
+}
 
 console.log('');
 if (failures) {

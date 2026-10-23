@@ -107,6 +107,14 @@ export const test = base.extend<{ signedIn: Page }>({
         // broken payload is not evidence that its assertion reads data. A sub-resource is
         // checked before the single-document read it hangs off, because `@children` is also
         // a `/id/` URL.
+        if (url.includes('/api/v1/automation/Directory.SuggestEntries')) {
+          return route.fulfill({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify([]),
+          });
+        }
+
         const isList =
           /@children|@search|@query|\/search\/lang\/|\/api\/v1\/query/.test(url) ||
           /@(acl|audit|annotations|comments|tags|versions|renditions)\b/.test(url);

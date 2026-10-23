@@ -72,7 +72,7 @@
  *   1  fail — below the threshold, so assertions may be vacuous
  *   2  usage or input problem (fix the environment, do not iterate on the code)
  */
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { basename } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -318,7 +318,7 @@ export function report(result, minExpected) {
  * comment claimed it was. `#` and `?` are the two that silently disable the file.
  */
 const invokedDirectly =
-  !!process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+  !!process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
 
 if (invokedDirectly) {
   const argv = process.argv.slice(2);
