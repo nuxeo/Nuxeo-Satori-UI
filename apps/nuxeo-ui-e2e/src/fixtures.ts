@@ -104,9 +104,8 @@ export const test = base.extend<{ signedIn: Page }>({
 
         // The empty answer has to be empty **in the shape that endpoint returns**, or the
         // app fails parsing rather than rendering an empty state — and a spec failing on a
-        // broken payload is not evidence that its assertion reads data. A sub-resource is
-        // checked before the single-document read it hangs off, because `@children` is also
-        // a `/id/` URL.
+        // broken payload is not evidence that its assertion reads data. A vocabulary lookup
+        // returns a bare array, which `DirectoryService.getEntries()` calls `.filter` on.
         if (url.includes('/api/v1/automation/Directory.SuggestEntries')) {
           return route.fulfill({
             status: 200,
@@ -115,6 +114,8 @@ export const test = base.extend<{ signedIn: Page }>({
           });
         }
 
+        // A sub-resource is checked before the single-document read it hangs off, because
+        // `@children` is also a `/id/` URL.
         const isList =
           /@children|@search|@query|\/search\/lang\/|\/api\/v1\/query/.test(url) ||
           /@(acl|audit|annotations|comments|tags|versions|renditions)\b/.test(url);
