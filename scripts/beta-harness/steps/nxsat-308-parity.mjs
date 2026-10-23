@@ -1850,6 +1850,14 @@ export default async function run(page, h, outDir) {
       ' because NXSAT-637 removed the upstream packages, so this step compares against a corrected' +
       ' expectation rather than a re-measured baseline.',
   );
+  h.note(
+    "this step's versions.restore-offered expectation was corrected after the before-half had been" +
+      ' captured: it counted restore controls inside the versions sidebar, which nxs-manage-versions' +
+      ' deliberately has none of, rather than on the document page where the confirmed restore is and' +
+      ' where Nuxeo Web UI puts it too. The before results were produced against the old expectation' +
+      ' and cannot be re-measured, because NXSAT-637 removed the upstream packages, so this step' +
+      ' compares against a corrected expectation rather than a re-measured baseline.',
+  );
   gap('versions.restore-offered', {
     correct: restoreOffer.listed === 3 && restoreOffer.offered >= 3,
     wrongObserved:
