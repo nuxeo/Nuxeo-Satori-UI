@@ -1,8 +1,14 @@
 // Each status takes a container role from the theme, and `--nxs-status-tag-<status>-background`
 // and `-foreground` override it. `status-tag.component.spec.ts` holds the status classes.
 :host {
-  --nxs-status-tag-background: var(--mat-sys-surface-container-high);
-  --nxs-status-tag-foreground: var(--mat-sys-on-surface-variant);
+  --nxs-status-tag-background: var(
+    --nxs-status-tag-neutral-background,
+    var(--mat-sys-surface-container-high)
+  );
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-neutral-foreground,
+    var(--mat-sys-on-surface-variant)
+  );
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -83,7 +89,10 @@
 }
 
 :host(.nxs-status-tag--neutral-quiet) {
-  --nxs-status-tag-background: transparent;
-  --nxs-status-tag-foreground: var(--mat-sys-on-surface);
+  --nxs-status-tag-background: var(--nxs-status-tag-neutral-quiet-background, transparent);
+  --nxs-status-tag-foreground: var(
+    --nxs-status-tag-neutral-quiet-foreground,
+    var(--mat-sys-on-surface)
+  );
   box-shadow: inset 0 0 0 1px var(--mat-sys-outline-variant);
 }
