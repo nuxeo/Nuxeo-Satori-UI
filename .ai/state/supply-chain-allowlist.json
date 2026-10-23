@@ -44,42 +44,6 @@
     "If the package becomes referenced, or stops being a dependency, its entry fails as unnecessary."
   ],
   "advisories": {
-    "@angular/common": {
-      "advisory": "GHSA-jfgx-762w-99vr",
-      "affects": "20.0.0 - 20.3.33",
-      "severity": "moderate",
-      "reason": "GHSA-jfgx-762w-99vr — XSRF Token Leakage via URL Parsing Discrepancy in Angular HTTP Client (incomplete fix for CVE-2025-66035). This affects @angular/common and all packages that depend on it. The app uses withXsrfConfiguration to configure XSRF protection via the standard Angular HttpClient. The vulnerability relates to URL parsing edge cases in the XSRF interceptor. Impact limited: the app communicates only with the Nuxeo backend under the same origin policy, and XSRF tokens are properly configured. Angular 20.3.34+ or 21.x will contain the complete fix. Accepting until the next Angular patch release is available.",
-      "reviewed": "2026-10-23",
-      "expires": "2026-12-31"
-    },
-    "@angular/forms": {
-      "advisory": "GHSA-jfgx-762w-99vr",
-      "severity": "moderate",
-      "reason": "Transitive dependency on @angular/common. See @angular/common entry (GHSA-jfgx-762w-99vr) for full details.",
-      "reviewed": "2026-10-23",
-      "expires": "2026-12-31"
-    },
-    "@angular/platform-browser": {
-      "advisory": "GHSA-jfgx-762w-99vr",
-      "severity": "moderate",
-      "reason": "Transitive dependency on @angular/common. See @angular/common entry (GHSA-jfgx-762w-99vr) for full details.",
-      "reviewed": "2026-10-23",
-      "expires": "2026-12-31"
-    },
-    "@angular/platform-browser-dynamic": {
-      "advisory": "GHSA-jfgx-762w-99vr",
-      "severity": "moderate",
-      "reason": "Transitive dependency on @angular/common. See @angular/common entry (GHSA-jfgx-762w-99vr) for full details.",
-      "reviewed": "2026-10-23",
-      "expires": "2026-12-31"
-    },
-    "@angular/router": {
-      "advisory": "GHSA-jfgx-762w-99vr",
-      "severity": "moderate",
-      "reason": "Transitive dependency on @angular/common. See @angular/common entry (GHSA-jfgx-762w-99vr) for full details.",
-      "reviewed": "2026-10-23",
-      "expires": "2026-12-31"
-    },
     "quill": {
       "advisory": "GHSA-v3m3-f69x-jf25",
       "affects": "=2.0.3",
