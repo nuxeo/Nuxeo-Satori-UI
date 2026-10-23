@@ -228,10 +228,12 @@ export class NxsPermissionsPanelComponent {
   protected readonly permissionGroups = computed(() => {
     const catalogue = this.snapshot()?.catalogue;
     if (!catalogue) return [];
+    // With All permissions on, the standard group follows, so the suggestions stay as the server gave
+    // them, or the fallback's three rights would be listed twice.
     const groups = [
       {
         label: 'satori-components.permissions-panel.group.suggested',
-        permissions: nxsOfferedRights(catalogue.suggested),
+        permissions: this.offersAll() ? catalogue.suggested : nxsOfferedRights(catalogue.suggested),
       },
     ];
     if (this.offersAll()) {
@@ -313,9 +315,9 @@ export class NxsPermissionsPanelComponent {
    */
   protected readonly editorExtraPermissions = computed<readonly string[]>(() => {
     const offered = this.offered();
-    // The entry's own grant comes from its row, so it stays offered after All permissions is unticked.
+    // The entry's own grant and its staged one stay offered after All permissions is unticked.
     const item = this.editor()?.item;
-    const held = [item?.row?.permission, ...(item?.extraPermissions ?? [])];
+    const held = [item?.row?.permission, item?.permission, ...(item?.extraPermissions ?? [])];
     return [...new Set([...held, this.editorPermission()])].filter(
       (p): p is string => !!p && !offered.has(p),
     );

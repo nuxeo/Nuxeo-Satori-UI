@@ -353,6 +353,36 @@ describe('NxsPermissionsPanelComponent', () => {
       expect(panel()['editorExtraPermissions']()).toEqual(['Write', 'Unlock']);
     });
 
+    it('keeps a staged replacement selectable in its editor after All permissions is unticked', async () => {
+      await mount(serverDoc([{ username: 'jdoe', permission: 'Read' }]));
+      panel()['allPermissions'].set(true);
+      const target = panel()['snapshot']()?.local[0];
+      if (!target) throw new Error('no entry to stage');
+      panel()['staged'].set(
+        new Map([
+          [target.id, { kind: 'replace', target, permission: 'Write', begin: null, end: null }],
+        ]),
+      );
+      panel()['openEdit'](panel()['localItems']()[0]);
+      panel()['editorPermission'].set('Unlock');
+      panel()['allPermissions'].set(false);
+      await render();
+      expect(panel()['editorExtraPermissions']()).toEqual(['Write', 'Unlock']);
+    });
+
+    it('lists the three rights once, not twice, when All permissions is ticked and the type suggests nothing', async () => {
+      const doc = serverDoc([{ username: 'jdoe', permission: 'Read' }]);
+      contextOf(doc)['userVisiblePermissions'] = [];
+      await mount(doc);
+      panel()['allPermissions'].set(true);
+      await render();
+      const overlay = await openFirstEntrySelect();
+      const names = offeredNames(overlay);
+      expect(names.filter((n) => n === 'Read')).toHaveLength(1);
+      expect(names.filter((n) => n === 'ReadWrite')).toHaveLength(1);
+      expect(names.filter((n) => n === 'Everything')).toHaveLength(1);
+    });
+
     describe('with offer="type"', () => {
       const COLLECTION_FOUR = ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'];
 
