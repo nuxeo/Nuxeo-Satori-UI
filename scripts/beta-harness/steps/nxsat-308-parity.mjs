@@ -228,7 +228,13 @@ export function aclSaveVerdict({ everythingOffered, saveOffered, writes, afterAc
     everythingOffered > 0 &&
     saveOffered > 0 &&
     writes.some((w) => PERMISSION_WRITE.test(w.url ?? ''));
-  return { attempted, survives: attempted && afterAcl.includes('parity-user:AddChildren') };
+  return {
+    attempted,
+    survives:
+      attempted &&
+      afterAcl.includes('members:Everything') &&
+      afterAcl.includes('parity-user:AddChildren'),
+  };
 }
 
 /**
