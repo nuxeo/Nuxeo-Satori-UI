@@ -702,9 +702,14 @@
                           </div>
                         </td>
                         <td>
-                          <sat-status-tag status="neutral" [hideIcon]="true">{{
-                            publishedVersion(pub)
-                          }}</sat-status-tag>
+                          <lib-extension-outlet
+                            [componentId]="statusTagId"
+                            [componentInputs]="{
+                              label: publishedVersion(pub),
+                              status: 'neutral',
+                              hideIcon: true,
+                            }"
+                          />
                         </td>
                         <td>{{ publishedRendition(pub) }}</td>
                         <td>
@@ -1022,9 +1027,14 @@
                             'document-detail.document-detail.workflow' | translate
                           }}</span>
                           <span class="ai-meta-val">
-                            <sat-status-tag status="info" [hideIcon]="true">{{
-                              aiClassification()!.suggestedWorkflow
-                            }}</sat-status-tag>
+                            <lib-extension-outlet
+                              [componentId]="statusTagId"
+                              [componentInputs]="{
+                                label: aiClassification()!.suggestedWorkflow,
+                                status: 'info',
+                                hideIcon: true,
+                              }"
+                            />
                           </span>
                         </div>
                       }

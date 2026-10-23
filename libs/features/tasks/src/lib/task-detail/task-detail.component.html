@@ -26,7 +26,10 @@
         <div class="task-detail-heading" role="heading" aria-level="2">
           {{ taskLabel(task()!) }}
         </div>
-        <sat-status-tag status="info" [hideIcon]="true">{{ taskWorkflow(task()!) }}</sat-status-tag>
+        <lib-extension-outlet
+          [componentId]="statusTagId"
+          [componentInputs]="{ label: taskWorkflow(task()!), status: 'info', hideIcon: true }"
+        />
       </div>
     </div>
 
@@ -222,18 +225,24 @@
             <span class="info-value" [class.overdue]="taskOverdue()">
               {{ task()!.dueDate | date: 'mediumDate' }}
               @if (taskOverdue()) {
-                <sat-status-tag status="important-loud">{{
-                  'tasks.task-detail.overdue' | translate
-                }}</sat-status-tag>
+                <lib-extension-outlet
+                  [componentId]="statusTagId"
+                  [componentInputs]="{
+                    label: 'tasks.task-detail.overdue' | translate,
+                    status: 'important-loud',
+                    hideIcon: false,
+                  }"
+                />
               }
             </span>
           </div>
           <div class="info-row">
             <span class="info-label">{{ 'tasks.task-detail.state' | translate }}</span>
             <span class="info-value">
-              <sat-status-tag status="neutral" [hideIcon]="true">{{
-                task()!.state
-              }}</sat-status-tag>
+              <lib-extension-outlet
+                [componentId]="statusTagId"
+                [componentInputs]="{ label: task()!.state, status: 'neutral', hideIcon: true }"
+              />
             </span>
           </div>
           <div class="info-row">

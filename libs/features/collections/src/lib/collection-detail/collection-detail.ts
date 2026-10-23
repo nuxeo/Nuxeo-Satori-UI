@@ -250,6 +250,8 @@ export class CollectionDetailComponent {
   private breadcrumbItemsCache: NxsBreadcrumbItem[] = [];
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
 
   readonly isInClipboard = computed(() =>
     this.clipboardDocs().some((d) => d.uid === this.collectionUid),
