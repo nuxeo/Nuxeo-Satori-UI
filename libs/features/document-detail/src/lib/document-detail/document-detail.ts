@@ -141,6 +141,7 @@ import {
 import {
   KeClientService,
   KeEnrichmentError,
+  toKeEntityTags,
   type KeEnrichRequest,
   type KeEnrichmentResult,
 } from '@agentic-ui/shared/ke-client';
@@ -1736,7 +1737,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
       }
 
       case 'named-entity-recognition-text': {
-        tagsToApply = this.collectNamedEntityTags(result.namedEntityText?.result);
+        tagsToApply = toKeEntityTags(result.namedEntityText?.result);
         if (tagsToApply.length === 0) {
           return this.throwKeResultError(
             this.translate.instant('document-detail.message.ke-no-text-entities'),

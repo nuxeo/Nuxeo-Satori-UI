@@ -681,16 +681,30 @@ sat-breadcrumbs {
       --mdc-chip-elevated-container-color: var(--mat-sys-surface-container-high, #e8e8e8);
       --mdc-chip-label-text-color: var(--mat-sys-on-surface, #333);
       --mdc-chip-with-icon-icon-size: 14px;
-      height: 24px;
+      min-height: 24px;
+      height: auto;
       font-size: 13px;
       font-weight: 400;
-      max-width: none;
+      max-width: 100%;
     }
 
-    .mat-mdc-chip-action-label {
+    // Long names wrap inside the chip outline. Material's label is `nowrap` and clips by default.
+    // The label and cell are rendered by MatChip's own template, so they need ::ng-deep to match.
+    ::ng-deep .mat-mdc-chip-action-label,
+    ::ng-deep .mdc-evolution-chip__text-label {
       overflow: visible;
       text-overflow: clip;
-      white-space: nowrap;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    ::ng-deep .mdc-evolution-chip__cell--primary {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .mdc-evolution-chip {
+      max-width: 100%;
     }
 
     input {
