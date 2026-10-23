@@ -50,6 +50,7 @@ import {
   BrowseContextService,
   ClipboardTargetService,
   decodeNuxeoPathSegment,
+  nuxeoBreadcrumbTitles,
   parseBrowseNuxeoPathFromRouterUrl,
   isBrowseRouterUrl,
   nuxeoPathsEqualFlexible,
@@ -699,12 +700,21 @@ export class BrowseComponent {
       { label: this.translate.instant('browse.breadcrumb.root'), routerLink: '/browse' },
     ];
     if (!path || path === '/') return crumbs;
+    // Ancestor titles as Web UI renders them, from the `breadcrumb` enricher on the same fetch that
+    // brought the folder. A path segment is only the fallback, and it has three real cases: a folder
+    // opened from the address bar has no document and so no enricher; an entry may carry no title;
+    // and `afterBrowseMetadataEdit` sets `currentDoc` from the update response, which carries no
+    // enricher, for the one render before `loadContent()` re-fetches.
+    const ancestorTitles = nuxeoBreadcrumbTitles(doc);
     const parts = path.split('/').filter(Boolean);
     let accumulated = '';
     for (const part of parts) {
       accumulated += `/${part}`;
       const isCurrent = accumulated === path;
-      const label = isCurrent && doc ? doc.title : decodeNuxeoPathSegment(part);
+      const label =
+        isCurrent && doc
+          ? doc.title
+          : (ancestorTitles.get(accumulated) ?? decodeNuxeoPathSegment(part));
       if (isCurrent) {
         crumbs.push({ label });
       } else {
