@@ -27,9 +27,13 @@
           {{ taskLabel(task()!) }}
         </div>
         <lib-extension-outlet
+          #workflowOutlet
           [componentId]="statusTagId"
           [componentInputs]="{ label: taskWorkflow(task()!), status: 'info', hideIcon: true }"
         />
+        @if (workflowOutlet.unresolved()) {
+          {{ taskWorkflow(task()!) }}
+        }
       </div>
     </div>
 
@@ -226,6 +230,7 @@
               {{ task()!.dueDate | date: 'mediumDate' }}
               @if (taskOverdue()) {
                 <lib-extension-outlet
+                  #overdueOutlet
                   [componentId]="statusTagId"
                   [componentInputs]="{
                     label: 'tasks.task-detail.overdue' | translate,
@@ -233,6 +238,9 @@
                     hideIcon: false,
                   }"
                 />
+                @if (overdueOutlet.unresolved()) {
+                  {{ 'tasks.task-detail.overdue' | translate }}
+                }
               }
             </span>
           </div>
@@ -240,9 +248,13 @@
             <span class="info-label">{{ 'tasks.task-detail.state' | translate }}</span>
             <span class="info-value">
               <lib-extension-outlet
+                #stateOutlet
                 [componentId]="statusTagId"
                 [componentInputs]="{ label: task()!.state, status: 'neutral', hideIcon: true }"
               />
+              @if (stateOutlet.unresolved()) {
+                {{ task()!.state }}
+              }
             </span>
           </div>
           <div class="info-row">

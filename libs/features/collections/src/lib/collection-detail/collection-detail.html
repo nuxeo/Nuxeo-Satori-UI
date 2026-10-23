@@ -490,6 +490,7 @@
                   </th>
                   <td mat-cell *matCellDef="let entry">
                     <lib-extension-outlet
+                      #entryStateOutlet
                       [componentId]="statusTagId"
                       [componentInputs]="{
                         label: entry.docLifeCycle,
@@ -497,6 +498,9 @@
                         hideIcon: true,
                       }"
                     />
+                    @if (entryStateOutlet.unresolved()) {
+                      {{ entry.docLifeCycle }}
+                    }
                   </td>
                 </ng-container>
 

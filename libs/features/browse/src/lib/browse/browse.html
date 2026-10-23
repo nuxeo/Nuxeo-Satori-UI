@@ -624,6 +624,7 @@
                       <td mat-cell *matCellDef="let row">
                         @if (row.docLifeCycle) {
                           <lib-extension-outlet
+                            #docLifeCycleOutlet
                             [componentId]="statusTagId"
                             [componentInputs]="{
                               label: row.docLifeCycle,
@@ -631,6 +632,9 @@
                               hideIcon: true,
                             }"
                           />
+                          @if (docLifeCycleOutlet.unresolved()) {
+                            {{ row.docLifeCycle }}
+                          }
                         }
                       </td>
                     </ng-container>
@@ -800,9 +804,13 @@
                 <span class="info-label">{{ 'browse.browse.state' | translate }}</span>
                 <span class="info-value">
                   <lib-extension-outlet
+                    #docStateOutlet
                     [componentId]="statusTagId"
                     [componentInputs]="{ label: docState(), status: 'info', hideIcon: true }"
                   />
+                  @if (docStateOutlet.unresolved()) {
+                    {{ docState() }}
+                  }
                 </span>
               </div>
               <div class="panel-info-row">

@@ -703,6 +703,7 @@
                         </td>
                         <td>
                           <lib-extension-outlet
+                            #publishedVersionOutlet
                             [componentId]="statusTagId"
                             [componentInputs]="{
                               label: publishedVersion(pub),
@@ -710,6 +711,9 @@
                               hideIcon: true,
                             }"
                           />
+                          @if (publishedVersionOutlet.unresolved()) {
+                            {{ publishedVersion(pub) }}
+                          }
                         </td>
                         <td>{{ publishedRendition(pub) }}</td>
                         <td>
@@ -1028,6 +1032,7 @@
                           }}</span>
                           <span class="ai-meta-val">
                             <lib-extension-outlet
+                              #suggestedWorkflowOutlet
                               [componentId]="statusTagId"
                               [componentInputs]="{
                                 label: aiClassification()!.suggestedWorkflow,
@@ -1035,6 +1040,9 @@
                                 hideIcon: true,
                               }"
                             />
+                            @if (suggestedWorkflowOutlet.unresolved()) {
+                              {{ aiClassification()!.suggestedWorkflow }}
+                            }
                           </span>
                         </div>
                       }
