@@ -135,8 +135,11 @@ TypeScript 6 refuses while a `tsconfig.json` is in the working directory (TS5112
 - **Vite 8.** `@angular/build` 22 depends on Vite 8, so the workspace moved with it rather than
   running two majors side by side. The security overrides that pin Vite under both Angular build
   packages moved to 8.3.5. No config used `rollupOptions`. The vitest configs use
-  `import.meta.dirname` instead of `__dirname`, and `vitest.workspace.ts` became the `projects` list
-  in a root `vitest.config.ts`.
+  `import.meta.dirname` instead of `__dirname`, and `vitest.workspace.ts` is deleted with nothing in
+  its place — see
+  [the Angular 21 record](angular-21-migration.md#vitestworkspacets-is-ignored-and-must-not-become-a-root-vitestconfigts)
+  for why a root `vitest.config.ts` is the wrong replacement. Nx 23 happens not to infer a project
+  from one, where Nx 22 does, so this branch carried the hazard without showing it.
 - **Overrides.** Every override was checked against the declared ranges of the packages that depend
   on it, because an override that forces a dependent below its range is a downgrade nobody chose.
   `piscina`, `postcss`, `webpack-dev-server`, `http-proxy-middleware`, `smol-toml`, `esbuild` and
