@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { signal } from '@angular/core';
@@ -20,7 +20,7 @@ describe('AppTranslateLoader', () => {
   function configure(labels: Record<string, string> = {}): void {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: AppConfigService,

@@ -1,4 +1,13 @@
-import { Component, DestroyRef, LOCALE_ID, inject, signal, OnInit, computed } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  LOCALE_ID,
+  inject,
+  signal,
+  OnInit,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -76,6 +85,7 @@ const DUE_LABEL_KEYS = {
     SatBreadcrumbsComponent,
   ],
   templateUrl: './tasks-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './tasks-page.component.scss',
 })
 export class TasksPageComponent implements OnInit {

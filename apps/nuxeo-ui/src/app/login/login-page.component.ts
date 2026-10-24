@@ -7,6 +7,7 @@ import {
   inject,
   OnDestroy,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -66,6 +67,7 @@ const LAST_USER_KEY = 'agentic_ui_last_username';
 
   templateUrl: './login-page.component.html',
 
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './login-page.component.scss',
 })
 export class LoginPageComponent implements AfterViewInit, OnDestroy {

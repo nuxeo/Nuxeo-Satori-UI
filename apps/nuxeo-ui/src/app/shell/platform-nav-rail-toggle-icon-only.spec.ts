@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -22,6 +22,7 @@ const HOST_VISIBLE_LABEL_CLASS = 'sat-platform-nav-rail-toggle-visible-label';
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-rail-toggle-icon-only.host.html',
 })
 class PlatformNavRailToggleIconOnlyHostComponent {}

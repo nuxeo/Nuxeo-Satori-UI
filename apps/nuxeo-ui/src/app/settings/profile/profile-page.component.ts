@@ -9,6 +9,7 @@ import {
   inject,
   signal,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatIconModule } from '@angular/material/icon';
@@ -43,6 +44,7 @@ const GROUP_PERM_PAGE_SIZE = 25;
     GroupPermLazyLoadDirective,
   ],
   templateUrl: './profile-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './profile-page.component.scss',
 })
 export class ProfilePageComponent {

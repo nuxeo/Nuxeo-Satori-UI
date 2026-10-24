@@ -66,6 +66,8 @@ bridge, its providers or a POC route as present, that code no longer exists.
 - **Only a CI run is authoritative.** Local gates here run on Node 25 with a
   `--no-experimental-webstorage` workaround; the repo pins Node 20 and CI uses it.
   A local green is necessary, not sufficient.
+  _Changed by NXSAT-669 (2026-10):_ the pin is now Node 24, because Angular 22 refuses Node 20,
+  and CI runs Node 24. The rule itself stands: only the CI run is authoritative.
 
   **So check it, every time you push.** This rule was stated here and then broken over
   twenty consecutive pushes while "CI green" was reported from local gates alone; CI was

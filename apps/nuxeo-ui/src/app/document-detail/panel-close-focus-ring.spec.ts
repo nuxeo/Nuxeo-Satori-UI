@@ -6,7 +6,7 @@
  * inset geometry, contrast against the button fill, and the `:focus` ring when `:focus-visible`
  * is false.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
@@ -70,6 +70,7 @@ function paintedBackground(element: HTMLElement): number[] {
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './panel-close-focus-ring.spec.html',
 })
 class PanelCloseFocusHostComponent {

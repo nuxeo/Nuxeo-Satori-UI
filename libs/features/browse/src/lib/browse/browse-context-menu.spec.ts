@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
@@ -84,7 +84,7 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: BrowseService, useValue: mockBrowseService },
         {

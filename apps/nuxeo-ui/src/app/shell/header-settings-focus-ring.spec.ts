@@ -19,7 +19,7 @@
  * evidence run; what is pinned here is the invariant — a non-none 2px ring using the theme
  * primary token — matching `header-search-focus-ring.spec.ts` (NXENG-775).
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -51,6 +51,7 @@ function rgb(css: string): [number, number, number] {
   standalone: true,
   imports: [MatButtonModule, MatIconModule, TranslateModule],
   styleUrls: ['./app-shell.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './header-settings-focus-ring.spec.html',
 })
 class HeaderSettingsHostComponent {}

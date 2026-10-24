@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
@@ -78,6 +78,7 @@ function linkSelector(navId: string): string {
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './nav-focus-ring-contrast.host.html',
 })
 class NavHostComponent {

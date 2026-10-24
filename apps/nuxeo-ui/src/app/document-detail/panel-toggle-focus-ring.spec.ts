@@ -10,7 +10,12 @@
  *
  * Source-level selector contract: `document-detail-panel-toggle-focus-ring.spec.ts`.
  */
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -74,6 +79,7 @@ function productionTabHeaderBackground(host: HTMLElement): string {
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-toggle-focus.scss',
     './panel-toggle-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './panel-toggle-focus-ring.spec.html',
 })
 class PanelToggleFocusHostComponent {

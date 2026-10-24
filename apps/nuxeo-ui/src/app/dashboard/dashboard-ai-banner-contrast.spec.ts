@@ -6,7 +6,7 @@
  * that put the finding in "Needs review". These tests render the real banner styles and
  * measure the computed contrast ratio, same pattern as `nav-focus-ring-contrast.spec.ts`.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
@@ -70,6 +70,7 @@ function paintedBackdrop(element: Element): number[] {
   standalone: true,
   imports: [MatIconModule, TranslateModule],
   styleUrls: ['./dashboard-page.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './dashboard-ai-banner-contrast.spec.html',
 })
 class DashboardAiBannerHostComponent {}

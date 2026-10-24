@@ -1,4 +1,13 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -66,6 +75,7 @@ export interface RecentUserGroupRow {
     MatPaginatorModule,
   ],
   templateUrl: './admin-users-groups-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-users-groups-page.component.scss',
 })
 export class AdminUsersGroupsPageComponent implements OnInit {

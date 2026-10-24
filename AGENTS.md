@@ -7,7 +7,7 @@ Full knowledge base: `AGENTS/00-architecture.md` through `AGENTS/11-beta-program
 
 ## 1. Architecture in 30 Seconds
 
-Angular 21 + Nx monorepo with 4 layers:
+Angular 22 + Nx monorepo with 4 layers:
 
 ```
 apps/nuxeo-ui          ← App Shell (routing, auth, global search)

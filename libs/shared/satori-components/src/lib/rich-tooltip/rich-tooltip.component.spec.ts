@@ -1,4 +1,4 @@
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsRichTooltipComponent } from './rich-tooltip.component';
@@ -7,6 +7,7 @@ import { NxsRichTooltipComponent } from './rich-tooltip.component';
 @Component({
   standalone: true,
   imports: [NxsRichTooltipComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-rich-tooltip
       heading="Versioning"

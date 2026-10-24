@@ -1,12 +1,22 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 
 import { ExtensionComponentRegistry } from './extension-component-registry.service';
 
-@Component({ selector: 'lib-eager', standalone: true, template: 'eager' })
+@Component({
+  selector: 'lib-eager',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: 'eager',
+})
 class EagerComponent {}
 
-@Component({ selector: 'lib-lazy', standalone: true, template: 'lazy' })
+@Component({
+  selector: 'lib-lazy',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: 'lazy',
+})
 class LazyComponent {}
 
 describe('ExtensionComponentRegistry', () => {

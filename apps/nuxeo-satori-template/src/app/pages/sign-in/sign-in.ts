@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
@@ -22,6 +22,7 @@ import { TemplateSessionService } from '../../template-session.service';
   selector: 'app-sign-in',
   standalone: true,
   templateUrl: './sign-in.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './sign-in.scss',
 })
 export class SignInComponent {

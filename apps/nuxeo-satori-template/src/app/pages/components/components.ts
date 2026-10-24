@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
@@ -41,6 +41,7 @@ import {
     SelectionTopbarComponent,
   ],
   templateUrl: './components.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './components.scss',
 })
 export class ComponentsShowcaseComponent {

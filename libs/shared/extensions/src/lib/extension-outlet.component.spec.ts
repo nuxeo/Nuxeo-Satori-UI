@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 
@@ -6,13 +6,18 @@ import { ExtensionComponentRegistry } from './extension-component-registry.servi
 import { ExtensionOutletComponent } from './extension-outlet.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
-@Component({ standalone: true, template: '<p class="panel">registered panel</p>' })
+@Component({
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '<p class="panel">registered panel</p>',
+})
 class RegisteredPanelComponent {}
 
 let viewInstances = 0;
 
 @Component({
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="view">{{ title() }}</p>',
 })
 class DocumentViewComponent {

@@ -4,7 +4,7 @@
 
 > **Not a developer on this repository?** Read [the short version](documentation/20-product/00-the-short-version.md): five minutes on what it does, what it does not, what you can change without code, and how to start. To customise it with an AI coding agent, use the [prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts).
 
-The rest of this page is for developers. Nx + **Angular 21** monorepo for Nuxeo Agentic UI, built with AI coding agents. PoC charter: [README.charter.md](README.charter.md). Boundaries and aliases: [docs/architecture.md](docs/architecture.md).
+The rest of this page is for developers. Nx + **Angular 22** monorepo for Nuxeo Agentic UI, built with AI coding agents. PoC charter: [README.charter.md](README.charter.md). Boundaries and aliases: [docs/architecture.md](docs/architecture.md).
 
 The `nuxeo-ui` app uses a root [`angular.json`](angular.json) for `ng build` / `ng serve` / `ng test` (Karma); Nx targets in [`apps/nuxeo-ui/project.json`](apps/nuxeo-ui/project.json) delegate to the Angular CLI (`nx:run-commands`) to avoid an Nx 22 + Angular application-builder schema bug (`visitor is not a function`). Libraries use **Vitest 4** and **Analog 2.9** (aligned with Angular 21).
 

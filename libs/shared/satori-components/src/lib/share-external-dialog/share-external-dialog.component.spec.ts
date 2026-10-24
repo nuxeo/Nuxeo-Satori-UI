@@ -6,6 +6,7 @@ import {
   inject,
   provideZonelessChangeDetection,
   type Provider,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DateAdapter, MATERIAL_ANIMATIONS, NativeDateAdapter } from '@angular/material/core';
@@ -37,6 +38,7 @@ class HostLibraryAdapter extends NativeDateAdapter {
 @Component({
   standalone: true,
   template: '',
+  changeDetection: ChangeDetectionStrategy.Eager,
   providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
 })
 class OpeningPageComponent {

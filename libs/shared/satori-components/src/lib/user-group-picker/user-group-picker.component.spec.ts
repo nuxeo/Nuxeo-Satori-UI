@@ -1,5 +1,10 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, of, throwError, type Observable } from 'rxjs';
@@ -35,6 +40,7 @@ const ADMINS: UserGroupSuggestion = {
 @Component({
   standalone: true,
   imports: [NxsUserGroupPickerComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-user-group-picker
     label="Grant to"
     [search]="search()"

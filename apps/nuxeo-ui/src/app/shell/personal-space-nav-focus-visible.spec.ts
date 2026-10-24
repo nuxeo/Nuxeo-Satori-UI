@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
@@ -24,6 +24,7 @@ const PERSONAL_SPACE_LINK =
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './personal-space-nav-focus-visible.host.html',
 })
 class PersonalSpaceNavHostComponent {

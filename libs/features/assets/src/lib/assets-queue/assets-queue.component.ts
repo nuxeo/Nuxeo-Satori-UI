@@ -8,6 +8,7 @@ import {
   output,
   signal,
   untracked,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
@@ -25,6 +26,7 @@ import { TranslatePipe } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslatePipe, MatIconModule],
   templateUrl: './assets-queue.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './assets-queue.component.scss',
 })
 export class AssetsQueueComponent {

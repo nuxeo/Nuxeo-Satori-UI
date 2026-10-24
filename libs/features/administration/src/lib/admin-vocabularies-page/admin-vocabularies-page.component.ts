@@ -1,4 +1,12 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -47,6 +55,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     MatTooltipModule,
   ],
   templateUrl: './admin-vocabularies-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-vocabularies-page.component.scss',
 })
 export class AdminVocabulariesPageComponent implements OnInit {
