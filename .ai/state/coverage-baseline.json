@@ -9,11 +9,11 @@
   "tolerance": 0.5,
   "projects": {
     "@nuxeo-satori/generators": {
-      "lines": 95.69,
-      "statements": 95.69,
-      "branches": 85.37,
-      "functions": 93.75,
-      "sTotal": 116,
+      "lines": 53.37,
+      "statements": 53.37,
+      "branches": 58.33,
+      "functions": 51.72,
+      "sTotal": 208,
       "sCovered": 111
     },
     "acme-extensions": {
@@ -41,12 +41,12 @@
       "sCovered": 53
     },
     "browse": {
-      "lines": 97.73,
-      "statements": 97.73,
-      "branches": 89.53,
+      "lines": 97.74,
+      "statements": 97.74,
+      "branches": 89.56,
       "functions": 98.42,
-      "sTotal": 1854,
-      "sCovered": 1812
+      "sTotal": 1855,
+      "sCovered": 1813
     },
     "collections": {
       "lines": 94.54,
@@ -81,11 +81,11 @@
       "sCovered": 623
     },
     "integration-tests": {
-      "lines": 62.92,
-      "statements": 62.92,
-      "branches": 65.93,
-      "functions": 59.46,
-      "sTotal": 240,
+      "lines": 50.84,
+      "statements": 50.84,
+      "branches": 54.79,
+      "functions": 44,
+      "sTotal": 297,
       "sCovered": 151
     },
     "knowledge-discovery": {
@@ -99,10 +99,10 @@
     "nuxeo-client": {
       "lines": 87.48,
       "statements": 87.48,
-      "branches": 76.98,
-      "functions": 88.45,
-      "sTotal": 2579,
-      "sCovered": 2256
+      "branches": 77.02,
+      "functions": 88.47,
+      "sTotal": 2588,
+      "sCovered": 2264
     },
     "permission-dialogs": {
       "lines": 92.75,
@@ -113,12 +113,12 @@
       "sCovered": 179
     },
     "satori-components": {
-      "lines": 97.53,
-      "statements": 97.53,
-      "branches": 87.93,
+      "lines": 97.51,
+      "statements": 97.51,
+      "branches": 87.95,
       "functions": 98.48,
-      "sTotal": 4178,
-      "sCovered": 4075
+      "sTotal": 4183,
+      "sCovered": 4079
     },
     "search": {
       "lines": 96.96,
@@ -185,12 +185,12 @@
       "sCovered": 4
     },
     "ui": {
-      "lines": 97.56,
-      "statements": 97.56,
-      "branches": 91.54,
-      "functions": 96.64,
-      "sTotal": 451,
-      "sCovered": 440
+      "lines": 75.93,
+      "statements": 75.93,
+      "branches": 63.6,
+      "functions": 79.72,
+      "sTotal": 835,
+      "sCovered": 634
     },
     "satori-components-satori": {
       "lines": 95.74,

@@ -30,14 +30,6 @@
       "until": "2027-06-30",
       "reason": "Untested assets drawer component (649 lines). Assets feature is out of Beta scope per coverage-gate.mjs. Component sits in report with empty statement map."
     },
-    "libs/integration-tests/src/lib/user-fixtures.ts": {
-      "until": "2027-06-30",
-      "reason": "Live-Nuxeo user fixtures for the integration suite, which runs only against a backend. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
-    },
-    "libs/integration-tests/vitest.setup.ts": {
-      "until": "2027-06-30",
-      "reason": "TestBed initialisation for the live integration spec. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
-    },
     "libs/shared/nuxeo-client/src/lib/constants/folderish-types.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
@@ -113,26 +105,6 @@
     "libs/shared/ui/src/lib/share-dialog/share-dialog.component.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "tools/satori-generators/src/extension-action/generator.ts": {
-      "until": "2027-06-30",
-      "reason": "Nx generator for an extension action. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
-    },
-    "tools/satori-generators/src/extension-component/generator.ts": {
-      "until": "2027-06-30",
-      "reason": "Nx generator for an extension component. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
-    },
-    "tools/satori-generators/src/extension-library/generator.ts": {
-      "until": "2027-06-30",
-      "reason": "Nx generator for an extension library. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
-    },
-    "tools/satori-generators/src/extension-rule/generator.ts": {
-      "until": "2027-06-30",
-      "reason": "Nx generator for an extension rule. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
-    },
-    "tools/satori-generators/src/util/library-context.ts": {
-      "until": "2027-06-30",
-      "reason": "Shared context for the extension generators. No spec has ever imported it: Vitest 3 counted it at 0%, Vitest 4 (NXSAT-669) leaves an unimported file out of the report instead, so it now needs listing here."
     }
   },
   "noStatements": {
