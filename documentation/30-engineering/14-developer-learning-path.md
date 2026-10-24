@@ -962,18 +962,13 @@ Estimated effort: **20 hours** for §17.1 and §17.2 together.
 
 ### 18. Third-party UI and utility libraries — **Area**
 
-| Library                         | Version                     | Where                                         | What to learn                                                                                                                                                                                                                                                     |
-| ------------------------------- | --------------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Quill**                       | **2.0.3** (`^2.0.3`)        | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                                                                                                                                    |
-| **DOMPurify**                   | **3.4.16** (`^3.4.16`)      | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                                                                                                                                                |
-| **`@ngx-translate/core`**       | **17.0.0**                  | App and three features                        | Custom `TranslateLoader`. **Trap:** adf-core's `TranslationService` does _not_ use the ngx-translate loader interface — extend `AppTranslateLoader` and override `getTranslation`; swapping in adf-core's loader deletes the manifest-`labels` Layer 0 capability |
-| **`@hylandsoftware/satori-ui`** | **0.2.1**                   | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`                                                                                                                                                                                                            |
-| **`pdfjs-dist`**                | **6.2.108**                 | —                                             | A version pin left over from the adf-core peer set. Nothing depends on it since NXSAT-637 removed adf-core; NXSAT-672 drops it.                                                                                                                                   |
-| **`cropperjs`**                 | **1.6.2**                   | `angular.json` styles only                    | Left over from adf-core's image viewer. Nothing depends on it since NXSAT-637; NXSAT-672 drops it.                                                                                                                                                                |
-| **`date-fns`**                  | **2.30.0**                  | The Material adapter's peer only              | A version pin left over from adf-core; NXSAT-672 drops it with the adapter.                                                                                                                                                                                       |
-| **`minimatch`**                 | **10.2.6**                  | Tooling                                       | Glob matching                                                                                                                                                                                                                                                     |
-| **`ng-mocks`**                  | `file:tools/stubs/ng-mocks` | —                                             | **Not a test-tooling choice.** It is a local stub that replaced the real package, because adf-hx imported `ng-mocks` from its _shipped runtime_ bundle, putting a test library and two `eval()` calls into a 1.6 MB customer chunk. Stays until NXSAT-672.        |
-| **`angular-oauth2-oidc`**       | **19.0.0**                  | Nowhere                                       | Declared, unused, deliberately retained                                                                                                                                                                                                                           |
+| Library                         | Version                | Where                                         | What to learn                                                                                                                                                                                                                                                     |
+| ------------------------------- | ---------------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Quill**                       | **2.0.3** (`^2.0.3`)   | `document-detail/note-editor` — 44 references | Delta model, toolbar modules, custom handlers, image insertion                                                                                                                                                                                                    |
+| **DOMPurify**                   | **3.4.16** (`^3.4.16`) | Notes, comments, AI markdown, `nuxeo-client`  | Configuration, hooks, and _why_ sanitising on output is not enough                                                                                                                                                                                                |
+| **`@ngx-translate/core`**       | **17.0.0**             | App and three features                        | Custom `TranslateLoader`. **Trap:** adf-core's `TranslationService` does _not_ use the ngx-translate loader interface — extend `AppTranslateLoader` and override `getTranslation`; swapping in adf-core's loader deletes the manifest-`labels` Layer 0 capability |
+| **`@hylandsoftware/satori-ui`** | **0.2.1**              | `nuxeo-ui` only                               | `SatAvatar`, `SatBreadcrumbs`, `SatTag`, `sat.theme()`                                                                                                                                                                                                            |
+| **`date-fns`**                  | **2.30.0** (`^2.30.0`) | `libs/shared/ui`'s Satori date adapter        | Locales and parsing behind `provideSatoriDateAdapter`, with `@angular/material-date-fns-adapter`.                                                                                                                                                                 |
 
 - [Quill](https://quilljs.com/docs/quickstart)
 - [DOMPurify](https://github.com/cure53/DOMPurify)
@@ -1297,26 +1292,20 @@ at `e334b0f`.
 
 ### Runtime dependencies
 
-| Package                                                                                    | Resolved                                 |
-| ------------------------------------------------------------------------------------------ | ---------------------------------------- |
-| `@angular/core`, `common`, `router`, `forms`, `compiler`, `animations`, `platform-browser` | 20.3.34 (`~20.3.33`)                     |
-| `@angular/material`                                                                        | 20.2.14 (`~20.2.0`)                      |
-| `@angular/cdk`                                                                             | 20.2.14 (`~20.2.0`)                      |
-| `@angular/material-date-fns-adapter`                                                       | 20.2.14                                  |
-| `@mat-datetimepicker/core`                                                                 | 16.0.1                                   |
-| `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)                         |
-| `zone.js`                                                                                  | 0.15.1 (`~0.15.0`)                       |
-| `tslib`                                                                                    | `^2.3.0`                                 |
-| `@hylandsoftware/satori-ui`                                                                | 0.2.1 (`^0.2.1`)                         |
-| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`)                       |
-| `angular-oauth2-oidc`                                                                      | 19.0.0 (unused)                          |
-| `quill`                                                                                    | 2.0.3 (`^2.0.3`)                         |
-| `dompurify`                                                                                | 3.4.16 (`^3.4.16`)                       |
-| `pdfjs-dist`                                                                               | 6.2.108                                  |
-| `cropperjs`                                                                                | 1.6.2                                    |
-| `date-fns`                                                                                 | 2.30.0                                   |
-| `minimatch`                                                                                | 10.2.6                                   |
-| `ng-mocks`                                                                                 | `file:tools/stubs/ng-mocks` (local stub) |
+| Package                                                                                    | Resolved             |
+| ------------------------------------------------------------------------------------------ | -------------------- |
+| `@angular/core`, `common`, `router`, `forms`, `compiler`, `animations`, `platform-browser` | 20.3.34 (`~20.3.33`) |
+| `@angular/material`                                                                        | 20.2.14 (`~20.2.0`)  |
+| `@angular/cdk`                                                                             | 20.2.14 (`~20.2.0`)  |
+| `@angular/material-date-fns-adapter`                                                       | 20.2.14 (`~20.2.0`)  |
+| `rxjs`                                                                                     | 7.8.2 (`~7.8.0`)     |
+| `zone.js`                                                                                  | 0.15.1 (`~0.15.0`)   |
+| `tslib`                                                                                    | `^2.3.0`             |
+| `@hylandsoftware/satori-ui`                                                                | 0.2.1 (`^0.2.1`)     |
+| `@ngx-translate/core`                                                                      | 17.0.0 (`^17.0.0`)   |
+| `quill`                                                                                    | 2.0.3 (`^2.0.3`)     |
+| `dompurify`                                                                                | 3.4.16 (`^3.4.16`)   |
+| `date-fns`                                                                                 | 2.30.0 (`^2.30.0`)   |
 
 ### Build and development
 
