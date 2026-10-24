@@ -503,25 +503,52 @@ expect(
 }
 
 // ---------------------------------------------------------------------------------------------
-// 19. The real lock's own `brace-expansion@^5.0.0` pin is load-bearing: with the key removed,
-//     the real lock goes red on that edge. The pass in control 1 is therefore the selector-scoped
-//     waiver excusing it, not the version check failing to look.
+// 19. At least one of the real manifest's override keys is load-bearing: with that key removed,
+//     the real lock goes red on the edge it was waiving. The pass in control 1 is therefore the
+//     override waiver excusing those edges, not the version check failing to look.
+//
+//     The key is found rather than named. This control used to remove `brace-expansion@^5.0.0`,
+//     which was load-bearing when it was written and stopped being so under Nx 23: nx then
+//     requests `brace-expansion` at exactly the version the lock holds, so the waiver has nothing
+//     to excuse and removing it changes nothing. The control went green-by-vacuity — the very
+//     failure it exists to rule out for control 1. Searching keeps it honest as the tree moves;
+//     only "no key is load-bearing" can now pass for the wrong reason, and that throws.
 // ---------------------------------------------------------------------------------------------
 {
   const lock = JSON.parse(readFileSync(REAL_LOCK, 'utf8'));
   const manifest = JSON.parse(readFileSync(REAL_MANIFEST, 'utf8'));
-  if (!Object.hasOwn(manifest.overrides ?? {}, 'brace-expansion@^5.0.0')) {
+  const keys = Object.keys(manifest.overrides ?? {});
+  if (keys.length === 0) {
     throw new Error(
-      'the real manifest no longer carries a "brace-expansion@^5.0.0" override — this control ' +
-        'would have passed for the wrong reason',
+      'the real manifest declares no overrides — this control would have passed for the wrong reason',
     );
   }
-  delete manifest.overrides['brace-expansion@^5.0.0'];
+
+  let found = null;
+  for (const key of keys) {
+    const without = JSON.parse(JSON.stringify(manifest));
+    delete without.overrides[key];
+    const result = runGate(`real-lock-no-override-${key.replace(/[^\w.-]/g, '_')}`, without, lock);
+    if (result.code === 1 && result.out.includes('requires ')) {
+      found = { key, result };
+      break;
+    }
+  }
+
+  if (!found) {
+    throw new Error(
+      `removing each of the ${keys.length} override key(s) in turn left the real lock green, so ` +
+        'control 1 does not depend on the override waiver and this control cannot prove it does. ' +
+        'Either the waiver is dead code or the lock no longer needs it — decide which, do not ' +
+        'delete this control.',
+    );
+  }
+
   expect(
-    'real lock goes red on brace-expansion once its override key is removed',
+    `real lock goes red on ${found.key} once its override key is removed`,
     'fail',
-    'requires brace-expansion@',
-    runGate('real-lock-no-brace-override', manifest, lock),
+    'requires ',
+    found.result,
   );
 }
 
