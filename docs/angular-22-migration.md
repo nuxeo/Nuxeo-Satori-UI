@@ -54,6 +54,20 @@ function; those were given `Eager` by hand. No `@Component` in the tree is left 
 strategy. The Material and CDK v22 schematics were run over the same full set and changed
 nothing.
 
+**angular-eslint 22 forbids exactly that opt-out.** `prefer-on-push-component-change-detection`
+ships in the 22 preset and fails on every explicit `Eager`: 126 errors across 11 projects
+(`ui`, `satori-components`, `satori-components-satori`, `document-layouts`, `document-detail`,
+`administration`, `assets`, `search`, `browse`, `tasks`, `core`), and no other error class in the
+whole workspace. Preserving Angular 21 behaviour and satisfying the rule are mutually exclusive, so
+one had to give.
+
+The rule is **off**, in the root `eslint.config.mjs`, with the reason and a 2027-06-30 revisit
+beside it. Not a suppression to reach green: the alternative is to adopt OnPush across 84 source
+components, which needs a per-surface check that change detection still fires and is the separate
+work this document already scopes out. Deleting that one line reports every component still to
+convert, so the list is recoverable rather than lost. Lint is green on all 30 projects with it, and
+was 126 errors without it.
+
 ### `HttpClient` uses fetch by default, and fetch cannot report upload progress
 
 `FetchBackend` is the default backend in 22. A request with `reportProgress` still completes, but no
