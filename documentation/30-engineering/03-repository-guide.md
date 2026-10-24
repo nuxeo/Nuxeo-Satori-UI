@@ -61,12 +61,10 @@ or vendored and carry no engineering intent — with two exceptions worth knowin
 
 - **`package-lock.json` is load-bearing** despite being generated. See the `npm ci` warning
   in [Getting Started](01-getting-started.md#use-npm-ci-never-a-bare-npm-install).
-- **`tools/stubs/ng-mocks`** is a hand-written stub, not vendored code, installed as `ng-mocks`
-  through a `file:` dependency in `package.json`. It stood in for the real `ng-mocks` because
-  adf-hx imported that **test library from its shipped runtime bundle**, which put `ng-mocks`'
-  implementation and two `eval()` calls into a customer-facing chunk. adf-hx is no longer
-  installed and nothing in the repository imports `ng-mocks`, so the stub now stands in for
-  nothing; it stays, with its supply-chain allowlist entry, until NXSAT-672 removes it.
+- **`ng-mocks` is not a dependency.** A hand-written `file:` stub stood in for it while adf-hx
+  imported that **test library from its shipped runtime bundle**, which put `ng-mocks`'
+  implementation and two `eval()` calls into a customer-facing chunk. adf-hx left the tree in
+  NXSAT-637 and the stub, with its supply-chain allowlist entry, went in NXSAT-672.
   `npm run beta:bundle` still fails if `ng-mocks` or an `eval()` from it reaches `dist/`.
 
 ---

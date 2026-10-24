@@ -329,11 +329,18 @@ DocumentService`. The chain, read from the published bundle:
     awaiting one. It must survive every adf-hx bump; the `bundle` gate goes red if the
     real library returns, and a future release importing a _different_ test helper shows
     up as a new fingerprint rather than as a silent regression.
+    _Changed by NXSAT-672 (2026-10):_ the new information is that adf-hx is gone (NXSAT-637,
+    held out by the blocking `dependency-tree` gate), so nothing imports `ng-mocks` and the stub
+    stood in for nothing. It was removed; the `bundle` gate stays and still fails on the real
+    library's fingerprints.
   - **`angular-oauth2-oidc` is kept**, unused, on the basis that it causes no issue
     today — `pdfjs-dist` tree-shakes out entirely, this does not. Not a blocker; revisit
     only if something breaks or the SCA position changes. `cropperjs` was kept on the same
     basis until NXSAT-290, which made it used: its stylesheet is a global style, because
     adf-core's image viewer renders every image twice without it.
+    _Changed by NXSAT-672 (2026-10):_ all three were removed. adf-core and its image viewer
+    left in NXSAT-637, so `cropperjs`'s global stylesheet styled nothing (no `cropper-` class in
+    any template or style), and no source imports `angular-oauth2-oidc` or `pdfjs-dist`.
   - **The initial-bundle cost of adf-hx is accepted.** It stopped being a deferrable
     question the moment the ports had to go in the root injector, so the budget was
     raised deliberately: `maximumWarning` 1.5 → 2.5 MB, `maximumError` 2.0 → 3.5 MB.

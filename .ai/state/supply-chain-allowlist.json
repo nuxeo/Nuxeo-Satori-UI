@@ -39,8 +39,8 @@
     "`unreferencedDependencies` excuses a production dependency that no source file imports. Four",
     "of these turned out to be genuinely unused — `openai`, `express`, `cors`, `dotenv` — and were",
     "removed rather than listed. An entry here means the package is required by something other",
-    "than an import: the Angular runtime, a version pin, or the ng-mocks stub. The pins and the stub",
-    "listed today are left over from ADF, which left the tree in NXSAT-637; NXSAT-672 removes them.",
+    "than an import: the Angular runtime, or a helper library the compiler emits. The ADF-era",
+    "version pins and the ng-mocks stub that used to be listed here went in NXSAT-672.",
     "If the package becomes referenced, or stops being a dependency, its entry fails as unnecessary."
   ],
   "advisories": {
@@ -93,10 +93,6 @@
   },
   "unreferencedDependencies": {
     "tslib": "Emitted helper library. The TypeScript compiler generates imports of it into the build output; no source file names it.",
-    "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source.",
-    "pdfjs-dist": "Version pin left over from ADF: an @alfresco/adf-core peer, and the second deliberate deviation, because 4.x downgrades a shared native package (6.2.108). adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
-    "minimatch": "Version pin left over from ADF: @alfresco/adf-core declared it as a `>=10.0.0` peer. adf-core left the tree in NXSAT-637, but the pin still decides the copy hoisted to the root, which the dev tooling asking for `^10` resolves to (@typescript-eslint/typescript-estree, test-exclude and ignore-walk among them), so NXSAT-672 re-decides it rather than just deleting it.",
-    "angular-oauth2-oidc": "Version pin left over from ADF: a direct dependency of @alfresco/adf-core, pinned so a clean install could not float it. adf-core left the tree in NXSAT-637 and no package depends on this one now; NXSAT-672 drops it.",
-    "ng-mocks": "Not a library: `file:tools/stubs/ng-mocks`, a stub that stood in for the real test-mocking package because @alfresco/adf-hx-content-services imported `ngMocks` from its shipped /ui bundle (see scripts/beta-harness/no-test-libs-in-bundle.mjs). Our source never imports it. adf-hx left the tree in NXSAT-637; the stub and this entry go in NXSAT-672."
+    "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source."
   }
 }

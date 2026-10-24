@@ -91,7 +91,7 @@ Worse, **test artifacts ship in the published bundle**: `ng-mocks` appears among
 and `api/index.d.ts` exports `./lib/testing/hxcs-js-client.mock`. That put a test library's
 implementation and **two `eval()` calls** into a customer-facing chunk. Mitigated locally with a
 hand-written stub (`tools/stubs/ng-mocks`) and guarded by `npm run beta:bundle`, which now
-reports 0 `eval()`.
+reports 0 `eval()`. The stub went in NXSAT-672 after adf-hx left the tree; the guard stays.
 
 ### H3 · Review capacity is the binding constraint
 
