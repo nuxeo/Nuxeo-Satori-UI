@@ -140,10 +140,23 @@ TypeScript 6 refuses while a `tsconfig.json` is in the working directory (TS5112
   [the Angular 21 record](angular-21-migration.md#vitestworkspacets-is-ignored-and-must-not-become-a-root-vitestconfigts)
   for why a root `vitest.config.ts` is the wrong replacement. Nx 23 happens not to infer a project
   from one, where Nx 22 does, so this branch carried the hazard without showing it.
-- **Overrides.** Every override was checked against the declared ranges of the packages that depend
-  on it, because an override that forces a dependent below its range is a downgrade nobody chose.
+- **Overrides.** Every override is checked against the declared ranges of the packages that depend
+  on it, because an override forcing a dependent below its range is a downgrade nobody chose.
   `piscina`, `postcss`, `webpack-dev-server`, `http-proxy-middleware`, `smol-toml`, `esbuild` and
-  `@angular-devkit/architect` were moved up to what Angular 22 and Nx 23 declare.
+  `@angular-devkit/architect` moved up to what Angular 22 and Nx 23 declare.
+
+  Two survived that pass and were caught afterwards, by auditing every override rather than the
+  ones the bump touched: `postcss` 8.5.28 against the `^8.5.30` Vite 8.3.5 declares, and `qs`
+  6.15.3 against the `^6.16.0` Express 5.3.0 declares — the second was never in the list at all.
+  Both are now floors: `postcss` 8.5.31, `qs` 6.16.1. The audit is per-override and whole-tree, not
+  per-bump, because the dependent's range moves on its own: Vite raised its `postcss` floor when it
+  went to 8.3.5, which turned an override that had been correct into a downgrade without anything
+  in this repository changing.
+
+  Every remaining override sits at or above its dependents' declared minimum, checked with
+  `semver.minVersion`. A mismatch is only a defect in one direction — above is a security floor,
+  below is a downgrade — so the count alone does not say whether anything is wrong.
+
 - **`zone.js` 0.16** drops Internet Explorer and the non-Chromium Edge, neither of which is
   supported.
 
