@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, inject, input } from '@angular/core';
+import { Component, computed, inject, input, ChangeDetectionStrategy } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { catchError, map, of, startWith, switchMap } from 'rxjs';
@@ -69,6 +69,7 @@ type BrowseState =
   standalone: true,
   imports: [RouterLink],
   templateUrl: './documents.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './documents.scss',
 })
 export class DocumentsComponent {

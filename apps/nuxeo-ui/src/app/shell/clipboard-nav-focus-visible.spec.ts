@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
@@ -27,6 +27,7 @@ const CLIPBOARD_TEST_LABEL = '⟪NXENG-873-clipboard-nav⟫';
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './clipboard-nav-focus-visible.host.html',
 })
 class ClipboardNavHostComponent {

@@ -1,7 +1,14 @@
-import { Component, input, provideZonelessChangeDetection, signal, type Type } from '@angular/core';
+import {
+  Component,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+  type Type,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import {
@@ -82,6 +89,7 @@ const CONTRIBUTED_TAB_MARKER = 'CONTRIBUTED CLAIMS PANEL';
 @Component({
   standalone: true,
   selector: 'lib-test-claims-panel',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="claims">CONTRIBUTED CLAIMS PANEL</p>',
 })
 class ClaimsPanelComponent {}
@@ -89,6 +97,7 @@ class ClaimsPanelComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-claim-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="claim-view">CLAIM VIEW {{ document()?.title }} {{ heading() }}</p>',
 })
 class ClaimViewComponent {
@@ -99,6 +108,7 @@ class ClaimViewComponent {
 @Component({
   standalone: true,
   selector: 'lib-test-case-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="case-view">CASE VIEW</p>',
 })
 class CaseViewComponent {}
@@ -107,6 +117,7 @@ class CaseViewComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-custom-permissions',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p>CUSTOM PERMISSIONS for {{ documentId() }}</p>',
 })
 class CustomPermissionsComponent {
@@ -232,7 +243,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,

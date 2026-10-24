@@ -11,6 +11,7 @@ import {
   effect,
   ElementRef,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
@@ -346,6 +347,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
   templateUrl: './document-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     './document-detail.scss',
     './document-detail-go-back-icon.scss',

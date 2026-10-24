@@ -616,7 +616,9 @@ process.exit(anyFailed ? 1 : 0);
  *
  * The flag does not exist before Node 22, where passing it makes Node refuse to
  * start — so it is added only when the running major actually supports it. The
- * repo pins Node 20 in `.nvmrc`, which is why CI never needs this.
+ * repo pins Node 24 in `.nvmrc`, where the built-in store is still off by default
+ * (`localStorage` is undefined, so jsdom's is used), which is why CI never needs this.
+ * Node 25 is the first major where it is on and throws.
  *
  * @returns {{ NODE_OPTIONS?: string }}
  */

@@ -1,4 +1,12 @@
-import { Component, DestroyRef, OnDestroy, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnDestroy,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { DomSanitizer, SafeHtml, SafeResourceUrl } from '@angular/platform-browser';
 import { MatButtonModule } from '@angular/material/button';
@@ -48,6 +56,7 @@ type PreviewMode = 'pdf' | 'image' | 'text' | 'unsupported';
     MatTooltipModule,
   ],
   templateUrl: './kd-citation-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './kd-citation-dialog.scss',
 })
 export class KdCitationDialogComponent implements OnDestroy {

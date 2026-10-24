@@ -2,7 +2,7 @@
 /**
  * Controls for the pure half of `crowdin-push-context.mjs`.
  *
- * A standalone selftest rather than a `.spec.mjs`, because `vitest.workspace.ts` only picks up
+ * A standalone selftest rather than a `.spec.mjs`, because the root `vitest.config.ts` only picks up
  * projects with a Vite config and `tools/` is not one. This repository already verifies its
  * scripts this way — `review-guardrails.selftest.mjs`, `sanitizer-audit.selftest.mjs` — so
  * this follows that rather than adding a build target for four functions.

@@ -7,6 +7,7 @@ import {
   inject,
   signal,
   untracked,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
@@ -261,6 +262,7 @@ const PAGE_SIZE = 50;
     NxsPermissionsPanelComponent,
   ],
   templateUrl: './browse.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './browse.scss',
 })
 export class BrowseComponent {

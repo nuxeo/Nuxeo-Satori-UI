@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
@@ -18,6 +18,7 @@ const NAV_LIST_SELECTOR = 'sat-platform-nav nav.sat-platform-nav-list';
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-trash-focus-unobscured.host.html',
 })
 class NavTrashHostComponent {}

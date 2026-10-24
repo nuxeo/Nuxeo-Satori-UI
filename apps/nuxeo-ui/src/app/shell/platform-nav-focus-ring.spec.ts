@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslateModule } from '@ngx-translate/core';
@@ -83,6 +83,7 @@ function flatten(value: string, backdrop: readonly number[]): number[] {
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-focus-ring.host.html',
 })
 class NavHostComponent {}
@@ -283,9 +284,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
       }
       for (const rule of Array.from(rules)) {
         const styleRule = rule as CSSStyleRule;
-        const canonical = styleRule.selectorText
-          ?.replace(/\[_ngcontent-[^\]]+\]/g, '')
-          .trim();
+        const canonical = styleRule.selectorText?.replace(/\[_ngcontent-[^\]]+\]/g, '').trim();
         if (canonical === target) {
           matched = styleRule;
           break;
@@ -293,7 +292,9 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
       }
       if (matched) break;
     }
-    expect(matched).withContext(`stylesheet must contain ${target} without a comma list`).toBeDefined();
+    expect(matched)
+      .withContext(`stylesheet must contain ${target} without a comma list`)
+      .toBeDefined();
     expect(matched!.cssText).toMatch(/outline:\s*2px\s+solid/);
     expect(matched!.cssText).toMatch(/outline-offset:\s*-2px/);
   });
@@ -321,6 +322,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-collections-focus-ring.host.html',
 })
 class CollectionsNavHostComponent {}

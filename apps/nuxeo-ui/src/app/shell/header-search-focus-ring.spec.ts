@@ -38,7 +38,7 @@
  * running app and recorded in the evidence folder; what is pinned here is the invariant that
  * makes them hold — the ring resolves through the theme token and does not pin its scheme.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
@@ -72,6 +72,7 @@ function rgb(css: string): [number, number, number] {
   // which is exactly what we want: the declarations are the shell's, the markup mirrors
   // app-shell.component.html.
   styleUrls: ['./app-shell.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './header-search-focus-ring.spec.html',
 })
 class HeaderSearchHostComponent {}

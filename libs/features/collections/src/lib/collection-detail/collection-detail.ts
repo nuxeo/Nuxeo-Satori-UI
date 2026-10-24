@@ -1,4 +1,12 @@
-import { Component, DestroyRef, LOCALE_ID, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  LOCALE_ID,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -144,6 +152,7 @@ const MEMBER_PAGE_SIZE = 50;
     SatTagModule,
   ],
   templateUrl: './collection-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './collection-detail.scss',
 })
 export class CollectionDetailComponent {

@@ -1,5 +1,5 @@
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { RIGHT_ARROW } from '@angular/cdk/keycodes';
@@ -19,6 +19,7 @@ import { MatTabListKeydownDirective } from './mat-tab-list-keydown.directive';
 @Component({
   standalone: true,
   imports: [MatTabsModule, MatTabListKeydownDirective, TranslateModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './mat-tab-list-keyboard-a11y.host.html',
 })
 class MatTabListKeyboardA11yHostComponent {}

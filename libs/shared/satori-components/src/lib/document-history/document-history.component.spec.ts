@@ -1,5 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNativeDateAdapter } from '@angular/material/core';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -41,6 +46,7 @@ function page(entries: AuditEntry[], resultsCount = entries.length): AuditLogLis
 @Component({
   standalone: true,
   imports: [NxsDocumentHistoryComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-document-history [documentUid]="uid()" />`,
 })
 class HostComponent {

@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatTooltip } from '@angular/material/tooltip';
 import { By } from '@angular/platform-browser';
@@ -28,6 +33,7 @@ const ACTIONS: readonly NxsToolbarAction[] = [
 @Component({
   standalone: true,
   imports: [NxsDocumentToolbarComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-document-toolbar
       [actions]="actions()"

@@ -9,6 +9,7 @@ import {
   effect,
   inject,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router, RouterLink, RouterOutlet } from '@angular/router';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
@@ -89,6 +90,7 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     TranslatePipe,
   ],
   templateUrl: './app-shell.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app-shell.component.scss',
 })
 export class AppShellComponent implements OnDestroy {

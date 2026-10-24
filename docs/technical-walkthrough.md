@@ -22,7 +22,7 @@
 
 ## 1. Repository & Tooling
 
-### Monorepo with Nx 22
+### Monorepo with Nx 23
 
 ```
 agentic-ui-poc/

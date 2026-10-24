@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -60,6 +60,7 @@ export interface ShareSavedSearchAddPermissionResult {
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './share-saved-search-add-permission-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './share-saved-search-add-permission-dialog.component.scss',
 })
 export class ShareSavedSearchAddPermissionDialogComponent {
