@@ -161,26 +161,37 @@ below it is a downgrade.
 The ratchet baseline was re-recorded, and a re-record is indistinguishable from a silent loosening
 unless something proves no coverage was lost. Percentages cannot: the unit of measurement changed.
 
-`scripts/coverage-line-diff.mjs` compares two runs' `coverage-final.json` files **line by line**, over
-source files identical between the two revisions, and classifies every line that was covered before
-and is not now. Only an unexplained one counts as a loss. Its controls are
-`scripts/coverage-line-diff.selftest.mjs` — four, one of which plants a real loss and requires exit 1,
-because a tool that reports "REAL LOSS 0" without ever having reported anything else proves nothing.
+`scripts/coverage-line-diff.mjs` compares two runs' `coverage-final.json` files over source files
+identical between the two revisions. Every line covered before and not now is judged **column by
+column** on each run's own data, with counters summed across every project that measured the file.
+A line is a loss when some column ran before and is unexecuted now. Missing evidence does not count
+as evidence: a function the earlier run did not model leaves its statements' credit standing. A
+covered file that is absent afterwards makes the result incomplete (exit 3), not clean. Its controls are
+`scripts/coverage-line-diff.selftest.mjs`: eleven, six of which plant a loss and require a non-zero
+exit, because a tool that reports "REAL LOSS 0" without ever having reported anything else proves
+nothing. Five of those six pass against the comparator's first version only by failing, which is how
+its review (PR #464) showed that version could not see those losses.
 
-Against the merge base `ec82e5574` (Angular 20, Vitest 3):
+**The comparison that proves it** holds the measurement constant. Vitest 3.2 ships the AST-aware
+remapping Vitest 4 made the default (`coverage.experimentalAstAwareRemapping`), so the merge base
+`ec82e5574` (Angular 20, Vitest 3) was re-run with it on, against this branch on Vitest 4:
 
-|                                             |       |
-| ------------------------------------------- | ----- |
-| unchanged files compared                    | 258   |
-| lines covered before, not after             | 99    |
-| inside code unexecuted in **both** runs     | 42    |
-| inside a function Vitest 3 never modelled   | 42    |
-| the earlier run's own data contradicts      | 3     |
-| in a file where Vitest 3 called no function | 12    |
-| **REAL LOSS**                               | **0** |
+|                                 |       |
+| ------------------------------- | ----- |
+| unchanged files compared        | 266   |
+| lines covered before, not after | **0** |
+| lines covered after, not before | 0     |
+| covered files absent afterwards | 0     |
+| **REAL LOSS**                   | **0** |
 
-127 files are absent afterwards, every one of them a file no spec imports, which Vitest 3 counted at
-0% and Vitest 4 omits.
+The 118 files absent afterwards are all at 0% before: files no spec imports, which Vitest 3 counted
+and Vitest 4 omits.
+
+Compared against Vitest 3's default line-based report instead, 99 lines are covered before and not
+after. 44 of them are explained by the earlier run's own data. The other 55 sit inside functions
+that run did not model, such as callbacks, `catchError` fallbacks, and a dialog no spec constructs.
+The comparator reports these as unproven rather than explained, and the like-for-like run above shows
+that none of them ran on Angular 20 either: under the same measurement, nothing was lost.
 
 Re-running the two projects after the `coverage.include` fix gives the honest figures —
 `@nuxeo-satori/generators` 53.37% over 208 statements (was 95.69% over 116) and `integration-tests`
@@ -192,7 +203,9 @@ The baseline now records **18 of 24 projects at ≥90%**, and 11 of 16 in the Be
 `document-detail` (88.03%) and `nuxeo-client` (87.48%) fall below the bar under the new counting and
 are the two to raise first. Both hard floors hold: `satori-components` 99.02%, `-satori` 100%.
 
-To reproduce, run the suite on each revision and diff the reports:
+To reproduce, run the suite on each revision and diff the reports. On the Angular 20 checkout, add
+`experimentalAstAwareRemapping: true` beside `provider: 'v8'` in every Vitest config first, and run
+with `--skip-nx-cache`, because a cache hit restores the old line-based report:
 
 ```bash
 node scripts/beta-harness/coverage-gate.mjs --run      # writes coverage/ for all Vitest projects
@@ -200,6 +213,8 @@ node scripts/coverage-line-diff.mjs \
   --before <a20-checkout>/coverage --before-root <a20-checkout> --before-rev ec82e5574 \
   --after  ./coverage              --after-root  .             --after-rev  HEAD
 ```
+
+Exit status: 0 no loss, 1 a loss, 2 a usage error, 3 an incomplete measurement.
 
 ## Validation
 

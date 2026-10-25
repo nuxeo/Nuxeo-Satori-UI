@@ -8,13 +8,19 @@
  * covered when any statement starting on it ran. Only source files identical between the two
  * revisions are compared, so a difference cannot come from the code under test.
  *
- * A line covered before and not after is classified, and only an unexplained one is a loss:
- *   neverRanEither          inside a function or branch arm unexecuted in both runs
- *   contradictedBefore      the earlier run's own function/branch data says it did not execute;
- *                           its whole-line statement credited it anyway
- *   fileNeverInvokedBefore  the earlier run called no function in the file at all
- *   notModelledBefore       inside a function uncalled now that the earlier run did not model
- *   realLoss                anything else — exits 1
+ * A line covered before and not after is judged column by column, using each run's own data. A
+ * column ran when no uncalled function or untaken branch arm contains it and the innermost
+ * statement containing it was hit; it did not run when either of those says so. A line is:
+ *   neverRanEither          every column unexecuted now was unexecuted before as well
+ *   notMeasuredBefore       the same, except some of those columns the earlier run did not measure
+ *   realLoss                some column ran before and is unexecuted now
+ *
+ * Counters are summed by source location across every report that measured the file, so one
+ * project's zero cannot explain away another project's execution. Missing evidence is not
+ * evidence: a function the earlier run did not model leaves its statements' credit standing.
+ *
+ * Exit status: 0 no loss, 1 real loss, 2 usage error, 3 incomplete measurement — an unchanged
+ * file with covered lines before is absent from the later reports, so its coverage is unknown.
  *
  * Not a gate: it needs both runs' reports. `docs/angular-21-migration.md` has the commands.
  *
@@ -45,7 +51,21 @@ function* reports(dir) {
   }
 }
 
-/** repo-relative path -> { project, covered, measured, statements, hit, raw } */
+const locKey = (l) => `${l.start.line}:${l.start.column}-${l.end.line}:${l.end.column}`;
+
+/** Add `n` to the counter at `key`, creating it from `make()` the first time. */
+function tally(map, key, make, n) {
+  const c = map.get(key) ?? { ...make(), hits: 0 };
+  c.hits += n ?? 0;
+  map.set(key, c);
+}
+
+/**
+ * repo-relative path -> { project, covered, measured, statements, hit, stmts, fns, arms }
+ *
+ * `stmts`, `fns` and `arms` are counters keyed by source location and summed over every report
+ * that measured the file, so a file two projects measure is judged on both runs together.
+ */
 function load(dir, root) {
   const out = new Map();
   for (const f of reports(dir)) {
@@ -58,18 +78,35 @@ function load(dir, root) {
         measured: new Set(),
         statements: 0,
         hit: 0,
-        raw: [],
+        stmts: new Map(),
+        fns: new Map(),
+        arms: new Map(),
       };
-      e.raw.push(cov);
       for (const [id, loc] of Object.entries(cov.statementMap)) {
-        e.measured.add(loc.start.line);
         e.statements++;
-        if (cov.s[id] > 0) {
-          e.covered.add(loc.start.line);
-          e.hit++;
-        }
+        if (cov.s[id] > 0) e.hit++;
+        tally(e.stmts, locKey(loc), () => ({ loc }), cov.s[id]);
+      }
+      for (const [id, fn] of Object.entries(cov.fnMap)) {
+        tally(e.fns, locKey(fn.loc), () => ({ loc: fn.loc, name: fn.name }), cov.f[id]);
+      }
+      for (const [id, br] of Object.entries(cov.branchMap)) {
+        br.locations.forEach((loc, i) =>
+          tally(
+            e.arms,
+            `${locKey(br.loc)}#${i}#${locKey(loc)}`,
+            () => ({ loc, line: br.loc.start.line }),
+            cov.b[id][i],
+          ),
+        );
       }
       out.set(rel, e);
+    }
+  }
+  for (const e of out.values()) {
+    for (const { loc, hits } of e.stmts.values()) {
+      e.measured.add(loc.start.line);
+      if (hits > 0) e.covered.add(loc.start.line);
     }
   }
   return out;
@@ -92,6 +129,7 @@ const gained = [];
 const perProject = {};
 const onlyBefore = [];
 const onlyAfter = [];
+const incomplete = [];
 let compared = 0;
 let skippedChanged = 0;
 for (const [file, b] of before) {
@@ -102,6 +140,7 @@ for (const [file, b] of before) {
   const x = after.get(file);
   if (!x) {
     onlyBefore.push(file);
+    if (b.covered.size) incomplete.push(`${file} (${b.covered.size} line(s) covered before)`);
     continue;
   }
   compared++;
@@ -134,92 +173,80 @@ for (const [file, b] of before) {
 }
 for (const file of after.keys()) if (!before.has(file) && !changed.has(file)) onlyAfter.push(file);
 
-const inside = (loc, line) => loc && loc.start.line <= line && line <= loc.end.line;
+/** Source lines of an unchanged file; its text is the same in both checkouts. */
+const sourceLines = (file) => readFileSync(join(args['after-root'], file), 'utf8').split('\n');
 
-/** The function or branch arm containing `line` that never ran in this data, or null. */
-function unexecuted(entry, line) {
-  for (const cov of entry.raw) {
-    for (const [id, fn] of Object.entries(cov.fnMap)) {
-      if (cov.f[id] === 0 && inside(fn.loc, line))
-        return `function ${fn.name || '(anonymous)'}@${fn.loc.start.line}`;
-    }
-    for (const [id, br] of Object.entries(cov.branchMap)) {
-      const arm = br.locations.find((l, i) => cov.b[id][i] === 0 && inside(l, line));
-      if (arm) return `branch@${arm.start.line}`;
-    }
-  }
-  return null;
+/** The columns [from, to) that `loc` spans on `line`. An unknown column reaches the line's edge. */
+function span(loc, line, length) {
+  if (loc?.start.line === undefined || loc.end.line === undefined) return null;
+  if (line < loc.start.line || line > loc.end.line) return null;
+  const from = line === loc.start.line ? (loc.start.column ?? 0) : 0;
+  const to = line === loc.end.line ? (loc.end.column ?? length) : length;
+  return [from, to];
 }
 
-/** The innermost function containing `line` that never ran, or null. */
-function uncalledFn(entry, line) {
-  let best = null;
-  for (const cov of entry.raw) {
-    for (const [id, fn] of Object.entries(cov.fnMap)) {
-      if (
-        cov.f[id] === 0 &&
-        inside(fn.loc, line) &&
-        (!best || fn.loc.start.line >= best.loc.start.line)
-      )
-        best = fn;
+/**
+ * What this run's data says about each column of `line`: 'ran', 'not' or null (not measured).
+ *
+ * A function or branch arm that never executed decides every column inside it, because nothing
+ * inside an uncalled function or a skipped arm can have run, whatever a coarser statement says.
+ * Otherwise the innermost statement covering the column decides. A called function or a taken
+ * arm decides nothing: being entered does not mean every column of it ran.
+ */
+function columns(entry, line, length) {
+  const state = new Array(length).fill(null);
+  const paint = (regions, pick) => {
+    for (const r of regions) {
+      const s = span(r.loc, line, length);
+      if (s) for (let c = Math.max(0, s[0]); c < Math.min(length, s[1]); c++) pick(c, r);
     }
-  }
-  return best;
-}
-
-/** Calls recorded for a function starting at the same place, or undefined when not modelled. */
-function callsAt(entry, loc) {
-  for (const cov of entry.raw) {
-    for (const [id, fn] of Object.entries(cov.fnMap)) {
-      if (
-        fn.loc.start.line === loc.start.line &&
-        Math.abs((fn.loc.start.column ?? 0) - (loc.start.column ?? 0)) <= 2
-      )
-        return cov.f[id];
-    }
-  }
-  return undefined;
+  };
+  // Innermost statement: the one starting latest, then ending earliest.
+  const depth = new Array(length).fill(null);
+  const inner = (a, b) =>
+    a.loc.start.line !== b.loc.start.line
+      ? a.loc.start.line > b.loc.start.line
+      : (a.loc.start.column ?? 0) !== (b.loc.start.column ?? 0)
+        ? (a.loc.start.column ?? 0) > (b.loc.start.column ?? 0)
+        : a.loc.end.line !== b.loc.end.line
+          ? a.loc.end.line < b.loc.end.line
+          : (a.loc.end.column ?? Infinity) < (b.loc.end.column ?? Infinity);
+  paint(entry.stmts.values(), (c, r) => {
+    if (!depth[c] || inner(r, depth[c])) depth[c] = r;
+  });
+  for (let c = 0; c < length; c++) if (depth[c]) state[c] = depth[c].hits > 0 ? 'ran' : 'not';
+  const unexecuted = [...entry.fns.values(), ...entry.arms.values()].filter((r) => r.hits === 0);
+  paint(unexecuted, (c) => (state[c] = 'not'));
+  return state;
 }
 
 const classified = {
   neverRanEither: 0,
-  contradictedBefore: 0,
-  fileNeverInvokedBefore: 0,
-  notModelledBefore: 0,
-  notModelledSample: [],
+  notMeasuredBefore: 0,
   realLoss: [],
 };
+const sources = new Map();
 for (const [file, line] of lost) {
-  const nowWhy = unexecuted(after.get(file), line);
-  const thenWhy = unexecuted(before.get(file), line);
-  if (nowWhy && thenWhy) {
-    classified.neverRanEither++;
-    continue;
+  if (!sources.has(file)) sources.set(file, sourceLines(file));
+  const text = sources.get(file)[line - 1] ?? '';
+  const now = columns(after.get(file), line, text.length);
+  const then = columns(before.get(file), line, text.length);
+  // A column is lost when the earlier run's data says it ran and this run's says it did not.
+  const lostAt = [];
+  let unmeasured = false;
+  for (let c = 0; c < text.length; c++) {
+    if (/\s/.test(text[c]) || now[c] !== 'not') continue;
+    if (then[c] === 'ran') lostAt.push(c);
+    else if (then[c] === null) unmeasured = true;
   }
-  if (thenWhy) {
-    classified.contradictedBefore++;
-    continue;
-  }
-  // Only module-load code ran in the file before. That code is still covered now, so a line
-  // uncovered now is in a body that could not have run then either.
-  const fnsBefore = before.get(file).raw.flatMap((c) => Object.keys(c.fnMap).map((id) => c.f[id]));
-  if (fnsBefore.length && fnsBefore.every((n) => n === 0)) {
-    classified.fileNeverInvokedBefore++;
-    continue;
-  }
-  const fn = uncalledFn(after.get(file), line);
-  const then = fn ? callsAt(before.get(file), fn.loc) : null;
-  if (fn && then === undefined) {
-    classified.notModelledBefore++;
-    if (classified.notModelledSample.length < 8)
-      classified.notModelledSample.push(`${file}:${line} ${fn.name}`);
-    continue;
-  }
-  classified.realLoss.push(
-    `${file}:${line}  (now: ${nowWhy ?? 'statement uncovered'}; before: ${
-      then === null ? 'no uncalled function now' : `same function called ${then}x`
-    })`,
-  );
+  if (lostAt.length) {
+    classified.realLoss.push(
+      `${file}:${line}:${lostAt[0] + 1}  ran before, unexecuted now: ${JSON.stringify(
+        text.slice(lostAt[0], lostAt.at(-1) + 1).trim(),
+      )}`,
+    );
+  } else if (unmeasured) classified.notMeasuredBefore++;
+  else classified.neverRanEither++;
 }
 
 const pct = (h, n) => (n ? ((100 * h) / n).toFixed(2) : '-');
@@ -249,12 +276,11 @@ for (const [k, p] of Object.entries(perProject).sort()) {
   );
 }
 console.log(`\nneverRanEither         ${classified.neverRanEither}`);
-console.log(`contradictedBefore     ${classified.contradictedBefore}`);
-console.log(`fileNeverInvokedBefore ${classified.fileNeverInvokedBefore}`);
-console.log(`notModelledBefore      ${classified.notModelledBefore}`);
-for (const u of classified.notModelledSample) console.log(`  e.g. ${u}`);
+console.log(`notMeasuredBefore      ${classified.notMeasuredBefore}`);
 console.log(`REAL LOSS              ${classified.realLoss.length}`);
 for (const u of classified.realLoss) console.log(`  ${u}`);
+console.log(`INCOMPLETE             ${incomplete.length}`);
+for (const u of incomplete) console.log(`  ${u}`);
 if (onlyBefore.length) {
   console.log('\nmeasured before, absent after:');
   for (const f of onlyBefore) console.log(`  ${f}`);
@@ -263,10 +289,20 @@ if (args.json) {
   writeFileSync(
     args.json,
     JSON.stringify(
-      { compared, skippedChanged, classified, lost, gained, onlyBefore, onlyAfter, perProject },
+      {
+        compared,
+        skippedChanged,
+        classified,
+        incomplete,
+        lost,
+        gained,
+        onlyBefore,
+        onlyAfter,
+        perProject,
+      },
       null,
       2,
     ),
   );
 }
-process.exit(classified.realLoss.length ? 1 : 0);
+process.exit(classified.realLoss.length ? 1 : incomplete.length ? 3 : 0);
