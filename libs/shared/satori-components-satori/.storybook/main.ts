@@ -6,18 +6,26 @@ import type { StorybookConfig } from '@storybook/angular';
  * GitHub Packages token; `satori-components`' Storybook is the one that builds without.
  */
 const config: StorybookConfig = {
-  stories: ['../src/**/*.stories.ts'],
-  // Satori's `sat.*` catalogue, where `provideAndConfigureSatoriTranslations` fetches it.
+  stories: [
+    '../../satori-components/.storybook/getting-started.mdx',
+    '../../satori-components/src/**/*.mdx',
+    '../../satori-components/src/**/*.stories.ts',
+    '../src/**/*.stories.ts',
+  ],
   staticDirs: [
+    { from: '../../../../apps/nuxeo-ui/public/i18n', to: 'i18n' },
     {
       from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n',
       to: 'i18n/@hylandsoftware/satori-ui',
     },
   ],
-  addons: [],
+  addons: ['@storybook/addon-docs', '@storybook/addon-a11y'],
   framework: {
     name: '@storybook/angular',
     options: {},
+  },
+  docs: {
+    defaultName: 'API',
   },
   core: {
     disableTelemetry: true,
