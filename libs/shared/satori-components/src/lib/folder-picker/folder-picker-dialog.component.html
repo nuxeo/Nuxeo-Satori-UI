@@ -11,7 +11,7 @@
       [attr.aria-label]="'satori-components.folder-picker.up' | translate"
       (click)="up()"
     >
-      <mat-icon aria-hidden="true">arrow_upward</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="arrow_up" />
     </button>
     <span class="nxs-folder-picker-dialog__trail" aria-live="polite">{{
       trail().join(' › ')
@@ -58,9 +58,11 @@
               >folder</mat-icon
             >
             <span class="nxs-folder-picker-dialog__folder-title">{{ doc.title }}</span>
-            <mat-icon class="nxs-folder-picker-dialog__chevron" aria-hidden="true"
-              >chevron_right</mat-icon
-            >
+            <mat-icon
+              class="nxs-folder-picker-dialog__chevron"
+              aria-hidden="true"
+              svgIcon="chevron_right"
+            />
           </button>
         </li>
       }

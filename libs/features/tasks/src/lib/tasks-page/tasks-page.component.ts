@@ -950,7 +950,7 @@ export class TasksPageComponent implements OnInit {
 
   actionIcon(action: { name: string }): string {
     const n = action.name.toLowerCase();
-    if (n.includes('approve') || n.includes('validate')) return 'check_circle';
+    if (n.includes('approve') || n.includes('validate')) return 'circle_check';
     if (n.includes('reject')) return 'cancel';
     if (n.includes('start')) return 'play_arrow';
     if (n.includes('cancel')) return 'block';

@@ -674,7 +674,7 @@ export class BrowseComponent {
         entries.unshift({
           id: 'collection.edit',
           label: this.translate.instant('browse.browse.edit'),
-          icon: 'edit',
+          icon: 'pencil',
         });
       }
       if (entries.length > 0) menus[doc.uid] = entries;

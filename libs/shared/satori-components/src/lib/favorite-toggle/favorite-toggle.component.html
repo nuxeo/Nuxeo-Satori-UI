@@ -15,5 +15,5 @@
   [disabled]="disabled()"
   (click)="press($event)"
 >
-  <mat-icon aria-hidden="true">{{ favorite() ? 'star' : 'star_border' }}</mat-icon>
+  <mat-icon aria-hidden="true" [svgIcon]="favorite() ? 'star' : 'star'" />
 </button>

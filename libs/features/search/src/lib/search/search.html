@@ -9,7 +9,7 @@
           [class.active]="aiSearchMode()"
           (click)="toggleAiSearch()"
         >
-          <mat-icon class="ai-sparkle-icon">auto_awesome</mat-icon>
+          <mat-icon class="ai-sparkle-icon" svgIcon="ai" />
           {{
             aiSearchMode()
               ? ('search.ai-search-active' | translate)
@@ -22,7 +22,7 @@
             class="nxql-toggle-btn"
             (click)="showNxqlPanel.set(!showNxqlPanel())"
           >
-            <mat-icon>code</mat-icon>
+            <mat-icon svgIcon="code" />
             {{
               showNxqlPanel()
                 ? ('search.hide-query' | translate)
@@ -34,7 +34,7 @@
 
       @if (aiSearchMode()) {
         <div class="ai-search-bar">
-          <mat-icon class="ai-search-icon">auto_awesome</mat-icon>
+          <mat-icon class="ai-search-icon" svgIcon="ai" />
           <input
             class="ai-search-input"
             type="text"
@@ -58,7 +58,7 @@
               (click)="executeAiSearch()"
               [disabled]="!aiQuery().trim()"
             >
-              <mat-icon>send</mat-icon>
+              <mat-icon svgIcon="send" />
             </button>
           }
           <mat-autocomplete
@@ -67,7 +67,7 @@
           >
             @for (suggestion of aiSuggestions(); track suggestion) {
               <mat-option [value]="suggestion">
-                <mat-icon class="suggestion-icon">auto_awesome</mat-icon>
+                <mat-icon class="suggestion-icon" svgIcon="ai" />
                 {{ suggestion }}
               </mat-option>
             }
@@ -76,7 +76,7 @@
 
         @if (aiError()) {
           <div class="ai-error">
-            <mat-icon>error_outline</mat-icon>
+            <mat-icon svgIcon="error" />
             {{ aiError() }}
           </div>
         }
@@ -84,7 +84,7 @@
         @if (showNxqlPanel() && aiGeneratedNxql()) {
           <div class="ai-nxql-panel">
             <div class="ai-nxql-explanation">
-              <mat-icon>info_outline</mat-icon>
+              <mat-icon svgIcon="info" />
               <span>{{ aiExplanation() }}</span>
             </div>
             <pre class="ai-nxql-code">{{ aiGeneratedNxql() }}</pre>
@@ -139,7 +139,7 @@
         (click)="exportCsv()"
         class="toolbar-btn"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
 
       <!--
@@ -157,7 +157,7 @@
         (click)="setViewMode('grid')"
         class="toolbar-btn"
       >
-        <mat-icon>grid_view</mat-icon>
+        <mat-icon svgIcon="grid_view" />
       </button>
 
       <button
@@ -169,7 +169,7 @@
         (click)="setViewMode('table')"
         class="toolbar-btn"
       >
-        <mat-icon>view_list</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
 
       <button
@@ -181,7 +181,7 @@
         [attr.aria-pressed]="viewMode() === 'list'"
         (click)="setViewMode('list')"
       >
-        <mat-icon>format_list_bulleted</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
     </div>
   </div>
@@ -226,7 +226,7 @@
             (click)="setGridSortOrder(gridSortOrder() === 'asc' ? 'desc' : 'asc')"
             class="action-btn"
           >
-            <mat-icon>{{ gridSortOrder() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            <mat-icon [svgIcon]="gridSortOrder() === 'asc' ? 'arrow_up' : 'arrow_downward'" />
           </button>
         </div>
       </div>
@@ -244,7 +244,7 @@
             </div>
             <div class="result-card-thumbnail">
               <nxs-thumbnail class="result-thumbnail-image" [documentId]="row.id">
-                <mat-icon class="result-icon">{{ row.icon }}</mat-icon>
+                <mat-icon class="result-icon" [svgIcon]="row.icon" />
               </nxs-thumbnail>
             </div>
             <div class="result-card-body">
@@ -276,7 +276,7 @@
                     class="action-btn"
                     (click)="downloadDocument(row.id, row.name, $event)"
                   >
-                    <mat-icon class="action-icon">download</mat-icon>
+                    <mat-icon class="action-icon" svgIcon="download" />
                   </button>
                 }
               </div>
@@ -336,7 +336,7 @@
               [attr.aria-label]="'search.search.manage-columns' | translate"
               (click)="openColumnPanel()"
             >
-              <mat-icon>tune</mat-icon>
+              <mat-icon svgIcon="settings" />
             </button>
           </span>
         </div>
@@ -359,7 +359,7 @@
               @if (col.key === 'name') {
                 <span class="col-name">
                   <nxs-thumbnail class="row-thumbnail-image" [documentId]="row.id">
-                    <mat-icon class="row-icon">{{ row.icon }}</mat-icon>
+                    <mat-icon class="row-icon" [svgIcon]="row.icon" />
                   </nxs-thumbnail>
                   <button
                     type="button"
@@ -415,7 +415,7 @@
           (click)="setGridSortOrder(gridSortOrder() === 'asc' ? 'desc' : 'asc')"
           class="action-btn"
         >
-          <mat-icon>{{ gridSortOrder() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+          <mat-icon [svgIcon]="gridSortOrder() === 'asc' ? 'arrow_up' : 'arrow_downward'" />
         </button>
       </div>
     </div>
@@ -425,7 +425,7 @@
         <div class="simple-list-item" [class.selected]="isSelected(row.id)">
           <div class="simple-list-thumb-wrap">
             <nxs-thumbnail class="simple-list-thumb" [documentId]="row.id">
-              <mat-icon class="simple-list-icon">{{ row.icon }}</mat-icon>
+              <mat-icon class="simple-list-icon" [svgIcon]="row.icon" />
             </nxs-thumbnail>
             <span class="simple-list-checkbox col-hover-select">
               <mat-checkbox
@@ -465,7 +465,7 @@
                   class="action-btn"
                   (click)="downloadDocument(row.id, row.name, $event)"
                 >
-                  <mat-icon class="action-icon">download</mat-icon>
+                  <mat-icon class="action-icon" svgIcon="download" />
                 </button>
               }
             </div>

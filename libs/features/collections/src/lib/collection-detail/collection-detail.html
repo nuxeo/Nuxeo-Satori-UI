@@ -57,7 +57,7 @@
           [attr.aria-label]="'collections.collection-detail.refresh' | translate"
           (click)="loadMembers()"
         >
-          <mat-icon>sync</mat-icon>
+          <mat-icon svgIcon="sync" />
         </button>
         @if (canEditCollection()) {
           <button
@@ -66,7 +66,7 @@
             [attr.aria-label]="'collections.collection-detail.edit' | translate"
             (click)="editCollection()"
           >
-            <mat-icon>edit</mat-icon>
+            <mat-icon svgIcon="pencil" />
           </button>
         }
         @if (canDeleteCollection()) {
@@ -77,7 +77,7 @@
             [matTooltip]="'collections.collection-detail.delete' | translate"
             [attr.aria-label]="'collections.collection-detail.delete' | translate"
           >
-            <mat-icon>delete</mat-icon>
+            <mat-icon svgIcon="trash" />
           </button>
         }
         <button
@@ -87,7 +87,7 @@
           [matTooltip]="'collections.collection-detail.export' | translate"
           [attr.aria-label]="'collections.collection-detail.export' | translate"
         >
-          <mat-icon>download</mat-icon>
+          <mat-icon svgIcon="download" />
         </button>
         @if (showsLockAction()) {
           <!-- An icon button rather than a menu item: `disabledInteractive` keeps a reader's
@@ -109,7 +109,7 @@
               isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate)
             "
           >
-            <mat-icon>{{ isLocked() ? 'lock' : 'lock_open' }}</mat-icon>
+            <mat-icon [svgIcon]="isLocked() ? 'lock' : 'lock_open'" />
           </button>
         }
         <button
@@ -118,20 +118,20 @@
           [matTooltip]="'collections.collection-detail.more-actions' | translate"
           [attr.aria-label]="'collections.collection-detail.more-actions' | translate"
         >
-          <mat-icon>more_vert</mat-icon>
+          <mat-icon svgIcon="more_vert" />
         </button>
         <button
           mat-icon-button
           [matTooltip]="'collections.collection-detail.search' | translate"
           [attr.aria-label]="'collections.collection-detail.search' | translate"
         >
-          <mat-icon>search</mat-icon>
+          <mat-icon svgIcon="search" />
         </button>
       </div>
 
       <mat-menu #moreMenu="matMenu">
         <button mat-menu-item (click)="shareCollection()">
-          <mat-icon>share</mat-icon>
+          <mat-icon svgIcon="share" />
           <span>{{ 'collections.collection-detail.share' | translate }}</span>
         </button>
         <button
@@ -139,7 +139,7 @@
           (click)="toggleSubscription()"
           [disabled]="actionInProgress() === 'subscribe'"
         >
-          <mat-icon>{{ isSubscribed() ? 'notifications_active' : 'notifications' }}</mat-icon>
+          <mat-icon [svgIcon]="isSubscribed() ? 'notifications_active' : 'notifications'" />
           <span>{{
             isSubscribed()
               ? ('collections.unsubscribe' | translate)
@@ -147,7 +147,7 @@
           }}</span>
         </button>
         <button mat-menu-item (click)="toggleClipboard()">
-          <mat-icon>{{ isInClipboard() ? 'content_paste_off' : 'content_paste' }}</mat-icon>
+          <mat-icon [svgIcon]="isInClipboard() ? 'content_paste_off' : 'content_paste'" />
           <span>{{
             isInClipboard()
               ? ('collections.remove-from-clipboard' | translate)
@@ -159,7 +159,7 @@
           (click)="exportCollection()"
           [disabled]="actionInProgress() === 'export'"
         >
-          <mat-icon>download</mat-icon>
+          <mat-icon svgIcon="download" />
           <span>{{ 'collections.collection-detail.export' | translate }}</span>
         </button>
       </mat-menu>
@@ -295,7 +295,7 @@
                               "
                               (click)="editExternalPermission(ace)"
                             >
-                              <mat-icon>edit</mat-icon>
+                              <mat-icon svgIcon="pencil" />
                             </button>
                             <button
                               mat-icon-button
@@ -308,7 +308,7 @@
                               [disabled]="actionInProgress() === 'notify-' + ace.id"
                               (click)="sendNotificationEmail(ace)"
                             >
-                              <mat-icon>send</mat-icon>
+                              <mat-icon svgIcon="send" />
                             </button>
                             <button
                               mat-icon-button
@@ -318,7 +318,7 @@
                               "
                               (click)="deletePermission(ace)"
                             >
-                              <mat-icon>delete</mat-icon>
+                              <mat-icon svgIcon="trash" />
                             </button>
                           </td>
                         }
@@ -424,7 +424,7 @@
             </div>
           } @else if (filteredAuditEntries().length === 0) {
             <div class="history-empty">
-              <mat-icon>event_busy</mat-icon>
+              <mat-icon svgIcon="calendar" />
               <p>{{ 'collections.collection-detail.no-history-entries-found' | translate }}</p>
             </div>
           } @else {

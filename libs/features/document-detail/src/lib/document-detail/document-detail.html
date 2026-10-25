@@ -10,7 +10,7 @@
     [headingLevel]="1"
   >
     <button mat-stroked-button type="button" (click)="goBack()">
-      <mat-icon aria-hidden="true">arrow_back</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="arrow_left" />
       {{ 'document-detail.document-detail.go-back-2' | translate }}
     </button>
   </nxs-error-state>
@@ -49,9 +49,9 @@
             (click)="runTextEntityExtraction()"
           >
             @if (isKeActionRunning('named-entity-recognition-text')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>sell</mat-icon>
+              <mat-icon svgIcon="tag" />
             }
             {{ 'document-detail.document-detail.extract-named-entities-text' | translate }}
           </button>
@@ -63,9 +63,9 @@
             (click)="runTextClassification()"
           >
             @if (isKeActionRunning('text-classification')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>category</mat-icon>
+              <mat-icon svgIcon="tag" />
             }
             {{ 'document-detail.document-detail.classify-document' | translate }}
           </button>
@@ -77,9 +77,9 @@
             (click)="runTextSummarization()"
           >
             @if (isKeActionRunning('text-summarization')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>short_text</mat-icon>
+              <mat-icon svgIcon="text_lines" />
             }
             {{ 'document-detail.document-detail.summarize-document' | translate }}
           </button>
@@ -96,9 +96,9 @@
             (click)="runImageEnrichment()"
           >
             @if (isKeActionRunning('image-enrichment')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>image_search</mat-icon>
+              <mat-icon svgIcon="image" />
             }
             {{ 'document-detail.document-detail.describe-image' | translate }}
           </button>
@@ -145,7 +145,7 @@
                 'document-detail.document-detail.already-ingested-to-content-lake' | translate
               "
             >
-              <mat-icon>cloud_done</mat-icon>
+              <mat-icon svgIcon="cloud_check" />
             </button>
           </span>
         } @else {
@@ -160,7 +160,7 @@
             <span class="cdk-visually-hidden" cdkAriaLive="off">{{
               'document-detail.document-detail.ingest-to-content-lake' | translate
             }}</span>
-            <mat-icon aria-hidden="true">cloud_upload</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="cloud_upload" />
           </button>
         }
       }
@@ -193,7 +193,7 @@
           (click)="restoreFromTrash()"
           [disabled]="actionInProgress() === 'restore'"
         >
-          <mat-icon>restore_from_trash</mat-icon>
+          <mat-icon svgIcon="restore" />
           {{ 'document-detail.document-detail.restore' | translate }}
         </button>
       }
@@ -204,7 +204,7 @@
           (click)="permanentlyDelete()"
           [disabled]="actionInProgress() === 'permanentDelete'"
         >
-          <mat-icon>delete_forever</mat-icon>
+          <mat-icon svgIcon="trash_x" />
           {{ 'document-detail.document-detail.delete-permanently' | translate }}
         </button>
       }
@@ -227,7 +227,7 @@
           (click)="confirmRestoreVersion()"
           [disabled]="actionInProgress() === 'restore'"
         >
-          <mat-icon>restore</mat-icon>
+          <mat-icon svgIcon="restore" />
           {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
         </button>
       }
@@ -573,7 +573,7 @@
                                   type="button"
                                   (click)="editExternalPermission(ace)"
                                 >
-                                  <mat-icon>edit</mat-icon>
+                                  <mat-icon svgIcon="pencil" />
                                 </button>
                                 <button
                                   mat-icon-button
@@ -588,7 +588,7 @@
                                   [disabled]="actionInProgress() === 'notify-' + ace.id"
                                   (click)="sendPermissionNotification(ace)"
                                 >
-                                  <mat-icon>send</mat-icon>
+                                  <mat-icon svgIcon="send" />
                                 </button>
                                 <button
                                   mat-icon-button
@@ -601,7 +601,7 @@
                                   type="button"
                                   (click)="deletePermission(ace)"
                                 >
-                                  <mat-icon>delete</mat-icon>
+                                  <mat-icon svgIcon="trash" />
                                 </button>
                               </td>
                             }
@@ -663,7 +663,7 @@
                 </div>
               } @else if (publishedDocs().length === 0) {
                 <div class="publish-empty">
-                  <mat-icon>cloud_off</mat-icon>
+                  <mat-icon svgIcon="cloud_off" />
                   <p>
                     {{
                       'document-detail.document-detail.this-document-has-not-been-published'
@@ -688,7 +688,7 @@
                       <tr>
                         <td>
                           <div class="pub-title-cell">
-                            <mat-icon class="pub-doc-icon">description</mat-icon>
+                            <mat-icon class="pub-doc-icon" svgIcon="page" />
                             <span class="pub-path-text">{{ publishedPath(pub) }}</span>
                           </div>
                         </td>
@@ -758,7 +758,7 @@
                       />
                     } @else {
                       <ng-container>
-                        <mat-icon>publish</mat-icon>
+                        <mat-icon svgIcon="publish" />
                         {{ 'document-detail.document-detail.publish' | translate }}
                       </ng-container>
                     }
@@ -784,7 +784,7 @@
                   </div>
                 } @else if (sectionTree().length === 0) {
                   <div class="publish-empty">
-                    <mat-icon>folder_off</mat-icon>
+                    <mat-icon svgIcon="folder" />
                     <p>
                       {{
                         'document-detail.document-detail.no-sections-available-for-publishing'
@@ -822,7 +822,7 @@
                 </p>
               </div>
               <button mat-flat-button class="ai-btn-primary" (click)="openAiAssistant()">
-                <mat-icon>auto_awesome</mat-icon>
+                <mat-icon svgIcon="ai" />
                 {{ 'document-detail.document-detail.ai-assistant' | translate }}
               </button>
             </div>
@@ -833,7 +833,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--purple">
-                    <mat-icon>auto_awesome</mat-icon>
+                    <mat-icon svgIcon="ai" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.document-summary' | translate }}
@@ -851,7 +851,7 @@
                       class="ai-btn-primary ai-btn-sm"
                       (click)="generateSummary()"
                     >
-                      <mat-icon>auto_awesome</mat-icon>
+                      <mat-icon svgIcon="ai" />
                       {{
                         aiSummary()
                           ? ('document-detail.regenerate' | translate)
@@ -905,7 +905,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--indigo">
-                    <mat-icon>sell</mat-icon>
+                    <mat-icon svgIcon="tag" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.suggested-tags' | translate }}
@@ -936,7 +936,7 @@
                           <span class="ai-tag-confidence"
                             >{{ (tag.confidence * 100).toFixed(0) }}%</span
                           >
-                          <mat-icon class="ai-tag-add">add_circle_outline</mat-icon>
+                          <mat-icon class="ai-tag-add" svgIcon="circle_add" />
                         </button>
                       }
                     </div>
@@ -953,7 +953,7 @@
                     </button>
                   } @else {
                     <button mat-stroked-button class="ai-btn-outline" (click)="suggestTags()">
-                      <mat-icon>auto_awesome</mat-icon>
+                      <mat-icon svgIcon="ai" />
                       {{ 'document-detail.document-detail.suggest-tags' | translate }}
                     </button>
                   }
@@ -964,7 +964,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--purple">
-                    <mat-icon>tune</mat-icon>
+                    <mat-icon svgIcon="settings" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.classification-amp-metadata' | translate }}
@@ -1054,7 +1054,7 @@
                       class="ai-btn-primary ai-btn-full"
                       (click)="classifyDocument()"
                     >
-                      <mat-icon>tune</mat-icon>
+                      <mat-icon svgIcon="settings" />
                       {{ 'document-detail.document-detail.classify' | translate }}
                     </button>
                   }
@@ -1065,7 +1065,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--indigo">
-                    <mat-icon>hub</mat-icon>
+                    <mat-icon svgIcon="processes" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.related-documents' | translate }}
@@ -1103,7 +1103,7 @@
                     <div class="ai-similar-list">
                       @for (simDoc of aiSimilarDocs(); track simDoc.uid) {
                         <button class="ai-similar-item" (click)="navigateToDoc(simDoc.uid)">
-                          <mat-icon class="ai-similar-icon">description</mat-icon>
+                          <mat-icon class="ai-similar-icon" svgIcon="page" />
                           <div class="ai-similar-info">
                             <span class="ai-similar-title">{{ simDoc.title }}</span>
                             <span class="ai-similar-path">{{ simDoc.path }}</span>
@@ -1117,13 +1117,13 @@
                   } @else {
                     <div class="ai-doc-thumbs">
                       <div class="ai-doc-thumb">
-                        <mat-icon class="ai-doc-thumb-icon">description</mat-icon>
+                        <mat-icon class="ai-doc-thumb-icon" svgIcon="page" />
                         <span>{{
                           'document-detail.document-detail.document-preview' | translate
                         }}</span>
                       </div>
                       <div class="ai-doc-thumb">
-                        <mat-icon class="ai-doc-thumb-icon">description</mat-icon>
+                        <mat-icon class="ai-doc-thumb-icon" svgIcon="page" />
                         <span>{{
                           'document-detail.document-detail.document-preview' | translate
                         }}</span>
@@ -1142,7 +1142,7 @@
                     </button>
                   } @else {
                     <button mat-stroked-button class="ai-btn-outline" (click)="findSimilar()">
-                      <mat-icon>search</mat-icon>
+                      <mat-icon svgIcon="search" />
                       {{ 'document-detail.document-detail.find-connections' | translate }}
                     </button>
                   }
@@ -1166,9 +1166,7 @@
           [matTooltip]="detailsPanelToggleLabelKey() | translate"
           [attr.aria-label]="detailsPanelToggleLabelKey() | translate"
         >
-          <mat-icon aria-hidden="true">{{
-            propertiesPanelOpen() ? 'info' : 'info_outline'
-          }}</mat-icon>
+          <mat-icon aria-hidden="true" [svgIcon]="propertiesPanelOpen() ? 'info' : 'info'" />
         </button>
       </div>
     </div>
@@ -1253,7 +1251,7 @@
                         "
                         (click)="openDriveDialog()"
                       >
-                        <mat-icon>open_in_new</mat-icon>
+                        <mat-icon svgIcon="open_full" />
                       </button>
                       <button
                         mat-icon-button
@@ -1261,7 +1259,7 @@
                         [attr.aria-label]="'document-detail.document-detail.preview' | translate"
                         (click)="previewAttachment(att)"
                       >
-                        <mat-icon>visibility</mat-icon>
+                        <mat-icon svgIcon="view" />
                       </button>
                       <button
                         mat-icon-button
@@ -1269,7 +1267,7 @@
                         [attr.aria-label]="'document-detail.document-detail.download' | translate"
                         (click)="downloadAttachment(att.url, att.name)"
                       >
-                        <mat-icon>download</mat-icon>
+                        <mat-icon svgIcon="download" />
                       </button>
                       @if (canWriteDoc()) {
                         <button
@@ -1280,15 +1278,15 @@
                             'document-detail.document-detail.more-actions' | translate
                           "
                         >
-                          <mat-icon>more_vert</mat-icon>
+                          <mat-icon svgIcon="more_vert" />
                         </button>
                         <mat-menu #attMenu="matMenu">
                           <button mat-menu-item (click)="openReplaceDialog(att)">
-                            <mat-icon>find_replace</mat-icon>
+                            <mat-icon svgIcon="search" />
                             <span>{{ 'document-detail.document-detail.replace' | translate }}</span>
                           </button>
                           <button mat-menu-item (click)="openRemoveDialog(att)">
-                            <mat-icon>cancel</mat-icon>
+                            <mat-icon svgIcon="circle_x" />
                             <span>{{ 'document-detail.document-detail.remove' | translate }}</span>
                           </button>
                         </mat-menu>
@@ -1323,7 +1321,7 @@
                         [attr.aria-label]="'document-detail.document-detail.loading' | translate"
                       />
                     } @else {
-                      <mat-icon>psychology</mat-icon>
+                      <mat-icon svgIcon="ai" />
                     }
                     {{ 'document-detail.document-detail.analyze-sentiment' | translate }}
                   </button>
@@ -1332,7 +1330,7 @@
                 @if (aiThreadSummary()) {
                   <div class="sentiment-summary-panel">
                     <div class="sentiment-summary-header">
-                      <mat-icon>forum</mat-icon>
+                      <mat-icon svgIcon="chat" />
                       <span>{{
                         'document-detail.document-detail.thread-summary' | translate
                       }}</span>
@@ -1351,7 +1349,7 @@
                         </span>
                         @if (sent.summary; as sentSummary) {
                           <p class="sentiment-inline-summary">
-                            <mat-icon class="sentiment-inline-icon">auto_awesome</mat-icon>
+                            <mat-icon class="sentiment-inline-icon" svgIcon="ai" />
                             {{ sentSummary }}
                           </p>
                         }
@@ -1420,17 +1418,19 @@
         (click)="toggleSectionNode(node); $event.stopPropagation()"
         type="button"
       >
-        <mat-icon class="section-arrow" [class.section-arrow--expanded]="node.expanded">
-          chevron_right
-        </mat-icon>
+        <mat-icon
+          class="section-arrow"
+          [class.section-arrow--expanded]="node.expanded"
+          svgIcon="chevron_right"
+        />
       </button>
     } @else {
       <span class="section-toggle-spacer"></span>
     }
-    <mat-icon class="section-icon">{{ sectionIcon(node) }}</mat-icon>
+    <mat-icon class="section-icon" [svgIcon]="sectionIcon(node)" />
     <span class="section-label">{{ node.doc.title }}</span>
     @if (selectedSectionId() === node.doc.uid) {
-      <mat-icon class="section-check">check_circle</mat-icon>
+      <mat-icon class="section-check" svgIcon="circle_check" />
     }
   </div>
 

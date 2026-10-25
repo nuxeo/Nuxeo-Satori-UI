@@ -12,7 +12,7 @@
         <span class="saved-filters-label">{{
           filterSearchInput() || ('assets.search-filters' | translate)
         }}</span>
-        <mat-icon class="saved-filters-arrow">arrow_drop_down</mat-icon>
+        <mat-icon class="saved-filters-arrow" svgIcon="chevron_down" />
       </button>
 
       @if (filterSearchOpen()) {
@@ -46,7 +46,7 @@
                   type="button"
                   (mousedown)="selectFilterOption(option)"
                 >
-                  <mat-icon class="saved-filter-icon">bookmark</mat-icon>
+                  <mat-icon class="saved-filter-icon" svgIcon="bookmark" />
                   {{ option.label }}
                 </button>
               }
@@ -73,7 +73,7 @@
       class="queue-toggle-btn"
       [class.active]="viewMode() === 'queue'"
     >
-      <mat-icon>{{ viewMode() === 'filter' ? 'view_list' : 'filter_list' }}</mat-icon>
+      <mat-icon [svgIcon]="viewMode() === 'filter' ? 'bullet_list' : 'filter_list'" />
     </button>
   </div>
 </div>
@@ -97,7 +97,7 @@
         />
         @if (secondarySearchInput().trim()) {
           <button class="clear-btn" type="button" (click)="onSecondarySearchClear()">
-            <mat-icon>close</mat-icon>
+            <mat-icon svgIcon="x_large" />
           </button>
         }
       </div>

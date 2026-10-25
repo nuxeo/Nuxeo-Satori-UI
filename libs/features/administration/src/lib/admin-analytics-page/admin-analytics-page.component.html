@@ -8,7 +8,7 @@
       mat-icon-button
       [attr.aria-label]="'admin.admin-analytics-page.search-placeholder' | translate"
     >
-      <mat-icon>search</mat-icon>
+      <mat-icon svgIcon="search" />
     </button>
   </header>
 
@@ -24,7 +24,7 @@
             (ngModelChange)="distPath.set($event)"
             (blur)="refreshDistribution()"
           />
-          <mat-icon matPrefix>folder</mat-icon>
+          <mat-icon matPrefix svgIcon="folder" />
         </mat-form-field>
 
         @if (distributionWarning()) {
@@ -167,7 +167,7 @@
     @if (featureFlags.aiEnabled()) {
       <mat-tab>
         <ng-template mat-tab-label>
-          <mat-icon class="ai-tab-icon">auto_awesome</mat-icon>
+          <mat-icon class="ai-tab-icon" svgIcon="ai" />
           {{ 'admin.admin-analytics-page.ai-audit-anomalies' | translate }}
         </ng-template>
         <div class="tab-pad">
@@ -203,7 +203,7 @@
                   [attr.aria-label]="'admin.admin-analytics-page.loading' | translate"
                 ></mat-spinner>
               } @else {
-                <mat-icon>auto_awesome</mat-icon>
+                <mat-icon svgIcon="ai" />
               }
               {{ 'administration.admin-analytics-page.scan-for-anomalies' | translate }}
             </button>
@@ -218,7 +218,7 @@
             </div>
           } @else if (aiAnomalySummary()) {
             <div class="anomaly-summary">
-              <mat-icon>info</mat-icon>
+              <mat-icon svgIcon="info" />
               <span>{{ aiAnomalySummary() }}</span>
             </div>
             @if (aiAnomalies().length) {

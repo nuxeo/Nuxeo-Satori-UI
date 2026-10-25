@@ -305,7 +305,7 @@ export class DashboardPageComponent {
   insightIcon(icon: string): string {
     const map: Record<string, string> = {
       task: 'assignment',
-      document: 'description',
+      document: 'page',
       warning: 'warning',
       info: 'info',
       workflow: 'account_tree',

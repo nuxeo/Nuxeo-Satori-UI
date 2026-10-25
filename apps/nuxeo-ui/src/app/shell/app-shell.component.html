@@ -53,7 +53,7 @@
         (click)="togglePlatformNav()"
         [attr.aria-label]="'app.nav.toggle' | translate"
       >
-        <mat-icon>menu</mat-icon>
+        <mat-icon svgIcon="menu" />
       </button>
 
       <h1 satAppHeaderTitle>{{ pageTitle() }}</h1>
@@ -75,7 +75,7 @@
           class="header-search-input-wrap"
           [class.header-search-filled]="globalSearchTerm().trim().length > 0"
         >
-          <mat-icon class="header-search-icon" aria-hidden="true">search</mat-icon>
+          <mat-icon class="header-search-icon" aria-hidden="true" svgIcon="search" />
           <input
             id="global-header-search-input"
             type="text"
@@ -118,12 +118,12 @@
                       />
                     } @else {
                       <span class="header-search-option-preview header-search-option-preview--icon">
-                        <mat-icon>{{ docTypeIcon(result.kind) }}</mat-icon>
+                        <mat-icon [svgIcon]="docTypeIcon(result.kind)" />
                       </span>
                     }
                   } @else {
                     <span class="header-search-option-avatar">
-                      <mat-icon>{{ userGroupIcon(result) }}</mat-icon>
+                      <mat-icon [svgIcon]="userGroupIcon(result)" />
                     </span>
                   }
                   <span class="header-search-option-meta">
@@ -186,7 +186,7 @@
             class="ai-chat-toggle"
             [class.active]="aiChatOpen()"
           >
-            <mat-icon>auto_awesome</mat-icon>
+            <mat-icon svgIcon="ai" />
           </button>
         }
         <button
@@ -196,7 +196,7 @@
           [attr.aria-label]="'shell.settings.menu' | translate"
           [matMenuTriggerFor]="headerSettingsMenu"
         >
-          <mat-icon>settings</mat-icon>
+          <mat-icon svgIcon="settings" />
         </button>
       </div>
     </sat-app-header>
@@ -204,7 +204,7 @@
     <mat-menu #headerSettingsMenu="matMenu">
       @if (themingFlags.themingEnabled()) {
         <a mat-menu-item routerLink="/settings/themes">
-          <mat-icon>palette</mat-icon>
+          <mat-icon svgIcon="paint_brush" />
           {{ 'shell.menu.themes' | translate }}
         </a>
       }
@@ -214,9 +214,7 @@
         switch. Restore it together with `AI_FEATURES_ENABLED`.
 
       <button mat-menu-item type="button" (click)="featureFlags.toggle()">
-        <mat-icon [style.color]="featureFlags.aiEnabled() ? '#4caf50' : '#9e9e9e'">{{
-          featureFlags.aiEnabled() ? 'toggle_on' : 'toggle_off'
-        }}</mat-icon>
+        <mat-icon [style.color]="featureFlags.aiEnabled() ? '#4caf50' : '#9e9e9e'" [svgIcon]="featureFlags.aiEnabled() ? 'toggle_on' : 'toggle_off'" />
         {{
           'shell.menu.ai-features'
             | translate
@@ -229,11 +227,11 @@
       </button>
       -->
       <button mat-menu-item type="button">
-        <mat-icon>help_outline</mat-icon>
+        <mat-icon svgIcon="help" />
         {{ 'shell.menu.help' | translate }}
       </button>
       <button mat-menu-item type="button">
-        <mat-icon>info_outline</mat-icon>
+        <mat-icon svgIcon="info" />
         {{ 'shell.menu.about' | translate }}
       </button>
     </mat-menu>
@@ -263,7 +261,7 @@
       >
         <div class="ai-chat-panel">
           <div class="ai-chat-header">
-            <mat-icon class="ai-chat-header-icon">auto_awesome</mat-icon>
+            <mat-icon class="ai-chat-header-icon" svgIcon="ai" />
             <span class="ai-chat-header-title">{{ 'shell.ai.title' | translate }}</span>
             <button
               mat-icon-button
@@ -271,21 +269,21 @@
               (click)="clearAiChat()"
               [attr.aria-label]="'shell.ai.clear' | translate"
             >
-              <mat-icon>delete_sweep</mat-icon>
+              <mat-icon svgIcon="trash_sweep" />
             </button>
             <button
               mat-icon-button
               (click)="aiChatOpen.set(false)"
               [attr.aria-label]="'shell.ai.close' | translate"
             >
-              <mat-icon>close</mat-icon>
+              <mat-icon svgIcon="x_large" />
             </button>
           </div>
 
           <div class="ai-chat-messages">
             @if (!aiChat.hasMessages()) {
               <div class="ai-chat-welcome">
-                <mat-icon class="ai-chat-welcome-icon">auto_awesome</mat-icon>
+                <mat-icon class="ai-chat-welcome-icon" svgIcon="ai" />
                 <h3>{{ 'shell.ai.heading' | translate }}</h3>
                 <p>{{ 'shell.ai.empty-state' | translate }}</p>
                 <div class="ai-chat-suggestions">
@@ -318,7 +316,7 @@
               >
                 @if (msg.role === 'assistant') {
                   <div class="ai-msg-avatar-wrap">
-                    <mat-icon class="ai-msg-avatar">auto_awesome</mat-icon>
+                    <mat-icon class="ai-msg-avatar" svgIcon="ai" />
                   </div>
                 }
                 <div class="ai-msg-bubble">
@@ -330,7 +328,7 @@
                   @if (msg.sources?.length) {
                     <div class="ai-msg-sources">
                       <div class="ai-sources-label">
-                        <mat-icon>link</mat-icon>
+                        <mat-icon svgIcon="url" />
                         {{ 'shell.ai.sources' | translate }}
                       </div>
                       @for (source of msg.sources!; track source.uid) {
@@ -347,14 +345,15 @@
                             every untyped AI source fell back to the generic icon. Domain values
                             must not be translated.
                           -->
-                          <mat-icon class="ai-source-card-icon">{{
-                            docTypeIcon(source.type ?? 'File')
-                          }}</mat-icon>
+                          <mat-icon
+                            class="ai-source-card-icon"
+                            [svgIcon]="docTypeIcon(source.type ?? 'File')"
+                          />
                           <span class="ai-source-card-info">
                             <span class="ai-source-card-title">{{ source.title }}</span>
                             <span class="ai-source-card-path">{{ source.path }}</span>
                           </span>
-                          <mat-icon class="ai-source-card-arrow">open_in_new</mat-icon>
+                          <mat-icon class="ai-source-card-arrow" svgIcon="open_full" />
                         </button>
                       }
                     </div>
@@ -364,7 +363,7 @@
             }
             @if (aiChat.loading()) {
               <div class="ai-chat-msg assistant">
-                <mat-icon class="ai-msg-avatar">auto_awesome</mat-icon>
+                <mat-icon class="ai-msg-avatar" svgIcon="ai" />
                 <div class="ai-msg-bubble ai-msg-typing">
                   <span class="typing-dot"></span>
                   <span class="typing-dot"></span>
@@ -374,7 +373,7 @@
             }
             @if (aiChat.error()) {
               <div class="ai-chat-error">
-                <mat-icon>error_outline</mat-icon>
+                <mat-icon svgIcon="error" />
                 {{ aiChat.error() }}
               </div>
             }
@@ -397,7 +396,7 @@
               (click)="sendAiMessage()"
               [disabled]="!aiChatInput().trim() || aiChat.loading()"
             >
-              <mat-icon>send</mat-icon>
+              <mat-icon svgIcon="send" />
             </button>
           </div>
         </div>

@@ -16,7 +16,7 @@
 } @else {
   @if (showRootBack()) {
     <button type="button" class="nxs-document-tree__back" (click)="openRoot()">
-      <mat-icon class="nxs-document-tree__back-icon" aria-hidden="true">chevron_left</mat-icon>
+      <mat-icon class="nxs-document-tree__back-icon" aria-hidden="true" svgIcon="chevron_left" />
       {{ 'satori-components.document-tree.root' | translate }}
     </button>
   }
@@ -63,8 +63,8 @@
               class="nxs-document-tree__toggle nxs-document-tree__arrow"
               [class.nxs-document-tree__arrow--open]="node.expanded"
               aria-hidden="true"
-              >chevron_right</mat-icon
-            >
+              svgIcon="chevron_right"
+            />
           } @else {
             <span class="nxs-document-tree__toggle" aria-hidden="true"></span>
           }
