@@ -11,16 +11,13 @@ import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
+import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 /**
- * Re-register the avatar, breadcrumbs, tag and rich tooltip `NXS_PRIMITIVE_IDS` on Satori, over the
- * Material implementations `provideNxsComponents()` registered.
- *
- * `NXS_PRIMITIVE_IDS.errorState` is left on Material: Satori's `sat-401-` to `sat-500-error-state`
- * ship only in Satori 1.0, which needs Angular 22, and the Satori this package can install has no
- * error state. Registering one here is the whole change once it can.
+ * Re-register the avatar, breadcrumbs, tag, rich tooltip and error state `NXS_PRIMITIVE_IDS` on
+ * Satori, over the Material implementations `provideNxsComponents()` registered.
  *
  * Satori-if-available, Material otherwise, decided by which providers an application lists — not
  * at build time and not by a runtime probe. This entry point is the only one in the package that
@@ -41,6 +38,7 @@ export function provideNxsSatoriComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.breadcrumbs]: NxsSatoriBreadcrumbsComponent,
       [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsSatoriRichTooltipComponent,
+      [NXS_PRIMITIVE_IDS.errorState]: NxsSatoriErrorStateComponent,
     },
   });
 }

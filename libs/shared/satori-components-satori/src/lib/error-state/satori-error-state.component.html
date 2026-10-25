@@ -1,0 +1,58 @@
+@switch (status()) {
+  @case (401) {
+    <sat-401-error-state>
+      @if (ownHeading()) {
+        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+      }
+      @if (canRetry()) {
+        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
+          <mat-icon aria-hidden="true">refresh</mat-icon>
+          {{ 'satori-components.error-state.retry' | translate }}
+        </button>
+      }
+      <ng-content />
+    </sat-401-error-state>
+  }
+  @case (403) {
+    <sat-403-error-state>
+      @if (ownHeading()) {
+        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+      }
+      @if (canRetry()) {
+        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
+          <mat-icon aria-hidden="true">refresh</mat-icon>
+          {{ 'satori-components.error-state.retry' | translate }}
+        </button>
+      }
+      <ng-content />
+    </sat-403-error-state>
+  }
+  @case (404) {
+    <sat-404-error-state>
+      @if (ownHeading()) {
+        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+      }
+      @if (canRetry()) {
+        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
+          <mat-icon aria-hidden="true">refresh</mat-icon>
+          {{ 'satori-components.error-state.retry' | translate }}
+        </button>
+      }
+      <ng-content />
+    </sat-404-error-state>
+  }
+  @default {
+    <sat-500-error-state>
+      @if (ownHeading()) {
+        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+      }
+      @if (canRetry()) {
+        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
+          <mat-icon aria-hidden="true">refresh</mat-icon>
+          {{ 'satori-components.error-state.retry' | translate }}
+        </button>
+      }
+      <ng-content />
+    </sat-500-error-state>
+  }
+}
