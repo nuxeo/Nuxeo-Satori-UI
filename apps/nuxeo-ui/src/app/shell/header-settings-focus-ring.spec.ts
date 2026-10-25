@@ -26,6 +26,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 
 /** WCAG 2.1 relative luminance. */
@@ -49,7 +51,7 @@ function rgb(css: string): [number, number, number] {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, testTranslateModule()],
+  imports: [MatButtonModule, MatIconModule, TranslatePipe, testTranslateModule()],
   styleUrls: ['./app-shell.component.scss'],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './header-settings-focus-ring.spec.html',
@@ -62,7 +64,7 @@ describe('header Settings menu — keyboard focus indicator (NXENG-872)', () => 
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [HeaderSettingsHostComponent, testTranslateModule()],
+      imports: [HeaderSettingsHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
 

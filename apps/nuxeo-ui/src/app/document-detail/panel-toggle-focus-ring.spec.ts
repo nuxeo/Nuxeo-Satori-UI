@@ -28,6 +28,8 @@ import {
   type NxsTab,
 } from '@nuxeo/satori-platform/components';
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
@@ -101,7 +103,7 @@ describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)'
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [PanelToggleFocusHostComponent, testTranslateModule()],
+      imports: [PanelToggleFocusHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });

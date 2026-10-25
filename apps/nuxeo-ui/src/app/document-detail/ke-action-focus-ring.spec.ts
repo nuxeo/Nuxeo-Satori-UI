@@ -14,6 +14,8 @@ import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
@@ -52,7 +54,7 @@ function productionDetailHeaderBackground(host: HTMLElement): string {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, testTranslateModule()],
+  imports: [MatButtonModule, MatIconModule, TranslatePipe, testTranslateModule()],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './ke-action-focus-ring.fixture.scss',
@@ -69,7 +71,7 @@ describe('Document detail ke-action button — keyboard focus indicator (NXENG-7
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [KeActionFocusHostComponent, testTranslateModule()],
+      imports: [KeActionFocusHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });

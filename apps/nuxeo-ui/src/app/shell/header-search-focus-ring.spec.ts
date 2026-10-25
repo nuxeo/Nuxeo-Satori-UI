@@ -43,6 +43,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 // TranslateModule removed - no longer exported in ngx-translate 18
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 
 /** WCAG 2.1 relative luminance. */
@@ -67,7 +69,7 @@ function rgb(css: string): [number, number, number] {
 
 @Component({
   standalone: true,
-  imports: [MatIconModule, testTranslateModule()],
+  imports: [MatIconModule, TranslatePipe, testTranslateModule()],
   // The real stylesheet under test. Emulated encapsulation scopes it to this template,
   // which is exactly what we want: the declarations are the shell's, the markup mirrors
   // app-shell.component.html.
@@ -84,7 +86,7 @@ describe('header global search — keyboard focus indicator', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [HeaderSearchHostComponent, testTranslateModule()],
+      imports: [HeaderSearchHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 

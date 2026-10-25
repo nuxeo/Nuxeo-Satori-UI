@@ -15,6 +15,8 @@ import {
   type NxsDetailsPanelTab,
 } from '@nuxeo/satori-platform/components';
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
@@ -66,7 +68,7 @@ function paintedBackground(element: HTMLElement): number[] {
 
 @Component({
   standalone: true,
-  imports: [NxsDetailsPanelComponent, testTranslateModule()],
+  imports: [NxsDetailsPanelComponent, TranslatePipe, testTranslateModule()],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],
@@ -85,7 +87,7 @@ describe('Document detail panel close — keyboard focus indicator (NXENG-830)',
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [PanelCloseFocusHostComponent, testTranslateModule()],
+      imports: [PanelCloseFocusHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });

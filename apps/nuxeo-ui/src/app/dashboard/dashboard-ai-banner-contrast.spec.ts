@@ -11,6 +11,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 
 function relativeLuminance([r, g, b]: readonly number[]): number {
@@ -68,7 +70,7 @@ function paintedBackdrop(element: Element): number[] {
 
 @Component({
   standalone: true,
-  imports: [MatIconModule, testTranslateModule()],
+  imports: [MatIconModule, TranslatePipe, testTranslateModule()],
   styleUrls: ['./dashboard-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './dashboard-ai-banner-contrast.spec.html',
@@ -85,7 +87,7 @@ describe('dashboard AI Insights banner title contrast (NXENG-939)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DashboardAiBannerHostComponent, testTranslateModule()],
+      imports: [DashboardAiBannerHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 

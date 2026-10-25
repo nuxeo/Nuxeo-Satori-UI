@@ -6,6 +6,8 @@ import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
@@ -25,7 +27,7 @@ const EXPIRED_QUEUE_LINK =
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, testTranslateModule()],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './expired-queue-nav-focus-visible.host.html',
 })

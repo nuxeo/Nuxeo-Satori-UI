@@ -5,6 +5,8 @@ import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
 
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
@@ -36,7 +38,7 @@ const KD_TEST_LABELS = {
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, testTranslateModule()],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './nav-focus-ring-knowledge-discovery.host.html',
 })
