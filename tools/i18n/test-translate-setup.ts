@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { NgModule } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { provideTranslateService, TranslateLoader, type TranslationObject } from '@ngx-translate/core';
+import {
+  provideTranslateService,
+  TranslateLoader,
+  type TranslationObject,
+} from '@ngx-translate/core';
 import { of, type Observable } from 'rxjs';
 
 /**
@@ -52,13 +57,12 @@ class RealCatalogueLoader implements TranslateLoader {
  *
  * ngx-translate 18 replaced `TranslateModule` with `provideTranslateService()`. For backward
  * compatibility with specs that call `imports: [testTranslateModule()]`, this wraps the provider
- * in an empty module; new code should call `providers: [testTranslateProviders()]` directly.
+ * in a module; new code should call `providers: [testTranslateProviders()]` directly.
  */
 export function testTranslateModule() {
-  return {
-    ngModule: class {},
-    providers: testTranslateProviders(),
-  };
+  @NgModule({ providers: testTranslateProviders() })
+  class TestTranslateModule {}
+  return TestTranslateModule;
 }
 
 export function testTranslateProviders() {

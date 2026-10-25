@@ -1,3 +1,4 @@
+import { NgModule } from '@angular/core';
 import { provideTranslateService, TranslateLoader } from '@ngx-translate/core';
 import { of, type Observable } from 'rxjs';
 
@@ -45,15 +46,16 @@ class FallbackCatalogueLoader implements TranslateLoader {
  *
  * ngx-translate 18 replaced `TranslateModule` with `provideTranslateService()`. For backward
  * compatibility with specs that call `imports: [testTranslateModule()]`, this wraps the provider
- * in an empty module.
+ * in a module.
  */
 export function testTranslateModule(extra: Record<string, string> = {}) {
-  return {
-    ngModule: class {},
+  @NgModule({
     providers: provideTranslateService({
       loader: { provide: TranslateLoader, useFactory: () => new FallbackCatalogueLoader(extra) },
       lang: 'en',
       fallbackLang: 'en',
     }),
-  };
+  })
+  class TestTranslateModule {}
+  return TestTranslateModule;
 }
