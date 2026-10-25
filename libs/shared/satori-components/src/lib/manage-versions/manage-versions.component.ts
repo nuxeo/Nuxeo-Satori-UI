@@ -166,7 +166,7 @@ export class NxsManageVersionsComponent {
       (version.properties?.['dc:lastContributor'] as string | undefined) ??
       this.translate.instant('satori-components.manage-versions.unknown-user');
     return this.translate.instant('satori-components.manage-versions.modified', {
-      when: when ? formatRelativeTime(when, this.translate.currentLang) : '',
+      when: when ? formatRelativeTime(when, this.translate.currentLang() ?? 'en') : '',
       who,
     });
   }

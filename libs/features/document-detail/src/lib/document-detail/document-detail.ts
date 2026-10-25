@@ -444,7 +444,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     merge(
       this.translate.onLangChange,
       this.translate.onTranslationChange,
-      this.translate.onDefaultLangChange,
+      this.translate.onFallbackLangChange,
     ).pipe(map((_, index) => index)),
     { initialValue: -1 },
   );
@@ -3643,7 +3643,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
   }
 
   // ── Panel Activity ──

@@ -1,9 +1,9 @@
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
-import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom, inject } from '@angular/core';
+import { APP_INITIALIZER, ApplicationConfig, inject } from '@angular/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding, withHashLocation } from '@angular/router';
 import { MAT_FAB_DEFAULT_OPTIONS } from '@angular/material/button';
-import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
+import { provideTranslateService, TranslateLoader } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo/satori-platform/nuxeo-client';
@@ -59,11 +59,9 @@ export const appConfig: ApplicationConfig = {
       provide: MAT_FAB_DEFAULT_OPTIONS,
       useValue: { color: 'primary' },
     },
-    importProvidersFrom(
-      TranslateModule.forRoot({
-        loader: { provide: TranslateLoader, useClass: AppTranslateLoader },
-      }),
-    ),
+    provideTranslateService({
+      loader: { provide: TranslateLoader, useClass: AppTranslateLoader },
+    }),
     {
       provide: CURRENT_USERNAME,
       useFactory: () => {

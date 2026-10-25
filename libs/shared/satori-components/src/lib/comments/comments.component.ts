@@ -274,7 +274,7 @@ export class NxsCommentsComponent {
   }
 
   protected when(date: string | undefined): string {
-    return date ? formatRelativeTime(date, this.translate.currentLang) : '';
+    return date ? formatRelativeTime(date, this.translate.currentLang() ?? 'en') : '';
   }
 
   /**
