@@ -96,7 +96,7 @@ export class SearchFiltersDrawerComponent {
   readonly facetLabels = toSignal(
     this.translate.onLangChange.pipe(
       map((event) => event.lang),
-      startWith(this.translate.currentLang || this.translate.defaultLang || 'en'),
+      startWith(this.translate.currentLang || this.translate.fallbackLang || 'en'),
       switchMap((lang) => loadFacetLabels(this.directoryService, lang)),
     ),
     { initialValue: {} },

@@ -444,7 +444,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     merge(
       this.translate.onLangChange,
       this.translate.onTranslationChange,
-      this.translate.onDefaultLangChange,
+      this.translate.onFallbackLangChange,
     ).pipe(map((_, index) => index)),
     { initialValue: -1 },
   );
