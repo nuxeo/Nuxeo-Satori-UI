@@ -196,6 +196,9 @@
     "@angular/build": {
       "vite": "8.3.5"
     },
+    "@hylandsoftware/satori-ui": {
+      "@ngx-translate/core": "$@ngx-translate/core"
+    },
     "adm-zip": "0.6.1",
     "axios": "1.20.0",
     "body-parser": "2.3.0",
