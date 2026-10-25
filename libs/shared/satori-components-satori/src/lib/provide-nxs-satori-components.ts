@@ -30,7 +30,7 @@ import { NxsSatoriTagComponent } from './tag/satori-tag.component';
  * List it after `provideNxsComponents()`, because later registrations win. The Satori components
  * also need what any Satori host provides: `provideSatori()` from
  * `@hylandsoftware/satori-ui/providers` for the theme and icons, and Satori's `sat.*` catalogue in
- * ngx-translate — `provideAndConfigureSatoriUITranslations` from `@hylandsoftware/satori-ui/translations`,
+ * ngx-translate — `provideAndConfigureSatoriTranslations` from `@hylandsoftware/satori-ui/translations`,
  * or seeded into your own loader as `apps/nuxeo-ui` does. Without the catalogue, the breadcrumbs'
  * landmark and the tooltip's close hint render as raw keys.
  */

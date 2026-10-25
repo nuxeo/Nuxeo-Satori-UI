@@ -17,12 +17,15 @@ sat-platform-nav-container.has-selection-topbar {
   height: calc(100% - var(--selection-topbar-height));
 }
 
-:host ::ng-deep sat-platform-nav-list-item.nav-item--clipboard-badge .sat-platform-nav-icon {
+:host ::ng-deep a[sat-platform-nav-menu-item].nav-item--clipboard-badge .sat-platform-nav-icon {
   position: relative;
   overflow: visible;
 }
 
-:host ::ng-deep sat-platform-nav-list-item.nav-item--clipboard-badge .sat-platform-nav-icon::after {
+:host
+  ::ng-deep
+  a[sat-platform-nav-menu-item].nav-item--clipboard-badge
+  .sat-platform-nav-icon::after {
   content: var(--nav-clipboard-count);
   position: absolute;
   top: -4px;

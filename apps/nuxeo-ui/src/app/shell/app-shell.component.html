@@ -14,30 +14,33 @@
        (4056183850) is expected to recur; track closure via documented a11y exception or upstream
        Satori fix, not by re-adding persistent visible text here. -->
   <sat-platform-nav>
-    @for (item of navItems(); track item.id) {
-      <sat-platform-nav-list-item
-        [attr.data-nav-id]="item.id"
-        [active]="isActive(item.path)"
-        (click)="onNavClick(item, $event)"
-        [class.nav-item--clipboard-badge]="item.path === '/clipboard' && clipboardCount() > 0"
-        [style.--nav-clipboard-count]="
-          item.path === '/clipboard' ? clipboardBadgeCssContent() : null
-        "
-        [attr.aria-label]="clipboardNavAriaLabel(item)"
-      >
-        <sat-platform-nav-avatar [item]="item" />
-        {{ navText(item) }}
-      </sat-platform-nav-list-item>
-    }
+    <sat-platform-nav-menu>
+      @for (item of navItems(); track item.id) {
+        <a
+          sat-platform-nav-menu-item
+          [attr.data-nav-id]="item.id"
+          [active]="isActive(item.path)"
+          (click)="onNavClick(item, $event)"
+          [class.nav-item--clipboard-badge]="item.path === '/clipboard' && clipboardCount() > 0"
+          [style.--nav-clipboard-count]="
+            item.path === '/clipboard' ? clipboardBadgeCssContent() : null
+          "
+          [attr.aria-label]="clipboardNavAriaLabel(item)"
+        >
+          <sat-platform-nav-avatar [item]="item" />
+          {{ navText(item) }}
+        </a>
+      }
+    </sat-platform-nav-menu>
 
     <sat-platform-nav-user>
-      <sat-platform-nav-user-profile (click)="toggleSettingsDrawer()">
+      <button satPlatformNavUserProfile (click)="toggleSettingsDrawer()">
         <!-- NXENG-894: projected mat-icon/img skips vendor avatar initials. Empty mat-icon +
              codepoint glyph (not ligature text) — IBM label_name_visible counted "account_circle"
              as visible label text outside aria-label; fontIcon needs a class-based icon set. -->
         <mat-icon aria-hidden="true" class="app-shell-user-profile-icon"></mat-icon>
         {{ displayName() }}
-      </sat-platform-nav-user-profile>
+      </button>
     </sat-platform-nav-user>
   </sat-platform-nav>
 

@@ -1,6 +1,6 @@
 import { provideRouter, withDisabledInitialNavigation, withHashLocation } from '@angular/router';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { provideAndConfigureSatoriUITranslations } from '@hylandsoftware/satori-ui/translations';
+import { provideAndConfigureSatoriTranslations } from '@hylandsoftware/satori-ui/translations';
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { NXS_PRIMITIVE_IDS, provideNxsComponents } from '@nuxeo/satori-platform/components';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
@@ -13,7 +13,7 @@ import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
  * its Satori implementation, and nothing in the template changed.
  *
  * Also what a host owes Satori: `provideSatori()` for the theme and icons, and Satori's `sat.*`
- * catalogue — here through upstream's `provideAndConfigureSatoriUITranslations`.
+ * catalogue — here through upstream's `provideAndConfigureSatoriTranslations`.
  *
  * The router is `satori-components`' story router: the breadcrumb's `/browse` link matches a route
  * that renders nothing, and hash location keeps a followed link inside the story's iframe.
@@ -23,7 +23,7 @@ const meta: Meta = {
   decorators: [
     applicationConfig({
       providers: [
-        provideAndConfigureSatoriUITranslations({ fallbackLang: 'en' }),
+        provideAndConfigureSatoriTranslations({ fallbackLang: 'en' }),
         provideRouter(
           [{ path: 'browse', children: [] }],
           withHashLocation(),

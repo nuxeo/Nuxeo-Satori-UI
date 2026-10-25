@@ -11,7 +11,7 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 /**
  * NXENG-898 — IBM Equal Access Issue ID 3170739755 on the Favorites sidebar link
- * (`sat-platform-nav-list-item[10]` / `aria-label="Favorites"`).
+ * (`a[sat-platform-nav-menu-item]` / `aria-label="Favorites"`).
  *
  * Same mechanism as NXENG-761 / NXENG-794: Satori reads `--sat-platform-nav-outline` for every
  * `.sat-platform-nav-item`, and IBM `style_focus_visible` reads `:focus` only — mirrored in
@@ -31,7 +31,7 @@ function favoritesNavDescriptor() {
 
 const FAVORITES_NAV = favoritesNavDescriptor();
 
-const FAVORITES_LINK = `sat-platform-nav-list-item[data-nav-id="${FAVORITES_NAV.id}"] .sat-platform-nav-item`;
+const FAVORITES_LINK = `a[sat-platform-nav-menu-item][data-nav-id="${FAVORITES_NAV.id}"]`;
 
 @Component({
   standalone: true,

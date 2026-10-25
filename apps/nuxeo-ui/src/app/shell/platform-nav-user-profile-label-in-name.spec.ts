@@ -2,7 +2,7 @@ import { signal } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 
-import { SatPlatformNavStateService } from '@hylandsoftware/satori-ui/platform-nav';
+import { SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';
@@ -132,7 +132,7 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
   it('does not render vendor initials that diverge from the aria-label (IBM 2972081309)', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
     // IBM scan and the ticket repro use the expanded sidebar label, not the collapsed rail.
-    TestBed.inject(SatPlatformNavStateService).toggleCollapsed();
+    TestBed.inject(SatPlatformNavState).toggleCollapsed();
     fixture.detectChanges();
 
     const button = profileButton(fixture.nativeElement as HTMLElement);
@@ -163,7 +163,7 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
 
   it('renders the profile avatar glyph via CSS codepoint (NXENG-894)', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
-    TestBed.inject(SatPlatformNavStateService).toggleCollapsed();
+    TestBed.inject(SatPlatformNavState).toggleCollapsed();
     fixture.detectChanges();
 
     const icon = profileProjectedMatIcon(profileButton(fixture.nativeElement as HTMLElement));
@@ -181,7 +181,7 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
   });
 
   it('keeps label in name when the sidebar rail is collapsed (IBM 2972081309)', () => {
-    const navState = TestBed.inject(SatPlatformNavStateService);
+    const navState = TestBed.inject(SatPlatformNavState);
     const fixture = TestBed.createComponent(AppShellComponent);
     fixture.detectChanges();
 
@@ -204,7 +204,7 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
   it('opens the settings drawer when the profile control is activated', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
     const component = fixture.componentInstance;
-    TestBed.inject(SatPlatformNavStateService).toggleCollapsed();
+    TestBed.inject(SatPlatformNavState).toggleCollapsed();
     fixture.detectChanges();
 
     profileButton(fixture.nativeElement as HTMLElement).click();

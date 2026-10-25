@@ -35,10 +35,7 @@ import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SatAppHeaderModule } from '@hylandsoftware/satori-ui/app-header';
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
-import {
-  SatPlatformNavModule,
-  SatPlatformNavStateService,
-} from '@hylandsoftware/satori-ui/platform-nav';
+import { SatPlatformNavModule, SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 import {
   CollectionService,
   DocumentDetailService,
@@ -107,7 +104,7 @@ export class AppShellComponent implements OnDestroy {
   };
 
   private readonly router = inject(Router);
-  private readonly platformNavState = inject(SatPlatformNavStateService);
+  private readonly platformNavState = inject(SatPlatformNavState);
   private readonly auth = inject(AuthService);
   private readonly sessionTimeout = inject(SessionTimeoutService);
   private readonly snackBar = inject(MatSnackBar);
