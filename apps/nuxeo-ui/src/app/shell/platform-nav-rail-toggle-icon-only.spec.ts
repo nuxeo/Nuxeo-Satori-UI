@@ -10,6 +10,8 @@ import {
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { TranslateService } from '@ngx-translate/core';
 
+import { testTranslateModule } from '../i18n/translate-testing';
+
 /**
  * NXENG-927 (icon-only product revert) — Satori rail expand/collapse is conveyed through
  * translated `aria-label` and `matTooltip` only (no host visible-label span).

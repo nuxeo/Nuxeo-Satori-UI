@@ -4,6 +4,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 // testTranslateModule() removed - no longer exported in ngx-translate 18
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 
+import { testTranslateModule } from '../i18n/translate-testing';
 const TRASH_NAV_ID = 'app.navbar.trash';
 const TRASH_LINK_SELECTOR = `sat-platform-nav-list-item[data-nav-id="${TRASH_NAV_ID}"] .sat-platform-nav-item`;
 const NAV_LIST_SELECTOR = 'sat-platform-nav nav.sat-platform-nav-list';
