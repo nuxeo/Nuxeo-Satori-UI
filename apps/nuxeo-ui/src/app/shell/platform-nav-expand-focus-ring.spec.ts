@@ -4,6 +4,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 // TranslateModule removed - no longer exported in ngx-translate 18
+import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
  * NXENG-796 — keyboard focus indicator on the sidebar **Expand navigation** rail toggle

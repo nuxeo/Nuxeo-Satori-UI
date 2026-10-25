@@ -4,6 +4,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 // TranslateModule removed - no longer exported in ngx-translate 18
+import { testTranslateModule } from '../i18n/translate-testing';
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 

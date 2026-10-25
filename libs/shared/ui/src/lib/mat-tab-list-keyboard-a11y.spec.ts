@@ -1,4 +1,4 @@
-import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { testTranslateProviders } from '@agentic-ui/testing/i18n';
 import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
@@ -6,7 +6,7 @@ import { RIGHT_ARROW } from '@angular/cdk/keycodes';
 
 import { MatTabsModule } from '@angular/material/tabs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-// testTranslateModule() removed - no longer exported in ngx-translate 18
+import { TranslatePipe } from '@ngx-translate/core';
 
 import {
   MAT_TAB_LIST_IBM_ONKEYDOWN,
@@ -18,7 +18,7 @@ import { MatTabListKeydownDirective } from './mat-tab-list-keydown.directive';
 
 @Component({
   standalone: true,
-  imports: [MatTabsModule, MatTabListKeydownDirective, testTranslateModule()],
+  imports: [MatTabsModule, MatTabListKeydownDirective, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './mat-tab-list-keyboard-a11y.host.html',
 })
@@ -197,8 +197,12 @@ describe('MatTabListKeydownDirective on Material tab group', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [testTranslateModule(), MatTabListKeyboardA11yHostComponent],
-      providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
+      imports: [MatTabListKeyboardA11yHostComponent],
+      providers: [
+        testTranslateProviders(),
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+      ],
     }).compileComponents();
 
     fixture = TestBed.createComponent(MatTabListKeyboardA11yHostComponent);

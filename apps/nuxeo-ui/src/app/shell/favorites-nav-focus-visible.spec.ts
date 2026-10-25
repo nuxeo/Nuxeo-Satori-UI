@@ -3,8 +3,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-// testTranslateModule() removed - no longer exported in ngx-translate 18
 
+import { testTranslateModule } from '../i18n/translate-testing';
 import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
