@@ -5,8 +5,6 @@ import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { TranslatePipe } from '@ngx-translate/core';
 
-import { TranslatePipe } from '@ngx-translate/core';
-
 import { testTranslateModule } from '../i18n/translate-testing';
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
