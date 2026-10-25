@@ -192,7 +192,7 @@ export class CollectionDetailComponent {
   /** The active language as a signal, so the column names follow a language change. */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang },
+    { initialValue: this.translate.currentLang() ?? 'en' },
   );
   /** The member columns, as the list takes them: translated, each sorted on the server. */
   readonly memberColumns = computed<readonly NxsDocumentListColumn[]>(() => {

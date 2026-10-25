@@ -3643,7 +3643,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
   }
 
   // ── Panel Activity ──

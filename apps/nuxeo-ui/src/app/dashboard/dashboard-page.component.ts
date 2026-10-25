@@ -295,7 +295,7 @@ export class DashboardPageComponent {
    * word order. See `formatRelativeTime`.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
   }
 
   goToTask(task: NuxeoTask): void {

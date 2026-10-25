@@ -53,7 +53,7 @@ export class ProfilePageComponent {
   /** The active language as a signal, so a `computed` that calls `instant()` recomputes on a switch. */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.getCurrentLang() },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
   private readonly locale = inject(LOCALE_ID);
   private readonly destroyRef = inject(DestroyRef);

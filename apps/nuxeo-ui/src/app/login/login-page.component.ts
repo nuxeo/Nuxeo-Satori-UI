@@ -26,7 +26,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 
-import { TranslateModule, TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
 
@@ -59,8 +59,6 @@ const LAST_USER_KEY = 'agentic_ui_last_username';
     MatProgressSpinnerModule,
 
     MatSnackBarModule,
-
-    TranslateModule,
 
     SatLogoModule,
   ],
