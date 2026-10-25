@@ -292,7 +292,7 @@ async function revealContentBehindDrawer(p, host) {
     return { drawerWasOpen: true, error: `${host} is not in the page after the resize` };
   }
   const urlBefore = p.url();
-  const activeItem = p.locator('sat-platform-nav-list-item a.sat-platform-nav-item-active');
+  const activeItem = p.locator('a[sat-platform-nav-menu-item].sat-platform-nav-item-active');
   if ((await activeItem.count()) !== 1) {
     return {
       drawerWasOpen: true,
