@@ -37,9 +37,9 @@
       <button satPlatformNavUserProfile (click)="toggleSettingsDrawer()">
         <!-- NXENG-894: projected mat-icon/img skips vendor avatar initials. Empty mat-icon +
              codepoint glyph (not ligature text) — IBM label_name_visible counted "account_circle"
-             as visible label text outside aria-label; fontIcon needs a class-based icon set. -->
-        <mat-icon aria-hidden="true" class="app-shell-user-profile-icon"></mat-icon>
-        {{ displayName() }}
+             as visible label text outside aria-label; fontIcon needs a class-based icon set.
+        --><mat-icon aria-hidden="true" class="app-shell-user-profile-icon"></mat-icon
+        >{{ displayName() }}
       </button>
     </sat-platform-nav-user>
   </sat-platform-nav>

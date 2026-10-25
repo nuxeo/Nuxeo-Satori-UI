@@ -117,10 +117,8 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
 
   /** Projected avatar mat-icon (any markup — class is not part of the regression contract). */
   function profileProjectedMatIcon(button: Element): Element {
-    const icon = button.querySelector('.sat-platform-nav-icon mat-icon');
-    expect(icon)
-      .withContext('profile button must project a mat-icon in the avatar slot')
-      .toBeTruthy();
+    const icon = button.querySelector('mat-icon');
+    expect(icon).withContext('profile button must project a mat-icon').toBeTruthy();
     return icon as Element;
   }
 

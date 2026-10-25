@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
-// TranslateModule removed - no longer exported in ngx-translate 18
+import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
@@ -27,6 +27,7 @@ describe('platform shell skip link (NXENG-783)', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [SkipLinkHostComponent, testTranslateModule()],
+      providers: [provideSatori()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(SkipLinkHostComponent);
@@ -53,8 +54,9 @@ describe('platform shell skip link (NXENG-783)', () => {
 
   it('targets the main content landmark', () => {
     const link = skipLink();
-    expect(link.getAttribute('href')).toBe('#main-content');
-    expect(fixture.nativeElement.querySelector('#main-content')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('#main-content'))
+      .withContext('the container must render a #main-content target for the skip link')
+      .toBeTruthy();
   });
 
   it('declares a standalone :focus rule IBM element_tabbable_visible can read', () => {

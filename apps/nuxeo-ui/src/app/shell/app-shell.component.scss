@@ -772,7 +772,7 @@ $ai-radius: 14px;
   }
 }
 
-:host ::ng-deep sat-platform-nav-user-profile mat-icon.app-shell-user-profile-icon {
+:host ::ng-deep button[satPlatformNavUserProfile] mat-icon.app-shell-user-profile-icon {
   flex-shrink: 0;
 
   &::before {

@@ -6,6 +6,10 @@ html[data-app-theme='nuxeo'],
 html:not([data-app-theme]) {
   color-scheme: light dark;
   @include sat.theme;
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
+  );
 }
 
 html[data-app-theme='dark'] {
@@ -18,6 +22,10 @@ html[data-app-theme='dark'] {
         tertiary: mat.$violet-palette,
       ),
     )
+  );
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
   );
 }
 
@@ -32,6 +40,10 @@ html[data-app-theme='kawaii'] {
       ),
     )
   );
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
+  );
 }
 
 html[data-app-theme='light'] {
@@ -44,6 +56,10 @@ html[data-app-theme='light'] {
         tertiary: mat.$blue-palette,
       ),
     )
+  );
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
   );
 }
 
@@ -156,13 +172,12 @@ html:not([data-app-theme]) body.mat-typography sat-platform-nav h2.sat-platform-
  * `--agentic-nav-focus-outline-color` is an app-level escape hatch for a customer who wants a
  * distinct ring without also repainting the nav label and icon.
  *
- * It is declared on `html`, not on `sat-platform-nav`, so that Layer 0 keeps control of it.
- * `AppThemeService.applyTheme` writes a theme's `tokens` as **inline** custom properties on
- * `<html>` — that is how a customer rebrands from JSON — and an inline value only outranks
- * this rule while both are on the same element. Declared on the nav instead, it would apply
- * directly to the element the vendor rule reads it from and beat the inherited root value, so
- * a customer who set `--sat-platform-nav-outline` in their theme would silently stop
- * controlling the ring. Asserted in `platform-nav-focus-ring.spec.ts`.
+ * Satori 1.0 sets `--sat-platform-nav-outline` inside its `color()` mixin, so the primary
+ * declaration now lives in each theme block above (after `sat.theme`) at matching specificity.
+ * This `html` rule is the low-specificity fallback for inline token overrides from Layer 0:
+ * `AppThemeService.applyTheme` writes a theme's `tokens` as inline custom properties on
+ * `<html>`, and an inline value outranks a stylesheet rule on the same element.
+ * Asserted in `platform-nav-focus-ring.spec.ts`.
  *
  * The token also feeds the nav list's scrollbar thumb — the only other thing Satori reads it
  * for — which the rule below suppresses: measured as no rendered scrollbar in Chromium,
