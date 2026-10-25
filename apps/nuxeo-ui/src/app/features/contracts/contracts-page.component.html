@@ -231,15 +231,12 @@ export class MyPageComponent {{ '{' }} {{ '}' }}</pre>
     </mat-card-content>
   </mat-card>
 
-  <div class="info-banner">
-    <p>
-      <mat-icon class="banner-icon info">info</mat-icon>
-      <span>
-        <strong>{{ 'app.contracts-page.for-customers' | translate }}</strong>
-        {{ 'app.contracts-page.all-components-shown-are-available-from' | translate }}
-        <code>&#64;nuxeo/satori-platform/ui</code>. Import them directly into your extension
-        libraries to build custom pages and features.
-      </span>
-    </p>
-  </div>
+  <sat-banner variant="info">
+    <sat-banner-message>
+      <strong>{{ 'app.contracts-page.for-customers' | translate }}</strong>
+      {{ 'app.contracts-page.all-components-shown-are-available-from' | translate }}
+      <code>&#64;nuxeo/satori-platform/ui</code>. Import them directly into your extension libraries
+      to build custom pages and features.
+    </sat-banner-message>
+  </sat-banner>
 </div>

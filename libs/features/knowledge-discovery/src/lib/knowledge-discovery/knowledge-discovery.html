@@ -21,10 +21,9 @@
   </header>
 
   @if (agentsError()) {
-    <div class="kd-banner kd-banner--error">
-      <mat-icon>error_outline</mat-icon>
-      <span>{{ agentsError() }}</span>
-    </div>
+    <sat-banner variant="important">
+      <sat-banner-message>{{ agentsError() }}</sat-banner-message>
+    </sat-banner>
     @if (debugMode() && agentsErrorDetail(); as detail) {
       <details class="kd-debug" open>
         <summary>
@@ -50,10 +49,9 @@
     }
   }
   @if (referenceDataError()) {
-    <div class="kd-banner kd-banner--muted">
-      <mat-icon>info_outline</mat-icon>
-      <span>{{ referenceDataError() }}</span>
-    </div>
+    <sat-banner variant="info">
+      <sat-banner-message>{{ referenceDataError() }}</sat-banner-message>
+    </sat-banner>
     @if (debugMode() && referenceDataErrorDetail(); as detail) {
       <details class="kd-debug" open>
         <summary>
@@ -79,10 +77,9 @@
     }
   }
   @if (agentDetailsError()) {
-    <div class="kd-banner kd-banner--error">
-      <mat-icon>error_outline</mat-icon>
-      <span>{{ agentDetailsError() }}</span>
-    </div>
+    <sat-banner variant="important">
+      <sat-banner-message>{{ agentDetailsError() }}</sat-banner-message>
+    </sat-banner>
     @if (debugMode() && agentDetailsErrorDetail(); as detail) {
       <details class="kd-debug" open>
         <summary>

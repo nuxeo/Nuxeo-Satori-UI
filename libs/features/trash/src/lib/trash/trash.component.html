@@ -31,9 +31,9 @@
     </div>
   }
 
-  <div class="page-header-row">
-    <span class="page-header-title">{{ 'trash.trash.search-results' | translate }}</span>
-    <div class="page-header-actions">
+  <sat-header-bar variant="one-row">
+    {{ 'trash.trash.search-results' | translate }}
+    <div sat-header-bar-trailing class="page-header-actions">
       <button mat-flat-button class="save-as-btn" [disabled]="saving()" (click)="saveAsSearch()">
         <mat-icon>bookmark_add</mat-icon>
         {{ 'trash.trash.save-as' | translate }}
@@ -64,7 +64,7 @@
         </mat-menu>
       }
     </div>
-  </div>
+  </sat-header-bar>
 
   <div class="results-toolbar">
     <div class="results-summary">

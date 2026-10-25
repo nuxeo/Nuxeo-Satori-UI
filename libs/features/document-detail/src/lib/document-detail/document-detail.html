@@ -168,30 +168,28 @@
   </div>
 
   @if (keStatus() || keError()) {
-    <div class="ke-status-banner" [class.ke-status-banner--error]="keError()">
-      <mat-icon>{{ keError() ? 'error_outline' : 'auto_awesome' }}</mat-icon>
-      <span>{{ keError() || keStatus() }}</span>
-    </div>
+    <sat-banner [variant]="keError() ? 'important' : 'info'" [border]="true">
+      <sat-banner-message>{{ keError() || keStatus() }}</sat-banner-message>
+    </sat-banner>
   }
 
   @if ((contentLakeIngestStatus() || contentLakeIngestError()) && !contentLakeIngestInFlight()) {
-    <div class="ke-status-banner" [class.ke-status-banner--error]="contentLakeIngestError()">
-      <mat-icon>{{ contentLakeIngestError() ? 'error_outline' : 'cloud_upload' }}</mat-icon>
-      <span>{{ contentLakeIngestError() || contentLakeIngestStatus() }}</span>
-    </div>
+    <sat-banner [variant]="contentLakeIngestError() ? 'important' : 'info'" [border]="true">
+      <sat-banner-message>{{
+        contentLakeIngestError() || contentLakeIngestStatus()
+      }}</sat-banner-message>
+    </sat-banner>
   }
 
   @if (isTrashed()) {
-    <div class="trashed-banner">
-      <mat-icon class="trashed-banner-icon">info</mat-icon>
-      <span class="trashed-banner-text">{{
+    <sat-banner variant="info" [border]="true">
+      <sat-banner-message>{{
         'document-detail.document-detail.you-are-viewing-a-trashed-document' | translate
-      }}</span>
-      <span class="trashed-banner-spacer"></span>
+      }}</sat-banner-message>
       @if (canWriteDoc()) {
         <button
           mat-stroked-button
-          class="trashed-banner-btn"
+          satBannerAction
           (click)="restoreFromTrash()"
           [disabled]="actionInProgress() === 'restore'"
         >
@@ -202,7 +200,7 @@
       @if (canRemoveDoc()) {
         <button
           mat-stroked-button
-          class="trashed-banner-btn trashed-banner-btn--danger"
+          satBannerAction
           (click)="permanentlyDelete()"
           [disabled]="actionInProgress() === 'permanentDelete'"
         >
@@ -210,23 +208,22 @@
           {{ 'document-detail.document-detail.delete-permanently' | translate }}
         </button>
       }
-    </div>
+    </sat-banner>
   }
 
   @if (isVersionView()) {
-    <div class="version-banner">
-      <mat-icon class="version-banner-icon">info</mat-icon>
-      <span class="version-banner-text">{{
+    <sat-banner variant="info" [border]="true">
+      <sat-banner-message>{{
         'document-detail.version-viewing' | translate: { version: versionLabel() }
-      }}</span>
-      <button mat-button type="button" class="version-banner-latest" (click)="showLatestVersion()">
+      }}</sat-banner-message>
+      <button mat-button type="button" satBannerAction (click)="showLatestVersion()">
         {{ 'document-detail.version-go-to-latest' | translate }}
       </button>
       @if (canRestoreVersion()) {
         <button
           mat-flat-button
           type="button"
-          class="version-banner-restore"
+          satBannerAction
           (click)="confirmRestoreVersion()"
           [disabled]="actionInProgress() === 'restore'"
         >
@@ -234,46 +231,40 @@
           {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
         </button>
       }
-    </div>
+    </sat-banner>
   }
 
-  <!-- Workflow info banner (yellow) — one per running workflow -->
+  <!-- Workflow info banner — one per running workflow -->
   @for (wf of documentWorkflows(); track wf.id) {
-    <div class="workflow-banner">
-      <mat-icon class="workflow-banner-icon">warning</mat-icon>
-      <span class="workflow-banner-text">
-        {{
-          'document-detail.workflow-started-on-document'
-            | translate: { workflow: workflowDisplayName(wf) }
-        }}
-      </span>
-      <span class="workflow-banner-spacer"></span>
+    <sat-banner variant="warning" [border]="true">
+      <sat-banner-message>{{
+        'document-detail.workflow-started-on-document'
+          | translate: { workflow: workflowDisplayName(wf) }
+      }}</sat-banner-message>
       <button
         mat-button
-        class="workflow-banner-abandon"
+        satBannerAction
         [disabled]="abandoningWorkflow()"
         (click)="abandonWorkflow(wf)"
       >
         {{ 'document-detail.document-detail.abandon' | translate }}
       </button>
-    </div>
+    </sat-banner>
   }
 
-  <!-- Task action banner (blue) — one per pending task -->
+  <!-- Task action banner — one per pending task -->
   @for (task of documentTasks(); track task.id) {
-    <div class="task-action-banner">
-      <mat-icon class="task-action-icon">check_box</mat-icon>
-      <span class="task-action-text">
+    <sat-banner variant="info" [border]="true">
+      <sat-banner-message>
         {{ 'document-detail.document-detail.you-have-a-task-to-process' | translate }}
         @if (taskDueLabel(task)) {
           {{ 'document-detail.task-due-before' | translate: { due: taskDueLabel(task) } }}
         }
-      </span>
-      <span class="task-action-spacer"></span>
-      <button mat-flat-button class="task-action-btn" (click)="goToTask(task)">
+      </sat-banner-message>
+      <button mat-flat-button satBannerAction (click)="goToTask(task)">
         {{ 'document-detail.document-detail.process' | translate }}
       </button>
-    </div>
+    </sat-banner>
   }
 
   <!-- Start Process modal dialog -->
@@ -878,10 +869,10 @@
                 <div class="ai-card-body">
                   @if (aiSummaryLoading()) {
                     <div class="ai-loading-skeleton">
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line medium"></div>
-                      <div class="skeleton-line short"></div>
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [width]="200" [height]="14" />
+                      <sat-ghost [width]="120" [height]="14" />
                     </div>
                   } @else if (aiSummary()) {
                     <div class="ai-summary-result">
@@ -929,8 +920,8 @@
                 <div class="ai-card-body">
                   @if (aiTagsLoading()) {
                     <div class="ai-loading-skeleton">
-                      <div class="skeleton-line medium"></div>
-                      <div class="skeleton-line short"></div>
+                      <sat-ghost [width]="200" [height]="14" />
+                      <sat-ghost [width]="120" [height]="14" />
                     </div>
                   } @else if (aiSuggestedTags().length) {
                     <div class="ai-tags-list">
@@ -988,9 +979,9 @@
                 <div class="ai-card-body">
                   @if (aiClassifyLoading()) {
                     <div class="ai-loading-skeleton">
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line medium"></div>
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [width]="200" [height]="14" />
                     </div>
                   } @else if (aiClassification()) {
                     <div class="ai-meta-rows">
@@ -1160,10 +1151,9 @@
             </div>
 
             @if (aiError()) {
-              <div class="ai-error-banner">
-                <mat-icon>error_outline</mat-icon>
-                {{ aiError() }}
-              </div>
+              <sat-banner variant="important">
+                <sat-banner-message>{{ aiError() }}</sat-banner-message>
+              </sat-banner>
             }
           </div>
         </ng-template>

@@ -31,6 +31,7 @@ import {
   DocumentService,
   NuxeoApiBase,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -54,6 +55,7 @@ import {
     MatSelectModule,
     MatDatepickerModule,
     MatSnackBarModule,
+    SatHeaderBar,
     SatTagModule,
   ],
   templateUrl: './task-detail.component.html',

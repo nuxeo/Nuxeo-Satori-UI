@@ -53,14 +53,7 @@
 .doc-header-bar {
   border-bottom: 1px solid var(--mat-sys-outline-variant, #c8c5d3);
   background: var(--mat-sys-surface-container-lowest, #fff);
-  padding: 10px 20px;
   flex-shrink: 0;
-}
-
-.doc-header-top {
-  display: flex;
-  align-items: center;
-  gap: 10px;
 }
 
 .doc-header-type-icon {
@@ -68,11 +61,6 @@
   width: 22px;
   height: 22px;
   color: var(--mat-sys-on-surface-variant, #474551);
-}
-
-.doc-header-titles {
-  flex: 1;
-  min-width: 0;
 }
 
 .doc-main-title {

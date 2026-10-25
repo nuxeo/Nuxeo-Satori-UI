@@ -112,7 +112,9 @@ import {
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
+import { SAT_BANNER_IMPORTS } from '@hylandsoftware/satori-ui/banner';
 import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { SatGhost } from '@hylandsoftware/satori-ui/ghost';
 import { SatTagModule, SatTagCategory } from '@hylandsoftware/satori-ui/tag';
 import {
   AiGatewayService,
@@ -342,7 +344,9 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NxsPermissionsPanelComponent,
     NoteEditorComponent,
     SatAvatarModule,
+    SAT_BANNER_IMPORTS,
     SatBreadcrumbs,
+    SatGhost,
     SatTagModule,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],

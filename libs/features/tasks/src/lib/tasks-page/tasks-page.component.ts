@@ -46,6 +46,7 @@ import {
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
 import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 const DUE_LABEL_KEYS = {
@@ -83,6 +84,7 @@ const DUE_LABEL_KEYS = {
     MatDividerModule,
     DocumentViewerComponent,
     SatBreadcrumbs,
+    SatHeaderBar,
   ],
   templateUrl: './tasks-page.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,

@@ -14,21 +14,20 @@
     </div>
   } @else {
     <!-- Header -->
-    <div class="task-detail-header">
+    <sat-header-bar variant="one-row">
       <button
+        sat-header-bar-leading
         mat-icon-button
         (click)="goBack()"
         [title]="'tasks.task-detail.back-to-tasks' | translate"
       >
         <mat-icon>arrow_back</mat-icon>
       </button>
-      <div class="task-detail-title-group">
-        <div class="task-detail-heading" role="heading" aria-level="2">
-          {{ taskLabel(task()!) }}
-        </div>
-        <sat-status-tag status="info" [hideIcon]="true">{{ taskWorkflow(task()!) }}</sat-status-tag>
-      </div>
-    </div>
+      {{ taskLabel(task()!) }}
+      <sat-status-tag sat-header-bar-trailing status="info" [hideIcon]="true">{{
+        taskWorkflow(task()!)
+      }}</sat-status-tag>
+    </sat-header-bar>
 
     <div class="task-detail-layout">
       <!-- Left: Task form -->

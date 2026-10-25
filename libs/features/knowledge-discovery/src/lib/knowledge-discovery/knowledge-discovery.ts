@@ -17,6 +17,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatDialog } from '@angular/material/dialog';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute } from '@angular/router';
+import { SAT_BANNER_IMPORTS } from '@hylandsoftware/satori-ui/banner';
 import { Subscription, catchError, forkJoin, map, of, switchMap, timer } from 'rxjs';
 
 import { ContentLakeUploadComponent } from '../content-lake-upload/content-lake-upload';
@@ -76,6 +77,7 @@ export interface KdDebugError {
     MatInputModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
+    SAT_BANNER_IMPORTS,
   ],
   templateUrl: './knowledge-discovery.html',
   changeDetection: ChangeDetectionStrategy.Eager,

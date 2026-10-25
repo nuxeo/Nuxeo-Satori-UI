@@ -17,26 +17,21 @@
       </div>
     } @else {
       <!-- Document Header Bar (title + breadcrumb) — spans full width -->
-      <div class="doc-header-bar">
-        <div class="doc-header-top">
-          <mat-icon class="doc-header-type-icon">description</mat-icon>
-          <div class="doc-header-titles">
-            @if (targetDoc()) {
-              <div class="doc-main-title" role="heading" aria-level="1">
-                {{ targetDoc()!.title }}
-              </div>
-              <sat-breadcrumbs
-                [items]="breadcrumbItems()"
-                (click)="onBreadcrumbClick($event)"
-              ></sat-breadcrumbs>
-            } @else {
-              <div class="doc-main-title" role="heading" aria-level="1">
-                {{ selectedTask()!.targetDocTitle || ('tasks.document' | translate) }}
-              </div>
-            }
-          </div>
-        </div>
-      </div>
+      <sat-header-bar class="doc-header-bar" variant="one-row">
+        <mat-icon sat-header-bar-leading class="doc-header-type-icon">description</mat-icon>
+        @if (targetDoc()) {
+          {{ targetDoc()!.title }}
+        } @else {
+          {{ selectedTask()!.targetDocTitle || ('tasks.document' | translate) }}
+        }
+        @if (targetDoc()) {
+          <sat-breadcrumbs
+            sat-header-bar-trailing
+            [items]="breadcrumbItems()"
+            (click)="onBreadcrumbClick($event)"
+          ></sat-breadcrumbs>
+        }
+      </sat-header-bar>
 
       <!-- Two-panel split: Task Form (left) + Document Preview (right) -->
       <div class="task-content-area">
