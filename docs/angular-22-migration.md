@@ -184,4 +184,88 @@ keeps Satori's default, because it demonstrates what a Satori host gets.
 
 ## Validation
 
-_To be completed from the evidence run._
+Run from a dedicated worktree on Node 24, with `NX_WORKSPACE_ROOT_PATH` unset and the Nx cache
+isolated. The gate ran clean; the backend suite ran against a live Nuxeo instance (Docker, port 8080) with `NUXEO_USER`/`NUXEO_PASS` set and every `AWS_*` variable stripped.
+
+### Gate and static checks
+
+| Check            | Result                                           |
+| ---------------- | ------------------------------------------------ |
+| `beta:gate`      | **pass, 32 of 33** (code-scanning NOT RUN)       |
+| Affected lint    | pass, 30 projects                                |
+| Affected tests   | pass                                             |
+| Affected build   | pass                                             |
+| Affected typeck  | pass                                             |
+| Coverage gate    | pass (baseline re-recorded for Vitest 4)         |
+| Storybook builds | pass (token-free + satori + interactions)        |
+| Publishability   | pass (7 entry points typecheck standalone)       |
+| Peer install     | pass (installs from public npm, no GitHub auth)  |
+| API surface      | pass (re-recorded for TS 6 / ng-packagr 22 emit) |
+
+The gate is identical to the Angular 20 baseline and Angular 21: 32 green, `code-scanning` NOT RUN
+(it needs a PR, so every local run reports it this way). Six defects were found and fixed during
+validation — all pre-existing on the Angular 22 branch, none introduced by the merge from 669:
+
+1. **Lint red (126 errors):** `@angular-eslint/prefer-on-push-component-change-detection` forbids
+   the explicit `Eager` strategy the `change-detection-eager` migration added to preserve Angular
+   21 behaviour. Rule turned off with documented reason and 2027-06-30 revisit; 126 → 0.
+2. **Override downgrades:** `postcss` 8.5.28 and `qs` 6.15.3 forced dependents below their
+   declared ranges (`^8.5.30` and `^6.16.0`). Raised to 8.5.31 and 6.16.1.
+3. **Lockfile selftest:** control 19 was green-by-vacuity — it removed `brace-expansion@^5.0.0`,
+   which Nx 23 no longer needs, so removing it changed nothing. Now searches for any load-bearing
+   key; found `@angular/build`.
+4. **`api-surface` red (2300+ line diff):** ng-packagr 22 / TypeScript 6 emit inline
+   `import("@angular/core").X` where 21 hoisted `_angular_core.X`. Proved 0 public-surface
+   differences and 74 internal `ɵ` members, all of them `ɵprov` going to `<any>`. Re-recorded.
+5. **`publishability` red:** TypeScript 6 rejects `baseUrl`, so the gate's declaration typecheck
+   could not run and correctly refused to report a pass. `baseUrl: '.'` dropped (never needed).
+6. **`peer-installability` red:** ng-packagr flattens declarations to
+   `types/nuxeo-satori-platform-components-satori.d.ts`, which matched neither
+   `-components-satori.mjs` nor `/components-satori/`. The one file allowed to import Satori was
+   reported as leaking. Fixed path match to `-components-satori.` with trailing dot.
+
+Three of the six (4, 5, 6) share the same root cause: ng-packagr and TypeScript changed how they
+emit declarations, and the harness had the old shape hardcoded. NXSAT-669's commit `1176c22d2`
+fixed `publishability` and `upgrade-rehearsal` for this; `peer-installability` was missed then.
+
+### Backend suite (live Nuxeo on Docker, Node 24)
+
+| Check        | Result                                                                |
+| ------------ | --------------------------------------------------------------------- |
+| i18n audit   | pass (pseudo-locale rendering, translation coverage)                  |
+| integration  | pass (live backend operations via Vitest)                             |
+| e2e          | **41 pass, 8 fail** — 7 pre-existing WebKit, 1 chromium environmental |
+| Runtime a11y | not measured (setup: Playwright/axe version mismatch)                 |
+
+#### e2e breakdown
+
+The 8 failures are **not regressions**:
+
+- **7 WebKit failures** reproduce on the Angular 20 baseline: `blob-URL images actually decode`,
+  `dates render on every listing surface`, `Log in shows a visible focus indicator`, `login form
+stays usable in forced-colors`, `skip link is first in tab order`, `offers navigation into the
+repository tree`, and `the session survives a real reload`.
+- **1 chromium failure** is environmental, not a regression: `dates render on every listing
+surface` fails because the page visits `/#/search` with no query and expects date-formatted
+  results, but the default filter chips (`Validated` + `No Containers`) match zero documents in
+  this Nuxeo instance's current data. The page renders the honest empty state: `2204 results` in
+  the facets, zero rows, `No documents match the search criteria`. **Control:** the same test
+  fails identically on Angular 21 against the same Nuxeo (Node 20, port 4234), proving it is
+  data-dependent rather than an Angular 22 change.
+
+#### a11y
+
+Runtime a11y checks were not measured. The initial run installed Playwright 1.64.1 and
+`@axe-core/playwright` 4.14.0 unpinned; the preflight correctly refused to run because the
+baseline was measured against 4.13.0 and axe rule sets move between versions. A second run at the
+pinned versions (1.63.0 / 4.13.0) was started but the evidence directory for it is incomplete.
+
+Template a11y (`npm run a11y`, which reads one static HTML snapshot per surface) also failed
+setup: `Cannot read properties of undefined (reading 'accessibility')`. Both are tooling issues,
+not product defects, and are out of scope for this migration's validation — the same tools and
+pins will be used for all three Angular versions (20, 21, 22) when the full a11y pass runs.
+
+### Evidence location
+
+Gate logs, suite output and the eight commits are saved to
+`~/Desktop/agentic-ui-evidence/NXSAT-670/validation/`, outside the repository.
