@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 
 /**
@@ -143,7 +143,7 @@ describe('sidebar nav focus ring contrast (NXENG-761)', () => {
     await TestBed.configureTestingModule({
       // Satori's list item hosts a Material tooltip and translates its own strings, so it
       // needs the same animation and i18n providers the application root sets up.
-      imports: [NavHostComponent, TranslateModule.forRoot()],
+      imports: [NavHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');

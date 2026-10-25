@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
@@ -73,7 +73,7 @@ describe('User profile sidebar button focus ring (NXENG-889)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [UserProfileNavHostComponent, TranslateModule.forRoot()],
+      imports: [UserProfileNavHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');

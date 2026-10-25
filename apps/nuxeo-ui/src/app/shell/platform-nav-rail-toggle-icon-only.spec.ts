@@ -8,7 +8,7 @@ import {
   SatPlatformNavStateService,
 } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateService } from '@ngx-translate/core';
 
 /**
  * NXENG-927 (icon-only product revert) — Satori rail expand/collapse is conveyed through
@@ -61,7 +61,7 @@ describe('Platform nav rail toggle icon-only labels (NXENG-927)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PlatformNavRailToggleIconOnlyHostComponent, TranslateModule.forRoot()],
+      imports: [PlatformNavRailToggleIconOnlyHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
 

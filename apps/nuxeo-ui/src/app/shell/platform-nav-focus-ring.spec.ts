@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
@@ -82,7 +82,7 @@ function flatten(value: string, backdrop: readonly number[]): number[] {
  */
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-focus-ring.host.html',
 })
@@ -109,7 +109,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
       // Satori's nav translates its collapse/expand tooltips, and ngx-translate is
       // bootstrapped by the application rather than by the component — the same reason
       // `tasks-page.viewer-mime.spec.ts` imports it.
-      imports: [NavHostComponent, TranslateModule.forRoot()],
+      imports: [NavHostComponent, testTranslateModule()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');
     fixture = TestBed.createComponent(NavHostComponent);
@@ -321,7 +321,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
  */
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-collections-focus-ring.host.html',
 })

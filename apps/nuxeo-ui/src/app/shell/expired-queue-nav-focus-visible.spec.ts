@@ -3,7 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 import { testTranslateModule } from '../i18n/translate-testing';
@@ -25,7 +25,7 @@ const EXPIRED_QUEUE_LINK =
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './expired-queue-nav-focus-visible.host.html',
 })

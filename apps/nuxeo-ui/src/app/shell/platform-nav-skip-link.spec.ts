@@ -1,7 +1,7 @@
 import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 
 /**
  * NXENG-783 — shell skip link must be visible on keyboard focus (IBM element_tabbable_visible).
@@ -25,7 +25,7 @@ describe('platform shell skip link (NXENG-783)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SkipLinkHostComponent, TranslateModule.forRoot()],
+      imports: [SkipLinkHostComponent, testTranslateModule()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(SkipLinkHostComponent);

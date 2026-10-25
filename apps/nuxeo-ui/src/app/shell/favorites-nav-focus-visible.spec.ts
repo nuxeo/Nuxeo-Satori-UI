@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 
@@ -35,7 +35,7 @@ const FAVORITES_LINK = `sat-platform-nav-list-item[data-nav-id="${FAVORITES_NAV.
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './favorites-nav-focus-visible.host.html',
 })
@@ -97,7 +97,7 @@ describe('Favorites sidebar nav — keyboard focus visible (NXENG-898)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [FavoritesNavHostComponent, TranslateModule.forRoot()],
+      imports: [FavoritesNavHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');

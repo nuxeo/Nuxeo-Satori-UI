@@ -3,7 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 
 /**
  * NXENG-796 — keyboard focus indicator on the sidebar **Expand navigation** rail toggle
@@ -73,7 +73,7 @@ describe('Expand navigation rail toggle focus ring (NXENG-796)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ExpandNavHostComponent, TranslateModule.forRoot()],
+      imports: [ExpandNavHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');

@@ -24,7 +24,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import { testTranslateModule } from '../i18n/translate-testing';
 
@@ -49,7 +49,7 @@ function rgb(css: string): [number, number, number] {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, TranslateModule],
+  imports: [MatButtonModule, MatIconModule, testTranslateModule()],
   styleUrls: ['./app-shell.component.scss'],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './header-settings-focus-ring.spec.html',
