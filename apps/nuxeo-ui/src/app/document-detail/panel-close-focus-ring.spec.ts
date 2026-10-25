@@ -9,7 +9,7 @@
 import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import {
   NxsDetailsPanelComponent,
   type NxsDetailsPanelTab,
@@ -66,7 +66,7 @@ function paintedBackground(element: HTMLElement): number[] {
 
 @Component({
   standalone: true,
-  imports: [NxsDetailsPanelComponent, TranslateModule],
+  imports: [NxsDetailsPanelComponent, testTranslateModule()],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],

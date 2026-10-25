@@ -17,7 +17,7 @@ import {
   provideRouter,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { Observable, of } from 'rxjs';
 import { vi, type Mock } from 'vitest';
 import {
@@ -237,7 +237,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
-      // `TranslateModule` is bootstrapped by the app, not the feature: the
+      // `testTranslateModule()` is bootstrapped by the app, not the feature: the
       // detail template's `translate` pipes inject `TranslateService`.
       imports: [DocumentDetailComponent, testTranslateModule()],
       providers: [

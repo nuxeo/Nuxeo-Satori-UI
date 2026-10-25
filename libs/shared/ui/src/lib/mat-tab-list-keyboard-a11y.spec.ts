@@ -6,7 +6,7 @@ import { RIGHT_ARROW } from '@angular/cdk/keycodes';
 
 import { MatTabsModule } from '@angular/material/tabs';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import {
   MAT_TAB_LIST_IBM_ONKEYDOWN,
@@ -18,7 +18,7 @@ import { MatTabListKeydownDirective } from './mat-tab-list-keydown.directive';
 
 @Component({
   standalone: true,
-  imports: [MatTabsModule, MatTabListKeydownDirective, TranslateModule],
+  imports: [MatTabsModule, MatTabListKeydownDirective, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './mat-tab-list-keyboard-a11y.host.html',
 })

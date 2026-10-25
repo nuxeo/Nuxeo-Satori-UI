@@ -9,7 +9,7 @@
 import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import { testTranslateModule } from '../i18n/translate-testing';
 
@@ -68,7 +68,7 @@ function paintedBackdrop(element: Element): number[] {
 
 @Component({
   standalone: true,
-  imports: [MatIconModule, TranslateModule],
+  imports: [MatIconModule, testTranslateModule()],
   styleUrls: ['./dashboard-page.component.scss'],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './dashboard-ai-banner-contrast.spec.html',

@@ -21,7 +21,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import {
   NxsTabBodyDirective,
   NxsTabsComponent,
@@ -72,7 +72,7 @@ function productionTabHeaderBackground(host: HTMLElement): string {
     MatTooltipModule,
     NxsTabBodyDirective,
     NxsTabsComponent,
-    TranslateModule,
+    testTranslateModule(),
   ],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
