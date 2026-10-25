@@ -152,6 +152,9 @@ describe('DocumentDetailComponent', () => {
   let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    // The service mocks live at module scope, and since Vitest 4 `vi.spyOn` on one returns
+    // that same mock, so call history would carry over from the previous test.
+    vi.clearAllMocks();
     toast = { show: vi.fn(), error: vi.fn() };
     TestBed.overrideProvider(NxsToastService, { useValue: toast });
     mockBrowseService.updateDocument.mockReturnValue(of(STUB_DOC));

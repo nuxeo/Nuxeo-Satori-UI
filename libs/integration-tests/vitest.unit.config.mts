@@ -50,6 +50,11 @@ export default defineConfig(() => ({
       // for this project and SonarCloud reports its files as uncovered — which is
       // indistinguishable from there being no tests at all.
       reporter: ['text', 'html', 'clover', 'json', 'lcov'],
+      // Vitest 4 leaves a file no spec imports out of the report instead of counting it at 0%,
+      // which took `user-fixtures.ts` and `vitest.setup.ts` out of the denominator. Listing them
+      // keeps the measurement Vitest 3 made. The live specs are excluded: this run never loads them.
+      include: ['src/**/*.ts', 'vitest.setup.ts'],
+      exclude: ['src/**/*.spec.ts'],
     },
   },
 }));

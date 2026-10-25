@@ -71,8 +71,10 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
+
+import { entryTypes } from './package-types.mjs';
 
 const DIST = resolve('dist/libs/platform');
 
@@ -568,7 +570,7 @@ try {
               paths: Object.fromEntries(
                 subpaths.map((s) => [
                   s.replace(/^\./, pkg.name),
-                  [`./${join('pkg', s.replace(/^\.\/?/, ''), 'index.d.ts')}`],
+                  [`./${relative(stage, entryTypes(join(stage, 'pkg'), s))}`],
                 ]),
               ),
             },

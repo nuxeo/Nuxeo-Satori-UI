@@ -10,7 +10,7 @@ import {
   untracked,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { CommonModule } from '@angular/common';
+
 import { MatIconModule } from '@angular/material/icon';
 import {
   AssetAggregationService,
@@ -23,7 +23,7 @@ import { TranslatePipe } from '@ngx-translate/core';
 @Component({
   selector: 'lib-assets-queue',
   standalone: true,
-  imports: [TranslatePipe, CommonModule, MatIconModule],
+  imports: [TranslatePipe, MatIconModule],
   templateUrl: './assets-queue.component.html',
   styleUrl: './assets-queue.component.scss',
 })

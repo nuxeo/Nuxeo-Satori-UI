@@ -1052,7 +1052,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private readFreshBlobNavigationState(): boolean {
-    const fromCurrent = this.router.getCurrentNavigation()?.extras?.state as
+    const fromCurrent = this.router.currentNavigation()?.extras?.state as
       { freshBlobDocument?: boolean } | undefined;
     if (fromCurrent?.freshBlobDocument === true) {
       return true;
@@ -1062,7 +1062,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private readFreshNoteNavigationState(): boolean {
-    const fromCurrent = this.router.getCurrentNavigation()?.extras?.state as
+    const fromCurrent = this.router.currentNavigation()?.extras?.state as
       { freshNote?: boolean } | undefined;
     if (fromCurrent?.freshNote === true) {
       return true;

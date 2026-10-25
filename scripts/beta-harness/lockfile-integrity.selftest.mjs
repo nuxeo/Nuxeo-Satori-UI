@@ -360,10 +360,10 @@ expect(
 /**
  * The dependent in the `"."` fixture below, kept in a constant rather than written inline.
  *
- * `minimatch` is a production dependency with an `unreferencedDependencies` exception, and the
- * `supply-chain` gate treats a literal `node_modules/<dep>` anywhere under `scripts/` as a build
- * reference. Spelling the lock path out therefore forged a reference to it and turned that gate red
- * — correctly: a string in a fixture making an unused production dependency look used is exactly
+ * `minimatch` was a production dependency with an `unreferencedDependencies` exception until
+ * NXSAT-672, and the `supply-chain` gate treats a literal `node_modules/<dep>` anywhere under
+ * `scripts/` as a build reference. Spelling the lock path out therefore forged a reference to it
+ * and turned that gate red — correctly: a string in a fixture making an unused production dependency look used is exactly
  * the weakening it exists to catch. Interpolating the name keeps the fixture honest.
  */
 const SELF_REF_DEPENDENT = 'minimatch';
