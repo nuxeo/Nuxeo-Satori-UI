@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 jobs:
   changelog:
@@ -14,16 +15,19 @@ jobs:
     # Only run if the push was not from the changelog bot itself
     if: "!contains(github.event.head_commit.message, 'chore: update CHANGELOG')"
     steps:
+      - name: Require bot token
+        env:
+          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+        run: |
+          if [[ -z "$BOT_GITHUB_TOKEN" ]]; then
+            echo "::error::secrets.BOT_GITHUB_TOKEN is required to push the changelog branch and open a PR."
+            exit 1
+          fi
+
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          # NOTE: GITHUB_TOKEN authenticates as github-actions[bot].
-          # If branch protection is re-enabled and github-actions[bot]
-          # is not in the bypass list, this push will fail.
-          # Options: (1) add github-actions[bot] to bypass list,
-          # (2) use BOT_GITHUB_TOKEN with bypass permissions, or
-          # (3) create a PR instead of direct push.
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.BOT_GITHUB_TOKEN }}
 
       - uses: actions/setup-node@v4
         with:
@@ -38,12 +42,32 @@ jobs:
             --commit-path . \
             || echo "No conventional commits found — CHANGELOG.md unchanged."
 
-      - name: Commit updated CHANGELOG.md if changed
+      - name: Open or update changelog pull request
+        env:
+          GH_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
         run: |
+          if git diff --quiet CHANGELOG.md; then
+            echo "CHANGELOG.md is unchanged."
+            exit 0
+          fi
+
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git diff --quiet CHANGELOG.md || (
-            git add CHANGELOG.md &&
-            git commit -m "chore: update CHANGELOG [skip ci]" &&
-            git push
-          )
+          branch="chore/update-changelog"
+          git switch --create "$branch"
+          git add CHANGELOG.md
+          git commit -m "chore: update CHANGELOG"
+          git push --force origin "$branch"
+
+          pull_request="$(gh pr list --state open --base main --head "$branch" --json number --jq '.[0].number // empty')"
+          if [[ -n "$pull_request" ]]; then
+            gh pr edit "$pull_request" \
+              --title "chore: update CHANGELOG" \
+              --body "Generated from Conventional Commits by the Changelog Agent."
+          else
+            gh pr create \
+              --base main \
+              --head "$branch" \
+              --title "chore: update CHANGELOG" \
+              --body "Generated from Conventional Commits by the Changelog Agent."
+          fi
