@@ -323,7 +323,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
  */
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
+  imports: [SatPlatformNavModule, TranslatePipe],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-collections-focus-ring.host.html',
 })

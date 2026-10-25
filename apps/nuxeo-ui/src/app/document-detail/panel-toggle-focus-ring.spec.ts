@@ -74,6 +74,7 @@ function productionTabHeaderBackground(host: HTMLElement): string {
     MatTooltipModule,
     NxsTabBodyDirective,
     NxsTabsComponent,
+    TranslatePipe,
     testTranslateModule(),
   ],
   styleUrls: [
