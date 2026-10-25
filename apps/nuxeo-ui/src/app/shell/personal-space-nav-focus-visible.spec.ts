@@ -25,7 +25,7 @@ const PERSONAL_SPACE_LINK =
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslatePipe, TranslatePipe, testTranslateModule()],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
   changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './personal-space-nav-focus-visible.host.html',
 })

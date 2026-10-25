@@ -441,11 +441,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /** Ticks when the language or its catalogue changes, so `instant` lookups in computeds re-run. */
   private readonly translationTick = toSignal(
-    merge(
-      this.translate.onLangChange,
-      this.translate.onTranslationChange,
-      this.translate.onFallbackLangChange,
-    ).pipe(map((_, index) => index)),
+    merge(this.translate.onLangChange, this.translate.onTranslationChange).pipe(
+      map((_, index) => index),
+    ),
     { initialValue: -1 },
   );
 
@@ -3643,7 +3641,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   // ── Panel Activity ──

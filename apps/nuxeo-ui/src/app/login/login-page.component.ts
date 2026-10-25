@@ -60,6 +60,8 @@ const LAST_USER_KEY = 'agentic_ui_last_username';
 
     MatSnackBarModule,
 
+    TranslatePipe,
+
     SatLogoModule,
   ],
 

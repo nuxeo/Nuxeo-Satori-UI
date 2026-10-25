@@ -1,9 +1,9 @@
 import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
-import { APP_INITIALIZER, ApplicationConfig, inject } from '@angular/core';
+import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom, inject } from '@angular/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding, withHashLocation } from '@angular/router';
 import { MAT_FAB_DEFAULT_OPTIONS } from '@angular/material/button';
-import { provideTranslateService, TranslateLoader } from '@ngx-translate/core';
+import { TranslateLoader, provideTranslateService } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo/satori-platform/nuxeo-client';
@@ -51,10 +51,7 @@ export const appConfig: ApplicationConfig = {
     provideAnimations(),
     provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding(), withHashLocation()),
-    // satori-ui 0.4 adds a minimum subscript height to every form field without a hint or error,
-    // which moves every form in the product. Opted out until design signs the spacing off;
-    // dropping the argument adopts it.
-    provideSatori({ subscriptSizing: false }),
+    provideSatori(),
     {
       provide: MAT_FAB_DEFAULT_OPTIONS,
       useValue: { color: 'primary' },

@@ -300,7 +300,7 @@ export class SearchComponent {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang() ?? 'en' },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
 
   /** Every column as the picker offers it: names resolved for the active language. */

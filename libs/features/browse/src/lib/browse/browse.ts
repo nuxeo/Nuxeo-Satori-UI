@@ -522,7 +522,7 @@ export class BrowseComponent {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang() ?? 'en' },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
 
   /** The columns as the picker offers them: names resolved for the active language. */
@@ -2216,7 +2216,7 @@ export class BrowseComponent {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   permissionIcon(permission: string): string {

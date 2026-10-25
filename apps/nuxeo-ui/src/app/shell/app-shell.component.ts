@@ -130,7 +130,7 @@ export class AppShellComponent implements OnDestroy {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang() ?? 'en' },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
   readonly aiChat = inject(AiChatService);
   readonly featureFlags = inject(AiFeatureFlagService);

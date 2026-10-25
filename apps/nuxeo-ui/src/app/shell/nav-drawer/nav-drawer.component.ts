@@ -486,7 +486,7 @@ export class NavDrawerComponent {
    * word order. See `formatRelativeTime`.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   // ── Collections ──
