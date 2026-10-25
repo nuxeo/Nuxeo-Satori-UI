@@ -4,12 +4,12 @@ Nx monorepo: `apps/nuxeo-ui` (shell) and libraries under `libs/`. Path aliases a
 
 ## Stack version (authoritative)
 
-The repo targets **Angular 21.2.x** (`@angular/*` and `@angular/build` in the **21.2** line—see root `package.json`). This document describes that stack. It is **not** aligned with Angular 22 APIs or CLI behavior; if you upgrade major versions, revisit routing, builders, and Material/Satori peer ranges.
+The repo targets **Angular 22.2.x** (`@angular/*` and `@angular/build` in the **22.2** line—see root `package.json`). This document describes that stack. It is **not** aligned with Angular 23 APIs or CLI behavior; if you upgrade major versions, revisit routing, builders, and Material/Satori peer ranges. What the 21 → 22 move changed is in [`angular-22-migration.md`](angular-22-migration.md).
 
 **Tooling (web vs libraries):**
 
 - **`apps/nuxeo-ui`**: Built and served with the root [`angular.json`](../angular.json) and `ng` CLI (`@angular/build:application`). Nx targets in [`apps/nuxeo-ui/project.json`](../apps/nuxeo-ui/project.json) delegate to `ng build` / `ng serve` / `ng test` (Karma) for compatibility with the current Nx + application-builder setup.
-- **Libraries** under `libs/*`: Unit tests use **Vitest** and **Analog** (Angular 21–compatible), not Karma.
+- **Libraries** under `libs/*`: Unit tests use **Vitest** and **Analog** (Angular 22–compatible), not Karma.
 
 The shell uses **Hyland Satori Platform Nav** (`sat-platform-nav-container`, list items, main content with `router-outlet`). Navigation labels and paths are defined in `apps/nuxeo-ui/src/app/platform-nav-items.ts` and stay in the app until another surface needs the same config. With `@hylandsoftware/satori-ui` **0.2.x**, the sidebar product title is whatever Satori renders by default (Figma-specific title may require a newer Satori release or internal customization).
 

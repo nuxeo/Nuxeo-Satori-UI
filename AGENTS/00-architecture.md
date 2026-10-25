@@ -4,8 +4,8 @@
 
 | Layer                | Technology                                                      |
 | -------------------- | --------------------------------------------------------------- |
-| Frontend framework   | Angular 21 (standalone components, signals)                     |
-| Monorepo tool        | Nx 22                                                           |
+| Frontend framework   | Angular 22 (standalone components, signals)                     |
+| Monorepo tool        | Nx 23                                                           |
 | UI component library | Satori (Hyland design system) + Angular Material                |
 | State management     | Angular Signals — no NgRx, no BehaviorSubject for UI state      |
 | HTTP                 | Angular HttpClient via `NuxeoApiBase` wrapper                   |

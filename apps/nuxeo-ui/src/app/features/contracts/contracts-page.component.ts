@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 
 import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -35,6 +35,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     SelectionTopbarComponent,
   ],
   templateUrl: './contracts-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './contracts-page.component.scss',
 })
 export class ContractsPageComponent {

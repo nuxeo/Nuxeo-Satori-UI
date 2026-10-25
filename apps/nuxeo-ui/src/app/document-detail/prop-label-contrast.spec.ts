@@ -5,7 +5,7 @@
  * `data-app-theme` resolves real token pairs. Host tokens come from `:host` in
  * `document-detail.scss` (no inline overrides on the test host).
  */
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
@@ -24,6 +24,7 @@ const WCAG_AA_NORMAL_TEXT = 4.5;
   standalone: true,
   imports: [NxsDetailsPanelComponent, NxsPropertiesPanelComponent],
   templateUrl: './prop-label-contrast.host.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],

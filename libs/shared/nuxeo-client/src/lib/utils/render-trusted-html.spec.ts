@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer, type SafeHtml } from '@angular/platform-browser';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -23,6 +28,7 @@ import { renderTrustedHtml } from './render-trusted-html';
  */
 @Component({
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './render-trusted-html.host.html',
 })
 class HostComponent {

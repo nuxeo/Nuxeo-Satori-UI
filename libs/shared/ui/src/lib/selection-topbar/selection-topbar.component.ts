@@ -9,6 +9,7 @@ import {
   input,
   output,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { SafeUrl } from '@angular/platform-browser';
 import { MatButtonModule } from '@angular/material/button';
@@ -38,6 +39,7 @@ import { NxsThumbnailComponent, provideNxsThumbnailCache } from '@nuxeo/satori-p
   ],
   providers: [provideNxsThumbnailCache()],
   templateUrl: './selection-topbar.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './selection-topbar.component.scss',
 })
 export class SelectionTopbarComponent {

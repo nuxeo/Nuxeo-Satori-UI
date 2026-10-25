@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsDetailsPanelComponent, type NxsDetailsPanelTab } from './details-panel.component';
@@ -12,6 +17,7 @@ const TABS: readonly NxsDetailsPanelTab[] = [
 @Component({
   standalone: true,
   imports: [NxsDetailsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-details-panel
       [heading]="heading()"

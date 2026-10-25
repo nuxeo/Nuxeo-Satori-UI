@@ -7,7 +7,7 @@
  * suite owns computed outline geometry, contrast against the tab header, and IBM `:focus`-only
  * behaviour.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
@@ -58,6 +58,7 @@ function productionTabHeaderBackground(host: HTMLElement): string {
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './detail-tab-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './detail-tab-focus-ring.spec.html',
 })
 class DetailTabFocusHostComponent {

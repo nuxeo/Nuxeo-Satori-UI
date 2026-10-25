@@ -1,4 +1,4 @@
-import { Component, computed, inject, input, output } from '@angular/core';
+import { Component, computed, inject, input, output, ChangeDetectionStrategy } from '@angular/core';
 
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -21,6 +21,7 @@ interface ActiveFilter {
   imports: [NxsThumbnailComponent, TranslatePipe, MatButtonModule, MatIconModule],
   providers: [provideNxsThumbnailCache()],
   templateUrl: './search-queue.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search-queue.component.scss',
 })
 export class SearchQueueComponent {

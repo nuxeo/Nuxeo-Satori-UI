@@ -59,7 +59,7 @@ jobs:
       # user and global config anyway, so only the repository's .npmrc is under test.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Classifier controls (offline)
         run: node scripts/registry-auth-check.selftest.mjs
