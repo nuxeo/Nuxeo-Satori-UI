@@ -68,9 +68,7 @@
       "lines": 87.0,
       "statements": 87.0,
       "branches": 74.97,
-      "functions": 93.17,
-      "sTotal": 2490,
-      "sCovered": 2192
+      "functions": 93.17
     },
     "document-layouts": {
       "lines": 98.73,
