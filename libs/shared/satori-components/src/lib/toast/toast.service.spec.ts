@@ -1,4 +1,9 @@
-import { Component, inject, provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component,
+  inject,
+  provideZonelessChangeDetection,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar, type MatSnackBarConfig } from '@angular/material/snack-bar';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -8,7 +13,12 @@ import { NxsToastComponent } from './toast.component';
 import { NXS_TOAST_DURATION, NxsToastService, provideNxsToast } from './toast.service';
 
 /** A consumer, so the service is reached the way the core slice reaches it: from `providers`. */
-@Component({ standalone: true, template: '', providers: [provideNxsToast()] })
+@Component({
+  standalone: true,
+  template: '',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  providers: [provideNxsToast()],
+})
 class ConsumerComponent {
   readonly toast = inject(NxsToastService);
 }

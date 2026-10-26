@@ -8090,11 +8090,17 @@ function checkLibraryEntryPoint({ root, entry, barrel, ngPackage }) {
  *   `InjectionToken` with an explicit `provide…()` function, so host and remote can share one
  *   instance. Every `providedIn` value is refused, `'platform'` and `'any'` included.
  *
- * Specs are exempt: a test host is not part of the library. `/components-satori` ships in the same
- * package and is held to the same rules; its absence is `checkSatoriFallbackDependencies`' to report.
+ * Specs are exempt: a test host is not part of the library. So is `src/test-setup.ts`, which
+ * `tsconfig.lib.json` excludes from the build: since Angular 21 TestBed is zoneless unless its
+ * environment provides zone change detection, and an NgModule is the only way to give it one — the
+ * one Angular's own test runners generate. `/components-satori` ships in the same package and is
+ * held to the same rules; its absence is `checkSatoriFallbackDependencies`' to report.
  */
 function checkSatoriComponentsFederationReadiness() {
-  const nonSpec = (path) => /\.(ts|mts)$/.test(path) && !/\.(spec|test)\.ts$/.test(path);
+  const nonSpec = (path) =>
+    /\.(ts|mts)$/.test(path) &&
+    !/\.(spec|test)\.ts$/.test(path) &&
+    !/\/src\/test-setup\.ts$/.test(path);
   const sources = satoriComponentsSources().filter(nonSpec);
   if (sources.length === 0) {
     fail(

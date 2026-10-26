@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -11,6 +11,7 @@ export interface ReplaceAttachmentDialogData {
   standalone: true,
   imports: [TranslatePipe, MatDialogModule],
   templateUrl: './replace-attachment-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .replace-dialog {

@@ -1,9 +1,11 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -19,10 +21,8 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
  * override.
  */
 
-const KD_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.knowledgeDiscovery"] .sat-platform-nav-item';
-const DASHBOARD_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.dashboard"] .sat-platform-nav-item';
+const KD_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.knowledgeDiscovery"]';
+const DASHBOARD_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.dashboard"]';
 
 const ACTIVE_CLASS = 'sat-platform-nav-item-active';
 const MINIMUM_RATIO = 3;
@@ -36,7 +36,8 @@ const KD_TEST_LABELS = {
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './nav-focus-ring-knowledge-discovery.host.html',
 })
 class KdNavHostComponent {}

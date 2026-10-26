@@ -7,7 +7,7 @@
       </div>
     } @else if (annotationsTab() && !arenderAvailable()) {
       <div class="viewer-placeholder">
-        <mat-icon class="placeholder-icon">edit_note</mat-icon>
+        <mat-icon class="placeholder-icon" svgIcon="note_edit" />
         <p>{{ 'shared-ui.document-viewer.annotations-are-not-available-for-this' | translate }}</p>
         <span class="mime-label">{{
           'shared-ui.document-viewer.use-the-view-tab-for-the' | translate
@@ -49,7 +49,7 @@
         }
         @case ('audio') {
           <div class="viewer-audio-wrapper">
-            <mat-icon class="audio-icon">audiotrack</mat-icon>
+            <mat-icon class="audio-icon" svgIcon="audio" />
             <audio [src]="rawBlobUrl()" controls class="viewer-audio"></audio>
           </div>
         }
@@ -93,7 +93,7 @@
         }
         @default {
           <div class="viewer-placeholder">
-            <mat-icon class="placeholder-icon">insert_drive_file</mat-icon>
+            <mat-icon class="placeholder-icon" svgIcon="page" />
             <p>{{ 'shared-ui.document-viewer.preview-not-available' | translate }}</p>
             @if (mimeType()) {
               <span class="mime-label">{{ mimeType() }}</span>
@@ -130,7 +130,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.zoom-in' | translate"
         (click)="zoomIn()"
       >
-        <mat-icon>zoom_in</mat-icon>
+        <mat-icon svgIcon="zoom_in" />
       </button>
       <button
         mat-icon-button
@@ -140,7 +140,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.toggle-fit' | translate"
         (click)="toggleFit()"
       >
-        <mat-icon>{{ fitMode() === 'width' ? 'crop_free' : 'fit_screen' }}</mat-icon>
+        <mat-icon [svgIcon]="fitMode() === 'width' ? 'crop' : 'fit_screen'" />
       </button>
       <button
         mat-icon-button
@@ -148,7 +148,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.zoom-out' | translate"
         (click)="zoomOut()"
       >
-        <mat-icon>zoom_out</mat-icon>
+        <mat-icon svgIcon="zoom_out" />
       </button>
       <button
         mat-icon-button
@@ -156,7 +156,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.rotate-left' | translate"
         (click)="rotateLeft()"
       >
-        <mat-icon>rotate_left</mat-icon>
+        <mat-icon svgIcon="rotate_left" />
       </button>
       <button
         mat-icon-button
@@ -164,7 +164,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.rotate-right' | translate"
         (click)="rotateRight()"
       >
-        <mat-icon>rotate_right</mat-icon>
+        <mat-icon svgIcon="rotate_right" />
       </button>
     </div>
   }
@@ -185,7 +185,7 @@
           [attr.aria-label]="'shared-ui.document-viewer.open-with-nuxeo-drive' | translate"
           (click)="openWithDriveClicked.emit()"
         >
-          <mat-icon>cloud_sync</mat-icon>
+          <mat-icon svgIcon="sync" />
         </button>
       }
       <button
@@ -196,7 +196,7 @@
         <span class="cdk-visually-hidden" cdkAriaLive="off">{{
           'shared-ui.document-viewer.preview' | translate
         }}</span>
-        <mat-icon aria-hidden="true">visibility</mat-icon>
+        <mat-icon aria-hidden="true" svgIcon="view" />
       </button>
       <button
         mat-icon-button
@@ -204,7 +204,7 @@
         [attr.aria-label]="'shared-ui.document-viewer.download' | translate"
         (click)="downloadClicked.emit()"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
       @if (showMainFileControls()) {
         <button
@@ -214,7 +214,7 @@
           [disabled]="mainFileActionInProgress() === 'replace-main'"
           (click)="replaceMainFileClicked.emit()"
         >
-          <mat-icon>find_replace</mat-icon>
+          <mat-icon svgIcon="search" />
         </button>
         <button
           mat-icon-button
@@ -226,7 +226,7 @@
           <span class="cdk-visually-hidden" cdkAriaLive="off">{{
             'shared-ui.document-viewer.remove-main-file' | translate
           }}</span>
-          <mat-icon aria-hidden="true">cancel</mat-icon>
+          <mat-icon aria-hidden="true" svgIcon="circle_x" />
         </button>
       }
     </div>
@@ -357,7 +357,7 @@
                   "
                   (click)="formatDownload.emit(view.downloadUrl)"
                 >
-                  <mat-icon>download</mat-icon>
+                  <mat-icon svgIcon="download" />
                 </button>
               </div>
             }

@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 import { RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
@@ -35,6 +35,7 @@ import { TemplateSessionService } from './template-session.service';
   standalone: true,
   imports: [RouterOutlet, RouterLink, RouterLinkActive, SignInComponent],
   templateUrl: './app.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './app.scss',
 })
 export class App {

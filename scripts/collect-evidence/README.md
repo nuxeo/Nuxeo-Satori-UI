@@ -157,8 +157,10 @@ written to do, but it proves nothing, so it can never be cited as evidence. Conv
 
 - Headed Chromium by default, so the team can watch the capture live
 - `httpCredentials` **and** an injected session: the session satisfies the route guard so
-  pages render, `httpCredentials` authenticates the XHRs behind them. Without both, `/nuxeo/api`
-  calls intermittently 403 and you photograph empty states that read as component defects.
+  pages render, and the app's interceptor sends its Basic header on the XHRs behind them;
+  `httpCredentials` (`send: 'always'`) authenticate `page.request`. On a Nuxeo with guests
+  enabled nothing challenges, so a missing half runs as `Anonymous` rather than failing — and
+  this runner, unlike `beta:evidence`, has no identity guard yet (NXSAT-643 follow-up).
   Set `export const skipHttpCredentials = true` on the scenes file for public routes (login) so
   `/me` hydration does not sign the browser in before the form is shown. The runner also sets
   `sessionStorage.agentic_ui_signed_out` so anonymous `/me` hydration does not redirect away

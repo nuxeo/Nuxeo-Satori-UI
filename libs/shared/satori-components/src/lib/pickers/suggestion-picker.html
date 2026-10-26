@@ -20,7 +20,7 @@
             type="button"
             [attr.aria-label]="'satori-components.pickers.remove' | translate: { name: item.label }"
           >
-            <mat-icon aria-hidden="true">cancel</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="x_large" />
           </button>
         </mat-chip-row>
       }
@@ -58,7 +58,7 @@
         [attr.aria-label]="'satori-components.pickers.clear' | translate"
         (click)="clear()"
       >
-        <mat-icon aria-hidden="true">close</mat-icon>
+        <mat-icon aria-hidden="true" svgIcon="x_large" />
       </button>
     }
   }
@@ -112,7 +112,7 @@
                 [type]="option.documentType ?? ''"
               />
             } @else {
-              <mat-icon aria-hidden="true">{{ option.icon }}</mat-icon>
+              <mat-icon aria-hidden="true" [svgIcon]="option.icon ?? ''" />
             }
             <span class="nxs-picker__option">
               <span class="nxs-picker__option-label">{{ option.label }}</span

@@ -42,7 +42,7 @@
     (click)="confirm()"
   >
     @if (deleting()) {
-      <mat-icon class="nxs-spinning" aria-hidden="true">autorenew</mat-icon>
+      <mat-icon class="nxs-spinning" aria-hidden="true" svgIcon="autorenew" />
       {{ 'satori-components.permission-dialogs.delete.deleting' | translate }}
     } @else {
       {{ 'satori-components.permission-dialogs.delete.delete' | translate }}

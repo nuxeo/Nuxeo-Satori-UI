@@ -1,4 +1,11 @@
-import { Component, DestroyRef, inject, signal, OnInit } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  signal,
+  OnInit,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -24,6 +31,7 @@ import {
   DocumentService,
   NuxeoApiBase,
 } from '@nuxeo/satori-platform/nuxeo-client';
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -47,9 +55,11 @@ import {
     MatSelectModule,
     MatDatepickerModule,
     MatSnackBarModule,
+    SatHeaderBar,
     SatTagModule,
   ],
   templateUrl: './task-detail.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './task-detail.component.scss',
 })
 export class TaskDetailComponent implements OnInit {
@@ -316,9 +326,9 @@ export class TaskDetailComponent implements OnInit {
 
   actionIcon(action: { name: string }): string {
     const n = action.name.toLowerCase();
-    if (n.includes('approve') || n.includes('validate')) return 'check_circle';
-    if (n.includes('reject')) return 'cancel';
-    if (n.includes('start')) return 'play_arrow';
+    if (n.includes('approve') || n.includes('validate')) return 'circle_check';
+    if (n.includes('reject')) return 'x_large';
+    if (n.includes('start')) return 'triangle_right';
     if (n.includes('cancel')) return 'block';
     return 'send';
   }

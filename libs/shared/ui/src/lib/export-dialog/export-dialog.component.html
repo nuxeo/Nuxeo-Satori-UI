@@ -3,7 +3,7 @@
 <mat-dialog-content>
   @for (option of options; track option.type) {
     <button class="export-option" [disabled]="exporting()" (click)="onExport(option.type)">
-      <mat-icon class="export-option-icon">{{ option.icon }}</mat-icon>
+      <mat-icon class="export-option-icon" [svgIcon]="option.icon" />
       <span class="export-option-label">{{ option | descriptorLabel }}</span>
       @if (exporting() === option.type) {
         <mat-spinner diameter="18" class="export-spinner" />

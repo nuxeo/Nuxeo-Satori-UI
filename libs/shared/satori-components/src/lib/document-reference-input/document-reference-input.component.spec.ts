@@ -1,5 +1,10 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, of, throwError } from 'rxjs';
@@ -51,6 +56,7 @@ describe('nxsDocumentSuggestionQuery', () => {
 @Component({
   standalone: true,
   imports: [NxsDocumentReferenceInputComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `@if (multiple()) {
       <nxs-document-reference-input
         label="Related contract"
@@ -336,10 +342,7 @@ describe('NxsDocumentReferenceInputComponent', () => {
     delayed.next({ entries: [doc('c1', 'Old title')] });
     delayed.complete();
     await render();
-    expect(chips().map((chip) => chip.textContent?.trim())).toEqual([
-      'Contract notes cancel',
-      'secret cancel',
-    ]);
+    expect(chips().map((chip) => chip.textContent?.trim())).toEqual(['Contract notes', 'secret']);
     expect(host.many.value).toEqual(['n1', 'secret']);
   });
 

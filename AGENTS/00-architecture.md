@@ -4,8 +4,8 @@
 
 | Layer                | Technology                                                      |
 | -------------------- | --------------------------------------------------------------- |
-| Frontend framework   | Angular 20 (standalone components, signals)                     |
-| Monorepo tool        | Nx 22                                                           |
+| Frontend framework   | Angular 22 (standalone components, signals)                     |
+| Monorepo tool        | Nx 23                                                           |
 | UI component library | Satori (Hyland design system) + Angular Material                |
 | State management     | Angular Signals — no NgRx, no BehaviorSubject for UI state      |
 | HTTP                 | Angular HttpClient via `NuxeoApiBase` wrapper                   |
@@ -136,7 +136,7 @@ document identity follows `idProperty`. Unreadable stored document references re
 `documentChange` continues to report an individual selection or null; use `valueChange` for
 all ids. The picker stories exercise addition and keyboard removal.
 
-**Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
+**Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:
 

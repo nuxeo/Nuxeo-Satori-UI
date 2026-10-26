@@ -1,5 +1,5 @@
 import { DatePipe } from '@angular/common';
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -42,6 +42,7 @@ const DEFAULT_NXQL =
     MatExpansionModule,
   ],
   templateUrl: './admin-nxql-search-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-nxql-search-page.component.scss',
 })
 export class AdminNxqlSearchPageComponent {

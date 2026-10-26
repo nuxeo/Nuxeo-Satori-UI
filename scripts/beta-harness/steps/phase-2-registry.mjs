@@ -166,7 +166,7 @@ async function bundleFingerprint(page) {
  */
 function readNav(page) {
   return page.evaluate(() =>
-    [...document.querySelectorAll('sat-platform-nav-list-item[data-nav-id]')].map((el) => [
+    [...document.querySelectorAll('a[sat-platform-nav-menu-item][data-nav-id]')].map((el) => [
       el.getAttribute('data-nav-id'),
       (el.textContent ?? '').trim(),
     ]),
@@ -227,7 +227,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: the shipped default is exactly the navigation we mean to ship.
   // ---------------------------------------------------------------------------
-  h.step('The packaged default renders exactly the navigation the product ships');
+  await h.step('The packaged default renders exactly the navigation the product ships');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
 
@@ -254,13 +254,13 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // NEGATIVE / FALLBACK: nothing that worked before is broken.
   // ---------------------------------------------------------------------------
-  h.step('Production browse is unaffected by the registry');
+  await h.step('Production browse is unaffected by the registry');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.expectText('repository content listed', 'lib-browse', 'Default domain');
   await h.screenshot('default-manifest-production-browse');
 
-  h.step('The adf-hx POC route is unaffected by the registry');
+  await h.step('The adf-hx POC route is unaffected by the registry');
   await h.goTo('/#/browse-adf-hx');
   await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
   await h.expectText('Nuxeo children listed', 'hxp-document-list', 'Default domain');
@@ -269,7 +269,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: one capability per step, each with the bundle hash pinned.
   // ---------------------------------------------------------------------------
-  h.step('A manifest hides a navigation entry, with no rebuild');
+  await h.step('A manifest hides a navigation entry, with no rebuild');
   const hidden = await applyManifest(
     { overrides: { 'app.navbar.trash': { visible: false } } },
     'hide',
@@ -288,7 +288,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('manifest-hides-nav-entry');
 
-  h.step('A manifest adds a navigation entry, with no rebuild');
+  await h.step('A manifest adds a navigation entry, with no rebuild');
   const added = await applyManifest(
     {
       slots: {
@@ -333,7 +333,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('manifest-adds-nav-entry');
 
-  h.step('A manifest reorders the navigation, with no rebuild');
+  await h.step('A manifest reorders the navigation, with no rebuild');
   const reordered = await applyManifest(
     { overrides: { 'app.navbar.administration': { order: 1 } } },
     'reorder',
@@ -354,7 +354,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('manifest-reorders-nav');
 
-  h.step('A manifest relabels a navigation entry, with no rebuild');
+  await h.step('A manifest relabels a navigation entry, with no rebuild');
   // Collections rather than Browse: the legacy Browse entry ships `disabled`, so an
   // override on it has nothing to relabel and this step would assert against an
   // entry that is not in the DOM at all.
@@ -387,7 +387,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('manifest-relabels-nav');
 
-  h.step('A manifest gates an entry behind a registered rule, with no rebuild');
+  await h.step('A manifest gates an entry behind a registered rule, with no rebuild');
   const gatedOff = await applyManifest(
     { overrides: { 'app.navbar.browseAdfHx': { rule: 'core.false' } } },
     'rule denies',
@@ -414,7 +414,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: the nav array is no longer decorative.
   // ---------------------------------------------------------------------------
-  h.step('A manifest-added entry gets real drawer content from the sidebar slot');
+  await h.step('A manifest-added entry gets real drawer content from the sidebar slot');
   await applyManifest(
     {
       slots: {
@@ -437,7 +437,7 @@ export default async function run(page, h) {
     'sidebar slot',
     baselineBundle,
   );
-  await page.locator('sat-platform-nav-list-item[data-nav-id="app.navbar.searchFilters"]').click();
+  await page.locator('a[sat-platform-nav-menu-item][data-nav-id="app.navbar.searchFilters"]').click();
   await page.waitForTimeout(1500);
   await h.expectVisible(
     'the shared extension outlet rendered in the drawer',
@@ -458,7 +458,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: $references layering.
   // ---------------------------------------------------------------------------
-  h.step('A customer layer wins over ours through $references');
+  await h.step('A customer layer wins over ours through $references');
   const layered = await applyManifest(
     {
       $references: ['baseline', 'acme'],
@@ -490,7 +490,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: the documented fail-open contract.
   // ---------------------------------------------------------------------------
-  h.step('An unknown rule id leaves the entry visible, as documented');
+  await h.step('An unknown rule id leaves the entry visible, as documented');
   // Two things have to be true for this to mean anything, and neither can be
   // asserted from the harness's own variables.
   //
@@ -530,7 +530,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('unknown-rule-fails-open');
 
-  h.step('A user without administration access is not offered Administration');
+  await h.step('A user without administration access is not offered Administration');
   // Phase 2 ran every check as Administrator, so the one user-visible
   // regression it could cause — Administration exposed to everyone — had no
   // coverage anywhere.
@@ -539,8 +539,8 @@ export default async function run(page, h) {
   // object `AuthService` writes, so this is a genuine non-administrator *client
   // session*: `hasAdministrationAccess()` is false and the rule on the
   // descriptor is what removes the entry. It is not a second Nuxeo account —
-  // the browser context's `httpCredentials` still carry the configured user, so
-  // XHRs are unchanged. It therefore tests the Layer 1 gate, which is the thing
+  // the stored session keeps the configured user's `basic`, which the app's
+  // interceptor still sends, so XHRs are unchanged. It therefore tests the Layer 1 gate, which is the thing
   // Phase 2 changed, and says nothing about server-side authorisation, which
   // Phase 2 did not touch and which Nuxeo enforces regardless.
   // Two things force administrator back on and both have to be defeated:
@@ -549,6 +549,10 @@ export default async function run(page, h) {
   // API omits the flag. So the session is injected under a different username
   // and `/me` is intercepted to answer as an ordinary member.
   manifestBody = null;
+  // Save the genuine session before overwriting it with the synthetic one.
+  const genuineSession = await page.evaluate(() =>
+    sessionStorage.getItem('agentic_ui_nuxeo_session'),
+  );
   await page.route('**/api/v1/me', (route) =>
     route.fulfill({
       status: 200,
@@ -600,8 +604,13 @@ export default async function run(page, h) {
   );
   await h.screenshot('non-admin-has-no-administration-entry');
 
-  // Back to the configured user for the remaining steps.
+  // Back to the configured user for the remaining steps. Restore the genuine session that was
+  // saved before the synthetic block, so h.login()'s pre-restoration verification sees it.
   await page.unroute('**/api/v1/me');
+  await page.evaluate((saved) => {
+    if (saved) sessionStorage.setItem('agentic_ui_nuxeo_session', saved);
+    else sessionStorage.removeItem('agentic_ui_nuxeo_session');
+  }, genuineSession);
   await h.login();
   await page.waitForTimeout(500);
 
@@ -611,7 +620,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // LOAD-BEARING: the bulk-action surface is registry-driven.
   // ---------------------------------------------------------------------------
-  h.step('The bulk-action bar is resolved from the registry, and a manifest changes it');
+  await h.step('The bulk-action bar is resolved from the registry, and a manifest changes it');
 
   /** Select the first two rows in production browse, which raises the topbar. */
   const selectTwoRows = async () => {
@@ -674,7 +683,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('manifest-customised-bulk-actions');
 
-  h.step('A malformed extensions block leaves a working application');
+  await h.step('A malformed extensions block leaves a working application');
   // A valid envelope, so the response is applied and only the extensions reader is under test.
   manifestBody = manifestDocument({
     $references: 'not a list',
@@ -695,7 +704,7 @@ export default async function run(page, h) {
   await h.expectText('repository content still listed', 'lib-browse', 'Default domain');
   await h.screenshot('malformed-extensions-falls-back');
 
-  h.step('An absent configuration service leaves the packaged surface intact');
+  await h.step('An absent configuration service leaves the packaged surface intact');
   manifestBody = null;
   await reloadApp(page);
   const unconfigured = await readNav(page);
@@ -706,6 +715,6 @@ export default async function run(page, h) {
   );
   await h.screenshot('absent-config-packaged-surface');
 
-  h.step('Registry health');
+  await h.step('Registry health');
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

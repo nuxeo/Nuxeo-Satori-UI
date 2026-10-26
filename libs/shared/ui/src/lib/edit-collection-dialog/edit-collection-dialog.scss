@@ -24,6 +24,7 @@ mat-dialog-actions {
 }
 
 .expires-field-invalid {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mdc-notched-outline__leading,
   ::ng-deep .mdc-notched-outline__notch,
   ::ng-deep .mdc-notched-outline__trailing {
@@ -31,6 +32,7 @@ mat-dialog-actions {
   }
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-select-panel.vocab-select-panel {
   display: flex;
   flex-direction: column;
@@ -39,12 +41,14 @@ mat-dialog-actions {
   padding-top: 0;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-select-panel.vocab-select-panel .vocab-panel__search {
   flex: 0 0 auto;
   padding: 8px 12px;
   border-bottom: 1px solid var(--mat-sys-outline-variant, #e5e7eb);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-select-panel.vocab-select-panel .vocab-panel__search input {
   width: 100%;
   box-sizing: border-box;
@@ -55,12 +59,14 @@ mat-dialog-actions {
   font-size: 0.875rem;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-select-panel.vocab-select-panel .vocab-panel__list {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .vocab-grouped-select-panel .mat-mdc-optgroup-label,
 ::ng-deep .vocab-grouped-select-panel .mat-mdc-optgroup .mdc-list-group__subheader {
   font-weight: 700;
@@ -70,6 +76,7 @@ mat-dialog-actions {
   border-bottom: 1px solid var(--mat-sys-outline-variant, #f0f0f0);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .vocab-field .mat-mdc-select-trigger {
   height: auto;
   min-height: 24px;
@@ -85,6 +92,7 @@ mat-dialog-actions {
   box-sizing: border-box;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .vocab-trigger-chips .mdc-evolution-chip {
   margin: 2px 4px 2px 0;
 }

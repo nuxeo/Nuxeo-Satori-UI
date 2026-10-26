@@ -29,13 +29,13 @@ import { nxsInitials, nxsVisibleText } from '../visible-text';
 })
 export class NxsAvatarComponent implements NxsAvatarInputs {
   /**
-   * The person's initials, upper-cased: up to two, or one at size `24`, where two do not fit and
-   * Satori's avatar shows one.
+   * The person's initials, upper-cased: up to two, or one at sizes `18` and `24`, where two do
+   * not fit and Satori's avatar shows one.
    */
   readonly initials = input.required<string>();
   /** The circle's colour: `purple`, `blue`, `pink`, `teal`, `yellow`, `green`, `red` or `orange`. */
   readonly color = input<NxsAvatarColor>('blue');
-  /** The diameter in pixels: `24`, `28`, `36`, `64`, `80` or `128`. */
+  /** The diameter in pixels: `18`, `24`, `28`, `36`, `64`, `80` or `128`. */
   readonly size = input<NxsAvatarSize>('36');
   /**
    * The accessible name, usually the person's name, already translated. Blank, or only whitespace
@@ -48,6 +48,6 @@ export class NxsAvatarComponent implements NxsAvatarInputs {
   protected readonly namedColor = computed(() => nxsNamedColorStyle(this.color()));
 
   protected readonly shownInitials = computed(() =>
-    nxsInitials(this.initials(), this.size() === '24' ? 1 : 2),
+    nxsInitials(this.initials(), this.size() === '18' || this.size() === '24' ? 1 : 2),
   );
 }

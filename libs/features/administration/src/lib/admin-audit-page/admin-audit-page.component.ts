@@ -1,5 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -49,6 +56,7 @@ import {
     MatTooltipModule,
   ],
   templateUrl: './admin-audit-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-audit-page.component.scss',
 })
 export class AdminAuditPageComponent implements OnInit {
@@ -167,7 +175,7 @@ export class AdminAuditPageComponent implements OnInit {
   }
 
   severityIcon(sev: string): string {
-    return sev === 'high' ? 'error' : sev === 'medium' ? 'warning' : 'info';
+    return sev === 'high' ? 'error' : sev === 'medium' ? 'report_problem' : 'info';
   }
 
   /* --- AI: Natural-Language Search --- */
@@ -229,12 +237,12 @@ export class AdminAuditPageComponent implements OnInit {
 
   summaryStatIcon(icon: string): string {
     const map: Record<string, string> = {
-      edit: 'edit',
-      delete: 'delete',
+      edit: 'pencil',
+      delete: 'trash',
       security: 'shield',
-      login: 'login',
+      login: 'key',
       download: 'download',
-      workflow: 'account_tree',
+      workflow: 'tree',
       info: 'info',
     };
     return map[icon] || 'info';

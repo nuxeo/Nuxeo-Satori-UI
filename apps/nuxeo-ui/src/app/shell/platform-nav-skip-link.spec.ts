@@ -1,7 +1,8 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
-import { TranslateModule } from '@ngx-translate/core';
+import { provideSatori } from '@hylandsoftware/satori-ui/providers';
+import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
  * NXENG-783 — shell skip link must be visible on keyboard focus (IBM element_tabbable_visible).
@@ -15,6 +16,7 @@ import { TranslateModule } from '@ngx-translate/core';
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-skip-link.host.html',
 })
 class SkipLinkHostComponent {}
@@ -24,7 +26,8 @@ describe('platform shell skip link (NXENG-783)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SkipLinkHostComponent, TranslateModule.forRoot()],
+      imports: [SkipLinkHostComponent, testTranslateModule()],
+      providers: [provideSatori()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(SkipLinkHostComponent);
@@ -51,8 +54,31 @@ describe('platform shell skip link (NXENG-783)', () => {
 
   it('targets the main content landmark', () => {
     const link = skipLink();
-    expect(link.getAttribute('href')).toBe('#main-content');
-    expect(fixture.nativeElement.querySelector('#main-content')).toBeTruthy();
+    const mainContent = fixture.nativeElement.querySelector('#main-content');
+    expect(mainContent)
+      .withContext('the container must render a #main-content target for the skip link')
+      .toBeTruthy();
+    // Satori 1.0 uses programmatic focus instead of href="#main-content".
+    // The click-to-focus behavior is verified by the "activates the skip link" test.
+    const href = link.getAttribute('href');
+    if (href !== null) {
+      expect(href)
+        .withContext('skip link href must target #main-content when present')
+        .toBe('#main-content');
+    }
+  });
+
+  it('activates the skip link and moves focus to main content', () => {
+    const link = skipLink();
+    const mainContent = fixture.nativeElement.querySelector('#main-content') as HTMLElement;
+    expect(mainContent).toBeTruthy();
+
+    link.click();
+    fixture.detectChanges();
+
+    expect(document.activeElement)
+      .withContext('clicking the skip link must move focus to #main-content')
+      .toBe(mainContent);
   });
 
   it('declares a standalone :focus rule IBM element_tabbable_visible can read', () => {

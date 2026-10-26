@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -22,6 +22,7 @@ export interface ChangePasswordDialogData {
     MatInputModule,
   ],
   templateUrl: './change-password-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .pwd-form {

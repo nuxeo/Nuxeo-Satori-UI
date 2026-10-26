@@ -33,12 +33,12 @@ const VARIANTS: Readonly<Record<NxsErrorStatus, Variant>> = {
     message: 'satori-components.error-state.forbidden.message',
   },
   404: {
-    icon: 'search_off',
+    icon: 'search',
     heading: 'satori-components.error-state.not-found.heading',
     message: 'satori-components.error-state.not-found.message',
   },
   500: {
-    icon: 'error_outline',
+    icon: 'error',
     heading: 'satori-components.error-state.server.heading',
     message: 'satori-components.error-state.server.message',
   },

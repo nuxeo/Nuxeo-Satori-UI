@@ -1,6 +1,7 @@
 // NXSAT-544 / IBM 2834597055 — standalone stylesheet so document-detail.scss stays under the 36 kB cap.
 // IBM Equal Access `style_focus_visible` reads `:focus` only — keep a standalone selector, not
 // a comma list with `:focus-visible` (see AGENTS/08-bug-patterns.md §17).
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .panel-toggle-btn.mat-mdc-icon-button:focus {
   outline-style: solid;
   outline-width: 2px;

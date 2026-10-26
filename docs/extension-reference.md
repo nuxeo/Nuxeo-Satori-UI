@@ -600,13 +600,13 @@ at the table below, conflating the two.
 
 Components are referenced by ID and must already be compiled in. Contributing a new one is Layer 2.
 
-| Component ID                      | Renders                                                                            |
-| --------------------------------- | ---------------------------------------------------------------------------------- |
-| `app.sidebar.assets`              | Asset facet filters                                                                |
-| `app.sidebar.searchFilters`       | Search filter panel                                                                |
-| `app.sidebar.trashFilters`        | Trash filter panel                                                                 |
-| `app.page.contracts`              | A full-page surface, for the `routes` slot                                         |
-| `nxs.components.permissionsPanel` | Local and inherited permissions in the document-detail and browse Permissions tabs |
+| Component ID                      | Renders                                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `app.sidebar.assets`              | Asset facet filters                                                                            |
+| `app.sidebar.searchFilters`       | Search filter panel                                                                            |
+| `app.sidebar.trashFilters`        | Trash filter panel                                                                             |
+| `app.page.contracts`              | A full-page surface, for the `routes` slot                                                     |
+| `nxs.components.permissionsPanel` | Local and inherited permissions in the document-detail, browse and collection Permissions tabs |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -878,10 +878,12 @@ replaced per document by a `documentView` entry — section 9a. And the local an
 half of `app.tabs.permissions` renders the component registered as
 `nxs.components.permissionsPanel`, as does the Permissions tab of `/browse`, so re-registering
 that ID from your library (section 14) replaces the panel in both; the external-user section
-under it stays packaged. The component receives two inputs: `documentId`, and
+under it stays packaged. The component receives `documentId`, and
 `permissionsChanged`, a callback to invoke after any write that may have changed the ACL, so the
 host reads the external-user section again. A replacement that does not declare it leaves that
-section as it was until the tab reloads.
+section as it was until the tab reloads. A collection's Permissions tab also passes `offer: 'type'`:
+offer only the type's `userVisiblePermissions`, as Web UI does. An input your component does not
+declare is not set.
 
 A tab you contribute names a registered component instead, through `componentId`,
 and is rendered by the same `ExtensionOutletComponent` the sidebar uses. The
@@ -1437,8 +1439,10 @@ that is Layer 2 — see section 14.
   package (section 1), so a change is a new version of that package, built and installed. On a
   demo server, a preset (section 1) switches between configurations per browser.
 
-- **The Permissions tabs refuse some edits rather than guess.** Both — document detail and
-  `/browse` — use `nxs.components.permissionsPanel`. It offers the server's list
+- **The Permissions tabs refuse some edits rather than guess.** All three — document detail,
+  `/browse` and a collection — use `nxs.components.permissionsPanel`. A collection's tab offers
+  the server's list for the type alone — `Read`, `ReadCanCollect`, `ReadWrite` and `Everything` on
+  a stock server — as Web UI does. The other two offer the server's list
   for the document type, then `Write`, `ReadVersion`, `WriteVersion`, `AddChildren`,
   `RemoveChildren`, `Remove`, `Version`, `WriteSecurity`, `Unlock`, `SetRetention` and
   `UnsetRetention`, then any other permission the server reports. Nuxeo reports only the

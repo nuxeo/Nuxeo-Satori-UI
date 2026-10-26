@@ -1,16 +1,18 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
+import { TranslatePipe } from '@ngx-translate/core';
+
 import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
  * NXENG-912 — IBM Equal Access Issue ID 3416250941 on the Expired Queue sidebar link
- * (`sat-platform-nav-list-item[7]` / `aria-label="Expired Queue"`).
+ * (`a[sat-platform-nav-menu-item]` / `aria-label="Expired Queue"`).
  *
  * Same mechanism as NXENG-761 / NXENG-794: Satori reads `--sat-platform-nav-outline` for every
  * `.sat-platform-nav-item`, and `styles.scss` mirrors the ring on `:focus` for IBM
@@ -20,12 +22,12 @@ import { testTranslateModule } from '../i18n/translate-testing';
 
 const ACTIVE_CLASS = 'sat-platform-nav-item-active';
 
-const EXPIRED_QUEUE_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.expiredQueue"] .sat-platform-nav-item';
+const EXPIRED_QUEUE_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.expiredQueue"]';
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './expired-queue-nav-focus-visible.host.html',
 })
 class ExpiredQueueNavHostComponent {

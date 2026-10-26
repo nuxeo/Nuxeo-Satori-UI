@@ -1,9 +1,10 @@
-import { Component, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { MatDialog } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatIconModule } from '@angular/material/icon';
+import { SAT_BANNER_IMPORTS } from '@hylandsoftware/satori-ui/banner';
 import { of } from 'rxjs';
 
 // Import from @nuxeo/satori-platform/ui - what customers have access to
@@ -27,15 +28,16 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [
     TranslatePipe,
-    CommonModule,
     MatButtonModule,
     MatCardModule,
     MatIconModule,
+    SAT_BANNER_IMPORTS,
     WidgetContainerComponent,
     WidgetGridComponent,
     SelectionTopbarComponent,
   ],
   templateUrl: './contracts-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './contracts-page.component.scss',
 })
 export class ContractsPageComponent {

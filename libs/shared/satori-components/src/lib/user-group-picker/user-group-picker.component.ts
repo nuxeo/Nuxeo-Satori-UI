@@ -160,7 +160,7 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
       value: principal,
       key: principal.prefixedId,
       label: principal.label,
-      icon: principal.kind === 'group' ? 'group' : 'person',
+      icon: principal.kind === 'group' ? 'user_group' : 'user',
       detailKey: `satori-components.user-group-picker.${principal.kind}`,
       detail: principal.email ? ' · ' + principal.email : '',
     })),

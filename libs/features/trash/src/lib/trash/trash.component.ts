@@ -1,4 +1,13 @@
-import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  DestroyRef,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -15,6 +24,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { of, finalize, filter, switchMap, map } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ConfirmDialogComponent,
@@ -92,9 +102,11 @@ const SORTABLE_COLUMNS = new Set(['title', 'modified', 'contributor', 'created',
     MatSnackBarModule,
     MatMenuModule,
     MatDialogModule,
+    SatHeaderBar,
     SatTagModule,
   ],
   templateUrl: './trash.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './trash.component.scss',
 })
 export class TrashComponent {

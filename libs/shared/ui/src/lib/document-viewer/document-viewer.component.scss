@@ -369,6 +369,7 @@
 // NXENG-799 / NXENG-816 / NXENG-817 / NXSAT-524 — image toolbar icon buttons (Zoom out, Zoom in,
 // Toggle fit, …); IBM 922184956, 2140832667. `style_focus_visible` reads `:focus` only — keep
 // this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .viewer-toolbar button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;
@@ -429,6 +430,7 @@
 // NXSAT-496 / NXSAT-520 / IBM 1425495611, 1924385914 — footer Download (Preview tab) and
 // sibling icon buttons: `style_focus_visible` reads `:focus` only; keep this selector separate
 // from `:focus-visible` (comma lists are not resolved by the scanner).
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .viewer-footer-actions button.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;
@@ -541,6 +543,7 @@
 // NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / NXSAT-527 / IBM 1635062655, 2294099067
 // (Download Thumbnail, Download OriginalJpeg, …) — IBM `style_focus_visible` reads `:focus` only;
 // keep this selector separate from `:focus-visible` (comma lists are not resolved by the scanner).
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides -- a11y focus ring */
 .format-download-btn.mat-mdc-icon-button:focus {
   outline: 2px solid var(--document-viewer-focus-on-light-surface) !important;
   outline-offset: 2px;

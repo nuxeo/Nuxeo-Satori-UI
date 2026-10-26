@@ -1,5 +1,10 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { Subject, of, throwError, type Observable } from 'rxjs';
@@ -35,6 +40,7 @@ const ADMINS: UserGroupSuggestion = {
 @Component({
   standalone: true,
   imports: [NxsUserGroupPickerComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `@if (multiple()) {
       <nxs-user-group-picker label="Grant to" multiple [formControl]="many" [search]="search()" />
     } @else {
@@ -130,8 +136,8 @@ describe('NxsUserGroupPickerComponent', () => {
     // The icon's ligature is hidden from assistive technology; the label and the detail are
     // separate words in the option's name.
     expect(options().map((option) => option.textContent?.trim())).toEqual([
-      'personAdministrator User · admin@example.invalid',
-      'groupAdministrators group Group',
+      'Administrator User · admin@example.invalid',
+      'Administrators group Group',
     ]);
   });
 

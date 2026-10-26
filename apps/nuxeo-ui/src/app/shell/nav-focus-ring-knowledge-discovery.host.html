@@ -4,10 +4,12 @@
   reproducing the same inset-ring adjacency NXENG-761 fixed for other nav entries.
 -->
 <sat-platform-nav>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.knowledgeDiscovery">{{
-    'shell.test.knowledge-discovery-nav-item' | translate
-  }}</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item [active]="true" data-nav-id="app.navbar.dashboard">{{
-    'shell.test.dashboard-nav-item' | translate
-  }}</sat-platform-nav-list-item>
+  <sat-platform-nav-menu>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.knowledgeDiscovery">{{
+      'shell.test.knowledge-discovery-nav-item' | translate
+    }}</a>
+    <a sat-platform-nav-menu-item [active]="true" data-nav-id="app.navbar.dashboard">{{
+      'shell.test.dashboard-nav-item' | translate
+    }}</a>
+  </sat-platform-nav-menu>
 </sat-platform-nav>

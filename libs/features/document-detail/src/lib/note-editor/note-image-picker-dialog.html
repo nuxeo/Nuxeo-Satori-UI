@@ -6,7 +6,7 @@
     mat-dialog-close
     [attr.aria-label]="'document-detail.note-image-picker-dialog.close' | translate"
   >
-    <mat-icon>close</mat-icon>
+    <mat-icon svgIcon="x_large" />
   </button>
 
   <mat-dialog-content>
@@ -68,7 +68,7 @@
         <span class="note-image-picker__results-count">{{ resultsLabel() }}</span>
       </div>
 
-      <mat-icon class="note-image-picker__view-icon" aria-hidden="true">grid_view</mat-icon>
+      <mat-icon class="note-image-picker__view-icon" aria-hidden="true" svgIcon="grid_view" />
     </div>
 
     @if (loading()) {
@@ -103,12 +103,12 @@
             <div class="note-image-picker__thumb">
               @if (isSelected(doc.uid)) {
                 <span class="note-image-picker__check" aria-hidden="true">
-                  <mat-icon>check_circle</mat-icon>
+                  <mat-icon svgIcon="circle_check" />
                 </span>
               }
 
               <nxs-thumbnail class="note-image-picker__image" [documentId]="doc.uid">
-                <mat-icon class="note-image-picker__placeholder">image</mat-icon>
+                <mat-icon class="note-image-picker__placeholder" svgIcon="image" />
               </nxs-thumbnail>
             </div>
 

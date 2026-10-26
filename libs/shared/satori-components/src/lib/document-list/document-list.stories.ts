@@ -194,8 +194,8 @@ export const WithRowActions: Story = {
   args: {
     rowActions: {
       archive: [
-        { id: 'acme.collection.edit', label: 'Edit', icon: 'edit' },
-        { id: 'acme.collection.delete', label: 'Delete', icon: 'delete' },
+        { id: 'acme.collection.edit', label: 'Edit', icon: 'pencil' },
+        { id: 'acme.collection.delete', label: 'Delete', icon: 'trash' },
       ],
     },
   },

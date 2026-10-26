@@ -532,7 +532,13 @@ function falseClaim(file) {
       );
     }
   }
-  for (const m of text.matchAll(/(?:^|[\s`(])(scripts\/[A-Za-z0-9/._-]+\.(?:mjs|sh|js))/g)) {
+  // The extension has to be the end of the path, not a prefix of it: without the boundary,
+  // `…/proxy.parity.json` matched as far as `.js` and was then reported as a file that does not
+  // exist, naming a path nobody had written. Anchored on a non-path character so a longer
+  // extension is left to the next iteration rather than truncated into a false claim.
+  for (const m of text.matchAll(
+    /(?:^|[\s`(])(scripts\/[A-Za-z0-9/._-]+\.(?:mjs|sh|js))(?![A-Za-z0-9])/g,
+  )) {
     if (!existsSync(resolve(repoRoot, m[1]))) {
       report(
         file,

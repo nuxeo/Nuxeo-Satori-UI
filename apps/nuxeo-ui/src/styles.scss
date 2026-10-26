@@ -2,12 +2,18 @@
 @use '@hylandsoftware/satori-ui/theme' as sat;
 @use './app/document-detail/document-detail-header-toolbar-focus';
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html[data-app-theme='nuxeo'],
 html:not([data-app-theme]) {
   color-scheme: light dark;
   @include sat.theme;
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
+  );
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html[data-app-theme='dark'] {
   color-scheme: dark;
   @include sat.theme(
@@ -19,8 +25,13 @@ html[data-app-theme='dark'] {
       ),
     )
   );
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
+  );
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html[data-app-theme='kawaii'] {
   color-scheme: light;
   @include sat.theme(
@@ -32,8 +43,13 @@ html[data-app-theme='kawaii'] {
       ),
     )
   );
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
+  );
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html[data-app-theme='light'] {
   color-scheme: light;
   @include sat.theme(
@@ -44,6 +60,10 @@ html[data-app-theme='light'] {
         tertiary: mat.$blue-palette,
       ),
     )
+  );
+  --sat-platform-nav-outline: var(
+    --agentic-nav-focus-outline-color,
+    var(--sat-platform-nav-on-background, var(--mat-sys-on-primary, #fff))
   );
 }
 
@@ -96,6 +116,7 @@ app-root {
  * sidebar title is still an `h2.sat-platform-nav-title` — restore its intended type scale so it
  * wins over `html[data-app-theme] .mat-typography h2` from the generated theme.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html[data-app-theme] body.mat-typography sat-platform-nav h2.sat-platform-nav-title {
   font-family: var(--sat-platform-nav-title-font);
   font-size: var(--sat-platform-nav-title-medium-size, 1rem);
@@ -107,6 +128,7 @@ html[data-app-theme] body.mat-typography sat-platform-nav h2.sat-platform-nav-ti
 }
 
 /* Same conflict before `data-app-theme` is applied (e.g. first paint). */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html:not([data-app-theme]) body.mat-typography sat-platform-nav h2.sat-platform-nav-title {
   font-family: var(--sat-platform-nav-title-font);
   font-size: var(--sat-platform-nav-title-medium-size, 1rem);
@@ -156,13 +178,12 @@ html:not([data-app-theme]) body.mat-typography sat-platform-nav h2.sat-platform-
  * `--agentic-nav-focus-outline-color` is an app-level escape hatch for a customer who wants a
  * distinct ring without also repainting the nav label and icon.
  *
- * It is declared on `html`, not on `sat-platform-nav`, so that Layer 0 keeps control of it.
- * `AppThemeService.applyTheme` writes a theme's `tokens` as **inline** custom properties on
- * `<html>` — that is how a customer rebrands from JSON — and an inline value only outranks
- * this rule while both are on the same element. Declared on the nav instead, it would apply
- * directly to the element the vendor rule reads it from and beat the inherited root value, so
- * a customer who set `--sat-platform-nav-outline` in their theme would silently stop
- * controlling the ring. Asserted in `platform-nav-focus-ring.spec.ts`.
+ * Satori 1.0 sets `--sat-platform-nav-outline` inside its `color()` mixin, so the primary
+ * declaration now lives in each theme block above (after `sat.theme`) at matching specificity.
+ * This `html` rule is the low-specificity fallback for inline token overrides from Layer 0:
+ * `AppThemeService.applyTheme` writes a theme's `tokens` as inline custom properties on
+ * `<html>`, and an inline value outranks a stylesheet rule on the same element.
+ * Asserted in `platform-nav-focus-ring.spec.ts`.
  *
  * The token also feeds the nav list's scrollbar thumb — the only other thing Satori reads it
  * for — which the rule below suppresses: measured as no rendered scrollbar in Chromium,
@@ -173,6 +194,7 @@ html:not([data-app-theme]) body.mat-typography sat-platform-nav h2.sat-platform-
  * `app/shell/nav-focus-ring-contrast.spec.ts` measure the real computed ratio instead of
  * re-deriving colours it would have had to hardcode.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html {
   --sat-platform-nav-outline: var(
     --agentic-nav-focus-outline-color,
@@ -196,6 +218,7 @@ html {
  * does land after change detection.
  */
 /* Standalone — IBM Equal Access reads `:focus` only, not comma-grouped selector lists. */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html body a.sat-skip-to-content-button:focus {
   position: fixed;
   top: 24px;
@@ -204,6 +227,7 @@ html body a.sat-skip-to-content-button:focus {
   opacity: 1;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html body a.sat-skip-to-content-button:focus-visible,
 html body a.sat-skip-to-content-button.sat-skip-to-content-button-visible {
   position: fixed;
@@ -233,6 +257,7 @@ html body a.sat-skip-to-content-button.sat-skip-to-content-button-visible {
  * `sat-platform-nav .sat-platform-nav-item:focus, …:focus-visible` reports the control as
  * unindicated again.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 sat-platform-nav .sat-platform-nav-item:focus {
   outline: 2px solid var(--sat-platform-nav-outline, var(--mat-sys-outline-variant, #c8c6d0));
   outline-offset: -2px;
@@ -252,6 +277,7 @@ sat-platform-nav #sat-platform-nav-title-icon:focus {
   outline-offset: -2px;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 sat-platform-nav #sat-platform-nav-title-icon svg.sat-platform-nav-title-icon {
   width: 24px;
   height: 24px;
@@ -280,6 +306,7 @@ sat-platform-nav #sat-platform-nav-user-profile:focus {
  * (`html body` + `nav` element) and give the flex child `min-height: 0` so the list scrolls
  * inside the fixed panel above the user profile block.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html body sat-platform-nav nav.sat-platform-nav-list {
   flex: 1 1 auto;
   min-height: 0;
@@ -294,6 +321,7 @@ html body sat-platform-nav nav.sat-platform-nav-list {
   }
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html body sat-platform-nav nav.sat-platform-nav-list:hover,
 html body sat-platform-nav nav.sat-platform-nav-list:focus-within {
   overflow-y: auto;
@@ -301,11 +329,13 @@ html body sat-platform-nav nav.sat-platform-nav-list:focus-within {
 }
 
 /* Long page titles must not squeeze the trailing logo + actions (avoids clipped "HYLAND" / settings). */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 sat-app-header .sat-app-header-leading-container {
   min-width: 0;
   flex: 1 1 auto;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 sat-app-header .sat-app-header-title,
 sat-app-header h1.sat-app-header-title,
 sat-app-header h2.sat-app-header-title {
@@ -316,6 +346,7 @@ sat-app-header h2.sat-app-header-title {
   white-space: nowrap;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 sat-app-header .sat-app-header-trailing-container,
 sat-app-header .sat-app-header-actions,
 sat-app-header sat-word-mark-logo.sat-app-header-logo,
@@ -334,6 +365,7 @@ sat-app-header img.app-brand-logo {
 
 /* Material typography adds `margin: 0 0 .75em` to all <p> tags via `.mat-typography p`.
    This pushes the nav-rail label text down, misaligning it with the icon. Reset it. */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 sat-platform-nav p.sat-platform-nav-item-label {
   margin: 0 !important;
 }
@@ -343,11 +375,13 @@ sat-platform-nav p.sat-platform-nav-item-label {
  * (often blue). Map accent FABs to semantic primary so they match Satori / nav purple.
  * App also sets MAT_FAB_DEFAULT_OPTIONS to primary; this covers explicit color="accent".
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mat-mdc-fab.mat-accent {
   --mdc-fab-container-color: var(--mat-sys-primary);
   --mat-fab-foreground-color: var(--mat-sys-on-primary);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mat-mdc-mini-fab.mat-accent {
   --mdc-fab-small-container-color: var(--mat-sys-primary);
   --mat-fab-small-foreground-color: var(--mat-sys-on-primary);
@@ -358,9 +392,11 @@ sat-platform-nav p.sat-platform-nav-item-label {
  * .mat-mdc-text-field-wrapper (often with border-radius) which crops "Choose a …" style labels
  * in dialogs, filters, and anywhere the wrapper is rounded — fix once app-wide.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mat-mdc-form-field-appearance-outline {
   overflow: visible;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-text-field-wrapper {
     overflow: visible;
   }
@@ -429,6 +465,7 @@ sat-platform-nav p.sat-platform-nav-item-label {
  * Only the variants this application actually renders are remapped; any other
  * category or status keeps Satori's semantic colour.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .sat-tag.sat-tag {
   --sat-tag-cat-blue-container: var(
     --agentic-pill-background,
@@ -473,12 +510,14 @@ sat-status-tag {
   vertical-align: middle;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .sat-tag.sat-tag .sat-tag-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .sat-tag.sat-tag .sat-tag-label {
   display: inline-flex;
   align-items: center;
@@ -505,6 +544,7 @@ sat-status-tag {
  * without `!important`; a customer stylesheet can still beat it, which an
  * `!important` declaration did not allow.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mat-mdc-dialog-container {
   --mat-dialog-subhead-size: var(--agentic-dialog-title-font-size, 1.375rem);
   --mat-dialog-subhead-line-height: var(--agentic-dialog-title-line-height, 1.75rem);
@@ -512,6 +552,7 @@ sat-status-tag {
   --mat-dialog-subhead-tracking: 0;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 html .mat-mdc-dialog-container .mat-mdc-dialog-title.mat-mdc-dialog-title {
   font-size: var(--agentic-dialog-title-font-size, 1.375rem);
   line-height: var(--agentic-dialog-title-line-height, 1.75rem);
@@ -525,12 +566,14 @@ html .mat-mdc-dialog-container .mat-mdc-dialog-title.mat-mdc-dialog-title {
  * dialogs never overflow narrow viewports. Large dialogs (preview, share-saved-search)
  * declare their own width/min-width so they still fill the appropriate area.
  */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .cdk-overlay-pane.mat-mdc-dialog-panel {
   width: auto;
   max-width: 95vw;
 }
 
 /* Long tooltips: allow wrapping instead of clipping on a single line. */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mat-mdc-tooltip.mat-tooltip-multiline .mdc-tooltip__surface {
   max-width: min(20rem, calc(100vw - 1.5rem));
   white-space: pre-line;
@@ -540,6 +583,7 @@ html .mat-mdc-dialog-container .mat-mdc-dialog-title.mat-mdc-dialog-title {
 }
 
 /* Selection topbar sits at z-index 1200 — keep its tooltips above the bar. */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mat-mdc-tooltip.selection-topbar-tooltip .mdc-tooltip__surface {
   max-width: min(18rem, calc(100vw - 2rem));
   white-space: normal;
@@ -553,14 +597,17 @@ html .mat-mdc-dialog-container .mat-mdc-dialog-title.mat-mdc-dialog-title {
   box-shadow: var(--mat-sys-level3, 0 4px 14px #00000047);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .cdk-overlay-pane.document-compare-dialog-panel {
   max-width: 96vw !important;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .document-compare-dialog-panel .mat-mdc-dialog-surface {
   max-width: 96vw;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .cdk-overlay-container .mat-mdc-tooltip-panel:has(.selection-topbar-tooltip) {
   z-index: 1300;
 }
