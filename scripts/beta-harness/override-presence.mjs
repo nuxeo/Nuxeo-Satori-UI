@@ -90,9 +90,10 @@ function indexLock(packages) {
     );
     const at = path.lastIndexOf('node_modules/');
     // An npm alias (`"foo": "npm:bar@1"`) sits at `node_modules/foo` with `name: "bar"`. npm
-    // matches override keys against dependency-edge names, and its dependents' edges say `foo`, so
-    // it is indexed under its installation name only; indexing `bar` would accept an override that
-    // affects nothing. Its own edges are kept, so the walk still passes through it.
+    // matches an override against the dependency edge's name (`getEdgeRule` in arborist's
+    // override-set.js compares `rule.name !== edge.name`), and that is `foo`. So an alias is
+    // indexed under its install name only: indexing `bar` too would let an override keyed on the
+    // real name pass while it applies to nothing.
     const name = at >= 0 ? path.slice(at + 'node_modules/'.length) : entry.name;
     if (!name) continue;
     index.set(name, [...(index.get(name) ?? []), { version: entry.version, edges }]);
@@ -116,8 +117,13 @@ export function staleOverrides(overrides, packages, semver = null) {
   const copiesOf = (name) => index.get(name) ?? [];
 
   const requestMatches = (spec, range) => {
-    if (!range || !semver || !semver.validRange(range) || !semver.validRange(spec)) return true;
-    return semver.intersects(spec, range, { includePrerelease: true });
+    // An alias request is compared by the range it carries, as npm does with `subSpec`.
+    const request =
+      typeof spec === 'string' && spec.startsWith('npm:')
+        ? spec.slice(spec.lastIndexOf('@') + 1)
+        : spec;
+    if (!range || !semver || !semver.validRange(range) || !semver.validRange(request)) return true;
+    return semver.intersects(request, range, { includePrerelease: true });
   };
 
   const hasApplicableRequest = (name, range) => {
@@ -232,8 +238,16 @@ const CONTROLS = [
   ['nested, transitive child', { a: { c: '1.4.1' } }, []],
   ['nested, reached through a peer', { '@s/p': { c: '1.4.1' } }, []],
   ['nested, "." pinning the parent itself', { a: { '.': '1.0.1' } }, []],
-  ['npm alias, by its real name', { real: '1.0.1' }, ['real']],
+  ['npm alias, by its install name', { al: '1.0.1' }, []],
+  ['npm alias, selector matched by the range the alias carries', { 'al@^1.0.0': '1.0.1' }, []],
   ['nested, reached through an npm alias', { y: { c: '1.4.1' } }, []],
+  ['npm alias, by its real name, which no edge is called', { real: '1.0.1' }, ['real']],
+  [
+    'npm alias, selector outside the range the alias carries',
+    { 'al@^9.0.0': '9.0.1' },
+    ['al@^9.0.0'],
+    true,
+  ],
   ['absent package', { zzz: '1.0.0' }, ['zzz']],
   ['absent scoped package', { '@s/q': '1.0.0' }, ['@s/q']],
   ['selector has no matching dependency request', { 'd@^9.0.0': '9.0.1' }, ['d@^9.0.0'], true],
