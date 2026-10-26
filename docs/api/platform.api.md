@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-130 exported symbol(s).
+127 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -200,7 +200,6 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly avatar: "nxs.primitives.avatar";
     readonly breadcrumbs: "nxs.primitives.breadcrumbs";
     readonly tag: "nxs.primitives.tag";
-    readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
     }>;
@@ -2003,37 +2002,6 @@ class NxsSpinnerComponent {
     }, {}, never, never, true, never>;
     }
 }
-class NxsStatusTagComponent implements NxsStatusTagInputs {
-    readonly label: import("@angular/core").InputSignal<string>;
-    readonly status: import("@angular/core").InputSignal<NxsTagStatus>;
-    readonly hideIcon: import("@angular/core").InputSignal<boolean>;
-    protected readonly icon: import("@angular/core").Signal<string | null>;
-    static ɵfac: i0.ɵɵFactoryDeclaration<NxsStatusTagComponent, never>;
-    static ɵcmp: i0.ɵɵComponentDeclaration<NxsStatusTagComponent, "nxs-status-tag", never, {
-    "label": {
-    "alias": "label";
-    "required": true;
-    "isSignal": true;
-    };
-    "status": {
-    "alias": "status";
-    "required": false;
-    "isSignal": true;
-    };
-    "hideIcon": {
-    "alias": "hideIcon";
-    "required": false;
-    "isSignal": true;
-    };
-    }, {}, never, never, true, never>;
-    }
-}
-interface NxsStatusTagInputs {
-    readonly label: InputSignal<string>;
-    readonly status: InputSignal<NxsTagStatus>;
-    readonly hideIcon: InputSignal<boolean>;
-    }
-}
 interface NxsTab {
     readonly id: string;
     readonly label: string;
@@ -2214,7 +2182,6 @@ interface NxsTagInputs {
     readonly color: InputSignal<NxsTagColor>;
     }
 }
-type NxsTagStatus = 'important' | 'important-loud' | 'info' | 'neutral' | 'neutral-quiet' | 'success' | 'warning';
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;

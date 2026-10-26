@@ -1,7 +1,6 @@
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { expect } from 'storybook/test';
-
 import { provideStoryRouter } from '../../.storybook/story-router';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
@@ -49,7 +48,7 @@ export const MaterialRegistration: StoryObj = {
       },
       errorState: {
         status: 500,
-        heading: 'Server error',
+        heading: 'Failed to load folder contents.',
         retryable: true,
       },
     },
