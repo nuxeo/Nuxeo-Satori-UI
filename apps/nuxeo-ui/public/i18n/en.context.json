@@ -2482,5 +2482,6 @@
   "satori-components.search-filters.chosen-authors": "Accessible name of the set of chips below the Authors box of the search filters: the authors the user has chosen to filter on, each removable.",
   "satori-components.search-filters.chosen-collections": "Accessible name of the set of chips below the Collections box of the search filters: the collections the user has chosen to filter on, each removable.",
   "satori-components.search-filters.chosen-tags": "Accessible name of the set of chips below the Tags box of the search filters: the tags the user has chosen to filter on, each removable.",
-  "shared-ui.saved-search-dialog.no-slash": "Error under the name box of the dialog that names a saved search, shown when the name contains a slash, which the server refuses; Save stays disabled until it is removed. Keep the slash character '/' as it is."
+  "shared-ui.saved-search-dialog.no-slash": "Error under the name box of the dialog that names a saved search, shown when the name contains a slash, which the server refuses; Save stays disabled until it is removed. Keep the slash character '/' as it is.",
+  "kd.content-lake-upload.ingesting-into-content-lake": "Progress text in the Upload to Content Lake dialog while the uploaded files are being indexed. Content Lake is Hyland's store of content indexed for AI search (product name, do not translate)."
 }
