@@ -15,6 +15,7 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
   NxsBreadcrumbsComponent,
+  NxsCardComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
   NxsStatusTagComponent,
@@ -58,6 +59,13 @@ describe('provideNxsSatoriComponents', () => {
   it('re-registers the error state on Satori (Satori 1.0 ships sat-{401..500}-error-state)', () => {
     const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
     expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsSatoriErrorStateComponent);
+  });
+
+  // No Satori card is wrapped yet, so `PAIRS` has no card and the ID keeps the Material one. Its
+  // Satori variant replaces this test with a `PAIRS` entry.
+  it('leaves the card on Material, which no Satori component re-registers yet', () => {
+    const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
+    expect(components.peek(NXS_PRIMITIVE_IDS.card)).toBe(NxsCardComponent);
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {

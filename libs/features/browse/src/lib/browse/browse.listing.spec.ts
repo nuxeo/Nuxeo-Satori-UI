@@ -4,7 +4,9 @@ import {
   provideZonelessChangeDetection,
   signal,
   ChangeDetectionStrategy,
+  type TemplateRef,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
@@ -17,7 +19,11 @@ import { vi } from 'vitest';
 
 import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
-import { provideNxsComponents } from '@nuxeo/satori-platform/components';
+import {
+  NXS_PRIMITIVE_IDS,
+  provideNxsComponents,
+  type NxsCardInputs,
+} from '@nuxeo/satori-platform/components';
 import {
   BrowseService,
   ClipboardTargetService,
@@ -125,6 +131,33 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 class CustomPermissionsComponent {
   readonly documentId = input('');
   readonly permissionsChanged = input<(() => void) | null>(null);
+}
+
+/** A card registered under the packaged card's ID, which shows what browse passed it. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-probe-card',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  imports: [NgTemplateOutlet],
+  template: `
+    <p class="probe-heading">{{ heading() }}</p>
+    <p class="probe-subheading">{{ subheading() }}</p>
+    <p class="probe-selected">{{ selected() }}</p>
+    <p class="probe-selection-label">{{ selectionLabel() }}</p>
+    <div class="probe-media"><ng-container [ngTemplateOutlet]="media()" /></div>
+    <div class="probe-header-action"><ng-container [ngTemplateOutlet]="headerAction()" /></div>
+  `,
+})
+class ProbeCardComponent implements NxsCardInputs {
+  readonly heading = input('');
+  readonly subheading = input('');
+  readonly selected = input(false, { transform: (value: unknown) => value === true });
+  readonly selectionLabel = input('');
+  readonly selectionHandler = input<((selected: boolean) => void) | null>(null);
+  readonly openHandler = input<(() => void) | null>(null);
+  readonly media = input<TemplateRef<unknown> | null>(null);
+  readonly headerAction = input<TemplateRef<unknown> | null>(null);
+  readonly actions = input<TemplateRef<unknown> | null>(null);
 }
 
 describe('BrowseComponent — rendered document list', () => {
@@ -961,5 +994,114 @@ describe('BrowseComponent — rendered document list', () => {
     const reads = detail.getDocumentPermissions.mock.calls.length;
     custom.permissionsChanged()?.();
     expect(detail.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+  });
+  /**
+   * The card view renders each document's card by `nxs.primitives.card`, so whatever is registered
+   * under it — the library's card, a customer's, Satori's later — is what the user sees.
+   */
+  describe('card view', () => {
+    const entries = [
+      doc({ uid: 'file-1', title: 'Readme.md', type: 'File' }),
+      doc({
+        uid: 'sub-1',
+        title: 'Sub',
+        type: 'Folder',
+        path: '/default-domain/workspaces/ws-1/sub',
+        facets: ['Folderish'],
+      }),
+      doc({
+        uid: 'coll-1',
+        title: 'Q3 claims',
+        type: 'Collection',
+        facets: ['Collection'],
+        contextParameters: { permissions: ['Read', 'Write', 'Remove'] },
+      }),
+    ];
+
+    async function renderCards(extraProviders: unknown[] = []): Promise<void> {
+      browse.getBrowseFolderContents.mockReturnValue(of({ folder, entries, totalSize: 3 }));
+      await render(extraProviders);
+      (query('button[aria-label="Card view"]') as HTMLButtonElement).click();
+      await settleOutlets();
+    }
+
+    it('renders every card by its registered ID, with what browse passes it', async () => {
+      await renderCards([
+        provideNxsComponents(),
+        provideSatoriExtensions({ components: { [NXS_PRIMITIVE_IDS.card]: ProbeCardComponent } }),
+      ]);
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
+
+      const probes = fixture.nativeElement.querySelectorAll(
+        '.card-grid lib-extension-outlet lib-test-probe-card',
+      ) as NodeListOf<HTMLElement>;
+      expect(probes).toHaveLength(3);
+      expect(query('nxs-card')).toBeNull();
+      const text = (selector: string) =>
+        [...probes].map((probe) => probe.querySelector(selector)?.textContent?.trim());
+      expect(text('.probe-heading')).toEqual(['Readme.md', 'Sub', 'Q3 claims']);
+      expect(text('.probe-subheading')).toEqual(['File', 'Folder', 'Collection']);
+      expect(text('.probe-selection-label')).toEqual([
+        'Select Readme.md',
+        'Select Sub',
+        'Select Q3 claims',
+      ]);
+      expect(text('.probe-selected')).toEqual(['false', 'false', 'false']);
+      // The templates render where browse declared them, so they read browse's own document.
+      expect(probes[0].querySelector('.probe-media nxs-thumbnail mat-icon')).not.toBeNull();
+      expect(probes[0].querySelector('.probe-header-action button')).toBeNull();
+      expect(
+        probes[2]
+          .querySelector('.probe-header-action button[mat-icon-button]')
+          ?.getAttribute('aria-label'),
+      ).toBe('Collection actions');
+
+      const [file, sub] = fixture.debugElement
+        .queryAll(By.directive(ProbeCardComponent))
+        .map((probe) => probe.componentInstance as ProbeCardComponent);
+      file.openHandler()?.();
+      expect(navigate).toHaveBeenCalledWith('/doc/file-1');
+      sub.openHandler()?.();
+      expect(navigate).toHaveBeenCalledWith('/browse/default-domain/workspaces/ws-1/sub');
+
+      file.selectionHandler()?.(true);
+      await settle();
+      expect(TestBed.inject(SelectionService).selectedIds()).toEqual(new Set(['file-1']));
+      expect(text('.probe-selected')).toEqual(['true', 'false', 'false']);
+    });
+
+    it('renders the library card through the outlet, with no fallback beside it', async () => {
+      await renderCards([provideNxsComponents()]);
+
+      const cards = fixture.nativeElement.querySelectorAll(
+        '.card-grid nxs-card',
+      ) as NodeListOf<HTMLElement>;
+      expect(cards).toHaveLength(3);
+      expect(
+        fixture.nativeElement.querySelectorAll('.card-grid lib-extension-outlet nxs-card'),
+      ).toHaveLength(3);
+      expect(cards[0].querySelector('button.nxs-card__open')?.textContent?.trim()).toBe(
+        'Readme.md',
+      );
+      expect(cards[0].querySelector('.nxs-card__media nxs-thumbnail')).not.toBeNull();
+      expect(cards[2].querySelector('.nxs-card__header-action button')).not.toBeNull();
+    });
+
+    it('falls back to the built-in card when nothing is registered under the ID', async () => {
+      await renderCards();
+      const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
+
+      const cards = fixture.nativeElement.querySelectorAll(
+        '.card-grid nxs-card',
+      ) as NodeListOf<HTMLElement>;
+      expect(cards).toHaveLength(3);
+      expect(query('.card-grid lib-extension-outlet nxs-card')).toBeNull();
+      cards[0].querySelector<HTMLElement>('button.nxs-card__open')?.click();
+      expect(navigate).toHaveBeenCalledWith('/doc/file-1');
+      cards[0].querySelector<HTMLInputElement>('.nxs-card__select input')?.click();
+      await settle();
+      expect(TestBed.inject(SelectionService).selectedIds()).toEqual(new Set(['file-1']));
+      expect(cards[0].classList).toContain('nxs-card--selected');
+    });
   });
 });

@@ -188,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-130 exported symbol(s).
+132 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -202,6 +202,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
+    readonly card: "nxs.primitives.card";
     }>;
 }
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
@@ -309,6 +310,84 @@ class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
 interface NxsBreadcrumbsInputs {
     readonly items: InputSignal<readonly NxsBreadcrumbItem[]>;
     readonly label: InputSignal<string>;
+    }
+}
+class NxsCardComponent implements NxsCardInputs {
+    readonly heading: import("@angular/core").InputSignal<string>;
+    readonly subheading: import("@angular/core").InputSignal<string>;
+    readonly selected: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly selectionLabel: import("@angular/core").InputSignal<string>;
+    readonly selectionHandler: import("@angular/core").InputSignal<((selected: boolean) => void) | null>;
+    readonly openHandler: import("@angular/core").InputSignal<(() => void) | null>;
+    readonly media: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    readonly headerAction: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    readonly actions: import("@angular/core").InputSignal<TemplateRef<unknown> | null>;
+    protected readonly interactive: import("@angular/core").Signal<boolean>;
+    protected readonly label: import("@angular/core").Signal<string>;
+    protected readonly selectable: import("@angular/core").Signal<boolean>;
+    protected readonly ownSubheading: import("@angular/core").Signal<string>;
+    protected toggle(selected: boolean): void;
+    protected open(): void;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCardComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsCardComponent, "nxs-card", never, {
+    "heading": {
+    "alias": "heading";
+    "required": false;
+    "isSignal": true;
+    };
+    "subheading": {
+    "alias": "subheading";
+    "required": false;
+    "isSignal": true;
+    };
+    "selected": {
+    "alias": "selected";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionLabel": {
+    "alias": "selectionLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectionHandler": {
+    "alias": "selectionHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "openHandler": {
+    "alias": "openHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    "media": {
+    "alias": "media";
+    "required": false;
+    "isSignal": true;
+    };
+    "headerAction": {
+    "alias": "headerAction";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsCardInputs {
+    readonly heading: InputSignal<string>;
+    readonly subheading: InputSignal<string>;
+    readonly selected: InputSignalWithTransform<boolean, unknown>;
+    readonly selectionLabel: InputSignal<string>;
+    readonly selectionHandler: InputSignal<((selected: boolean) => void) | null>;
+    readonly openHandler: InputSignal<(() => void) | null>;
+    readonly media: InputSignal<TemplateRef<unknown> | null>;
+    readonly headerAction: InputSignal<TemplateRef<unknown> | null>;
+    readonly actions: InputSignal<TemplateRef<unknown> | null>;
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {

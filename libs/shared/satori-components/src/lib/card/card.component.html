@@ -1,0 +1,42 @@
+<mat-card class="nxs-card__surface" [appearance]="interactive() ? 'outlined' : 'filled'">
+  @if (selectable()) {
+    <mat-checkbox
+      class="nxs-card__select"
+      [checked]="selected()"
+      [aria-label]="label()"
+      (change)="toggle($event.checked)"
+    />
+  }
+  @if (media(); as mediaTemplate) {
+    <div class="nxs-card__media">
+      <ng-container [ngTemplateOutlet]="mediaTemplate" />
+    </div>
+  }
+  <div class="nxs-card__body">
+    @if (openHandler()) {
+      <button
+        type="button"
+        class="nxs-card__heading nxs-card__open"
+        [title]="heading()"
+        (click)="open()"
+      >
+        {{ heading() }}
+      </button>
+    } @else {
+      <span class="nxs-card__heading" [title]="heading()">{{ heading() }}</span>
+    }
+    @if (ownSubheading(); as text) {
+      <span class="nxs-card__subheading" [title]="text">{{ text }}</span>
+    }
+  </div>
+  @if (headerAction(); as headerActionTemplate) {
+    <div class="nxs-card__header-action">
+      <ng-container [ngTemplateOutlet]="headerActionTemplate" />
+    </div>
+  }
+  @if (actions(); as actionsTemplate) {
+    <div class="nxs-card__actions">
+      <ng-container [ngTemplateOutlet]="actionsTemplate" />
+    </div>
+  }
+</mat-card>

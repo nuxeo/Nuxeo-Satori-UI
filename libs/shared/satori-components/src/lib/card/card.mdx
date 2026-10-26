@@ -1,0 +1,153 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as CardStories from './card.stories';
+
+<Meta of={CardStories} name="Overview" />
+
+# Card
+
+The card is one item in a grid of cards, such as a document in the card view of a folder or of
+search results: its thumbnail, its title and type, a checkbox to select it, and the actions the
+page offers on it. Use it for a grid a user scans by eye. For a list a user sorts and compares,
+use the document list.
+
+## Key features
+
+- **Opens from anywhere on it.** With an `openHandler`, the title is a button whose area covers
+  the whole card, so a click on the thumbnail opens the item too.
+- **Controls of their own.** The checkbox, the corner action and the actions at the foot sit above
+  that area as separate controls, never inside the button.
+- **Selectable when named.** A `selectionLabel` adds the checkbox, named by it; `selectionHandler`
+  hears its new state. Without a label the card is not selectable.
+- **Your thumbnail and actions.** The page passes templates for the media, the corner action and
+  the actions, and they render with the page's own data and handlers.
+- **Fills its cell.** Every card in a grid row is as tall as the tallest.
+- **Outlined only when it opens.** It is a Material card, outlined when it has an `openHandler`
+  and filled when it opens nothing, because an outline says a surface can be pressed. Hover and
+  selection take the theme's primary colours.
+- **Replaceable by ID.** It is registered as `nxs.primitives.card`, so your own card can take its
+  place on every screen that renders the ID.
+
+## Demo showcase
+
+A file in a folder's card view. Press the title or the icon: the Actions panel records
+`openHandler`. Tick the checkbox: it records `selectionHandler` with `true`.
+
+<Canvas of={CardStories.Document} />
+
+## Usage
+
+export const usageTs = `import { NxsCardComponent, NxsThumbnailComponent } from '@nuxeo/satori-platform/components';
+
+readonly cards = computed(() =>
+  this.documents().map((doc) => ({
+    doc,
+    open: () => this.openDocument(doc),
+    select: () => this.selection.toggle(doc.uid),
+  })),
+);`;
+
+<Source
+  language="typescript"
+  dark
+  code={usageTs}
+/>
+
+export const usageHtml = `@for (card of cards(); track card.doc.uid) {
+  <ng-template #thumbnail>
+    <nxs-thumbnail class="acme-thumbnail" [documentId]="card.doc.uid">
+      <mat-icon svgIcon="file" />
+    </nxs-thumbnail>
+  </ng-template>
+  <nxs-card
+    [heading]="card.doc.title"
+    [subheading]="card.doc.type"
+    [selected]="selection.isSelected(card.doc.uid)"
+    [selectionLabel]="'acme.select-item' | translate: { name: card.doc.title }"
+    [selectionHandler]="card.select"
+    [openHandler]="card.open"
+    [media]="thumbnail"
+  />
+}`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+Every input is optional. `heading`, `subheading` and `selectionLabel` take text you have already
+translated. `selected` is a bare attribute. The handlers are functions, made once per item rather
+than in the template, so the card's inputs keep their identity between change detection runs.
+`media`, `headerAction` and `actions` are `TemplateRef`s, rendered where you declared them, so they
+read your component's own data. The card has no outputs. It needs no providers.
+
+Place it in a template by its selector, or render the ID `nxs.primitives.card`
+(`NXS_PRIMITIVE_IDS.card`) through `lib-extension-outlet` with the same inputs, as browse and search
+do. The outlet sets inputs and binds no outputs, which is why everything the card takes is an input.
+Give the outlet `display: contents` in a grid, so the card it renders is the grid item. A
+replacement you register under the ID implements `NxsCardInputs`. Satori's own card is not wrapped
+yet, so the ID renders this component with or without `provideNxsSatoriComponents()`.
+
+## Where its data comes from
+
+The card loads nothing. Your component passes the text, the selection state and the handlers. The
+thumbnail is whatever your media template renders: in the application, `nxs-thumbnail`, which
+fetches the document's rendition through the platform's signed-in client. Nuxeo decides what the
+user may open or select; the card only shows what your component passes.
+
+**In these stories** no request is made: the media is the document-type icon a thumbnail shows
+while it loads, and the text is the English an application would pass.
+
+## Examples
+
+### Selected
+
+The checkbox stays shown, and the card takes the theme's selection colours.
+
+<Canvas of={CardStories.Selected} />
+
+### With actions
+
+Favorite and Download at the foot, as search's card view passes them. They show on hover or focus.
+
+<Canvas of={CardStories.WithActions} />
+
+### With a corner action
+
+A collection's menu, as browse's card view passes it. It shows on hover or focus.
+
+<Canvas of={CardStories.WithHeaderAction} />
+
+### Not interactive
+
+No `openHandler` and no `selectionLabel`: the title is text, and there is no checkbox.
+
+<Canvas of={CardStories.NotInteractive} />
+
+### A long title
+
+Cut short with an ellipsis; hovering it shows the whole title.
+
+<Canvas of={CardStories.LongTitle} />
+
+### By registered ID
+
+Three cards rendered through `lib-extension-outlet` by the ID, in a grid, as browse and search
+render them.
+
+<Canvas of={CardStories.ByRegisteredId} />
+
+## Accessibility
+
+- **One control to open.** The title is a native button, named by the title. Its area covers the
+  card for pointer users; keyboard and screen reader users reach it as a button.
+- **No nested controls.** The checkbox and the actions are siblings of the button, not inside it, so
+  each is announced and operated on its own (WCAG 4.1.2).
+- **Checkbox.** A native checkbox inside Material's, named by `selectionLabel`. A label of only
+  spaces or invisible characters counts as none, and no checkbox renders.
+- **Shown on focus.** The checkbox and the actions are faded until the card is hovered, focused or
+  selected, never hidden, so they stay in the tab order; focusing one shows it.
+- **Focus ring.** The title draws a two-pixel ring in the theme's primary colour on focus.
+- **Keyboard.** **Tab** moves through the checkbox, the title, the corner action and the actions;
+  **Enter** or **Space** presses the one focused.

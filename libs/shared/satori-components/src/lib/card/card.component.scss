@@ -1,0 +1,138 @@
+// A flex column, so the card fills the cell a grid gives it — or, rendered by ID, the cell its
+// outlet's parent gives it — and every card in a row is as tall as the tallest.
+:host {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.nxs-card__surface {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  transition:
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
+}
+
+// On the surface's own class rather than through Material's `--mat-card-*` tokens, which are the
+// design system's internals.
+:host(.nxs-card--interactive:hover) .nxs-card__surface {
+  border-color: var(--mat-sys-primary);
+  box-shadow: var(--mat-sys-level1);
+}
+
+:host(.nxs-card--selected) .nxs-card__surface {
+  border-color: var(--mat-sys-primary);
+  background-color: var(--mat-sys-primary-container);
+}
+
+.nxs-card__media {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 120px;
+  overflow: hidden;
+  background: var(--mat-sys-surface-container);
+}
+
+.nxs-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 10px 12px;
+}
+
+.nxs-card__heading,
+.nxs-card__subheading {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nxs-card__heading {
+  font: var(--mat-sys-title-small);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-card__subheading {
+  font: var(--mat-sys-body-small);
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// The heading as the card's one control. Its `::after` stretches the hit area over the whole card —
+// the surface is Material's positioned `mat-card` — so a click on the media opens the item too.
+.nxs-card__open {
+  appearance: none;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: start;
+  cursor: pointer;
+
+  &::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+  }
+}
+
+// IBM Equal Access's style_focus_visible reads `:focus` only, so the ring is drawn on both.
+.nxs-card__open:focus {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+.nxs-card__open:focus-visible {
+  outline: 2px solid var(--mat-sys-primary);
+  outline-offset: 2px;
+}
+
+// The controls sit above the stretched hit area. They are faded rather than hidden until the card is
+// hovered, focused or selected, so they stay in the tab order and in the accessibility tree.
+.nxs-card__select,
+.nxs-card__header-action,
+.nxs-card__actions {
+  position: relative;
+  z-index: 1;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+:host(:hover),
+:host(:focus-within),
+:host(.nxs-card--selected) {
+  .nxs-card__select,
+  .nxs-card__header-action,
+  .nxs-card__actions {
+    opacity: 1;
+  }
+}
+
+.nxs-card__select {
+  position: absolute;
+  top: 4px;
+  inset-inline-start: 4px;
+}
+
+.nxs-card__header-action {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+  border-radius: 50%;
+  background: var(--mat-sys-surface-container-lowest);
+}
+
+.nxs-card__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: auto;
+  padding: 0 8px 8px;
+}

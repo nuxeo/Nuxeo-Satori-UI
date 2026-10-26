@@ -10,14 +10,14 @@ Four components here are also in Satori's own component library: the avatar, the
 tag and the rich tooltip. Each one is registered under an ID. A screen that renders the ID, rather
 than the component, shows whichever version the application registered: Satori's, when
 `@nuxeo/satori-platform/components-satori` is installed and provided, or the built-in version
-otherwise. A fifth, the error state, is registered the same way; Satori's own error states arrive with
-Satori 1.0, which needs a newer Angular than this package supports, so it renders the built-in
-version either way for now.
+otherwise. The status tag and the error state are registered the same way, with a Satori version
+each. The card is registered the same way too, but nothing wraps Satori's interactive card yet, so it
+renders the built-in version either way for now.
 
 ## Key features
 
-- **Five IDs, one set of inputs each.** Both versions of an ID take the same inputs, so a screen
-  passes the same values whichever is registered.
+- **One set of inputs per ID.** Every version of an ID takes the same inputs, so a screen passes
+  the same values whichever is registered.
 - **Satori when it is available.** The choice is made by the providers your application lists, not
   when the library is built and not by checking at run time.
 - **Works without Satori.** Without access to GitHub Packages, leave Satori out: every ID still
@@ -27,8 +27,8 @@ version either way for now.
 
 ## Demo showcase
 
-The four IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them.
-The error state's own page shows it by ID.
+The IDs with a Satori version, rendered through `lib-extension-outlet` as a screen renders them. The
+card, which has none yet, is shown by ID on its own page.
 
 <Canvas of={ByIdStories.MaterialRegistration} />
 
@@ -111,7 +111,23 @@ The error state's own page shows it by ID.
       <td>
         <code>NxsErrorStateInputs</code>
       </td>
-      <td>None yet: Satori 1.0's error states</td>
+      <td>
+        Error states (<code>sat-401-error-state</code> to <code>sat-500-error-state</code>)
+      </td>
+    </tr>
+    <tr>
+      <td>
+        <code>nxs.primitives.card</code>
+      </td>
+      <td>
+        <code>heading</code>, <code>subheading</code>, <code>selected</code>,
+        <code>selectionLabel</code>, <code>selectionHandler</code>, <code>openHandler</code>,
+        <code>media</code>, <code>headerAction</code>, <code>actions</code>
+      </td>
+      <td>
+        <code>NxsCardInputs</code>
+      </td>
+      <td>None yet: Satori's interactive card is not wrapped</td>
     </tr>
   </tbody>
 </table>
