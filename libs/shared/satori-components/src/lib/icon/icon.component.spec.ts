@@ -40,8 +40,8 @@ describe('NxsIconComponent', () => {
     await render();
   });
 
-  it('renders the ligature as a Material icon', () => {
-    expect(icon().textContent?.trim()).toBe('folder');
+  it('renders the icon as an SVG icon', () => {
+    expect(icon().getAttribute('data-mat-icon-name')).toBe('folder');
   });
 
   it('is decorative by default — hidden, with no role or name', () => {
@@ -85,8 +85,8 @@ describe('NxsIconComponent', () => {
   });
 
   it('follows a changed name', async () => {
-    host.name.set('description');
+    host.name.set('page');
     await render();
-    expect(icon().textContent?.trim()).toBe('description');
+    expect(icon().getAttribute('data-mat-icon-name')).toBe('page');
   });
 });

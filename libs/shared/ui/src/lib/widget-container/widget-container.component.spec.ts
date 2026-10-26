@@ -123,17 +123,17 @@ describe('WidgetContainerComponent', () => {
   });
 
   it('renders the icon and applies the icon colour when both are given', async () => {
-    host.icon.set('history');
+    host.icon.set('clock');
     host.iconColor.set('rgb(255, 0, 0)');
     await fixture.whenStable();
 
     const icon = query('.widget-header-icon');
-    expect(icon?.textContent?.trim()).toBe('history');
+    expect(icon?.getAttribute('data-mat-icon-name')).toBe('clock');
     expect(icon?.style.color).toBe('rgb(255, 0, 0)');
   });
 
   it('renders the icon with no colour override when iconColor is left at its default', async () => {
-    host.icon.set('history');
+    host.icon.set('clock');
     await fixture.whenStable();
 
     // `iconColor` defaults to '' so the Material theme colour wins; a hardcoded default here

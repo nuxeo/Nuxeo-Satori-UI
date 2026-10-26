@@ -5,7 +5,7 @@
   [attr.aria-label]="triggerLabel()"
   [satRichTooltipTriggerFor]="tooltip"
 >
-  <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
+  <mat-icon aria-hidden="true" [svgIcon]="icon()" />
 </button>
 <sat-rich-tooltip #tooltip="satRichTooltip">
   <sat-rich-tooltip-title>{{ heading() }}</sat-rich-tooltip-title>

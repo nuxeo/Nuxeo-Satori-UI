@@ -27,7 +27,7 @@ export type NxsAvatarColor =
   'purple' | 'blue' | 'pink' | 'teal' | 'yellow' | 'green' | 'red' | 'orange';
 
 /** Avatar diameters in pixels. The values Satori's avatar takes, which `/components-satori` asserts. */
-export type NxsAvatarSize = '24' | '28' | '36' | '64' | '80' | '128';
+export type NxsAvatarSize = '18' | '24' | '28' | '36' | '64' | '80' | '128';
 
 /** Tag colours: the avatar colours plus `gray`, as Satori's category tag takes them. */
 export type NxsTagColor = NxsAvatarColor | 'gray';

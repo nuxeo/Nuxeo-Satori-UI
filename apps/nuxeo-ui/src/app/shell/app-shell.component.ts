@@ -34,11 +34,9 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SatAppHeaderModule } from '@hylandsoftware/satori-ui/app-header';
+import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
-import {
-  SatPlatformNavModule,
-  SatPlatformNavStateService,
-} from '@hylandsoftware/satori-ui/platform-nav';
+import { SatPlatformNavModule, SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 import {
   CollectionService,
   DocumentDetailService,
@@ -74,6 +72,7 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     RouterLink,
     SatPlatformNavModule,
     SatAppHeaderModule,
+    SatAvatarModule,
     SatLogoModule,
     MatDialogModule,
     MatMenuModule,
@@ -107,7 +106,7 @@ export class AppShellComponent implements OnDestroy {
   };
 
   private readonly router = inject(Router);
-  private readonly platformNavState = inject(SatPlatformNavStateService);
+  private readonly platformNavState = inject(SatPlatformNavState);
   private readonly auth = inject(AuthService);
   private readonly sessionTimeout = inject(SessionTimeoutService);
   private readonly snackBar = inject(MatSnackBar);

@@ -705,10 +705,10 @@ npx nx run-many -t eslint:lint # lint all projects
 
 The global provider setup in `apps/nuxeo-ui/src/app/app.config.ts`:
 
-| Provider                                             | Purpose                                              |
-| ---------------------------------------------------- | ---------------------------------------------------- |
-| `provideAnimations()`                                | Angular animations (required by Material and Satori) |
-| `provideHttpClient(withInterceptors([...]))`         | HTTP client with auth interceptor                    |
-| `provideRouter(routes, withComponentInputBinding())` | Router with route-to-input binding                   |
-| `provideSatori()`                                    | Satori UI theme and services                         |
-| `TranslateModule.forRoot(...)`                       | ngx-translate with no-op loader (PoC placeholder)    |
+| Provider                                             | Purpose                                           |
+| ---------------------------------------------------- | ------------------------------------------------- |
+| `provideAnimations()`                                | Angular animations (deprecated in Angular 22)     |
+| `provideHttpClient(withInterceptors([...]))`         | HTTP client with auth interceptor                 |
+| `provideRouter(routes, withComponentInputBinding())` | Router with route-to-input binding                |
+| `provideSatori()`                                    | Satori UI theme and services                      |
+| `TranslateModule.forRoot(...)`                       | ngx-translate with no-op loader (PoC placeholder) |

@@ -6,7 +6,7 @@ import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 const TRASH_NAV_ID = 'app.navbar.trash';
-const TRASH_LINK_SELECTOR = `sat-platform-nav-list-item[data-nav-id="${TRASH_NAV_ID}"] .sat-platform-nav-item`;
+const TRASH_LINK_SELECTOR = `a[sat-platform-nav-menu-item][data-nav-id="${TRASH_NAV_ID}"]`;
 const NAV_LIST_SELECTOR = 'sat-platform-nav nav.sat-platform-nav-list';
 
 /**

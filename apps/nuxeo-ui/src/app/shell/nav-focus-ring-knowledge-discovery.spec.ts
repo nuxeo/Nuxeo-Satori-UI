@@ -21,10 +21,8 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
  * override.
  */
 
-const KD_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.knowledgeDiscovery"] .sat-platform-nav-item';
-const DASHBOARD_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.dashboard"] .sat-platform-nav-item';
+const KD_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.knowledgeDiscovery"]';
+const DASHBOARD_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.dashboard"]';
 
 const ACTIVE_CLASS = 'sat-platform-nav-item-active';
 const MINIMUM_RATIO = 3;

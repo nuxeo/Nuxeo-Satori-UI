@@ -1,4 +1,4 @@
-<mat-icon class="nxs-error-state__icon" aria-hidden="true">{{ variant().icon }}</mat-icon>
+<mat-icon class="nxs-error-state__icon" aria-hidden="true" [svgIcon]="variant().icon" />
 @let title = ownHeading() || (variant().heading | translate);
 @switch (headingLevel()) {
   @case (1) {
@@ -24,7 +24,7 @@
 <div class="nxs-error-state__actions">
   @if (canRetry()) {
     <button mat-stroked-button type="button" (click)="pressRetry()">
-      <mat-icon aria-hidden="true">refresh</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="refresh" />
       {{ 'satori-components.error-state.retry' | translate }}
     </button>
   }

@@ -59,7 +59,7 @@ Recovery: restore a known-good lock, merge only the new entries, run
 | Command                                                 | Purpose                                                      |
 | ------------------------------------------------------- | ------------------------------------------------------------ |
 | `npm run beta:gate -- --phase <id>`                     | Every gate (26), cheapest first, stop at first failure       |
-| `npm run beta:supply-chain`                             | SCA: production audit, dated acceptances, unimported deps    |
+| `npm run beta:supply-chain`                             | SCA: audit, dated acceptances, unused deps, dead overrides   |
 | `npm run beta:code-scanning`                            | Reads the CodeQL alerts; fails if the ref was never analysed |
 | `npm run beta:gate -- --gates lockfile,guardrails,lint` | Fast inner loop                                              |
 | `npm run beta:gate -- --gates <id>`                     | Any subset. An unknown id prints the valid list              |

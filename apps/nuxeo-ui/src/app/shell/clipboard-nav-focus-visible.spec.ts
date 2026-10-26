@@ -12,7 +12,7 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 /**
  * NXENG-873 — IBM Equal Access Issue ID 2358251400 on the Clipboard sidebar link
- * (`sat-platform-nav-list-item[13]` / `aria-label="Clipboard"`).
+ * (`a[sat-platform-nav-menu-item]` / `aria-label="Clipboard"`).
  *
  * Same mechanism as NXENG-761: Satori reads `--sat-platform-nav-outline` for every
  * `.sat-platform-nav-item`, including Clipboard. This spec pins the reported element
@@ -21,8 +21,7 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 const ACTIVE_CLASS = 'sat-platform-nav-item-active';
 
-const CLIPBOARD_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.clipboard"] .sat-platform-nav-item';
+const CLIPBOARD_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.clipboard"]';
 
 const CLIPBOARD_TEST_LABEL = '⟪NXENG-873-clipboard-nav⟫';
 

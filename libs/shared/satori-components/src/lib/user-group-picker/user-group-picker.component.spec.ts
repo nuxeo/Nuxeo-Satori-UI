@@ -127,8 +127,8 @@ describe('NxsUserGroupPickerComponent', () => {
     // The icon's ligature is hidden from assistive technology; the label and the detail are
     // separate words in the option's name.
     expect(options().map((option) => option.textContent?.trim())).toEqual([
-      'personAdministrator User · admin@example.invalid',
-      'groupAdministrators group Group',
+      'Administrator User · admin@example.invalid',
+      'Administrators group Group',
     ]);
   });
 

@@ -29,6 +29,7 @@ import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
+import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
@@ -40,6 +41,7 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.tag, NxsTagComponent, NxsSatoriTagComponent],
   [NXS_PRIMITIVE_IDS.statusTag, NxsStatusTagComponent, NxsSatoriStatusTagComponent],
   [NXS_PRIMITIVE_IDS.richTooltip, NxsRichTooltipComponent, NxsSatoriRichTooltipComponent],
+  [NXS_PRIMITIVE_IDS.errorState, NxsErrorStateComponent, NxsSatoriErrorStateComponent],
 ];
 
 function registry(providers: (Provider | EnvironmentProviders)[]): ExtensionComponentRegistry {
@@ -53,10 +55,9 @@ describe('provideNxsSatoriComponents', () => {
     for (const [id, , satori] of PAIRS) expect(components.peek(id)).toBe(satori);
   });
 
-  // Satori's error states ship only in Satori 1.0 (Angular 22); the installable Satori has none.
-  it('leaves the error state on Material, which Satori cannot replace yet', () => {
+  it('re-registers the error state on Satori (Satori 1.0 ships sat-{401..500}-error-state)', () => {
     const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
-    expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsErrorStateComponent);
+    expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsSatoriErrorStateComponent);
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {
@@ -316,7 +317,7 @@ describe('the Satori primitives, rendered by ID', () => {
     });
     const trigger = host.querySelector('nxs-satori-rich-tooltip button');
     expect(trigger?.getAttribute('aria-label')).toBe('About versioning');
-    expect(trigger?.querySelector('mat-icon')?.textContent?.trim()).toBe('info');
+    expect(trigger?.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe('info');
     expect(host.querySelector('nxs-satori-rich-tooltip sat-rich-tooltip')).not.toBeNull();
   });
 });

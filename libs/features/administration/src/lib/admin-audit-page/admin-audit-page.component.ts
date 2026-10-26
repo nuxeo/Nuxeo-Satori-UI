@@ -175,7 +175,7 @@ export class AdminAuditPageComponent implements OnInit {
   }
 
   severityIcon(sev: string): string {
-    return sev === 'high' ? 'error' : sev === 'medium' ? 'warning' : 'info';
+    return sev === 'high' ? 'error' : sev === 'medium' ? 'report_problem' : 'info';
   }
 
   /* --- AI: Natural-Language Search --- */
@@ -237,12 +237,12 @@ export class AdminAuditPageComponent implements OnInit {
 
   summaryStatIcon(icon: string): string {
     const map: Record<string, string> = {
-      edit: 'edit',
-      delete: 'delete',
+      edit: 'pencil',
+      delete: 'trash',
       security: 'shield',
-      login: 'login',
+      login: 'key',
       download: 'download',
-      workflow: 'account_tree',
+      workflow: 'tree',
       info: 'info',
     };
     return map[icon] || 'info';

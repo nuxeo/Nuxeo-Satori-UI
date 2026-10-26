@@ -44,7 +44,7 @@ export interface DocumentTypeTraits {
    */
   readonly preview: boolean;
   /** The icon a document of this type gets in the Publishing tab's section tree. */
-  readonly sectionIcon: 'library_books' | 'folder';
+  readonly sectionIcon: 'book' | 'folder';
 }
 
 const DEFAULT_TRAITS: DocumentTypeTraits = {
@@ -64,7 +64,7 @@ const OWN_TRAITS: ReadonlyArray<readonly [string, Partial<DocumentTypeTraits>]> 
   ['Note', { view: 'noteEditor' }],
   ['Picture', { picture: true }],
   ['Video', { video: true }],
-  ['SectionRoot', { sectionIcon: 'library_books' }],
+  ['SectionRoot', { sectionIcon: 'book' }],
   ['Collection', { preview: false }],
   ['Folder', { preview: false }],
   ['Workspace', { preview: false }],

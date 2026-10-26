@@ -18,19 +18,13 @@
   >
     @for (item of items(); track item.id) {
       <li class="nxs-upload-queue__item" [attr.data-state]="item.state">
-        <mat-icon class="nxs-upload-queue__icon" aria-hidden="true">
-          @switch (item.state) {
-            @case ('done') {
-              check_circle
-            }
-            @case ('failed') {
-              error_outline
-            }
-            @default {
-              description
-            }
-          }
-        </mat-icon>
+        <mat-icon
+          class="nxs-upload-queue__icon"
+          aria-hidden="true"
+          [svgIcon]="
+            item.state === 'done' ? 'circle_check' : item.state === 'failed' ? 'error' : 'page'
+          "
+        />
         <div class="nxs-upload-queue__body">
           <span class="nxs-upload-queue__name">{{ item.file.name }}</span>
           <span class="nxs-upload-queue__status">
@@ -86,7 +80,7 @@
             [attr.aria-label]="retryLabel"
             (click)="retry.emit(item.id)"
           >
-            <mat-icon aria-hidden="true">refresh</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="refresh" />
           </button>
         }
         @if (removable(item)) {
@@ -100,7 +94,7 @@
             [attr.aria-label]="removeLabel"
             (click)="remove.emit(item.id)"
           >
-            <mat-icon aria-hidden="true">close</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="x_large" />
           </button>
         }
       </li>

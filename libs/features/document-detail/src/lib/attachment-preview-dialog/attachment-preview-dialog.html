@@ -6,7 +6,7 @@
       (click)="close()"
       [matTooltip]="'document-detail.attachment-preview-dialog.close' | translate"
     >
-      <mat-icon>close</mat-icon>
+      <mat-icon svgIcon="x_large" />
     </button>
   </div>
 
@@ -39,7 +39,7 @@
       <iframe [src]="data.blobUrl" [title]="data.name" class="viewer-frame"></iframe>
     } @else {
       <div class="viewer-unsupported">
-        <mat-icon class="unsupported-icon">insert_drive_file</mat-icon>
+        <mat-icon class="unsupported-icon" svgIcon="page" />
         <p>
           {{
             'document-detail.attachment-preview-dialog.preview-not-available-for-this-file'
@@ -58,35 +58,35 @@
         [matTooltip]="'document-detail.attachment-preview-dialog.zoom-in' | translate"
         (click)="zoomIn()"
       >
-        <mat-icon>zoom_in</mat-icon>
+        <mat-icon svgIcon="zoom_in" />
       </button>
       <button
         mat-icon-button
         [matTooltip]="'document-detail.attachment-preview-dialog.fit-to-screen' | translate"
         (click)="zoomReset()"
       >
-        <mat-icon>crop_free</mat-icon>
+        <mat-icon svgIcon="crop" />
       </button>
       <button
         mat-icon-button
         [matTooltip]="'document-detail.attachment-preview-dialog.zoom-out' | translate"
         (click)="zoomOut()"
       >
-        <mat-icon>zoom_out</mat-icon>
+        <mat-icon svgIcon="zoom_out" />
       </button>
       <button
         mat-icon-button
         [matTooltip]="'document-detail.attachment-preview-dialog.rotate-left' | translate"
         (click)="rotateLeft()"
       >
-        <mat-icon>rotate_left</mat-icon>
+        <mat-icon svgIcon="rotate_left" />
       </button>
       <button
         mat-icon-button
         [matTooltip]="'document-detail.attachment-preview-dialog.rotate-right' | translate"
         (click)="rotateRight()"
       >
-        <mat-icon>rotate_right</mat-icon>
+        <mat-icon svgIcon="rotate_right" />
       </button>
     </div>
   }

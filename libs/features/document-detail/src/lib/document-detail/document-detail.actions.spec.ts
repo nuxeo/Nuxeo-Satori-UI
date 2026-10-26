@@ -11,6 +11,7 @@ import {
   withDisabledInitialNavigation,
 } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { BehaviorSubject, NEVER, Observable, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -270,7 +271,12 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
     installDefaults();
 
     await TestBed.configureTestingModule({
-      imports: [testTranslateModule(), testTranslateModule(), DocumentDetailComponent],
+      imports: [
+        testTranslateModule(),
+        testTranslateModule(),
+        MatIconTestingModule,
+        DocumentDetailComponent,
+      ],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
@@ -608,7 +614,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       await fixture.whenStable();
 
       const lock = offered('app.toolbar.lock');
-      expect(lock.icon).toBe('lock_open');
+      expect(lock.icon).toBe('unlocked');
       expect(component.isToolbarActionActive(lock)).toBe(false);
     });
 

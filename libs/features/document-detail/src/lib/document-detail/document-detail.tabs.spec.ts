@@ -898,7 +898,7 @@ describe('DocumentDetailComponent — tab surfaces', () => {
 
       expect(
         component.sectionIcon({ doc: doc({ type: 'SectionRoot' }), children: [], expanded: true }),
-      ).toBe('library_books');
+      ).toBe('book');
       expect(
         component.sectionIcon({ doc: doc({ type: 'Section' }), children: [], expanded: true }),
       ).toBe('folder');

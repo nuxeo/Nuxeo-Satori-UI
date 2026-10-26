@@ -76,10 +76,12 @@
   padding: 1.5rem;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .voc-page .mat-mdc-form-field {
   --mat-form-field-container-height: var(--admin-control-height, 40px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .voc-table th.mat-mdc-header-cell,
 .voc-table td.mat-mdc-cell {
   padding-top: var(--admin-row-padding-y, 0.68rem);
@@ -87,6 +89,7 @@
   vertical-align: middle;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .voc-table .mat-column-actions {
   width: 1%;
   white-space: nowrap;

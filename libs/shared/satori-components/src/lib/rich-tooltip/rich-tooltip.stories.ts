@@ -74,7 +74,7 @@ export const OpensOnFocus: Story = {
 
 export const OtherIcon: Story = {
   args: {
-    icon: 'help_outline',
+    icon: 'help',
     heading: 'Who can see this?',
     content: 'Everyone with Read permission on the folder.',
     triggerLabel: 'Help: who can see this',

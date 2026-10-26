@@ -1,0 +1,4 @@
+{
+  "productPrefixes": ["nxs"],
+  "ignorePaths": ["**/node_modules/**", "**/dist/**", "**/out-tsc/**"]
+}

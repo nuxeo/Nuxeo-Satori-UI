@@ -3,7 +3,7 @@
     <article class="profile-card profile-card--primary">
       <header class="profile-card__header">
         <div class="profile-card__title" role="heading" aria-level="2">
-          <mat-icon aria-hidden="true">account_circle</mat-icon>
+          <mat-icon aria-hidden="true" svgIcon="user_circle" />
           <span>{{ username() }}</span>
         </div>
         <button
@@ -12,7 +12,7 @@
           (click)="openChangePasswordDialog()"
           #changePasswordButton
         >
-          <mat-icon aria-hidden="true">lock</mat-icon>
+          <mat-icon aria-hidden="true" svgIcon="lock" />
           <span>{{ 'app.profile-page.change-password' | translate }}</span>
         </button>
       </header>
@@ -68,7 +68,7 @@
                         target="_blank"
                         rel="noopener noreferrer"
                       >
-                        <mat-icon aria-hidden="true">groups</mat-icon>
+                        <mat-icon aria-hidden="true" svgIcon="users" />
                         <span>{{ g.label }}</span>
                       </a>
                     </td>
@@ -196,7 +196,7 @@
               <td>
                 @if (showGrantedBy(permission.grantedBy)) {
                   <span class="profile-perm-table__granted-by">
-                    <mat-icon aria-hidden="true">groups</mat-icon>
+                    <mat-icon aria-hidden="true" svgIcon="users" />
                     <span>{{ permission.grantedBy }}</span>
                   </span>
                 }
@@ -224,7 +224,7 @@
         (click)="groupPermPrev(groupId)"
         [attr.aria-label]="'app.profile-page.previous-page' | translate"
       >
-        <mat-icon>chevron_left</mat-icon>
+        <mat-icon svgIcon="chevron_left" />
       </button>
       <span class="profile-card__pagination-label">{{ currentPage + 1 }} / {{ totalPages }}</span>
       <button
@@ -234,7 +234,7 @@
         (click)="groupPermNext(groupId)"
         [attr.aria-label]="'app.profile-page.next-page' | translate"
       >
-        <mat-icon>chevron_right</mat-icon>
+        <mat-icon svgIcon="chevron_right" />
       </button>
     </div>
   }
