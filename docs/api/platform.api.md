@@ -275,7 +275,7 @@ interface NxsAvatarInputs {
     readonly label: InputSignal<string>;
     }
 }
-type NxsAvatarSize = '128' | '24' | '28' | '36' | '64' | '80';
+type NxsAvatarSize = '128' | '18' | '24' | '28' | '36' | '64' | '80';
 interface NxsBreadcrumbItem {
     readonly label: string;
     readonly routerLink?: string | readonly (string | number)[];
