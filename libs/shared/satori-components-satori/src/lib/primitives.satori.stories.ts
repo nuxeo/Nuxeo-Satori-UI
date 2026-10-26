@@ -58,7 +58,7 @@ export const SatoriRegistration: StoryObj = {
       },
       errorState: {
         status: 500,
-        heading: 'Server error',
+        heading: 'Failed to load folder contents.',
         retryable: true,
       },
     },
