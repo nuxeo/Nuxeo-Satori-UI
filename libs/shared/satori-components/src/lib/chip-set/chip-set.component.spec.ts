@@ -70,6 +70,15 @@ describe('NxsChipSetComponent', () => {
     expect(removeButtons()[0].tabIndex).toBe(0);
   });
 
+  it('keeps Enter and Space on a remove button from reaching an enclosing select', () => {
+    const parent = vi.fn();
+    fixture.nativeElement.addEventListener('keydown', parent);
+    for (const key of ['Enter', ' ']) {
+      removeButtons()[0].dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }));
+    }
+    expect(parent).not.toHaveBeenCalled();
+  });
+
   it('labels each remove button by its removeLabel', () => {
     expect(removeButtons().map((b) => b.getAttribute('aria-label'))).toEqual([
       'Remove Europe',

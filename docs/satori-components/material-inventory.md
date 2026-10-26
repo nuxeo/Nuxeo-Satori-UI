@@ -208,9 +208,7 @@ notice, so it is a card here rather than a `banner`.
 
 ### 4.6 Banners and inline notices → `banner` → `nxs-banner`
 
-**Migrated under NXSAT-677** (`nxs-banner` now exists, registered as `nxs.primitives.banner`): the
-trashed-document and version banners in document detail, the two location hints in create-import, and
-search's AI error. The rows below that name them are the record as measured on 2026-10-08. Still on
+**Migrated under NXSAT-677** (`nxs-banner` now exists, registered as `nxs.primitives.banner`): the two location hints in create-import and search's AI error. The trashed-document and version banners in document detail were first migrated here, but `main` moved them to `sat-banner` (NXSAT-673), so they are not `nxs-banner` on this branch. The rows below that name them are the record as measured on 2026-10-08. Still on
 Material, as the scope column says: the KD and AI banners, the workflow and task-action banners
 (NXSAT-327), and the collection page's unavailable state, which is a page-level error state rather
 than a banner.

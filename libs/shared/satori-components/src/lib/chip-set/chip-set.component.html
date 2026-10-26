@@ -9,8 +9,10 @@
         [disabled]="item.disabled ?? false"
         [attr.aria-label]="item.removeLabel"
         (click)="$event.stopPropagation()"
+        (keydown.enter)="$event.stopPropagation()"
+        (keydown.space)="$event.stopPropagation()"
       >
-        <mat-icon aria-hidden="true">cancel</mat-icon>
+        <mat-icon aria-hidden="true" svgIcon="circle_x" />
       </button>
     </mat-chip>
   }
