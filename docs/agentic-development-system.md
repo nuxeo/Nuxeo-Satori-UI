@@ -447,6 +447,11 @@ These agents run on GitHub Actions cron schedules. No developer action required 
 **Action:** Auto-generates `CHANGELOG.md` entries from Conventional Commit messages since the last tag. Commits the update directly to `main` so the changelog stays current without manual writing.  
 **Implementation:** `git-cliff` or `conventional-changelog-cli`.
 
+> **Status:** implemented as `changelog.yml` and then removed. The repository rules reject a direct
+> push to `main`, and with no release tags `conventional-changelog-cli` prepended the full commit
+> history as a `0.0.0` section to the hand-curated `CHANGELOG.md`, again on every run.
+> `CHANGELOG.md` is written by hand.
+
 #### AGENTS.md Staleness Agent
 
 **Schedule:** Weekly  
