@@ -119,10 +119,7 @@
       "description": "Origin for Nuxeo REST calls from the browser. Empty keeps requests relative, which is right when Nuxeo serves the application."
     },
     "nuxeoServerUrl": {
-      "type": [
-        "string",
-        "null"
-      ],
+      "type": ["string", "null"],
       "description": "Absolute Nuxeo URL for clients that connect directly (Nuxeo Drive, ARender)."
     },
     "aiBackendUrl": {
@@ -149,9 +146,7 @@
             {
               "type": "object",
               "additionalProperties": false,
-              "required": [
-                "src"
-              ],
+              "required": ["src"],
               "properties": {
                 "src": {
                   "type": "string"
@@ -172,9 +167,7 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "id"
-        ],
+        "required": ["id"],
         "properties": {
           "id": {
             "type": "string",
@@ -244,17 +237,11 @@
       "additionalProperties": false,
       "properties": {
         "idleTimeoutMs": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": ["number", "null"],
           "exclusiveMinimum": 0
         },
         "warningBeforeMs": {
-          "type": [
-            "number",
-            "null"
-          ],
+          "type": ["number", "null"],
           "exclusiveMinimum": 0
         }
       }
@@ -268,10 +255,7 @@
           "description": "Sign-in buttons on the login page, each opening path in the browser.",
           "items": {
             "type": "object",
-            "required": [
-              "id",
-              "path"
-            ],
+            "required": ["id", "path"],
             "properties": {
               "id": {
                 "type": "string",
@@ -288,16 +272,10 @@
           }
         },
         "postLoginPath": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         },
         "returnQueryParam": {
-          "type": [
-            "string",
-            "null"
-          ]
+          "type": ["string", "null"]
         }
       }
     }
