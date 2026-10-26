@@ -21,7 +21,7 @@
     >
       @if (action.icon) {
         <span class="cdk-visually-hidden" cdkAriaLive="off">{{ nameOf(action) }}</span>
-        <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
+        <mat-icon aria-hidden="true" [svgIcon]="action.icon" />
       } @else {
         <span class="nxs-document-toolbar__text">{{ action.label }}</span>
         @if (extraOf(action); as extra) {
@@ -44,7 +44,7 @@
       <span class="cdk-visually-hidden" cdkAriaLive="off">{{
         ownMoreLabel() || ('satori-components.document-toolbar.more-actions' | translate)
       }}</span>
-      <mat-icon aria-hidden="true">more_vert</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="more_vert" />
     </button>
   }
 </div>
@@ -62,7 +62,7 @@
       (click)="run(action)"
     >
       @if (action.icon) {
-        <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
+        <mat-icon aria-hidden="true" [svgIcon]="action.icon" />
       }
       <span>{{ action.label }}</span>
     </button>

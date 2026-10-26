@@ -154,20 +154,30 @@ Skip either and your script will produce confident, meaningless green.
 
 ### 2a. Authenticate with _both_ mechanisms
 
-`httpCredentials` alone lets XHRs through but does not satisfy the app's route guard. The
-sessionStorage session alone renders pages but leaves `/nuxeo/api` calls returning intermittent
-403s. `a11y/playwright.config.ts` documents this and both are required:
+`httpCredentials` with `send: 'always'` authenticates `page.request` but does not satisfy the
+app's route guard; the app's own XHRs carry the header its interceptor builds from the
+sessionStorage session. Without `send: 'always'` the credentials are sent only on a 401
+challenge, and a Nuxeo with guests enabled never sends one — `page.request` then runs as
+`Anonymous` with HTTP 200 (NXSAT-643). `a11y/playwright.config.ts` documents this and both are
+required:
 
 ```js
+import { injectedSession, SESSION_KEY, SIGNED_OUT_KEY } from '../session.mjs';
+import { gotoOrExit, requireSessionAdopted, watchNuxeoApiOrigins } from './preconditions.mjs';
+
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  httpCredentials: { username: user, password: pass, origin: baseUrl },
+  httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
+const page = await context.newPage();
 
+// Before the first navigation, so every Nuxeo request the page sends is seen: one to another
+// origin means the guard below would judge the wrong server, and it refuses instead.
+const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
 // `networkidle`, not a fixed pause, so the app's own session hydration has very likely
 // finished before the session below is written; the reload that follows is what makes the
 // written session the one the app starts from.
-await page.goto(baseUrl, { waitUntil: 'networkidle' });
+await gotoOrExit(page, baseUrl, TOOL, { waitUntil: 'networkidle' });
 await page.evaluate(
   ({ key, value, signedOutKey }) => {
     sessionStorage.setItem(key, value);
@@ -175,15 +185,22 @@ await page.evaluate(
   },
   { key: SESSION_KEY, signedOutKey: SIGNED_OUT_KEY, value: injectedSession(user, pass) },
 );
+// The first navigation booted the app with no session, which on a guest-enabled Nuxeo adopts
+// `Anonymous` and can leave a guest cookie that outranks the Basic header (NXSAT-643).
+await context.clearCookies();
+// The boot above ran signed out; the session's requests start at this reload.
+foreignApiOrigins.restartAtNextLoad();
 await page.reload({ waitUntil: 'networkidle' });
-await requireSessionAdopted(page, user, TOOL);
+await requireSessionAdopted(page, user, TOOL, { baseUrl, foreignApiOrigins });
 ```
 
 The session shape and key come from `../session.mjs`; do not write the JSON inline. And do not
 drop `requireSessionAdopted`. If the app rejects the injected session, it signs in through
 `/me` instead, because `httpCredentials` answers that request. Every route then renders
 normally, so without the check nothing shows that the session copy has drifted from
-`AuthService`. `session.mjs` explains how adoption is proved.
+`AuthService`. `session.mjs` explains how adoption is proved. `requireSessionAdopted` then asks
+`/me`, from inside the page, who the adopted session runs as — the identity guard shared with
+`scripts/beta-harness/identity-guard.mjs` — and exits 2 for `Anonymous` or anyone else.
 
 In a **spec**, do not hand-roll this — the `signedIn` fixture already does it, including the
 adoption check at teardown, and `fixtures.ts` rebases it onto a11y-scout's `test` so both are
@@ -349,6 +366,7 @@ import {
   launchChromium,
   requireBackend,
   requireSessionAdopted,
+  watchNuxeoApiOrigins,
 } from './preconditions.mjs';
 
 const TOOL = '<question>';
@@ -382,16 +400,30 @@ try {
 const browser = await launchChromium(chromium, TOOL);
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
-  httpCredentials: { username: user, password: pass, origin: baseUrl },
+  httpCredentials: { username: user, password: pass, origin: baseUrl, send: 'always' },
 });
 const page = await context.newPage();
 
 try {
   // Backend precondition FIRST — an empty screen scans clean and proves nothing.
   await requireBackend(page, baseUrl, TOOL);
-  await gotoOrExit(page, baseUrl, TOOL);
-  // ... sign in (§2a), then for each route: navigate inside try/catch and record a failure
-  // as unmeasured (not a crash), assert the host (§2b), measure ...
+  // Sign in (§2a). The watcher starts before the first navigation, so it sees every request.
+  const foreignApiOrigins = watchNuxeoApiOrigins(page, baseUrl);
+  await gotoOrExit(page, baseUrl, TOOL, { waitUntil: 'networkidle' });
+  await page.evaluate(
+    ({ key, value, signedOutKey }) => {
+      sessionStorage.setItem(key, value);
+      sessionStorage.removeItem(signedOutKey);
+    },
+    { key: SESSION_KEY, signedOutKey: SIGNED_OUT_KEY, value: injectedSession(user, pass) },
+  );
+  // The signed-out boot can leave a guest cookie that outranks the Basic header (NXSAT-643).
+  await context.clearCookies();
+  foreignApiOrigins.restartAtNextLoad();
+  await page.reload({ waitUntil: 'networkidle' });
+  await requireSessionAdopted(page, user, TOOL, { baseUrl, foreignApiOrigins });
+  // ... then for each route: navigate inside try/catch and record a failure as unmeasured
+  // (not a crash), assert the host (§2b), measure ...
 } finally {
   await context.close();
   await browser.close();
@@ -506,7 +538,7 @@ assuming a fresh route means a fresh state.
 | A timed-out test              | Playwright **restarts the worker**, recreating the a11y-scout accumulator, so every surface already scanned is dropped. One browse timeout turned five successful scans into `pages scanned: 1` | Assert `pagesScanned.length`; it is the only thing that makes this visible |
 | A failing test                | Fragments the worker-scoped report                                                                                                                                                              | Assert `pagesScanned.length`                                               |
 | Dev proxy                     | `apps/nuxeo-ui/proxy.conf.json` is **not** hot-reloaded                                                                                                                                         | Restart `nx serve` after editing it                                        |
-| Node 22+                      | A built-in `localStorage` shadows jsdom's                                                                                                                                                       | Node is pinned to 20 in `.nvmrc`                                           |
+| Node 25+                      | A built-in `localStorage` shadows jsdom's                                                                                                                                                       | Node is pinned to 24 in `.nvmrc`                                           |
 
 ## 7. Before you commit a new check
 

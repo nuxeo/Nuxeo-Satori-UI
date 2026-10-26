@@ -219,6 +219,53 @@ const ALL_GATES = [
     cmd: 'node',
     argv: ['scripts/beta-harness/assertion-audit.mjs'],
   },
+  // The assertion audit above asks whether a check can fail. It cannot ask whether the check is
+  // reading the surface it claims to, and the parity steps are the one file where that question
+  // decides everything: they capture the same claims on two sets of components, one of which can
+  // never be captured again. The run was unable to finish for two months — a crumb selected by a
+  // label that was itself under test aborted it on a timeout — and no gate was in a position to
+  // notice, because every defect was in a steps file nothing audited.
+  {
+    id: 'parity-surface',
+    label: 'Parity surface adapter audit',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/parity-surface-audit.mjs'],
+  },
+  // Static and synthetic: the controls are written to a temporary directory, so unlike the
+  // sanitizer selftest this one cannot leave the tree dirty.
+  {
+    id: 'parity-surface-selftest',
+    label: 'Parity surface audit controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/parity-surface-audit.selftest.mjs'],
+  },
+  // The parity steps' own step-11 controls. `parity-surface` above audits that file's *shape* —
+  // selectors in adapters, no unguarded click, no adapter gap. It cannot ask whether a verdict in
+  // it is capable of being wrong, and step 11's was: "parity-user's AddChildren survives the save"
+  // was green on the nxs surface while nothing had been saved, because the option filter matched
+  // no option, so no change was staged, no Save appeared, and the entry survived an ACL nobody
+  // touched. `aclSaveVerdict` is the fix, and this runs it in process against each situation step
+  // 11 can observe, printing beside each what the old predicate would have concluded. Its second
+  // group covers the root cause rather than the verdict: `showsPermission` against the strings the
+  // panel actually emits — "Manage everything Everything", "Edit ReadWrite" — which is where
+  // matching a translated label went wrong twice.
+  //
+  // It is here because it was registered nowhere. `beta:parity-selftest` existed in `package.json`
+  // and was wired into neither this list nor `ci.yml`, so the only demonstration that the step-11
+  // control can go red was a script a human had to remember to run — and an edit that dropped the
+  // control would have been caught by nothing.
+  //
+  // In process and synthetic: no browser, no backend, no file written, ~50 ms. Next to the audit
+  // above because both read the same steps file and neither compiles anything.
+  {
+    id: 'parity-selftest',
+    label: 'Parity step 11 save-verdict and option-match controls',
+    cmd: 'node',
+    argv: ['scripts/beta-harness/steps/nxsat-308-parity.selftest.mjs'],
+    // How many controls passed the old predicate while no save had happened is the evidence, so
+    // surface it on a pass too.
+    echoOnPass: true,
+  },
   {
     id: 'lint',
     label: 'Affected lint',
@@ -569,7 +616,9 @@ process.exit(anyFailed ? 1 : 0);
  *
  * The flag does not exist before Node 22, where passing it makes Node refuse to
  * start — so it is added only when the running major actually supports it. The
- * repo pins Node 20 in `.nvmrc`, which is why CI never needs this.
+ * repo pins Node 24 in `.nvmrc`, where the built-in store is still off by default
+ * (`localStorage` is undefined, so jsdom's is used), which is why CI never needs this.
+ * Node 25 is the first major where it is on and throws.
  *
  * @returns {{ NODE_OPTIONS?: string }}
  */

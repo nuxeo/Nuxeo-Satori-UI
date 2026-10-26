@@ -6,14 +6,16 @@
  * inset geometry, contrast against the button fill, and the `:focus` ring when `:focus-visible`
  * is false.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import {
   NxsDetailsPanelComponent,
   type NxsDetailsPanelTab,
 } from '@nuxeo/satori-platform/components';
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -66,10 +68,11 @@ function paintedBackground(element: HTMLElement): number[] {
 
 @Component({
   standalone: true,
-  imports: [NxsDetailsPanelComponent, TranslateModule],
+  imports: [NxsDetailsPanelComponent, TranslatePipe, testTranslateModule()],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './panel-close-focus-ring.spec.html',
 })
 class PanelCloseFocusHostComponent {
@@ -84,7 +87,7 @@ describe('Document detail panel close — keyboard focus indicator (NXENG-830)',
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [PanelCloseFocusHostComponent, testTranslateModule()],
+      imports: [PanelCloseFocusHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });

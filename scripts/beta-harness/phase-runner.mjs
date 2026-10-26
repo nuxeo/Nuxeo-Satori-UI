@@ -29,6 +29,11 @@
  *                                  and exits 2 (precondition not met).
  *   EVIDENCE_STRICT_SCREENSHOTS=1  fail the run if any two screenshots are
  *                                  byte-identical, not just if they all are
+ *                                  The run is then checked by the identity guard
+ *                                  (`identity-guard.mjs`) at the start and after
+ *                                  every step: a result obtained as `Anonymous` or
+ *                                  as another user makes the run
+ *                                  `precondition-not-met` and is marked invalid.
  *   EVIDENCE_ENSURE_BACKEND=1      bring the Nuxeo Docker stack up first and wait
  *                                  for the REST API, instead of capturing into a
  *                                  dead backend. Opt-in, because starting
@@ -43,6 +48,7 @@ import { resolve, isAbsolute } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
 import { createHelpers } from './helpers.mjs';
+import { createIdentityMonitor, describeReport } from './identity-guard.mjs';
 import { missingNuxeoCredentialsMessage, readNuxeoCredentials } from './nuxeo-credentials.mjs';
 
 /**
@@ -178,10 +184,19 @@ const browser = await chromium.launch({
   slowMo: Number(process.env['EVIDENCE_SLOWMO'] ?? 300),
 });
 
-// `httpCredentials` guarantees Basic auth on every request to the app origin.
-// Injecting a session into sessionStorage (see helpers.login) satisfies the route
-// guard so pages render, but does not reliably authenticate XHRs — that surfaces as
-// intermittent 403s on /nuxeo/api paths and screenshots of empty or error states.
+// Credentials go out on every request, unasked (NXSAT-643). This comment used to say
+// `httpCredentials` "guarantees Basic auth on every request to the app origin". It guaranteed
+// nothing: Playwright sends `httpCredentials` only in answer to a 401 challenge, and a Nuxeo
+// that allows guests never sends one — it answers 200 as `Anonymous`. Measured on the shared
+// local server, every `page.request` call a steps file made ran as the guest.
+//
+// - `page.request`: `send: 'always'` attaches the header to every request to `origin`. It
+//   replaces an explicit `Authorization` on the request, so a steps file that needs a second
+//   identity uses its own `request.newContext()`.
+// - The browser: `send` does not reach it. The app's own requests carry the header its
+//   interceptor builds from the injected session (`helpers.login`), and `login` clears the
+//   cookies first so a guest session cannot be adopted.
+//
 // Omitted only for a `skipHttpCredentials` steps file; see the credentials block above.
 const context = await browser.newContext({
   viewport: { width: 1440, height: 900 },
@@ -191,11 +206,13 @@ const context = await browser.newContext({
         httpCredentials: {
           username: credentials.username,
           password: credentials.password,
-          origin: baseUrl,
+          origin: new URL(baseUrl).origin,
+          send: 'always',
         },
       }
     : {}),
 });
+await context.clearCookies();
 
 const page = await context.newPage();
 
@@ -222,7 +239,12 @@ page.on('response', (res) => {
   recorder.consoleErrors.push(`HTTP ${res.status()} ${path}`);
 });
 
-const helpers = createHelpers(page, outDir, recorder);
+/**
+ * The identity guard, for every run that sends credentials. A `skipHttpCredentials` steps file
+ * sends none and claims nothing about a user, so there is no identity to hold it to.
+ */
+const identity = credentials ? createIdentityMonitor({ page, baseUrl, username: credentials.username }) : null;
+const helpers = createHelpers(page, outDir, recorder, { identity });
 
 let runError = null;
 let preconditionFailure = null;
@@ -232,7 +254,25 @@ try {
   if (typeof runSteps !== 'function') {
     throw new Error(`${stepsFile} must export a default async function(page, helpers, outDir)`);
   }
+  if (identity) {
+    // Before any step: the page has not loaded the app yet, so only `page.request` is asked.
+    const start = await identity.verify('at the start', { app: false });
+    if (!start.ok) {
+      const detail = start.reports.filter((r) => !r.ok).map((r) => `[${r.channel}] ${r.problem}`).join('; ');
+      recorder.steps.push({
+        index: 1,
+        label: 'Identity guard — at the start',
+        screenshots: [],
+        checks: [{ name: 'precondition: identity guard at the start', passed: false, detail }],
+        notes: [],
+      });
+      const err = new Error(`identity guard at the start: requests do not run as ${credentials.username} — ${detail}`);
+      err.name = 'PreconditionError';
+      throw err;
+    }
+  }
   await runSteps(page, helpers, outDir);
+  await helpers.finish();
 } catch (err) {
   if (err instanceof Error && err.name === 'PreconditionError') {
     preconditionFailure = err.message;
@@ -280,6 +320,17 @@ const manifest = {
     stepsFile,
   },
   totals: { steps: recorder.steps.length, checks: totalChecks, failed: failedChecks.length },
+  // Who each result was obtained as. `valid: false` means at least one check rejected the run,
+  // which is also why its verdict is `precondition-not-met`: nothing in it can be cited.
+  identity: identity
+    ? {
+        applicable: true,
+        expected: identity.expectedApi,
+        valid: identity.checks.length > 0 && identity.checks.every((c) => c.ok),
+        switches: identity.switches,
+        checks: identity.checks,
+      }
+    : { applicable: false, reason: 'the steps file sends no credentials (skipHttpCredentials)' },
   ...(runError ? { error: runError } : {}),
   ...(preconditionFailure ? { preconditionFailure } : {}),
   screenshotAudit,
@@ -464,6 +515,16 @@ function renderIndex(m) {
       '> hold here. Fix the environment or run the steps file that matches it. Do **not**',
       '> change application code to make this run go green, and do not read the failed',
       '> check below as a finding.',
+      '',
+    );
+  }
+
+  if (m.identity?.applicable) {
+    const last = m.identity.checks.at(-1);
+    lines.push(
+      `**Identity:** ${m.identity.valid ? 'VALID' : '**INVALID**'} — expected \`${m.identity.expected}\`, ` +
+        `${m.identity.checks.length} check(s)${last ? `, last ${last.at}: ${last.reports.map(describeReport).join(' · ')}` : ''}`,
+      ...m.identity.switches.map((sw) => `- signed in as \`${sw.username}\` from ${sw.at} — ${sw.reason}`),
       '',
     );
   }

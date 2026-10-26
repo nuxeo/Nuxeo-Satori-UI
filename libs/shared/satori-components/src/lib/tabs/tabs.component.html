@@ -10,7 +10,7 @@
       <ng-template mat-tab-label>
         <span class="nxs-tabs__label" [attr.data-tab-id]="tab.id">
           @if (tab.icon) {
-            <mat-icon class="nxs-tabs__icon" aria-hidden="true">{{ tab.icon }}</mat-icon>
+            <mat-icon class="nxs-tabs__icon" aria-hidden="true" [svgIcon]="tab.icon" />
           }
           {{ tab.label }}
         </span>

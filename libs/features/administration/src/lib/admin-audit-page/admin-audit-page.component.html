@@ -8,7 +8,7 @@
       mat-icon-button
       [attr.aria-label]="'admin.admin-audit-page.settings-placeholder' | translate"
     >
-      <mat-icon>settings</mat-icon>
+      <mat-icon svgIcon="settings" />
     </button>
   </header>
 
@@ -17,7 +17,7 @@
     <section class="ai-anomaly-banner" [class.ai-anomaly-banner--loading]="anomalyLoading()">
       <div class="ai-anomaly-banner__header">
         <div class="ai-anomaly-banner__title-row">
-          <mat-icon class="ai-sparkle-icon">auto_awesome</mat-icon>
+          <mat-icon class="ai-sparkle-icon" svgIcon="ai" />
           <span class="ai-anomaly-banner__title">{{
             'admin.admin-audit-page.ai-anomaly-detection' | translate
           }}</span>
@@ -36,7 +36,7 @@
             (click)="loadAnomalies()"
             [disabled]="anomalyLoading()"
           >
-            <mat-icon>refresh</mat-icon>
+            <mat-icon svgIcon="refresh" />
           </button>
           <button
             type="button"
@@ -45,7 +45,7 @@
             [attr.aria-label]="'admin.admin-audit-page.dismiss' | translate"
             (click)="dismissAnomalies()"
           >
-            <mat-icon>close</mat-icon>
+            <mat-icon svgIcon="x_large" />
           </button>
         </div>
       </div>
@@ -61,7 +61,7 @@
         </div>
       } @else if (anomalies().length === 0) {
         <div class="ai-anomaly-banner__empty">
-          <mat-icon>verified</mat-icon>
+          <mat-icon svgIcon="shield_secured" />
           <span>{{ 'admin.admin-audit-page.no-anomalies-detected-in-the-last' | translate }}</span>
         </div>
       } @else {
@@ -70,9 +70,10 @@
           @for (a of anomalies(); track a.description) {
             <div class="ai-anomaly-card" [class]="'ai-anomaly-card--' + a.severity">
               <div class="ai-anomaly-card__header">
-                <mat-icon [class]="'sev-icon sev-icon--' + a.severity">{{
-                  severityIcon(a.severity)
-                }}</mat-icon>
+                <mat-icon
+                  [class]="'sev-icon sev-icon--' + a.severity"
+                  [svgIcon]="severityIcon(a.severity)"
+                />
                 <span class="ai-anomaly-card__severity">{{ a.severity }}</span>
                 <span class="ai-anomaly-card__time">{{ a.timestamp }}</span>
               </div>
@@ -98,7 +99,7 @@
   @if (featureFlags.aiEnabled()) {
     <section class="ai-nl-search">
       <div class="ai-nl-search__input-row">
-        <mat-icon class="ai-nl-search__icon">auto_awesome</mat-icon>
+        <mat-icon class="ai-nl-search__icon" svgIcon="ai" />
         <input
           class="ai-nl-search__input"
           type="text"
@@ -122,7 +123,7 @@
             [matTooltip]="'admin.admin-audit-page.search-with-ai' | translate"
             [attr.aria-label]="'admin.admin-audit-page.search-with-ai' | translate"
           >
-            <mat-icon>search</mat-icon>
+            <mat-icon svgIcon="search" />
           </button>
         }
         @if (nlExplanation()) {
@@ -133,13 +134,13 @@
             [matTooltip]="'admin.admin-audit-page.clear-ai-filters' | translate"
             [attr.aria-label]="'admin.admin-audit-page.clear-ai-filters' | translate"
           >
-            <mat-icon>clear</mat-icon>
+            <mat-icon svgIcon="x_large" />
           </button>
         }
       </div>
       @if (nlExplanation()) {
         <div class="ai-nl-search__explanation">
-          <mat-icon>lightbulb</mat-icon>
+          <mat-icon svgIcon="lightbulb" />
           <span>{{ nlExplanation() }}</span>
         </div>
       }
@@ -207,7 +208,7 @@
             'admin.admin-audit-page.ai-summarizes-the-currently-visible-entries' | translate
           "
         >
-          <mat-icon>auto_awesome</mat-icon>
+          <mat-icon svgIcon="ai" />
           {{ 'admin.admin-audit-page.summarize-with-ai' | translate }}
         </button>
       }
@@ -218,7 +219,7 @@
   @if (featureFlags.aiEnabled() && summaryOpen()) {
     <section class="ai-summary-panel">
       <div class="ai-summary-panel__header">
-        <mat-icon class="ai-sparkle-icon">auto_awesome</mat-icon>
+        <mat-icon class="ai-sparkle-icon" svgIcon="ai" />
         <span>{{ 'admin.admin-audit-page.ai-summary' | translate }}</span>
         <button
           type="button"
@@ -226,7 +227,7 @@
           [attr.aria-label]="'admin.admin-audit-page.close-ai-summary' | translate"
           (click)="closeSummary()"
         >
-          <mat-icon>close</mat-icon>
+          <mat-icon svgIcon="x_large" />
         </button>
       </div>
       @if (summaryLoading()) {
@@ -246,7 +247,7 @@
           <div class="ai-summary-stats">
             @for (stat of auditSummary()!.stats; track stat.label) {
               <div class="ai-summary-stat-card">
-                <mat-icon>{{ summaryStatIcon(stat.icon) }}</mat-icon>
+                <mat-icon [svgIcon]="summaryStatIcon(stat.icon)" />
                 <div class="ai-summary-stat-card__body">
                   <span class="ai-summary-stat-card__value">{{ stat.value }}</span>
                   <span class="ai-summary-stat-card__label">{{ stat.label }}</span>
@@ -262,7 +263,7 @@
             <div class="ai-summary-users">
               @for (u of auditSummary()!.topUsers; track u.name) {
                 <span class="ai-summary-user-chip">
-                  <mat-icon>person</mat-icon>
+                  <mat-icon svgIcon="user" />
                   {{ u.name }} <strong>({{ u.count }})</strong>
                 </span>
               }

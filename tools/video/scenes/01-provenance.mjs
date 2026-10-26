@@ -316,7 +316,7 @@ export default async function run({ page, deckUrl, hold, playDeck }) {
   await page
     // By id, not by label: the entry's text is a translated Layer 0 string and a
     // relabel would leave this matching nothing, silently filming the wrong beat.
-    .locator('sat-platform-nav-list-item[data-nav-id="app.navbar.browseAdfHx"]')
+    .locator('a[sat-platform-nav-menu-item][data-nav-id="app.navbar.browseAdfHx"]')
     .first()
     .click({ timeout: 8000 })
     .catch((e) => console.log(`  [scene] nav item click failed: ${e.message}`));

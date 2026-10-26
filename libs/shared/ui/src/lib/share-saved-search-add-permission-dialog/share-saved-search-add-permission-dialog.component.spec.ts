@@ -129,4 +129,93 @@ describe('Saved-search sharing — principal picker integration', () => {
     ]);
     expect(search).not.toHaveBeenCalled();
   });
+
+  const values = (dialog: ShareSavedSearchAddPermissionDialogComponent) =>
+    dialog.rightOptions.map((option) => option.value);
+
+  it("offers the saved search's own list, which has no Can collect", async () => {
+    await render({ permissions: ['Read', 'ReadWrite', 'Everything'] });
+    const dialog = fixture.componentInstance;
+    expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything']);
+    expect(dialog.rightOptions.map((option) => option.label)).toEqual([
+      'Read',
+      'Edit',
+      'Manage everything',
+    ]);
+  });
+
+  it('offers whatever the server lists for the type rather than a fixed list', async () => {
+    await render({ permissions: ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'] });
+    expect(values(fixture.componentInstance)).toEqual([
+      'Read',
+      'ReadCanCollect',
+      'ReadWrite',
+      'Everything',
+    ]);
+  });
+
+  it('starts a new entry on the first right offered when Read is absent', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    expect(fixture.componentInstance.right).toBe('ReadWrite');
+  });
+
+  it('resets to the first offered right and clears the picker after adding another', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    await pick();
+    const dialog = fixture.componentInstance;
+    dialog.right = 'Everything';
+    dialog.create(true);
+    await settle();
+    expect(dialog.right).toBe('ReadWrite');
+    expect(dialog.selectedPrincipal()).toBeNull();
+    expect(box().value).toBe('');
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it('disables submission when the selected right is not offered', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    await pick();
+    const dialog = fixture.componentInstance;
+    expect(dialog.isSubmitDisabled()).toBe(false);
+    dialog.right = 'Read';
+    expect(dialog.isSubmitDisabled()).toBe(true);
+  });
+
+  it('does not create an entry for a right the server does not offer', async () => {
+    await render({ permissions: ['ReadWrite', 'Everything'] });
+    await pick();
+    fixture.componentInstance.right = 'Read';
+    fixture.componentInstance.create(false);
+    expect(close).not.toHaveBeenCalled();
+    expect(fixture.componentInstance.saving()).toBe(false);
+  });
+
+  it("falls back to Nuxeo's default three when the read carried no list", async () => {
+    await render();
+    expect(values(fixture.componentInstance)).toEqual(['Read', 'ReadWrite', 'Everything']);
+  });
+
+  it("keeps an edited entry's permission when the type no longer offers it", async () => {
+    await render({
+      permissions: ['Read', 'ReadWrite', 'Everything'],
+      initialData: { userGroup: 'members', right: 'ReadCanCollect', timeFrame: 'Permanent' },
+    });
+    const dialog = fixture.componentInstance;
+    expect(dialog.right).toBe('ReadCanCollect');
+    expect(values(dialog)).toEqual(['Read', 'ReadWrite', 'Everything', 'ReadCanCollect']);
+  });
+
+  it('falls back to Read when an empty permissions list is provided', async () => {
+    await render({ permissions: [] });
+    expect(fixture.componentInstance.right).toBe('Read');
+    expect(values(fixture.componentInstance)).toEqual(['Read', 'ReadWrite', 'Everything']);
+  });
+
+  it('translates each offered right label', async () => {
+    await render({ permissions: ['Read', 'Everything'] });
+    expect(fixture.componentInstance.rightOptions).toEqual([
+      { value: 'Read', label: 'Read' },
+      { value: 'Everything', label: 'Manage everything' },
+    ]);
+  });
 });

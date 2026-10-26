@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
@@ -14,7 +14,7 @@ describe('BrowseService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
       ],
@@ -91,6 +91,41 @@ describe('BrowseService', () => {
     const result = await result$;
     expect(result.entries.map((e) => e.uid)).toEqual(['d1', 'd2', 'd3']);
     expect(result.totalSize).toBe(3);
+  });
+
+  it('getByPath asks for the breadcrumb enricher, so a trail has its ancestors’ titles', async () => {
+    const result$ = firstValueFrom(service.getByPath('/default-domain/workspaces'));
+
+    const req = httpMock.expectOne(
+      (r) => r.url === '/nuxeo/api/v1/path/default-domain/workspaces' && r.method === 'GET',
+    );
+    expect((req.request.headers.get('enrichers.document') ?? '').split(',')).toContain(
+      'breadcrumb',
+    );
+    req.flush({
+      uid: 'wsr',
+      title: 'Workspaces',
+      type: 'WorkspaceRoot',
+      path: '/default-domain/workspaces',
+      lastModified: '2026-01-01T00:00:00.000Z',
+      properties: {},
+      contextParameters: {
+        breadcrumb: {
+          entries: [
+            {
+              uid: 'dom',
+              title: 'Domain',
+              type: 'Domain',
+              path: '/default-domain',
+              lastModified: '2026-01-01T00:00:00.000Z',
+              properties: {},
+            },
+          ],
+        },
+      },
+    });
+
+    expect((await result$).contextParameters?.breadcrumb?.entries?.[0].title).toBe('Domain');
   });
 
   it('getRepositoryRoot returns the root document when path access succeeds', async () => {

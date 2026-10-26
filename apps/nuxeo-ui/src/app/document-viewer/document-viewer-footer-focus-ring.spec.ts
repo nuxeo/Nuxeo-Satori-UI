@@ -10,6 +10,7 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { DocumentViewerComponent } from '@nuxeo/satori-platform/ui';
 
 import { testTranslateModule } from '../i18n/translate-testing';
@@ -107,7 +108,7 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
 
     await TestBed.configureTestingModule({
       imports: [DocumentViewerComponent, testTranslateModule()],
-      providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
+      providers: [provideZonelessChangeDetection(), provideNoopAnimations(), provideSatori()],
     }).compileComponents();
 
     fixture = TestBed.createComponent(DocumentViewerComponent);
@@ -136,7 +137,7 @@ describe('DocumentViewer footer focus ring by theme (NXSAT-496)', () => {
       ...fixture.nativeElement.querySelectorAll('.viewer-footer-actions button'),
     ] as HTMLButtonElement[];
     const button = buttons.find(
-      (candidate) => candidate.querySelector('mat-icon')?.textContent?.trim() === 'visibility',
+      (candidate) => candidate.querySelector('mat-icon')?.getAttribute('svgicon') === 'view',
     );
     expect(button).withContext('expected Preview footer button').toBeTruthy();
     return button as HTMLButtonElement;

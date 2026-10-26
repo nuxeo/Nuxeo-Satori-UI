@@ -9,196 +9,196 @@
   "tolerance": 0.5,
   "projects": {
     "@nuxeo-satori/generators": {
-      "lines": 20.89,
-      "statements": 20.89,
-      "branches": 82.35,
-      "functions": 37.5,
-      "sTotal": 383,
-      "sCovered": 80
+      "lines": 53.37,
+      "statements": 53.37,
+      "branches": 58.33,
+      "functions": 51.72,
+      "sTotal": 208,
+      "sCovered": 111
     },
     "acme-extensions": {
-      "lines": 100,
-      "statements": 100,
+      "lines": 93.75,
+      "statements": 93.75,
       "branches": 100,
-      "functions": 84.62,
-      "sTotal": 101,
-      "sCovered": 101
+      "functions": 88.24,
+      "sTotal": 32,
+      "sCovered": 30
     },
     "administration": {
-      "lines": 96.25,
-      "statements": 96.25,
-      "branches": 91.76,
-      "functions": 94.74,
-      "sTotal": 2615,
-      "sCovered": 2517
+      "lines": 94.58,
+      "statements": 94.58,
+      "branches": 78.95,
+      "functions": 94.31,
+      "sTotal": 1181,
+      "sCovered": 1117
     },
     "assets": {
-      "lines": 97.44,
-      "statements": 97.44,
-      "branches": 92.31,
-      "functions": 66.67,
-      "sTotal": 78,
-      "sCovered": 76
+      "lines": 92.98,
+      "statements": 92.98,
+      "branches": 87.5,
+      "functions": 84.62,
+      "sTotal": 57,
+      "sCovered": 53
     },
     "browse": {
-      "lines": 98.75,
-      "statements": 98.75,
-      "branches": 92.52,
-      "functions": 98.95,
-      "sTotal": 3291,
-      "sCovered": 3250
+      "lines": 97.74,
+      "statements": 97.74,
+      "branches": 89.56,
+      "functions": 98.42,
+      "sTotal": 1855,
+      "sCovered": 1813
     },
     "collections": {
-      "lines": 95.02,
-      "statements": 95.02,
-      "branches": 86.3,
-      "functions": 94.92,
-      "sTotal": 683,
-      "sCovered": 649
+      "lines": 94.54,
+      "statements": 94.54,
+      "branches": 84.36,
+      "functions": 94.85,
+      "sTotal": 403,
+      "sCovered": 381
     },
     "core": {
       "lines": 100,
       "statements": 100,
       "branches": 100,
       "functions": 100,
-      "sTotal": 7,
-      "sCovered": 7
+      "sTotal": 2,
+      "sCovered": 2
     },
     "document-detail": {
-      "lines": 92.56,
-      "statements": 92.56,
-      "branches": 83.58,
-      "functions": 97.83,
-      "sTotal": 4840,
-      "sCovered": 4480
+      "lines": 88.03,
+      "statements": 88.03,
+      "branches": 74.97,
+      "functions": 93.17,
+      "sTotal": 2490,
+      "sCovered": 2192
     },
     "document-layouts": {
-      "lines": 99.64,
-      "statements": 99.64,
-      "branches": 95.17,
-      "functions": 100,
-      "sTotal": 826,
-      "sCovered": 823
+      "lines": 98.73,
+      "statements": 98.73,
+      "branches": 93.54,
+      "functions": 97.08,
+      "sTotal": 631,
+      "sCovered": 623
     },
     "integration-tests": {
-      "lines": 30.36,
-      "statements": 30.36,
-      "branches": 94.25,
-      "functions": 57.14,
-      "sTotal": 695,
-      "sCovered": 211
+      "lines": 50.84,
+      "statements": 50.84,
+      "branches": 54.79,
+      "functions": 44,
+      "sTotal": 297,
+      "sCovered": 151
     },
     "knowledge-discovery": {
-      "lines": 65.03,
-      "statements": 65.03,
-      "branches": 62.03,
-      "functions": 69.33,
-      "sTotal": 1081,
-      "sCovered": 703
+      "lines": 64.02,
+      "statements": 64.02,
+      "branches": 37.1,
+      "functions": 60.48,
+      "sTotal": 567,
+      "sCovered": 363
     },
     "nuxeo-client": {
-      "lines": 90.3,
-      "statements": 90.3,
-      "branches": 83.82,
-      "functions": 92.34,
-      "sTotal": 4834,
-      "sCovered": 4365
+      "lines": 87.48,
+      "statements": 87.48,
+      "branches": 77.02,
+      "functions": 88.47,
+      "sTotal": 2588,
+      "sCovered": 2264
     },
     "permission-dialogs": {
-      "lines": 96.43,
-      "statements": 96.43,
-      "branches": 67.74,
-      "functions": 93.75,
-      "sTotal": 476,
-      "sCovered": 459
+      "lines": 92.75,
+      "statements": 92.75,
+      "branches": 71.05,
+      "functions": 94.74,
+      "sTotal": 193,
+      "sCovered": 179
     },
     "satori-components": {
-      "lines": 100,
-      "statements": 100,
-      "branches": 100,
-      "functions": 100,
-      "sTotal": 124,
-      "sCovered": 124
+      "lines": 97.51,
+      "statements": 97.51,
+      "branches": 87.95,
+      "functions": 98.48,
+      "sTotal": 4183,
+      "sCovered": 4079
     },
     "search": {
-      "lines": 94.69,
-      "statements": 94.69,
-      "branches": 84.8,
-      "functions": 91.67,
-      "sTotal": 1016,
-      "sCovered": 962
+      "lines": 96.96,
+      "statements": 96.96,
+      "branches": 90.13,
+      "functions": 95.52,
+      "sTotal": 624,
+      "sCovered": 605
     },
     "shared-ai-client": {
-      "lines": 97.72,
-      "statements": 97.72,
-      "branches": 98.68,
-      "functions": 94.29,
-      "sTotal": 219,
-      "sCovered": 214
+      "lines": 93.97,
+      "statements": 93.97,
+      "branches": 88.46,
+      "functions": 97.56,
+      "sTotal": 116,
+      "sCovered": 109
     },
     "shared-app-config": {
-      "lines": 99.58,
-      "statements": 99.58,
-      "branches": 92,
-      "functions": 94.44,
-      "sTotal": 475,
-      "sCovered": 473
+      "lines": 97.13,
+      "statements": 97.13,
+      "branches": 90.4,
+      "functions": 97.14,
+      "sTotal": 349,
+      "sCovered": 339
     },
     "shared-extensions": {
-      "lines": 95.44,
-      "statements": 95.44,
-      "branches": 93.8,
-      "functions": 78.41,
-      "sTotal": 768,
-      "sCovered": 733
+      "lines": 92.59,
+      "statements": 92.59,
+      "branches": 92.42,
+      "functions": 86.5,
+      "sTotal": 499,
+      "sCovered": 462
     },
     "shared-kd-client": {
-      "lines": 99.72,
-      "statements": 99.72,
-      "branches": 92.88,
+      "lines": 99.67,
+      "statements": 99.67,
+      "branches": 91.99,
       "functions": 100,
-      "sTotal": 724,
-      "sCovered": 722
+      "sTotal": 303,
+      "sCovered": 302
     },
     "shared-ke-client": {
       "lines": 100,
       "statements": 100,
-      "branches": 98.28,
+      "branches": 98.23,
       "functions": 100,
-      "sTotal": 247,
-      "sCovered": 247
+      "sTotal": 123,
+      "sCovered": 123
     },
     "tasks": {
-      "lines": 97.4,
-      "statements": 97.4,
-      "branches": 93.23,
-      "functions": 92.37,
-      "sTotal": 1077,
-      "sCovered": 1049
+      "lines": 97,
+      "statements": 97,
+      "branches": 88.6,
+      "functions": 93.75,
+      "sTotal": 634,
+      "sCovered": 615
     },
     "testing": {
       "lines": 100,
       "statements": 100,
       "branches": 100,
       "functions": 100,
-      "sTotal": 31,
-      "sCovered": 31
+      "sTotal": 4,
+      "sCovered": 4
     },
     "ui": {
-      "lines": 97.78,
-      "statements": 97.78,
-      "branches": 96.72,
-      "functions": 89.36,
-      "sTotal": 540,
-      "sCovered": 528
+      "lines": 75.93,
+      "statements": 75.93,
+      "branches": 63.6,
+      "functions": 79.72,
+      "sTotal": 835,
+      "sCovered": 634
     },
     "satori-components-satori": {
-      "lines": 100,
-      "statements": 100,
-      "branches": 100,
+      "lines": 95.74,
+      "statements": 95.74,
+      "branches": 90.91,
       "functions": 100,
-      "sTotal": 95,
-      "sCovered": 95
+      "sTotal": 47,
+      "sCovered": 45
     }
   }
 }

@@ -55,13 +55,19 @@ route that opens it.
 
 Both run axe, so one of them had to give it up. phase-6 keeps it for three reasons:
 
-1. **It was driven to zero, and is one fix from zero again.** Seven rule classes and 77
+1. **It was driven to zero, and is back at zero.** Seven rule classes and 77
    violating nodes were cleared to empty `KNOWN_VIOLATIONS` and make the verdict
-   unconditional. That zero has since gone stale — two `color-contrast` nodes on `/#/tasks`
-   still fail under phase-6's own tags as of 2026-09-30; see
-   [The disagreement](#the-disagreement--resolved-2026-09-11-against-phase-6). The remedy is
-   to fix those and re-measure phase-6, not to move the verdict to a scanner with 22
-   untriaged axe findings.
+   unconditional. That zero went stale — two `color-contrast` nodes on `/#/tasks`
+   still failed under phase-6's own tags as of 2026-09-30; see
+   [The disagreement](#the-disagreement--resolved-2026-09-11-against-phase-6). Those two were
+   `.task-due-prefix` in the nav drawer's task list, taking its colour from
+   `--mat-sys-outline`: measured 4.25:1 on `--mat-sys-surface` (`rgb(249, 249, 252)`) against
+   1.4.3's 4.5:1. Both reported nodes sit on that background — `.task-item.active` differs only
+   by an inset box-shadow, not its fill. Fixed under NXSAT-647 by moving to
+   `--mat-sys-on-surface-variant` (8.93:1), and phase-6 re-measured at **35/35, `verdict PASS`**
+   on 2026-10-22.
+   The remedy was to fix those and re-measure phase-6, not to move the verdict to a scanner
+   with 22 untriaged axe findings.
 2. **It depends on a public package.** `@axe-core/playwright` is on the public registry.
    a11y-scout is distributed as hand-passed tarballs that no registry can serve. A
    customer-shippable product should not have its conformance claim depend on a file
@@ -145,6 +151,28 @@ built-in avatar's and tag's eight named colours at 4.5:1 in the Material themes 
 compiles, because no screen renders those components in every colour — screens use Satori's — so
 the axe layer has no node to judge. It computes from the palette and the compiled theme values; a
 host's own `--nxs-*` colours are outside it, and the published WCAG number still comes from axe.
+
+### A static rule for this defect class was attempted and withdrawn
+
+The `--mat-sys-outline`-as-text-colour defect fixed under NXSAT-647 resists being found by the
+runtime layer, because axe only judges what is rendered while it is scanning: of four measured
+instances, the axe-driven sweep found the two that were on screen and left `.task-due-prefix`
+(which needs a task with a due date) and `.expired-sep` (in a drawer panel phase-6 never opens).
+
+A diff-scoped guardrail was therefore written to forbid the token as a text `color`, and
+**withdrawn before merge**. Over seven review rounds it produced ten valid findings, every one in
+its text matching rather than in the accessibility fix: a declaration split across lines, a
+`var()` fallback moving the closing line, a `style` attribute allowed to omit its last semicolon,
+an HTML comment holding retired markup, element text containing the opt-out word, a token inside
+`content: "…"`, an opt-out read from a selector name, `Array.from` counting code points where the
+offsets were code units, a Sass `$color:` assignment, a Sass map entry, and SCSS property nesting
+— where `border: { color: … }` **is** `border-color`, a correct non-text use the rule called a
+violation.
+
+Seven consecutive rounds in one class is a statement about the approach: the rule needs a real
+Sass parser (`postcss-scss`), not a regex, and that is tracked as **NXSAT-709**. Recorded here so the
+next attempt starts from the ten known cases and their controls rather than from scratch. The
+WCAG verdict is unaffected either way — it belongs to axe, and `phase-6-a11y` is `PASS 35/35`.
 
 ## Baselines and suppression
 
@@ -769,18 +797,19 @@ hard requirement for the keyboard and focus checks.
 The standard is written; the code does not fully implement it yet. Gaps, in the order they
 should be closed:
 
-| #   | Gap                                                                                                  | Status                                                                                                                        |
-| --- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| 1   | The axe disagreement                                                                                 | **Resolved** 2026-09-11 — a11y-scout was right, phase-6 was stale                                                             |
-| 1a  | Blocking nodes phase-6 claims do not exist: `button-name` ×2 on browse, `color-contrast` ×2 on tasks | **Open, halved** — browse fixed by `NXSAT-227` (0 on 2026-09-30); tasks ×2 still real, so the published number is still wrong |
-| 1b  | Six `color-contrast` findings that reproduce under neither harness; state-dependent                  | **Open** — reproduce the state before judging them                                                                            |
-| 2   | a11y-scout's verdict does not filter `source !== 'axe'`; it reports every finding equally            | **Open**                                                                                                                      |
-| 3   | Findings are untriaged (81 in the first baseline), so `failOnBlockers` is `false` everywhere         | **Open** — a gate red on its first run for untriaged reasons is one people learn to ignore                                    |
-| 4   | a11y-scout has no baseline file; phase-6 uses a rule-id array rather than the keyed-count shape      | **Open**                                                                                                                      |
-| 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                       |
-| 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half          |
+| #   | Gap                                                                                                  | Status                                                                                                                                                                                                                                                                                                                                                                                                 |
+| --- | ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1   | The axe disagreement                                                                                 | **Resolved** 2026-09-11 — a11y-scout was right, phase-6 was stale                                                                                                                                                                                                                                                                                                                                      |
+| 1a  | Blocking nodes phase-6 claims do not exist: `button-name` ×2 on browse, `color-contrast` ×2 on tasks | **Resolved** 2026-10-22 — browse fixed by `NXSAT-227` (0 on 2026-09-30); the tasks ×2 were `.task-due-prefix` on `--mat-sys-outline` at 4.25:1 against 1.4.3's 4.5:1, fixed under `NXSAT-647`, phase-6 re-measured 35/35 `PASS`                                                                                                                                                                        |
+| 1b  | Six `color-contrast` findings that reproduce under neither harness; state-dependent                  | **Open** — reproduce the state before judging them                                                                                                                                                                                                                                                                                                                                                     |
+| 2   | a11y-scout's verdict does not filter `source !== 'axe'`; it reports every finding equally            | **Open**                                                                                                                                                                                                                                                                                                                                                                                               |
+| 3   | Findings are untriaged (81 in the first baseline), so `failOnBlockers` is `false` everywhere         | **Open** — a gate red on its first run for untriaged reasons is one people learn to ignore                                                                                                                                                                                                                                                                                                             |
+| 4   | a11y-scout has no baseline file; phase-6 uses a rule-id array rather than the keyed-count shape      | **Open**                                                                                                                                                                                                                                                                                                                                                                                               |
+| 5   | phase-6 scans `/#/collections`, which renders nothing, without a selector assertion                  | **Confirmed** — probe written and red; the fix to phase-6 is still open                                                                                                                                                                                                                                                                                                                                |
+| 6   | Ownership is documented but not enforced by anything executable                                      | **Partly closed** — `a11y/diagnostics/route-render-check.mjs` enforces the "a scan must have something to scan" half                                                                                                                                                                                                                                                                                   |
+| 7   | Three untriaged text uses of `--mat-sys-outline`, in states no harness renders                       | **Open** — `tasks-page.component.scss:312` (`.graph-empty`, 0.82rem), `:569` (`.dropdown-id`, 0.72rem) and `kd-citation-dialog.scss:129` (`.__mime`, 11px). Found by token search under `NXSAT-647`, not by a scan; each needs its background measured in the state that renders it before it is called a violation. `:281` was checked and is an 18px icon, so 1.4.11's 3:1 applies and it is correct |
 
-Do not describe accessibility as standardised until rows 1a, 2 and 5 are closed. Rows 3 and 4
+Do not describe accessibility as standardised until rows 2 and 5 are closed. Rows 3 and 4
 depend on triage and are expected to take longer.
 
 ## The verification scripts

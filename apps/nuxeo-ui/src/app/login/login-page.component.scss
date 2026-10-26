@@ -77,19 +77,23 @@
   ::ng-deep mat-form-field.login-field-full {
     overflow: visible;
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     &.mat-focused {
       position: relative;
       z-index: 2;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-mdc-text-field-wrapper {
       overflow: visible;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-mdc-form-field-infix {
       overflow: visible;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     input.mat-mdc-input-element {
       scroll-margin-block: 1.5rem;
     }
@@ -116,17 +120,20 @@
 .login-field-username {
   overflow: visible;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-text-field-wrapper,
   ::ng-deep .mat-mdc-form-field-infix {
     overflow: visible;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep input.mat-mdc-input-element {
     scroll-margin: 0.5rem;
   }
 }
 
 /* WCAG 1.4.1: invalid state is not conveyed by outline color alone. */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .login-field-full.mat-form-field-invalid .mat-mdc-form-field-error {
   display: flex;
   align-items: flex-start;
@@ -134,6 +141,7 @@
   font-weight: 500;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .login-field-full.mat-form-field-invalid .mat-mdc-form-field-error::before {
   content: 'Error:';
   flex-shrink: 0;

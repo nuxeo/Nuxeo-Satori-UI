@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { NgModule } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { TranslateLoader, TranslateModule, type TranslationObject } from '@ngx-translate/core';
+import {
+  provideTranslateService,
+  TranslateLoader,
+  type TranslationObject,
+} from '@ngx-translate/core';
 import { of, type Observable } from 'rxjs';
 
 /**
@@ -44,14 +49,24 @@ class RealCatalogueLoader implements TranslateLoader {
  * so a spec's own `configureTestingModule` still works and does not have to know about this.
  */
 /**
- * The translate module a test needs, for specs that call `TestBed.resetTestingModule()`.
+ * The translate providers a test needs, for specs that call `TestBed.resetTestingModule()`.
  *
  * A reset discards whatever the global `beforeEach` configured, so a spec that resets and then
  * reconfigures has to bring this back itself. `selection-topbar.component.spec.ts` does exactly
  * that in the middle of a test, which is how this export came to exist.
+ *
+ * ngx-translate 18 replaced `TranslateModule` with `provideTranslateService()`. For backward
+ * compatibility with specs that call `imports: [testTranslateModule()]`, this wraps the provider
+ * in a module; new code should call `providers: [testTranslateProviders()]` directly.
  */
 export function testTranslateModule() {
-  return TranslateModule.forRoot({
+  @NgModule({ providers: testTranslateProviders() })
+  class TestTranslateModule {}
+  return TestTranslateModule;
+}
+
+export function testTranslateProviders() {
+  return provideTranslateService({
     loader: { provide: TranslateLoader, useClass: RealCatalogueLoader },
     // Both of these are required, and the loader alone is not enough. With no active
     // language ngx-translate has nothing to look a key up in and falls through to its key
@@ -69,6 +84,6 @@ export function testTranslateModule() {
 
 export function provideTestTranslations(): void {
   beforeEach(() => {
-    TestBed.configureTestingModule({ imports: [testTranslateModule()] });
+    TestBed.configureTestingModule({ providers: [testTranslateProviders()] });
   });
 }

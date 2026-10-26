@@ -28,10 +28,12 @@ sat-breadcrumbs {
   padding-bottom: 12px;
   flex-shrink: 0;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-chevron {
     display: none;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-list li:not(:last-child)::after {
     content: '›';
     margin-left: 4px;
@@ -87,17 +89,20 @@ sat-breadcrumbs {
   flex-direction: column;
   min-height: 0;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-tab-header {
     background: #fff;
     border-bottom: 1px solid #e0e0e0;
     flex-shrink: 0;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-tab-labels {
     gap: 0;
     justify-content: flex-start;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-tab {
     flex-grow: 0 !important;
     min-width: 0;
@@ -106,6 +111,7 @@ sat-breadcrumbs {
     letter-spacing: 0;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-tab-body-wrapper {
     flex: 1;
     overflow: auto;
@@ -288,6 +294,7 @@ sat-breadcrumbs {
 
 .toolbar-filter-field {
   width: 170px;
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-form-field-infix {
     padding-top: 6px !important;
     padding-bottom: 6px !important;
@@ -315,11 +322,13 @@ sat-breadcrumbs {
 
 .toolbar-filter-select {
   width: 130px;
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-form-field-infix {
     padding-top: 6px !important;
     padding-bottom: 6px !important;
     min-height: 32px !important;
   }
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-select-trigger {
     font-size: 12px;
   }
@@ -801,6 +810,7 @@ sat-breadcrumbs {
 
 .filter-field {
   width: 160px;
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-form-field-infix {
     padding-top: 6px !important;
     padding-bottom: 6px !important;

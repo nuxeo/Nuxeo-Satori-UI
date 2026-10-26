@@ -15,7 +15,7 @@
           [disabled]="!isCurrentFolderish()"
           (click)="openCreateImportDialog()"
         >
-          <mat-icon>add</mat-icon>
+          <mat-icon svgIcon="plus_large" />
           {{ 'browse.browse.create-import' | translate }}
         </button>
       }
@@ -25,7 +25,7 @@
         [attr.aria-label]="'browse.browse.upload-with-nuxeo-drive' | translate"
         (click)="openDriveDialog()"
       >
-        <mat-icon>cloud_upload</mat-icon>
+        <mat-icon svgIcon="cloud_upload" />
       </button>
       @if (showHeaderEdit()) {
         <button
@@ -34,7 +34,7 @@
           [attr.aria-label]="'browse.browse.edit' | translate"
           (click)="openEditDialog()"
         >
-          <mat-icon>edit</mat-icon>
+          <mat-icon svgIcon="pencil" />
         </button>
       }
       @if (showHeaderDelete()) {
@@ -44,7 +44,7 @@
           [attr.aria-label]="'browse.browse.delete' | translate"
           (click)="deleteDocument()"
         >
-          <mat-icon>delete</mat-icon>
+          <mat-icon svgIcon="trash" />
         </button>
       }
       <button
@@ -53,7 +53,7 @@
         [attr.aria-label]="'browse.browse.download-all' | translate"
         (click)="downloadAll()"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
       <nxs-action-menu
         [actions]="contextMenuItems()"
@@ -117,7 +117,7 @@
                     (click)="filterText.set('')"
                     class="filter-clear-btn"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 }
               </mat-form-field>
@@ -163,7 +163,7 @@
                     (click)="filterContributor.set('')"
                     class="filter-clear-btn"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 }
               </mat-form-field>
@@ -190,7 +190,7 @@
                     [attr.aria-label]="'browse.browse.manage-columns' | translate"
                     (click)="openColumnPanel()"
                   >
-                    <mat-icon>tune</mat-icon>
+                    <mat-icon svgIcon="settings" />
                   </button>
                 }
                 <button
@@ -206,7 +206,7 @@
                       [attr.aria-label]="'browse.browse.loading' | translate"
                     />
                   } @else {
-                    <mat-icon>download</mat-icon>
+                    <mat-icon svgIcon="download" />
                   }
                 </button>
                 <button
@@ -216,7 +216,7 @@
                   [class.active-view]="viewMode() === 'list'"
                   (click)="setViewMode('list')"
                 >
-                  <mat-icon>view_list</mat-icon>
+                  <mat-icon svgIcon="bullet_list" />
                 </button>
                 <button
                   mat-icon-button
@@ -225,7 +225,7 @@
                   [class.active-view]="viewMode() === 'card'"
                   (click)="setViewMode('card')"
                 >
-                  <mat-icon>grid_view</mat-icon>
+                  <mat-icon svgIcon="grid_view" />
                 </button>
               </div>
             </div>
@@ -286,7 +286,7 @@
             } @else {
               @if (filteredEntries().length === 0 && pageIndex() === 0) {
                 <div class="browse-empty">
-                  <mat-icon class="empty-icon">folder_open</mat-icon>
+                  <mat-icon class="empty-icon" svgIcon="folder_open" />
                   <p>{{ 'browse.browse.this-folder-is-empty' | translate }}</p>
                 </div>
               }
@@ -308,7 +308,7 @@
                     <button class="doc-card" type="button" (click)="onRowClick(doc)">
                       <div class="card-thumb">
                         <nxs-thumbnail class="card-thumb-img" [documentId]="doc.uid">
-                          <mat-icon class="card-thumb-icon">{{ docIcon(doc) }}</mat-icon>
+                          <mat-icon class="card-thumb-icon" [svgIcon]="docIcon(doc)" />
                         </nxs-thumbnail>
                       </div>
                       <div class="card-body">
@@ -325,18 +325,18 @@
                         [attr.aria-label]="'browse.browse.collection-actions' | translate"
                         (click)="$event.stopPropagation()"
                       >
-                        <mat-icon>more_vert</mat-icon>
+                        <mat-icon svgIcon="more_vert" />
                       </button>
                       <mat-menu #collectionCardMenu="matMenu">
                         @if (canEditCollectionEntry(doc)) {
                           <button mat-menu-item (click)="openEditCollectionDialog(doc)">
-                            <mat-icon>edit</mat-icon>
+                            <mat-icon svgIcon="pencil" />
                             <span>{{ 'browse.browse.edit' | translate }}</span>
                           </button>
                         }
                         @if (canDeleteCollectionEntry(doc)) {
                           <button mat-menu-item (click)="deleteCollectionEntry(doc)">
-                            <mat-icon>delete</mat-icon>
+                            <mat-icon svgIcon="trash" />
                             <span>{{ 'browse.browse.delete' | translate }}</span>
                           </button>
                         }
@@ -464,7 +464,7 @@
                                   type="button"
                                   (click)="editExternalPermission(ace)"
                                 >
-                                  <mat-icon>edit</mat-icon>
+                                  <mat-icon svgIcon="pencil" />
                                 </button>
                                 <button
                                   mat-icon-button
@@ -476,7 +476,7 @@
                                   [disabled]="actionInProgress() === 'notify-' + ace.id"
                                   (click)="sendNotificationEmail(ace)"
                                 >
-                                  <mat-icon>email</mat-icon>
+                                  <mat-icon svgIcon="emails" />
                                 </button>
                                 <button
                                   mat-icon-button
@@ -485,7 +485,7 @@
                                   type="button"
                                   (click)="deletePermission(ace)"
                                 >
-                                  <mat-icon>delete</mat-icon>
+                                  <mat-icon svgIcon="trash" />
                                 </button>
                               </td>
                             }
@@ -510,7 +510,7 @@
                     [ngModel]="filterUsername()"
                     (ngModelChange)="filterUsername.set($event)"
                   />
-                  <mat-icon matPrefix>person_search</mat-icon>
+                  <mat-icon matPrefix svgIcon="user" />
                 </mat-form-field>
                 <mat-form-field appearance="outline" class="filter-field" subscriptSizing="dynamic">
                   <mat-label>{{ 'browse.browse.from' | translate }}</mat-label>
@@ -682,7 +682,7 @@
                 </div>
               } @else if (trashedDocs().length === 0) {
                 <div class="browse-empty">
-                  <mat-icon class="empty-icon">delete_outline</mat-icon>
+                  <mat-icon class="empty-icon" svgIcon="trash" />
                   <p>{{ 'browse.browse.trash-is-empty' | translate }}</p>
                 </div>
               } @else {
@@ -701,7 +701,7 @@
                         <tr class="browse-row">
                           <td class="cell-name-inner">
                             <nxs-thumbnail class="doc-thumb" [documentId]="doc.uid">
-                              <mat-icon class="doc-icon">{{ docIcon(doc) }}</mat-icon>
+                              <mat-icon class="doc-icon" [svgIcon]="docIcon(doc)" />
                             </nxs-thumbnail>
                             <span class="doc-title">{{ doc.title }}</span>
                           </td>
@@ -717,7 +717,7 @@
                               class="restore-btn"
                               (click)="restoreDocument(doc)"
                             >
-                              <mat-icon>restore_from_trash</mat-icon>
+                              <mat-icon svgIcon="restore" />
                               {{ 'browse.browse.restore' | translate }}
                             </button>
                           </td>
@@ -741,7 +741,7 @@
           "
           [attr.aria-label]="'browse.browse.toggle-details-panel' | translate"
         >
-          <mat-icon>{{ panelOpen() ? 'info' : 'info_outline' }}</mat-icon>
+          <mat-icon [svgIcon]="panelOpen() ? 'info' : 'info'" />
         </button>
       </div>
     </div>
@@ -756,7 +756,7 @@
             (click)="closePanel()"
             [attr.aria-label]="'browse.browse.close-panel' | translate"
           >
-            <mat-icon>close</mat-icon>
+            <mat-icon svgIcon="x_large" />
           </button>
         </div>
 

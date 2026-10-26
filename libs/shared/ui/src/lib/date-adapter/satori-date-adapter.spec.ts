@@ -1,4 +1,9 @@
-import { Component, LOCALE_ID, provideZonelessChangeDetection } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  LOCALE_ID,
+  provideZonelessChangeDetection,
+} from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import {
   DateAdapter,
@@ -271,6 +276,7 @@ describe('provideSatoriDateAdapter', () => {
   // This asserts the direction that makes the per-component fix work.
   it('overrides an adapter a component imports MatNativeDateModule for', () => {
     @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
       standalone: true,
       imports: [MatDatepickerModule, MatNativeDateModule, MatFormFieldModule, MatInputModule],
       providers: [provideSatoriDateAdapter()],

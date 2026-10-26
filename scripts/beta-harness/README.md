@@ -116,6 +116,96 @@ red auth-guard checks is to go change the auth guard.
 A precondition mismatch now aborts on the first step with its own verdict and its
 own exit code, and says what to run instead.
 
+### The identity guard
+
+Some Nuxeo servers have anonymous authentication switched on — the shared local one does. They
+answer a request whose credentials did not arrive `200` as `Anonymous` instead of refusing it, so
+a status code, a non-empty result and a rendered page all look the same either way, and a
+permission check can pass because a guest can do nothing. `identity-guard.mjs` asks
+`/nuxeo/api/v1/me` who the request ran as, through the channel the result came from, and rejects
+`Anonymous`, another user, or no answer (NXSAT-643).
+
+In the runner it checks `page.request` before the first step, and `page.request` plus the app in
+the page — its stored session, and `/me` asked with the header that session sends, from inside the
+page and replayed from Node with the browser's cookies — at every step boundary and after the
+last step. An in-page answer must come from a server (a `page.route` that fulfils `/me` is
+refused), every probe goes to the app's own origin, no probe follows a redirect, and an app that
+sends Nuxeo API requests to another origin is refused rather than judged on the wrong server. User
+ids compare exactly.
+
+`/me` vouches only for the header it was asked with, so the requests the page itself sent are
+judged too. Every `fetch` or XHR the page sent to `/nuxeo/` since its session was installed must
+have gone out with the session's header, read after any `page.route` rewrite. One without it, or
+with another user's, is rejected. Neither a reload nor a later request that carried the header
+excuses it.
+
+The session counts as installed at one of three points:
+
+- the start of the page, for a session injected before the page loads;
+- the reload `h.login()` makes, so the signed-out boot before it is not judged. A script that signs
+  in by reload outside the runner calls `restartAtNextLoad()` on its watcher first;
+- a declared switch.
+
+Before a form sign-in has been seen, and only then, the requests before the first that carried the
+header are excused. The configuration service's files under `/nuxeo/agentic-ui-config/` are read
+without the header by design, so they are not judged.
+
+A rejection makes the run `precondition-not-met` (exit 2), marks
+`manifest.identity.valid: false`, and records the failed check on the step whose result is
+invalid. So:
+
+- **`await h.step(...);`, as a statement of its own.** The boundary check is asynchronous; not
+  awaited, it runs alongside the next step and cannot speak for its own. `npm run beta:audit`
+  refuses any other form in `steps/` — a `.then()` chain, `Promise.all`, an alias — because a
+  discarded `Promise.all([h.step(...)])` looks to the runtime exactly like an `await`. At run time
+  a boundary nothing awaited in time is still recorded as a failed check on its step, and the run
+  ends `precondition-not-met`.
+- **A steps file's own in-page `fetch` to `/nuxeo/` sends the session's header**, as the app's
+  interceptor does. The guard cannot tell it from the app's requests, and one without the header
+  ran as whoever the cookies say.
+- **Say when the browser is meant to be someone else**: `await h.signedInAs(user, reason)` before
+  the next boundary. The switch is listed in `INDEX.md`; an unannounced one is rejected.
+- **Say when it is meant to be signed out**: `await h.signedOut(reason)`. Once a run has signed
+  in, a boundary that finds no session, or a page off the app, is rejected — losing the session is
+  one way to hide a result obtained as someone else. Before the first sign-in both are accepted.
+- **Declare a transition before you make it, and await it.** `h.signedInAs`, `h.signedOut` and
+  `h.login()` each restart the window of requests the next boundary judges, so they first ask
+  Nuxeo who the outgoing session's requests ran as: a step that read anything headerless is
+  refused there rather than discarded. Two consequences. The new session must not be installed
+  yet, or it is what gets judged — against the user it replaces. And the call must be awaited as a
+  statement; `npm run beta:audit` fails a floating one, because discarding that promise would skip
+  the verification in silence.
+- **`page.request` always sends the run's own user.** The context's `httpCredentials` use
+  `send: 'always'`, which replaces an explicit `Authorization` on the request. A second API
+  identity needs its own `request.newContext()` or Node `fetch`.
+- **`h.login()` clears cookies** before it signs in, so a guest session cannot be adopted.
+
+Its controls:
+
+```bash
+npm run beta:identity-guard-selftest     # offline: the judgement and the step wiring
+APP_URL=… npm run beta:identity-guard-controls   # live, needs a guest-enabled Nuxeo
+```
+
+The live controls run `fixtures/identity-guard/control.steps.mjs` through the real runner three
+times: no fault must pass; credentials dropped mid-run, and a guest cookie adopted mid-run, must
+each end `precondition-not-met` while every check of the steps' own passes — without the guard
+both would have been green.
+
+#### What talks to Nuxeo, and how it is guarded
+
+| Harness                                                                                               | Credentials on every request                       | Identity checked                                                                         |
+| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| `phase-runner.mjs` + `steps/*.mjs`                                                                    | `page.request`: `send: 'always'`; app: its session | start, every step boundary, end                                                          |
+| `steps/nxsat-308-parity/seed-parity-data.mjs`                                                         | explicit header, Node `fetch`                      | before the first write, after verifying                                                  |
+| `backend-preflight.mjs`, `e2e-preflight.mjs`, `a11y/preflight.mjs`                                    | explicit header, Node `fetch`                      | `/me` by name, before any data check                                                     |
+| `apps/nuxeo-ui-e2e` (`signedIn`, `newNuxeoApiContext`)                                                | `send: 'always'`; API contexts: explicit header    | `signedIn`: both channels before and after every test; an API context once, when created |
+| `a11y/` suites (`signedIn`) and `a11y/diagnostics/*`                                                  | `send: 'always'`; diagnostics: explicit header     | both channels before and after every test; diagnostics once, after sign-in               |
+| `scripts/collect-evidence/story-runner.mjs`, `annotate-showcase.mjs`, `scripts/demo-deck/capture.mjs` | `send: 'always'`                                   | not by this guard (`capture.mjs` checks `/me` itself)                                    |
+| `libs/integration-tests`, `apps/nuxeo-ui/e2e/*.mjs`, `tools/video`, `tools/i18n`                      | explicit header or the app's session               | not by this guard                                                                        |
+
+The last two rows are named, not covered: they predate the guard and are follow-ups.
+
 ### Notes are not checks
 
 `h.note(text)` records something a run deliberately does **not** cover. Use it
@@ -164,10 +254,11 @@ npm run beta:gate -- --gates guardrails,lint        # fast inner loop
 npm run beta:gate -- --base main --tail 80
 ```
 
-Every gate in `ALL_GATES` (26 today — an unknown `--gates` id prints the current
+Every gate in `ALL_GATES` (32 today — an unknown `--gates` id prints the current
 list), cheapest first, stopping at the first failure and printing only its output
 tail: `node`, the `lockfile` and `dependency-tree` pairs, `supply-chain`,
-`code-scanning`, the guardrails and sanitizer pairs, `assertions`, then affected
+`code-scanning`, the guardrails and sanitizer pairs, `assertions`, the
+`parity-surface` pair, then affected
 `lint`, `test`, `build`, `typecheck`, then `spec-types`, `bundle` and the packaging
 and drift gates. [Dev Harness & Gates](../../documentation/30-engineering/08-dev-harness-and-gates.md)
 has the table. That ordering is deliberate — a lint error usually explains the test
@@ -207,6 +298,47 @@ files suppress Phase 1's own deliverables.
 
 It cannot tell you whether a falsifiable assertion asserts the _right_ thing. That
 is `AGENTS/12-review-agents.md`.
+
+### The `parity-surface` gate
+
+`npm run beta:parity-surface` audits the one steps file that captures the same claims
+twice — `steps/nxsat-308-parity.mjs`, on the upstream adf-hx components and on their
+nxs- replacements. The upstream half cannot be captured again, so that file's rule is
+that the steps and the expected values are written once and only the **surface adapter**
+changes between the halves.
+
+Nothing enforced the rule, and the `nxs` run was unable to finish for two months. A
+breadcrumb crumb was selected by its label; the label was itself under test, so the one
+real defect — a trail labelled with path segments rather than document titles — became a
+30 s `locator.click` timeout, `verdict: error`, and eleven of twenty-four steps that never
+ran. Separately, the fallback element, the properties labels, the search page size, how a
+search is submitted, the no-results wording and how a permission option is chosen were all
+written into the step bodies as one surface's answer, and each read as a parity failure on a
+surface that behaved correctly. One was worse than a false red: a permission option matched
+by its translated label staged nothing, so the save under test never ran — and the check
+that `AddChildren` survived it passed against an untouched ACL.
+
+Three rules, one per failure: `unguarded-click` (a `.click()` with no `.catch()`),
+`surface-selector-in-step` (a selector naming `nxs-`, `hxp-`, `adf-`, `sat-` or `lib-`
+from outside an adapter, in the runner or inside a `page.evaluate`), and `adapter-gap`
+(a surface missing an adapter key the steps read). A helper that only the adapters call
+counts as adapter code; one the steps also call does not.
+
+It does not decide a surface-specific CSS class with no element prefix, and it cannot
+tell you whether an adapter's selector matches anything on the running app — `nxs-breadcrumbs`
+was a real element of this repository and matched nothing, because `app.config.ts`
+re-registers that primitive on Satori. Both limits are printed on every run.
+`npm run beta:parity-surface-selftest` is its negative controls; they are synthetic files in
+a temporary directory, so unlike the sanitizer controls they cannot leave the tree dirty.
+
+`npm run beta:parity-selftest` is the other half, and it answers the question the audit
+structurally cannot: not whether the file has the right shape, but whether a verdict in it is
+capable of being wrong. It runs step 11's `aclSaveVerdict` in process against each situation the
+step can observe — nothing staged, the happy path, the entry dropped, the Save counted after the
+click, a click that never reached the wire, an unrelated write in the same window — and prints
+beside each what the predicate that used to be there would have concluded. Four of the six passed
+that old predicate with nothing saved. Both are gates (`parity-surface-selftest`,
+`parity-selftest`) and both run in `ci.yml`.
 
 ### Coverage ratchet
 

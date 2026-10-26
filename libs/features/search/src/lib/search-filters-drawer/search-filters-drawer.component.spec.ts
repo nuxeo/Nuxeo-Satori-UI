@@ -1,4 +1,4 @@
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
@@ -24,7 +24,7 @@ import {
 import { SearchSession } from '../search-session/search-session';
 import { SearchFiltersDrawerComponent } from './search-filters-drawer.component';
 
-@Component({ standalone: true, template: '' })
+@Component({ standalone: true, changeDetection: ChangeDetectionStrategy.Eager, template: '' })
 class BlankPage {}
 
 /** A saved search's params with no filter set: every parameter written, empty. */

@@ -1,4 +1,10 @@
-import { Component, inject, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  inject,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, of, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -18,6 +24,7 @@ import {
   standalone: true,
   imports: [NxsThumbnailComponent],
   providers: [provideNxsThumbnailCache()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (shown()) {
       @if (cards()) {

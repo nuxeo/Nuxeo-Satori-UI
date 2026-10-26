@@ -1,4 +1,4 @@
-import { HttpClient, provideHttpClient } from '@angular/common/http';
+import { HttpClient, provideHttpClient, withXhr } from '@angular/common/http';
 import { inject, provideZonelessChangeDetection } from '@angular/core';
 import {
   TranslateLoader,
@@ -81,7 +81,7 @@ const preview: Preview = {
     applicationConfig({
       providers: [
         provideZonelessChangeDetection(),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideTranslateService({
           loader: provideTranslateLoader(ApplicationCatalogueLoader),
           lang: 'en',

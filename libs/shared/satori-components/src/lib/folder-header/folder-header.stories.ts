@@ -34,7 +34,7 @@ const meta: Meta<NxsFolderHeaderComponent> = {
 >
   <button mat-stroked-button type="button">Share</button>
   <button mat-icon-button type="button" aria-label="More actions">
-    <mat-icon>more_vert</mat-icon>
+    <mat-icon svgIcon="more_vert" />
   </button>
 </nxs-folder-header>`,
   }),

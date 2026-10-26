@@ -1,4 +1,4 @@
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatDatepickerIntl, MatDatepickerModule } from '@angular/material/datepicker';
 import { TranslateService } from '@ngx-translate/core';
@@ -14,6 +14,7 @@ import {
   standalone: true,
   imports: [MatDatepickerModule],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './translated-datepicker-intl.host.html',
 })
 class PickerHostComponent {}

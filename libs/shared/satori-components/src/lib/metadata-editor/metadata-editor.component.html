@@ -1,6 +1,6 @@
 @if (submitted() && invalidCount() > 0) {
   <div class="nxs-metadata-editor__summary" role="alert" [id]="id + '-summary'">
-    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <mat-icon aria-hidden="true" svgIcon="error" />
     <span class="nxs-metadata-editor__summary-text">
       @if (invalidCount() === 1) {
         {{ 'satori-components.metadata-editor.summary-one' | translate }}
@@ -223,7 +223,7 @@
                   'satori-components.metadata-editor.remove-value' | translate: { name: item }
                 "
               >
-                <mat-icon aria-hidden="true">cancel</mat-icon>
+                <mat-icon aria-hidden="true" svgIcon="circle_x" />
               </button>
             </mat-chip-row>
           }
@@ -309,7 +309,7 @@
               "
               (click)="removeComplexItem(control, index)"
             >
-              <mat-icon aria-hidden="true">delete_outline</mat-icon>
+              <mat-icon aria-hidden="true" svgIcon="trash" />
               {{ 'satori-components.metadata-editor.remove' | translate }}
             </button>
           </fieldset>
@@ -324,7 +324,7 @@
           [attr.aria-describedby]="listInvalid ? id + '-' + path + '-error' : null"
           (click)="addComplexItem(control, definition, depth)"
         >
-          <mat-icon aria-hidden="true">add</mat-icon>
+          <mat-icon aria-hidden="true" svgIcon="plus_large" />
           {{ 'satori-components.metadata-editor.add-item' | translate: { label } }}
         </button>
         @if (listInvalid && error) {
@@ -392,7 +392,7 @@
                   "
                   (click)="$event.stopPropagation()"
                 >
-                  <mat-icon aria-hidden="true">cancel</mat-icon>
+                  <mat-icon aria-hidden="true" svgIcon="circle_x" />
                 </button>
               </mat-chip>
             }

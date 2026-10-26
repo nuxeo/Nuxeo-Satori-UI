@@ -267,7 +267,7 @@ The interesting engineering detail, and it is worth reading aloud from
 
 |                           |                                                                                                                                                                                                                        |
 | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Customer depends on       | `@nuxeo/satori-platform` + peers: Angular 20.3, Material/CDK 20.2, `@hylandsoftware/satori-ui ^0.2`, `@ngx-translate/core ^17`, `rxjs ^7.8`                                                                            |
+| Customer depends on       | `@nuxeo/satori-platform` + peers: Angular 22.2, Material/CDK 22.2, `@hylandsoftware/satori-ui ^0.4`, `@ngx-translate/core ^17`, `rxjs ^7.8`                                                                            |
 | Customer **cannot** reach | adf-hx, at all. `libs/shared/adf-hx-bridge`, which held the twelve API ports, the Nuxeo↔Hx mappers and thirteen of our `hxp-`* components, was internal and never published, and was removed on 2026-10-14 (NXSAT-635) |
 
 **The line for leadership:** adf-hx is an implementation detail of the product, not part of the

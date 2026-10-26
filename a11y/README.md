@@ -274,3 +274,9 @@ would have meant one definition but also one more thread to cut. A drifted copy 
 break authentication on its own: the app would sign in through `httpCredentials` and a cookie
 session instead, and every scan would pass. So the `signedIn` fixture and the diagnostics
 check that the app adopted the injected session (`session.mjs`), and fail if it did not.
+
+One import does reach out of this folder, on purpose: `session.mjs` and the diagnostics use the
+identity guard in `scripts/beta-harness/identity-guard.mjs` (NXSAT-643), which asks `/me` who a
+scan actually ran as. It is shared with the phase runner and the e2e fixtures rather than copied,
+because two copies of a security check are two things to keep right. Removing this folder leaves
+it in place.

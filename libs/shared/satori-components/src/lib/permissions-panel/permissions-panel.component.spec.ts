@@ -5,6 +5,7 @@ import {
   provideZonelessChangeDetection,
   signal,
   type Type,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
@@ -111,6 +112,7 @@ function contextOf(doc: NuxeoDocument): Record<string, unknown> {
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel [documentId]="uid()" [permissionsChanged]="changed" />`,
 })
 class HostComponent {
@@ -121,12 +123,30 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-permissions-panel documentId="doc-1" />
     <nxs-permissions-panel documentId="doc-2" />
   `,
 })
 class TwoPanelsHostComponent {}
+
+@Component({
+  standalone: true,
+  imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<nxs-permissions-panel documentId="doc-1" offer="type" />`,
+})
+class TypeOfferHostComponent {}
+
+/** A Collection as a stock server reads it: its type's four, and 34 permissions held. */
+function collectionDoc(local: Ace[], visible: string[] | undefined): NuxeoDocument {
+  const doc = serverDoc(local, { permissions: [...ALL, 'ReadCanCollect'] });
+  const context = contextOf(doc);
+  if (visible) context['userVisiblePermissions'] = visible;
+  else delete context['userVisiblePermissions'];
+  return { ...doc, type: 'Collection' };
+}
 
 describe('NxsPermissionsPanelComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
@@ -237,6 +257,98 @@ describe('NxsPermissionsPanelComponent', () => {
         'Standard permissions',
         'Other permissions on this server',
       ]);
+    });
+
+    describe('with offer="type"', () => {
+      const COLLECTION_FOUR = ['Read', 'ReadCanCollect', 'ReadWrite', 'Everything'];
+
+      async function mountTyped(doc: NuxeoDocument) {
+        documents.getDocumentPermissions.mockReturnValue(of(doc));
+        const page = TestBed.createComponent(TypeOfferHostComponent);
+        page.detectChanges();
+        await page.whenStable();
+        page.detectChanges();
+        return {
+          page,
+          typed: page.debugElement.query(By.directive(NxsPermissionsPanelComponent))
+            .componentInstance as NxsPermissionsPanelComponent,
+        };
+      }
+
+      const offeredIn = (page: ComponentFixture<unknown>) => {
+        const trigger = (page.nativeElement as HTMLElement).querySelector<HTMLElement>(
+          'tr[role="row"] .mat-mdc-select-trigger',
+        );
+        trigger?.click();
+        page.detectChanges();
+        const overlay = document.querySelector('.cdk-overlay-container') as HTMLElement;
+        return Array.from(overlay.querySelectorAll('mat-option[data-permission]')).map((o) =>
+          o.getAttribute('data-permission'),
+        );
+      };
+
+      it("offers only the type's userVisiblePermissions, not the standard or other groups", async () => {
+        const { page, typed } = await mountTyped(
+          collectionDoc([{ username: 'members', permission: 'Read' }], COLLECTION_FOUR),
+        );
+        expect(typed['permissionGroups']()).toEqual([
+          {
+            label: 'satori-components.permissions-panel.group.suggested',
+            permissions: COLLECTION_FOUR,
+          },
+        ]);
+        expect(offeredIn(page)).toEqual(COLLECTION_FOUR);
+      });
+
+      it('keeps an entry holding a permission outside the list in its own select', async () => {
+        const { page, typed } = await mountTyped(
+          collectionDoc([{ username: 'powerusers', permission: 'Write' }], COLLECTION_FOUR),
+        );
+        typed['openEdit'](typed['localItems']()[0]);
+        expect(typed['editorExtraPermissions']()).toEqual(['Write']);
+        expect(offeredIn(page)).toEqual(['Write', ...COLLECTION_FOUR]);
+      });
+
+      it('refuses a permission the server does not define, naming the entry and why, and writes nothing', async () => {
+        const doc = collectionDoc(
+          [
+            { username: 'members', permission: 'ReadCanCollect' },
+            { username: 'powerusers', permission: 'Remove' },
+          ],
+          COLLECTION_FOUR,
+        );
+        const { page, typed } = await mountTyped(doc);
+        typed['setPermission'](typed['localItems']()[0], 'NoSuchPermission300');
+        page.detectChanges();
+        const save = Array.from(
+          (page.nativeElement as HTMLElement).querySelectorAll<HTMLButtonElement>('button'),
+        ).find((b) => b.textContent?.trim() === 'Save');
+        save?.click();
+        page.detectChanges();
+        await page.whenStable();
+        page.detectChanges();
+
+        const alert = (page.nativeElement as HTMLElement).querySelector('[role="alert"]');
+        expect(alert?.textContent).toContain(
+          "Nothing was saved. These entries can't be saved from this panel:",
+        );
+        expect(alert?.textContent).toContain('members — NoSuchPermission300');
+        expect(alert?.textContent).toContain("this server doesn't define that permission.");
+        expect(documents.replacePermission).not.toHaveBeenCalled();
+        expect(documents.addPermission).not.toHaveBeenCalled();
+        expect(documents.removePermissionById).not.toHaveBeenCalled();
+      });
+
+      it("falls back to Nuxeo's default three when the read carries no list", async () => {
+        const { typed } = await mountTyped(
+          collectionDoc([{ username: 'members', permission: 'Read' }], undefined),
+        );
+        expect(typed['permissionGroups']()[0].permissions).toEqual([
+          'Read',
+          'ReadWrite',
+          'Everything',
+        ]);
+      });
     });
 
     it('shows a permission the server does not list, so its entry can still be kept', async () => {
@@ -1270,6 +1382,7 @@ class HostLibraryAdapter extends NativeDateAdapter {
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" />`,
 })
 class DatesHostComponent {}
@@ -1278,6 +1391,7 @@ class DatesHostComponent {}
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
   providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" />`,
 })
 class DatesHostWithAdapterComponent {}
@@ -1287,6 +1401,7 @@ class DatesHostWithAdapterComponent {}
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
   providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" />`,
 })
 class CalendarDaysHostComponent {}

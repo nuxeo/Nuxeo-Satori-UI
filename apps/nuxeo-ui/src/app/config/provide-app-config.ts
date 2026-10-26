@@ -115,7 +115,7 @@ export function syncDocumentLanguage(
   const apply = (lang: string | undefined): void => {
     if (lang) document.documentElement.lang = lang;
   };
-  apply(translate.getCurrentLang());
+  apply(translate.getCurrentLang() ?? undefined);
   translate.onLangChange
     .pipe(takeUntilDestroyed(destroyRef))
     .subscribe((event) => apply(event.lang));

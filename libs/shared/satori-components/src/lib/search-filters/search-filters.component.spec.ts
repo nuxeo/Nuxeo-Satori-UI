@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -39,6 +44,7 @@ const AGGREGATIONS: SearchAggregations = {
 @Component({
   standalone: true,
   imports: [NxsSearchFiltersComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-search-filters
     [(filters)]="filters"
     [aggregations]="aggregations()"

@@ -1,5 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -9,13 +8,20 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { NxsUserGroupPickerComponent, type NxsPrincipal } from '@nuxeo/satori-platform/components';
-import { TranslatePipe } from '@ngx-translate/core';
+import {
+  NxsUserGroupPickerComponent,
+  nxsOfferedRights,
+  type NxsPrincipal,
+} from '@nuxeo/satori-platform/components';
+import { permissionRightLabel } from '@nuxeo/satori-platform/nuxeo-client';
+import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';
 
 export interface ShareSavedSearchAddPermissionDialogData {
   title?: string;
+  /** The saved search's `userVisiblePermissions`; Nuxeo's default three when absent. */
+  permissions?: readonly string[] | null;
   initialData?: {
     userGroup: string;
     right: string;
@@ -31,18 +37,10 @@ export interface ShareSavedSearchAddPermissionResult {
   grantedBy: string;
 }
 
-const RIGHT_OPTIONS = [
-  { value: 'Read', labelKey: 'permission.read', label: 'Read' },
-  { value: 'ReadWrite', labelKey: 'permission.read-write', label: 'Edit' },
-  { value: 'Everything', labelKey: 'permission.everything', label: 'Manage everything' },
-  { value: 'ReadCanCollect', labelKey: 'permission.read-can-collect', label: 'Can collect' },
-];
-
 @Component({
   selector: 'lib-share-saved-search-add-permission-dialog',
   standalone: true,
   imports: [
-    DescriptorLabelPipe,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -57,6 +55,7 @@ const RIGHT_OPTIONS = [
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter()],
   templateUrl: './share-saved-search-add-permission-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './share-saved-search-add-permission-dialog.component.scss',
 })
 export class ShareSavedSearchAddPermissionDialogComponent {
@@ -70,8 +69,9 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     inject<ShareSavedSearchAddPermissionDialogData>(MAT_DIALOG_DATA, { optional: true }) ?? {};
 
   readonly selectedPrincipal = signal<NxsPrincipal | null>(null);
+  private readonly translate = inject(TranslateService);
   readonly saving = signal(false);
-  readonly rightOptions = RIGHT_OPTIONS;
+  readonly rightOptions: readonly { value: string; label: string }[];
 
   right = 'Read';
   timeFrameMode: 'permanent' | 'date-based' = 'permanent';
@@ -86,6 +86,23 @@ export class ShareSavedSearchAddPermissionDialogComponent {
     if (this.isEditMode && this.data.initialData) {
       this.initializeFormWithData(this.data.initialData);
     }
+    this.rightOptions = nxsOfferedRights(
+      this.data.permissions,
+      this.isEditMode ? this.right : undefined,
+    ).map((value) => ({
+      value,
+      label: permissionRightLabel(value, (key) => this.translate.instant(key)),
+    }));
+    // The type's list need not hold `Read`, so a new entry starts on the first right it offers.
+    if (!this.isEditMode) this.right = this.firstRight();
+  }
+
+  private firstRight(): string {
+    return this.rightOptions[0]?.value ?? 'Read';
+  }
+
+  private rightIsOffered(): boolean {
+    return this.rightOptions.some((option) => option.value === this.right);
   }
 
   private initializeFormWithData(data: NonNullable<typeof this.data.initialData>): void {
@@ -162,7 +179,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   }
 
   create(andAddAnother: boolean): void {
-    if (!this.selectedPrincipal() || this.saving()) return;
+    if (this.isSubmitDisabled()) return;
 
     this.saving.set(true);
 
@@ -185,7 +202,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
   }
 
   isSubmitDisabled(): boolean {
-    return !this.selectedPrincipal() || this.saving();
+    return !this.selectedPrincipal() || this.saving() || !this.rightIsOffered();
   }
 
   private buildResultEntry(): ShareSavedSearchAddPermissionResult {
@@ -229,7 +246,7 @@ export class ShareSavedSearchAddPermissionDialogComponent {
 
   private resetForm(): void {
     this.selectedPrincipal.set(null);
-    this.right = 'Read';
+    this.right = this.firstRight();
     this.timeFrameMode = 'permanent';
     this.beginDate = null;
     this.endDate = null;

@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { RouterOutlet, provideRouter, withComponentInputBinding } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -9,13 +9,19 @@ import { AppExtensionsService } from './app-extensions.service';
 import { extensionRoutes, provideExtensionRoutes } from './extension-routes';
 import { provideSatoriExtensions } from './provide-satori-extensions';
 
-@Component({ standalone: true, selector: 'lib-test-home', template: 'PACKAGED HOME' })
+@Component({
+  standalone: true,
+  selector: 'lib-test-home',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: 'PACKAGED HOME',
+})
 class HomeComponent {}
 
 @Component({
   standalone: true,
   selector: 'lib-test-shell',
   imports: [RouterOutlet],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<router-outlet />',
 })
 class ShellComponent {}
@@ -23,6 +29,7 @@ class ShellComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-reports',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="reports">CONTRIBUTED REPORTS PAGE</p>',
 })
 class ReportsComponent {}
