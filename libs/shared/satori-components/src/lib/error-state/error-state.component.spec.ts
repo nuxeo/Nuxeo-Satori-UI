@@ -1,5 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { NxsHeadingLevel } from '../heading-level';
@@ -9,6 +14,7 @@ import { type NxsErrorStatus, nxsErrorStatus } from './error-status';
 @Component({
   standalone: true,
   imports: [NxsErrorStateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-error-state
       [status]="status()"
@@ -37,6 +43,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsErrorStateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-error-state retryable />`,
 })
 class BareAttributeHostComponent {}

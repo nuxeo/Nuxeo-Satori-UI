@@ -32,33 +32,33 @@ const mockQuill = vi.hoisted(() => {
     getModule: vi.fn(() => ({ container: { style: { display: '' } } })),
   };
 
-  const QuillCtor = vi.fn(
-    (
-      _editor: HTMLElement,
-      options?: {
-        modules?: {
-          toolbar?: {
-            container?: HTMLElement;
-            handlers?: Record<string, (value?: string | number | boolean) => void>;
-          };
+  // A `function`, not an arrow: the component calls `new Quill(...)`, and since Vitest 4 a
+  // mock called with `new` constructs its implementation, which an arrow function cannot be.
+  const QuillCtor = vi.fn(function (
+    _editor: HTMLElement,
+    options?: {
+      modules?: {
+        toolbar?: {
+          container?: HTMLElement;
+          handlers?: Record<string, (value?: string | number | boolean) => void>;
         };
-      },
-    ) => {
-      const toolbar = options?.modules?.toolbar?.container;
-      const handlers = options?.modules?.toolbar?.handlers ?? {};
-      if (toolbar) {
-        for (const [format, handler] of Object.entries(handlers)) {
-          toolbar.querySelectorAll(`.ql-${format}`).forEach((button) => {
-            button.addEventListener('click', (event) => {
-              event.preventDefault();
-              handler();
-            });
-          });
-        }
-      }
-      return instance;
+      };
     },
-  );
+  ) {
+    const toolbar = options?.modules?.toolbar?.container;
+    const handlers = options?.modules?.toolbar?.handlers ?? {};
+    if (toolbar) {
+      for (const [format, handler] of Object.entries(handlers)) {
+        toolbar.querySelectorAll(`.ql-${format}`).forEach((button) => {
+          button.addEventListener('click', (event) => {
+            event.preventDefault();
+            handler();
+          });
+        });
+      }
+    }
+    return instance;
+  });
   Object.assign(QuillCtor, { sources: { SILENT: 'silent', USER: 'user' } });
   return { instance, QuillCtor };
 });

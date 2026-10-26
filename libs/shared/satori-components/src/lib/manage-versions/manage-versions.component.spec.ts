@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -51,6 +56,7 @@ function versionOf(major: number, minor: number, who = 'jdoe'): NuxeoDocument {
 @Component({
   standalone: true,
   imports: [NxsManageVersionsComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-manage-versions
       [document]="document()"

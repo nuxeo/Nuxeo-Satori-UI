@@ -136,7 +136,7 @@ describe('the configured language at startup', () => {
       http.match(() => true).forEach((request) => request.flush({}));
     }
     expect(status.done).withContext(`initializers settled for ${defaultLanguage}`).toBeTrue();
-    return TestBed.inject(TranslateService).getCurrentLang();
+    return TestBed.inject(TranslateService).getCurrentLang() ?? 'en';
   }
 
   beforeEach(() => {

@@ -1,4 +1,11 @@
-import { Component, DestroyRef, inject, OnInit, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  OnInit,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import {
   MAT_DIALOG_DATA,
   MatDialog,
@@ -79,6 +86,7 @@ export interface ShareSavedSearchDialogData {
     MatSelectModule,
   ],
   templateUrl: './share-saved-search-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './share-saved-search-dialog.component.scss',
 })
 export class ShareSavedSearchDialogComponent implements OnInit {

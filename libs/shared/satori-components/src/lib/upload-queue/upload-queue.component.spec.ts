@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsUploadQueue, type NxsUploadItem } from './upload-queue';
@@ -7,6 +12,7 @@ import { NxsUploadQueueComponent } from './upload-queue.component';
 @Component({
   standalone: true,
   imports: [NxsUploadQueueComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-upload-queue
     label="Files to upload"
     [items]="items()"

@@ -1,4 +1,11 @@
-import { Component, LOCALE_ID, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  LOCALE_ID,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -52,6 +59,7 @@ const PERM_PAGE_SIZE = 10;
     MatPaginatorModule,
   ],
   templateUrl: './admin-user-details-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-user-details-page.component.scss',
 })
 export class AdminUserDetailsPageComponent implements OnInit {

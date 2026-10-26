@@ -88,12 +88,24 @@ mkdirSync(OUT, { recursive: true });
 // Run tsc's own entry script with this Node, not `npx`: `npx` is `npx.cmd` on Windows, which
 // Node only starts through a shell, and a shell re-splits any argument containing a space —
 // every path below, in a checkout under a directory such as `C:\work\Agentic UI`.
+//
+// TypeScript 6 refuses explicit files while a tsconfig.json sits in the working directory
+// (TS5112) and makes `--moduleResolution node` a deprecation error, so `--ignoreConfig` keeps
+// the flags-only configuration and `--ignoreDeprecations 6.0` keeps the emitted CommonJS
+// exactly as it was, the same allowance tsconfig.base.json makes. Both go with TypeScript 7.
+// TypeScript 6 also stopped loading every `@types` package by default; the generators need
+// Node's, so `--types node` names it.
 const TSC = createRequire(import.meta.url).resolve('typescript/bin/tsc');
 try {
   execFileSync(
     process.execPath,
     [
       TSC,
+      '--ignoreConfig',
+      '--ignoreDeprecations',
+      '6.0',
+      '--types',
+      'node',
       '--outDir',
       OUT,
       '--rootDir',

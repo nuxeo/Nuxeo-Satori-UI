@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatTooltip } from '@angular/material/tooltip';
 import { Subject, of, throwError, type Observable } from 'rxjs';
@@ -13,6 +18,7 @@ import { NXS_FAVORITES_CHANGED_EVENT, nxsToggleFavorite } from './toggle-favorit
 @Component({
   standalone: true,
   imports: [NxsFavoriteToggleComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <div class="probe-row">
       <nxs-favorite-toggle

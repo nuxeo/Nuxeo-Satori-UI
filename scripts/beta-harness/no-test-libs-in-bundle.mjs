@@ -7,17 +7,17 @@
  * `ng-mocks` — a test-mocking library — from its **shipped** `/ui` runtime bundle, so
  * ng-mocks' implementation landed in a 1.6 MB customer-facing chunk carrying two
  * `eval()` calls. For an on-premises enterprise product that fails CSP and every SAST
- * review. `tools/stubs/ng-mocks/` replaces it, permanently — upstream will not be
- * changing this — and this is the check that the replacement is actually working.
+ * review. A `file:` stub replaced it until adf-hx left the tree (NXSAT-637); the stub went in
+ * NXSAT-672, and this check stays as the guard that the real library never comes back.
  *
- * Because the stub is indefinite, this gate is too. A future adf-hx release could import
- * a different test helper, which shows up here as a new fingerprint going red rather
- * than as a silent regression.
+ * The gate is permanent all the same: any dependency could ship a test helper in its
+ * runtime bundle, which shows up here as a new fingerprint going red rather than as a
+ * silent regression.
  *
  * It reads the built bytes rather than `package.json`, because the question is not
- * what we declared, it is what a customer receives. A stub that stops working, an
- * `npm install` that quietly restores the real library, or a new upstream version
- * that imports a different test helper all show up here and nowhere else.
+ * what we declared, it is what a customer receives. An `npm install` that quietly brings
+ * the real library in, or a new dependency version that imports a test helper, shows up
+ * here and nowhere else.
  *
  * `eval` is matched as a call — `eval(` — rather than as a word, so the string "eval"
  * inside an unrelated identifier or a sourcemap comment does not fail the gate.
@@ -50,9 +50,9 @@ const BANNED = [
     // in the real library's compiled output.
     needles: ['extendClassicClass', '_ng_mocks_universe__', 'MockMiddleware'],
     why:
-      'ng-mocks is a test-mocking library. adf-hx imports it from its shipped /ui bundle; ' +
-      'tools/stubs/ng-mocks/ is meant to keep it out of the build.',
-    fix: 'Check that package.json still has "ng-mocks": "file:tools/stubs/ng-mocks" and re-run npm ci.',
+      'ng-mocks is a test-mocking library. adf-hx used to import it from its shipped /ui ' +
+      'bundle; nothing in the product should.',
+    fix: 'Find the dependency that imports ng-mocks at runtime (`npm ls ng-mocks`) and remove it.',
   },
   {
     id: 'eval',
@@ -230,8 +230,8 @@ if (hits.length === 0 && missingFiles.length === 0) {
   if (!sawAdfHx) {
     console.log(
       '\n  VACUOUS: no adf-hx code was found in this bundle, so nothing could have\n' +
-        '  carried a banned symbol into it. This run does not demonstrate that the\n' +
-        '  ng-mocks stub works — it demonstrates that adf-hx is not in the bundle.\n' +
+        '  carried a banned symbol into it. This run demonstrates that adf-hx is not\n' +
+        '  in the bundle, not that any substitute for ng-mocks works.\n' +
         '  It becomes load-bearing again only if a component imports @alfresco/adf-hx-content-services.',
     );
   }

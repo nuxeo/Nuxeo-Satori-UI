@@ -141,7 +141,7 @@ walk the user through it** — do not silently continue past a missing prerequis
 - **GitHub CLI**: `gh auth status` logged in with push access to `nuxeo/agentic-ui-poc`.
 - **Signed commits**: `git config commit.gpgsign` is `true`, `gpg.format=ssh`, key registered on
   GitHub as a **Signing Key** (distinct from an Authentication key).
-- **Node 20** (`.nvmrc`) and `npm ci` done. On Node 22+ a built-in `localStorage` shadows jsdom's
+- **Node 24** (`.nvmrc`) and `npm ci` done. On Node 25+ a built-in `localStorage` shadows jsdom's
   and a bare `nx test` fails on correct code — route verification through the gate.
 - **Docker running**, with the shared `nuxeo` container present: the workspace script reads its
   image and licence from it.

@@ -1,5 +1,12 @@
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
-import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ViewChild,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -68,6 +75,7 @@ export interface EditMetadataDialogData {
     MatIconModule,
   ],
   templateUrl: './edit-metadata-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

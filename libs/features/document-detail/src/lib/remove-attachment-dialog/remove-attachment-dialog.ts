@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { TranslatePipe } from '@ngx-translate/core';
 
@@ -7,6 +7,7 @@ import { TranslatePipe } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslatePipe, MatDialogModule],
   templateUrl: './remove-attachment-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .remove-dialog {

@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { WidgetContainerComponent } from './widget-container.component';
@@ -11,6 +16,7 @@ import { WidgetContainerComponent } from './widget-container.component';
 @Component({
   standalone: true,
   imports: [WidgetContainerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <lib-widget-container [title]="title()" [icon]="icon()" [iconColor]="iconColor()">
       <button widgetActions type="button" class="probe-action">Refresh</button>
@@ -59,6 +65,7 @@ describe('WidgetContainerComponent', () => {
 
   it('honours headingLevel when widgets sit under a section heading', async () => {
     @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
       standalone: true,
       imports: [WidgetContainerComponent],
       template: `<lib-widget-container [title]="'Nested'" [headingLevel]="3" />`,

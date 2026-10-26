@@ -1,4 +1,4 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -33,6 +33,7 @@ const RAW = 'blob:http://localhost/real-object-url';
  */
 @Component({
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './angular-security-context.spec.html',
 })
 class SecurityContextHost {

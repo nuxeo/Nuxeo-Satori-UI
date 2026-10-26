@@ -1,4 +1,4 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import {
@@ -67,6 +67,7 @@ const layout = (overrides: Partial<ResolvedLayout> = {}): ResolvedLayout => ({
 @Component({
   selector: 'lib-acme-claim-panel',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<p class="acme-claim-panel">{{ heading() }}: {{ document()?.title }}</p>`,
 })
 class ClaimPanelComponent {

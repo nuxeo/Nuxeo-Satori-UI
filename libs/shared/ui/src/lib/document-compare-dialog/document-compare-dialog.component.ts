@@ -1,4 +1,12 @@
-import { Component, LOCALE_ID, computed, effect, inject, signal } from '@angular/core';
+import {
+  Component,
+  LOCALE_ID,
+  computed,
+  effect,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCheckboxModule } from '@angular/material/checkbox';
@@ -39,6 +47,7 @@ export interface DocumentCompareDialogData {
     CompareIconImageComponent,
   ],
   templateUrl: './document-compare-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './document-compare-dialog.scss',
 })
 export class DocumentCompareDialogComponent {
