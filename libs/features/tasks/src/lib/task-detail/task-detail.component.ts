@@ -31,7 +31,8 @@ import {
   DocumentService,
   NuxeoApiBase,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
+import { NXS_PRIMITIVE_IDS } from '@nuxeo/satori-platform/components';
+import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import {
@@ -55,7 +56,7 @@ import {
     MatSelectModule,
     MatDatepickerModule,
     MatSnackBarModule,
-    SatHeaderBar,
+    ExtensionOutletComponent,
     SatTagModule,
   ],
   templateUrl: './task-detail.component.html',
@@ -75,6 +76,7 @@ export class TaskDetailComponent implements OnInit {
   private readonly http = inject(HttpClient);
   private readonly destroyRef = inject(DestroyRef);
 
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   readonly task = signal<NuxeoTask | null>(null);
   readonly targetDoc = signal<NuxeoDocument | null>(null);
   readonly loading = signal(true);

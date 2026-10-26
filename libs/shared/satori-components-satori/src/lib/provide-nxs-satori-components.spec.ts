@@ -17,6 +17,7 @@ import {
   NxsBreadcrumbsComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
+  NxsStatusTagComponent,
   NxsTagComponent,
   provideNxsComponents,
 } from '@nuxeo/satori-platform/components';
@@ -31,12 +32,14 @@ import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.
 import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
+import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.avatar, NxsAvatarComponent, NxsSatoriAvatarComponent],
   [NXS_PRIMITIVE_IDS.breadcrumbs, NxsBreadcrumbsComponent, NxsSatoriBreadcrumbsComponent],
   [NXS_PRIMITIVE_IDS.tag, NxsTagComponent, NxsSatoriTagComponent],
+  [NXS_PRIMITIVE_IDS.statusTag, NxsStatusTagComponent, NxsSatoriStatusTagComponent],
   [NXS_PRIMITIVE_IDS.richTooltip, NxsRichTooltipComponent, NxsSatoriRichTooltipComponent],
   [NXS_PRIMITIVE_IDS.errorState, NxsErrorStateComponent, NxsSatoriErrorStateComponent],
 ];

@@ -641,8 +641,8 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Five component-registry IDs for the primitives Satori also ships. Each resolves to a Material
-implementation from `@nuxeo/satori-platform/components`, and the first four to a Satori-backed one
+Six component-registry IDs for the primitives Satori also ships. Each resolves to a Material
+implementation from `@nuxeo/satori-platform/components`, and all but `errorState` to a Satori-backed one
 when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
@@ -652,6 +652,7 @@ Packages access, leave it out and every ID still resolves, on Material.
 | `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                             | `sat-avatar`                                             |
 | `nxs.primitives.breadcrumbs` | `items`, `label`                                                 | `sat-breadcrumbs`                                        |
 | `nxs.primitives.tag`         | `label`, `color`                                                 | `sat-category-tag`                                       |
+| `nxs.primitives.statusTag`   | `label`, `status`, `hideIcon`                                    | `sat-status-tag`                                         |
 | `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                     | `sat-rich-tooltip`                                       |
 | `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler` | — (Material only: Satori's error states need Satori 1.0) |
 
@@ -675,11 +676,15 @@ the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An ov
 implements the matching `Nxs…Inputs` interface.
 
 **Where packaged screens render them.** Browse and the collection page render their breadcrumb
-trail through `nxs.primitives.breadcrumbs`, and `nxs-document-list` renders each row's type through
-`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`, so an override of
-those three IDs reaches them. Every other screen still uses the `sat-*` elements directly until it
-moves onto these IDs; there the IDs render only where a host resolves them — a
-`lib-extension-outlet` with a `componentId` — and in the library's Storybook.
+trail through `nxs.primitives.breadcrumbs`. Browse, the collection page, document detail and task
+detail render their status tags through `nxs.primitives.statusTag`. `nxs-document-list` renders each
+row's type through `nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`. An
+override of those IDs reaches these screens.
+
+Other `sat-*` uses in packaged screens are not yet on these IDs, so an override does not reach them.
+Those elements render directly until they move onto the IDs. Where a host resolves an ID through a
+`lib-extension-outlet` with a `componentId`, and in the library's Storybook, the IDs render as
+described above.
 
 ### `nxs-` components registered for a slot
 
