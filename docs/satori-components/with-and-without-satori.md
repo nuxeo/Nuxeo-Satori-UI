@@ -87,6 +87,19 @@ Both are 36 px teal circles. Satori's has a thin white border and uses Noto Sans
 
 Satori's is a little larger — 24 px tall with 14 px text, against 20 px with 12 px — with softer colours. Neither cuts a long label short: the built-in one wraps it onto a further line inside the tag, as Web UI's tags do, while Satori's stays on one line and spills out of a narrow box.
 
+### Status tag
+
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsStatusTagComponent`                                                                                              |
+| Registered ID   | `nxs.primitives.statusTag`                                                                                           |
+| With Satori     | Satori's own component: `NxsSatoriStatusTagComponent` renders `<sat-status-tag>`                                     |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
+
+![Status tag: without Satori on the left, with Satori on the right](status-tag-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
+
+Both take the same label, `status` and `hideIcon`, and both have the seven statuses Satori's status tag has. The built-in one draws its colours from Material's theme roles, so its palette differs from Satori's. Each status takes its own background and text colour, which `--nxs-status-tag-<status>-background` and `-foreground` override.
+
 ### Breadcrumbs
 
 | Field           | Value                                                                                                                |
@@ -702,13 +715,13 @@ It follows Web UI's audit search: every filter and the sort go to the server, so
 
 ## Full screenshots
 
-Storybook's "Primitives/By registered ID" story renders the four registered IDs that have a Satori variant — avatar, tag, breadcrumbs and rich tooltip — with one template and the same inputs. The fifth, `nxs.primitives.errorState`, has no Satori variant yet, so the story leaves it out.
+Storybook's "Primitives/By registered ID" story renders the five registered IDs that have a Satori variant — avatar, tag, status tag, breadcrumbs and rich tooltip — with one template and the same inputs. The sixth, `nxs.primitives.errorState`, has no Satori variant yet, so the story leaves it out.
 
-![The four primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
+![The five primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
-![The four primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
+![The five primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
 
-![The four primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
+![The five primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
 
 ## Detailed differences
 
@@ -723,11 +736,11 @@ Colours are given as background / text.
 
 ## What a customer without access also loses
 
-The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Satori's SVG icon set), the app chrome (`sat-app-header`, `sat-platform-nav`, `sat-logo`) and the status tag (`sat-status-tag`). The base library has no replacement for these.
+The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Satori's SVG icon set) and the app chrome (`sat-app-header`, `sat-platform-nav`, `sat-logo`). The base library has no replacement for these.
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's and a manifest can swap them. Its other screens still use `<sat-avatar>`, `<sat-category-tag>`, `<sat-status-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and a manifest cannot swap them.
+The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
 
 Only things rendered by ID, such as customer extensions, go through the choice.
 
@@ -739,7 +752,6 @@ Only things rendered by ID, such as customer extensions, go through the choice.
 ## Open questions
 
 - Should our own screens move from `sat-*` to the registered IDs so customers can swap them?
-- Does the status tag need a built-in version?
 
 ## All components
 
@@ -751,6 +763,7 @@ The components in the library today:
 | ------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
 | Avatar                          | `nxs.primitives.avatar`                                                                                                 | Yes — Satori's own component |
 | Tag                             | `nxs.primitives.tag`                                                                                                    | Yes — Satori's own component |
+| Status tag                      | `nxs.primitives.statusTag`                                                                                              | Yes — Satori's own component |
 | Breadcrumbs                     | `nxs.primitives.breadcrumbs`                                                                                            | Yes — Satori's own component |
 | Rich tooltip                    | `nxs.primitives.richTooltip`                                                                                            | Yes — Satori's own component |
 | Icon                            | —                                                                                                                       | Same component; theme only   |
