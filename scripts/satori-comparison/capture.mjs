@@ -630,11 +630,11 @@ try {
   }
 
   // The "Primitives/By registered ID" story in both Storybooks: the whole viewport, as it renders,
-  // and a close-up of the four primitives together for the side-by-side.
+  // and a close-up of the five primitives together for the side-by-side.
   const full = {};
   const PRIMITIVE_HOSTS = {
-    without: 'nxs-avatar, nxs-breadcrumbs, nxs-tag, nxs-rich-tooltip',
-    with: 'nxs-satori-avatar, nxs-satori-breadcrumbs, nxs-satori-tag, nxs-satori-rich-tooltip',
+    without: 'nxs-avatar, nxs-breadcrumbs, nxs-tag, nxs-status-tag, nxs-rich-tooltip',
+    with: 'nxs-satori-avatar, nxs-satori-breadcrumbs, nxs-satori-tag, nxs-satori-status-tag, nxs-satori-rich-tooltip',
   };
   for (const [side, book] of [
     ['without', 'without'],
@@ -681,8 +681,8 @@ try {
       } else {
         record(
           `Full screenshot (${side})`,
-          'all four IDs resolve to Satori wrappers',
-          seen.nxsSatoriHosts === 4,
+          'all five IDs resolve to Satori wrappers',
+          seen.nxsSatoriHosts === 5,
           `${seen.nxsSatoriHosts} nxs-satori-* host(s)`,
         );
       }
@@ -694,7 +694,7 @@ try {
     await compose(
       browser,
       {
-        title: 'All four primitives, by registered ID',
+        title: 'All five primitives, by registered ID',
         subtitle:
           'The "Primitives/By registered ID" story: one template, the same inputs. Close-ups at 2x device pixel ratio.',
         left: {
@@ -757,7 +757,7 @@ try {
       ...components.flatMap((c) => [`## ${c.heading}`, '', `![${c.heading}](${c.image})`, '']),
       '## Full screenshots',
       '',
-      `![All four primitives](${FULL_IMAGES.sideBySide})`,
+      `![All five primitives](${FULL_IMAGES.sideBySide})`,
       '',
       '## Checks',
       '',
