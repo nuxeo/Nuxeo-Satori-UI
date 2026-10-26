@@ -26,7 +26,9 @@
  *   the surface's rounded outline. A screenshot around the surface with the element focused is
  *   compared with one taken with nothing focused, so the surface's own shadow and anti-aliasing,
  *   which do not change, are never counted. That baseline is taken after one unjudged pass of Tab,
- *   so a message that leaving a field reveals, such as a required field's, is already in it.
+ *   so a message that leaving a field reveals, such as a required field's, is already in it — and
+ *   the dialog is judged by every rule above again once settled, so such a message cannot break
+ *   the layout unseen.
  *
  * A title that is visually hidden (Nuxeo Drive's while it checks) names the dialog and paints
  * nothing, so it is not judged.
@@ -480,6 +482,14 @@ export async function checkDialogLayout(page, options = {}) {
   await page.evaluate(() => window.scrollTo(0, 0));
   const { failures, surface: measured } = await page.evaluate(measureDialogLayout, rules);
   if (!measured) return failures;
+  // What leaving each field reveals is laid out too, and judged by the same rules: a revealed
+  // message that overflows is a layout failure, and the focus baseline below includes it.
+  await settleByTabbing(page, rules);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  const settled = await page.evaluate(measureDialogLayout, rules);
+  for (const failure of settled.failures) {
+    if (!failures.includes(failure)) failures.push(`after leaving each field: ${failure}`);
+  }
   failures.push(...(await checkFocus(page, rules)));
   return failures;
 }
@@ -519,15 +529,14 @@ async function settleByTabbing(page, rules) {
 /**
  * Tab through the dialog and fail each element whose focus indicator paints outside the surface.
  *
- * The dialog is tabbed through once unjudged first (`settleByTabbing`), so the baseline shows
- * what leaving each field reveals. The window is then made as tall as the page, so focusing an
+ * Runs on the settled dialog (`settleByTabbing`, in `checkDialogLayout`), so the baseline shows
+ * what leaving each field reveals. The window is made as tall as the page, so focusing an
  * element never scrolls it out of the screenshot, and restored after. Tabbing starts from a click
  * beside the surface: after a `blur()` the browser would resume from the element that had focus
  * and skip those before it.
  */
 async function checkFocus(page, rules) {
   const failures = [];
-  await settleByTabbing(page, rules);
   const viewport = page.viewportSize();
   const height = await page.evaluate(() => document.documentElement.scrollHeight);
   if (viewport && height > viewport.height) {

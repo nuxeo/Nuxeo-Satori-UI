@@ -208,6 +208,20 @@ test('content wider than its scroll container scrolls sideways inside the dialog
   reports(failures, /<div.mat-mdc-dialog-content> scrolls sideways: \d+ px of content in \d+ px/);
 });
 
+test('a message that leaving a field reveals, wider than its scroll container', async () => {
+  // Laid out only after the field is left, so a check of the dialog as it opens never sees it.
+  const content =
+    '<input aria-label="To" required onblur="this.nextElementSibling.hidden = false" />' +
+    '<p hidden style="width: 600px; margin: 4px 0 0">Required</p>';
+  const failures = await check(
+    dialog({ content, css: '.mat-mdc-dialog-content { overflow: auto; }' }),
+  );
+  reports(
+    failures,
+    /after leaving each field: <div.mat-mdc-dialog-content>.* scrolls sideways: \d+ px of content/,
+  );
+});
+
 test('a date field narrower than its date', async () => {
   const failures = await check(dialog({ css: 'input { width: 40px; }' }));
   reports(failures, /the "To" field cuts off "2\/1\/2031"/);
