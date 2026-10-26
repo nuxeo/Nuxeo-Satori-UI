@@ -10,8 +10,9 @@ Package tools are launched through `package-command.mjs` without a shell on ever
 `spawnToolSync` returns a spawn-style error result when a tool cannot be resolved; invalid
 shell options still throw. Sanitizer audit registry keys use `/` even when discovery or
 TypeScript declarations supply Windows paths; filesystem operations retain native paths.
-The Windows workflow explicitly builds `nuxeo-ui` because an affected build need not select
-the application, whereas the bundle gate always requires its output.
+The platform jobs use the runtime pinned in `.nvmrc`. The Windows workflow explicitly builds
+`nuxeo-ui` because an affected build need not select the application, whereas the bundle
+gate always requires its output.
 
 `npm run beta:e2e-negative-control` uses the portable Node runner (the `.sh` file is only
 a compatibility wrapper). It preserves separate baseline/starved reports and artifacts,

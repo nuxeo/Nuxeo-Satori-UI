@@ -27,6 +27,14 @@ const success = {
 };
 const analysis = { ref: context.ref, commit_sha: context.sha, tool: { name: 'CodeQL' } };
 
+test('all platform jobs use the repository-pinned runtime accepted by gate zero', () => {
+  for (const job of Object.values(workflow.jobs)) {
+    const setup = job.steps.find((step) => step.uses?.startsWith('actions/setup-node@'));
+    assert.equal(setup.with['node-version-file'], '.nvmrc');
+    assert.equal(setup.with['node-version'], undefined);
+  }
+});
+
 test('a clean Windows runner explicitly builds the bundle before the full gate', () => {
   const steps = workflow.jobs['windows-gate'].steps;
   const build = steps.findIndex((step) => step.run === 'npx nx build nuxeo-ui');
