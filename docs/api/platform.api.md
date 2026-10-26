@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-130 exported symbol(s).
+131 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -456,18 +456,18 @@ interface NxsCreateVersionDialogData {
 }
 type NxsCreateVersionDialogResult = NuxeoDocument | undefined;
 class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly min: _angular_core.InputSignal<Date | null>;
-    readonly max: _angular_core.InputSignal<Date | null>;
-    readonly hint: _angular_core.InputSignal<string>;
-    readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly value: _angular_core.ModelSignal<Date | null>;
-    protected readonly adapterMin: _angular_core.Signal<unknown>;
-    protected readonly adapterMax: _angular_core.Signal<unknown>;
-    protected readonly isDisabled: _angular_core.Signal<boolean>;
-    protected readonly problem: _angular_core.Signal<"max" | "min" | "parse" | null>;
-    protected readonly example: _angular_core.Signal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly min: import("@angular/core").InputSignal<Date | null>;
+    readonly max: import("@angular/core").InputSignal<Date | null>;
+    readonly hint: import("@angular/core").InputSignal<string>;
+    readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly value: import("@angular/core").ModelSignal<Date | null>;
+    protected readonly adapterMin: import("@angular/core").Signal<unknown>;
+    protected readonly adapterMax: import("@angular/core").Signal<unknown>;
+    protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly problem: import("@angular/core").Signal<"max" | "min" | "parse" | null>;
+    protected readonly example: import("@angular/core").Signal<string>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
@@ -1391,13 +1391,13 @@ class NxsMetadataEditorComponent {
     readonly validChange: import("@angular/core").OutputEmitterRef<boolean>;
     protected readonly id: string;
     protected readonly form: FormGroup<Record<string, AbstractControl<any, any, any>>>;
-    protected readonly structure: _angular_core.WritableSignal<number>;
-    protected readonly submitted: _angular_core.WritableSignal<boolean>;
-    protected readonly invalidCount: _angular_core.WritableSignal<number>;
-    protected readonly selectedTab: _angular_core.WritableSignal<number>;
-    protected readonly standardFields: _angular_core.Signal<readonly EditorField[]>;
-    protected readonly typeSections: _angular_core.Signal<readonly NxsEditorSection[]>;
-    protected readonly tabs: _angular_core.Signal<readonly NxsTab[]>;
+    protected readonly structure: import("@angular/core").WritableSignal<number>;
+    protected readonly submitted: import("@angular/core").WritableSignal<boolean>;
+    protected readonly invalidCount: import("@angular/core").WritableSignal<number>;
+    protected readonly selectedTab: import("@angular/core").WritableSignal<number>;
+    protected readonly standardFields: import("@angular/core").Signal<readonly EditorField[]>;
+    protected readonly typeSections: import("@angular/core").Signal<readonly NxsEditorSection[]>;
+    protected readonly tabs: import("@angular/core").Signal<readonly NxsTab[]>;
     protected readonly errorMatcher: ErrorStateMatcher;
     constructor();
     validate(): boolean;
@@ -1527,32 +1527,33 @@ class NxsPagerComponent {
 }
 class NxsPermissionsPanelComponent {
     protected datesValid(): boolean;
-    readonly documentId: _angular_core.InputSignal<string>;
-    readonly permissionsChanged: _angular_core.InputSignal<(() => void) | null>;
+    readonly documentId: import("@angular/core").InputSignal<string>;
+    readonly permissionsChanged: import("@angular/core").InputSignal<(() => void) | null>;
+    readonly offer: import("@angular/core").InputSignal<"all" | "type">;
     protected readonly idPrefix: string;
     protected readonly localColumns: string[];
     protected readonly inheritedColumns: string[];
     protected readonly otherColumns: string[];
-    protected readonly snapshot: _angular_core.WritableSignal<NxsPermissionsSnapshot | null>;
-    protected readonly loading: _angular_core.WritableSignal<boolean>;
-    protected readonly loadError: _angular_core.WritableSignal<LoadError | null>;
-    protected readonly saving: _angular_core.WritableSignal<boolean>;
-    protected readonly outcome: _angular_core.WritableSignal<NxsSaveOutcome | null>;
-    protected readonly inheritanceBusy: _angular_core.WritableSignal<boolean>;
-    protected readonly inheritanceError: _angular_core.WritableSignal<string | null>;
-    protected readonly staged: _angular_core.WritableSignal<ReadonlyMap<string, NxsPermissionChange>>;
-    protected readonly editor: _angular_core.WritableSignal<EditorState | null>;
-    protected readonly editorPrincipal: _angular_core.WritableSignal<UserGroupSuggestion | null>;
-    protected readonly editorQuery: _angular_core.WritableSignal<string>;
-    protected readonly editorPermission: _angular_core.WritableSignal<string>;
-    protected readonly editorDated: _angular_core.WritableSignal<boolean>;
-    protected readonly editorBegin: _angular_core.WritableSignal<Date | null>;
-    protected readonly editorEnd: _angular_core.WritableSignal<Date | null>;
-    protected readonly editorSubmitted: _angular_core.WritableSignal<boolean>;
-    protected readonly suggestions: _angular_core.WritableSignal<UserGroupSuggestion[]>;
-    protected readonly loadErrorKey: _angular_core.Signal<string>;
-    protected readonly canManage: _angular_core.Signal<boolean>;
-    protected readonly editable: _angular_core.Signal<boolean>;
+    protected readonly snapshot: import("@angular/core").WritableSignal<NxsPermissionsSnapshot | null>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly loadError: import("@angular/core").WritableSignal<LoadError | null>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
+    protected readonly outcome: import("@angular/core").WritableSignal<NxsSaveOutcome | null>;
+    protected readonly inheritanceBusy: import("@angular/core").WritableSignal<boolean>;
+    protected readonly inheritanceError: import("@angular/core").WritableSignal<string | null>;
+    protected readonly staged: import("@angular/core").WritableSignal<ReadonlyMap<string, NxsPermissionChange>>;
+    protected readonly editor: import("@angular/core").WritableSignal<EditorState | null>;
+    protected readonly editorPrincipal: import("@angular/core").WritableSignal<UserGroupSuggestion | null>;
+    protected readonly editorQuery: import("@angular/core").WritableSignal<string>;
+    protected readonly editorPermission: import("@angular/core").WritableSignal<string>;
+    protected readonly editorDated: import("@angular/core").WritableSignal<boolean>;
+    protected readonly editorBegin: import("@angular/core").WritableSignal<Date | null>;
+    protected readonly editorEnd: import("@angular/core").WritableSignal<Date | null>;
+    protected readonly editorSubmitted: import("@angular/core").WritableSignal<boolean>;
+    protected readonly suggestions: import("@angular/core").WritableSignal<UserGroupSuggestion[]>;
+    protected readonly loadErrorKey: import("@angular/core").Signal<string>;
+    protected readonly canManage: import("@angular/core").Signal<boolean>;
+    protected readonly editable: import("@angular/core").Signal<boolean>;
     protected readonly trackItem: (_index: number, item: LocalItem) => string;
     protected readonly pendingCount: import("@angular/core").Signal<number>;
     protected readonly permissionGroups: import("@angular/core").Signal<{
@@ -1931,14 +1932,14 @@ class NxsShareExternalDialogComponent {
     protected datesValid(): boolean;
     protected readonly rights: readonly string[];
     protected readonly mailHint = "permissions.notification.mail-hint";
-    protected readonly email: _angular_core.WritableSignal<string>;
-    protected readonly emailLeft: _angular_core.WritableSignal<boolean>;
-    protected readonly right: _angular_core.WritableSignal<string>;
-    protected readonly begin: _angular_core.WritableSignal<Date | null>;
-    protected readonly end: _angular_core.WritableSignal<Date | null>;
-    protected readonly comment: _angular_core.WritableSignal<string>;
-    protected readonly saving: _angular_core.WritableSignal<"another" | "create" | null>;
-    protected readonly emailValid: _angular_core.Signal<boolean>;
+    protected readonly email: import("@angular/core").WritableSignal<string>;
+    protected readonly emailLeft: import("@angular/core").WritableSignal<boolean>;
+    protected readonly right: import("@angular/core").WritableSignal<string>;
+    protected readonly begin: import("@angular/core").WritableSignal<Date | null>;
+    protected readonly end: import("@angular/core").WritableSignal<Date | null>;
+    protected readonly comment: import("@angular/core").WritableSignal<string>;
+    protected readonly saving: import("@angular/core").WritableSignal<"another" | "create" | null>;
+    protected readonly emailValid: import("@angular/core").Signal<boolean>;
     protected readonly emailError: ErrorStateMatcher;
     protected readonly endBeforeBegin: import("@angular/core").Signal<boolean>;
     protected readonly valid: import("@angular/core").Signal<boolean>;
@@ -2245,15 +2246,15 @@ class NxsUpdatePermissionDialogComponent {
     protected readonly principal: string;
     protected readonly rights: readonly string[];
     protected readonly mailHint = "permissions.notification.mail-hint";
-    protected readonly right: _angular_core.WritableSignal<string>;
-    protected readonly dated: _angular_core.WritableSignal<boolean>;
-    protected readonly begin: _angular_core.WritableSignal<Date | null>;
-    protected readonly end: _angular_core.WritableSignal<Date | null>;
-    protected readonly notify: _angular_core.WritableSignal<boolean>;
-    protected readonly comment: _angular_core.WritableSignal<string>;
-    protected readonly saving: _angular_core.WritableSignal<boolean>;
-    protected readonly endBeforeBegin: _angular_core.Signal<boolean>;
-    protected readonly valid: _angular_core.Signal<boolean>;
+    protected readonly right: import("@angular/core").WritableSignal<string>;
+    protected readonly dated: import("@angular/core").WritableSignal<boolean>;
+    protected readonly begin: import("@angular/core").WritableSignal<Date | null>;
+    protected readonly end: import("@angular/core").WritableSignal<Date | null>;
+    protected readonly notify: import("@angular/core").WritableSignal<boolean>;
+    protected readonly comment: import("@angular/core").WritableSignal<string>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
+    protected readonly endBeforeBegin: import("@angular/core").Signal<boolean>;
+    protected readonly valid: import("@angular/core").Signal<boolean>;
     protected label(permission: string): string;
     protected update(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
@@ -2480,8 +2481,8 @@ class TranslatedDatepickerIntl extends MatDatepickerIntl {
     constructor();
     formatYearRange(start: string, end: string): string;
     formatYearRangeLabel(start: string, end: string): string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<TranslatedDatepickerIntl>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 function nxsAceTimeFrame(ace: Pick<NuxeoAce, 'begin' | 'end'>, translate: (key: string, params?: Record<string, unknown>) => string, locale: string): string;
@@ -4589,7 +4590,7 @@ class DocumentViewerComponent {
 }
 class EditCollectionDialogComponent {
     protected form?: NgForm;
-    readonly saving: _angular_core.WritableSignal<boolean>;
+    readonly saving: import("@angular/core").WritableSignal<boolean>;
     title: string;
     description: string;
     nature: string | null;
@@ -4788,8 +4789,8 @@ interface StoryboardItem {
 }
 type TranslateFn = (key: string, params?: Record<string, unknown>) => string;
 class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<TranslatedDatepickerIntl>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<TranslatedDatepickerIntl, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class UiComponent {
