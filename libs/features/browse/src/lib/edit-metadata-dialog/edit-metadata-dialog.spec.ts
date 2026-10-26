@@ -1,8 +1,11 @@
+import { DateAdapter } from '@angular/material/core';
+import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -12,7 +15,7 @@ import {
   type DirectoryEntry,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { EditMetadataDialogComponent, type EditMetadataDialogData } from './edit-metadata-dialog';
 
@@ -75,7 +78,6 @@ describe('EditMetadataDialogComponent (NXSAT-192)', () => {
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: BrowseService, useValue: mockBrowseService },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
       ],
     })
       .overrideComponent(EditMetadataDialogComponent, {
@@ -142,7 +144,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
   let getEntries: ReturnType<typeof vi.fn<DirectoryService['getEntries']>>;
   let getAllL10nEntries: ReturnType<typeof vi.fn<DirectoryService['getAllL10nEntries']>>;
   let updateDocument: ReturnType<typeof vi.fn<BrowseService['updateDocument']>>;
-  let snackOpen: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let close: ReturnType<typeof vi.fn>;
 
   async function setup(data: EditMetadataDialogData = dialogData): Promise<void> {
@@ -154,7 +156,8 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     updateDocument = vi.fn<BrowseService['updateDocument']>(() =>
       of({ uid: 'doc-1', title: 'Saved' } as NuxeoDocument),
     );
-    snackOpen = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     close = vi.fn();
 
     await TestBed.configureTestingModule({
@@ -165,7 +168,6 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
         { provide: MAT_DIALOG_DATA, useValue: data },
         { provide: DirectoryService, useValue: { getEntries, getAllL10nEntries } },
         { provide: BrowseService, useValue: { updateDocument } },
-        { provide: MatSnackBar, useValue: { open: snackOpen } },
       ],
     })
       .overrideComponent(EditMetadataDialogComponent, {
@@ -300,13 +302,59 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     expect(component.showExpiresError()).toBe(false);
   });
 
-  it('tolerates a half-typed date without showing an error', async () => {
+  it.each([
+    { locale: enUS, input: '12/31/2026' },
+    { locale: fr, input: '31/12/2026' },
+    { locale: de, input: '31.12.2026' },
+    { locale: nl, input: '31-12-2026' },
+    { locale: ja, input: '2026/12/31' },
+    { locale: th, input: '31/12/2026' },
+    { locale: zhCN, input: '26-12-31' },
+  ])(
+    'accepts Expires "$input" using $locale.code and retains the parsed date',
+    async ({ locale, input }) => {
+      await setup();
+      fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(locale);
+      component.onExpiresInput({ target: { value: input } } as unknown as Event);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.showExpiresError()).toBe(false);
+      expect(component.expiresErrorMatcher.isErrorState()).toBe(false);
+      expect([
+        component.expires?.getFullYear(),
+        component.expires?.getMonth(),
+        component.expires?.getDate(),
+      ]).toEqual([2026, 11, 31]);
+      component.save();
+      expect(updateDocument).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ 'dc:expired': new Date(2026, 11, 31).toISOString() }),
+      );
+    },
+  );
+
+  it('shows and blocks locale-invalid Expires text even when the model previously held a valid date', async () => {
+    await setup();
+    fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(de);
+    component.expires = new Date(2026, 3, 3);
+    component.onExpiresInput({ target: { value: '03/04/2026' } } as unknown as Event);
+    expect(component.isExpiresValid()).toBe(false);
+    expect(component.showExpiresError()).toBe(true);
+    expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
+    // Material's ngModel turns an invalid adapter date into null. Non-empty raw text must
+    // still block submission rather than clearing the stored expiry.
+    component.onExpiresChange(null);
+    expect(component.isExpiresValid()).toBe(false);
+    component.save();
+    expect(updateDocument).not.toHaveBeenCalled();
+  });
+
+  it('blocks a half-typed date and shows an error', async () => {
     await setup();
 
     component.onExpiresInput(expiresInputEvent('12/0'));
 
-    expect(component.isExpiresValid()).toBe(true);
-    expect(component.showExpiresError()).toBe(false);
+    expect(component.isExpiresValid()).toBe(false);
+    expect(component.showExpiresError()).toBe(true);
   });
 
   it('keeps the raw text when the datepicker reports an unparseable date', async () => {
@@ -343,7 +391,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
       'dc:expired': '2027-05-06T00:00:00.000Z',
     });
     expect(component.saving()).toBe(false);
-    expect(snackOpen).toHaveBeenCalledWith('Document updated', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Document updated');
     expect(close).toHaveBeenCalledWith({ uid: 'doc-1', title: 'Saved' });
   });
 
@@ -357,7 +405,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     expect(updateDocument.mock.calls[0][1]).toMatchObject({ 'dc:expired': null });
   });
 
-  it('sends a null expiry when the datepicker parsed a half-typed date to Invalid Date', async () => {
+  it('refuses to save when the datepicker parsed a half-typed date to Invalid Date', async () => {
     await setup();
     component.onExpiresInput(expiresInputEvent('12/'));
     component.onExpiresChange(new Date(Number.NaN));
@@ -365,7 +413,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     component.save();
     await flushAsync();
 
-    expect(updateDocument.mock.calls[0][1]).toMatchObject({ 'dc:expired': null });
+    expect(updateDocument).not.toHaveBeenCalled();
   });
 
   it('resets saving and keeps the dialog open when the update fails', async () => {
@@ -376,7 +424,7 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     await flushAsync();
 
     expect(component.saving()).toBe(false);
-    expect(snackOpen).toHaveBeenCalledWith('Failed to update document', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to update document');
     expect(close).not.toHaveBeenCalled();
   });
 
@@ -408,5 +456,52 @@ describe('EditMetadataDialogComponent vocabulary pickers and save', () => {
     expect(updateDocument).not.toHaveBeenCalled();
     expect(component.saving()).toBe(false);
     expect(close).not.toHaveBeenCalled();
+  });
+});
+
+/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
+async function typeKeystrokes(
+  fixture: ComponentFixture<unknown>,
+  input: HTMLInputElement,
+  text: string,
+): Promise<string[]> {
+  const shown: string[] = [];
+  for (let end = 1; end <= text.length; end++) {
+    input.value = text.slice(0, end);
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    shown.push(input.value);
+  }
+  return shown;
+}
+
+const TYPED_EXPIRY = '12/31/2027';
+const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
+const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
+
+// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
+// write back and erase the text mid-entry. Only a real template exercises that write-back.
+describe('EditMetadataDialogComponent Expires typed into the real field', () => {
+  it('keeps every partial entry in the field and holds the finished date', async () => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [testTranslateModule(), EditMetadataDialogComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: { close: vi.fn() } },
+        { provide: MAT_DIALOG_DATA, useValue: dialogData },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: BrowseService, useValue: mockBrowseService },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(EditMetadataDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
   });
 });

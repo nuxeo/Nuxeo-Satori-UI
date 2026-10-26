@@ -48,6 +48,14 @@ const EVIDENCE_REQUIRED = new Set(['complete', 'complete-with-deviations']);
  */
 const CURRENT_GATE_COUNT = await countGates();
 
+/**
+ * How many gates a report shows reaching a verdict. `gates.ran` excludes a gate that reported NOT
+ * RUN, which `results` includes; reports from before `gates` existed have only `results`.
+ */
+function gatesRan(report) {
+  return report.gates?.ran?.length ?? report.results?.length ?? 0;
+}
+
 if (!existsSync(statePath)) {
   console.error(
     `state-check: ${statePath} does not exist. Nothing to verify, so this is not a pass.`,
@@ -101,7 +109,7 @@ for (const p of state.phases ?? []) {
     if (p.evidence?.gate) {
       const gate = await resolveGate(p.evidence.gate);
       if (gate.ok) {
-        const ran = gate.report.results?.length ?? gate.report.gates?.ran?.length ?? 0;
+        const ran = gatesRan(gate.report);
         row.gate = `${gate.report.verdict} (${ran} of ${CURRENT_GATE_COUNT} gates) — ${gate.rel}`;
       } else {
         problems.push({
@@ -181,9 +189,7 @@ for (const p of state.phases ?? []) {
   // two reports in this corpus read `"verdict": "pass"` having run one gate of six.
   if (p.evidence.gate) {
     const gate = await resolveGate(p.evidence.gate);
-    const ranCount = gate.ok
-      ? (gate.report.results?.length ?? gate.report.gates?.ran?.length ?? 0)
-      : 0;
+    const ranCount = gate.ok ? gatesRan(gate.report) : 0;
     row.gate = gate.ok
       ? `${gate.report.verdict} (${ranCount} of ${CURRENT_GATE_COUNT} gates) — ${gate.rel}`
       : null;
@@ -221,10 +227,10 @@ for (const p of state.phases ?? []) {
       // citation is kept rather than replaced: it is the historical fact of what was
       // actually run at sign-off, and overwriting it would erase the very gap this
       // warning exists to surface.
-      const signedOff = gate.report.results?.length ?? gate.report.gates?.ran?.length ?? 0;
+      const signedOff = gatesRan(gate.report);
       if (signedOff < CURRENT_GATE_COUNT) {
         const re = p.evidence.regate ? await resolveGate(p.evidence.regate) : null;
-        const reRan = re?.ok ? (re.report.results?.length ?? 0) : 0;
+        const reRan = re?.ok ? gatesRan(re.report) : 0;
         if (re?.ok && re.report.verdict === 'pass' && reRan >= CURRENT_GATE_COUNT) {
           row.gate += `  [re-gated ${reRan}/${CURRENT_GATE_COUNT}: ${re.rel}]`;
         } else if (re?.ok && re.report.verdict === 'pass') {

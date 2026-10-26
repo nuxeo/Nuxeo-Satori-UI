@@ -59,7 +59,7 @@ both yours:
 
 Replacing what a packaged ID _does_ is a Layer 2 operation: register a handler under that ID from
 your own library (section 14), where the change is in reviewed, versioned code rather than in a
-JSON document any repository writer can edit.
+JSON fragment.
 
 ### Where the manifest lives, and how it survives upgrade
 
@@ -70,34 +70,45 @@ Marketplace package that contributes `bootstrap` and `manifest` fragments to the
 the package's `package.xml` depends on `nuxeo-agentic-ui`, which orders installation, and its
 component `<require>`s `org.nuxeo.agentic.ui.config.defaults`, which orders contributions so our
 defaults are always registered first. Everything at that path is served without authentication —
-put nothing secret in a fragment. The `bootstrap.json` that used to be copied and edited beside
+put nothing secret in a fragment.
+
+Scaffold that package rather than writing it by hand. In a clone of this repository it needs only
+Node 20 — no `npm ci`, no registry token:
+`node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme` writes both
+declarations, starter fragments with JSON schemas for your editor, and a `build.mjs` that refuses
+what the server would reject — JSON that does not parse, a repeated key, a fragment over 1 MiB, a
+missing asset — and writes the installable zip: `node config-packages/acme-config/build.mjs`. The
+`config-package` Nx generator writes the same files, byte for byte, where Nx is installed:
+`npx nx g ./tools/satori-generators:config-package acme-config --owner=acme` after a full install
+of this repository, or `npx nx g @nuxeo/satori-platform:config-package acme-config --owner=acme`
+from the published package. `config-packages/presales-demo` in this repository is one, with two
+demo presets. The `bootstrap.json` that used to be copied and edited beside
 the bundle is **removed with no migration**: a file left in `nxserver/nuxeo.war/agentic-ui-config`
 is not served.
 
-**Until NXSAT-312 slice 2 ships, the client below is unchanged:** it does not yet merge the
-served fragments, and it still reads the manifest from the Note described next. Slice 2 removes
-the Note, also with no migration, and the two slices ship together.
+The application fetches both, anonymously and together, before anything renders, and applies
+the fragments in the order the server lists them, our defaults first. A key a later fragment sets
+wins over an earlier one. Each fragment's `extensions` block is handled in two stages. First its
+`$references` resolve against its own `$layers` only, so one package cannot reach another's named
+layers. Then the resolved blocks merge in the same order, and that merge is **not** isolated: slot
+entries with the same `id` merge across packages, so a later package can patch a descriptor an
+earlier one contributed. Nothing is read from the repository: the Nuxeo Note at
+`/default-domain/config/agentic-ui` that held the manifest before NXSAT-312 is no longer read, by
+any request, with **no migration** — re-create its content as a manifest fragment in your package.
+Nothing about configuration changes when a user signs in or out.
 
-The manifest is a Nuxeo document at `/default-domain/config/agentic-ui`, read with the signed-in
-user's own session. It is **not** a file inside the packaged web directory, because the marketplace
-installer copies that directory with `overwrite="true"` and would destroy it. See the Phase 1 section
-of the plan for the ACL model — in short, grant Read broadly and Write narrowly, and block
-inheritance on the config folder.
+`AppConfigService.diagnostics()` reports where each half came from (`configuration-service` or
+`packaged-default`), the package component behind every fragment, and the server's own
+diagnostics — a replacement it rejected, a contribution it removed.
 
-With the default `manifestDocumentProperty`, `note:note`, the document is a Note and its
-`note:mime_type` must be **`text/plain`**. Nuxeo's HTML sanitizer escapes the quotes in a Note of
-any other type — `application/json` included — so the stored JSON stops parsing and the packaged
-defaults apply with no error shown. A deployment that points `manifestDocumentProperty` at a
-property of its own schema is not subject to this.
-
-The Layer 1 configuration is the `extensions` key of that document:
+The Layer 1 configuration is the `extensions` key of a manifest fragment:
 
 ```json
 {
   "version": 1,
   "extensions": {
     "$name": "acme-customisation",
-    "overrides": { "app.navbar.browseAdfHx": { "visible": false } },
+    "overrides": { "app.navbar.expiredQueue": { "visible": false } },
     "slots": {
       "navbar": [
         {
@@ -113,24 +124,78 @@ The Layer 1 configuration is the `extensions` key of that document:
 }
 ```
 
+Most examples later in this reference start at `overrides` or `slots`: they show the contents of
+this `extensions` key, and in a package's `manifest.json` they go inside it. At the top level of a
+fragment those keys are ignored without an error. The JSON schema the generator writes flags them in
+your editor; the package build does not.
+
+### Presales presets
+
+A demo server can carry several named configurations and switch between them per browser, without
+reinstalling anything. A bootstrap fragment declares them:
+
+```json
+{
+  "presales": {
+    "presetSwitching": true,
+    "presets": {
+      "acme": {
+        "label": "Acme Insurance",
+        "bootstrap": { "branding": { "applicationTitle": "Acme Insurance" } },
+        "manifest": { "labels": { "nav.item.browse": "Claims" } }
+      }
+    }
+  }
+}
+```
+
+Open the application with `?preset=acme` — before or after the `#` — and that preset's `bootstrap`
+and `manifest` are applied after every package's fragments. The choice is remembered in
+`localStorage` (`agentic-ui.preset`) until `?preset=` clears it, and a badge in the header names
+the preset in force. **Nothing happens unless a package sets `presetSwitching: true`**: on any
+other server the parameter and the stored choice are both ignored, and the diagnostics and the browser console say so. A
+later fragment's `presetSwitching` wins, so a customer package can switch it off. A preset name
+is up to 64 letters, digits, `.`, `_` and `-`, starting with a letter or digit; a preset whose
+name breaks that rule is skipped, and an unknown name is reported and forgotten.
+
+Presets are package content, served anonymously like every fragment. Switching chooses among them
+for one browser; it grants nothing and changes nothing on the server.
+
+### Feature toggles
+
+A manifest fragment's top-level `featureToggles` turns a packaged feature on or off by name. A value
+that is not `true` or `false` is ignored, and a later fragment's value wins.
+
+```json
+{ "version": 1, "featureToggles": { "permissions.externalUsers": false } }
+```
+
+| Toggle                      | Default | What it controls                                                                                                                                                                                                                                 |
+| --------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `permissions.externalUsers` | `true`  | The "Permissions Assigned to External Users" card on a document's Permissions tab, with sharing by email. Web UI's `org.nuxeo.web.ui.permissions.externalUsers`. Turning it off hides the card; shares already made stay in force on the server. |
+
 ---
 
 ## 2. Slots
 
-A slot is a named, ordered list of descriptors. Nine exist for Beta, of which six
+A slot is a named, ordered list of descriptors. Thirteen exist for Beta, of which seven
 carry packaged entries.
 
-| Slot           | What it addresses                         | Status in Beta                                     |
-| -------------- | ----------------------------------------- | -------------------------------------------------- |
-| `navbar`       | Primary platform navigation entries       | **Populated** — packaged entries in section 3      |
-| `bulk-actions` | Actions over a multi-document selection   | **Populated** — packaged entries in section 5      |
-| `sidebar`      | Drawer content behind a navbar entry      | Resolves; **no packaged entries** — see section 6  |
-| `routes`       | Application routes                        | Resolves; **no packaged entries** — see section 11 |
-| `toolbar`      | Document-detail toolbar and overflow menu | **Populated** — 16 packaged actions, section 8     |
-| `contextMenu`  | The browse "More actions" menu            | **Populated** — 4 packaged actions, section 10     |
-| `tabs`         | Document-detail tab children              | **Populated** — 6 packaged tabs, section 9         |
-| `documentList` | Document list columns                     | **Populated** — 12 packaged columns, section 7     |
-| `documentView` | The View tab body on document detail      | Resolves; **no packaged entries** — see section 9a |
+| Slot               | What it addresses                                  | Status in Beta                                                                       |
+| ------------------ | -------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `navbar`           | Primary platform navigation entries                | **Populated** — packaged entries in section 3                                        |
+| `bulk-actions`     | Actions over a multi-document selection            | **Populated** — packaged entries in section 5                                        |
+| `sidebar`          | Drawer content behind a navbar entry               | Resolves; **no packaged entries** — see section 6                                    |
+| `routes`           | Application routes                                 | Resolves; **no packaged entries** — see section 11                                   |
+| `toolbar`          | Document-detail toolbar and overflow menu          | **Populated** — 16 packaged actions, section 8                                       |
+| `contextMenu`      | The browse "More actions" menu                     | **Populated** — 4 packaged actions, section 10                                       |
+| `rowActions`       | The menu on each row of browse's list              | **Populated** — 5 packaged actions, section 10a                                      |
+| `tabs`             | Document-detail tab children                       | **Populated** — 6 packaged tabs, section 9                                           |
+| `documentList`     | Document list columns                              | **Populated** — 12 packaged columns, section 7                                       |
+| `documentView`     | The View tab body on document detail               | Resolves; **no packaged entries** — see section 9a                                   |
+| `documentMetadata` | A type's layout in the document-detail Properties  | Resolves; **no packaged entries** — see section 9c                                   |
+| `documentEdit`     | The form of the document-detail Edit dialog        | Resolves; **no packaged entries** — see section 9c                                   |
+| `documentCreate`   | The form filling in a new document of a given type | Resolves in the create form, which **no screen opens yet**; no packaged entries — 9c |
 
 Read the three states precisely, because they are different promises:
 
@@ -153,18 +218,18 @@ Deferred to GA and deliberately absent: `content-metadata-presets`, `badges`,
 ### Slots are additive
 
 Slot IDs are plain strings. There is no enum, union or `switch` on slot identity in the registry, so
-a tenth slot needs no change to the nine and no new release of the registry —
+a new slot needs no change to the existing ones and no new release of the registry —
 `libs/shared/extensions/src/lib/extension-slot-registry.service.spec.ts` proves it by registering a
-slot the library has never heard of and showing the nine unchanged.
+slot the library has never heard of and showing the existing ones unchanged.
 
 ### Fields every descriptor honours
 
-| Field      | Meaning                                                           |
-| ---------- | ----------------------------------------------------------------- |
-| `id`       | Required. The address. An entry without one is dropped.           |
-| `order`    | Ascending. Absent sorts last. Packaged entries are spaced by ten. |
-| `disabled` | `true` removes the entry. Upstream ACA semantics.                 |
-| `rule`     | A rule ID, or a nested rule reference — see section 4.            |
+| Field      | Meaning                                                                                                                                                                             |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`       | Required. The address. An entry without one is dropped.                                                                                                                             |
+| `order`    | Ascending. Absent sorts as `Number.MAX_SAFE_INTEGER` — after any ordinary number, tied with that value, before `Infinity`. `null` sorts as `0`. Packaged entries are spaced by ten. |
+| `disabled` | `true` removes the entry. ACA's semantics: any truthy value does, the string `"false"` too.                                                                                         |
+| `rule`     | A rule ID, or a nested rule reference — see section 4.                                                                                                                              |
 
 Action descriptors (`bulk-actions`, and the other action slots when they are
 populated) honour four more:
@@ -233,8 +298,7 @@ Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.
 | ------------------------------- | ------------------- | ---------------------- | ----- | ----------------------------------- |
 | `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                   |
 | `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                   |
-| `app.navbar.browse`             | Browse              | `/browse`              | 30    | — (`disabled`, see below)           |
-| `app.navbar.browseAdfHx`        | Browse              | `/browse-adf-hx`       | 40    | —                                   |
+| `app.navbar.browse`             | Browse              | `/browse`              | 30    | —                                   |
 | `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                   |
 | `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                   |
 | `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                   |
@@ -247,12 +311,15 @@ Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.
 | `app.navbar.trash`              | Trash               | `/trash`               | 140   | —                                   |
 | `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess` |
 
-`app.navbar.browse` ships `disabled: true` and is therefore not rendered: `/browse-adf-hx`
-is the browse entry the product offers. The descriptor stays registered because `/browse`
-is still a live route, so it still supplies that page's title. An `overrides` entry cannot
-bring it back — `visible` is the only visibility field there and `disabled` outranks it.
-Restating the ID as a `navbar` slot addition with `"disabled": false` does, which is the
-supported route for a customer who wants both browse surfaces.
+`app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
+app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
+backticks because it is no longer an ID you can address. An `overrides` key naming it changes
+nothing. A `navbar` slot entry naming it no longer patches anything, so it is added as an entry of
+its own, blank unless it gives a path and a label: delete it. A `labels` entry for its key,
+nav.item.browse-adf-hx, no longer reaches any entry: set `nav.item.browse` instead. Old `/#/browse-adf-hx` and `/#/search-adf-hx` links redirect to
+`/browse` and `/search` with their query string intact, and a `?path=` folder opens in `/browse`.
+Until then `app.navbar.browse` shipped `disabled: true`; a manifest restating it with
+`"disabled": false` is now redundant but harmless.
 
 **Hiding an entry hides the navigation, not the route.** `{"visible": false}` and a
 denying `rule` both remove the entry from the sidebar; neither removes the route,
@@ -307,11 +374,18 @@ Registered by `DOCUMENT_RULE_EVALUATORS`. These wrap the existing pure predicate
 | `app.rules.canRemove`            | The user has `Remove`                                             |
 | `app.rules.canAddChildren`       | The user has `AddChildren`                                        |
 | `app.rules.canManagePermissions` | The user has `WriteSecurity` or `Everything`                      |
+| `app.rules.canPublish`           | Web UI's `isPublishable`: see below                               |
 | `app.rules.hasDocument`          | A document is in focus                                            |
 | `app.rules.isType`               | The focused document's type is one of the `parameters`            |
 | `app.rules.hasFacet`             | The focused document carries at least one facet in `parameters`   |
+| `app.rules.hasFile`              | The focused document holds a main file (`file:content`)           |
 | `app.rules.isTrashed`            | The focused document is in the trash                              |
 | `app.rules.isNotTrashed`         | A document is in focus and is not in the trash                    |
+
+`app.rules.canPublish` is Nuxeo Web UI's `isPublishable`: the focused document is not a proxy, a
+record or in the trash, carries the `Publishable` facet, and the user has `WriteVersion`. It is
+true on a version — Web UI publishes a version as it is — and needs no version to exist, because
+publishing a live document creates one.
 
 `app.rules.isType` and `app.rules.hasFacet` take the type or facet names as `parameters`, matched
 exactly — Nuxeo names are case-sensitive. With no string parameters — or `parameters` that is not
@@ -334,7 +408,9 @@ and negate with `core.not`, or combine with `core.every` — `hasFacet("Versiona
 
 **Scope, stated plainly.** "The focused document" means the document open on
 `/#/doc/:uid`. That page is the only surface that publishes one, and it clears it
-when you navigate away, so all nine answer `false` everywhere else. In particular the two
+when you navigate away, so all ten answer `false` everywhere else — with one
+exception: browse's row menu (section 10a) resolves its own slot with each row's
+document in focus, for that slot only. In particular the two
 type rules gate document-detail **tabs and toolbar actions**; they cannot vary browse list
 columns by type, because a list has no single focused document. An earlier
 version of this document described the first five as functional with no caveat
@@ -393,12 +469,18 @@ label that renders.
 | `app.rules.isInClipboard` | The focused document is in the clipboard           |
 | `app.rules.hasVersion`    | The focused document has at least one version      |
 | `app.rules.isAiEnabled`   | The AI feature flag is on                          |
-| `app.rules.isNote`        | The focused document is a Note                     |
+| `app.rules.isNote`        | The focused document's type is `Note`              |
 | `app.rules.isNotBusy`     | None of the named operations is in flight          |
 
 Only the positive form of each is registered. The negative half is an ordinary
 composite a manifest can write for itself:
 `{ "type": "core.not", "parameters": ["app.rules.isFavorite"] }`.
+
+`app.rules.isNote` is the exception in this table: it reads the focused document, not
+something the surface published, and answers exactly as
+`{ "type": "app.rules.isType", "parameters": ["Note"] }`. It used to read a `note` flag
+that document detail derived from that same document, so its answer is unchanged on every
+surface. It stays registered by `SURFACE_RULE_EVALUATORS`.
 
 `app.rules.isNotBusy` takes the operation names as parameters, because an
 operation name is data rather than contract:
@@ -475,7 +557,7 @@ descriptor with no handler renders and is inert rather than throwing, so a
 manifest can be written before the Layer 2 library that backs it ships.
 
 ```ts
-import { ExtensionActionRegistry } from '@nuxeo-satori/platform/extensions';
+import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
 inject(ExtensionActionRegistry).register({
   'acme.bulkActions.archive': inject(AcmeArchiveActionService),
@@ -518,12 +600,13 @@ at the table below, conflating the two.
 
 Components are referenced by ID and must already be compiled in. Contributing a new one is Layer 2.
 
-| Component ID                | Renders                                    |
-| --------------------------- | ------------------------------------------ |
-| `app.sidebar.assets`        | Asset facet filters                        |
-| `app.sidebar.searchFilters` | Search filter panel                        |
-| `app.sidebar.trashFilters`  | Trash filter panel                         |
-| `app.page.contracts`        | A full-page surface, for the `routes` slot |
+| Component ID                      | Renders                                                                                        |
+| --------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `app.sidebar.assets`              | Asset facet filters                                                                            |
+| `app.sidebar.searchFilters`       | Search filter panel                                                                            |
+| `app.sidebar.trashFilters`        | Trash filter panel                                                                             |
+| `app.page.contracts`              | A full-page surface, for the `routes` slot                                                     |
+| `nxs.components.permissionsPanel` | Local and inherited permissions in the document-detail, browse and collection Permissions tabs |
 
 `app.page.contracts` is the first component registered for the **`routes`** slot rather than for a
 drawer, and it exists because that slot went live with **no component in the product able to serve
@@ -556,11 +639,65 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ---
 
+## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
+
+Five component-registry IDs for the primitives Satori also ships. Each resolves to a Material
+implementation from `@nuxeo/satori-platform/components`, and the first four to a Satori-backed one
+when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
+one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
+Packages access, leave it out and every ID still resolves, on Material.
+
+| Component ID                 | Inputs (all text arrives translated)                             | Satori-backed by                                         |
+| ---------------------------- | ---------------------------------------------------------------- | -------------------------------------------------------- |
+| `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                             | `sat-avatar`                                             |
+| `nxs.primitives.breadcrumbs` | `items`, `label`                                                 | `sat-breadcrumbs`                                        |
+| `nxs.primitives.tag`         | `label`, `color`                                                 | `sat-category-tag`                                       |
+| `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                     | `sat-rich-tooltip`                                       |
+| `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler` | — (Material only: Satori's error states need Satori 1.0) |
+
+Both implementations of an ID declare the same inputs (`Nxs…Inputs` in `/components`; a spec in
+`/components-satori` compares them), so whoever renders an ID passes the same `componentInputs`
+whichever is registered. Registration layers like every other contribution — in provider order,
+later wins per ID — so the order is the mechanism:
+
+```ts
+providers: [
+  provideNxsComponents(), // Material, from @nuxeo/satori-platform/components
+  provideNxsSatoriComponents(), // optional: Satori, from @nuxeo/satori-platform/components-satori
+  provideSatoriExtensions({ components: { 'nxs.primitives.tag': AcmeTag } }), // yours wins
+];
+```
+
+`provideNxsSatoriComponents()` also needs what any Satori host provides: `provideSatori()` for the
+theme and icons, and Satori's `sat.*` catalogue in ngx-translate (upstream's
+`provideAndConfigureSatoriUITranslations`, or seeded into your own loader). Without the catalogue
+the breadcrumbs' landmark and the tooltip's close hint render as raw keys. An override of yours
+implements the matching `Nxs…Inputs` interface.
+
+**Where packaged screens render them.** Browse and the collection page render their breadcrumb
+trail through `nxs.primitives.breadcrumbs`, and `nxs-document-list` renders each row's type through
+`nxs.primitives.tag` and its last contributor through `nxs.primitives.avatar`, so an override of
+those three IDs reaches them. Every other screen still uses the `sat-*` elements directly until it
+moves onto these IDs; there the IDs render only where a host resolves them — a
+`lib-extension-outlet` with a `componentId` — and in the library's Storybook.
+
+### `nxs-` components registered for a slot
+
+`provideNxsComponents()` registers each of these under an ID ready for the slot named, and nothing
+places them: a manifest entry in that slot does, with `componentId` set to the ID (for `routes`, a
+`path`). `npx nx g ./tools/satori-generators:satori-component` adds a row here with the component.
+
+<!-- satori:register:nxs-components — `satori-component` appends a row to the table below -->
+
+| Component ID | Element | For the slot |
+| ------------ | ------- | ------------ |
+
+---
+
 ## 7. `documentList` — the packaged columns
 
-Twelve columns, registered by the application and resolved by both the production
-browse and the adf-hx browse route. So `overrides` and `slots` entries here take
-effect on the rendered list.
+Twelve columns, registered by the application and resolved by browse. So `overrides` and
+`slots` entries here take effect on the rendered list.
 
 **Nine of the twelve ship `hiddenByDefault`.** That is not the same as `disabled`:
 a hidden column is still offered in the column picker, so a user can switch it on,
@@ -643,32 +780,55 @@ sees at once: the toggles are mutually exclusive pairs, and every entry is gated
 icon buttons in the header row. `overflow` is a descriptor field like any other,
 so `slots.toolbar` can move a packaged action between the two.
 
-| ID                                | Label                 | Icon                   | Order | Overflow | Shown when                              |
-| --------------------------------- | --------------------- | ---------------------- | ----- | -------- | --------------------------------------- |
-| `app.toolbar.edit`                | Edit                  | `edit`                 | 10    | no       | not trashed, writable and not a Note    |
-| `app.toolbar.editProperties`      | Edit properties       | `edit`                 | 10    | no       | not trashed, writable and a Note        |
-| `app.toolbar.addToCollection`     | Add to collection     | `library_add`          | 20    | no       | not trashed                             |
-| `app.toolbar.delete`              | Delete                | `delete`               | 30    | no       | not trashed and `app.rules.canRemove`   |
-| `app.toolbar.lock`                | Lock                  | `lock`                 | 40    | no       | not trashed, writable and not locked    |
-| `app.toolbar.unlock`              | Unlock                | `lock_open`            | 40    | no       | not trashed, writable and locked        |
-| `app.toolbar.addToFavorites`      | Add to Favorites      | `star_border`          | 50    | yes      | not trashed and not a favourite         |
-| `app.toolbar.removeFromFavorites` | Remove from Favorites | `star`                 | 50    | yes      | not trashed and a favourite             |
-| `app.toolbar.share`               | Share                 | `share`                | 60    | yes      | not trashed                             |
-| `app.toolbar.publish`             | Publish document      | `publish`              | 70    | yes      | not trashed, has a version and writable |
-| `app.toolbar.subscribe`           | Notify Me             | `notifications`        | 80    | yes      | not trashed and not subscribed          |
-| `app.toolbar.unsubscribe`         | Unsubscribe           | `notifications_active` | 80    | yes      | not trashed and subscribed              |
-| `app.toolbar.addToClipboard`      | Add to Clipboard      | `content_paste`        | 90    | yes      | not trashed and not in the clipboard    |
-| `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard        |
-| `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                  |
-| `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                             |
+| ID                                | Label                 | Icon                   | Order | Overflow | Shown when                             |
+| --------------------------------- | --------------------- | ---------------------- | ----- | -------- | -------------------------------------- |
+| `app.toolbar.edit`                | Edit                  | `edit`                 | 10    | no       | not trashed, writable¹ and not a Note  |
+| `app.toolbar.editProperties`      | Edit properties       | `edit`                 | 10    | no       | not trashed, writable¹ and a Note      |
+| `app.toolbar.addToCollection`     | Add to collection     | `library_add`          | 20    | no       | not trashed                            |
+| `app.toolbar.delete`              | Delete                | `delete`               | 30    | no       | not trashed and `app.rules.canRemove`  |
+| `app.toolbar.lock`                | Lock                  | `lock_open`            | 40    | no       | not trashed, writable and not locked ¹ |
+| `app.toolbar.unlock`              | Unlock                | `lock`                 | 40    | no       | not trashed and locked ¹ ²             |
+| `app.toolbar.addToFavorites`      | Add to Favorites      | `star_border`          | 50    | yes      | not trashed and not a favourite        |
+| `app.toolbar.removeFromFavorites` | Remove from Favorites | `star`                 | 50    | yes      | not trashed and a favourite            |
+| `app.toolbar.share`               | Share                 | `share`                | 60    | yes      | not trashed                            |
+| `app.toolbar.publish`             | Publish document      | `publish`              | 70    | yes      | not trashed and `app.rules.canPublish` |
+| `app.toolbar.subscribe`           | Notify Me             | `notifications`        | 80    | yes      | not trashed and not subscribed         |
+| `app.toolbar.unsubscribe`         | Unsubscribe           | `notifications_active` | 80    | yes      | not trashed and subscribed             |
+| `app.toolbar.addToClipboard`      | Add to Clipboard      | `content_paste`        | 90    | yes      | not trashed and not in the clipboard   |
+| `app.toolbar.removeFromClipboard` | Remove from Clipboard | `content_paste_off`    | 90    | yes      | not trashed and in the clipboard       |
+| `app.toolbar.export`              | Export                | `download`             | 100   | yes      | always                                 |
+| `app.toolbar.startProcess`        | Start Process         | `play_circle`          | 110   | yes      | not trashed                            |
+
+¹ For Edit and Edit properties, writable also means **not `Immutable`** — the rule is
+`app.rules.canWrite` and `core.not` over `app.rules.hasFacet` with `["Immutable"]`. Nuxeo
+marks versions and publications `Immutable`. A version's `permissions` enricher still lists
+`Write` while the server refuses to modify it, so `app.rules.canWrite` alone would offer
+Edit on a version; Web UI hides Edit on every `Immutable` document.
+
+For Lock and Unlock, neither is offered on a version, an immutable document or the repository root —
+`core.not` over `app.rules.hasFacet` `["Immutable"]` and over `app.rules.isType` `["Root"]`, as
+Nuxeo Web UI does. Versions carry the `Immutable` facet. The icon shows the document's state,
+also as Web UI does: the open padlock while unlocked, the closed one while locked.
+
+² Unlock is shown to anyone who can read a locked document, so every reader can see who holds
+the lock — its tooltip reads "Locked by {owner} on {date}" unless a manifest sets `tooltip`. It is
+**enabled** only for
+`app.rules.canWrite`: Nuxeo's default lock policy takes Write on a locked document away from
+everyone but its owner and administrators, so they are the users offered it enabled. With the
+policy disabled other Write holders are offered it too, and the server refuses them with a 409.
+The server decides either way — this rule only decides what the interface offers.
+Moved to the overflow menu with `"overflow": true`, Unlock keeps its tooltip on hover, but a
+reader's disabled entry there cannot take keyboard focus — Material menus skip disabled items —
+so the owner and date are then reachable by pointer only. Keep it inline where that matters.
 
 `app.toolbar.export` is the one entry with no `rule`, deliberately: it was
 outside the trashed-document guard in the markup this replaced, and exporting a
 trashed document still works.
 
 The document-specific header controls that are **not** in this table —
-attachments, Knowledge Enrichment, the trashed-document restore banner — remain
-markup. They are conditional on document shape rather than on user intent, and
+attachments, Knowledge Enrichment, the trashed-document restore banner, the
+version banner and its Restore button — remain markup. They are conditional on
+document shape rather than on user intent, and
 extracting them would have changed behaviour rather than made it addressable.
 
 Adding your own works exactly as for `bulk-actions`: a descriptor decides where
@@ -713,8 +873,17 @@ not addressable**, and that asymmetry is deliberate and worth stating: the six
 packaged bodies are still markup in the host template, matched by ID. Extracting
 a thousand-plus lines of tab body into separately registered components would
 have been a rewrite, and the point of this slot is to make the tab strip
-addressable without one. The one exception is the body of `app.tabs.view`, which
-a `documentView` entry can replace per document — section 9a.
+addressable without one. There are two exceptions. The body of `app.tabs.view` can be
+replaced per document by a `documentView` entry — section 9a. And the local and inherited
+half of `app.tabs.permissions` renders the component registered as
+`nxs.components.permissionsPanel`, as does the Permissions tab of `/browse`, so re-registering
+that ID from your library (section 14) replaces the panel in both; the external-user section
+under it stays packaged. The component receives `documentId`, and
+`permissionsChanged`, a callback to invoke after any write that may have changed the ACL, so the
+host reads the external-user section again. A replacement that does not declare it leaves that
+section as it was until the tab reloads. A collection's Permissions tab also passes `offer: 'type'`:
+offer only the type's `userVisiblePermissions`, as Web UI does. An input your component does not
+declare is not set.
 
 A tab you contribute names a registered component instead, through `componentId`,
 and is rendered by the same `ExtensionOutletComponent` the sidebar uses. The
@@ -810,13 +979,268 @@ For Notes alone, the packaged `app.rules.isNote` reads the same way:
 What this slot does **not** do:
 
 - **Only the View tab.** The other tabs, the toolbar and the properties panel are
-  unchanged by any `documentView` entry. A per-type metadata or edit layout is a separate
-  design and is not this slot.
-- **The packaged views are not entries.** The note editor and document viewer are still
-  host markup, so a manifest cannot hide or reorder them — only outrank them with an
-  entry of your own. Making them registered entries is a follow-up.
+  unchanged by any `documentView` entry. Which properties the panel shows per type is a
+  layout file, section 9b, or a `documentMetadata` entry, section 9c — not this slot.
+- **The packaged views are not entries.** Which one renders is decided per document type
+  by a single table inside document detail: a Note gets the note editor, and every other
+  type — File, Picture, Video, Audio, your own — gets the document viewer, which picks its
+  presentation from the content (mime type, picture views, transcoded videos), not the
+  type. That packaged view is also the fallback when your entry's component fails to load,
+  so a broken Note view falls back to the note editor. A manifest cannot hide or reorder
+  the packaged views — only outrank them with an entry of your own. Registering them as
+  entries would publish new ids and is a separate decision.
 - **Like every slot, it is not a security control.** Whatever your component reads is
   still gated by Nuxeo server-side.
+
+---
+
+## 9b. Per-type layouts — which properties a document type shows
+
+Not a slot and not an ID: a **layout file** per document type and mode, shipped in your
+configuration package, as Nuxeo Web UI keeps a layout per type and mode. This build renders three
+modes:
+
+- **`metadata`** — the Properties panel on document detail, beneath the packaged rows (title, tags,
+  description and the Dublin Core vocabularies) and above Attachments. Read-only.
+- **`edit`** — the form of the Edit dialog on document detail, beneath the Dublin Core fields the
+  form always has (title, description, nature, subjects, coverage, expires). Saving sends only the
+  properties the user changed.
+- **`create`** — the same form for a new document of the type. It is built and tested, but **no
+  screen opens it yet**: Browse's create dialog keeps its own fields until it moves onto this form
+  in a later change.
+
+To replace the whole Properties section or form with a component of your own rather than a list
+of fields, use the `documentMetadata`, `documentEdit` and `documentCreate` slots, section 9c.
+
+**With no file, the layout is generated from the type's own schemas,** and, for `metadata` and
+`edit`, from those a dynamic facet adds to the document (next paragraph); a document being created
+has no facets yet, so `create` reads the type's alone. One section per schema,
+fields by name, each value shown by its schema type. Schemas the panel and viewers already
+present are left out — `common`, `dublincore`, `uid`, `file`, `files`, `note`, `facetedTag`,
+`relatedtext`, `picture`, `image_metadata`, `iptc`, `video`, `audio`, and the `collectionMember`,
+`notification` and `thumbnail` schemas Nuxeo's own facets add to a document as it is collected,
+subscribed to and given content — so a stock File or Note shows nothing new, a Claim shows its
+`claim` schema, and a schema you add to File appears on File. A type never falls back to its
+parent type's file, in any mode. Generated `edit` and `create` layouts leave out `blob` fields:
+files are added through the attachment and main-file actions, not typed into a form.
+
+**A schema a dynamic facet adds to one document gets a section on that document.** A facet added
+after creation (`Document.AddFacet`, or an integration such as HxAI's `Hxai`) brings schemas the
+type does not declare, so a File given `ExternalEntity` shows an `externalEntity` section and a
+File without it does not. Those sections come after the type's own, in schema-name order, so a
+facet never moves the sections every document of the type shows. Each such schema is read once
+per session; one that cannot be read is left out, with the reason in the console, and the rest of
+the layout still renders.
+
+**A file replaces the generated layout whole.** Only the fields it lists are shown, in its order;
+nothing generated is merged in. The type must match exactly.
+
+```json
+{
+  "version": 1,
+  "display": "sections",
+  "sections": [
+    {
+      "id": "summary",
+      "label": "Claim summary",
+      "fields": [
+        "claim:number",
+        { "field": "claim:status", "label": "Status" },
+        "claim:serviceDate"
+      ]
+    },
+    {
+      "id": "amounts",
+      "labelKey": "acme.layout.amounts",
+      "fields": ["claim:billedAmount", "claim:allowedAmount"]
+    }
+  ]
+}
+```
+
+| Key                   | Meaning                                                                                                                                    |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `version`             | Required, `1`. Any other value and the file is refused.                                                                                    |
+| `display`             | `"sections"` (default), or `"tabs"` for one tab per section.                                                                               |
+| `sections`            | Required list, may be empty — an empty layout shows nothing.                                                                               |
+| `sections[].id`       | Required, unique; 1 to 64 letters, digits, `.`, `_` or `-`, starting with a letter or digit.                                               |
+| `sections[].label`    | Heading, as a literal. Wins over `labelKey`. A section with neither has no heading (a tab is named from `id`).                             |
+| `sections[].labelKey` | Heading, as a translation key.                                                                                                             |
+| `sections[].fields`   | Required list of `"<prefix>:<field>"`, or `{ "field", "label"?, "labelKey"?, "required"? }`. Top-level fields only, each once per section. |
+| `fields[].required`   | `true` makes the field required in an `edit` or `create` form, on top of the schema's own constraints. Ignored in `metadata`.              |
+
+A field neither the type nor the document's facets have, an entry that is not `<prefix>:<field>`, or a field listed twice in
+one section is skipped and the rest of the file applies; a file that is refused shows the generated layout instead. Both are logged in
+the browser console under `[agentic-ui-layouts]`, and the page never breaks. A schema with no prefix
+is addressed by its name, as Nuxeo does: `file:content`. Unknown keys are ignored without a message,
+so that a file written for a later version still loads.
+
+A file may name a field of a facet's schema, such as `externalEntity:origin` in a File layout. It
+shows on a document that carries the facet; on one that does not, it is skipped and logged as for
+any field the document lacks, so expect that message for every such document. If the facet's
+schema could not be read, the message says so instead of calling the field absent.
+
+How each value is shown is decided by its schema type — there is no widget name to set:
+
+| Field type                     | Shown as                                                                                                                                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `string`                       | text                                                                                                                                                                                                      |
+| `string` bound to a vocabulary | the entry's label, read for the entries the document holds only, so a vocabulary of any size costs a read per value; `Parent/Child` for an `l10n…` vocabulary, in English as the panel's own Subjects row |
+| `string[]` and other lists     | one chip per item (vocabulary items labelled)                                                                                                                                                             |
+| `date`                         | a long date, in UTC, so a calendar date is the same day everywhere                                                                                                                                        |
+| `long`, `double`               | a number in the user's locale                                                                                                                                                                             |
+| `boolean`                      | Yes or No, translated                                                                                                                                                                                     |
+| `blob`                         | the file name                                                                                                                                                                                             |
+| `complex`, `complex[]`         | its sub-fields, one group per item                                                                                                                                                                        |
+
+In an `edit` or `create` form, the schema type picks the control:
+
+| Field type                         | Control                                                                                     |
+| ---------------------------------- | ------------------------------------------------------------------------------------------- |
+| `string`                           | a text field                                                                                |
+| `string` bound to a vocabulary     | a searchable select; an `l10n…` vocabulary is grouped under its parent entries              |
+| `string[]` bound to a vocabulary   | the same select, choosing several, each choice a removable chip                             |
+| `string[]` and other scalar lists  | a chip input: type a value, press Enter                                                     |
+| `date`                             | a date field with a picker. A typed date is read in the locale's order, which the hint says |
+| `long`, `integer`                  | a number field accepting whole numbers                                                      |
+| `double`                           | a number field                                                                              |
+| `boolean`                          | a checkbox                                                                                  |
+| `complex`                          | a labelled group of its sub-fields, each with its own control                               |
+| `complex[]`                        | one group per item, with Add and Remove                                                     |
+| `blob`, or `complex` nested deeper | shown, not editable                                                                         |
+
+**Validation before saving.** Save checks the schema's constraints in the browser first: a
+required field (`NotNullConstraint`, or `"required": true` in the file), a `PatternConstraint`
+(the whole value must match), a `LengthConstraint` and a `NumericIntervalConstraint`, inclusive or
+not. Each error is written under its field and tied to it for screen readers; a summary at the top
+counts the fields to correct, and focus moves to the first, opening its tab when the layout uses
+tabs. Nothing is sent until every field passes. Constraints the form does not check in the browser
+— `EnumConstraint`, `DateIntervalConstraint`, membership of a vocabulary — are still enforced by
+Nuxeo: when the server refuses a value, its message is shown under the field it names, and the
+dialog stays open with the user's input.
+
+**Labels.** A field's `label` is shown verbatim; else its `labelKey` if it translates; else the
+key `layout.field.<prefix>:<field>`; else a readable form of the field name (`billedAmount` →
+"Billed amount"). Generated section headings look up `layout.schema.<schema>` first. So a manifest
+`labels` entry renames a generated label with no layout file at all:
+
+```json
+{ "labels": { "layout.field.claim:memberId": "Member ID", "layout.schema.claim": "Claim details" } }
+```
+
+**Shipping one.** Put the file in your configuration package's bundle and contribute it from the
+component that `<require>`s `org.nuxeo.agentic.ui.config.defaults`:
+
+```xml
+<extension target="org.nuxeo.agentic.ui.config" point="configuration">
+  <layout type="Claim" mode="metadata" src="agentic-ui-config/layouts/Claim/metadata.layout.json" />
+  <layout type="Claim" mode="edit" src="agentic-ui-config/layouts/Claim/edit.layout.json" />
+</extension>
+```
+
+A later package's file for the same type and mode replaces yours whole; `enabled="false"` removes
+the one in force. While developing, `npm run config:dev -- --layout Claim/edit=claim-edit.layout.json`
+serves it to `nx serve` the same way. Each mode reads its own file: an `edit` file does not change
+the Properties panel, and a type with only a `metadata` file gets a generated `edit` form.
+
+What a layout file does **not** do:
+
+- **Not `view`, and not `create` on screen yet.** The View tab body is the `documentView` slot,
+  section 9a; a `create` file is read by the create form, which no screen opens yet. A file for
+  any other mode is served but not rendered.
+- **Not the packaged rows above it.** Title, tags, description and the Dublin Core vocabularies are
+  still the panel's own; a `dc:` field you list appears in your layout as well. In an `edit` or
+  `create` form the Dublin Core fields are the form's own, so a `dc:` field you list is shown once,
+  in their place.
+- **Not new controls.** The schema type picks the control; a file cannot name a widget, and a
+  `blob` field it lists is shown, not edited.
+- **Folderish types.** Document detail redirects them to Browse, so their Properties panel is never
+  shown.
+- **Like every configuration, it is not a security control.** A field left out of a layout is still
+  returned by the REST API to anyone who may read the document.
+
+---
+
+## 9c. `documentMetadata`, `documentEdit`, `documentCreate` — a component in place of a layout
+
+Each resolves, with no packaged entries. A layout file (section 9b) chooses fields; an entry in
+one of these slots puts a component of your own where the layout would render, for the documents
+or types its rule admits — when a list of fields cannot say what the type needs, such as a claim
+form whose fields depend on each other.
+
+| Slot               | Replaces                                                                                            | The component receives                         |
+| ------------------ | --------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `documentMetadata` | the type's layout in the Properties panel. The packaged rows above it stay                          | `document`                                     |
+| `documentEdit`     | the whole form in the Edit dialog, Dublin Core fields included. The dialog's title and buttons stay | `document`, `showErrors`, `onChange`           |
+| `documentCreate`   | the whole form for a new document of the type. **No screen opens the create form yet** (section 9b) | `type`, `parentPath`, `showErrors`, `onChange` |
+
+The descriptor fields are those of `documentView` (section 9a): `componentId` (defaulting to the
+`id`), `rule` and static `inputs`. **Which entry wins** is decided the same way: entries whose rule
+passes, in ascending `order`; the first whose component is registered renders; nothing matching,
+or nothing registered, renders the layout. A component that is registered but fails to load also
+gives way to the layout, so a broken chunk costs the customer their custom form, not the ability
+to edit.
+
+**A create's rule reads the type being created.** For `documentCreate` the rule context's
+`document` is the new document as far as it is known — its `type`, a `path` inside the target
+folder, no `uid`, no properties and no facets — so `app.rules.isType` answers for what is being
+created rather than for the folder it goes in.
+
+**The host's values win.** `document`, `type` and `parentPath` are set by the host after your
+manifest `inputs`, so configuration cannot point the form at another document or type.
+
+**A form component reports, the host saves.** An `edit` or `create` component does not call Nuxeo.
+It calls its `onChange` input with a `DocumentLayoutChange` — `{ properties, valid }` — whenever
+its values change, and the host's Save sends `properties` once the last report said `valid: true`;
+until a report arrives, the form counts as not valid. For an edit, report only the properties the
+user changed; Save closes without a request when there are none. `showErrors` turns `true` when the
+user presses Save, which is the moment to show every field's error, and messages the server
+returns are shown by the host, above the form. Both types are exported from
+`@nuxeo/satori-platform/extensions`:
+
+```ts
+import { Component, input } from '@angular/core';
+import type { DocumentLayoutChange } from '@nuxeo/satori-platform/extensions';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
+
+@Component({ selector: 'acme-claim-form', templateUrl: './claim-form.html' })
+export class ClaimFormComponent {
+  readonly document = input<NuxeoDocument | null>(null);
+  readonly showErrors = input(false);
+  readonly onChange = input<((change: DocumentLayoutChange) => void) | null>(null);
+}
+```
+
+```json
+{
+  "slots": {
+    "documentEdit": [
+      {
+        "id": "acme.documentEdit.claim",
+        "componentId": "acme.components.claimForm",
+        "rule": { "type": "app.rules.isType", "parameters": ["Claim"] }
+      }
+    ]
+  }
+}
+```
+
+**Why one slot per mode, not one `documentLayout` slot.** Nuxeo Web UI resolves a layout per type
+_and_ mode, and a single slot whose entries carry a `mode` field was considered. It was rejected
+because the modes do not share a contract: the metadata component is read-only and receives a
+document, the edit form receives a document and must report changes, and the create form receives
+a type and a folder because there is no document yet — its rule must be judged against the type
+being created, which a slot shared with document-scoped modes would get wrong. One slot per mode
+also keeps each entry's effect to a single surface, as every other slot does, and leaves
+`documentView` (section 9a) as it shipped.
+
+What these slots do **not** do:
+
+- **Not the dialog around the form.** The Edit dialog's title, Save and Cancel are the host's; the
+  dialog still opens only where `app.toolbar.edit`'s rule allows it: not in the trash, not
+  `Immutable`, not a Note, and Write or WriteProperties on the document (`app.rules.canWrite`).
+- **Not a security control.** A field your component does not show is still writable through the
+  REST API by anyone with Write, and Nuxeo's own constraints still apply to what you send.
 
 ---
 
@@ -833,11 +1257,63 @@ header. The actions apply to the folder or document currently open.
 | `app.contextMenu.unsubscribe` | Unsubscribe | `notifications_off` | 20    | subscribed     |
 | `app.contextMenu.export`      | Export      | `ios_share`         | 30    | always         |
 
-**Browse has no per-row menu**, in this build or before it. The slot's
-description in the section 2 table used to read "row-level menu on a document
-list" while the only menu in `browse.html` was this one, which would have sent a
-customer looking for a surface that does not exist. The ID is the contract and
-stays; the description was corrected.
+This menu acts on the folder open. The menu on each row of the list, acting on that row's document,
+is a separate slot, `rowActions` — section 10a.
+
+---
+
+## 10a. `rowActions` — the menu on each row of browse's list
+
+Registered by `PACKAGED_ROW_ACTIONS` in `libs/shared/extensions/src/lib/packaged-actions.ts`,
+rendered as the "Actions for …" menu at the end of each row of browse's document list.
+
+Each row resolves the slot with **that row's document in focus**, so `rule`, `enabledRule` and the
+document rules of section 4 read the row's own permissions and properties, not the folder's. A
+row whose entries are all hidden has no menu button.
+
+| ID                        | Label    | Icon                        | Order | Shown when                                |
+| ------------------------- | -------- | --------------------------- | ----- | ----------------------------------------- |
+| `app.rowActions.download` | Download | `download`                  | 10    | not trashed, holds a file                 |
+| `app.rowActions.rename`   | Rename   | `drive_file_rename_outline` | 20    | not trashed, `canWrite`, not `Immutable`¹ |
+| `app.rowActions.copyTo`   | Copy to… | `file_copy`                 | 30    | not trashed                               |
+| `app.rowActions.moveTo`   | Move to… | `drive_file_move`           | 40    | not trashed, `canRemove`                  |
+| `app.rowActions.delete`   | Delete   | `delete`                    | 50    | not trashed, `canRemove`                  |
+
+¹ As Edit in section 8: Nuxeo marks versions and publications `Immutable`, and their
+`permissions` enricher still lists `Write` while the server refuses to change them, so a
+publication listed in a section offers no Rename.
+
+What each does: **Download** saves the document's main file under its own name. **Rename** opens
+`nxs-rename-dialog`, which changes `dc:title` — as Nuxeo Web UI's title edit does, the name in the
+path stays. **Copy to…** and **Move to…** open `nxs-folder-picker-dialog` and run `Document.Copy` or
+`Document.Move` into the folder chosen; a folder cannot be chosen as its own destination, nor, when
+moving, the folder the document is already in. **Delete** asks, then moves the document to the
+trash, as the header's Delete does; a collection goes through the collection's own delete.
+
+A collection listed in browse also keeps its **Edit** entry, first in its menu. That entry is not a
+slot descriptor, and a manifest cannot hide it.
+
+Add your own entry the same way as to any action slot, with a handler that reads the row from the
+context it receives:
+
+```json
+{
+  "slots": {
+    "rowActions": [
+      { "id": "acme.rowActions.audit", "label": "Audit trail", "icon": "fact_check", "order": 25 }
+    ]
+  }
+}
+```
+
+```ts
+inject(ExtensionActionRegistry).register({
+  'acme.rowActions.audit': { execute: (context) => openAudit(context.document) },
+});
+```
+
+As everywhere in this document, hiding an entry is not a permission: Nuxeo checks the copy, the
+move, the rename and the delete on the request itself.
 
 ---
 
@@ -888,14 +1364,28 @@ not protect anything the API would otherwise return.
 
 ## 12. `$references` — layering your JSON over ours
 
-Semantics are ACA's, implemented by merging through `mergeObjects` from `@alfresco/adf-extensions`
-rather than reimplemented, so behaviour matches the upstream documentation.
+Semantics are ACA's. The merge is our own copy of `mergeObjects` from `@alfresco/adf-extensions`
+9.0.0, pinned case by case to its output, so behaviour matches the upstream documentation, apart
+from the `null` and `__proto__` items below, where ACA's merge threw or rewrote a prototype.
 
 - Layers apply in the order `$references` lists them. **Later wins.**
 - `$`-prefixed keys are **metadata and do not merge** — `$references` from a referenced layer never
-  leaks into the result.
+  leaks into the result. They are dropped at the top level and inside any object two layers both
+  set; inside a value only one layer sets, they are kept as written.
 - Arrays of objects merge **by `id`**, so a layer patches one entry without restating the list.
-- `"<key>.$replace"` replaces instead of merging.
+  Entries with an `id` come first, in the earlier layer's order except that integer-like ids such as
+  `"2"` go ahead of the rest, ascending; then the earlier layer's entries without an `id`; then the
+  later layer's new entries.
+- `"<key>.$replace"` replaces instead of merging. Below the top level — `"rule.$replace"` inside an
+  override — it takes effect only where an earlier layer set the same parent, and is otherwise kept
+  as a literal key.
+- A later scalar does **not** replace an earlier object: a number or boolean is ignored and a
+  string is spread into it. A later non-array is appended to an earlier array. Use `.$replace`.
+- `null` meeting an object, in either order, takes the later layer's value. ACA's merge threw
+  there, which broke every slot; `"rule": null` is how a later layer ungates an entry.
+- A `__proto__` key never replaces an object's prototype. The merge skips it wherever it iterates
+  an object, and a slot or override id named `__proto__` is dropped when the layer is read; inside a
+  value taken whole it stays an ordinary data property.
 - `$ignoreReferenceList` drops a layer even when it is referenced.
 - A layer that cannot be resolved is reported on `AppExtensionsService.missingLayers()`, not silently
   dropped, and the rest of the stack still applies.
@@ -945,30 +1435,26 @@ that is Layer 2 — see section 14.
   statement of slot state and is gated by `npm run beta:reference`; this prose is not.
 
 - **The two selection permission rules**, for the reason given in section 4.
-- **An in-app editor** for the manifest. It is edited as a Nuxeo Note.
+- **An in-app editor** for configuration. Configuration is the fragments in a configuration
+  package (section 1), so a change is a new version of that package, built and installed. On a
+  demo server, a preset (section 1) switches between configurations per browser.
 
-- **The permissions panel handles three permission levels, not Nuxeo's twelve.** The adopted
-  upstream panel represents `Read`, `ReadWrite` and `Everything`, and ranks rows against exactly
-  that list. A document whose local ACL holds anything else — `Write`, `AddChildren`,
-  `WriteSecurity`, `ReadVersion` and the rest, which workflows and server-side code do set — cannot
-  be round-tripped through it.
-
-  Because Nuxeo has no replace-an-ACL operation, saving is a clear followed by a replay, so an ACE
-  the panel cannot represent would be **deleted** by a save that reported success. The bridge now
-  **refuses the write** on such a document and names the offending entries, rather than losing them.
-
-  That is a guard, not a capability: the panel still cannot edit those documents at all, and their
-  permissions must be managed in Nuxeo until upstream can express the full set. Treat a refusal as
-  correct behaviour, not a defect.
-
-  **This is not only exotic documents.** Surveyed against a stock instance, 2 of the 12 documents
-  carrying a local ACL would be refused, and both are ones Nuxeo creates itself — the `sections`
-  root of a domain, which Nuxeo grants `members: CanAskForPublishing` by default, and a document's
-  `Comments` container, which the comment service gives `AddChildren` and `RemoveChildren`.
-
-  So the permissions panel is unusable on the Sections root of a stock domain from day one. Saving
-  there would have deleted the grant the publishing workflow depends on, so the refusal is doing its
-  job — but expect it, and manage those permissions in Nuxeo.
+- **The Permissions tabs refuse some edits rather than guess.** All three — document detail,
+  `/browse` and a collection — use `nxs.components.permissionsPanel`. A collection's tab offers
+  the server's list for the type alone — `Read`, `ReadCanCollect`, `ReadWrite` and `Everything` on
+  a stock server — as Web UI does. The other two offer the server's list
+  for the document type, then `Write`, `ReadVersion`, `WriteVersion`, `AddChildren`,
+  `RemoveChildren`, `Remove`, `Version`, `WriteSecurity`, `Unlock`, `SetRetention` and
+  `UnsetRetention`, then any other permission the server reports. Nuxeo reports only the
+  permissions the user holds, so that last group is every permission the server defines only for a
+  user holding `Everything`; a manager with `WriteSecurity` alone is not offered a custom permission
+  they do not hold. It writes one
+  entry per change, so an entry nobody touched is never written. What it still refuses, before
+  writing anything and naming each entry and why: an entry that changed on the server after the
+  page loaded, editing a deny (Nuxeo's write operations only grant), an entry with no identifier,
+  an entry naming no user or group, a time frame that ends before it starts, and a permission the
+  server does not define. Its labels for permissions outside that standard set
+  are the Nuxeo identifiers, not translated names.
 
 ---
 
@@ -978,7 +1464,7 @@ that is Layer 2 — see section 14.
 import {
   AppExtensionsService,
   ExtensionComponentRegistry,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 const extensions = inject(AppExtensionsService);
 const components = inject(ExtensionComponentRegistry);
@@ -1013,7 +1499,7 @@ component without forking.
 Section 1 explains why a manifest cannot rebind a packaged action. Here is where you can:
 
 ```ts
-import { ExtensionActionRegistry } from '@nuxeo-satori/platform/extensions';
+import { ExtensionActionRegistry } from '@nuxeo/satori-platform/extensions';
 
 const actions = inject(ExtensionActionRegistry);
 

@@ -2,14 +2,16 @@
 title: Documentation Governance
 parent: Governance
 order: 1
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-08
+repo_commit: 2898046
 audience: all
 ---
 
 # Documentation Governance
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
+> Only the repository links were re-verified at that commit: made relative rather than pinned to
+> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 
 ## The rule
 
@@ -32,7 +34,7 @@ Each was believed because it was written down.
 ## Why this set lives in the repository
 
 Markdown in `documentation/`, published to Confluence by
-[`scripts/publish-confluence.mjs`](https://github.com/nuxeo/agentic-ui-poc/blob/feature/adf-hx-browse-poc/scripts/publish-confluence.mjs).
+[`scripts/publish-confluence.mjs`](../../scripts/publish-confluence.mjs).
 Deliberate, for four reasons:
 
 1. **It travels with the code.** A branch that changes behaviour can change its documentation in

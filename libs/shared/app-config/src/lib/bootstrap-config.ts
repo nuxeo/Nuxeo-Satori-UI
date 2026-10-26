@@ -1,17 +1,18 @@
 /**
- * Layer 0 bootstrap configuration — the part of the configuration that has to be
- * readable *before* the user authenticates.
+ * Layer 0 bootstrap configuration — the part of the configuration the shell
+ * needs before the user authenticates: where Nuxeo is, what the product is
+ * called, which theme to start in, sign-in options and the integrations it
+ * reaches. What the interface offers and how it is arranged belongs in the
+ * runtime manifest (Layer 1), which is fetched beside this file; the fields a
+ * document type shows are per-type layout files, indexed by `layouts.json`.
  *
- * It therefore holds only what the shell needs in order to reach the server and
- * paint a branded login page: where Nuxeo is, what the product is called, which
- * theme to start in, and where to find the runtime manifest. Everything a
- * customer changes after login belongs in the runtime manifest instead, so that
- * it inherits Nuxeo's versioning, audit and ACLs.
- *
- * The constants here are the **packaged defaults**. The deployed, editable copy
- * lives *beside* the application bundle rather than inside it: the marketplace
- * installer copies the `web` directory with `overwrite="true"`, so anything a
- * customer edits within the bundle is destroyed on the next upgrade.
+ * The constants here are the **compiled-in fallback**. The configuration
+ * endpoint in `nuxeo-agentic-core` answers `agentic-ui-config/bootstrap.json`
+ * with the ordered `bootstrap` fragments of our defaults and of every installed
+ * configuration package, and `AppConfigService` folds them, in that order, over
+ * these constants. Nothing is read from a file a customer edits on the server.
+ * The endpoint serves it before authentication, so a fragment must hold nothing
+ * sensitive.
  */
 
 /** CSS custom properties applied to `<html>` while a theme is active. */
@@ -123,10 +124,6 @@ export interface AppBootstrapConfig {
   readonly nuxeoServerUrl: string | null;
   /** Prefix under which the `AI.*` automation operations are served. */
   readonly aiBackendUrl: string;
-  /** Repository path of the Nuxeo document holding the runtime manifest. */
-  readonly manifestDocumentPath: string;
-  /** Document property read as the manifest JSON payload. */
-  readonly manifestDocumentProperty: string;
   readonly branding: AppBrandingConfig;
   readonly defaultThemeId: string;
   readonly themes: readonly AppThemeConfig[];
@@ -209,8 +206,6 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   nuxeoApiOrigin: '',
   nuxeoServerUrl: null,
   aiBackendUrl: '/nuxeo',
-  manifestDocumentPath: '/default-domain/config/agentic-ui',
-  manifestDocumentProperty: 'note:note',
   branding: {
     // These two differ today: the shell header falls back to "Hyland Nuxeo"
     // while `index.html` sets the browser tab to "Nuxeo Platform". Both are
@@ -624,12 +619,6 @@ export function mergeBootstrapConfig(base: AppBootstrapConfig, patch: unknown): 
     nuxeoApiOrigin: readString(patch, 'nuxeoApiOrigin', base.nuxeoApiOrigin),
     nuxeoServerUrl: readNullableString(patch, 'nuxeoServerUrl', base.nuxeoServerUrl),
     aiBackendUrl: readString(patch, 'aiBackendUrl', base.aiBackendUrl),
-    manifestDocumentPath: readString(patch, 'manifestDocumentPath', base.manifestDocumentPath),
-    manifestDocumentProperty: readString(
-      patch,
-      'manifestDocumentProperty',
-      base.manifestDocumentProperty,
-    ),
     branding: {
       applicationTitle: readString(branding, 'applicationTitle', base.branding.applicationTitle),
       documentTitle: readString(branding, 'documentTitle', base.branding.documentTitle),

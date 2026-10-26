@@ -2,14 +2,23 @@
 title: Extensibility Contract
 parent: Engineering
 order: 7
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # The Extensibility Contract — four layers
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> Before that, last reviewed 2026-10-12 at `82c78bd` (`feature/nxsat-308-agent-surface`):
+> Only "The six guardrail checks" was verified at that commit, against
+> `libs/platform/guardrails/check-extension-library.mjs`. The entry-point count and the
+> `@nuxeo/satori-platform/components-satori` row in §6 were verified on 2026-10-11 at `ad60a57`.
+> The `@nuxeo/satori-platform/components` row in §6 was re-verified at
+> `effd434` (`feature/nxsat-308-satori-components`), and "Our rule context is deliberately not
+> upstream's" in §5 at `5abcd50` (`feature/nxsat-308-replace-adf-extensions`); the tarball figure
+> in §6 carries its own date. The rest of the page as of 2026-08-24 · `77265f9`.
 > Customer-facing companion: [`docs/extension-reference.md`](../../docs/extension-reference.md),
 > which is drift-gated by `npm run beta:reference`.
 
@@ -21,14 +30,15 @@ promise checkable rather than aspirational.
 
 ## 1. The four layers
 
-| Layer                      | What the customer writes                                                    | Build needed           | Survives upgrade                                  |
-| -------------------------- | --------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------- |
-| **0 — Configuration**      | JSON + CSS custom properties: theme tokens, branding, languages             | No                     | Yes — the package never installs `bootstrap.json` |
-| **1 — Declarative wiring** | JSON referencing components, rules, actions and routes **by registered ID** | No                     | Yes — it is a Nuxeo document                      |
-| **2 — Customer code**      | A TypeScript library against `@nuxeo-satori/platform`                       | Yes, in **their** repo | Yes — npm semver                                  |
-| **3 — Agent harness**      | Prompts. The generators and guardrails ship inside the package              | Yes, in their repo     | Yes                                               |
+| Layer                      | What the customer writes                                                    | App rebuild needed     | Survives upgrade                                 |
+| -------------------------- | --------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------ |
+| **0 — Configuration**      | JSON + CSS custom properties: theme tokens, branding, languages             | No                     | Yes — it is a fragment in the customer's package |
+| **1 — Declarative wiring** | JSON referencing components, rules, actions and routes **by registered ID** | No                     | Yes — it is a fragment in the customer's package |
+| **2 — Customer code**      | A TypeScript library against `@nuxeo/satori-platform`                       | Yes, in **their** repo | Yes — npm semver                                 |
+| **3 — Agent harness**      | Prompts. The generators and guardrails ship inside the package              | Yes, in their repo     | Yes                                              |
 
-Layers 0 and 1 are expected to absorb most customer requests and need no build.
+Layers 0 and 1 are expected to absorb most customer requests and need no build of the application:
+the customer's configuration package is zipped by a dependency-free script and installed.
 
 > **This expectation is a design assumption, not a measured fact.** It has not been tested
 > against real customer requests. [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md)
@@ -44,20 +54,25 @@ Layer 2 exists because a manifest can only rewire what is already compiled in �
 
 `bootstrap.json`, fetched before authentication because it carries the Nuxeo server URL.
 
-Live example: [`apps/nuxeo-satori-template/public/agentic-ui-config/bootstrap.json`](../../apps/nuxeo-satori-template/public/agentic-ui-config/bootstrap.json).
+Live example: [`apps/nuxeo-satori-template/public/agentic-ui-config/bootstrap.json`](../../apps/nuxeo-satori-template/public/agentic-ui-config/bootstrap.json). It is the servlet's
+response with one fragment, which is what the template's dev server answers; on a server, the
+fragment's `content` is a `bootstrap` fragment in your configuration package.
 
-| Key                                                 | Purpose                                                                                   |
-| --------------------------------------------------- | ----------------------------------------------------------------------------------------- |
-| `nuxeoApiOrigin`                                    | Where the Nuxeo REST API lives                                                            |
-| `manifestDocumentPath` / `manifestDocumentProperty` | Where the Layer 1 manifest document is, and which property holds it (default `note:note`) |
-| `branding`                                          | Product name, browser tab title, and `logo` (below)                                       |
-| `themes` / `defaultThemeId`                         | Named token sets applied to `<html>`                                                      |
-| `defaultLanguage` / `availableLanguages`            | i18n                                                                                      |
+| Key                                      | Purpose                                                                      |
+| ---------------------------------------- | ---------------------------------------------------------------------------- |
+| `nuxeoApiOrigin`                         | Where the Nuxeo REST API lives                                               |
+| `branding`                               | Product name, browser tab title, and `logo` (below)                          |
+| `themes` / `defaultThemeId`              | Named token sets applied to `<html>`                                         |
+| `defaultLanguage` / `availableLanguages` | i18n                                                                         |
+| `presales`                               | Presales presets, honoured only where a package sets `presetSwitching: true` |
 
 ### `branding.logo`
 
 `{ "src": "assets/acme-logo.svg", "alt": "Acme Insurance" }` replaces the Satori word mark in the header
-and the Satori lockup on the login page. `null` or absent keeps the Satori marks.
+and the Satori lockup on the login page. `null` or absent keeps the Satori marks. It does not
+replace the Hyland mark at the top of the navigation rail or the "Content Innovation Cloud" title
+shown when the rail is expanded (both hard-coded in Satori's `sat-platform-nav`), and there is no
+key for the favicon.
 
 - **`src`** is a relative path resolved against the directory `bootstrap.json` is served from,
   `/nuxeo/agentic-ui-config/`. The servlet serves images only under `assets/`, so a logo is
@@ -121,12 +136,16 @@ gate while the fallback did all the work.
 
 ## 3. Layer 1 — the manifest
 
-A **Nuxeo document**, not a file in the bundle. Example payload:
+A **`manifest` fragment in the customer's configuration package**, served with every other
+package's fragments at `agentic-ui-config/manifest.json`. Example fragment:
 [`apps/nuxeo-satori-template/manifest.example.json`](../../apps/nuxeo-satori-template/manifest.example.json).
 
-Choosing a document rather than a file was deliberate: it inherits the repository's
-versioning, audit trail, ACLs and per-tenant scoping for free, survives a marketplace
-upgrade, and can be edited from the application itself.
+It survives an upgrade of ours because it is in their package, which depends on ours, and it is
+versioned with that package. It is read before sign-in, so it is the same for every user and
+must hold nothing sensitive. Until NXSAT-312 the manifest was a Nuxeo Note at
+`/default-domain/config/agentic-ui`, read with each user's session; the application no longer
+reads it, with no migration. Each fragment's `extensions` block is resolved on its own, so two
+packages' contributions never depend on each other's `$layer` references.
 
 ```jsonc
 {
@@ -178,17 +197,17 @@ only that check goes red.
 
 Declared in [`libs/shared/extensions/src/lib/extension-slots.ts`](../../libs/shared/extensions/src/lib/extension-slots.ts).
 
-| Slot           | State                                                            | Evidence                                                                    |
-| -------------- | ---------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `navbar`       | **Live** — packaged descriptors + a host that renders them       | 17 documented IDs                                                           |
-| `bulk-actions` | **Live** — packaged descriptors + host                           |                                                                             |
-| `documentList` | **Live** — 12 packaged columns, resolved by _both_ browse routes | `provide-app-extensions.ts:93`, `browse.ts:373`, `browse-adf-hx-poc.ts:133` |
-| `sidebar`      | Resolved, **no packaged descriptor**                             | 3 documented IDs                                                            |
-| `routes`       | Resolved, **no packaged descriptor**                             | `extension-reference.md` section 11                                         |
-| `toolbar`      | **Live** — 16 packaged actions on document detail                | `extension-reference.md` section 8                                          |
-| `contextMenu`  | **Live** — 4 packaged actions in the browse "More actions" menu  | `extension-reference.md` section 10                                         |
-| `tabs`         | **Live** — 6 packaged document-detail tabs                       | `extension-reference.md` section 9                                          |
-| `documentView` | Resolved, **no packaged descriptor** — the View tab body         | `extension-reference.md` section 9a                                         |
+| Slot           | State                                                           | Evidence                                         |
+| -------------- | --------------------------------------------------------------- | ------------------------------------------------ |
+| `navbar`       | **Live** — packaged descriptors + a host that renders them      | 17 documented IDs                                |
+| `bulk-actions` | **Live** — packaged descriptors + host                          |                                                  |
+| `documentList` | **Live** — 12 packaged columns, resolved by the browse route    | `provide-app-extensions.ts:108`, `browse.ts:481` |
+| `sidebar`      | Resolved, **no packaged descriptor**                            | 3 documented IDs                                 |
+| `routes`       | Resolved, **no packaged descriptor**                            | `extension-reference.md` section 11              |
+| `toolbar`      | **Live** — 16 packaged actions on document detail               | `extension-reference.md` section 8               |
+| `contextMenu`  | **Live** — 4 packaged actions in the browse "More actions" menu | `extension-reference.md` section 10              |
+| `tabs`         | **Live** — 6 packaged document-detail tabs                      | `extension-reference.md` section 9               |
+| `documentView` | Resolved, **no packaged descriptor** — the View tab body        | `extension-reference.md` section 9a              |
 
 This table read "Reserved — nothing reads it" for `routes`, `toolbar`, `contextMenu` and
 `tabs` well after each gained a host. `npm run beta:reference` checks the states in
@@ -251,22 +270,26 @@ document-detail tabs and toolbar actions but not browse columns. Reference and e
 objects — `NodeEntry`, `SiteEntry`, `RepositoryInfo` — describing a repository we do not
 talk to. Reusing it would put ACS types in the signature every customer rule is written
 against. The _shape_ is upstream's; the types are ours. Upstream's domain-neutral helpers
-(`mergeObjects`, `mergeArrays`, `filterEnabled`, `sortByOrder`, `getValue`) are used
-directly.
+were used directly until NXSAT-308, which replaced the three the engine needed —
+`mergeObjects`, `filterEnabled` and `sortByOrder` — with our own, pinned case by case to
+upstream's output.
 
 ---
 
-## 6. Layer 2 — `@nuxeo-satori/platform`
+## 6. Layer 2 — `@nuxeo/satori-platform`
 
-One publishable library, four secondary entry points, 347 kB tarball of 25 files.
+One publishable library, six secondary entry points; `npm pack --dry-run` on the build gives a
+556 kB tarball of 70 files (measured 2026-10-08).
 
-| Entry point                           | Wraps                                                                 |
-| ------------------------------------- | --------------------------------------------------------------------- |
-| `@nuxeo-satori/platform`              | Root — `PLATFORM_ENTRY_POINTS`, shared types                          |
-| `@nuxeo-satori/platform/extensions`   | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent` |
-| `@nuxeo-satori/platform/app-config`   | Layer 0 loader and tokens                                             |
-| `@nuxeo-satori/platform/nuxeo-client` | Services and models                                                   |
-| `@nuxeo-satori/platform/ui`           | Shared presentational components                                      |
+| Entry point                                | Wraps                                                                                                                                            |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `@nuxeo/satori-platform`                   | Root — `PLATFORM_ENTRY_POINTS`, shared types                                                                                                     |
+| `@nuxeo/satori-platform/extensions`        | The registries, `provideSatoriExtensions`, `ExtensionOutletComponent`                                                                            |
+| `@nuxeo/satori-platform/app-config`        | Layer 0 loader and tokens                                                                                                                        |
+| `@nuxeo/satori-platform/components`        | `nxs-` components — Material-backed, no ADF or Satori import                                                                                     |
+| `@nuxeo/satori-platform/components-satori` | The same `nxs-` primitive IDs on Satori, over the Material ones; the only entry point that imports the optional `@hylandsoftware/satori-ui` peer |
+| `@nuxeo/satori-platform/nuxeo-client`      | Services and models                                                                                                                              |
+| `@nuxeo/satori-platform/ui`                | Shared presentational components                                                                                                                 |
 
 ### One declarative object reaches four registries
 
@@ -275,6 +298,13 @@ takes a contributor and registers slots, rules, components and actions in a
 `provideEnvironmentInitializer`. It uses `runInInjectionContext` rather than a bare call, so
 a rule contributed by a **customer library** may `inject()` its own dependencies — a factory
 declared in a customer library has no injection context of its own.
+
+The contributor runs **before the configuration loads**. The configuration tokens —
+`NUXEO_API_ORIGIN` and the SSO and session settings among them — keep the first value they
+resolve to, so a contributor that injects a service which reads one (any `NuxeoApiBase`
+service reads `NUXEO_API_ORIGIN` when it is constructed) fixes it at the packaged default for
+the life of the application. Inject an `Injector` and look such a service up inside the rule,
+as the product's own `app.rules.hasAdministrationAccess` does.
 
 ```ts
 // The whole integration, in a customer's app config:
@@ -312,16 +342,16 @@ compiler reported either. If you touch
 Four Nx generators, shipped **inside** the package at its root as a proper plugin:
 
 ```bash
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-action    export-claim  --library=acme-extensions
-npx nx g @nuxeo-satori/platform:extension-component claim-summary --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-action    export-claim  --library=acme-extensions
+npx nx g @nuxeo/satori-platform:extension-component claim-summary --library=acme-extensions
 ```
 
 Plus the guardrail a customer runs in their own CI:
 
 ```bash
-node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/<their-library>
+node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/<their-library>
 ```
 
 > Until 2026-08-24 the customer guide told customers to run
@@ -330,17 +360,18 @@ node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs 
 > could not be run by its audience. Verified fixed by unpacking the tarball into
 > `node_modules` and generating a library from it.
 
-### The five guardrail checks, and what each one caught
+### The six guardrail checks, and what each one caught
 
-| #   | Check                                               | Origin                                                                                                                                                                      |
-| --- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Registered IDs carry the library's own owner prefix | An ID is a public contract                                                                                                                                                  |
-| 2   | No import reaches past a published entry point      | Deep paths break without being breaking changes                                                                                                                             |
-| 3   | A spec asserts **registry state**                   | Three generators once spliced every registration _inside a comment_, reported success, printed the IDs they had "registered" — and lint, typecheck and six specs all passed |
-| 4   | Gating rules are declared fail-closed               | An unregistered rule ID permits                                                                                                                                             |
-| 5   | No component exported from the barrel               | A host that can import the class depends on a name that should stay free to change                                                                                          |
+| #   | Check                                                                                                                                                          | Origin                                                                                                                                                                      |
+| --- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Registered IDs carry the library's own owner prefix                                                                                                            | An ID is a public contract                                                                                                                                                  |
+| 2   | No import reaches past a published entry point                                                                                                                 | Deep paths break without being breaking changes                                                                                                                             |
+| 3   | A spec asserts **registry state**                                                                                                                              | Three generators once spliced every registration _inside a comment_, reported success, printed the IDs they had "registered" — and lint, typecheck and six specs all passed |
+| 4   | Gating rules are declared fail-closed                                                                                                                          | An unregistered rule ID permits                                                                                                                                             |
+| 5   | No component exported from the barrel                                                                                                                          | A host that can import the class depends on a name that should stay free to change                                                                                          |
+| 6   | Each registered component resolves, is named by a spec, uses the owner's selector prefix, and implements the `Nxs…Inputs` contract of a primitive it overrides | The registry swallows a failed lazy load on purpose, so a misspelt path is a blank slot with no error anywhere; an override missing an input has it silently dropped        |
 
-Three of those five were once satisfiable **without doing the thing they check** — a comment
+Three of the first five were once satisfiable **without doing the thing they check** — a comment
 mentioning a registry counted as an assertion, a dynamic `import()` evaded check 2, and
 `export * from './leaky'` evaded check 5. All three probed and closed.
 

@@ -1,0 +1,13 @@
+@use '@hylandsoftware/satori-ui/theme' as sat;
+
+html {
+  color-scheme: light;
+  @include sat.theme;
+}
+
+body {
+  margin: 0;
+  font: var(--mat-sys-body-medium);
+  color: var(--mat-sys-on-surface);
+  background: var(--mat-sys-surface);
+}

@@ -3,14 +3,19 @@ import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { Router } from '@angular/router';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { APP_CONFIG_FORMAT, AppConfigService } from '@nuxeo/satori-platform/app-config';
+import {
+  NXS_PERMISSIONS_PANEL_ID,
+  NxsPermissionsPanelComponent,
+} from '@nuxeo/satori-platform/components';
 import {
   AppExtensionsService,
   EXTENSION_SLOTS,
+  ExtensionComponentRegistry,
   type ExtensionActionDescriptor,
   type ExtensionRouteDescriptor,
   type ExtensionTabDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { appConfig } from '../app.config';
 import { AuthService } from '../auth/auth.service';
@@ -23,8 +28,8 @@ import { AuthService } from '../auth/auth.service';
  * or that `provideExtensionRoutes()` is in `provideAppExtensions()` — and a
  * descriptor nothing registers is the same defect as a descriptor nothing
  * renders, one layer up. So this bootstraps the real `appConfig.providers` and
- * drives the manifest through `AppConfigService.loadManifest()`, the method the
- * app itself calls after sign-in.
+ * drives the manifest through `AppConfigService.load()`, the method the app
+ * itself calls at startup.
  */
 describe('provideAppExtensions — the four reserved slots, as the app wires them', () => {
   const authMock = {
@@ -59,13 +64,25 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
     http.verify();
   });
 
-  /** Stand in a manifest document the way Nuxeo returns one. */
+  /** Stand in the configuration service, with one package contributing `extensions`. */
   async function loadManifest(extensionConfig: unknown): Promise<void> {
     const config = TestBed.inject(AppConfigService);
-    const done = config.loadManifest();
-    http
-      .expectOne((request) => request.url.includes('/nuxeo/api/v1/path'))
-      .flush({ properties: { 'note:note': JSON.stringify({ extensions: extensionConfig }) } });
+    const done = config.load();
+    for (const layer of ['bootstrap', 'manifest'] as const) {
+      const content = layer === 'manifest' ? { extensions: extensionConfig } : {};
+      http
+        .match((request) => request.url.endsWith(`/agentic-ui-config/${layer}.json`))
+        .forEach((request) =>
+          request.flush({
+            format: APP_CONFIG_FORMAT,
+            layer,
+            fragments: [
+              { name: 'acme', component: 'com.acme', bundle: 'com.acme', source: 'x', content },
+            ],
+            diagnostics: [],
+          }),
+        );
+    }
     await done;
     TestBed.inject(ApplicationRef).tick();
   }
@@ -82,6 +99,13 @@ describe('provideAppExtensions — the four reserved slots, as the app wires the
       'app.tabs.publishing',
     ]);
     expect(ids(EXTENSION_SLOTS.contextMenu)).toContain('app.contextMenu.share');
+  });
+
+  it('registers the packaged permissions panel under the ID the library exports', async () => {
+    await loadManifest({});
+    const components = TestBed.inject(ExtensionComponentRegistry);
+    expect(components.has(NXS_PERMISSIONS_PANEL_ID)).toBe(true);
+    expect(await components.resolve(NXS_PERMISSIONS_PANEL_ID)).toBe(NxsPermissionsPanelComponent);
   });
 
   it('merges manifest contributions into all four slots', async () => {

@@ -17,20 +17,23 @@ import { join } from 'node:path';
  * A note on navigation waits.
  *
  * These used `waitUntil: 'networkidle'`, which is the wrong tool here: the template
- * deliberately requests a Nuxeo manifest that 404s, so "500ms of no network
- * activity" is not a reliable signal and the goto timed out at 30s. Waiting for
+ * once requested a Nuxeo manifest that 404'd, so "500ms of no network
+ * activity" was not a reliable signal and the goto timed out at 30s. Waiting for
  * `load` and then for the navigation element it actually needs is both faster and
  * deterministic.
  */
 
 const CONFIG = 'agentic-ui-config/bootstrap.json';
 
-/** Rewrite one branch of the served bootstrap.json. */
+/**
+ * Rewrite one branch of the template's bootstrap fragment. The served file is the
+ * configuration servlet's envelope, and the template's values are its one fragment.
+ */
 function patchConfig(dir, mutate) {
   const path = join(dir, CONFIG);
-  const config = JSON.parse(readFileSync(path, 'utf8'));
-  mutate(config);
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+  const envelope = JSON.parse(readFileSync(path, 'utf8'));
+  mutate(envelope.fragments.at(-1).content);
+  writeFileSync(path, `${JSON.stringify(envelope, null, 2)}\n`);
 }
 
 export default async function run({ page, deckUrl, serve, hold, playDeck, teardown, ROOT }) {

@@ -1,0 +1,57 @@
+{
+  "$schema": "http://json-schema.org/schema",
+  "$id": "SatoriConfigPackage",
+  "title": "Satori configuration package",
+  "description": "Scaffolds a Nuxeo Marketplace package that contributes Layer 0 (bootstrap) and Layer 1 (manifest) configuration to Nuxeo Satori, with a build target that validates the JSON and produces the installable zip.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Marketplace package name, kebab-case, at most 128 characters. Also the directory, the Nx project name and the fragment name. Renaming it later is a different package to Nuxeo.",
+      "maxLength": 128,
+      "$default": {
+        "$source": "argv",
+        "index": 0
+      },
+      "x-prompt": "Package name (kebab-case, e.g. acme-config)?",
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$"
+    },
+    "owner": {
+      "type": "string",
+      "description": "Owner prefix for the Nuxeo component and bundle, as in <owner>.config.<name>. Component names must be unique on a server.",
+      "x-prompt": "Owner prefix (e.g. acme)?",
+      "pattern": "^[a-z][a-z0-9]*$"
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable name: the Marketplace title, and the starter's applicationTitle. Defaults to the name in title case."
+    },
+    "vendor": {
+      "type": "string",
+      "description": "Vendor shown in the Marketplace listing. Defaults to the title."
+    },
+    "version": {
+      "type": "string",
+      "description": "Package version. Nuxeo installs a higher version as an upgrade.",
+      "default": "1.0.0",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(-[A-Za-z0-9.-]+)?$"
+    },
+    "presales": {
+      "type": "boolean",
+      "description": "Add a presales block: preset switching on, and one example preset a demo URL selects with ?preset=<name>.",
+      "default": false
+    },
+    "directory": {
+      "type": "string",
+      "description": "Parent directory for the package: a relative path of letters, digits, '.', '_' and '-', no part starting with '-'. It goes into the build command unquoted.",
+      "default": "config-packages",
+      "pattern": "^[A-Za-z0-9._][A-Za-z0-9._-]*(/[A-Za-z0-9._][A-Za-z0-9._-]*)*$"
+    },
+    "force": {
+      "type": "boolean",
+      "description": "Overwrite the generated files if the package already exists. For the loop of editing a template and regenerating.",
+      "default": false
+    }
+  },
+  "required": ["name", "owner"]
+}

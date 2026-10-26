@@ -1,0 +1,92 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as SavedSearchSelectStories from './saved-search-select.stories';
+
+<Meta of={SavedSearchSelectStories} name="Overview" />
+
+# Saved search select
+
+The saved search select lists the saved searches the user can open, and emits the one they choose,
+as the list at the top of Web UI's search form does. Use it above the search filters, so the user
+can return to a search they saved, or one shared with them.
+
+## Key features
+
+- **What the server lists.** It shows the saved searches the server returns for its `pageProvider`:
+  the user's own and those shared with them. Who sees which search is the server's decision.
+- **Read when needed.** The list is read when the box is first focused, and read again after
+  `refresh` changes — bump it once a search is saved, renamed or deleted.
+- **Narrows as you type.** Typing keeps the searches whose name contains the text.
+- **Emits the choice.** It emits `selectedChange` with the id and title; loading that search's
+  filters is your component's job.
+- **Shows the open one.** With `selectedTitle` set, the box shows it, and leaving the box without a
+  choice puts it back.
+
+## Demo showcase
+
+Focus the box: the in-memory server lists three saved searches.
+
+<Canvas of={SavedSearchSelectStories.NoneOpen} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsSavedSearchSelectComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+export const usageHtml = `<nxs-saved-search-select
+  [selectedId]="savedSearchId()"
+  [selectedTitle]="savedSearchTitle()"
+  pageProvider="default_search"
+  [refresh]="savedSearchesVersion()"
+  (selectedChange)="open($event.id, $event.title)"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={usageHtml}
+/>
+
+`selectedId` and `selectedTitle` are the saved search open now, or empty strings for none.
+`pageProvider` names the page provider whose saved searches are listed, `default_search` by default.
+Change `refresh` to read the list again. Read the chosen search's parameters with
+`SearchService.getSavedSearchById` and turn them into filters with `nxsSearchFiltersFromParams`.
+
+Its label and messages are translated with ngx-translate under `satori-components.saved-search-select.*`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not. It needs
+`HttpClient` and the platform's `SearchService`. It has no registered ID: place it in a template by
+its selector.
+
+## Where its data comes from
+
+The list is `SearchService.getSavedSearches(pageProvider)`, Nuxeo's
+`GET /api/v1/search/saved?pageProvider=…`, with the application's sign-in. A list that cannot be read
+shows as empty.
+
+**In these stories** `SearchService` is an in-memory fake; nothing is sent to a server.
+
+## Examples
+
+### One open
+
+<Canvas of={SavedSearchSelectStories.OneOpen} />
+
+### No saved searches
+
+<Canvas of={SavedSearchSelectStories.NoSavedSearches} />
+
+### Loading
+
+<Canvas of={SavedSearchSelectStories.Loading} />
+
+## Accessibility
+
+- **Labelled.** The box has the visible label "Saved Searches"; the placeholder is a hint, not the
+  name.
+- **Combobox.** It is a Material autocomplete: **Down** opens the list, **Up** and **Down** move
+  through it, **Enter** opens the search, **Escape** closes the list.
+- **States.** Loading, no saved searches and no match are disabled entries in the list, so a screen
+  reader reads them as the list's content.

@@ -1,39 +1,35 @@
-import { InjectionToken } from '@angular/core';
+import { InjectionToken, inject } from '@angular/core';
 
-/** Directory name, relative to the application bundle's parent, holding the deployed configuration. */
+/** Directory name, relative to the application bundle's parent, the configuration is served from. */
 export const APP_CONFIG_DIRECTORY = 'agentic-ui-config';
 
 export const APP_BOOTSTRAP_CONFIG_FILE = 'bootstrap.json';
 
+export const APP_MANIFEST_CONFIG_FILE = 'manifest.json';
+
 /**
- * Resolve the bootstrap configuration URL as a **sibling** of the application
- * bundle rather than a file inside it.
+ * Resolve the bootstrap configuration URL as a **sibling** of the application bundle rather than
+ * a file inside it.
  *
- * That single `../` is the whole point of the path. The marketplace installer
- * copies the packaged `web` directory over the deployed one with
- * `overwrite="true"`, so a configuration file inside `.../agentic-ui/` is
- * silently replaced by ours on every upgrade. `.../agentic-ui-config/` is
- * outside that copy's source tree. The package installs only a sample there,
- * `bootstrap.example.json`; `bootstrap.json` is the customer's own copy, which
- * no install, upgrade or uninstall touches, so customer edits survive. When it
- * is absent the request 404s and the compiled defaults apply.
+ * Production base href is `/nuxeo/agentic-ui/`, giving `/nuxeo/agentic-ui-config/bootstrap.json`,
+ * which the configuration servlet in `nuxeo-agentic-core` answers with the bootstrap fragments
+ * every installed package contributed. Nothing on the server's disk is served at that path.
  *
- * Production base href is `/nuxeo/agentic-ui/`, giving
- * `/nuxeo/agentic-ui-config/bootstrap.json`. The `nuxeo` Tomcat context has
- * `docBase="../nxserver/nuxeo.war"`, so that URL is served from
- * `<server.home>/nxserver/nuxeo.war/agentic-ui-config/` — which is exactly the
- * `todir` of the sample's copy in `install.xml`. Note that
- * `<server.home>/nxserver/web` holds only `root.war` and is not a docBase;
- * installing there produces a permanent 404.
- *
- * Under `nx serve` the base href is `/`, where `../` clamps to the root and
- * gives `/agentic-ui-config/bootstrap.json`.
+ * Under `nx serve` the base href is `/`, where `../` clamps to the root and gives
+ * `/agentic-ui-config/bootstrap.json`, served from the gitignored
+ * `apps/nuxeo-ui/public/agentic-ui-config/` when a developer puts a response there.
  *
  * @param baseUri normally `document.baseURI`
  */
 export function resolveBootstrapConfigUrl(baseUri: string): string {
   const url = new URL(`../${APP_CONFIG_DIRECTORY}/${APP_BOOTSTRAP_CONFIG_FILE}`, baseUri);
   return `${url.pathname}${url.search}`;
+}
+
+/** The manifest response, served beside the bootstrap one. */
+export function resolveManifestConfigUrl(bootstrapUrl: string): string {
+  const path = bootstrapUrl.split(/[?#]/, 1)[0] ?? '';
+  return `${path.slice(0, path.lastIndexOf('/') + 1)}${APP_MANIFEST_CONFIG_FILE}`;
 }
 
 /**
@@ -43,4 +39,10 @@ export function resolveBootstrapConfigUrl(baseUri: string): string {
 export const APP_BOOTSTRAP_CONFIG_URL = new InjectionToken<string>('APP_BOOTSTRAP_CONFIG_URL', {
   providedIn: 'root',
   factory: () => resolveBootstrapConfigUrl(document.baseURI),
+});
+
+/** Where the manifest is fetched from: beside the bootstrap response unless overridden. */
+export const APP_MANIFEST_CONFIG_URL = new InjectionToken<string>('APP_MANIFEST_CONFIG_URL', {
+  providedIn: 'root',
+  factory: () => resolveManifestConfigUrl(inject(APP_BOOTSTRAP_CONFIG_URL)),
 });

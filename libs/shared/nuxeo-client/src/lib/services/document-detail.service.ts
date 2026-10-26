@@ -13,7 +13,7 @@ import {
 } from '../utils/permission-notification';
 import { NuxeoDocument, NuxeoDocumentList } from '../models/document.model';
 import { NuxeoWorkflowModel } from '../models/workflow.model';
-import { AuditLogList } from '../models/audit.model';
+import type { AuditLogList, AuditLogQuery } from '../models/audit.model';
 import { NuxeoApiBase } from './nuxeo-api-base';
 import { normalizeDocumentAcls } from '../utils/ace-principal';
 import { BLOB_CLIENT_REASON_PARAM, type FetchBlobOptions } from '../utils/blob-client-reason';
@@ -29,6 +29,8 @@ export class DocumentDetailService {
       properties: '*',
       'enrichers.document':
         'acls,permissions,renditions,favorites,subscribedNotifications,collections,preview,thumbnail',
+      // Nuxeo omits `lockOwner` / `lockCreated` unless asked, so a locked document reads as unlocked.
+      'fetch-document': 'lock',
     });
   }
 
@@ -77,10 +79,29 @@ export class DocumentDetailService {
     });
   }
 
-  getAuditLog(uid: string, pageSize = 50, currentPageIndex = 0): Observable<AuditLogList> {
-    const params = new HttpParams()
+  /**
+   * A document's audit entries, one page. `query` filters and sorts on the server, so a filter
+   * reaches every entry rather than only the page on screen. Dates go as instants: the adapter
+   * reads a bare day as midnight in the server's zone, not the user's.
+   */
+  getAuditLog(
+    uid: string,
+    pageSize = 50,
+    currentPageIndex = 0,
+    query: AuditLogQuery = {},
+  ): Observable<AuditLogList> {
+    let params = new HttpParams()
       .set('pageSize', pageSize)
       .set('currentPageIndex', currentPageIndex);
+    const principal = query.principalName?.trim();
+    if (principal) params = params.set('principalName', principal);
+    for (const eventId of query.eventIds ?? []) params = params.append('eventId', eventId);
+    if (query.eventCategory) params = params.set('eventCategory', query.eventCategory);
+    if (query.startDate) params = params.set('startEventDate', query.startDate.toISOString());
+    if (query.endDate) params = params.set('endEventDate', query.endDate.toISOString());
+    if (query.sortBy) {
+      params = params.set('sortBy', query.sortBy).set('sortOrder', query.sortOrder ?? 'desc');
+    }
     return this.http.get<AuditLogList>(this.api.apiUrl(`/nuxeo/api/v1/id/${uid}/@audit`), {
       params,
     });
@@ -98,7 +119,13 @@ export class DocumentDetailService {
       .set('sortOrder', 'desc,desc,desc');
     return this.http.get<NuxeoDocumentList>(
       this.api.apiUrl('/nuxeo/api/v1/search/pp/nxql_search/execute'),
-      { params, headers: { properties: 'dublincore,common,uid,rendition' } },
+      {
+        params,
+        headers: {
+          properties: 'dublincore,common,uid,rendition',
+          'enrichers.document': 'permissions',
+        },
+      },
     );
   }
 
@@ -140,17 +167,19 @@ export class DocumentDetailService {
   }
 
   lockDocument(uid: string): Observable<NuxeoDocument> {
-    return this.api.post<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}/@op/Document.Lock`, {
-      params: {},
-      context: {},
-    });
+    return this.api.post<NuxeoDocument>(
+      `/nuxeo/api/v1/id/${uid}/@op/Document.Lock`,
+      { params: {}, context: {} },
+      { 'fetch-document': 'lock' },
+    );
   }
 
   unlockDocument(uid: string): Observable<NuxeoDocument> {
-    return this.api.post<NuxeoDocument>(`/nuxeo/api/v1/id/${uid}/@op/Document.Unlock`, {
-      params: {},
-      context: {},
-    });
+    return this.api.post<NuxeoDocument>(
+      `/nuxeo/api/v1/id/${uid}/@op/Document.Unlock`,
+      { params: {}, context: {} },
+      { 'fetch-document': 'lock' },
+    );
   }
 
   addToFavorites(uid: string): Observable<NuxeoDocument> {
@@ -628,6 +657,13 @@ export class DocumentDetailService {
     );
   }
 
+  /**
+   * Removes **every** ACE `user` holds in `acl`, whatever `permission` says.
+   *
+   * `Document.RemovePermission` reads `user` as "all permissions for this user" and has no
+   * `permission` parameter, so a principal holding `Read` and `WriteVersion` loses both when
+   * either row is deleted. To remove one entry, use {@link removePermissionById}.
+   */
   removePermission(
     uid: string,
     params: { user: string; permission: string; acl?: string },
@@ -635,6 +671,20 @@ export class DocumentDetailService {
     return this.api.post<NuxeoDocument>(
       `/nuxeo/api/v1/id/${uid}/@op/Document.RemovePermission`,
       { params: { ...params, acl: params.acl ?? 'local' }, context: {} },
+      { 'Content-Type': 'application/json' },
+    );
+  }
+
+  /**
+   * Removes exactly one ACE, addressed by its Nuxeo id (`user:permission:granted:creator:begin:end`).
+   *
+   * Nuxeo answers 200 and changes nothing when no ACE has that id, so a caller that must know the
+   * entry is gone re-reads the ACL afterwards.
+   */
+  removePermissionById(uid: string, aceId: string, acl = 'local'): Observable<NuxeoDocument> {
+    return this.api.post<NuxeoDocument>(
+      `/nuxeo/api/v1/id/${uid}/@op/Document.RemovePermission`,
+      { params: { id: aceId, acl }, context: {} },
       { 'Content-Type': 'application/json' },
     );
   }
@@ -733,13 +783,14 @@ export class DocumentDetailService {
    * the two versions, and both only after the index caught up. A versions panel that reloads
    * on check-in would show the user a list missing the version they just created.
    *
-   * `Document.GetVersions` reads the repository directly and returned both immediately, so
-   * that is what the adf-hx `QUERY` port uses. The operation answers with a bare
-   * `{"entity-type":"documents","entries":[...]}` — no `totalSize`, no page index — so this
+   * `Document.GetVersions` reads the repository directly and returned both immediately. It answers
+   * **oldest first** — `0.1`, `0.2`, … `0.12`, checked against the local instance — so a caller
+   * showing the newest first sorts, as `nxs-manage-versions` does. The operation answers with a
+   * bare `{"entity-type":"documents","entries":[...]}` — no `totalSize`, no page index — so this
    * returns the entries rather than pretending to be a `NuxeoPaginatedList`.
    *
    * `getVersions` is deliberately left alone: `document-detail` and the bulk-action services
-   * already depend on its paginated shape, and changing them is not this port's business.
+   * already depend on its paginated shape.
    */
   getVersionsDirect(uid: string): Observable<NuxeoDocument[]> {
     return this.api
@@ -752,11 +803,8 @@ export class DocumentDetailService {
   }
 
   /**
-   * Create a version of a live document — Nuxeo's `Document.CheckIn`.
-   *
-   * Added for the adf-hx `CHECKIN` API port, which upstream's
-   * `CreateDocumentVersionService` requires. Nuxeo takes the increment as
-   * `'minor' | 'major'`; adf-hx expresses it as a `minor` boolean.
+   * Create a version of a live document — Nuxeo's `Document.CheckIn`. Nuxeo takes the increment
+   * as `'minor' | 'major'`, which `minor` chooses between.
    */
   checkInDocument(uid: string, minor = true): Observable<NuxeoDocument> {
     return this.api.post<NuxeoDocument>(
@@ -766,10 +814,15 @@ export class DocumentDetailService {
     );
   }
 
+  /**
+   * Replace the live document's content with a version's. `checkout: false` leaves it checked
+   * in at that version (`0.1`), as Web UI does; `true` leaves it checked out (`0.2+`), which
+   * reads as unversioned changes the user never made.
+   */
   restoreVersion(versionUid: string): Observable<NuxeoDocument> {
     return this.api.post<NuxeoDocument>(
       `/nuxeo/api/v1/id/${versionUid}/@op/Document.RestoreVersion`,
-      { params: { checkout: true }, context: {} },
+      { params: { checkout: false }, context: {} },
       { 'Content-Type': 'application/json' },
     );
   }

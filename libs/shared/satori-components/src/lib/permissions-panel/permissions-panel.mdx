@@ -1,0 +1,158 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as PermissionsPanelStories from './permissions-panel.stories';
+
+<Meta of={PermissionsPanelStories} name="Overview" />
+
+# Permissions panel
+
+The permissions panel shows who can do what on a document: the permissions set on the document
+itself, the ones it inherits from its parents, whether inheritance is blocked, and each entry's time
+frame and status. A user allowed to manage permissions can add, edit and remove the document's own
+entries, and block or restore inheritance. Use it on a document's or folder's Permissions tab.
+
+## Key features
+
+- **Everything about one document.** Its own entries, its inherited entries and any other named list,
+  each with the user or group, the permission, the time frame and who granted it.
+- **Edit, then save.** Additions, edits and removals are held until **Save**, then written one entry
+  at a time, so an entry the user did not touch is never rewritten.
+- **Safe saves.** Just before writing, the panel reads the document again. If any change can no
+  longer be written as shown — because someone changed that entry meanwhile, for example — it refuses
+  the whole save and says which entries and why. Afterwards it reads once more and reports any change
+  the server does not show.
+- **Time frames.** An entry can be permanent or limited to a date range. A typed date is read in the
+  order the user's locale writes dates, or through a date adapter the host provides, unless that
+  reads as Material's native one does: Material's own, or a subclass that keeps its `Date.parse`.
+  The host's adapter need not hold JS `Date`s — Luxon's `DateTime` works too — and an entry's days
+  are written as calendar days, `YYYY-MM-DD`, whatever it holds.
+- **Inheritance.** Blocking inheritance is shown as a state of the document, not as an entry.
+- **Read-only when it should be.** A user who cannot manage permissions sees the same tables with
+  nothing offering to change them.
+- **Replaceable by ID.** It is registered as `nxs.components.permissionsPanel`, so your own panel can
+  replace it everywhere it is shown.
+
+## Demo showcase
+
+Select **Add**, choose a user, pick a permission and select **Save**. The **Actions** tab lists every
+call the panel makes.
+
+<Canvas of={PermissionsPanelStories.Manageable} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsPermissionsPanelComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-permissions-panel [documentId]="document.uid" [permissionsChanged]="reloadShares" />`}
+/>
+
+`documentId` is the only required input: the uid of the document. `permissionsChanged` is an
+optional callback the panel calls after any write that may have changed the document's permissions,
+so you can refresh anything else you show that depends on them. `offer` chooses what the selects
+list: `all`, the default, is the type's `userVisiblePermissions`, then Nuxeo's standard permissions,
+then every other one the server reports; `type` is the type's list alone, as Web UI offers it. An
+entry holding a permission outside the list keeps it in its own select either way.
+
+The panel needs `HttpClient` and the platform's `DocumentDetailService`, which an application using
+`@nuxeo/satori-platform/nuxeo-client` already has. Its labels and the permission names are translated
+with ngx-translate, under `satori-components.permissions-panel.*` and `permissions.right.*`;
+`providePlatformEnglishFallback()` supplies the English when your catalogue does not.
+
+### By registered ID
+
+The Nuxeo Satori application registers the panel as `nxs.components.permissionsPanel`, exported as
+`NXS_PERMISSIONS_PANEL_ID`, and renders that ID on the Permissions tabs of the document page and of
+the browse page. Register your own component under the ID to replace the panel in both places. It
+receives the same inputs:
+
+export const byRegisteredIdHtml = `<lib-extension-outlet
+  [componentId]="permissionsPanelId"
+  [componentInputs]="{ documentId: document.uid, permissionsChanged: reloadShares }"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={byRegisteredIdHtml}
+/>
+
+## Where its data comes from
+
+Everything goes through the platform's `DocumentDetailService`, so every request carries the
+application's sign-in. The panel reads the document with three enrichers:
+
+- **`acls`** fills the tables: the document's own entries, the inherited ones, and any other named
+  list, which is shown read-only.
+- **`permissions`** decides whether the panel can be edited. Holding `WriteSecurity` or `Everything`
+  makes it editable; with anything less the same tables are read-only. A version is always
+  read-only, because its `permissions` repeat the live document's.
+- **`userVisiblePermissions`** fills the "suggested" group of the permission list. Nuxeo's standard
+  permissions, and any others `permissions` reports, follow it.
+
+Writes call `addPermission`, `replacePermission` and `removePermissionById`, one per changed entry.
+Blocking and restoring inheritance call `blockPermissionInheritance` and
+`unblockPermissionInheritance`. The user and group search calls `searchUsersGroups`.
+
+Hiding a control is not a security boundary: Nuxeo checks every write, whatever the panel shows.
+Sharing with external users is not part of this panel.
+
+**In these stories** `DocumentDetailService` is replaced by an in-memory fake that holds one
+document's permissions. Adding, editing, removing, saving and blocking inheritance all work, but
+nothing is sent to a server, and the fake starts again from the same entries when the page reloads.
+Every call the panel makes to it is logged in the **Actions** tab, and so is `permissionsChanged`.
+
+## Examples
+
+### Read-only
+
+The user holds neither `WriteSecurity` nor `Everything`.
+
+<Canvas of={PermissionsPanelStories.ReadOnly} />
+
+### Inheritance blocked
+
+<Canvas of={PermissionsPanelStories.InheritanceBlocked} />
+
+### Access denied
+
+When the read is refused, the panel says so rather than showing an empty list.
+
+<Canvas of={PermissionsPanelStories.AccessDenied} />
+
+### Loading, failures and validation
+
+Each of these is a story of its own under **Panels/Permissions panel**, answered by the same
+in-memory server:
+
+- **Loading.** The read has not answered: a spinner in a `status` region, and no table yet.
+- **No Local Entries.** Nothing is set on the document itself. The inherited entries are still
+  listed.
+- **Read Failed.** The read failed for a reason other than permission, so the panel offers
+  **Retry**. The story selects it and the next read succeeds; step back in the **Interactions**
+  tab to see the failure.
+- **Save Failed.** The server refuses the write. The panel says which entry it was and how many
+  changes were saved before it, and keeps the refused change to save again.
+- **Invalid Entry.** **Add** without choosing a user or group: the form says so, and nothing is
+  staged.
+- **Slow Server.** Every read and write answers after a second and a half, so the spinner shows
+  while the panel loads, and **Save** stays disabled while it writes.
+
+## Accessibility
+
+- **Structure.** Each list of entries is a table with column headers, named by the heading of its
+  section.
+- **Buttons.** The edit and remove buttons on each row show only an icon. Each is named for the entry
+  it acts on, such as "Remove Edit for jdoe".
+- **Forms.** The add and edit form labels every field. The user and group search is an autocomplete:
+  type to search, use the arrow keys to move through the suggestions and **Enter** to choose one.
+- **Keyboard.** Every action — add, edit, remove, save, cancel, block and restore inheritance — is a
+  button reached with **Tab**.
+- **Feedback.** A successful save is shown in a `status` message. A refused save, with its reasons,
+  and a failed read are shown in an `alert`, which screen readers announce at once.

@@ -21,15 +21,18 @@
 }
 
 ::ng-deep {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-tooltip {
     pointer-events: auto !important;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mdc-tooltip {
     z-index: 10000 !important;
     position: fixed !important;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mdc-tooltip__surface {
     white-space: nowrap !important;
   }
@@ -87,6 +90,14 @@
     width: 20px;
     height: 20px;
   }
+}
+
+/* The search drawer fills the panel below its header, so its own list can scroll. */
+.search-filters-outlet {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
 }
 
 .drawer-list {
@@ -174,31 +185,6 @@
   overflow-y: auto;
   padding: 4px 0;
   padding-top: 0;
-}
-
-.tree-back {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  width: 100%;
-  border: none;
-  background: none;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--mat-sys-primary);
-  cursor: pointer;
-  text-align: left;
-
-  mat-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-  }
-
-  &:hover {
-    background: color-mix(in srgb, var(--mat-sys-primary) 8%, transparent);
-  }
 }
 
 .tree-node {
@@ -352,8 +338,9 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+/* Measured at 4.24:1 on the card background with the outline token; on-surface-variant clears 4.5:1. */
 .rv-sep {
-  color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .rv-time {
@@ -442,8 +429,12 @@
   color: var(--mat-sys-on-surface-variant);
 }
 
+// Text, not a border — the same `&middot;` separator as `.rv-sep` above, which measured 4.24:1
+// with the outline token. `.expired-card` is `background: none`, so this sits on the same drawer
+// surface and the same ratio applies. Missed when `.rv-sep` was corrected; `expired-queue` is a
+// scanned journey screen.
 .expired-sep {
-  color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface-variant);
 }
 
 .expired-date {
@@ -802,8 +793,12 @@
   line-height: 1.4;
 }
 
+// Measured with the outline token at 4.25:1 on the drawer surface (`--mat-sys-surface`), against
+// WCAG AA's 4.5:1 for this 12px/400 text; on-surface-variant clears it at 8.93:1. Both nodes axe
+// reported sit on that same background — `.task-item.active` differs only by an inset box-shadow,
+// not its fill. The outline token is for borders and dividers, which only need 3:1.
 .task-due-prefix {
-  color: var(--mat-sys-outline);
+  color: var(--mat-sys-on-surface-variant);
   margin-right: 4px;
 }
 

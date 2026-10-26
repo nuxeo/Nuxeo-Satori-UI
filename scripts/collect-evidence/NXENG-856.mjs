@@ -1,7 +1,6 @@
 /** NXENG-856 — Preview tab `.format-type` label WCAG 1.4.3 AA contrast. */
 
-export const summary =
-  'Document detail Preview tab format-type label meets WCAG AA text contrast';
+export const summary = 'Document detail Preview tab format-type label meets WCAG AA text contrast';
 
 const DOC_UID = process.env['NUXEO_DOC_UID']?.trim();
 
@@ -148,10 +147,17 @@ export const scenes = [
         await viewTab.click({ timeout: 15000 });
       }
       await h.expectVisible('document viewer', 'lib-document-viewer');
-      const format = page.locator('lib-document-viewer .format-type').filter({ hasText: /\S/ }).first();
+      const format = page
+        .locator('lib-document-viewer .format-type')
+        .filter({ hasText: /\S/ })
+        .first();
       await format.waitFor({ state: 'visible', timeout: 30000 });
       await format.scrollIntoViewIfNeeded();
-      h.check('format-type label visible', await format.isVisible(), 'lib-document-viewer .format-type');
+      h.check(
+        'format-type label visible',
+        await format.isVisible(),
+        'lib-document-viewer .format-type',
+      );
       const text = (await format.innerText()).trim();
       h.check('format label is non-empty', text.length > 0, `reads "${text}"`);
       await h.shot('format-type-row', {
@@ -189,7 +195,8 @@ export const scenes = [
       await h.expectNoConsoleErrors('view tab', [
         /automation\/AI\./,
         '/nuxeo/logout',
-        '/nuxeo/api/v1/path/default-domain/config/agentic-ui',
+        '/agentic-ui-config/bootstrap.json',
+        '/agentic-ui-config/manifest.json',
       ]);
       await h.shot('format-type-contrast', {
         highlight: 'lib-document-viewer .format-type',

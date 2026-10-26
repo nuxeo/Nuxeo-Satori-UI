@@ -1,7 +1,7 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
-import { AppExtensionsService } from '@nuxeo-satori/platform/extensions';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
+import { AppExtensionsService } from '@nuxeo/satori-platform/extensions';
 
 /**
  * A diagnostics page, which is the most useful thing a template's landing page
@@ -15,6 +15,7 @@ import { AppExtensionsService } from '@nuxeo-satori/platform/extensions';
   selector: 'app-home',
   standalone: true,
   templateUrl: './home.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './home.scss',
 })
 export class HomeComponent {

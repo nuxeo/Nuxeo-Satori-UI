@@ -1,27 +1,29 @@
 @if (loading()) {
   <div class="detail-loading">
-    <mat-spinner
-      diameter="40"
-      [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-    />
+    <nxs-spinner diameter="40" [label]="'document-detail.document-detail.loading' | translate" />
   </div>
-} @else if (error()) {
-  <div class="detail-error">
-    <mat-icon class="error-icon">error_outline</mat-icon>
-    <p>{{ error() }}</p>
-    <button mat-stroked-button (click)="goBack()">
-      <mat-icon>arrow_back</mat-icon> {{ 'document-detail.document-detail.go-back-2' | translate }}
+} @else if (error(); as message) {
+  <nxs-error-state
+    class="detail-error"
+    [status]="errorStatus()"
+    [heading]="message"
+    [headingLevel]="1"
+  >
+    <button mat-stroked-button type="button" (click)="goBack()">
+      <mat-icon aria-hidden="true" svgIcon="arrow_left" />
+      {{ 'document-detail.document-detail.go-back-2' | translate }}
     </button>
-  </div>
+  </nxs-error-state>
 } @else if (doc()) {
   <!-- Header -->
   <div class="detail-header">
     <button
       mat-icon-button
+      class="detail-header-go-back-btn"
       (click)="goBack()"
       [attr.aria-label]="'document-detail.document-detail.go-back' | translate"
     >
-      <mat-icon>arrow_back</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="arrow_left" />
     </button>
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
@@ -30,8 +32,13 @@
         (click)="onBreadcrumbClick($event)"
       ></sat-breadcrumbs>
     </div>
-    <div class="header-actions">
-      @if (!isTrashed() && supportsTextKnowledgeEnrichment()) {
+    <nxs-document-toolbar
+      class="header-actions"
+      [actions]="toolbarEntries()"
+      [moreLabel]="'document-detail.document-detail.more-actions' | translate"
+      (selected)="runToolbarEntry($event)"
+    >
+      @if (!isTrashed() && !isVersionView() && supportsTextKnowledgeEnrichment()) {
         <div class="ke-action-group">
           <button
             type="button"
@@ -41,9 +48,9 @@
             (click)="runTextEntityExtraction()"
           >
             @if (isKeActionRunning('named-entity-recognition-text')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>sell</mat-icon>
+              <mat-icon svgIcon="tag" />
             }
             {{ 'document-detail.document-detail.extract-named-entities-text' | translate }}
           </button>
@@ -55,9 +62,9 @@
             (click)="runTextClassification()"
           >
             @if (isKeActionRunning('text-classification')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>category</mat-icon>
+              <mat-icon svgIcon="tag" />
             }
             {{ 'document-detail.document-detail.classify-document' | translate }}
           </button>
@@ -69,16 +76,16 @@
             (click)="runTextSummarization()"
           >
             @if (isKeActionRunning('text-summarization')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>short_text</mat-icon>
+              <mat-icon svgIcon="text_lines" />
             }
             {{ 'document-detail.document-detail.summarize-document' | translate }}
           </button>
         </div>
       }
 
-      @if (!isTrashed() && supportsImageKnowledgeEnrichment()) {
+      @if (!isTrashed() && !isVersionView() && supportsImageKnowledgeEnrichment()) {
         <div class="ke-action-group">
           <button
             type="button"
@@ -88,16 +95,16 @@
             (click)="runImageEnrichment()"
           >
             @if (isKeActionRunning('image-enrichment')) {
-              <mat-icon class="ke-spinning">autorenew</mat-icon>
+              <mat-icon class="ke-spinning" svgIcon="autorenew" />
             } @else {
-              <mat-icon>image_search</mat-icon>
+              <mat-icon svgIcon="image" />
             }
             {{ 'document-detail.document-detail.describe-image' | translate }}
           </button>
         </div>
       }
 
-      @if (!isTrashed() && showsContentLakeIngestAction()) {
+      @if (!isTrashed() && !isVersionView() && showsContentLakeIngestAction()) {
         @if (contentLakeIngestInFlight() || contentLakePresenceChecking()) {
           <span
             class="content-lake-ingest-loader"
@@ -137,146 +144,137 @@
                 'document-detail.document-detail.already-ingested-to-content-lake' | translate
               "
             >
-              <mat-icon>cloud_done</mat-icon>
+              <mat-icon svgIcon="cloud_check" />
             </button>
           </span>
         } @else {
           <button
             mat-icon-button
+            type="button"
+            class="content-lake-ingest-btn"
             [matTooltip]="'document-detail.document-detail.ingest-to-content-lake' | translate"
-            [attr.aria-label]="'document-detail.document-detail.ingest-to-content-lake' | translate"
             [disabled]="keActionInFlight() !== null"
             (click)="ingestToContentLake()"
           >
-            <mat-icon>cloud_upload</mat-icon>
+            <span class="cdk-visually-hidden" cdkAriaLive="off">{{
+              'document-detail.document-detail.ingest-to-content-lake' | translate
+            }}</span>
+            <mat-icon aria-hidden="true" svgIcon="cloud_upload" />
           </button>
         }
       }
-
-      @for (action of toolbarActions(); track action.id) {
-        <button
-          mat-icon-button
-          type="button"
-          [attr.data-action-id]="action.id"
-          [matTooltip]="action.tooltip ?? (action | descriptorLabel)"
-          [attr.aria-label]="action | descriptorLabel"
-          [disabled]="!isToolbarActionEnabled(action)"
-          (click)="runToolbarAction(action)"
-        >
-          <mat-icon>{{ action.icon }}</mat-icon>
-        </button>
-      }
-      <button
-        mat-icon-button
-        [matMenuTriggerFor]="moreMenu"
-        [matTooltip]="'document-detail.document-detail.more-actions' | translate"
-        [attr.aria-label]="'document-detail.document-detail.more-actions' | translate"
-      >
-        <mat-icon>more_vert</mat-icon>
-      </button>
-    </div>
-
-    <mat-menu #moreMenu="matMenu">
-      @for (action of overflowActions(); track action.id) {
-        <button
-          mat-menu-item
-          type="button"
-          [attr.data-action-id]="action.id"
-          [disabled]="!isToolbarActionEnabled(action)"
-          (click)="runToolbarAction(action)"
-        >
-          @if (action.icon) {
-            <mat-icon>{{ action.icon }}</mat-icon>
-          }
-          <span>{{ action | descriptorLabel }}</span>
-        </button>
-      }
-    </mat-menu>
+    </nxs-document-toolbar>
   </div>
 
   @if (keStatus() || keError()) {
-    <div class="ke-status-banner" [class.ke-status-banner--error]="keError()">
-      <mat-icon>{{ keError() ? 'error_outline' : 'auto_awesome' }}</mat-icon>
-      <span>{{ keError() || keStatus() }}</span>
-    </div>
+    <sat-banner
+      [class.ke-status-banner--error]="keError()"
+      [variant]="keError() ? 'important' : 'info'"
+      [border]="true"
+    >
+      <sat-banner-message>{{ keError() || keStatus() }}</sat-banner-message>
+    </sat-banner>
   }
 
   @if ((contentLakeIngestStatus() || contentLakeIngestError()) && !contentLakeIngestInFlight()) {
-    <div class="ke-status-banner" [class.ke-status-banner--error]="contentLakeIngestError()">
-      <mat-icon>{{ contentLakeIngestError() ? 'error_outline' : 'cloud_upload' }}</mat-icon>
-      <span>{{ contentLakeIngestError() || contentLakeIngestStatus() }}</span>
-    </div>
+    <sat-banner [variant]="contentLakeIngestError() ? 'important' : 'info'" [border]="true">
+      <sat-banner-message>{{
+        contentLakeIngestError() || contentLakeIngestStatus()
+      }}</sat-banner-message>
+    </sat-banner>
   }
 
   @if (isTrashed()) {
-    <div class="trashed-banner">
-      <mat-icon class="trashed-banner-icon">info</mat-icon>
-      <span class="trashed-banner-text">{{
+    <sat-banner variant="info" [border]="true">
+      <sat-banner-message>{{
         'document-detail.document-detail.you-are-viewing-a-trashed-document' | translate
-      }}</span>
-      <span class="trashed-banner-spacer"></span>
+      }}</sat-banner-message>
       @if (canWriteDoc()) {
         <button
           mat-stroked-button
-          class="trashed-banner-btn"
+          satBannerAction
           (click)="restoreFromTrash()"
           [disabled]="actionInProgress() === 'restore'"
         >
-          <mat-icon>restore_from_trash</mat-icon>
+          <mat-icon svgIcon="restore" />
           {{ 'document-detail.document-detail.restore' | translate }}
         </button>
       }
       @if (canRemoveDoc()) {
         <button
           mat-stroked-button
-          class="trashed-banner-btn trashed-banner-btn--danger"
+          satBannerAction
           (click)="permanentlyDelete()"
           [disabled]="actionInProgress() === 'permanentDelete'"
         >
-          <mat-icon>delete_forever</mat-icon>
+          <mat-icon svgIcon="trash_x" />
           {{ 'document-detail.document-detail.delete-permanently' | translate }}
         </button>
       }
-    </div>
+    </sat-banner>
   }
 
-  <!-- Workflow info banner (yellow) — one per running workflow -->
+  @if (isVersionView()) {
+    <sat-banner class="version-banner" variant="info" [border]="true">
+      <sat-banner-message>{{
+        'document-detail.version-viewing' | translate: { version: versionLabel() }
+      }}</sat-banner-message>
+      <button
+        class="version-banner-latest"
+        mat-button
+        type="button"
+        satBannerAction
+        (click)="showLatestVersion()"
+      >
+        {{ 'document-detail.version-go-to-latest' | translate }}
+      </button>
+      @if (canRestoreVersion()) {
+        <button
+          class="version-banner-restore"
+          mat-flat-button
+          type="button"
+          satBannerAction
+          (click)="confirmRestoreVersion()"
+          [disabled]="actionInProgress() === 'restore'"
+        >
+          <mat-icon svgIcon="restore" />
+          {{ 'document-detail.version-restore' | translate: { version: versionLabel() } }}
+        </button>
+      }
+    </sat-banner>
+  }
+
+  <!-- Workflow info banner — one per running workflow -->
   @for (wf of documentWorkflows(); track wf.id) {
-    <div class="workflow-banner">
-      <mat-icon class="workflow-banner-icon">warning</mat-icon>
-      <span class="workflow-banner-text">
-        {{
-          'document-detail.workflow-started-on-document'
-            | translate: { workflow: workflowDisplayName(wf) }
-        }}
-      </span>
-      <span class="workflow-banner-spacer"></span>
+    <sat-banner variant="warning" [border]="true">
+      <sat-banner-message>{{
+        'document-detail.workflow-started-on-document'
+          | translate: { workflow: workflowDisplayName(wf) }
+      }}</sat-banner-message>
       <button
         mat-button
-        class="workflow-banner-abandon"
+        satBannerAction
         [disabled]="abandoningWorkflow()"
         (click)="abandonWorkflow(wf)"
       >
         {{ 'document-detail.document-detail.abandon' | translate }}
       </button>
-    </div>
+    </sat-banner>
   }
 
-  <!-- Task action banner (blue) — one per pending task -->
+  <!-- Task action banner — one per pending task -->
   @for (task of documentTasks(); track task.id) {
-    <div class="task-action-banner">
-      <mat-icon class="task-action-icon">check_box</mat-icon>
-      <span class="task-action-text">
+    <sat-banner variant="info" [border]="true">
+      <sat-banner-message>
         {{ 'document-detail.document-detail.you-have-a-task-to-process' | translate }}
         @if (taskDueLabel(task)) {
           {{ 'document-detail.task-due-before' | translate: { due: taskDueLabel(task) } }}
         }
-      </span>
-      <span class="task-action-spacer"></span>
-      <button mat-flat-button class="task-action-btn" (click)="goToTask(task)">
+      </sat-banner-message>
+      <button mat-flat-button satBannerAction (click)="goToTask(task)">
         {{ 'document-detail.document-detail.process' | translate }}
       </button>
-    </div>
+    </sat-banner>
   }
 
   <!-- Start Process modal dialog -->
@@ -345,46 +343,38 @@
     <!-- Left: Tabs + content -->
     <div class="detail-main">
       <div class="tabs-header-row">
-        <mat-tab-group
-          #detailTabGroup
+        <nxs-tabs
           class="detail-tabs"
-          animationDuration="0ms"
+          [tabs]="detailTabEntries()"
+          [selectedIndex]="activeTabIndex()"
           (selectedIndexChange)="onTabChange($event)"
         >
-          @for (tab of detailTabs(); track tab.id) {
-            <mat-tab>
-              <ng-template mat-tab-label>
-                @if (tab.icon) {
-                  <mat-icon class="detail-tab-icon">{{ tab.icon }}</mat-icon>
-                }
-                {{ tab | descriptorLabel }}
-              </ng-template>
-              @switch (tab.id) {
-                @case ('app.tabs.view') {
-                  <ng-container [ngTemplateOutlet]="viewTabContent" />
-                }
-                @case ('app.tabs.annotations') {
-                  <ng-container [ngTemplateOutlet]="annotationsTabContent" />
-                }
-                @case ('app.tabs.permissions') {
-                  <ng-container [ngTemplateOutlet]="permissionsTabContent" />
-                }
-                @case ('app.tabs.history') {
-                  <ng-container [ngTemplateOutlet]="historyTabContent" />
-                }
-                @case ('app.tabs.publishing') {
-                  <ng-container [ngTemplateOutlet]="publishingTabContent" />
-                }
-                @case ('app.tabs.aiInsights') {
-                  <ng-container [ngTemplateOutlet]="aiInsightsTabContent" />
-                }
-                @default {
-                  <lib-extension-outlet [componentId]="tab.componentId ?? tab.id" />
-                }
+          <ng-template nxsTabBody let-tab>
+            @switch (tab.id) {
+              @case ('app.tabs.view') {
+                <ng-container [ngTemplateOutlet]="viewTabContent" />
               }
-            </mat-tab>
-          }
-        </mat-tab-group>
+              @case ('app.tabs.annotations') {
+                <ng-container [ngTemplateOutlet]="annotationsTabContent" />
+              }
+              @case ('app.tabs.permissions') {
+                <ng-container [ngTemplateOutlet]="permissionsTabContent" />
+              }
+              @case ('app.tabs.history') {
+                <ng-container [ngTemplateOutlet]="historyTabContent" />
+              }
+              @case ('app.tabs.publishing') {
+                <ng-container [ngTemplateOutlet]="publishingTabContent" />
+              }
+              @case ('app.tabs.aiInsights') {
+                <ng-container [ngTemplateOutlet]="aiInsightsTabContent" />
+              }
+              @default {
+                <lib-extension-outlet [componentId]="tabComponentId(tab.id)" />
+              }
+            }
+          </ng-template>
+        </nxs-tabs>
 
         <ng-template #viewTabContent>
           @if (documentView(); as view) {
@@ -405,54 +395,55 @@
         </ng-template>
 
         <ng-template #packagedViewContent>
-          @if (isNoteDocument()) {
-            <lib-note-editor
-              [content]="noteEditorBody()"
-              [mimeType]="mimeType()"
-              [uploadParentPath]="noteImageUploadParentPath()"
-              [loading]="viewerLoading()"
-              [saving]="noteSaving()"
-              [autoFocus]="focusNoteEditor()"
-              [readOnly]="!canWriteDoc()"
-              (saveNote)="saveNote($event)"
-              (focused)="focusNoteEditor.set(false)"
-            />
-          } @else {
-            <lib-document-viewer
-              [blobUrl]="blobUrl()"
-              [rawBlobUrl]="rawBlobUrl()"
-              [blobType]="mainBlobType()"
-              [mimeType]="mimeType()"
-              [fileName]="fileName()"
-              [fileSize]="fileSize()"
-              [loading]="viewerLoading()"
-              [noteContent]="noteContent()"
-              [noteHtml]="noteHtml()"
-              [videoSources]="videoSources()"
-              [storyboard]="storyboard()"
-              [posterUrl]="posterUrl()"
-              [hasPdfRendition]="hasPdfRendition()"
-              [previewUrl]="previewUrl()"
-              [pictureInfo]="pictureInfo()"
-              [pictureViews]="pictureViews()"
-              [exifData]="exifData()"
-              [iptcData]="iptcData()"
-              [videoInfo]="videoInfo()"
-              [arenderUrl]="arenderUrl()"
-              [arenderReloadId]="arenderReloadId()"
-              [viewerDocUid]="doc()?.uid ?? ''"
-              [annotationsTab]="false"
-              [showMainFileControls]="
-                !isNoteDocument() && !!fileName() && canWriteDoc() && !isTrashed()
-              "
-              [mainFileActionInProgress]="actionInProgress()"
-              (downloadClicked)="download()"
-              (previewClicked)="previewMainBlob()"
-              (openWithDriveClicked)="openDriveDialog()"
-              (formatDownload)="downloadPictureFormat($event)"
-              (replaceMainFileClicked)="openReplaceMainFileDialog()"
-              (removeMainFileClicked)="openRemoveMainFileDialog()"
-            />
+          @switch (packagedDocumentView()) {
+            @case ('noteEditor') {
+              <lib-note-editor
+                [content]="noteEditorBody()"
+                [mimeType]="mimeType()"
+                [uploadParentPath]="noteImageUploadParentPath()"
+                [loading]="viewerLoading()"
+                [saving]="noteSaving()"
+                [autoFocus]="focusNoteEditor()"
+                [readOnly]="!canWriteDoc()"
+                (saveNote)="saveNote($event)"
+                (focused)="focusNoteEditor.set(false)"
+              />
+            }
+            @default {
+              <lib-document-viewer
+                [blobUrl]="blobUrl()"
+                [rawBlobUrl]="rawBlobUrl()"
+                [blobType]="mainBlobType()"
+                [mimeType]="mimeType()"
+                [fileName]="fileName()"
+                [fileSize]="fileSize()"
+                [loading]="viewerLoading()"
+                [noteContent]="noteContent()"
+                [noteHtml]="noteHtml()"
+                [videoSources]="videoSources()"
+                [storyboard]="storyboard()"
+                [posterUrl]="posterUrl()"
+                [hasPdfRendition]="hasPdfRendition()"
+                [previewUrl]="previewUrl()"
+                [pictureInfo]="pictureInfo()"
+                [pictureViews]="pictureViews()"
+                [exifData]="exifData()"
+                [iptcData]="iptcData()"
+                [videoInfo]="videoInfo()"
+                [arenderUrl]="arenderUrl()"
+                [arenderReloadId]="arenderReloadId()"
+                [viewerDocUid]="doc()?.uid ?? ''"
+                [annotationsTab]="false"
+                [showMainFileControls]="!!fileName() && canWriteDoc() && !isTrashed()"
+                [mainFileActionInProgress]="actionInProgress()"
+                (downloadClicked)="download()"
+                (previewClicked)="previewMainBlob()"
+                (openWithDriveClicked)="openDriveDialog()"
+                (formatDownload)="downloadPictureFormat($event)"
+                (replaceMainFileClicked)="openReplaceMainFileDialog()"
+                (removeMainFileClicked)="openRemoveMainFileDialog()"
+              />
+            }
           }
         </ng-template>
 
@@ -496,452 +487,149 @@
 
         <ng-template #permissionsTabContent>
           <div class="permissions-container">
+            <!-- Local and inherited permissions: the nxs- panel, resolved by its registered ID so a
+                 customer library can re-register a replacement. -->
+            @if (doc(); as current) {
+              <lib-extension-outlet
+                #permissionsPanelOutlet
+                [componentId]="permissionsPanelId"
+                [componentInputs]="{
+                  documentId: current.uid,
+                  permissionsChanged: onPermissionsChanged,
+                }"
+              />
+              @if (permissionsPanelOutlet.unresolved()) {
+                <nxs-permissions-panel
+                  [documentId]="current.uid"
+                  [permissionsChanged]="onPermissionsChanged"
+                />
+              }
+            }
+
             @if (permissionsLoading()) {
               <div class="perm-loading">
-                <mat-spinner
+                <nxs-spinner
                   diameter="28"
-                  [attr.aria-label]="'document-detail.document-detail.loading' | translate"
+                  [label]="'document-detail.document-detail.loading' | translate"
                 />
               </div>
             }
-            <!-- Permissions defined locally -->
-            <section class="perm-section perm-section--local">
-              <div class="perm-section-header">
-                <div class="perm-section-title" role="heading" aria-level="3">
-                  {{ 'document-detail.document-detail.permissions-defined-locally' | translate }}
-                </div>
-                @if (canManagePermissions()) {
-                  <button
-                    mat-button
-                    color="primary"
-                    type="button"
-                    class="perm-action-btn"
-                    (click)="openAddPermissionDialog()"
-                  >
-                    {{ 'document-detail.document-detail.new' | translate }}
-                  </button>
-                }
-              </div>
-              @if (localAces().length === 0) {
-                <div class="perm-empty perm-empty--local">
-                  {{ 'document-detail.document-detail.there-are-no-local-permissions' | translate }}
-                </div>
-              } @else {
-                <div class="perm-table-wrap">
-                  <table class="perm-table">
-                    <thead>
-                      <tr>
-                        <th>{{ 'document-detail.document-detail.user-group' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.right' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.time-frame' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.granted-by' | translate }}</th>
-                        @if (canManagePermissions()) {
-                          <th></th>
-                        }
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (ace of localAces(); track ace.id) {
-                        <tr>
-                          <td>{{ displayUsername(ace) }}</td>
-                          <td>{{ permissionLabel(ace.permission) }}</td>
-                          <td>{{ aceTimeFrame(ace) }}</td>
-                          <td>{{ aceGrantedBy(ace) }}</td>
-                          @if (canManagePermissions()) {
-                            <td class="perm-row-actions">
-                              <button
-                                mat-icon-button
-                                [matTooltip]="'document-detail.document-detail.edit' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.edit-permission' | translate
-                                "
-                                type="button"
-                                (click)="editPermission(ace)"
-                              >
-                                <mat-icon>edit</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                [matTooltip]="'document-detail.document-detail.delete' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.delete-permission' | translate
-                                "
-                                type="button"
-                                (click)="deletePermission(ace)"
-                              >
-                                <mat-icon>delete</mat-icon>
-                              </button>
-                            </td>
-                          }
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-            </section>
-
-            <!-- Permissions inherited from upper levels -->
-            <section class="perm-section">
-              <div class="perm-section-header">
-                <div class="perm-section-title" role="heading" aria-level="3">
-                  {{
-                    'document-detail.document-detail.permissions-inherited-from-upper-levels'
-                      | translate
-                  }}
-                </div>
-                @if (canManagePermissions()) {
-                  <button
-                    mat-button
-                    color="primary"
-                    class="perm-action-btn"
-                    [disabled]="actionInProgress() === 'block-inheritance'"
-                    (click)="toggleInheritanceBlock()"
-                  >
+            <!-- Permissions Assigned to External Users -->
+            @if (showExternalShares()) {
+              <section class="perm-section">
+                <div class="perm-section-header">
+                  <div class="perm-section-title" role="heading" aria-level="3">
                     {{
-                      isInheritanceBlocked()
-                        ? ('document-detail.unblock' | translate)
-                        : ('document-detail.block' | translate)
+                      'document-detail.document-detail.permissions-assigned-to-external-users'
+                        | translate
                     }}
-                  </button>
-                }
-              </div>
-              @if (!isInheritanceBlocked()) {
+                  </div>
+                  @if (canManagePermissions()) {
+                    <button
+                      mat-button
+                      color="primary"
+                      type="button"
+                      class="perm-action-btn"
+                      (click)="openExternalPermissionDialog()"
+                    >
+                      {{ 'document-detail.document-detail.new' | translate }}
+                    </button>
+                  }
+                </div>
                 <div class="perm-info-bar">
                   <span class="perm-info-accent"></span>
                   <p>
                     {{
-                      'document-detail.document-detail.if-you-want-to-explicitly-control'
+                      'document-detail.document-detail.sharing-to-external-users-does-not'
                         | translate
                     }}
                   </p>
                 </div>
-              }
-              @if (isInheritanceBlocked()) {
-                <div class="perm-empty">
-                  {{
-                    'document-detail.document-detail.permissions-inheritance-is-blocked' | translate
-                  }}
-                </div>
-              } @else if (inheritedAces().length === 0) {
-                <div class="perm-empty">
-                  {{ 'document-detail.document-detail.no-inherited-permissions' | translate }}
-                </div>
-              } @else {
-                <div class="perm-table-wrap">
-                  <table class="perm-table">
-                    <thead>
-                      <tr>
-                        <th>{{ 'document-detail.document-detail.user-group' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.right' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.time-frame' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.granted-by' | translate }}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (ace of inheritedAces(); track ace.id) {
+                @if (externalAces().length === 0) {
+                  <div class="perm-empty">
+                    {{
+                      'document-detail.document-detail.the-document-is-not-shared-with' | translate
+                    }}
+                  </div>
+                } @else {
+                  <div class="perm-table-wrap">
+                    <table class="perm-table">
+                      <thead>
                         <tr>
-                          <td>{{ displayUsername(ace) }}</td>
-                          <td>{{ permissionLabel(ace.permission) }}</td>
-                          <td>{{ aceTimeFrame(ace) }}</td>
-                          <td>{{ aceGrantedBy(ace) }}</td>
-                        </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-            </section>
-
-            <!-- Permissions Assigned to External Users -->
-            <section class="perm-section">
-              <div class="perm-section-header">
-                <div class="perm-section-title" role="heading" aria-level="3">
-                  {{
-                    'document-detail.document-detail.permissions-assigned-to-external-users'
-                      | translate
-                  }}
-                </div>
-                @if (canManagePermissions()) {
-                  <button
-                    mat-button
-                    color="primary"
-                    type="button"
-                    class="perm-action-btn"
-                    (click)="openExternalPermissionDialog()"
-                  >
-                    {{ 'document-detail.document-detail.new' | translate }}
-                  </button>
-                }
-              </div>
-              <div class="perm-info-bar">
-                <span class="perm-info-accent"></span>
-                <p>
-                  {{
-                    'document-detail.document-detail.sharing-to-external-users-does-not' | translate
-                  }}
-                </p>
-              </div>
-              @if (externalAces().length === 0) {
-                <div class="perm-empty">
-                  {{
-                    'document-detail.document-detail.the-document-is-not-shared-with' | translate
-                  }}
-                </div>
-              } @else {
-                <div class="perm-table-wrap">
-                  <table class="perm-table">
-                    <thead>
-                      <tr>
-                        <th>{{ 'document-detail.document-detail.user' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.right' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.time-frame' | translate }}</th>
-                        <th>{{ 'document-detail.document-detail.granted-by' | translate }}</th>
-                        @if (canManagePermissions()) {
-                          <th></th>
-                        }
-                      </tr>
-                    </thead>
-                    <tbody>
-                      @for (ace of externalAces(); track ace.id) {
-                        <tr>
-                          <td>{{ displayUsername(ace) }}</td>
-                          <td>{{ permissionLabel(ace.permission) }}</td>
-                          <td>{{ aceTimeFrame(ace) }}</td>
-                          <td>{{ aceGrantedBy(ace) }}</td>
+                          <th>{{ 'document-detail.document-detail.user' | translate }}</th>
+                          <th>{{ 'document-detail.document-detail.right' | translate }}</th>
+                          <th>{{ 'document-detail.document-detail.time-frame' | translate }}</th>
+                          <th>{{ 'document-detail.document-detail.granted-by' | translate }}</th>
                           @if (canManagePermissions()) {
-                            <td class="perm-row-actions">
-                              <button
-                                mat-icon-button
-                                [matTooltip]="'document-detail.document-detail.edit' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.edit-permission' | translate
-                                "
-                                type="button"
-                                (click)="editExternalPermission(ace)"
-                              >
-                                <mat-icon>edit</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                [matTooltip]="
-                                  'document-detail.document-detail.send-notification-email'
-                                    | translate
-                                "
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.send-notification' | translate
-                                "
-                                type="button"
-                                [disabled]="actionInProgress() === 'notify-' + ace.id"
-                                (click)="sendPermissionNotification(ace)"
-                              >
-                                <mat-icon>send</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                [matTooltip]="'document-detail.document-detail.delete' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.delete-permission' | translate
-                                "
-                                type="button"
-                                (click)="deletePermission(ace)"
-                              >
-                                <mat-icon>delete</mat-icon>
-                              </button>
-                            </td>
+                            <th></th>
                           }
                         </tr>
-                      }
-                    </tbody>
-                  </table>
-                </div>
-              }
-            </section>
+                      </thead>
+                      <tbody>
+                        @for (ace of externalAces(); track ace.id) {
+                          <tr>
+                            <td>{{ displayUsername(ace) }}</td>
+                            <td>{{ permissionLabel(ace.permission) }}</td>
+                            <td>{{ aceTimeFrame(ace) }}</td>
+                            <td>{{ aceGrantedBy(ace) }}</td>
+                            @if (canManagePermissions()) {
+                              <td class="perm-row-actions">
+                                <button
+                                  mat-icon-button
+                                  [matTooltip]="'document-detail.document-detail.edit' | translate"
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.edit-permission' | translate
+                                  "
+                                  type="button"
+                                  (click)="editExternalPermission(ace)"
+                                >
+                                  <mat-icon svgIcon="pencil" />
+                                </button>
+                                <button
+                                  mat-icon-button
+                                  [matTooltip]="
+                                    'document-detail.document-detail.send-notification-email'
+                                      | translate
+                                  "
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.send-notification' | translate
+                                  "
+                                  type="button"
+                                  [disabled]="actionInProgress() === 'notify-' + ace.id"
+                                  (click)="sendPermissionNotification(ace)"
+                                >
+                                  <mat-icon svgIcon="send" />
+                                </button>
+                                <button
+                                  mat-icon-button
+                                  [matTooltip]="
+                                    'document-detail.document-detail.delete' | translate
+                                  "
+                                  [attr.aria-label]="
+                                    'document-detail.document-detail.delete-permission' | translate
+                                  "
+                                  type="button"
+                                  (click)="deletePermission(ace)"
+                                >
+                                  <mat-icon svgIcon="trash" />
+                                </button>
+                              </td>
+                            }
+                          </tr>
+                        }
+                      </tbody>
+                    </table>
+                  </div>
+                }
+              </section>
+            }
           </div>
         </ng-template>
 
         <ng-template #historyTabContent>
-          <div class="history-container">
-            <!-- Filters -->
-            <div class="history-filters">
-              <div class="filter-row">
-                <mat-form-field
-                  appearance="outline"
-                  subscriptSizing="dynamic"
-                  class="filter-field filter-field--wide"
-                >
-                  <mat-label>{{
-                    'document-detail.document-detail.username' | translate
-                  }}</mat-label>
-                  <input
-                    matInput
-                    [placeholder]="'document-detail.document-detail.filter-by-username' | translate"
-                    [ngModel]="filterUsername()"
-                    (ngModelChange)="filterUsername.set($event)"
-                  />
-                </mat-form-field>
-              </div>
-
-              <div class="filter-row">
-                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-field">
-                  <mat-label>{{ 'document-detail.document-detail.from' | translate }}</mat-label>
-                  <input
-                    matInput
-                    [matDatepicker]="fromPicker"
-                    [placeholder]="'common.date-mask' | translate"
-                    [ngModel]="filterDateFrom()"
-                    (ngModelChange)="filterDateFrom.set($event)"
-                  />
-                  <mat-datepicker-toggle matIconSuffix [for]="fromPicker" />
-                  <mat-datepicker #fromPicker />
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-field">
-                  <mat-label>{{ 'document-detail.document-detail.to' | translate }}</mat-label>
-                  <input
-                    matInput
-                    [matDatepicker]="toPicker"
-                    [placeholder]="'common.date-mask' | translate"
-                    [ngModel]="filterDateTo()"
-                    (ngModelChange)="filterDateTo.set($event)"
-                  />
-                  <mat-datepicker-toggle matIconSuffix [for]="toPicker" />
-                  <mat-datepicker #toPicker />
-                </mat-form-field>
-              </div>
-
-              <div class="filter-row">
-                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-field">
-                  <mat-label>{{
-                    'document-detail.document-detail.performed-actions' | translate
-                  }}</mat-label>
-                  <mat-select [ngModel]="filterAction()" (ngModelChange)="filterAction.set($event)">
-                    <mat-option value="">{{
-                      'document-detail.document-detail.select-event-actions' | translate
-                    }}</mat-option>
-                    @for (action of availableActions(); track action.id) {
-                      <mat-option [value]="action.id">{{ action.displayLabel }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-
-                <mat-form-field appearance="outline" subscriptSizing="dynamic" class="filter-field">
-                  <mat-label>{{
-                    'document-detail.document-detail.event-category' | translate
-                  }}</mat-label>
-                  <mat-select
-                    [ngModel]="filterCategory()"
-                    (ngModelChange)="filterCategory.set($event)"
-                  >
-                    <mat-option value="">{{
-                      'document-detail.document-detail.select-event-category' | translate
-                    }}</mat-option>
-                    @for (cat of availableCategories(); track cat.id) {
-                      <mat-option [value]="cat.id">{{ cat.displayLabel }}</mat-option>
-                    }
-                  </mat-select>
-                </mat-form-field>
-              </div>
-            </div>
-
-            <!-- Table -->
-            @if (auditLoading()) {
-              <div class="history-loading">
-                <mat-spinner
-                  diameter="32"
-                  [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                />
-              </div>
-            } @else if (filteredAuditEntries().length === 0) {
-              <div class="history-empty">
-                <mat-icon>event_busy</mat-icon>
-                <p>{{ 'document-detail.document-detail.no-history-entries-found' | translate }}</p>
-              </div>
-            } @else {
-              <div class="history-table-wrapper">
-                <table
-                  mat-table
-                  [dataSource]="filteredAuditEntries()"
-                  matSort
-                  (matSortChange)="onAuditSort($event)"
-                  class="history-table"
-                >
-                  <ng-container matColumnDef="eventId">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                      {{ 'document-detail.document-detail.performed-action' | translate }}
-                    </th>
-                    <td mat-cell *matCellDef="let entry">{{ eventLabel(entry.eventId) }}</td>
-                  </ng-container>
-
-                  <ng-container matColumnDef="eventDate">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                      {{ 'document-detail.document-detail.date' | translate }}
-                    </th>
-                    <td mat-cell *matCellDef="let entry">
-                      {{ entry.eventDate | date: ('document-detail.mmmm-d-yyyy' | translate) }}
-                    </td>
-                  </ng-container>
-
-                  <ng-container matColumnDef="principalName">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                      {{ 'document-detail.document-detail.username' | translate }}
-                    </th>
-                    <td mat-cell *matCellDef="let entry">
-                      <div class="user-cell">
-                        <sat-avatar
-                          [initials]="entry.principalName"
-                          [category]="avatarColor(entry.principalName)"
-                          size="24"
-                          [borderless]="true"
-                          aria-hidden="true"
-                        />
-                        <span>{{ entry.principalName }}</span>
-                      </div>
-                    </td>
-                  </ng-container>
-
-                  <ng-container matColumnDef="category">
-                    <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                      {{ 'document-detail.document-detail.category' | translate }}
-                    </th>
-                    <td mat-cell *matCellDef="let entry">{{ categoryLabel(entry.category) }}</td>
-                  </ng-container>
-
-                  <ng-container matColumnDef="comment">
-                    <th mat-header-cell *matHeaderCellDef>
-                      {{ 'document-detail.document-detail.comment' | translate }}
-                    </th>
-                    <td mat-cell *matCellDef="let entry" class="comment-cell">
-                      {{ entry.comment }}
-                    </td>
-                  </ng-container>
-
-                  <ng-container matColumnDef="docLifeCycle">
-                    <th mat-header-cell *matHeaderCellDef>
-                      {{ 'document-detail.document-detail.state' | translate }}
-                    </th>
-                    <td mat-cell *matCellDef="let entry">
-                      <sat-status-tag status="info" [hideIcon]="true">{{
-                        entry.docLifeCycle
-                      }}</sat-status-tag>
-                    </td>
-                  </ng-container>
-
-                  <tr mat-header-row *matHeaderRowDef="historyDisplayedColumns; sticky: true"></tr>
-                  <tr mat-row *matRowDef="let row; columns: historyDisplayedColumns"></tr>
-                </table>
-              </div>
-
-              <mat-paginator
-                [length]="auditTotalSize()"
-                [pageSize]="auditPageSize()"
-                [pageIndex]="auditPageIndex()"
-                [pageSizeOptions]="[10, 20, 50]"
-                (page)="onAuditPageChange($event)"
-                showFirstLastButtons
-              />
-            }
-          </div>
+          @if (historyShown()) {
+            <nxs-document-history class="history-container" [documentUid]="doc()!.uid" />
+          }
         </ng-template>
 
         <ng-template #publishingTabContent>
@@ -949,7 +637,13 @@
             <!-- Publication details -->
             <section class="publish-section">
               <div class="publish-section-header">
-                <div class="publish-section-title" role="heading" aria-level="3">
+                <div
+                  #publicationsHeading
+                  class="publish-section-title"
+                  role="heading"
+                  aria-level="3"
+                  tabindex="-1"
+                >
                   {{ 'document-detail.document-detail.publication-details' | translate }}
                 </div>
                 @if (publishedDocs().length > 0) {
@@ -979,7 +673,7 @@
                 </div>
               } @else if (publishedDocs().length === 0) {
                 <div class="publish-empty">
-                  <mat-icon>cloud_off</mat-icon>
+                  <mat-icon svgIcon="cloud_off" />
                   <p>
                     {{
                       'document-detail.document-detail.this-document-has-not-been-published'
@@ -1004,7 +698,7 @@
                       <tr>
                         <td>
                           <div class="pub-title-cell">
-                            <mat-icon class="pub-doc-icon">description</mat-icon>
+                            <mat-icon class="pub-doc-icon" svgIcon="page" />
                             <span class="pub-path-text">{{ publishedPath(pub) }}</span>
                           </div>
                         </td>
@@ -1024,15 +718,17 @@
                         </td>
                         <td>{{ publishedDate(pub) | date: 'longDate' }}</td>
                         <td class="pub-actions-cell">
-                          <button
-                            mat-stroked-button
-                            class="pub-action-btn"
-                            [disabled]="actionInProgress() === 'unpublish'"
-                            (click)="unpublishDocument(pub)"
-                          >
-                            {{ 'document-detail.document-detail.unpublish' | translate }}
-                          </button>
-                          @if (isOlderVersion(pub)) {
+                          @if (canUnpublish(pub)) {
+                            <button
+                              mat-stroked-button
+                              class="pub-action-btn unpublish-btn"
+                              [disabled]="actionInProgress() === 'unpublish'"
+                              (click)="unpublishDocument(pub)"
+                            >
+                              {{ 'document-detail.document-detail.unpublish' | translate }}
+                            </button>
+                          }
+                          @if (canRepublish(pub)) {
                             <button
                               mat-flat-button
                               color="primary"
@@ -1052,68 +748,71 @@
             </section>
 
             <!-- Publish to Section -->
-            <section class="publish-section">
-              <div class="publish-section-header">
-                <div class="publish-section-title" role="heading" aria-level="3">
-                  {{ 'document-detail.document-detail.publish-to-a-section' | translate }}
+            @if (canPublish()) {
+              <section class="publish-section">
+                <div class="publish-section-header">
+                  <div class="publish-section-title" role="heading" aria-level="3">
+                    {{ 'document-detail.document-detail.publish-to-a-section' | translate }}
+                  </div>
+                  <button
+                    mat-flat-button
+                    color="primary"
+                    class="publish-btn"
+                    [disabled]="!selectedSectionId() || publishing()"
+                    (click)="publishToSection()"
+                  >
+                    @if (publishing()) {
+                      <mat-spinner
+                        diameter="18"
+                        [attr.aria-label]="'document-detail.document-detail.loading' | translate"
+                      />
+                    } @else {
+                      <ng-container>
+                        <mat-icon svgIcon="publish" />
+                        {{ 'document-detail.document-detail.publish' | translate }}
+                      </ng-container>
+                    }
+                  </button>
                 </div>
-                <button
-                  mat-flat-button
-                  color="primary"
-                  class="publish-btn"
-                  [disabled]="!selectedSectionId() || publishing()"
-                  (click)="publishToSection()"
-                >
-                  @if (publishing()) {
-                    <mat-spinner
-                      diameter="18"
-                      [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                    />
-                  } @else {
-                    <ng-container>
-                      <mat-icon>publish</mat-icon>
-                      {{ 'document-detail.document-detail.publish' | translate }}
-                    </ng-container>
-                  }
-                </button>
-              </div>
 
-              <div class="publish-info-bar">
-                <span class="publish-info-accent"></span>
-                <p>
-                  {{
-                    'document-detail.document-detail.select-a-section-below-to-publish' | translate
-                  }}
-                </p>
-              </div>
-
-              @if (sectionsLoading()) {
-                <div class="publish-loading">
-                  <mat-spinner
-                    diameter="24"
-                    [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                  />
-                </div>
-              } @else if (sectionTree().length === 0) {
-                <div class="publish-empty">
-                  <mat-icon>folder_off</mat-icon>
+                <div class="publish-info-bar">
+                  <span class="publish-info-accent"></span>
                   <p>
                     {{
-                      'document-detail.document-detail.no-sections-available-for-publishing'
+                      'document-detail.document-detail.select-a-section-below-to-publish'
                         | translate
                     }}
                   </p>
                 </div>
-              } @else {
-                <div class="section-tree">
-                  @for (node of sectionTree(); track node.doc.uid) {
-                    <ng-container
-                      *ngTemplateOutlet="sectionNodeTpl; context: { $implicit: node, depth: 0 }"
+
+                @if (sectionsLoading()) {
+                  <div class="publish-loading">
+                    <mat-spinner
+                      diameter="24"
+                      [attr.aria-label]="'document-detail.document-detail.loading' | translate"
                     />
-                  }
-                </div>
-              }
-            </section>
+                  </div>
+                } @else if (sectionTree().length === 0) {
+                  <div class="publish-empty">
+                    <mat-icon svgIcon="folder" />
+                    <p>
+                      {{
+                        'document-detail.document-detail.no-sections-available-for-publishing'
+                          | translate
+                      }}
+                    </p>
+                  </div>
+                } @else {
+                  <div class="section-tree">
+                    @for (node of sectionTree(); track node.doc.uid) {
+                      <ng-container
+                        *ngTemplateOutlet="sectionNodeTpl; context: { $implicit: node, depth: 0 }"
+                      />
+                    }
+                  </div>
+                }
+              </section>
+            }
           </div>
         </ng-template>
 
@@ -1133,7 +832,7 @@
                 </p>
               </div>
               <button mat-flat-button class="ai-btn-primary" (click)="openAiAssistant()">
-                <mat-icon>auto_awesome</mat-icon>
+                <mat-icon svgIcon="ai" />
                 {{ 'document-detail.document-detail.ai-assistant' | translate }}
               </button>
             </div>
@@ -1144,7 +843,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--purple">
-                    <mat-icon>auto_awesome</mat-icon>
+                    <mat-icon svgIcon="ai" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.document-summary' | translate }}
@@ -1162,7 +861,7 @@
                       class="ai-btn-primary ai-btn-sm"
                       (click)="generateSummary()"
                     >
-                      <mat-icon>auto_awesome</mat-icon>
+                      <mat-icon svgIcon="ai" />
                       {{
                         aiSummary()
                           ? ('document-detail.regenerate' | translate)
@@ -1180,10 +879,10 @@
                 <div class="ai-card-body">
                   @if (aiSummaryLoading()) {
                     <div class="ai-loading-skeleton">
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line medium"></div>
-                      <div class="skeleton-line short"></div>
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [width]="200" [height]="14" />
+                      <sat-ghost [width]="120" [height]="14" />
                     </div>
                   } @else if (aiSummary()) {
                     <div class="ai-summary-result">
@@ -1216,7 +915,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--indigo">
-                    <mat-icon>sell</mat-icon>
+                    <mat-icon svgIcon="tag" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.suggested-tags' | translate }}
@@ -1231,8 +930,8 @@
                 <div class="ai-card-body">
                   @if (aiTagsLoading()) {
                     <div class="ai-loading-skeleton">
-                      <div class="skeleton-line medium"></div>
-                      <div class="skeleton-line short"></div>
+                      <sat-ghost [width]="200" [height]="14" />
+                      <sat-ghost [width]="120" [height]="14" />
                     </div>
                   } @else if (aiSuggestedTags().length) {
                     <div class="ai-tags-list">
@@ -1247,7 +946,7 @@
                           <span class="ai-tag-confidence"
                             >{{ (tag.confidence * 100).toFixed(0) }}%</span
                           >
-                          <mat-icon class="ai-tag-add">add_circle_outline</mat-icon>
+                          <mat-icon class="ai-tag-add" svgIcon="circle_add" />
                         </button>
                       }
                     </div>
@@ -1264,7 +963,7 @@
                     </button>
                   } @else {
                     <button mat-stroked-button class="ai-btn-outline" (click)="suggestTags()">
-                      <mat-icon>auto_awesome</mat-icon>
+                      <mat-icon svgIcon="ai" />
                       {{ 'document-detail.document-detail.suggest-tags' | translate }}
                     </button>
                   }
@@ -1275,7 +974,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--purple">
-                    <mat-icon>tune</mat-icon>
+                    <mat-icon svgIcon="settings" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.classification-amp-metadata' | translate }}
@@ -1290,9 +989,9 @@
                 <div class="ai-card-body">
                   @if (aiClassifyLoading()) {
                     <div class="ai-loading-skeleton">
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line wide"></div>
-                      <div class="skeleton-line medium"></div>
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [fitContainer]="true" [height]="14" />
+                      <sat-ghost [width]="200" [height]="14" />
                     </div>
                   } @else if (aiClassification()) {
                     <div class="ai-meta-rows">
@@ -1365,7 +1064,7 @@
                       class="ai-btn-primary ai-btn-full"
                       (click)="classifyDocument()"
                     >
-                      <mat-icon>tune</mat-icon>
+                      <mat-icon svgIcon="settings" />
                       {{ 'document-detail.document-detail.classify' | translate }}
                     </button>
                   }
@@ -1376,7 +1075,7 @@
               <section class="ai-card">
                 <div class="ai-card-header">
                   <span class="ai-card-icon ai-card-icon--indigo">
-                    <mat-icon>hub</mat-icon>
+                    <mat-icon svgIcon="processes" />
                   </span>
                   <div class="ai-card-title">
                     {{ 'document-detail.document-detail.related-documents' | translate }}
@@ -1414,7 +1113,7 @@
                     <div class="ai-similar-list">
                       @for (simDoc of aiSimilarDocs(); track simDoc.uid) {
                         <button class="ai-similar-item" (click)="navigateToDoc(simDoc.uid)">
-                          <mat-icon class="ai-similar-icon">description</mat-icon>
+                          <mat-icon class="ai-similar-icon" svgIcon="page" />
                           <div class="ai-similar-info">
                             <span class="ai-similar-title">{{ simDoc.title }}</span>
                             <span class="ai-similar-path">{{ simDoc.path }}</span>
@@ -1428,13 +1127,13 @@
                   } @else {
                     <div class="ai-doc-thumbs">
                       <div class="ai-doc-thumb">
-                        <mat-icon class="ai-doc-thumb-icon">description</mat-icon>
+                        <mat-icon class="ai-doc-thumb-icon" svgIcon="page" />
                         <span>{{
                           'document-detail.document-detail.document-preview' | translate
                         }}</span>
                       </div>
                       <div class="ai-doc-thumb">
-                        <mat-icon class="ai-doc-thumb-icon">description</mat-icon>
+                        <mat-icon class="ai-doc-thumb-icon" svgIcon="page" />
                         <span>{{
                           'document-detail.document-detail.document-preview' | translate
                         }}</span>
@@ -1453,7 +1152,7 @@
                     </button>
                   } @else {
                     <button mat-stroked-button class="ai-btn-outline" (click)="findSimilar()">
-                      <mat-icon>search</mat-icon>
+                      <mat-icon svgIcon="search" />
                       {{ 'document-detail.document-detail.find-connections' | translate }}
                     </button>
                   }
@@ -1462,530 +1161,163 @@
             </div>
 
             @if (aiError()) {
-              <div class="ai-error-banner">
-                <mat-icon>error_outline</mat-icon>
-                {{ aiError() }}
-              </div>
+              <sat-banner class="ai-error-banner" variant="important">
+                <sat-banner-message>{{ aiError() }}</sat-banner-message>
+              </sat-banner>
             }
           </div>
         </ng-template>
 
         <button
+          #panelToggle
           mat-icon-button
           class="panel-toggle-btn"
           (click)="propertiesPanelOpen.set(!propertiesPanelOpen())"
           [matTooltip]="detailsPanelToggleLabelKey() | translate"
           [attr.aria-label]="detailsPanelToggleLabelKey() | translate"
         >
-          <mat-icon aria-hidden="true">{{
-            propertiesPanelOpen() ? 'info' : 'info_outline'
-          }}</mat-icon>
+          <mat-icon aria-hidden="true" [svgIcon]="propertiesPanelOpen() ? 'info' : 'info'" />
         </button>
       </div>
     </div>
 
-    <!-- Right: Properties Panel (persists across all tabs) -->
+    <!-- Right: details panel (persists across all tabs) -->
     @if (propertiesPanelOpen()) {
-      <aside
+      <nxs-details-panel
         class="properties-panel"
-        [attr.aria-label]="'document-detail.document-detail.document-properties' | translate"
+        [heading]="fileName()"
+        [label]="'document-detail.document-detail.document-properties' | translate"
+        [closeLabel]="'document-detail.document-detail.close-panel' | translate"
+        [tabs]="panelViews()"
+        [selected]="activePanelView()"
+        (selectedChange)="switchPanelSubTab($event)"
+        (closed)="closePropertiesPanel()"
       >
-        <div class="panel-header">
-          <span class="panel-title">{{ fileName() }}</span>
-          <button
-            mat-icon-button
-            (click)="closePropertiesPanel()"
-            [attr.aria-label]="'document-detail.document-detail.close-panel' | translate"
-          >
-            <mat-icon>close</mat-icon>
-          </button>
-        </div>
-
-        <div class="panel-sub-tabs">
-          <button
-            class="sub-tab"
-            [class.sub-tab--active]="panelSubTab() === 'properties'"
-            (click)="switchPanelSubTab('properties')"
-          >
-            {{ 'document-detail.document-detail.properties' | translate }}
-          </button>
-          <button
-            class="sub-tab"
-            [class.sub-tab--active]="panelSubTab() === 'comments'"
-            (click)="switchPanelSubTab('comments')"
-          >
-            {{ 'document-detail.document-detail.comments' | translate }}
-          </button>
-          <button
-            class="sub-tab"
-            [class.sub-tab--active]="panelSubTab() === 'activity'"
-            (click)="switchPanelSubTab('activity')"
-          >
-            {{ 'document-detail.document-detail.activity' | translate }}
-          </button>
-        </div>
-
-        <!-- Properties sub-tab -->
-        @if (panelSubTab() === 'properties') {
-          <div class="panel-body">
-            <!-- Document info section matching native UI -->
-            <div class="doc-info-section">
-              @if (documentWorkflows().length > 0) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.process' | translate
-                  }}</span>
-                  <span class="doc-info-value">
-                    <sat-status-tag status="important">{{
-                      'document-detail.document-detail.running' | translate
-                    }}</sat-status-tag>
-                  </span>
-                </div>
+        @switch (activePanelView()) {
+          @case ('properties') {
+            <nxs-properties-panel
+              class="detail-properties"
+              [document]="doc()"
+              [vocabularyLabel]="vocabularyLabel()"
+              [processRunning]="documentWorkflows().length > 0"
+              [versionLabel]="versionLabel()"
+              [publications]="publicationCount()"
+              [format]="isNoteDocument() ? noteFormatDisplay() : ''"
+              (publicationsSelected)="goToPublishingTab()"
+            >
+              @if (doc(); as versioned) {
+                <!-- A publication has no versions of its own to pick from; Web UI shows a tag too. -->
+                @if (versioned.isProxy) {
+                  <nxs-tag nxsVersion [label]="versionLabel()" />
+                } @else {
+                  <nxs-manage-versions
+                    nxsVersion
+                    [document]="versioned"
+                    (versionSelected)="openVersion($event)"
+                    (latestSelected)="showLatestVersion()"
+                    (versionCreated)="onVersionCreated()"
+                  />
+                }
               }
-
-              @if (docState()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.state' | translate
-                  }}</span>
-                  <span class="doc-info-value">
-                    <sat-status-tag status="info" [hideIcon]="true">{{
-                      docState()
-                    }}</sat-status-tag>
-                  </span>
-                </div>
+              @if (doc(); as tagged) {
+                <nxs-tag-editor
+                  nxsTags
+                  [documentUid]="tagged.uid"
+                  [tags]="tags()"
+                  [readOnly]="!canTag()"
+                  (tagsChange)="setTags($event)"
+                />
               }
+              <lib-document-layout
+                [document]="doc()"
+                mode="metadata"
+                [style.--document-layout-label-color]="'var(--document-detail-properties-label-muted)'"
+              />
 
-              <div class="doc-info-row">
-                <span class="doc-info-label">{{
-                  'document-detail.document-detail.version' | translate
-                }}</span>
-                <span class="doc-info-value">
-                  @if (hasVersion()) {
-                    <div class="version-select-wrapper">
-                      <button class="version-select" (click)="toggleVersionDropdown()">
-                        <span>{{ versionLabel() }}</span>
-                        <mat-icon class="version-arrow">arrow_drop_down</mat-icon>
-                      </button>
-                      @if (versionDropdownOpen()) {
-                        <div class="version-dropdown">
-                          @if (versionsLoading()) {
-                            <div class="version-dropdown-loading">
-                              <mat-spinner
-                                diameter="20"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.loading' | translate
-                                "
-                              />
-                            </div>
-                          } @else {
-                            @if (doc()?.isCheckedOut && canWriteDoc()) {
-                              <button
-                                class="version-dropdown-item version-dropdown-create"
-                                (click)="versionDropdownOpen.set(false); openCreateVersionDialog()"
-                              >
-                                <mat-icon class="create-version-icon">add_circle_outline</mat-icon>
-                                <span class="version-dropdown-label">{{
-                                  'document-detail.document-detail.create-version' | translate
-                                }}</span>
-                              </button>
-                            }
-                            <button
-                              class="version-dropdown-item version-dropdown-item--current"
-                              (click)="versionDropdownOpen.set(false)"
-                            >
-                              <span class="version-dropdown-label">{{
-                                'document-detail.version-latest'
-                                  | translate: { version: versionLabel() }
-                              }}</span>
-                            </button>
-                            @for (v of versions(); track v.uid) {
-                              @if (canWriteDoc()) {
-                                <button class="version-dropdown-item" (click)="restoreVersion(v)">
-                                  <span class="version-dropdown-label">{{ versionString(v) }}</span>
-                                  <span class="version-dropdown-meta">{{
-                                    'document-detail.version-modified-by'
-                                      | translate
-                                        : {
-                                            when: relativeTime(v.lastModified),
-                                            who:
-                                              v.properties['dc:lastContributor'] ??
-                                              ('document-detail.unknown' | translate),
-                                          }
-                                  }}</span>
-                                </button>
-                              } @else {
-                                <div class="version-dropdown-item version-dropdown-item--readonly">
-                                  <span class="version-dropdown-label">{{ versionString(v) }}</span>
-                                  <span class="version-dropdown-meta">{{
-                                    'document-detail.version-modified-by'
-                                      | translate
-                                        : {
-                                            when: relativeTime(v.lastModified),
-                                            who:
-                                              v.properties['dc:lastContributor'] ??
-                                              ('document-detail.unknown' | translate),
-                                          }
-                                  }}</span>
-                                </div>
-                              }
-                            }
-                            @if (versions().length === 0) {
-                              <div class="version-dropdown-empty">
-                                {{
-                                  'document-detail.document-detail.no-previous-versions' | translate
-                                }}
-                              </div>
-                            }
-                          }
-                        </div>
-                      }
-                    </div>
-                  } @else if (canWriteDoc()) {
-                    <button
-                      mat-flat-button
-                      color="primary"
-                      class="create-version-btn"
-                      (click)="openCreateVersionDialog()"
-                    >
-                      {{ 'document-detail.document-detail.create-version' | translate }}
-                    </button>
-                  } @else {
-                    <span class="no-publications">—</span>
-                  }
-                </span>
-              </div>
-
-              <div class="doc-info-row">
-                <span class="doc-info-label">{{
-                  'document-detail.document-detail.publications' | translate
-                }}</span>
-                <span class="doc-info-value">
-                  @if (publicationCount() > 0) {
-                    <button type="button" class="publications-link" (click)="goToPublishingTab()">
-                      {{ publicationCount() }}
-                    </button>
-                  } @else {
-                    <span class="no-publications">0</span>
-                  }
-                </span>
-              </div>
-
-              @if (modified()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.last-modified' | translate
-                  }}</span>
-                  <span class="doc-info-value">{{ modified() | date: 'longDate' }}</span>
-                </div>
-              }
-
-              @if (created()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.created' | translate
-                  }}</span>
-                  <span class="doc-info-value">{{ created() | date: 'longDate' }}</span>
-                </div>
-              }
-
-              @if (creator()) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.by' | translate
-                  }}</span>
-                  <span class="doc-info-value creator-value">
-                    <sat-avatar
-                      [initials]="creator()!.charAt(0).toUpperCase()"
-                      [category]="avatarColor(creator()!)"
-                      size="24"
-                      [borderless]="true"
-                      aria-hidden="true"
-                    />
-                    <span class="creator-name">{{ creator() }}</span>
-                  </span>
-                </div>
-              }
-
-              @if (contributors().length > 0) {
-                <div class="doc-info-row">
-                  <span class="doc-info-label">{{
-                    'document-detail.document-detail.contributors' | translate
-                  }}</span>
-                  <span class="doc-info-value contributors-value">
-                    @for (c of contributors(); track c) {
-                      <span class="contributor-entry">
-                        <sat-avatar
-                          [initials]="c.charAt(0).toUpperCase()"
-                          [category]="avatarColor(c)"
-                          size="24"
-                          [borderless]="true"
-                          aria-hidden="true"
-                        />
-                        <span class="contributor-name">{{ c }}</span>
-                      </span>
-                    }
-                  </span>
-                </div>
-              }
-            </div>
-
-            <div class="indexing-header">
-              <div class="indexing-title" role="heading" aria-level="4">
-                {{ 'document-detail.document-detail.indexing-properties' | translate }}
-              </div>
-            </div>
-
-            <div class="prop-field">
-              <span class="prop-label">{{
-                'document-detail.document-detail.title' | translate
-              }}</span>
-              <span class="prop-value">{{ doc()!.title }}</span>
-            </div>
-
-            @if (isNoteDocument()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.format' | translate
-                }}</span>
-                <span class="prop-value">{{ noteFormatDisplay() }}</span>
-              </div>
-            }
-
-            @if (hasPersistedMainBlob()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.file-name' | translate
-                }}</span>
-                <span class="prop-value">{{ fileName() }}</span>
-              </div>
-            }
-
-            @if (expires()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.expires' | translate
-                }}</span>
-                <span class="prop-value">{{ expires() | date: 'longDate' }}</span>
-              </div>
-            }
-
-            <div class="prop-field prop-field--tags">
-              <span class="prop-label">{{
-                'document-detail.document-detail.tags' | translate
-              }}</span>
-              @if (canWriteDoc()) {
-                <mat-form-field
-                  appearance="fill"
-                  class="tags-suggestion-field"
-                  subscriptSizing="dynamic"
-                >
-                  <mat-chip-grid
-                    #tagChipGrid
-                    [attr.aria-label]="'document-detail.document-detail.document-tags' | translate"
-                  >
-                    @for (tag of tags(); track $index) {
-                      <mat-chip-row (removed)="removeInlineTag(tag)">
-                        {{ tag }}
-                        <button
-                          type="button"
-                          matChipRemove
-                          [attr.aria-label]="'shared.remove-tag' | translate: { name: tag }"
-                        >
-                          <mat-icon>cancel</mat-icon>
-                        </button>
-                      </mat-chip-row>
-                    }
-                    <input
-                      name="tagInput"
-                      [placeholder]="
-                        tags().length
-                          ? ''
-                          : ('document-detail.document-detail.add-a-tag' | translate)
-                      "
-                      [matChipInputFor]="tagChipGrid"
-                      [matAutocomplete]="tagAuto"
-                      [(ngModel)]="tagInput"
-                      [disabled]="tagAdding()"
-                      (ngModelChange)="onTagSearch($event)"
-                      (matChipInputTokenEnd)="addInlineTagFromChip($event)"
-                    />
-                  </mat-chip-grid>
-                  <mat-icon matSuffix>arrow_drop_down</mat-icon>
-                </mat-form-field>
-                <mat-autocomplete
-                  #tagAuto="matAutocomplete"
-                  autoActiveFirstOption
-                  (optionSelected)="selectTag($event)"
-                >
-                  @for (result of tagSearchResults(); track result) {
-                    <mat-option [value]="result">{{ result }}</mat-option>
-                  }
-                  @if (showCreateTagOption()) {
-                    <mat-option [value]="tagInput">
-                      <span class="create-tag-option">+ {{ tagInput }}</span>
-                    </mat-option>
-                  }
-                </mat-autocomplete>
-              } @else {
-                <div class="tags-readonly">
-                  @for (tag of tags(); track tag) {
-                    <span class="tags-readonly-chip">{{ tag }}</span>
-                  }
-                  @if (tags().length === 0) {
-                    <span class="tags-empty">—</span>
-                  }
-                </div>
-              }
-            </div>
-
-            @if (description()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.description' | translate
-                }}</span>
-                <p class="prop-description">{{ description() }}</p>
-              </div>
-            }
-
-            @if (documentCategory()) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.nature' | translate
-                }}</span>
-                <span class="prop-value">{{ documentCategory() }}</span>
-              </div>
-            }
-
-            @if (documentCoverage()) {
-              <div class="prop-field prop-field--tags">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.coverage' | translate
-                }}</span>
-                <div class="tags-readonly">
-                  <span class="tags-readonly-chip">{{ documentCoverageDisplay() }}</span>
-                </div>
-              </div>
-            }
-
-            @if (documentSubjects().length > 0) {
-              <div class="prop-field">
-                <span class="prop-label">{{
-                  'document-detail.document-detail.subjects' | translate
-                }}</span>
-                <span class="prop-value">{{ documentSubjectsDisplay() }}</span>
-              </div>
-            }
-
-            <div class="prop-section-divider"></div>
-
-            <div class="section-title" role="heading" aria-level="4">
-              {{ 'document-detail.document-detail.attachments' | translate }}
-            </div>
-            @if (attachments().length === 0) {
-              <p class="section-empty">
-                {{ 'document-detail.document-detail.there-are-no-attachments' | translate }}
-              </p>
-            } @else {
-              @for (att of attachments(); track att.index) {
-                <div class="attachment-card">
-                  <div class="attachment-info">
-                    <span class="attachment-name">{{ att.name }}</span>
-                    <span class="attachment-size">{{ formatBytes(att.size) }}</span>
-                  </div>
-                  <div class="attachment-actions">
-                    <button
-                      mat-icon-button
-                      [matTooltip]="
-                        'document-detail.document-detail.open-in-nuxeo-drive' | translate
-                      "
-                      [attr.aria-label]="
-                        'document-detail.document-detail.open-in-nuxeo-drive' | translate
-                      "
-                      (click)="openDriveDialog()"
-                    >
-                      <mat-icon>open_in_new</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
-                      [matTooltip]="'document-detail.document-detail.preview' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.preview' | translate"
-                      (click)="previewAttachment(att)"
-                    >
-                      <mat-icon>visibility</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
-                      [matTooltip]="'document-detail.document-detail.download' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.download' | translate"
-                      (click)="downloadAttachment(att.url, att.name)"
-                    >
-                      <mat-icon>download</mat-icon>
-                    </button>
-                    @if (canWriteDoc()) {
-                      <button
-                        mat-icon-button
-                        [matMenuTriggerFor]="attMenu"
-                        [matTooltip]="'document-detail.document-detail.more' | translate"
-                        [attr.aria-label]="
-                          'document-detail.document-detail.more-actions' | translate
-                        "
-                      >
-                        <mat-icon>more_vert</mat-icon>
-                      </button>
-                      <mat-menu #attMenu="matMenu">
-                        <button mat-menu-item (click)="openReplaceDialog(att)">
-                          <mat-icon>find_replace</mat-icon>
-                          <span>{{ 'document-detail.document-detail.replace' | translate }}</span>
-                        </button>
-                        <button mat-menu-item (click)="openRemoveDialog(att)">
-                          <mat-icon>cancel</mat-icon>
-                          <span>{{ 'document-detail.document-detail.remove' | translate }}</span>
-                        </button>
-                      </mat-menu>
-                    }
-                  </div>
-                </div>
-              }
-            }
-
-            @if (canWriteDoc()) {
-              <label class="upload-attachment-zone">
-                <span class="upload-link">{{
-                  'document-detail.document-detail.upload-attachment' | translate
-                }}</span>
-                <input #attachmentInput type="file" hidden (change)="uploadAttachment($event)" />
-              </label>
-            }
-
-            @if (hasCollections()) {
               <div class="prop-section-divider"></div>
 
               <div class="section-title" role="heading" aria-level="4">
-                {{ 'document-detail.document-detail.collections' | translate }}
+                {{ 'document-detail.document-detail.attachments' | translate }}
               </div>
-              @for (col of collections(); track col.uid) {
-                <sat-category-tag category="blue">
-                  <mat-icon>bookmark</mat-icon>
-                  {{ col.title }}
-                </sat-category-tag>
+              @if (attachments().length === 0) {
+                <p class="section-empty">
+                  {{ 'document-detail.document-detail.there-are-no-attachments' | translate }}
+                </p>
+              } @else {
+                @for (att of attachments(); track att.index) {
+                  <div class="attachment-card">
+                    <div class="attachment-info">
+                      <span class="attachment-name">{{ att.name }}</span>
+                      <span class="attachment-size">{{ formatBytes(att.size) }}</span>
+                    </div>
+                    <div class="attachment-actions">
+                      <button
+                        mat-icon-button
+                        [matTooltip]="
+                          'document-detail.document-detail.open-in-nuxeo-drive' | translate
+                        "
+                        [attr.aria-label]="
+                          'document-detail.document-detail.open-in-nuxeo-drive' | translate
+                        "
+                        (click)="openDriveDialog()"
+                      >
+                        <mat-icon svgIcon="open_full" />
+                      </button>
+                      <button
+                        mat-icon-button
+                        [matTooltip]="'document-detail.document-detail.preview' | translate"
+                        [attr.aria-label]="'document-detail.document-detail.preview' | translate"
+                        (click)="previewAttachment(att)"
+                      >
+                        <mat-icon svgIcon="view" />
+                      </button>
+                      <button
+                        mat-icon-button
+                        [matTooltip]="'document-detail.document-detail.download' | translate"
+                        [attr.aria-label]="'document-detail.document-detail.download' | translate"
+                        (click)="downloadAttachment(att.url, att.name)"
+                      >
+                        <mat-icon svgIcon="download" />
+                      </button>
+                      @if (canWriteDoc()) {
+                        <button
+                          mat-icon-button
+                          [matMenuTriggerFor]="attMenu"
+                          [matTooltip]="'document-detail.document-detail.more' | translate"
+                          [attr.aria-label]="
+                            'document-detail.document-detail.more-actions' | translate
+                          "
+                        >
+                          <mat-icon svgIcon="more_vert" />
+                        </button>
+                        <mat-menu #attMenu="matMenu">
+                          <button mat-menu-item (click)="openReplaceDialog(att)">
+                            <mat-icon svgIcon="search" />
+                            <span>{{ 'document-detail.document-detail.replace' | translate }}</span>
+                          </button>
+                          <button mat-menu-item (click)="openRemoveDialog(att)">
+                            <mat-icon svgIcon="circle_x" />
+                            <span>{{ 'document-detail.document-detail.remove' | translate }}</span>
+                          </button>
+                        </mat-menu>
+                      }
+                    </div>
+                  </div>
+                }
               }
-            }
-          </div>
-        }
 
-        <!-- Comments sub-tab -->
-        @if (panelSubTab() === 'comments') {
-          <div class="panel-body comments-panel">
-            @if (commentsLoading()) {
-              <div class="panel-loading">
-                <mat-spinner
-                  diameter="28"
-                  [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                />
-              </div>
-            } @else {
-              <!-- AI Sentiment Analysis -->
+              @if (canWriteDoc()) {
+                <label class="upload-attachment-zone">
+                  <span class="upload-link">{{
+                    'document-detail.document-detail.upload-attachment' | translate
+                  }}</span>
+                  <input #attachmentInput type="file" hidden (change)="uploadAttachment($event)" />
+                </label>
+              }
+            </nxs-properties-panel>
+          }
+          @case ('comments') {
+            <div class="comments-panel">
               @if (featureFlags.aiEnabled() && comments().length > 0) {
                 <div class="sentiment-toolbar">
                   <button
@@ -1999,7 +1331,7 @@
                         [attr.aria-label]="'document-detail.document-detail.loading' | translate"
                       />
                     } @else {
-                      <mat-icon>psychology</mat-icon>
+                      <mat-icon svgIcon="ai" />
                     }
                     {{ 'document-detail.document-detail.analyze-sentiment' | translate }}
                   </button>
@@ -2008,7 +1340,7 @@
                 @if (aiThreadSummary()) {
                   <div class="sentiment-summary-panel">
                     <div class="sentiment-summary-header">
-                      <mat-icon>forum</mat-icon>
+                      <mat-icon svgIcon="chat" />
                       <span>{{
                         'document-detail.document-detail.thread-summary' | translate
                       }}</span>
@@ -2017,301 +1349,64 @@
                   </div>
                 }
               }
-
-              <!-- Existing comments -->
-              @for (comment of comments(); track comment.id) {
-                <div class="comment-card">
-                  <div class="comment-header">
+              @if (doc(); as commented) {
+                <nxs-comments [documentUid]="commented.uid" (threadChange)="comments.set($event)">
+                  <ng-template nxsCommentExtra let-comment>
+                    @if (aiSentimentMap()[comment.id]; as sent) {
+                      <div class="comment-sentiment">
+                        <span class="sentiment-badge sentiment-{{ sent.sentiment }}">
+                          {{ sent.sentiment }}
+                        </span>
+                        @if (sent.summary; as sentSummary) {
+                          <p class="sentiment-inline-summary">
+                            <mat-icon class="sentiment-inline-icon" svgIcon="ai" />
+                            {{ sentSummary }}
+                          </p>
+                        }
+                      </div>
+                    }
+                  </ng-template>
+                </nxs-comments>
+              }
+            </div>
+          }
+          @case ('activity') {
+            <div class="activity-panel">
+              @if (panelActivityLoading()) {
+                <div class="panel-loading">
+                  <nxs-spinner
+                    diameter="28"
+                    [label]="'document-detail.document-detail.loading' | translate"
+                  />
+                </div>
+              } @else {
+                @for (entry of panelActivity(); track $index) {
+                  <div class="activity-card">
                     <sat-avatar
-                      [initials]="comment.author"
-                      [category]="avatarColor(comment.author)"
+                      [initials]="entry.principalName"
+                      [category]="avatarColor(entry.principalName)"
                       size="28"
                       [borderless]="true"
                       aria-hidden="true"
                     />
-                    <span class="comment-author">{{ comment.author }}</span>
-                    <span class="comment-time">{{ relativeTime(comment.creationDate) }}</span>
-                    @if (isCommentEdited(comment)) {
-                      <span class="comment-edited">(edited)</span>
-                    }
-                    @if (aiSentimentMap()[comment.id]; as sent) {
-                      <span class="sentiment-badge sentiment-{{ sent.sentiment }}">
-                        {{ sent.sentiment }}
-                      </span>
-                    }
-                    @if (canWriteDoc()) {
-                      <button
-                        mat-icon-button
-                        [matMenuTriggerFor]="commentMenu"
-                        class="comment-menu-btn"
-                        [attr.aria-label]="
-                          'document-detail.document-detail.comment-actions' | translate
-                        "
-                      >
-                        <mat-icon>more_vert</mat-icon>
-                      </button>
-                      <mat-menu #commentMenu="matMenu">
-                        <button mat-menu-item (click)="startEditComment(comment)">
-                          <mat-icon>edit</mat-icon>
-                          {{ 'document-detail.document-detail.edit' | translate }}
-                        </button>
-                        <button mat-menu-item (click)="deleteComment(comment)">
-                          <mat-icon>delete</mat-icon>
-                          {{ 'document-detail.document-detail.delete' | translate }}
-                        </button>
-                      </mat-menu>
-                    }
+                    <div class="activity-info">
+                      <span class="activity-user">{{ entry.principalName }}</span>
+                      <span class="activity-action">{{ activityLabel(entry) }}</span>
+                      <span class="activity-time">{{ relativeTime(entry.eventDate) }}</span>
+                    </div>
                   </div>
-                  @if (editingCommentId() === comment.id) {
-                    <div class="comment-edit-row">
-                      <input
-                        class="comment-edit-input"
-                        [value]="editingCommentText()"
-                        (input)="editingCommentText.set($any($event.target).value)"
-                        (keydown.enter)="saveEditComment()"
-                      />
-                      <button
-                        mat-icon-button
-                        (click)="saveEditComment()"
-                        [disabled]="commentSaving()"
-                        [matTooltip]="'document-detail.document-detail.save' | translate"
-                        [attr.aria-label]="'document-detail.document-detail.save' | translate"
-                      >
-                        <mat-icon>check</mat-icon>
-                      </button>
-                      <button
-                        mat-icon-button
-                        (click)="cancelEditComment()"
-                        [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                        [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                      >
-                        <mat-icon>close</mat-icon>
-                      </button>
-                    </div>
-                  } @else {
-                    <p class="comment-text">{{ comment.text }}</p>
-                    @if (aiSentimentMap()[comment.id]; as sentItem) {
-                      @if (sentItem.summary; as sentSummary) {
-                        <p class="sentiment-inline-summary">
-                          <mat-icon class="sentiment-inline-icon">auto_awesome</mat-icon>
-                          {{ sentSummary }}
-                        </p>
-                      }
-                    }
-                  }
+                }
 
-                  @if (canWriteDoc()) {
-                    <div class="comment-footer">
-                      <button class="reply-toggle-btn" (click)="startReply(comment.id)">
-                        <mat-icon class="reply-icon">reply</mat-icon>
-                        {{ 'document-detail.document-detail.reply' | translate }}
-                      </button>
-                    </div>
-                  }
-
-                  @if (replyCount(comment.id) > 0) {
-                    <div class="reply-summary">
-                      {{ replyCount(comment.id) }}
-                      {{
-                        replyCount(comment.id) === 1
-                          ? ('document-detail.reply' | translate)
-                          : ('document-detail.replies' | translate)
-                      }}
-                      · Last reply
-                      {{ lastReplyTime(comment.id) }}
-                    </div>
-                    <div class="replies-section">
-                      @for (reply of repliesMap()[comment.id]; track reply.id) {
-                        <div class="reply-card">
-                          <div class="comment-header">
-                            <sat-avatar
-                              [initials]="reply.author"
-                              [category]="avatarColor(reply.author)"
-                              size="24"
-                              [borderless]="true"
-                              aria-hidden="true"
-                            />
-                            <span class="comment-author">{{ reply.author }}</span>
-                            <span class="comment-time">{{ relativeTime(reply.creationDate) }}</span>
-                            @if (isCommentEdited(reply)) {
-                              <span class="comment-edited">(edited)</span>
-                            }
-                            @if (canWriteDoc()) {
-                              <button
-                                mat-icon-button
-                                [matMenuTriggerFor]="replyMenu"
-                                class="comment-menu-btn"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.reply-actions' | translate
-                                "
-                              >
-                                <mat-icon>more_vert</mat-icon>
-                              </button>
-                              <mat-menu #replyMenu="matMenu">
-                                <button mat-menu-item (click)="startEditComment(reply)">
-                                  <mat-icon>edit</mat-icon>
-                                  {{ 'document-detail.document-detail.edit' | translate }}
-                                </button>
-                                <button mat-menu-item (click)="deleteComment(reply, comment.id)">
-                                  <mat-icon>delete</mat-icon>
-                                  {{ 'document-detail.document-detail.delete' | translate }}
-                                </button>
-                              </mat-menu>
-                            }
-                          </div>
-                          @if (editingCommentId() === reply.id) {
-                            <div class="comment-edit-row">
-                              <input
-                                class="comment-edit-input"
-                                [value]="editingCommentText()"
-                                (input)="editingCommentText.set($any($event.target).value)"
-                                (keydown.enter)="saveEditComment()"
-                              />
-                              <button
-                                mat-icon-button
-                                (click)="saveEditComment()"
-                                [disabled]="commentSaving()"
-                                [matTooltip]="'document-detail.document-detail.save' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.save' | translate
-                                "
-                              >
-                                <mat-icon>check</mat-icon>
-                              </button>
-                              <button
-                                mat-icon-button
-                                (click)="cancelEditComment()"
-                                [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                                [attr.aria-label]="
-                                  'document-detail.document-detail.cancel' | translate
-                                "
-                              >
-                                <mat-icon>close</mat-icon>
-                              </button>
-                            </div>
-                          } @else {
-                            <p class="comment-text reply-text">{{ reply.text }}</p>
-                          }
-                        </div>
-                      }
-                    </div>
-                  }
-
-                  @if (canWriteDoc() && replyingToId() === comment.id) {
-                    <div class="reply-input-row">
-                      <input
-                        class="new-comment-input reply-input"
-                        [placeholder]="
-                          'document-detail.document-detail.write-a-reply-here' | translate
-                        "
-                        [value]="replyText()"
-                        (input)="replyText.set($any($event.target).value)"
-                        (keydown.enter)="submitReply(comment.id)"
-                      />
-                      @if (replyText().trim()) {
-                        <button
-                          mat-icon-button
-                          (click)="submitReply(comment.id)"
-                          [disabled]="commentSaving()"
-                          [matTooltip]="'document-detail.document-detail.submit' | translate"
-                          [attr.aria-label]="'document-detail.document-detail.submit' | translate"
-                        >
-                          <mat-icon>check</mat-icon>
-                        </button>
-                        <button
-                          mat-icon-button
-                          (click)="cancelReply()"
-                          [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                          [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                        >
-                          <mat-icon>close</mat-icon>
-                        </button>
-                      }
-                    </div>
-                  }
-                </div>
+                @if (panelActivity().length === 0) {
+                  <p class="section-empty">
+                    {{ 'document-detail.document-detail.no-recent-activity' | translate }}
+                  </p>
+                }
               }
-
-              @if (comments().length === 0) {
-                <p class="section-empty">
-                  {{ 'document-detail.document-detail.no-comments-yet' | translate }}
-                </p>
-              }
-
-              @if (canWriteDoc()) {
-                <!-- New comment input -->
-                <div class="new-comment-row">
-                  <input
-                    class="new-comment-input"
-                    [placeholder]="
-                      'document-detail.document-detail.write-a-comment-here' | translate
-                    "
-                    [value]="newCommentText()"
-                    (input)="newCommentText.set($any($event.target).value)"
-                    (keydown.enter)="submitComment()"
-                  />
-                  @if (newCommentText().trim()) {
-                    <button
-                      mat-icon-button
-                      (click)="submitComment()"
-                      [disabled]="commentSaving()"
-                      [matTooltip]="'document-detail.document-detail.submit' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.submit' | translate"
-                    >
-                      <mat-icon>check</mat-icon>
-                    </button>
-                    <button
-                      mat-icon-button
-                      (click)="cancelNewComment()"
-                      [matTooltip]="'document-detail.document-detail.cancel' | translate"
-                      [attr.aria-label]="'document-detail.document-detail.cancel' | translate"
-                    >
-                      <mat-icon>close</mat-icon>
-                    </button>
-                  }
-                </div>
-              }
-            }
-          </div>
+            </div>
+          }
         }
-
-        <!-- Activity sub-tab -->
-        @if (panelSubTab() === 'activity') {
-          <div class="panel-body activity-panel">
-            @if (panelActivityLoading()) {
-              <div class="panel-loading">
-                <mat-spinner
-                  diameter="28"
-                  [attr.aria-label]="'document-detail.document-detail.loading' | translate"
-                />
-              </div>
-            } @else {
-              @for (entry of panelActivity(); track $index) {
-                <div class="activity-card">
-                  <sat-avatar
-                    [initials]="entry.principalName"
-                    [category]="avatarColor(entry.principalName)"
-                    size="28"
-                    [borderless]="true"
-                    aria-hidden="true"
-                  />
-                  <div class="activity-info">
-                    <span class="activity-user">{{ entry.principalName }}</span>
-                    <span class="activity-action">{{ activityLabel(entry) }}</span>
-                    <span class="activity-time">{{ relativeTime(entry.eventDate) }}</span>
-                  </div>
-                </div>
-              }
-
-              @if (panelActivity().length === 0) {
-                <p class="section-empty">
-                  {{ 'document-detail.document-detail.no-recent-activity' | translate }}
-                </p>
-              }
-            }
-          </div>
-        }
-      </aside>
+      </nxs-details-panel>
     }
   </div>
 }
@@ -2333,17 +1428,19 @@
         (click)="toggleSectionNode(node); $event.stopPropagation()"
         type="button"
       >
-        <mat-icon class="section-arrow" [class.section-arrow--expanded]="node.expanded">
-          chevron_right
-        </mat-icon>
+        <mat-icon
+          class="section-arrow"
+          [class.section-arrow--expanded]="node.expanded"
+          svgIcon="chevron_right"
+        />
       </button>
     } @else {
       <span class="section-toggle-spacer"></span>
     }
-    <mat-icon class="section-icon">{{ sectionIcon(node) }}</mat-icon>
+    <mat-icon class="section-icon" [svgIcon]="sectionIcon(node)" />
     <span class="section-label">{{ node.doc.title }}</span>
     @if (selectedSectionId() === node.doc.uid) {
-      <mat-icon class="section-check">check_circle</mat-icon>
+      <mat-icon class="section-check" svgIcon="circle_check" />
     }
   </div>
 

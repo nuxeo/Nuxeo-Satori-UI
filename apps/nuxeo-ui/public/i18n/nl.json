@@ -27,16 +27,6 @@
     "toolbar-unlock": "Ontgrendelen",
     "toolbar-unsubscribe": "Uitschrijven"
   },
-  "adf-hx-bridge": {
-    "loading": "Laden",
-    "notify-me": "Mij informeren",
-    "pager": {
-      "no-documents": "Geen documenten",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} van {{ total }}"
-    },
-    "unsubscribe": "Uitschrijven"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "AI-controleafwijkingen",
@@ -517,6 +507,9 @@
     "placeholder-page": {
       "coming-soon": "Binnenkort beschikbaar"
     },
+    "preset": {
+      "badge": "Preset: {{ label }}"
+    },
     "profile-page": {
       "change-password": "Wachtwoord wijzigen",
       "company": "Bedrijf",
@@ -706,17 +699,6 @@
       "user-group": "Gebruiker / groep",
       "username": "Gebruikersnaam"
     },
-    "browse-adf-hx-poc": {
-      "columns": "Kolommen",
-      "manage-columns": "Kolommen beheren",
-      "preview": "Voorbeeld",
-      "preview-document": "Voorvertoning van document",
-      "retry": "Opnieuw proberen",
-      "select-a-single-document-in-the": "Selecteer één document op het tabblad Weergeven om de eigenschappen ervan te zien.",
-      "select-a-single-document-in-the-2": "Selecteer één document op het tabblad Weergeven om de versies ervan te zien.",
-      "the-repository-root-carries-no-access": "De hoofdmap van de opslagplaats heeft geen toegangsbeheerlijst. Open een domein of map om de rechten ervan te bekijken en te beheren.",
-      "this-folder-is-empty": "Deze map is leeg"
-    },
     "column": {
       "author": "Auteur",
       "coverage": "Dekking",
@@ -897,17 +879,6 @@
       "notify": "Informeren",
       "share": "Delen"
     },
-    "search-adf-hx": {
-      "enter-search-term": "Voer een zoekterm in...",
-      "loading": "Laden",
-      "next-page": "Volgende pagina",
-      "no-results-found": "Geen resultaten gevonden",
-      "previous-page": "Vorige pagina",
-      "search": "Zoeken",
-      "search-documents": "Documenten zoeken",
-      "searching": "Bezig met zoeken...",
-      "try-a-different-search-term": "Probeer een andere zoekterm"
-    },
     "show-details": "Gegevens weergeven",
     "tab": {
       "history": "Geschiedenis",
@@ -989,7 +960,6 @@
       "notifications-enabled": "Meldingen ingeschakeld",
       "removed-from-clipboard": "Verwijderd uit klembord"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "Mij informeren",
     "remove-from-clipboard": "Verwijderen uit klembord",
     "share-fallback-title": "Collectie",
@@ -1055,9 +1025,16 @@
       "trashed-document-many": "{{ count }} documenten in prullenbak",
       "trashed-document-one": "{{ count }} document in prullenbak"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "dd-mm-jjjj",
     "dismiss": "Ontsla",
     "email-example": "naam@bedrijf.nl",
+    "lock": {
+      "already-locked": "Document is al vergrendeld door een andere gebruiker, vernieuw uw pagina.",
+      "lock-no-permission": "U hebt geen toestemming om dit document te vergrendelen.",
+      "locked-by": "Door {{ owner }} op {{ date }} vergrendeld",
+      "locked-by-another-user": "U kunt dit document niet ontgrendelen omdat het door een andere gebruiker is vergrendeld.",
+      "unlock-no-permission": "U hebt geen toestemming om dit document te ontgrendelen."
+    },
     "ok": "OK",
     "page-number": "Pagina {{ page }}",
     "page-of": "Pagina {{ page }} van {{ total }}",
@@ -1103,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "Contract ABC-123.pdf",
     "saved-search-placeholder": "bijv. \"Openstaande beoordelingen contracten K3\"",
-    "showcase-dialog-message": "Dit dialoogvenster wordt geïmporteerd uit @nuxeo-satori/platform/ui. Klanten kunnen het gebruiken voor bevestigingsprompts, waarschuwingen en destructieve acties.",
+    "showcase-dialog-message": "Dit dialoogvenster wordt geïmporteerd uit @nuxeo/satori-platform/ui. Klanten kunnen het gebruiken voor bevestigingsprompts, waarschuwingen en destructieve acties.",
     "showcase-dialog-title": "Demo componentshowcase"
   },
   "dashboard": {
@@ -1411,6 +1388,8 @@
       "publication-removed": "Publicatie verwijderd",
       "removed-from-favorites": "Verwijderd uit favorieten",
       "reply-deleted": "Antwoord verwijderd",
+      "restore-version-conflict": "Deze versie kan niet worden hersteld vanwege een conflict met de huidige staat van het document. Laad de pagina opnieuw en probeer het nog eens.",
+      "restore-version-forbidden": "U kunt deze versie niet herstellen: u hebt geen toestemming, of een andere gebruiker heeft het document vergrendeld.",
       "search-failed-try-again": "Zoeken mislukt. Probeer het opnieuw.",
       "section-not-found": "Sectie niet gevonden",
       "selected-documents-have-no-insertable-image-url": "Geselecteerde documenten hebben geen invoegbare afbeeldings-URL",
@@ -1421,7 +1400,6 @@
       "workflow-abandoned": "Werkstroom afgebroken.",
       "workflow-started-successfully": "Werkstroom gestart"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "Centreren",
       "align-left": "Links uitlijnen",
@@ -1505,10 +1483,20 @@
     "task-due-before": "vóór {{ due }}",
     "unblock": "Deblokkeren",
     "unknown": "Onbekend",
+    "version-go-to-latest": "Naar de nieuwste versie",
     "version-latest": "{{ version }} Recente",
+    "version-latest-entry": "Nieuwste versie",
     "version-modified-by": "Aangepast {{ when }} door {{ who }}",
+    "version-restore": "{{ version }} herstellen",
+    "version-restore-confirm-title": "Weet u het zeker?",
+    "version-viewing": "U bekijkt versie {{ version }}.",
     "visual-editor": "Visuele editor",
     "workflow-started-on-document": "U hebt een werkstroom {{ workflow }} gestart voor dit document."
+  },
+  "document-layouts": {
+    "no": "No",
+    "sections": "Property sections",
+    "yes": "Yes"
   },
   "drawer": {
     "administration-analytics": "Analyses",
@@ -1526,104 +1514,6 @@
   "extensions": {
     "extension-outlet": {
       "loading": "Wordt geladen…"
-    }
-  },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "Activiteit",
-      "by": "Door",
-      "close-panel": "Deelvenster sluiten",
-      "contributors": "Bijdragers",
-      "created": "Gemaakt",
-      "document-details": "Documentgegevens",
-      "info": "Info",
-      "last-modified": "Laatst aangepast",
-      "no-recent-activity": "Geen recente activiteit",
-      "no-tags-yet": "Nog geen tags",
-      "properties": "Eigenschappen",
-      "search-or-create-a-tag": "Tag zoeken of maken",
-      "state": "Status",
-      "tags": "Tags",
-      "title": "Titel",
-      "type": "Typ"
-    },
-    "hxp-browse-history": {
-      "action": "Actie",
-      "all": "Alle",
-      "category": "Categorie",
-      "comment": "Opmerking",
-      "date": "Datum",
-      "from": "Van",
-      "next": "Volgende",
-      "no-audit-entries-found": "Geen controlevermeldingen gevonden.",
-      "performed-action": "Uitgevoerde actie",
-      "previous": "Vorige",
-      "state": "Status",
-      "to": "Met",
-      "username": "Gebruikersnaam"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "Vernieuwen"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "Pagina's van documentlijst",
-      "next": "Volgende",
-      "next-page": "Volgende pagina",
-      "previous": "Vorige",
-      "previous-page": "Vorige pagina"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "Tabbladen voor bladeren door mappen"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "Alle typen",
-      "card-view": "Kaartweergave",
-      "clear-contributor-filter": "Bijdragerfilter wissen",
-      "clear-title-filter": "Titelfilter wissen",
-      "contributor": "Bijdrager...",
-      "export-csv": "CSV exporteren",
-      "filter-by-title": "Filteren op titel...",
-      "last-contributor": "Laatste bijdrager",
-      "list-view": "Lijstweergave",
-      "modified-from": "Aangepast van",
-      "modified-to": "Aangepast tot",
-      "type": "Typ"
-    },
-    "hxp-browse-trash": {
-      "actions": "Acties",
-      "failed-to-load": "Kan de prullenbak niet laden.",
-      "last-modified": "Laatst aangepast",
-      "name": "Naam",
-      "restore": "Herstellen",
-      "retry": "Opnieuw proberen",
-      "trash-is-empty": "Prullenbak is leeg",
-      "type": "Typ"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "Kolomkiezer sluiten",
-      "column-settings": "Kolominstellingen",
-      "done": "Klaar",
-      "reset": "Opnieuw instellen"
-    },
-    "hxp-folder-header": {
-      "close-menu": "Menu sluiten",
-      "create-folder-upload-files-or-import": "Map maken, bestanden uploaden of CSV importeren",
-      "create-import": "Maken / Importeren",
-      "delete": "Verwijderen",
-      "download-all": "Alles downloaden",
-      "edit": "Bewerk",
-      "export": "Exporteren",
-      "more-actions": "Meer acties",
-      "share": "Delen",
-      "upload-with-nuxeo-drive": "Uploaden met Nuxeo Drive"
-    },
-    "tab": {
-      "history": "Geschiedenis",
-      "permissions": "Rechten",
-      "properties": "Eigenschappen",
-      "trash": "Prullenbak",
-      "versions": "Versies",
-      "view": "Weergeven"
     }
   },
   "kd": {
@@ -1777,7 +1667,6 @@
       "administration": "Beheer",
       "assets": "Assets",
       "browse": "Bladeren",
-      "browse-adf-hx": "Bladeren",
       "clipboard": "Klembord",
       "collections": "Collecties",
       "dashboard": "Dashboard",

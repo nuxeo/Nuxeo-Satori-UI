@@ -1,0 +1,84 @@
+:host {
+  --nxs-tabs-header-surface: var(--mat-sys-surface);
+  --nxs-tabs-header-border: var(--mat-sys-outline-variant);
+  --nxs-tabs-focus-outline: var(--mat-sys-primary);
+  --nxs-tabs-icon-color: var(--mat-sys-primary);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+// Compact, left-aligned labels; each body fills the space under the strip and clips, so a body
+// scrolls itself.
+.nxs-tabs__group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab-header {
+    background: var(--nxs-tabs-header-surface);
+    border-bottom: 1px solid var(--nxs-tabs-header-border);
+    flex-shrink: 0;
+  }
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab-labels {
+    gap: 0;
+    justify-content: flex-start;
+  }
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab {
+    flex-grow: 0 !important;
+    min-width: 0;
+    padding: 0 20px;
+    font-size: 13px;
+    letter-spacing: 0;
+  }
+
+  // Material draws no ring of its own on a keyboard-focused tab. A standalone `:focus` rule, not a
+  // list with `:focus-visible`, because IBM Equal Access `style_focus_visible` reads `:focus` only.
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab:focus {
+    outline: 2px solid var(--nxs-tabs-focus-outline);
+    outline-offset: -2px;
+  }
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab-body-wrapper {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab-body {
+    height: 100%;
+  }
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  ::ng-deep .mat-mdc-tab-body-content {
+    height: 100%;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+.nxs-tabs__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nxs-tabs__icon {
+  font-size: 18px;
+  width: 18px;
+  height: 18px;
+  color: var(--nxs-tabs-icon-color);
+}

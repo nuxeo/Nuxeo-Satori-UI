@@ -1,5 +1,5 @@
-import { Component, inject } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
@@ -18,7 +18,7 @@ export interface ColumnDef {
  * The packaged column set, kept only as the **fallback** for an injector where
  * Layer 1 registration has not run.
  *
- * `PACKAGED_BROWSE_COLUMNS` in `@nuxeo-satori/platform/extensions` is now the source
+ * `PACKAGED_BROWSE_COLUMNS` in `@nuxeo/satori-platform/extensions` is now the source
  * of truth, and `provide-app-extensions.ts` registers it into the `documentList`
  * slot. This list must mirror it. It survives because a component spec that
  * builds a bare `TestBed` has no `APP_INITIALIZER`, and resolving an empty slot
@@ -90,6 +90,7 @@ export function saveColumnSettings(columns: ColumnDef[]): void {
     MatCheckboxModule,
   ],
   templateUrl: './column-settings-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

@@ -1,12 +1,18 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -17,7 +23,7 @@ import {
   AuditEntry,
   DirectoryEntry,
   DirectoryService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,
@@ -26,12 +32,15 @@ import {
   AuditFilterResponse,
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo/satori-platform/ui';
 
 @Component({
   selector: 'lib-admin-audit-page',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
     TranslatePipe,
     DatePipe,
@@ -41,13 +50,13 @@ import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatTableModule,
     MatIconModule,
     MatProgressSpinnerModule,
     MatTooltipModule,
   ],
   templateUrl: './admin-audit-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-audit-page.component.scss',
 })
 export class AdminAuditPageComponent implements OnInit {
@@ -147,6 +156,9 @@ export class AdminAuditPageComponent implements OnInit {
 
   /* --- AI: Anomaly Detection --- */
   loadAnomalies(): void {
+    // `ngOnInit` calls this unconditionally and the banner is gated in the template, so without
+    // this guard an opted-out user still POSTed `AI.Anomalies` on every visit to the audit page.
+    if (!this.featureFlags.aiEnabled()) return;
     this.anomalyLoading.set(true);
     this.aiGateway.detectAnomalies('24h').subscribe({
       next: (res) => {
@@ -163,7 +175,7 @@ export class AdminAuditPageComponent implements OnInit {
   }
 
   severityIcon(sev: string): string {
-    return sev === 'high' ? 'error' : sev === 'medium' ? 'warning' : 'info';
+    return sev === 'high' ? 'error' : sev === 'medium' ? 'report_problem' : 'info';
   }
 
   /* --- AI: Natural-Language Search --- */
@@ -225,12 +237,12 @@ export class AdminAuditPageComponent implements OnInit {
 
   summaryStatIcon(icon: string): string {
     const map: Record<string, string> = {
-      edit: 'edit',
-      delete: 'delete',
+      edit: 'pencil',
+      delete: 'trash',
       security: 'shield',
-      login: 'login',
+      login: 'key',
       download: 'download',
-      workflow: 'account_tree',
+      workflow: 'tree',
       info: 'info',
     };
     return map[icon] || 'info';

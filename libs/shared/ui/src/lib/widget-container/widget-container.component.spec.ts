@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { WidgetContainerComponent } from './widget-container.component';
@@ -11,6 +16,7 @@ import { WidgetContainerComponent } from './widget-container.component';
 @Component({
   standalone: true,
   imports: [WidgetContainerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <lib-widget-container [title]="title()" [icon]="icon()" [iconColor]="iconColor()">
       <button widgetActions type="button" class="probe-action">Refresh</button>
@@ -59,6 +65,7 @@ describe('WidgetContainerComponent', () => {
 
   it('honours headingLevel when widgets sit under a section heading', async () => {
     @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
       standalone: true,
       imports: [WidgetContainerComponent],
       template: `<lib-widget-container [title]="'Nested'" [headingLevel]="3" />`,
@@ -116,17 +123,17 @@ describe('WidgetContainerComponent', () => {
   });
 
   it('renders the icon and applies the icon colour when both are given', async () => {
-    host.icon.set('history');
+    host.icon.set('clock');
     host.iconColor.set('rgb(255, 0, 0)');
     await fixture.whenStable();
 
     const icon = query('.widget-header-icon');
-    expect(icon?.textContent?.trim()).toBe('history');
+    expect(icon?.getAttribute('data-mat-icon-name')).toBe('clock');
     expect(icon?.style.color).toBe('rgb(255, 0, 0)');
   });
 
   it('renders the icon with no colour override when iconColor is left at its default', async () => {
-    host.icon.set('history');
+    host.icon.set('clock');
     await fixture.whenStable();
 
     // `iconColor` defaults to '' so the Material theme colour wins; a hardcoded default here

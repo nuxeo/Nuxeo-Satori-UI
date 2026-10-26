@@ -161,7 +161,7 @@ const auth = process.env['NUXEO_AUTH'] ?? '';
 import { SearchComponent } from '@agentic-ui/feature-search';
 
 // GOOD ✅ — move shared logic to libs/shared/ first
-import { SearchService } from '@nuxeo-satori/platform/nuxeo-client';
+import { SearchService } from '@nuxeo/satori-platform/nuxeo-client';
 ```
 
 ---
@@ -597,6 +597,166 @@ newly added mark goes unhidden. See
 
 ---
 
+## 19. A configuration token resolved before the configuration loads
+
+```typescript
+// BAD ❌ — runs in an environment initializer / APP_INITIALIZER factory, before
+// `AppConfigService.load()` has finished. Constructing AuthService resolves
+// NUXEO_API_ORIGIN and the SSO tokens; their factories read `bootstrap()` once,
+// Angular keeps that first value, and every package-contributed setting is ignored.
+provideSatoriExtensions(() => {
+  const auth = inject(AuthService);
+  return { rules: { 'app.rules.isPowerUser': () => auth.isPowerUser() } };
+});
+
+// GOOD ✅ — look the service up when the rule is evaluated, after startup.
+provideSatoriExtensions(() => {
+  const injector = inject(Injector);
+  return { rules: { 'app.rules.isPowerUser': () => injector.get(AuthService).isPowerUser() } };
+});
+
+// GOOD ✅ — or, in an initializer, wait for the configuration first.
+return async () => {
+  await config.load(); // runs once; every caller shares the first load
+  const auth = injector.get(AuthService);
+  /* … */
+};
+```
+
+The tokens provided in `apps/nuxeo-ui/src/app/config/provide-app-config.ts` are one-shot reads,
+so the hazard is anything that **constructs** a reader early: `AuthService`, `SessionTimeoutService`,
+any `NuxeoApiBase` service (`SelectionService` included), and the auth interceptor — which is why
+`AppConfigService` sends its own requests without interceptors. It fails silently: the app starts,
+signs in and works, on the packaged defaults. All three of an SSO button, an idle timeout and a
+Nuxeo origin from a configuration package were lost this way (NXSAT-312).
+
+Regression test pattern: boot the real `appConfig.providers`, answer the configuration requests
+with package values, and assert the tokens — `apps/nuxeo-ui/src/app/config/configuration-at-startup.spec.ts`.
+A spec of one service with the token provided by hand passes whatever the startup order is.
+
+---
+
+## 20. A file the app ships, referenced from the server root
+
+```typescript
+// BAD ❌ — resolves to the server root. The Marketplace package serves the app from
+// /nuxeo/agentic-ui/, so this is http://host/images/… → 404 on every packaged install.
+protected readonly heroImagePath = '/images/Login-background.svg';
+
+// GOOD ✅ — relative, so the browser resolves it against <base href>:
+// /nuxeo/agentic-ui/images/… when packaged, /images/… on the dev server.
+protected readonly heroImagePath = 'images/Login-background.svg';
+```
+
+The same holds for anything under `apps/nuxeo-ui/public/` or an `assets` `output` in
+`angular.json` — `src`, `href`, `url()` in a stylesheet, an `HttpClient` URL. It is invisible
+everywhere except a packaged install: the dev server, the unit tests and the e2e suite all use
+base href `/`, where the two forms are the same URL. The login page's background art was a
+broken image on every Marketplace install that way (NXSAT-318).
+
+Not the same as a server path. `/nuxeo/api/...`, `/nuxeo/icons/...` and
+`/nuxeo/agentic-ui-config/...` are Nuxeo's, not the app's, and are server-absolute on purpose.
+
+`checkNoRootAbsoluteShippedAssetPaths` in `scripts/review-guardrails.mjs` rejects the root-absolute
+form, reading what ships from `angular.json`. Regression test pattern: resolve the value against
+the packaged base, `new URL(src, 'http://host/nuxeo/agentic-ui/').pathname` — see
+`apps/nuxeo-ui/src/app/login/login-page.component.spec.ts`.
+
+---
+
+## 21. Selecting a version restores it, and a version looks writable
+
+```html
+<!-- BAD ❌ — choosing an entry in a list performs the destructive operation. One misclick
+     replaced the live document's content and discarded its unversioned changes. -->
+<button (click)="restoreVersion(v)">{{ versionString(v) }}</button>
+
+<!-- GOOD ✅ — choosing opens the version read-only; restore is a separate, confirmed action -->
+<button (click)="openVersion(v)">{{ versionString(v) }}</button>
+```
+
+Three facts about a Nuxeo version, each measured on the local server (NXSAT-332):
+
+- **Its `permissions` enricher repeats the live document's** — `Write`, `Remove`, `WriteSecurity`
+  — while the server refuses a `PUT` (500) and a trash (403, even for Administrator). Gate edit
+  affordances on `doc.isVersion`, or on the `Immutable` facet it carries, not on the enricher.
+- **`Document.RestoreVersion` checks `WriteVersion`**, not `Write`, and another user's lock
+  removes it (403). Administrator bypasses the lock.
+- **`checkout: true` leaves the restored document checked out** — it reads `0.2+` after
+  restoring `0.1`, as if the user had unversioned changes. Web UI sends `checkout: false`; the
+  document stays editable, because Nuxeo checks it out on the next save.
+
+Regression test pattern: click the rendered list entry and assert no restore request — a test
+that calls `restoreVersion()` directly asserts the defect. See
+`libs/features/document-detail/src/lib/document-detail/document-detail.versions.spec.ts`.
+
+---
+
+## 22. A border token used as a text colour (WCAG 1.4.3)
+
+`--mat-sys-outline` is Material's **non-text** role: borders, dividers, the edge of an unfilled
+control. WCAG grades those under 1.4.11 at **3:1**, and the token is built to clear exactly that.
+Text is 1.4.3 at **4.5:1**, so the token is a quarter of a point short — close enough to look
+deliberate on screen, and far enough to be a violation.
+
+Measured in this application's light theme, where `--mat-sys-outline` is `rgb(119, 118, 131)`,
+on `--mat-sys-surface` (`rgb(249, 249, 252)`):
+
+| Token                          | Ratio      | 1.4.11 (3:1) | 1.4.3 (4.5:1) |
+| ------------------------------ | ---------- | ------------ | ------------- |
+| `--mat-sys-outline`            | **4.25:1** | pass         | **fail**      |
+| `--mat-sys-on-surface-variant` | 8.93:1     | pass         | pass          |
+
+Check the background you are actually on before quoting a ratio. Both nodes axe reported for
+`.task-due-prefix` sat on that one surface — `.task-item.active` looks like a different
+background and is not, because it differs only by an inset `box-shadow`.
+
+```scss
+// BAD ❌ — a non-text token on 12px body text
+.task-due-prefix {
+  color: var(--mat-sys-outline);
+}
+
+// GOOD ✅ — the text-weight equivalent of the same role
+.task-due-prefix {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+// ALSO GOOD ✅ — genuinely non-text, and it says so, so the guardrail allows it
+.empty-icon {
+  font-size: 32px;
+  color: var(--mat-sys-outline); /* non-text: a 32px decorative glyph, so 1.4.11's 3:1 applies */
+}
+```
+
+What makes this one worth cataloguing is **how it resists being fixed by the symptom**. Four
+measured instances reached `integration/nxsat-308`, and three further text uses are still
+untriaged (`docs/accessibility.md` gap 7). A sweep driven by an axe run found and fixed two of
+the four —
+the tasks hint at 4.46:1 and `.rv-sep` at 4.24:1 — and left the other two standing, because axe
+only judges what is rendered while it is scanning: `.task-due-prefix` needs a task with a due
+date on screen, and `.expired-sep` lives in a drawer panel that `phase-6-a11y` never opens. So
+do not fix this by searching for the violation; search for the **token**, and note that the
+fallback form hides from a naive search — `var(--mat-sys-outline, #777683)` is the same defect
+as `var(--mat-sys-outline)`:
+
+```bash
+# grep -E, not rg: Rust's regex engine has no lookbehind, and the lookbehind is what keeps
+# `border-color`, `background-color` and `text-decoration-color` out of the results.
+grep -rnE '(^|[^-[:alnum:]_])color[[:space:]]*:[[:space:]]*var\(--mat-sys-outline' \
+  --include='*.scss' --include='*.html' libs apps
+```
+
+There is **no static gate for this yet.** One was written under NXSAT-647 and withdrawn: over
+seven review rounds it produced ten valid findings, all in its text matching, ending at SCSS
+property nesting — where `border: { color: … }` _is_ `border-color`, a correct non-text use it
+called a violation. A rule for this needs a real Sass parser rather than a regex, tracked as
+**NXSAT-709**; `docs/accessibility.md` records the ten cases so a second attempt does not
+restart from zero.
+Until then this pattern is the check: search for the token, not for the symptom.
+
+---
+
 ## Copilot Flags These on PRs
 
 If you write any of the above, GitHub Copilot will leave a review comment.
@@ -613,3 +773,5 @@ Fix proactively to avoid a review cycle:
 - "`<mat-spinner>` inside a button" → use a spinning `<mat-icon class="ke-spinning">progress_activity</mat-icon>` to preserve inline layout
 - "SVG has no accessible name" → if the link around it is already named, mark the graphic decorative with `aria-hidden="true"` on the wrapper; an `aria-label` on the host element does not reach the `<svg>`
 - "Focus indicator may not be visible" → set the vendor's focus-outline custom property to its own foreground token; left unset it falls back to a low-emphasis divider colour and misses 3:1
+- "Absolute path to a bundled asset" → drop the leading `/` so it resolves against `<base href>`; the packaged app lives under `/nuxeo/agentic-ui/`
+- "Low contrast text" → if the colour is `var(--mat-sys-outline)`, that is a border token graded at 3:1; use `var(--mat-sys-on-surface-variant)` for text. If the use really is non-text (an icon, a divider), say so in a comment with the measured ratio

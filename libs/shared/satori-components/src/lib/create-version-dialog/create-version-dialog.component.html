@@ -1,0 +1,44 @@
+<h2 mat-dialog-title>
+  {{
+    'satori-components.create-version-dialog.title'
+      | translate: { document: data.documentTitle, version: current }
+  }}
+</h2>
+
+<mat-dialog-content>
+  <mat-radio-group
+    class="nxs-create-version-dialog__options"
+    [(ngModel)]="increment"
+    [attr.aria-label]="'satori-components.create-version-dialog.kind' | translate"
+  >
+    <mat-radio-button value="Minor" class="nxs-create-version-dialog__option">
+      <span class="nxs-create-version-dialog__number">{{ nextMinor }}</span>
+      {{ 'satori-components.create-version-dialog.minor' | translate }}
+    </mat-radio-button>
+    <mat-radio-button value="Major" class="nxs-create-version-dialog__option">
+      <span class="nxs-create-version-dialog__number">{{ nextMajor }}</span>
+      {{ 'satori-components.create-version-dialog.major' | translate }}
+    </mat-radio-button>
+  </mat-radio-group>
+</mat-dialog-content>
+
+<mat-dialog-actions>
+  <button mat-stroked-button type="button" mat-dialog-close>
+    {{ 'satori-components.create-version-dialog.cancel' | translate }}
+  </button>
+  <span class="nxs-create-version-dialog__spacer"></span>
+  <button
+    mat-flat-button
+    type="button"
+    class="nxs-create-version-dialog__create"
+    [disabled]="saving()"
+    (click)="create()"
+  >
+    @if (saving()) {
+      <mat-icon class="nxs-spinning" aria-hidden="true" svgIcon="autorenew" />
+      {{ 'satori-components.create-version-dialog.creating' | translate }}
+    } @else {
+      {{ 'satori-components.create-version-dialog.create' | translate }}
+    }
+  </button>
+</mat-dialog-actions>

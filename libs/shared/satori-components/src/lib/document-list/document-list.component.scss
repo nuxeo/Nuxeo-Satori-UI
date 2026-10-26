@@ -1,0 +1,155 @@
+:host {
+  --nxs-document-list-folder-color: #ffa726;
+
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-document-list__state {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 0;
+}
+
+.nxs-document-list__scroller {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.nxs-document-list__table {
+  width: 100%;
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  th.mat-mdc-header-cell {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    font: var(--mat-sys-label-large);
+    color: var(--mat-sys-on-surface-variant);
+    background: var(--mat-sys-surface-container-low);
+    white-space: nowrap;
+  }
+
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+  td.mat-mdc-cell {
+    font: var(--mat-sys-body-medium);
+  }
+}
+
+.nxs-document-list__select {
+  width: 48px;
+  padding-inline: 4px;
+}
+
+.nxs-document-list__actions {
+  width: 48px;
+  padding-inline: 0;
+  text-align: center;
+}
+
+.nxs-document-list__row {
+  cursor: pointer;
+
+  &:hover {
+    background: var(--mat-sys-surface-container);
+  }
+
+  // IBM Equal Access's style_focus_visible reads `:focus` only, so each ring here is also drawn
+  // on a standalone `:focus` (NXSAT-547).
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: -2px;
+  }
+}
+
+.nxs-document-list__row--selected,
+.nxs-document-list__row--selected:hover {
+  background: var(--mat-sys-primary-container);
+}
+
+.nxs-document-list__title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nxs-document-list__thumb {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  border-radius: 3px;
+  object-fit: cover;
+}
+
+.nxs-document-list__icon {
+  width: 20px;
+  height: 20px;
+  font-size: 20px;
+  flex-shrink: 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-document-list__icon--folder {
+  color: var(--nxs-document-list-folder-color);
+}
+
+// A button for the row's primary action, styled as the row's text.
+.nxs-document-list__open {
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &:focus {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--mat-sys-primary);
+    outline-offset: 2px;
+  }
+}
+
+.nxs-document-list__person {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.nxs-document-list__drop {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px dashed var(--mat-sys-primary);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--mat-sys-primary-container) 85%, transparent);
+  pointer-events: none;
+}
+
+.nxs-document-list__drop-label {
+  font: var(--mat-sys-title-medium);
+  color: var(--mat-sys-on-primary-container);
+}

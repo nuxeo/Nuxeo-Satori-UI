@@ -48,7 +48,7 @@ labelled as assumptions in §14.
 **No.** There is no integration tier at all. The repository has two tiers with nothing between
 them:
 
-- **179 in-process specs** (3,016 test cases, all green) in which *every single one* mocks the
+- **179 in-process specs** (3,016 test cases, all green) in which _every single one_ mocks the
   network. 42 use `HttpTestingController`; the rest mock at the service boundary with `vi.fn()`.
   Not one exercises a real Nuxeo response, a real serialisation boundary or a real error
   payload.
@@ -60,21 +60,21 @@ error envelopes, enrichers, NXQL generation, upload and download paths — and n
 
 ### 1.2 Are the epic's two Definition of Done lines met?
 
-| NXENG-615 DoD line | Met? | Basis |
-| --- | --- | --- |
-| "Integration tests cover key user workflows" | **No** | No integration tier exists. Of the eleven workflows named in §6.3 — upload, download, delete, restore, permission grant/revoke, version create/restore, collection membership, task completion, note editing, CSV export, logout — **zero** are covered end to end at any tier. |
-| "E2E tests for critical paths" | **No, partially** | 19 cases exist and are genuine, but they cover 3 of 8 routes; 4 routes have no coverage at all; the suite performs no writes; 2 of 19 cases fail deterministically on WebKit today; and nothing runs it automatically, so it protects nothing between one developer remembering and the next. |
+| NXENG-615 DoD line                           | Met?              | Basis                                                                                                                                                                                                                                                                                         |
+| -------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| "Integration tests cover key user workflows" | **No**            | No integration tier exists. Of the eleven workflows named in §6.3 — upload, download, delete, restore, permission grant/revoke, version create/restore, collection membership, task completion, note editing, CSV export, logout — **zero** are covered end to end at any tier.               |
+| "E2E tests for critical paths"               | **No, partially** | 19 cases exist and are genuine, but they cover 3 of 8 routes; 4 routes have no coverage at all; the suite performs no writes; 2 of 19 cases fail deterministically on WebKit today; and nothing runs it automatically, so it protects nothing between one developer remembering and the next. |
 
 ### 1.3 The four most important problems
 
 1. **The E2E suite is red on WebKit on `main` right now, and nobody knows.** `npx nx run
-   nuxeo-ui-e2e:e2e` exits 1: 36 of 38 runs pass, 2 fail. Both failures are the accessibility
+nuxeo-ui-e2e:e2e` exits 1: 36 of 38 runs pass, 2 fail. Both failures are the accessibility
    regression guards for NXENG-750 and NXENG-751, added 2026-09-17 and 2026-09-18 — three weeks
    after WebKit was registered on 2026-08-25 with the claim that the suite passed on it. They
    were written and validated on Chromium only and landed WebKit-red. Deterministic across
    three runs, including Playwright's own retry. This is the clearest possible demonstration of
-   the CI gap: the suite runs in no workflow, so a regression in the *accessibility regression
-   tests themselves* reached `main` with every gate green. Details in §5.1.
+   the CI gap: the suite runs in no workflow, so a regression in the _accessibility regression
+   tests themselves_ reached `main` with every gate green. Details in §5.1.
 
 2. **Several tests certify things they cannot observe.** The suite's own "this is not a pulse
    check" helper is a pulse check. `expectSurfaceWithData(page, 'lib-browse', 'Root')` is used
@@ -98,7 +98,7 @@ error envelopes, enrichers, NXQL generation, upload and download paths — and n
    to it.** `npm run beta:coverage` exits 1 today. `nuxeo-ui` is absent from the ratchet
    entirely — because its `test` target is `ng test … --browsers=ChromeHeadless` (Karma/Jasmine,
    not Vitest), and `nx run-many -t test --coverage` **fails outright** on it with `Error:
-   Unknown argument: coverage`. The SonarCloud workflow runs exactly that command on every PR
+Unknown argument: coverage`. The SonarCloud workflow runs exactly that command on every PR
    under `continue-on-error: true`, so this has been failing silently. 18 spec files and 135
    test cases — including the auth service, the auth interceptor and session timeout — are
    measured by nothing.
@@ -108,7 +108,7 @@ error envelopes, enrichers, NXQL generation, upload and download paths — and n
 Stated because an audit that only lists faults misleads about where effort should go. The
 `adf-hx-bridge` API-port specs, the `nuxeo-client` service specs for `document-detail` and
 `browse`, the `libs/shared/extensions` Layer 0/1 specs and the three auth specs in
-`apps/nuxeo-ui` are assertion-bearing, comment *why* each assertion can fail, and in several
+`apps/nuxeo-ui` are assertion-bearing, comment _why_ each assertion can fail, and in several
 places record the negative control that proved it. `e2e-preflight.mjs` is a well-designed
 precondition gate. The problem is not that the existing tests are weak on average — it is that
 there is a whole tier missing, and that the tests which exist are not run by anything.
@@ -134,8 +134,9 @@ there is a whole tier missing, and that the tests which exist are not run by any
 
 This is not documented anywhere and is the root of finding §1.3.4.
 
-- **19 library projects run Vitest** via `vite.config.mts`, discovered by
-  `vitest.workspace.ts` (`['**/vite.config.{mjs,js,ts,mts}', '**/vitest.config.{mjs,js,ts,mts}']`).
+- **19 library projects run Vitest** via `vite.config.mts`, each as its own Nx `test` target. A root
+  `vitest.workspace.ts` listed them until Vitest 4, which no longer reads that file; it was deleted
+  rather than replaced, because nothing ran Vitest from the workspace root.
 - **`nuxeo-ui` runs Karma + Jasmine.** `apps/nuxeo-ui/project.json:51-57` declares
   `ng test nuxeo-ui --no-watch --browsers=ChromeHeadless`; `angular.json` wires
   `@angular/build:karma` with `apps/nuxeo-ui/karma.conf.js`. There is no `vite.config.mts` and
@@ -172,14 +173,14 @@ Uniform across the 19 library configs, with two deliberate settings and one late
 - **`ci.yml`** — one job, `lint-build-test`, on PR to `main` and on push to `main`/`feature/**`/
   `fix/**`. Runs guardrails and their self-tests, 8 static `beta:*` gates, `nx affected -t lint`,
   `nx affected -t build`, a test step, `nx affected -t typecheck`, 5 published-package checks and
-  a bundle-size check. The test step is *not* purely affected — it force-runs `document-detail`,
+  a bundle-size check. The test step is _not_ purely affected — it force-runs `document-detail`,
   `knowledge-discovery`, `search` and `browse` unconditionally, then runs affected with those
   four excluded. No Playwright step, no `beta:e2e`, no `beta:coverage`.
 - **`sonarcloud.yml`** — on every PR. **Runs the full suite**: `npx nx run-many -t test
-  --coverage --parallel=1`, under `continue-on-error: true`, then merges lcov and publishes. The
+--coverage --parallel=1`, under `continue-on-error: true`, then merges lcov and publishes. The
   quality gate step is also `continue-on-error: true`, with the reasoning recorded in the file
   (new-code coverage 0.0%, security rating E, reliability D on a 729-file diff). So the full
-  suite *does* run per-PR — and cannot fail the build, and has been failing on `nuxeo-ui` the
+  suite _does_ run per-PR — and cannot fail the build, and has been failing on `nuxeo-ui` the
   whole time (§4.2).
 - **`a11y.yml`** — static template accessibility scan on every PR. Its trailing comment is an
   unusually honest account of why the live-server axe scan cannot run on a GitHub-hosted runner
@@ -218,7 +219,7 @@ Each was re-derived first-hand; the plan's figures appear to predate `origin/mai
 - "all 15 workflows" → **14**.
 - "`apps/nuxeo-ui-e2e/screenshot-debug.spec.ts` sits at the app root and never runs" → **that
   file does not exist.** Not on disk, not untracked, and `git log --all --diff-filter=AD
-  -- '*screenshot-debug*'` returns nothing — it has never existed in this repository's history.
+-- '*screenshot-debug*'` returns nothing — it has never existed in this repository's history.
   **The plan's and the ticket's "a spec that never runs" finding is withdrawn.**
 - "~21 Playwright cases" → **19**, confirmed by run output on both engines.
 - The plan did not state, and this audit found, that `nuxeo-ui` runs Karma rather than Vitest.
@@ -278,11 +279,11 @@ Applied across all 184 files.
 - **disabled** — 0. No `.skip` describe blocks, no `xit`, no `xdescribe`.
 - **todo** — 0. **only** — 0 (`forbidOnly: true` in the Playwright config would reject one).
 - **flaky** — 0 observed. Three runs per Playwright engine and the full Vitest suite produced
-  identical verdicts with no retry-passes (§4.5). Nine specs carry *flakiness risk* that did not
+  identical verdicts with no retry-passes (§4.5). Nine specs carry _flakiness risk_ that did not
   manifest; listed in §9.9.
 - **broken** — **5 files**, all five orphaned `.mjs` scripts in `apps/nuxeo-ui/e2e/`. Executed;
   all five exit 1 (§4.4).
-- **blocked** — 0. Everything in scope was executable. The blockers found were in the *scripts*,
+- **blocked** — 0. Everything in scope was executable. The blockers found were in the _scripts_,
   not the environment.
 
 ### 3.3 Tier classification
@@ -311,7 +312,7 @@ Applied across all 184 files.
   `rg -n '\b(it|describe|test)\.(skip|todo)\b|\bxit\(|\bxdescribe\('`,
   `rg -n '\b(it|describe|test)\.only\b'`.
 - **Gap:** the plan asked for a 20-field schema per spec. The inventory carries 26 mechanical
-  fields per file; the *qualitative* fields (status, risk, recommendation) are applied per group
+  fields per file; the _qualitative_ fields (status, risk, recommendation) are applied per group
   in §3.2 and per file only where the finding is specific, rather than 184 times. Recorded as a
   deliberate deviation, not an omission.
 
@@ -346,7 +347,7 @@ Per project (files / tests / Vitest-reported duration):
   `tasks` 1 / 7 / 2.77 s
 
 The gap between 147 s wall and ~72 s of summed Vitest durations is Nx task overhead and Angular
-compilation at `--parallel=1`. `nuxeo-client`'s own line reports 121 s of *environment* time
+compilation at `--parallel=1`. `nuxeo-client`'s own line reports 121 s of _environment_ time
 against 12.56 s total, i.e. jsdom construction dominates and is parallelised across threads.
 
 ### 4.2 The `--coverage` defect
@@ -370,7 +371,7 @@ Nx forwards the flag and `ng` rejects it. Consequences, in order of severity:
 3. 18 spec files and 135 cases — `auth.service`, `nuxeo-auth.interceptor`,
    `session-timeout.service`, `share-token.util`, `login-page`, `profile-page`, the shell a11y
    specs, the i18n loader and locale registration, `provide-app-config`,
-   `provide-manifest-refresh`, `provide-app-extensions`, `platform-nav-items` — are measured by
+   `provide-manifest-refresh` (deleted in NXSAT-312), `provide-app-extensions`, `platform-nav-items` — are measured by
    nothing.
 
 Run without the flag, the project is healthy: `npx nx run nuxeo-ui:test` → **135 of 135 SUCCESS,
@@ -396,10 +397,10 @@ workflow runs it.
   uninstrumented files, 5 stale allowlist entries naming files now covered or gone.
 - **Four projects improved** since the baseline and have never been locked in: `adf-hx-bridge`
   +8.02 pp, `search` +3.40 pp, `collections` +0.91 pp, `knowledge-discovery` +0.91 pp.
-- The gate's own output is worth quoting because it pre-empts the misreading: "*8,819 line(s)
+- The gate's own output is worth quoting because it pre-empts the misreading: "_8,819 line(s)
   are in that state… A percentage in this table is a statement about the measured subset, not
-  about the project.*" And: "*14 of 19 measured project(s) meet 90%… Of those, 1 clears the bar
-  over fewer than 20 statements — core (7)… Substantively covered: 13.*"
+  about the project._" And: "_14 of 19 measured project(s) meet 90%… Of those, 1 clears the bar
+  over fewer than 20 statements — core (7)… Substantively covered: 13._"
 
 For context, `npm run beta:state` also exits 1 on `main`: 6 phases cite gate reports 333 commits
 behind HEAD with 179 source files changed since.
@@ -416,10 +417,10 @@ because both it and `playwright.config.ts:61-62` default to `Administrator`/`Adm
 
 Three runs per engine, single worker, `retries: 1` locally:
 
-| Engine | Cases | Run 1 | Run 2 | Run 3 | Wall | Flaky |
-| --- | --- | --- | --- | --- | --- | --- |
-| chromium | 19 | **19 passed** | 19 passed | 19 passed | 55 s / 52 s / 50 s | 0 |
-| webkit | 19 | **17 passed, 2 failed** | 17 passed, 2 failed | 17 passed, 2 failed | 98 s / 96 s / 96 s | 0 |
+| Engine   | Cases | Run 1                   | Run 2               | Run 3               | Wall               | Flaky |
+| -------- | ----- | ----------------------- | ------------------- | ------------------- | ------------------ | ----- |
+| chromium | 19    | **19 passed**           | 19 passed           | 19 passed           | 55 s / 52 s / 50 s | 0     |
+| webkit   | 19    | **17 passed, 2 failed** | 17 passed, 2 failed | 17 passed, 2 failed | 98 s / 96 s / 96 s | 0     |
 
 Both engines together, via the Nx target — the documented path, and equivalent to
 `npm run beta:e2e`:
@@ -439,13 +440,13 @@ All executed against the same served app, with `AGENTIC_UI_BASE_URL=http://local
 
 **All five fail. Exit 1, every one.**
 
-| Script | Exit | Elapsed | Failure point |
-| --- | --- | --- | --- |
-| `session-timeout.mjs` | 1 | 11 s | `TimeoutError` waiting for `.mat-mdc-snack-bar-container` |
-| `clipboard-move-scenarios.mjs` | 1 | 31 s | `locator.fill` timeout on `input[autocomplete="username"]` — **after** creating its Nuxeo fixtures |
-| `note-document-scenarios.mjs` | 1 | 65 s | `locator.waitFor` timeout on `input[autocomplete="username"]` |
-| `permission-notification.mjs` | 1 | 60 s | same, and it wrote PNGs **inside the repository** |
-| `profile-auth-verification.mjs` | 1 | 30 s | same |
+| Script                          | Exit | Elapsed | Failure point                                                                                      |
+| ------------------------------- | ---- | ------- | -------------------------------------------------------------------------------------------------- |
+| `session-timeout.mjs`           | 1    | 11 s    | `TimeoutError` waiting for `.mat-mdc-snack-bar-container`                                          |
+| `clipboard-move-scenarios.mjs`  | 1    | 31 s    | `locator.fill` timeout on `input[autocomplete="username"]` — **after** creating its Nuxeo fixtures |
+| `note-document-scenarios.mjs`   | 1    | 65 s    | `locator.waitFor` timeout on `input[autocomplete="username"]`                                      |
+| `permission-notification.mjs`   | 1    | 60 s    | same, and it wrote PNGs **inside the repository**                                                  |
+| `profile-auth-verification.mjs` | 1    | 30 s    | same                                                                                               |
 
 **Root cause, one for all five:** each navigates to `/#/login` and drives a **two-step login
 flow** — fill username → click `Continue` → fill password → click `Continue`. That flow no
@@ -470,8 +471,8 @@ Two side effects observed, each confirming a defect the static read predicted:
 Recorded in the format the plan requires. There is exactly one item.
 
 - **The 13 beta-harness evidence steps were not executed.**
-  - *Exact command:* `npm run beta:evidence -- <phase-id>` for each of the 13.
-  - *Blocker:* not a missing dependency — a scope and safety judgement. Several steps mutate
+  - _Exact command:_ `npm run beta:evidence -- <phase-id>` for each of the 13.
+  - _Blocker:_ not a missing dependency — a scope and safety judgement. Several steps mutate
     state the audit must not touch: `phase-1-config` and `phase-2-registry` rewrite
     `bootstrap.json` and the runtime manifest in the working tree and hash the built bundle;
     `phase-3-adf-hx` creates a versions fixture in the shared Nuxeo; `phase-4-platform` and
@@ -479,12 +480,12 @@ Recorded in the format the plan requires. There is exactly one item.
     not this worktree's reservation. Running them would have written files in the repository,
     contradicting the one-file constraint, and would have contended with six other live
     worktrees.
-  - *Required dependency:* a reserved port pair beyond 4210, a `dist/libs/platform` build, and
+  - _Required dependency:_ a reserved port pair beyond 4210, a `dist/libs/platform` build, and
     explicit approval to let a step modify tracked configuration files.
-  - *Recommended execution route:* run them individually under
+  - _Recommended execution route:_ run them individually under
     `AGENTIC_UI_EVIDENCE_DIR` pointed at the evidence tree, on a machine where the worktree may
     be dirtied, as part of Stage 9 in §11 rather than as part of this audit.
-  - *Affects:* **local only.** They run in no workflow today, so CI is unaffected either way.
+  - _Affects:_ **local only.** They run in no workflow today, so CI is unaffected either way.
   - They were fully analysed statically instead: assertion counts, routes visited, browser-vs-file
     character, and two live defects found in them (§9.11).
 
@@ -519,9 +520,9 @@ Recorded in the format the plan requires. There is exactly one item.
   moves between text fields and lists only, not buttons, unless Full Keyboard Access is enabled.
   The two tests encode Chromium's tab semantics.
 - **Why it is on `main`:** the `webkit` project was registered on **2026-08-25** (`c01f0e92`,
-  "cross-browser verified on Chromium and WebKit") with the config comment "*Registered only once
+  "cross-browser verified on Chromium and WebKit") with the config comment "_Registered only once
   the suite passed on it. A project that needs `test.skip` per spec reads as coverage it is
-  not.*" These two tests were added on **2026-09-17** (`d2cc4167`, `cd52fa4a`) and **2026-09-18**
+  not._" These two tests were added on **2026-09-17** (`d2cc4167`, `cd52fa4a`) and **2026-09-18**
   (`dd6b6e4b`). They post-date the claim, were validated on Chromium, and landed WebKit-red.
   Nothing ran the suite, so nothing noticed.
 - **Is it a product defect?** Judgement, not measurement, and it needs a team decision (§14.3):
@@ -536,7 +537,7 @@ Recorded in the format the plan requires. There is exactly one item.
 **`cross-browser.spec.ts:108`** — `test.skip(count === 0, 'no blob-backed thumbnails at the
 repository root on this instance')`.
 Coverage lost when it fires: everything after line 110 — the blob-decode verification, which is
-the whole test. `count === 0` is also exactly what a *completely broken blob pipeline* produces.
+the whole test. `count === 0` is also exactly what a _completely broken blob pipeline_ produces.
 The preceding guard, `expect(nuxeoSourced).toEqual([])`, is vacuous on an empty page, and the
 data assertion above it is the `'Root'` pulse check (§9.1). So a total blob-rendering regression
 would report as a **skip**, i.e. green. The test's own comment claims this cannot happen.
@@ -544,7 +545,7 @@ Did not fire in any of the six runs.
 
 **`cross-browser.spec.ts:165`** — `test.skip((await region.count()) === 0, 'no widget-body
 rendered on the landing surface')`.
-Coverage lost: the `tabindex="0"` and focus assertions for WCAG 2.1.1. This one is the *good*
+Coverage lost: the `tabindex="0"` and focus assertions for WCAG 2.1.1. This one is the _good_
 version — the file records that an earlier form selected `.widget-body[tabindex="0"]`, so
 removing the fix caused a skip rather than a failure, and that a negative control caught it. The
 residual gap is narrower: only a dashboard that renders no widgets at all skips silently.
@@ -563,7 +564,7 @@ encode a UI flow the application removed. Per-script detail in §4.6; recommenda
 - **Credentials.** `NUXEO_USER`/`NUXEO_PASS` are not exported in a fresh shell, and the suite
   still runs, because `e2e-preflight.mjs:21-22` and `playwright.config.ts:61-62` both default to
   `Administrator`/`Administrator`. This is worth recording precisely, because it cuts two ways.
-  It is *not* a hardcoded-credential violation in the sense `AGENTS/07-security.md` prohibits —
+  It is _not_ a hardcoded-credential violation in the sense `AGENTS/07-security.md` prohibits —
   the value is read from the environment first. But the fallback is the well-known default admin
   password, so (a) the suite's dependency on credentials is invisible until it is pointed at a
   non-default instance, where it will fail as 19 product failures rather than one missing
@@ -588,65 +589,65 @@ Every route in `apps/nuxeo-ui/src/app/app.routes.ts` appears exactly once across
 ### 6.1 The eight named feature modules
 
 - **browse** — `/#/browse` → `BrowseComponent`.
-  *Integration points:* folder navigation, listing, column config, context menu, permissions
+  _Integration points:_ folder navigation, listing, column config, context menu, permissions
   gating, clipboard, CSV export, thumbnails.
-  *Existing:* 12 Vitest specs / 403 cases, 99.02% lines (the best-covered feature). E2E: 3 cases,
-  of which two rely on the `'Root'` pulse check and one asserts root children are *named* without
+  _Existing:_ 12 Vitest specs / 403 cases, 99.02% lines (the best-covered feature). E2E: 3 cases,
+  of which two rely on the `'Root'` pulse check and one asserts root children are _named_ without
   ever clicking into a folder.
-  *Status:* unit complete, integration absent, E2E weak.
-  *Risk:* **Medium.** *Recommended:* service-level integration + one E2E navigation-and-write
-  journey. *Priority:* **P1.** *Effort:* Medium. *Blockers:* none.
+  _Status:_ unit complete, integration absent, E2E weak.
+  _Risk:_ **Medium.** _Recommended:_ service-level integration + one E2E navigation-and-write
+  journey. _Priority:_ **P1.** _Effort:_ Medium. _Blockers:_ none.
 
 - **search** — `/#/search` → `SearchComponent`.
-  *Integration points:* NXQL/HXQL generation, OpenSearch index, filters drawer, saved searches,
+  _Integration points:_ NXQL/HXQL generation, OpenSearch index, filters drawer, saved searches,
   quick filters, sorting, pagination, AI NL→NXQL, CSV export.
-  *Existing:* 2 Vitest specs / 111 cases, 94.56%. E2E: 3 cases, **two of which exercise nothing**
+  _Existing:_ 2 Vitest specs / 111 cases, 94.56%. E2E: 3 cases, **two of which exercise nothing**
   because `?q=` is inert (§9.1). `search.service.ts` (839 lines) has **no spec at all**.
-  *Status:* partial; the security regression guard is non-functional.
-  *Risk:* **High** — highest in the matrix. *Recommended:* service-level integration against a
-  live index, plus repair of the two inert E2E cases. *Priority:* **P0.** *Effort:* Large.
-  *Blockers:* needs a populated OpenSearch index, which `e2e-preflight` does not currently check.
+  _Status:_ partial; the security regression guard is non-functional.
+  _Risk:_ **High** — highest in the matrix. _Recommended:_ service-level integration against a
+  live index, plus repair of the two inert E2E cases. _Priority:_ **P0.** _Effort:_ Large.
+  _Blockers:_ needs a populated OpenSearch index, which `e2e-preflight` does not currently check.
 
 - **document-detail** — `/#/doc/:uid` → `DocumentDetailComponent`.
-  *Integration points:* metadata, tabs (manifest-driven), permissions, versions, publishing,
+  _Integration points:_ metadata, tabs (manifest-driven), permissions, versions, publishing,
   comments, audit, viewer, note editor, attachments.
-  *Existing:* 22 Vitest specs / 560 cases, 92.73% — the largest spec set. E2E: 3 cases, one of
+  _Existing:_ 22 Vitest specs / 560 cases, 92.73% — the largest spec set. E2E: 3 cases, one of
   which (`document-detail.spec.ts:59`) is the **correct** use of `expectSurfaceWithData`, passing
   a UID-specific title discovered via the API.
-  *Status:* unit complete, integration absent, E2E thin but sound.
-  *Risk:* **Medium.** *Recommended:* integration for the write paths — version create/restore,
-  ACL write, publish. *Priority:* **P1.** *Effort:* Large. *Blockers:* none.
+  _Status:_ unit complete, integration absent, E2E thin but sound.
+  _Risk:_ **Medium.** _Recommended:_ integration for the write paths — version create/restore,
+  ACL write, publish. _Priority:_ **P1.** _Effort:_ Large. _Blockers:_ none.
 
 - **collections** — `/#/collections/:uid` → `CollectionDetailComponent`.
-  *Existing:* 2 Vitest specs / 89 cases, 94.96%. **E2E: none.** `collection.service.ts`: no spec.
-  *Status:* unit partial, E2E absent. *Risk:* **Medium.** *Recommended:* service integration +
-  one E2E add/remove journey. *Priority:* **P2.** *Effort:* Medium. *Blockers:* none.
+  _Existing:_ 2 Vitest specs / 89 cases, 94.96%. **E2E: none.** `collection.service.ts`: no spec.
+  _Status:_ unit partial, E2E absent. _Risk:_ **Medium.** _Recommended:_ service integration +
+  one E2E add/remove journey. _Priority:_ **P2.** _Effort:_ Medium. _Blockers:_ none.
 
 - **tasks** — `/#/tasks`, `/#/tasks/:taskId` → `TasksPageComponent`.
-  *Existing:* 1 Vitest spec / 7 cases covering **only** viewer MIME handling; 43.81% lines.
+  _Existing:_ 1 Vitest spec / 7 cases covering **only** viewer MIME handling; 43.81% lines.
   `task.service.ts` and `workflow.service.ts`: no specs. **E2E: none.**
-  *Status:* weak. `completeTask`, `reassignTask`, `delegateTask`, `startWorkflow`,
+  _Status:_ weak. `completeTask`, `reassignTask`, `delegateTask`, `startWorkflow`,
   `cancelWorkflow` are untested at every tier.
-  *Risk:* **High** — a shape regression in the `PUT /task/:id` form body silently fails every
+  _Risk:_ **High** — a shape regression in the `PUT /task/:id` form body silently fails every
   approval. Mitigated only by the project being out of Beta scope.
-  *Recommended:* service integration against real workflow instances. *Priority:* **P2**
-  (P1 if workflow enters Beta scope). *Effort:* Large. *Blockers:* needs a deployed workflow model.
+  _Recommended:_ service integration against real workflow instances. _Priority:_ **P2**
+  (P1 if workflow enters Beta scope). _Effort:_ Large. _Blockers:_ needs a deployed workflow model.
 
 - **administration** — `/#/administration/**` → 9 child routes.
-  *Existing:* 3 Vitest specs / 25 cases, 62.08%. Only `users-groups` of the nine children has a
+  _Existing:_ 3 Vitest specs / 25 cases, 62.08%. Only `users-groups` of the nine children has a
   spec. **E2E: one negative case only** — `auth.spec.ts:135` asserts an anonymous visitor is
-  redirected *away*. No test ever loads the administration UI as an administrator.
-  *Status:* weak. *Risk:* **Medium** (out of Beta scope) / **High** for the NXQL console, which
+  redirected _away_. No test ever loads the administration UI as an administrator.
+  _Status:_ weak. _Risk:_ **Medium** (out of Beta scope) / **High** for the NXQL console, which
   executes arbitrary queries with no test on query construction.
-  *Recommended:* smoke E2E per child route + integration for the NXQL console and audit search.
-  *Priority:* **P2.** *Effort:* Large. *Blockers:* needs a non-admin fixture user.
+  _Recommended:_ smoke E2E per child route + integration for the NXQL console and audit search.
+  _Priority:_ **P2.** _Effort:_ Large. _Blockers:_ needs a non-admin fixture user.
 
 - **assets** — `/#/documents` → `AssetSearchResultsComponent`.
-  *Existing:* 1 Vitest spec / 7 cases over a sibling drawer; the route component itself has **no
+  _Existing:_ 1 Vitest spec / 7 cases over a sibling drawer; the route component itself has **no
   spec**. 97.40% — a figure over a measured subset that excludes three files entirely, and the
   project is one of the three absent from the ratchet baseline. **E2E: none.**
-  *Status:* weak; the percentage is misleading. *Risk:* **Medium.** *Recommended:* component spec
-  + E2E smoke. *Priority:* **P2.** *Effort:* Medium. *Blockers:* none.
+  _Status:_ weak; the percentage is misleading. _Risk:_ **Medium.** _Recommended:_ component spec
+  - E2E smoke. _Priority:_ **P2.** _Effort:_ Medium. _Blockers:_ none.
 
 - **trash** — `/#/trash` → `TrashComponent`. **See §6.2. The worst gap in the repository.**
 
@@ -665,12 +666,12 @@ Every route in `apps/nuxeo-ui/src/app/app.routes.ts` appears exactly once across
   `search()` added to fix a stale-response race (the comment describes the bug) that can be
   removed or inverted with a green build. A load-bearing ordering in `clearThumbnails()` —
   `forgetPreviews()` before revoking, so selection cannot bind revoked blob URLs into
-  `<img [src]>` — which the equivalent code in browse, search and assets *does* have tested.
+  `<img [src]>` — which the equivalent code in browse, search and assets _does_ have tested.
   Hand-rolled CSV escaping. A `JSON.parse` fallback in saved-search parsing that silently loads
   wrong filters. Facet counts computed over `pageSize: 200` while the table fetches
   `pageSize: 100`, neither asserted.
-- *Risk:* **Critical.** *Recommended:* add the `test` target first, then component + service
-  specs, then an E2E restore/purge journey. *Priority:* **P0.** *Effort:* Large. *Blockers:* none
+- _Risk:_ **Critical.** _Recommended:_ add the `test` target first, then component + service
+  specs, then an E2E restore/purge journey. _Priority:_ **P0.** _Effort:_ Large. _Blockers:_ none
   — this is pure debt.
 
 ### 6.3 Every other route
@@ -711,10 +712,10 @@ negative guard assertion only.
 **Not one Playwright case performs a write.** No test creates, modifies or deletes repository
 data; none needs teardown; none has an `afterEach`.
 
-Uncovered end to end: **upload/import** (the `Create / Import` button is asserted as *text*,
+Uncovered end to end: **upload/import** (the `Create / Import` button is asserted as _text_,
 never clicked) · **download** (no `waitForEvent('download')` anywhere) · **delete / send to
 trash** · **trash restore and permanent delete** · **permission grant and revoke** (only the
-*word* "Permissions" is asserted present) · **version create and restore** · **collection add and
+_word_ "Permissions" is asserted present) · **version create and restore** · **collection add and
 remove** · **workflow task completion** · **note editing** · **CSV export** · **login submission**
 (the form is never submitted, with valid or invalid credentials) · **logout** (the signed-out flag
 is injected directly; sign-out is never clicked) · **session timeout** · **search filters drawer**
@@ -743,45 +744,45 @@ Derived from `ls libs/shared/nuxeo-client/src/lib/services/`, not from the docum
 
 - **`document-detail.service.ts`** (851 L) — `document-detail.service.spec.ts`,
   `…operations.spec.ts`. 61 public methods, **60 invoked**. Error paths extensive (404, 403,
-  500). Uncovered: `removeAcl`. *Risk:* an ACL-deletion regression silently leaves access
-  granted. *Priority:* P2, Small.
+  500). Uncovered: `removeAcl`. _Risk:_ an ACL-deletion regression silently leaves access
+  granted. _Priority:_ P2, Small.
 - **`browse.service.ts`** (647 L) — 3 specs. 19 methods, **17 invoked**. Uncovered: `getByPath`,
   `getCollectionMembers`. Note: the 7 "error" markers in `browse.service.spec.ts` are all 403s
-  used as *intermediate steps in success paths* (the `/path/` fallback chain); there is no test
+  used as _intermediate steps in success paths_ (the `/path/` fallback chain); there is no test
   asserting that `getTreeChildren`, `copyDocuments`, `moveDocuments` or `updateDocument`
-  propagate an error. *Risk:* deep-linked browse URLs break untested. *Priority:* P2, Small.
+  propagate an error. _Risk:_ deep-linked browse URLs break untested. _Priority:_ P2, Small.
 - **`document-import.service.ts`** (1,055 L) — 15 methods, **11 invoked**. Uncovered:
-  `uploadFileToBatch`, `getEmptyDocumentWithDefaults`, `createFileFromBatch`. *Risk:* **High** —
+  `uploadFileToBatch`, `getEmptyDocumentWithDefaults`, `createFileFromBatch`. _Risk:_ **High** —
   `uploadFileToBatch` is the raw `PUT /api/v1/upload/{batch}/{index}`; a chunking or header
-  regression breaks every upload and nothing calls it directly. *Priority:* **P1**, Medium.
+  regression breaks every upload and nothing calls it directly. _Priority:_ **P1**, Medium.
 - **`user.service.ts`** (261 L) — 2 specs, **13/13 invoked**. `user.service.crud.spec.ts` has
-  error paths; `user.service.spec.ts` has none. *Risk:* Low. *Priority:* P3, Small.
+  error paths; `user.service.spec.ts` has none. _Risk:_ Low. _Priority:_ P3, Small.
 - **`settings.service.ts`** (219 L) — 2 specs, **6/6 invoked**. `settings.service.spec.ts` — the
   file covering `getLocalPermissions`, the ACL-read path — has **zero** error paths.
-  *Risk:* Medium. *Priority:* P2, Small.
+  _Risk:_ Medium. _Priority:_ P2, Small.
 - **`directory.service.ts`** (320 L) — 12 methods, **7 invoked**; **zero error paths**.
   Uncovered: `getDirectoryCatalog`, `invalidateDirectoryCatalog`, `getL10nEntries`,
-  `getEventTypes`, `getEventCategories`. *Risk:* Medium — vocabulary pickers render empty on
-  error; the audit page's event-type filter is wholly untested. *Priority:* P2, Medium.
+  `getEventTypes`, `getEventCategories`. _Risk:_ Medium — vocabulary pickers render empty on
+  error; the audit page's event-type filter is wholly untested. _Priority:_ P2, Medium.
 - **`selection.service.ts`** (160 L) — 10 methods, **4 invoked**. Uncovered: `isAllSelected`,
   `isIndeterminate`, `clear`, `resetUiState`, `setClearOnlyMode`, **`deleteSelected`**.
-  *Risk:* **High** — `deleteSelected` is a destructive bulk trash operation with no test.
-  *Priority:* **P1**, Small.
+  _Risk:_ **High** — `deleteSelected` is a destructive bulk trash operation with no test.
+  _Priority:_ **P1**, Small.
 - **`trash.service.ts`** (194 L) — 7 methods, **2 invoked**; **zero error paths**. The spec is
   exclusively NXQL-literal escaping. Uncovered: **`restoreDocument`**, **`permanentlyDelete`**,
-  `saveSearch`, `updateSearch`, `getSavedSearches`. *Risk:* **Critical**, compounding §6.2.
-  *Priority:* **P0**, Medium.
+  `saveSearch`, `updateSearch`, `getSavedSearches`. _Risk:_ **Critical**, compounding §6.2.
+  _Priority:_ **P0**, Medium.
 - **`administration.service.ts`** (287 L) — 6 methods, **1 invoked** (`searchAuditLogs`), 1 error
   path. Uncovered: `nxqlSearch`, `getNxqlTotalSize`, `listOAuth2Providers`, `listDirectoryNames`,
-  `getDefaultDomainPath`. *Risk:* High for the NXQL console. *Priority:* P2, Medium.
+  `getDefaultDomainPath`. _Risk:_ High for the NXQL console. _Priority:_ P2, Medium.
 - **`arender.service.ts`** (207 L) — **3/3 invoked, but zero HTTP**: the spec makes no
   `expectOne`/`flush` at all, covering only config validation and URL rejection.
-  `isAvailable()`'s server behaviour is untested. *Risk:* Medium. *Priority:* P2, Small.
+  `isAvailable()`'s server behaviour is untested. _Risk:_ Medium. _Priority:_ P2, Small.
 - **`browse-context.service.ts`** (86 L) — 8 methods, **6 invoked**. Uncovered: `setFromRouterUrl`,
   `setFromDocument` — precisely the entry points the router and document-detail call, so the
-  tree can desync from the URL untested. *Risk:* Medium. *Priority:* P2, Small.
-- **`content-lake-ingest.service.ts`** (362 L) — **7/7 invoked**, 1 error path. *Risk:* Low.
-  *Priority:* P3, Small.
+  tree can desync from the URL untested. _Risk:_ Medium. _Priority:_ P2, Small.
+- **`content-lake-ingest.service.ts`** (362 L) — **7/7 invoked**, 1 error path. _Risk:_ Low.
+  _Priority:_ P3, Small.
 
 ### 7.2 Services with no spec at all — 15 files, 1,721 lines
 
@@ -790,34 +791,34 @@ Ordered by size. Every one is a **P0–P2** gap depending on blast radius.
 - **`search.service.ts` — 839 L, 10 methods. The single largest untested unit in the repository.**
   Backs every search query, saved-search read and write, and the document picker. A
   query-building regression breaks `/#/search`, `/#/trash`, `/#/documents` and the note picker
-  simultaneously. *Risk:* **Critical.** *Priority:* **P0.** *Effort:* Large.
+  simultaneously. _Risk:_ **Critical.** _Priority:_ **P0.** _Effort:_ Large.
 - **`task.service.ts`** — 142 L, 7 methods including `completeTask`, `reassignTask`,
-  `delegateTask`. *Risk:* High. *Priority:* P2, Medium.
-- **`principal-permissions.service.ts`** — 133 L, `listLocalPermissionRows`. An RBAC *display*
+  `delegateTask`. _Risk:_ High. _Priority:_ P2, Medium.
+- **`principal-permissions.service.ts`** — 133 L, `listLocalPermissionRows`. An RBAC _display_
   path: misclassifying inherited as local lets a user "remove" a permission that does not exist.
-  *Risk:* **High.** *Priority:* **P1**, Small.
+  _Risk:_ **High.** _Priority:_ **P1**, Small.
 - **`workflow.service.ts`** — 87 L, 9 methods including `startWorkflow`, `cancelWorkflow`.
-  *Risk:* High. *Priority:* P2, Small.
+  _Risk:_ High. _Priority:_ P2, Small.
 - **`collection.service.ts`** — 81 L, 6 methods. Named a key service in `AGENTS.md` §3.
-  *Risk:* Medium. *Priority:* P2, Small.
+  _Risk:_ Medium. _Priority:_ P2, Small.
 - **`nuxeo-drive.service.ts`** — 80 L, 4 methods including `buildEditUrl`,
   `buildDirectTransferUrl`. URL construction for an external protocol handler; a malformed
-  `nxdrive://` URL fails silently in the OS. *Risk:* Medium. *Priority:* P2, Small.
-- **`asset.service.ts`** — 67 L. The `/#/documents` page's only query. *Risk:* Medium.
-  *Priority:* P2, Small.
-- **`content-model.service.ts`** — 54 L. Schema-driven metadata forms. *Risk:* Medium.
-  *Priority:* P2, Small.
-- **`trash-filter.service.ts`** — 48 L. Compounds §6.2. *Risk:* Medium. *Priority:* P1, Small.
+  `nxdrive://` URL fails silently in the OS. _Risk:_ Medium. _Priority:_ P2, Small.
+- **`asset.service.ts`** — 67 L. The `/#/documents` page's only query. _Risk:_ Medium.
+  _Priority:_ P2, Small.
+- **`content-model.service.ts`** — 54 L. Schema-driven metadata forms. _Risk:_ Medium.
+  _Priority:_ P2, Small.
+- **`trash-filter.service.ts`** — 48 L. Compounds §6.2. _Risk:_ Medium. _Priority:_ P1, Small.
 - **`nuxeo-api-base.ts`** — 45 L, 6 methods (`apiUrl`, `get/post/put/delete`, `nxqlSearch`).
   **The HTTP wrapper beneath every service**, with no direct test that `apiUrl` composes
-  correctly. *Risk:* **High** by blast radius, low by change frequency. *Priority:* **P1**, Small.
-- **`tag.service.ts`** — 45 L, 3 methods. *Risk:* Low. *Priority:* P3, Small.
+  correctly. _Risk:_ **High** by blast radius, low by change frequency. _Priority:_ **P1**, Small.
+- **`tag.service.ts`** — 45 L, 3 methods. _Risk:_ Low. _Priority:_ P3, Small.
 - **`document.service.ts`** — 38 L, 4 methods. Dashboard "recently edited/viewed" and the expired
-  queue. *Risk:* Low. *Priority:* P3, Small.
+  queue. _Risk:_ Low. _Priority:_ P3, Small.
 - **`asset-aggregation.service.ts`** — 23 L · **`clipboard-target.service.ts`** — 21 L ·
   **`search-aggregation.service.ts`** — 18 L. Thin signal holders. `clipboard-target` is the one
-  with teeth: a stale paste target moves documents to the wrong folder. *Risk:* Low–Medium.
-  *Priority:* P3, Small.
+  with teeth: a stale paste target moves documents to the wrong folder. _Risk:_ Low–Medium.
+  _Priority:_ P3, Small.
 
 ### 7.3 `AGENTS/01-services.md` is stale — a documentation defect
 
@@ -838,47 +839,47 @@ trusted the document.
   `AssetAggregationService`, `TrashFilterService`, `SettingsService`, `AdministrationService`.
 - `AGENTS.md` §3 advertises "23 services"; `AGENTS/00-architecture.md` and §8 of `AGENTS.md`
   advertise "All 23 services with full method signatures". There are 27 service files in that
-  directory. *Priority:* **P1**, Small. This is the file every agent and new engineer reads first.
+  directory. _Priority:_ **P1**, Small. This is the file every agent and new engineer reads first.
 
 ---
 
 ## 8. Cross-cutting concern coverage
 
-- **File upload** — *covered, narrowly.* `document-import.service.spec.ts:283-302` drives
+- **File upload** — _covered, narrowly._ `document-import.service.spec.ts:283-302` drives
   `/upload/new/default` then `POST /upload/batch-1/0`. `create-import-dialog.component.spec.ts`
   covers staged-batch orchestration, stalled and superseded uploads — against a **mocked**
   service. **Gap:** the byte transfer itself (`uploadFileToBatch`) is never called directly; no
-  test asserts the request body or headers. No E2E upload. *P1, Medium.*
-- **Download and blob lifecycle** — *well covered, and the best-covered cross-cutting concern.*
+  test asserts the request body or headers. No E2E upload. _P1, Medium._
+- **Download and blob lifecycle** — _well covered, and the best-covered cross-cutting concern._
   Renditions (`nuxeo-renditions-api.spec.ts`, incl. 404), download xpath/filename split
   (`nuxeo-download-api.spec.ts:64`), `fetchBlob`/`fetchPdfRendition`/`fetchThumbnail`/`exportZip`/
   `bulkDownload`. **Revocation on destroy is asserted, not stubbed**, in eight specs across
   document-detail, attachment preview, note image picker, search queue, search and browse.
-  **Gap:** `TrashComponent.clearThumbnails()` (§6.2), and no E2E download. *P2, Small.*
-- **RBAC and permissions** — *mixed.* Strong on ACL read/write (`nuxeo-acl.service.spec.ts`,
+  **Gap:** `TrashComponent.clearThumbnails()` (§6.2), and no E2E download. _P2, Small._
+- **RBAC and permissions** — _mixed._ Strong on ACL read/write (`nuxeo-acl.service.spec.ts`,
   `nuxeo-acl-write.spec.ts`, which explicitly covers `sys_acl` vs `sys_effectiveAcl` so inherited
   grants are not rewritten as local), seven permission utility specs, three dialog specs, and
   component gating (`browse.permissions.spec.ts`, "refuses to trash without the Remove
   permission"). **Gap: the guards.** Only `fullAdministratorGuard` has a spec
   (`admin-route.guards.spec.ts:111`). **`authGuard`, `loginGuard`, `adminGuard` and `themingGuard`
   have no unit spec** — the entire route-level authorisation layer is unit-untested, covered only
-  by one negative E2E case. Plus `principal-permissions.service.ts` (§7.2). *P0, Medium.*
-- **Pagination and sorting** — *partial.* Page index/size exercised in ten specs plus
+  by one negative E2E case. Plus `principal-permissions.service.ts` (§7.2). _P0, Medium._
+- **Pagination and sorting** — _partial._ Page index/size exercised in ten specs plus
   `paginated-total.spec.ts`. **Sorting is tested in exactly one place** — `search.spec.ts:525-556`
   (tri-state column sort, `sortBy`/`sortOrder` query-param round trip). No sorting test for
-  browse, trash, assets or any admin table. *P2, Medium.*
+  browse, trash, assets or any admin table. _P2, Medium._
 - **Retry, timeout, offline** — **effectively none, and the reason is structural.** There is **no
   `retry()`, `retryWhen()` or `timeout()` operator anywhere in `apps/` or `libs/`**. The only
   `retry` is a user-clicked button. Network-error (`status: 0`) handling appears twice:
   `browse.service.csv-poll.spec.ts:99` and `ai-error.spec.ts:37-38`. No offline or timeout
   behaviour is specified, so none can be tested. **This is a product gap surfacing as a test
-  gap** — worth raising separately from this audit. *P1, Large.*
-- **Feature flags** — *consumed everywhere, tested nowhere.* `AiFeatureFlagService` has **no spec
+  gap** — worth raising separately from this audit. _P1, Large._
+- **Feature flags** — _consumed everywhere, tested nowhere._ `AiFeatureFlagService` has **no spec
   file**; it is stubbed in six document-detail specs. Untested: the `localStorage` opt-out read,
   and a one-time migration that **forcibly re-enables AI for users who previously opted out**. A
   regression there either resurrects the opt-out bug or re-flips every existing user's choice.
-  *P1, Small.*
-- **i18n** — *covered, and well.* `app-translate-loader.spec.ts:20-169` covers upstream key
+  _P1, Small._
+- **i18n** — _covered, and well._ `app-translate-loader.spec.ts:20-169` covers upstream key
   aliasing, the folders < app catalogue < manifest-labels precedence, manifest override of an
   aliased key, and compiled-in English fallback on fetch failure.
   `register-locale-data.spec.ts:22-51` covers every advertised locale, fr/de formatting instead
@@ -886,15 +887,15 @@ trusted the document.
   `apps/nuxeo-ui`, so both are invisible to coverage (§4.2). Separately, several E2E and harness
   assertions are coupled to untranslated English literals (`'Root'`, `'Create / Import'`,
   `'Username (required)'`, English month abbreviations) and will break as localisation lands.
-  *P2, Medium.*
-- **Extension manifest Layer 0 / Layer 1** — *the best-covered area in the repository.* Four
+  _P2, Medium._
+- **Extension manifest Layer 0 / Layer 1** — _the best-covered area in the repository._ Four
   `app-config` specs and ten `extensions` specs, including error paths, a manifest patching a
   packaged id, route path validation, and rule nesting. Plus three app-level wiring specs.
   **Gap:** `nav-items.spec.ts` tests **only** Administration gating; the other 14 packaged nav
   entries — including `app.navbar.trash` — have no test that they render, route or order
   correctly. And no E2E asserts a manifest change alters runtime behaviour, which is the Beta's
-  headline customer-facing claim. *P1, Medium.*
-- **Authentication** — *strong at unit level.* `auth.service.spec.ts` covers persisted-session
+  headline customer-facing claim. _P1, Medium._
+- **Authentication** — _strong at unit level._ `auth.service.spec.ts` covers persisted-session
   restore, basic-auth hydration with `/me` 403, stale-cookie mismatch, share-token auth and
   failure, and logout clearing selection and browse context — with **real** `SelectionService`,
   `BrowseContextService` and `ClipboardTargetService`, making it the closest thing in the repo to
@@ -903,12 +904,12 @@ trusted the document.
   `session-timeout.service.spec.ts` covers idle logout, activity reset and re-arming.
   **Gaps:** the guards (above); no E2E ever submits the login form or clicks sign-out; session
   timeout has no E2E (its only coverage was `session-timeout.mjs`, which is broken — §4.6).
-  *P1, Medium.*
-- **Multi-select and bulk actions** — *partial.* `selection.service.spec.ts` covers 4 of 10
+  _P1, Medium._
+- **Multi-select and bulk actions** — _partial._ `selection.service.spec.ts` covers 4 of 10
   methods (§7.1); the topbar slot is covered. **`apps/nuxeo-ui/src/app/extensions/bulk-action.services.ts`
   has no spec** — all six handlers registered at `provide-app-extensions.ts:110-118`
   (`downloadZip`, `addToCollection`, `compare`, `addToClipboard`, `publish`, `delete`) are
-  untested, including the bulk trash confirmation. *P1, Medium.*
+  untested, including the bulk trash confirmation. _P1, Medium._
 
 ---
 
@@ -924,10 +925,10 @@ The repository's documented failure mode, found in both tiers.
 
 1. **`expectSurfaceWithData(page, 'lib-browse', 'Root')`** at `browse.spec.ts:15`, `:23` and
    `cross-browser.spec.ts:87`, `:135`, `:142`. `fixtures.ts:61-64` documents the helper as the
-   thing that distinguishes rendering from working: "*every critical-path spec asserts a piece of
+   thing that distinguishes rendering from working: "_every critical-path spec asserts a piece of
    **repository data**, which can only be there if the XHR was authenticated and Nuxeo
-   answered.*" **`'Root'` is not repository data.** `browse.ts:562` pushes
-   `{ label: 'Root', href: '/browse' }` unconditionally, *before* the `if (!doc …) return crumbs`
+   answered._" **`'Root'` is not repository data.** `browse.ts:562` pushes
+   `{ label: 'Root', href: '/browse' }` unconditionally, _before_ the `if (!doc …) return crumbs`
    on the next line, and `showBreadcrumbs()` returns `true` when there is no document. Verified
    first-hand. An empty page, a dead Nuxeo or a 403 on every XHR all satisfy it. Five of the
    helper's six `lib-browse` call sites are affected; the sixth
@@ -940,7 +941,7 @@ The repository's documented failure mode, found in both tiers.
    reset at `search.ts:938`. Nothing syncs the URL into it — confirmed by grepping every
    `drawerFilters` reference outside the search component. So both tests load the identical
    default unfiltered search. The second of them, `search.spec.ts:33`, is documented at `:34-39`
-   as "*the regression guard for the HXQL injection fixed in `hxql-literal.ts`*". **It cannot
+   as "_the regression guard for the HXQL injection fixed in `hxql-literal.ts`_". **It cannot
    fail if that security fix is reverted.** This is the single most serious individual finding:
    a non-functional guard is worse than no guard, because it occupies the slot where a real one
    would go.
@@ -951,7 +952,7 @@ The repository's documented failure mode, found in both tiers.
    `input.press('Enter')` at `:206` is a no-op, and the assertions at `:204` and `:210` are the
    same `toHaveValue(term)` with a `waitForTimeout` between them. There is no round trip.
 
-**E2E — also weak:** `auth.spec.ts:63` matches *any* button on the page via
+**E2E — also weak:** `auth.spec.ts:63` matches _any_ button on the page via
 `'button, input[type="submit"]'` + `.first()`, while `:66` and `:100` in the same file use the
 correct `button.login-submit`. `auth.spec.ts:148` is a negative URL match, so breaking the app
 entirely makes it greener. `document-detail.spec.ts:84` is `not.toContainText` on a locator that
@@ -972,7 +973,7 @@ low. The ones that exist cluster:**
   string, never that it is the right icon.
 - `providers.spec.ts:132-153` — `expect(tokens).toHaveLength(12)` against an array literal written
   two lines above, commented as guarding against a dropped port. Dropping a port from the
-  *production* provider array does not change it. The `TestBed.inject` loop beside it is the
+  _production_ provider array does not change it. The `TestBed.inject` loop beside it is the
   load-bearing half.
 - `providers.spec.ts:168-191` — `expect(exported).toBeDefined()` over static ES imports; a missing
   one fails module resolution before `it` runs.
@@ -989,13 +990,13 @@ low. The ones that exist cluster:**
 42 specs use `HttpTestingController`; 40 call `.verify()`.
 
 - **Two do not:** `document-detail.tabs.spec.ts` and `document-detail.viewer.spec.ts`. The viewer
-  spec would *fail* if `verify()` were added — its storyboard tests deliberately leave a `Subject`
+  spec would _fail_ if `verify()` were added — its storyboard tests deliberately leave a `Subject`
   pending. The tabs spec is worse in one respect: it mounts a 15-provider component and makes
   only two `expectOne` calls in ~2,000 lines, so essentially its entire HTTP surface is
   unasserted and any unanticipated request is silently swallowed.
 - **Two of the 40 are tautologies**, verified first-hand:
   `provide-app-extensions.spec.ts:57-60` and `app-shell-header-a11y.spec.ts:193-194` both do
-  `http.match(() => true).forEach(r => r.flush(…))` and *then* `http.verify()`. Flushing every
+  `http.match(() => true).forEach(r => r.flush(…))` and _then_ `http.verify()`. Flushing every
   outstanding request and verifying the queue is empty cannot report anything. That is cleanup
   spelled `verify()`, and it reads as a check. (`nuxeo-model-api.spec.ts:212` uses the same
   `match(() => true)` shape but correctly and with a comment explaining why — draining requests
@@ -1016,7 +1017,7 @@ The standard requires a 4xx/5xx test per service method. Actual, by spec:
 - **Good:** `document-detail.service.operations.spec.ts` 25/81,
   `settings.service.accounts.spec.ts` 14/27, `user.service.crud.spec.ts` 11/26,
   `browse.service.export.spec.ts` 11/20.
-- **Misleading:** `browse.service.spec.ts` shows 7 error markers, none of which test a *failing*
+- **Misleading:** `browse.service.spec.ts` shows 7 error markers, none of which test a _failing_
   call (§7.1).
 
 ### 9.4 Mock fidelity
@@ -1024,11 +1025,11 @@ The standard requires a 4xx/5xx test per service method. Actual, by spec:
 The strongest dimension, and deliberately so. `browse.spec.ts:49-61` and `search.spec.ts:52-56`
 bind mock return types to the real service:
 `getByPath: vi.fn((): ReturnType<BrowseService['getByPath']> => notConnected())`, with the
-rationale recorded — "*a fixture that has drifted from what `BrowseService` actually returns
-fails to compile rather than passing against a shape the production code would never receive*"
-— and the trap named: "*Neither shows up under `nx test`, which strips types through esbuild.*"
+rationale recorded — "_a fixture that has drifted from what `BrowseService` actually returns
+fails to compile rather than passing against a shape the production code would never receive_"
+— and the trap named: "_Neither shows up under `nx test`, which strips types through esbuild._"
 
-**What it does not protect:** method *existence* and parameter lists. `{ provide: BrowseService,
+**What it does not protect:** method _existence_ and parameter lists. `{ provide: BrowseService,
 useValue: mockBrowseService }` is not type-checked by Angular DI, so a renamed method leaves the
 mock's old key in place, the spec compiles, and production fails at runtime. And
 `document-detail.tabs.spec.ts:154-185` declares a 30-method mock with **no** `ReturnType<>`
@@ -1048,14 +1049,14 @@ concentrated in `browse.actions.spec.ts` (41), `document-detail.tabs.spec.ts` (2
 `collection-detail.spec.ts` (26), `search.spec.ts` (21). Representative:
 `document-detail.tabs.spec.ts:473-482` asserts `lastDialogData()` and
 `getDocumentPermissions` was called — both "the component called the mock" — while never
-asserting the permissions appear in `localAces()`. A test 36 lines above *does* assert resulting
+asserting the permissions appear in `localAces()`. A test 36 lines above _does_ assert resulting
 signal state, and survives a refactor of how the reload is triggered; this one does not.
 
 ### 9.6 Integration character
 
 Closest to genuine integration, in order:
 
-1. **`apps/nuxeo-ui/src/app/auth/auth.service.spec.ts:209-245`** — injects the *real*
+1. **`apps/nuxeo-ui/src/app/auth/auth.service.spec.ts:209-245`** — injects the _real_
    `SelectionService`, `BrowseContextService` and `ClipboardTargetService` and asserts a
    cross-service invariant after `logout()`. The only spec in the repository that asserts a
    multi-service invariant with nothing stubbed.
@@ -1075,7 +1076,7 @@ preserved. That is the property the missing tier should generalise (§11).
 ### 9.7 DOM vs signal testing
 
 31 specs query the DOM against a standard that says not to. **Mostly this does not matter, and
-in two cases the standard is wrong**: the a11y specs *must* read the DOM, and
+in two cases the standard is wrong**: the a11y specs _must_ read the DOM, and
 `app-shell-header-a11y.spec.ts:219-221` uses `toBeTruthy()` precisely as a guard against the
 following assertions passing vacuously — a legitimate use, and not counted in §9.1. Where it does
 matter: `login-page.component.spec.ts` (46 DOM references, e.g. asserting
@@ -1094,9 +1095,9 @@ presence) use DOM queries as a substitute for state assertions.
 - Three separate `ace()` builders exist.
 
 Roughly half the suite duplicates fixtures inline and the other half duplicates the factory that
-builds them. The authors knew the cost — `nuxeo-document-api.spec.ts:39-41` records that "*every
+builds them. The authors knew the cost — `nuxeo-document-api.spec.ts:39-41` records that "_every
 optional-looking field on `NuxeoAce` is in fact required, so a partial literal only compiles
-behind a cast — which is what hid an incomplete fixture here*" — but the lesson was learned
+behind a cast — which is what hid an incomplete fixture here_" — but the lesson was learned
 per-file and never extracted. This is the root cause of §9.4's residual drift risk.
 
 ### 9.9 Flakiness risk (none observed, nine specs at risk)
@@ -1104,7 +1105,7 @@ per-file and never extracted. This is the root cause of §9.4's residual drift r
 Zero flaky verdicts across the full Vitest suite and three runs per Playwright engine. The risk
 is latent:
 
-- **`provide-manifest-refresh.spec.ts:128`** — a real `setTimeout(resolve, 2600)` wall-clock sleep
+- **`provide-manifest-refresh.spec.ts:128`** (deleted with the refresh in NXSAT-312) — a real `setTimeout(resolve, 2600)` wall-clock sleep
   waiting on 2,000 ms of production backoff. A 600 ms margin on a loaded runner. The sibling at
   `:140` sleeps 1,200 ms. **This is in `apps/nuxeo-ui`, where `fakeAsync`/`tick` is available and
   already used** in `session-timeout.service.spec.ts:64` — so it is an inconsistency, not a
@@ -1177,7 +1178,7 @@ image. Four defects nonetheless:
   becomes a suite nobody ever wires into CI.
 - **QW2 (P0, Small).** Make `expectSurfaceWithData` incapable of being passed a constant. Change
   the signature so the expected text must come from an API-discovered value — the
-  `document-detail.spec.ts:54` pattern — and fix the five `'Root'` call sites. *Trade-off:* each
+  `document-detail.spec.ts:54` pattern — and fix the five `'Root'` call sites. _Trade-off:_ each
   browse spec needs a cheap NXQL round trip in a fixture, adding ~200 ms per spec.
 - **QW3 (P0, Small).** Make the `?q=` specs exercise the real path by driving the filters drawer
   instead of the URL, **or** — better, and worth a separate ticket — make the search component
@@ -1187,7 +1188,7 @@ image. Four defects nonetheless:
   unblocks every other trash recommendation and today makes writing a trash spec pointless.
 - **QW5 (P1, Small).** Remove `--coverage` incompatibility: either give `nuxeo-ui` a
   `karma-coverage` reporter and accept the flag, or exclude it explicitly from the run-many in
-  `sonarcloud.yml`. Today the command fails silently on every PR. *Trade-off:* the honest fix is
+  `sonarcloud.yml`. Today the command fails silently on every PR. _Trade-off:_ the honest fix is
   QW6, of which this is the interim.
 - **QW6 (P1, Small).** Delete the two flush-then-verify `afterEach` bodies or rename them to
   `drainPendingRequests()`. As written, two files read as having HTTP verification and have none.
@@ -1202,7 +1203,7 @@ image. Four defects nonetheless:
 - **QW10 (P1, Small).** Reconcile `AGENTS/01-services.md` with disk (§7.3) and correct the "23
   services" claim in `AGENTS.md`. Also record in `AGENTS/05-test-standards.md` and `CLAUDE.md`
   that `apps/nuxeo-ui` runs Karma, not Vitest.
-- **QW11 (P2, Small).** Replace the six real sleeps in `provide-manifest-refresh.spec.ts` and
+- **QW11 (P2, Small).** Replace the six real sleeps in `provide-manifest-refresh.spec.ts` (since deleted) and
   `browse.actions.spec.ts` with `fakeAsync`/`tick`, and wrap
   `document-detail.tabs.spec.ts:1223-1268` in `vi.useFakeTimers()` with a fixed system time.
   Removes ~5 s of wall clock and the two most load-sensitive tests.
@@ -1214,17 +1215,17 @@ image. Four defects nonetheless:
 
 ### 10.2 Architectural changes
 
-- **AC1 — Build the integration tier (§11).** *Trade-off:* a new tier needs a live Nuxeo, which
+- **AC1 — Build the integration tier (§11).** _Trade-off:_ a new tier needs a live Nuxeo, which
   is the reason none exists. The mitigation is the two-track design in §11.1.
-- **AC2 — Extract `libs/shared/testing` with typed factories.** *Trade-off:* it is a coupling
+- **AC2 — Extract `libs/shared/testing` with typed factories.** _Trade-off:_ it is a coupling
   point, and `eslint.config.mjs`'s `depConstraints` need a `type:testing` tag every project may
   depend on, which weakens the boundary the constraints exist to enforce. There is also a real
   risk of a god-object with 40 optional overrides, at which point it is harder to read than the
   inline literals. Mitigate by keeping one factory per model and requiring every field to be
   filled — the `nuxeo-document-api.spec.ts:39-41` discipline — with no `Partial<>` escape hatch.
 - **AC3 — Move `apps/nuxeo-ui` to Vitest.** Ends the two-runner split, the invisible-coverage
-  problem and the Jasmine-matcher island in one move. *Trade-off: the migration is not free, and
-  the hard part is specific.* Karma runs in real Chrome, so
+  problem and the Jasmine-matcher island in one move. _Trade-off: the migration is not free, and
+  the hard part is specific._ Karma runs in real Chrome, so
   `app-shell-header-a11y.spec.ts`'s focusability census (`element.focus()`, `document.activeElement`,
   reasoning about `display:none` above 675 px) and `login-page.component.spec.ts`'s 46 DOM
   assertions depend on real layout and focus semantics that jsdom models weakly. Expect to keep a
@@ -1233,7 +1234,7 @@ image. Four defects nonetheless:
 - **AC4 — Typecheck spec files, and gate per-service coverage rather than per-project.** Three
   separate spec comments independently record that Vitest strips types through esbuild so a
   type-broken spec stays green; `CLAUDE.md` names it as one of two traps that cost a phase. The
-  mitigation so far is per-file discipline three authors reinvented. *Trade-off:* a per-service
+  mitigation so far is per-file discipline three authors reinvented. _Trade-off:_ a per-service
   gate blocks PRs on pre-existing debt — 15 spec-less services is weeks of work. The honest
   sequencing is to ratchet: record today's per-service state as the floor, fail only on
   regression, and burn down on a schedule. A gate everyone routes around is worse than no gate,
@@ -1246,20 +1247,20 @@ image. Four defects nonetheless:
 ### 11.1 The central decision: real Nuxeo, or contract tests against fixtures?
 
 **Recommendation: both, in that order — a real-Nuxeo service-level suite as the primary tier, with
-recorded fixtures generated *from* it as a fast per-PR subset.** Argued rather than asserted:
+recorded fixtures generated _from_ it as a fast per-PR subset.** Argued rather than asserted:
 
 - **Real-Nuxeo only** catches what matters — actual response shapes, enrichers, error envelopes,
   NXQL the server accepts, permission semantics. But it cannot run on a GitHub-hosted runner
   today. `a11y.yml`'s trailing comment sets out exactly why, and the reasoning transfers without
-  modification: `backend-preflight.mjs` says in as many words "*this repo has no compose file, so
-  the stack was created by hand and cannot be recreated*", it can only `docker start` an existing
+  modification: `backend-preflight.mjs` says in as many words "_this repo has no compose file, so
+  the stack was created by hand and cannot be recreated_", it can only `docker start` an existing
   container, and Nuxeo images come from the private `packages.nuxeo.com` for which this repository
   holds no credentials. A tier that can only run on one developer's machine gets bypassed and
   then ignored — `coverage-gate.mjs` says so in its own header.
-- **Fixtures only** runs anywhere and is fast, but it tests our *belief* about Nuxeo's responses.
+- **Fixtures only** runs anywhere and is fast, but it tests our _belief_ about Nuxeo's responses.
   When the server changes, the fixtures do not, and the suite stays green while production
   breaks. That is the same failure class as §9.1, one level up.
-- **Both, with fixtures *recorded from* the real suite**, resolves the tension: the recorded
+- **Both, with fixtures _recorded from_ the real suite**, resolves the tension: the recorded
   tier runs per-PR on any runner; the real tier runs nightly and, when a recorded response no
   longer matches the server, **fails the recording, not the test** — so drift surfaces as a
   specific, actionable diff rather than as silent staleness.
@@ -1274,63 +1275,63 @@ exit-2 precondition convention, the port and data-root isolation in
 Each has an objective, scope, effort, risks, acceptance criteria and a verification command.
 Dependencies are stated; stages 1–3 are prerequisites for everything after.
 
-**Stage 1 — Unblock measurement.** *P0, Small.* Add the `test` target to `trash` (QW4); fix the
+**Stage 1 — Unblock measurement.** _P0, Small._ Add the `test` target to `trash` (QW4); fix the
 `--coverage` failure (QW5); add `assets`, `shared-ai-client`, `tasks` to the ratchet baseline and
 clear the 5 stale allowlist entries so `beta:coverage` is green and meaningful.
-*Acceptance:* `npm run beta:coverage` exits 0; `nx run-many -t test --coverage` exits 0;
-`nx show projects --with-target test` returns 21. *Verify:* those three commands.
-*Risk:* low. *Depends on:* nothing.
+_Acceptance:_ `npm run beta:coverage` exits 0; `nx run-many -t test --coverage` exits 0;
+`nx show projects --with-target test` returns 21. _Verify:_ those three commands.
+_Risk:_ low. _Depends on:_ nothing.
 
-**Stage 2 — Stop the bleeding in the existing tiers.** *P0, Medium.* QW1, QW2, QW3, QW6, QW7,
-QW8, QW9, QW12. *Acceptance:* `nx run nuxeo-ui-e2e:e2e` exits 0 on both engines; the
+**Stage 2 — Stop the bleeding in the existing tiers.** _P0, Medium._ QW1, QW2, QW3, QW6, QW7,
+QW8, QW9, QW12. _Acceptance:_ `nx run nuxeo-ui-e2e:e2e` exits 0 on both engines; the
 bogus-credentials control fails ≥5 specs; `beta:audit` scans 25 additional files and is still
-green. *Verify:* `npx nx run nuxeo-ui-e2e:e2e`, the new control script, `npm run beta:audit`.
-*Risk:* QW1 may surface a genuine a11y defect requiring a product change (§14.3).
+green. _Verify:_ `npx nx run nuxeo-ui-e2e:e2e`, the new control script, `npm run beta:audit`.
+_Risk:_ QW1 may surface a genuine a11y defect requiring a product change (§14.3).
 
-**Stage 3 — `libs/shared/testing`.** *P1, Medium.* AC2. Typed factories for `NuxeoDocument`,
+**Stage 3 — `libs/shared/testing`.** _P1, Medium._ AC2. Typed factories for `NuxeoDocument`,
 `NuxeoAce`, `NuxeoComment`, audit entry, result page; the `scope:shared`/`type:testing` tags and
 the `depConstraints` edge. Migrate the three duplicate document builders first as proof.
-*Acceptance:* three specs migrated with no behaviour change; a deliberate field-type change in the
-model breaks compilation in exactly one file. *Verify:* `nx affected -t typecheck`, plus that
-negative control run by hand. *Depends on:* Stage 1.
+_Acceptance:_ three specs migrated with no behaviour change; a deliberate field-type change in the
+model breaks compilation in exactly one file. _Verify:_ `nx affected -t typecheck`, plus that
+negative control run by hand. _Depends on:_ Stage 1.
 
-**Stage 4 — Integration harness and the precondition contract.** *P1, Medium.* A new
+**Stage 4 — Integration harness and the precondition contract.** _P1, Medium._ A new
 `libs/integration-tests` project with its own target, reusing `e2e-preflight`'s exit-2 convention:
 refuse to run against an absent or empty Nuxeo, and **refuse to run against the default
 credentials without an explicit opt-in flag**, closing §5.4. Per-run data root under
 `/default-domain/workspaces/it-<runid>` with guaranteed teardown, so the fixture leak in §4.6
-cannot recur. *Acceptance:* the harness exits 2 with a specific message for each of: no Nuxeo,
+cannot recur. _Acceptance:_ the harness exits 2 with a specific message for each of: no Nuxeo,
 empty Nuxeo, missing credentials; and a run that creates documents leaves none behind.
-*Verify:* four deliberate negative controls. *Depends on:* Stage 3.
+_Verify:_ four deliberate negative controls. _Depends on:_ Stage 3.
 
-**Stage 5 — Search and query contract.** *P0, Large.* The highest-risk gap (§6.1, §7.2).
+**Stage 5 — Search and query contract.** _P0, Large._ The highest-risk gap (§6.1, §7.2).
 `SearchService` (839 L) and `nuxeo-api-base.ts` against live Nuxeo and OpenSearch: NXQL and HXQL
 generation including the injection cases `hxql-literal.ts` guards, quick filters, drawer filters,
 sorting, pagination, saved-search CRUD, the document picker, empty and error results.
-*Acceptance:* every public method of both services exercised against the server, including at
-least one 4xx and one 5xx; reverting the `hxql-literal` fix turns the suite red. *Verify:* that
-revert, run as a negative control. *Risk:* index staleness — the harness must assert index
+_Acceptance:_ every public method of both services exercised against the server, including at
+least one 4xx and one 5xx; reverting the `hxql-literal` fix turns the suite red. _Verify:_ that
+revert, run as a negative control. _Risk:_ index staleness — the harness must assert index
 freshness, not just repository content.
 
-**Stage 6 — Write paths and destructive operations.** *P0, Large.* Upload
+**Stage 6 — Write paths and destructive operations.** _P0, Large._ Upload
 (`uploadFileToBatch` end to end), download, trash/restore/permanent-delete,
 `SelectionService.deleteSelected`, bulk actions. Every case creates its own fixture and tears it
-down. *Acceptance:* each operation verified by a follow-up API query, not by a UI assertion.
-*Verify:* the suite plus a leak check that the data root is empty afterwards.
+down. _Acceptance:_ each operation verified by a follow-up API query, not by a UI assertion.
+_Verify:_ the suite plus a leak check that the data root is empty afterwards.
 
-**Stage 7 — RBAC and the guards.** *P1, Large.* `authGuard`, `loginGuard`, `adminGuard`,
+**Stage 7 — RBAC and the guards.** _P1, Large._ `authGuard`, `loginGuard`, `adminGuard`,
 `themingGuard` unit specs (§8), plus integration for `principal-permissions.service.ts`, ACL
 read/write against real inherited-vs-local ACLs, and **a non-administrator fixture user** — the
 one missing ingredient that makes every permission branch currently untestable, since
 `fixtures.ts` hardcodes `isAdministrator` and `groups: []`.
-*Acceptance:* every guard has a redirect test; at least one test runs as a non-admin and is
-denied. *Risk:* creating and cleaning up a Nuxeo user per run.
+_Acceptance:_ every guard has a redirect test; at least one test runs as a non-admin and is
+denied. _Risk:_ creating and cleaning up a Nuxeo user per run.
 
-**Stage 8 — Feature-level workflows.** *P1, Large.* Collections membership, document-detail write
+**Stage 8 — Feature-level workflows.** _P1, Large._ Collections membership, document-detail write
 paths (versions, publish, ACL), notes, CSV export, and the trash component (§6.2). Plus the
 `AiFeatureFlagService` opt-out and its one-time migration (§8).
 
-**Stage 9 — Fold in the orphans and the harness.** *P2, Medium.* Per §13: promote
+**Stage 9 — Fold in the orphans and the harness.** _P2, Medium._ Per §13: promote
 `session-timeout.mjs` and `clipboard-move-scenarios.mjs`, convert `note-document-scenarios.mjs`,
 delete the other two. Bring the 13 evidence steps under a scheduled run so §4.7 stops being an
 unexecuted tier, and execute them as part of this stage's acceptance.
@@ -1345,14 +1346,14 @@ Add to `ci.yml`'s existing `lint-build-test` job — cheap, deterministic, no Nu
 
 - **`npm run beta:coverage`** — after Stage 1 makes it green. It is the ratchet the repository
   already built and the only thing that stops coverage rotting; it currently runs nowhere.
-  *P0, Small.*
+  _P0, Small._
 - **The recorded-fixture integration subset** (§11.1) once Stage 5 exists. Target under 3 minutes.
-  *P1, Medium.*
-- **The typecheck-specs gate** (AC4). *P1, Small.*
+  _P1, Medium._
+- **The typecheck-specs gate** (AC4). _P1, Small._
 - **Not Playwright.** It needs a live Nuxeo and a served app. Forcing it into the per-PR gate
   makes the gate red on every machine without the Docker stack, and `coverage-gate.mjs` already
-  records what happens then: "*a gate that cannot pass gets bypassed and then ignored. That is
-  worse than no gate.*"
+  records what happens then: "_a gate that cannot pass gets bypassed and then ignored. That is
+  worse than no gate._"
 
 ### 12.2 What runs nightly
 
@@ -1366,14 +1367,14 @@ reporting, published artifacts, a deliberately-broken-spec check, and keeping Pl
    a nightly job is roughly **12–15 minutes**. That is comfortably nightly-affordable and,
    notably, **also affordable per-PR** if a service container can be stood up at all — which is
    the real constraint, not wall clock.
-2. **The per-PR subset decision NXSAT-231 leaves open.** *Recommendation: do not take a subset of
-   the Playwright suite per-PR.* At 165 s for the whole thing, a subset saves nothing worth the
+2. **The per-PR subset decision NXSAT-231 leaves open.** _Recommendation: do not take a subset of
+   the Playwright suite per-PR._ At 165 s for the whole thing, a subset saves nothing worth the
    cost of maintaining a tag taxonomy and the risk of the untagged half rotting. Either the
    service container works — in which case run all 38 — or it does not, in which case run none.
    The per-PR fast tier should be the recorded-fixture integration subset (§12.1), which needs no
    container at all.
 3. **The evidence this audit produced that sizes NXSAT-231's own acceptance criterion.** Its
-   criterion is "*a deliberately broken spec has been observed to turn the job red*". **Two specs
+   criterion is "_a deliberately broken spec has been observed to turn the job red_". **Two specs
    are already broken on WebKit** (§5.1), so that criterion can be met with a real regression
    rather than a synthetic one — and the job's first run will be red, which is the correct
    outcome and should be expected rather than treated as a wiring failure.
@@ -1409,8 +1410,8 @@ single highest-leverage decision in the roadmap** and is item 1 in §14.3.
   argues against absorbing them. Baseline from this audit: **zero flaky across six runs**, so any
   flake in the first nightly runs is new and attributable.
 - **`workers: 1` should be revisited, but not yet.** Its stated justification —
-  "*these share one Nuxeo repository, and parallel specs that create or trash documents would
-  interfere*" — describes a hazard the suite does not have, since no spec writes anything. But
+  "_these share one Nuxeo repository, and parallel specs that create or trash documents would
+  interfere_" — describes a hazard the suite does not have, since no spec writes anything. But
   Stage 6 introduces exactly that hazard deliberately. **Leave `workers: 1` and re-examine after
   Stage 6**, when per-run data-root isolation (Stage 4) makes parallelism safe.
 - **Reporting.** NXSAT-231 already requires failures to reach somewhere a person sees. Adding the
@@ -1430,49 +1431,49 @@ priorities they produce are labelled as such in §14.
 
 ### P0 — before Beta
 
-- **R1. Make `nx run nuxeo-ui-e2e:e2e` green.** Stage 2 / QW1. *Small.* *Acceptance:* exit 0 on
+- **R1. Make `nx run nuxeo-ui-e2e:e2e` green.** Stage 2 / QW1. _Small._ _Acceptance:_ exit 0 on
   both engines, and the chosen resolution (product fix vs engine-scoped assertion) recorded in
   the spec.
-- **R2. Repair the assertions that cannot fail.** QW2, QW3, QW12. *Medium.* *Acceptance:*
+- **R2. Repair the assertions that cannot fail.** QW2, QW3, QW12. _Medium._ _Acceptance:_
   reverting the `hxql-literal` fix turns the suite red; the bogus-credentials control fails ≥5
   specs; no `expectSurfaceWithData` call site passes a constant.
 - **R3. Give `trash` a test target and cover restore/permanent-delete.** QW4 + Stage 6.
-  *Large.* *Acceptance:* `nx test trash` runs; both destructive operations covered at service and
+  _Large._ _Acceptance:_ `nx test trash` runs; both destructive operations covered at service and
   component level; the blob-URL ordering in `clearThumbnails()` has a regression test.
-- **R4. Test `SearchService` and `nuxeo-api-base.ts`.** Stage 5. *Large.* *Acceptance:* every
+- **R4. Test `SearchService` and `nuxeo-api-base.ts`.** Stage 5. _Large._ _Acceptance:_ every
   public method exercised, with 4xx and 5xx paths.
-- **R5. Fix `--coverage` and green the ratchet, then run it in CI.** Stage 1 + §12.1. *Small.*
-  *Acceptance:* `beta:coverage` exits 0 locally and blocks a PR that regresses a project.
-- **R6. Decide the CI container route.** §12.3. *Medium* to decide, *Large* to implement.
-  *Acceptance:* a documented decision, and a nightly job observed to run green once.
+- **R5. Fix `--coverage` and green the ratchet, then run it in CI.** Stage 1 + §12.1. _Small._
+  _Acceptance:_ `beta:coverage` exits 0 locally and blocks a PR that regresses a project.
+- **R6. Decide the CI container route.** §12.3. _Medium_ to decide, _Large_ to implement.
+  _Acceptance:_ a documented decision, and a nightly job observed to run green once.
 
 ### P1 — before GA
 
-- **R7. Build Stages 3, 4, 6, 7.** *Very Large* in aggregate. The integration tier itself.
-- **R8. Unit-test the four route guards.** §8. *Medium.* The whole route-authorisation layer.
+- **R7. Build Stages 3, 4, 6, 7.** _Very Large_ in aggregate. The integration tier itself.
+- **R8. Unit-test the four route guards.** §8. _Medium._ The whole route-authorisation layer.
 - **R9. Cover `principal-permissions.service.ts`, `selection.service.deleteSelected`,
-  `uploadFileToBatch`, `bulk-action.services.ts`, `AiFeatureFlagService`.** *Medium.* Five
+  `uploadFileToBatch`, `bulk-action.services.ts`, `AiFeatureFlagService`.** _Medium._ Five
   targeted gaps with real blast radius.
-- **R10. Fix the harness defects.** QW8, QW9. *Small.* `assertion-audit.mjs` scanning a
+- **R10. Fix the harness defects.** QW8, QW9. _Small._ `assertion-audit.mjs` scanning a
   non-existent directory is a green gate looking in the wrong place.
-- **R11. Make credential dependence explicit.** §5.4. *Small.* Keep the `Administrator` default
-  for local convenience but have the preflight *warn* when the default is in use and *fail* when
+- **R11. Make credential dependence explicit.** §5.4. _Small._ Keep the `Administrator` default
+  for local convenience but have the preflight _warn_ when the default is in use and _fail_ when
   an explicit `IT_REQUIRE_EXPLICIT_CREDENTIALS=1` is set, as CI would.
-- **R12. Reconcile `AGENTS/01-services.md` and document the Karma runner.** QW10. *Small.*
-- **R13. Extract `libs/shared/testing`.** AC2. *Medium.*
+- **R12. Reconcile `AGENTS/01-services.md` and document the Karma runner.** QW10. _Small._
+- **R13. Extract `libs/shared/testing`.** AC2. _Medium._
 
 ### P2 — next quarter
 
-- **R14. `apps/nuxeo-ui` to Vitest.** AC3. *Large.* *Trade-off in §10.2.*
-- **R15. Typecheck specs; ratchet per-service coverage.** AC4. *Medium.*
+- **R14. `apps/nuxeo-ui` to Vitest.** AC3. _Large._ _Trade-off in §10.2._
+- **R15. Typecheck specs; ratchet per-service coverage.** AC4. _Medium._
 - **R16. E2E coverage for the four uncovered routes** — collections, tasks, documents, trash.
-  *Large.*
-- **R17. Stage 9 — resolve the orphans and schedule the harness.** *Medium.* Per script:
-  *promote* `session-timeout.mjs` (the only asserting coverage of idle-session expiry anywhere,
-  and its assertions are already hard failures); *promote* `clipboard-move-scenarios.mjs` **with
+  _Large._
+- **R17. Stage 9 — resolve the orphans and schedule the harness.** _Medium._ Per script:
+  _promote_ `session-timeout.mjs` (the only asserting coverage of idle-session expiry anywhere,
+  and its assertions are already hard failures); _promote_ `clipboard-move-scenarios.mjs` **with
   teardown added and its `PARTIAL` status changed to `FAIL`** (real UI-plus-API verification of a
   refresh bug nothing else covers, but it leaks fixtures — demonstrated in §4.6 — and its
-  headline check is decorative); *convert* `note-document-scenarios.mjs` to a beta-harness step
+  headline check is decorative); _convert_ `note-document-scenarios.mjs` to a beta-harness step
   (it is an evidence capture reimplementing `phase-runner.mjs`); **delete**
   `permission-notification.mjs` (its unique assertions match success and failure identically —
   `waitForSnackbar(page, /notification sent|could not be sent/i)` — and it is hardwired to a named
@@ -1481,18 +1482,18 @@ priorities they produce are labelled as such in §14.
   `cross-browser.spec.ts:131`; its unique half compares two functionally identical extractors at a
   `WARN` severity that can never fail the run). All five must be fixed or deleted — leaving them
   implies coverage that does not exist.
-- **R18. Remaining service specs and error paths.** §7.1, §9.3. *Large.*
-- **R19. Sorting coverage beyond search; pagination consistency.** *Medium.*
+- **R18. Remaining service specs and error paths.** §7.1, §9.3. _Large._
+- **R19. Sorting coverage beyond search; pagination consistency.** _Medium._
 
 ### P3 — nice to have
 
-- **R20.** De-flake the latent timing risks (QW11). *Small.*
+- **R20.** De-flake the latent timing risks (QW11). _Small._
 - **R21.** Delete the two Nx-scaffold smoke specs (`core.spec.ts`, `ui.spec.ts`) and fix the
-  misleading titles in §9.10. *Small.*
+  misleading titles in §9.10. _Small._
 - **R22.** Specify and then test retry/timeout/offline behaviour (§8) — a product decision first.
-  *Large.*
+  _Large._
 - **R23.** Decouple E2E assertions from untranslated English literals ahead of localisation.
-  *Medium.*
+  _Medium._
 
 ---
 
@@ -1574,13 +1575,13 @@ Each phase passed its own verification before the next began. Full blocks are at
   source; three subagent claims corrected by that check.
 - **Phase 6 — Implementation scope.** Nine stages (§11), each with objective, scope, effort,
   risks, acceptance criteria and verification command; the real-Nuxeo-vs-fixtures decision argued
-  with the constraint that settles it. *Verification:* every P0/P1 gap in §6–§8 maps to at least
+  with the constraint that settles it. _Verification:_ every P0/P1 gap in §6–§8 maps to at least
   one stage — checked by walking §6.4's workflow list and §7.2's service list against §11.2.
 - **Phase 7 — CI/CD plan.** §12. Defers to NXSAT-231 for the E2E half and contributes measured
-  sizing, the per-PR subset recommendation, and the shared-container argument. *Verification:*
+  sizing, the per-PR subset recommendation, and the shared-container argument. _Verification:_
   NXSAT-231 was fetched and read in full; §12.2 restates none of its scope.
 - **Phase 8 — Deliverable.** All 15 sections present; P0–P3 and Small/Very Large throughout;
-  assumptions labelled in §14.1. *Verification:* the contents list was walked against the
+  assumptions labelled in §14.1. _Verification:_ the contents list was walked against the
   document.
 
 ### 15.2 Final verification checklist

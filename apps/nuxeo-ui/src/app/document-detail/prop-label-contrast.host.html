@@ -1,7 +1,3 @@
-<aside class="properties-panel">
-  <div class="prop-field">
-    <span class="prop-label">Title</span>
-    <span class="prop-value">Sample document</span>
-  </div>
-  <button type="button" class="sub-tab sub-tab--active">Properties</button>
-</aside>
+<nxs-details-panel class="properties-panel" [heading]="heading" [tabs]="views">
+  <nxs-properties-panel class="detail-properties" [document]="document" />
+</nxs-details-panel>

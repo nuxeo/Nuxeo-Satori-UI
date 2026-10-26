@@ -16,7 +16,7 @@ import {
   type NuxeoGroupList,
   type NuxeoUser,
   type NuxeoUserList,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { AdminUsersGroupsPageComponent } from './admin-users-groups-page.component';

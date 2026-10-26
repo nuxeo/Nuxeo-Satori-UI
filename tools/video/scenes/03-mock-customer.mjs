@@ -35,19 +35,12 @@ import { join } from 'node:path';
 
 import { caption, hideCode, showCode } from '../mock-customer/captions.mjs';
 import { serveAppWithNuxeoProxy } from '../mock-customer/serve-app.mjs';
-import {
-  ACME_WORKSPACE_PATH,
-  check,
-  clearManifest,
-  writeManifest,
-} from '../mock-customer/seed-nuxeo.mjs';
+import { ACME_WORKSPACE_PATH, check } from '../mock-customer/seed-nuxeo.mjs';
+import { requireNuxeoCredentials } from '../../../scripts/beta-harness/nuxeo-credentials.mjs';
 
 const APP_PORT = 4413;
 const CONFIG = 'agentic-ui-config/bootstrap.json';
-
-/** Credentials for the local Docker instance, from the environment. */
-const USER = process.env['NUXEO_USER'] ?? 'Administrator';
-const PASS = process.env['NUXEO_PASS'] ?? 'Administrator';
+const MANIFEST = 'agentic-ui-config/manifest.json';
 
 const CLAIMS_PATH = `${ACME_WORKSPACE_PATH}/claims`;
 
@@ -91,7 +84,7 @@ const NORTHWIND_BRANDING = {
 };
 
 /**
- * Acme's Layer 1 manifest, written to a **Nuxeo document**, not a file.
+ * Acme's Layer 1 manifest fragment, as their configuration package contributes it.
  *
  * One override of each kind the registry supports, against ids the build knows and
  * one id the build has never heard of being renamed — `acme.navbar.acmeExtensions`
@@ -110,7 +103,11 @@ const ACME_MANIFEST = {
 };
 
 /**
- * Rewrite branches of the served `bootstrap.json`.
+ * Rewrite branches of the template's bootstrap fragment in the served `bootstrap.json`.
+ *
+ * The file is the configuration servlet's envelope; the template's values are its
+ * one fragment, standing in for the bootstrap fragment of Acme's configuration
+ * package.
  *
  * `themes` is merged **by id** rather than assigned, and that is not a nicety: the
  * first cut used `Object.assign` alone, which replaced the file's themes with the
@@ -122,11 +119,31 @@ const ACME_MANIFEST = {
  */
 function patchConfig(dir, patch) {
   const path = join(dir, CONFIG);
-  const config = JSON.parse(readFileSync(path, 'utf8'));
+  const envelope = JSON.parse(readFileSync(path, 'utf8'));
+  const config = envelope.fragments.at(-1).content;
   const existingThemes = Array.isArray(config.themes) ? config.themes : [];
   Object.assign(config, patch);
   config.themes = mergeThemesById(existingThemes, patch.themes ?? []);
-  writeFileSync(path, `${JSON.stringify(config, null, 2)}\n`);
+  writeFileSync(path, `${JSON.stringify(envelope, null, 2)}\n`);
+}
+
+/** Serve `manifest` as Acme's manifest fragment, or no fragment at all for `null`. */
+function writeManifest(dir, manifest) {
+  const path = join(dir, MANIFEST);
+  const envelope = JSON.parse(readFileSync(path, 'utf8'));
+  envelope.fragments =
+    manifest === null
+      ? []
+      : [
+          {
+            name: 'acme',
+            component: 'com.acme.insurance.config',
+            bundle: 'com.acme.insurance.config',
+            source: 'agentic-ui-config/manifest.json',
+            content: manifest,
+          },
+        ];
+  writeFileSync(path, `${JSON.stringify(envelope, null, 2)}\n`);
 }
 
 /** Same rule as `mergeBootstrapConfig`: later wins per id, unknown ids append. */
@@ -140,8 +157,12 @@ function mergeThemesById(existing, incoming) {
   return merged;
 }
 
-/** Sign in, on camera, with a credential typed rather than injected. */
-async function signIn(page, hold) {
+/**
+ * Sign in, on camera, with a credential typed rather than injected.
+ *
+ * @param {{ username: string, password: string }} credentials from `run`, which requires them
+ */
+async function signIn(page, hold, { username, password }) {
   await page.waitForSelector('.sign-in', { timeout: 45000 });
   await caption(
     page,
@@ -151,17 +172,21 @@ async function signIn(page, hold) {
   await hold(page, 5000);
 
   await page.click('input[name="username"]');
-  await page.type('input[name="username"]', USER, { delay: 90 });
+  await page.type('input[name="username"]', username, { delay: 90 });
   await page.click('input[name="password"]');
-  await page.type('input[name="password"]', PASS, { delay: 70 });
+  await page.type('input[name="password"]', password, { delay: 70 });
   await hold(page, 1200);
   await page.click('.sign-in__submit');
 }
 
 export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
+  // Credentials for the local Docker instance, from the environment with no default — both used
+  // to fall back to its administrator pair (NXSAT-649). First, because everything below needs
+  // them: `check()` reads the repository and the sign-in types them on camera.
+  const credentials = requireNuxeoCredentials('record the 03-mock-customer scene');
+
   // ---- refuse to record a lie -------------------------------------------------
   await check({ quiet: true });
-  await clearManifest();
 
   const built = join(ROOT, 'dist', 'nuxeo-satori-template', 'browser');
   const stage = join(ROOT, 'dist', '.video-stage-03');
@@ -169,6 +194,7 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
   mkdirSync(stage, { recursive: true });
   cpSync(built, stage, { recursive: true });
   patchConfig(stage, ACME_BRANDING);
+  writeManifest(stage, null);
 
   const app = await serveAppWithNuxeoProxy({ root: stage, port: APP_PORT });
   teardown.push(app.stop);
@@ -180,7 +206,7 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
 
   // ---- 1. sign in against Nuxeo ----------------------------------------------
   await page.goto(app.url, { waitUntil: 'load' });
-  await signIn(page, hold);
+  await signIn(page, hold, credentials);
 
   // ---- 2. browse the real repository -----------------------------------------
   await page.waitForSelector('.docs__table', { timeout: 45000 });
@@ -263,10 +289,14 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
   await page.waitForSelector('.docs__table', { timeout: 45000 });
   await caption(
     page,
-    'Layer 0 — configuration beside the bundle',
-    'This is Acme’s brand and palette, from bootstrap.json. Watch what one file does to the same build.',
+    'Layer 0 — configuration in their own package',
+    'This is Acme’s brand and palette, from the bootstrap fragment in their configuration package. Watch what one fragment does to the same build.',
   );
-  await showCode(page, 'bootstrap.json — the edit', JSON.stringify(NORTHWIND_BRANDING, null, 2));
+  await showCode(
+    page,
+    'bootstrap fragment — the edit',
+    JSON.stringify(NORTHWIND_BRANDING, null, 2),
+  );
   await hold(page, 9000);
 
   patchConfig(stage, NORTHWIND_BRANDING);
@@ -275,7 +305,7 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
   await caption(
     page,
     'Same bundle. Second tenant.',
-    'Brand, tab title, navigation, accents and surfaces all changed. No rebuild, no redeploy, no restart — one JSON file and a reload. The documents did not move.',
+    'Brand, tab title, navigation, accents and surfaces all changed. No rebuild — the same bundle, a different configuration fragment. The documents did not move.',
   );
   await hold(page, 8500);
 
@@ -317,24 +347,24 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
   );
   await hold(page, 7500);
 
-  // ---- 8. Layer 1: a manifest in Nuxeo itself --------------------------------
+  // ---- 8. Layer 1: a manifest fragment in Acme's package ----------------------
   await page.goto(`${app.url}/documents?path=${encodeURIComponent(CLAIMS_PATH)}`, {
     waitUntil: 'load',
   });
   await page.waitForSelector('.docs__table', { timeout: 45000 });
   await caption(
     page,
-    'Layer 1 — a manifest stored in Nuxeo',
-    'Not a file on a server Acme cannot reach: a document at /default-domain/config/satori-template, with ACLs, versions and audit like any other.',
+    'Layer 1 — a manifest in Acme’s own package',
+    'A fragment in a Marketplace package that depends on ours. Upgrading our package leaves it in force, and nothing is edited on the server.',
   );
   await showCode(
     page,
-    'note:note on the config document',
+    'manifest fragment — com.acme.insurance.config',
     JSON.stringify(ACME_MANIFEST.extensions.overrides, null, 2),
   );
   await hold(page, 9000);
 
-  await writeManifest(ACME_MANIFEST);
+  writeManifest(stage, ACME_MANIFEST);
   await page.reload({ waitUntil: 'load' });
   await page.waitForSelector('.shell__nav-link', { timeout: 45000 });
   await caption(
@@ -351,7 +381,7 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
   await caption(
     page,
     'And it says so itself',
-    'Bootstrap: deployed-file. Manifest: nuxeo-document. The application reports which half of its configuration is live and which fell back — it does not assume.',
+    'Both halves: configuration-service, with the package each fragment came from. The application reports where its configuration came from — it does not assume.',
   );
   await hold(page, 8000);
 
@@ -361,6 +391,5 @@ export default async function run({ page, deckUrl, hold, teardown, ROOT }) {
   await hold(page, 13000);
 
   // ---- leave the server as we found it ---------------------------------------
-  await clearManifest();
   rmSync(stage, { recursive: true, force: true });
 }

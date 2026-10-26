@@ -1,0 +1,79 @@
+@if (readOnly()) {
+  <ul
+    class="nxs-tag-editor__chips"
+    [attr.aria-label]="'satori-components.tag-editor.tags' | translate"
+  >
+    @for (tag of saved(); track tag) {
+      <li><nxs-tag color="gray" [label]="tag" /></li>
+    } @empty {
+      <li class="nxs-tag-editor__empty">
+        <span aria-hidden="true">—</span>
+        <span class="nxs-tag-editor__sr-only">{{
+          'satori-components.tag-editor.none' | translate
+        }}</span>
+      </li>
+    }
+  </ul>
+} @else {
+  <mat-form-field class="nxs-tag-editor__field" subscriptSizing="dynamic">
+    <mat-chip-grid #grid [attr.aria-label]="'satori-components.tag-editor.tags' | translate">
+      @for (tag of shown(); track tag) {
+        <mat-chip-row (removed)="remove(tag)">
+          {{ tag }}
+          <button
+            type="button"
+            matChipRemove
+            [attr.aria-label]="'satori-components.tag-editor.remove' | translate: { tag }"
+          >
+            <mat-icon class="nxs-tag-editor__remove-icon" aria-hidden="true"></mat-icon>
+          </button>
+        </mat-chip-row>
+      }
+      @for (tag of adding(); track tag) {
+        <mat-chip-row class="nxs-tag-editor__pending" disabled>
+          {{ tag }}
+          <nxs-spinner
+            diameter="14"
+            [label]="'satori-components.tag-editor.adding' | translate: { tag }"
+          />
+        </mat-chip-row>
+      }
+    </mat-chip-grid>
+    <!-- Outside the grid: the autocomplete makes the box a combobox, which a grid may not contain. -->
+    <input
+      #box
+      class="nxs-tag-editor__box"
+      [id]="id + '-box'"
+      [placeholder]="'satori-components.tag-editor.add' | translate"
+      [attr.aria-label]="'satori-components.tag-editor.add' | translate"
+      [matChipInputFor]="grid"
+      [matAutocomplete]="suggestionList"
+      (input)="typed(box.value)"
+      (matChipInputTokenEnd)="entered($event)"
+    />
+    <mat-autocomplete
+      #suggestionList="matAutocomplete"
+      autoActiveFirstOption
+      (optionSelected)="picked($event)"
+    >
+      @for (option of options(); track option.label) {
+        <mat-option
+          [value]="option"
+          [attr.aria-label]="
+            option.isNew
+              ? ('satori-components.tag-editor.new-label' | translate: { tag: option.label })
+              : null
+          "
+        >
+          @if (option.isNew) {
+            <span class="nxs-tag-editor__new">{{
+              'satori-components.tag-editor.new' | translate: { tag: option.label }
+            }}</span>
+          } @else {
+            {{ option.label }}
+          }
+        </mat-option>
+      }
+    </mat-autocomplete>
+  </mat-form-field>
+}

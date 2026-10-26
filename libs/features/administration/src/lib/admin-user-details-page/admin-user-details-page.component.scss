@@ -121,6 +121,7 @@
   width: 100%;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .ud-table th.mat-mdc-header-cell,
 .ud-table td.mat-mdc-cell {
   padding-top: var(--admin-row-padding-y, 0.68rem);

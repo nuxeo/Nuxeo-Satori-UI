@@ -54,16 +54,17 @@ caching means that increase is not damped. Nobody has measured requests per user
 
 ## 3. Multi-tenancy and customer isolation
 
-| Concern                     | Position                                                                                                                                      |
-| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| Multi-tenancy               | **The UI has no notion of it.** Tenancy is Nuxeo's, and the UI inherits whatever the server enforces                                          |
-| Data isolation              | Nuxeo ACLs. The UI is not a security boundary — it decides what is _offered_; Nuxeo decides what is _permitted_                               |
-| Config isolation            | Per-installation `bootstrap.json`, and the Layer 1 manifest is a Nuxeo document, so it **inherits per-tenant scoping and ACLs for free**      |
-| Customer code isolation     | Complete — their library is in their repository, built by them                                                                                |
-| Cross-customer blast radius | A defect in our published package affects every customer on that version. Mitigated by semver, the API-surface gate and the upgrade rehearsal |
+| Concern                     | Position                                                                                                                                                                    |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Multi-tenancy               | **The UI has no notion of it.** Tenancy is Nuxeo's, and the UI inherits whatever the server enforces                                                                        |
+| Data isolation              | Nuxeo ACLs. The UI is not a security boundary — it decides what is _offered_; Nuxeo decides what is _permitted_                                                             |
+| Config isolation            | Per installation: the configuration packages installed on that server. Fragments are the same for every user, so there is **no per-tenant or per-user scoping** (NXSAT-312) |
+| Customer code isolation     | Complete — their library is in their repository, built by them                                                                                                              |
+| Cross-customer blast radius | A defect in our published package affects every customer on that version. Mitigated by semver, the API-surface gate and the upgrade rehearsal                               |
 
-The manifest-as-Nuxeo-document choice pays off here: per-tenant configuration needed no new
-machinery.
+Since NXSAT-312 configuration is installation-wide: every user gets the same fragments, so
+per-tenant configuration would need new machinery. The earlier manifest-as-Nuxeo-document design,
+which inherited Nuxeo's scoping, is gone.
 
 ---
 
@@ -117,7 +118,7 @@ not currently in any phase of the plan.
 | ---------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
 | Reproducing a customer issue       | **Partly** — ~20 per-ticket evidence runners (`NXSAT-*`) exist as a pattern for capturing before/after against a live Nuxeo                  |
 | Knowing the customer's version     | Their installed package version; no phone-home                                                                                               |
-| Knowing their configuration        | Their `bootstrap.json` and manifest document — both readable **if** they share them                                                          |
+| Knowing their configuration        | Their configuration package — readable **if** they share it                                                                                  |
 | Distinguishing our bug from theirs | The support boundary is architecturally clear (their library, their repo) — **untested in practice**                                         |
 | Escalation path for adf-hx defects | Established — `docs/adf-hx-upstream-findings.md`, written to be sent to the adf-hx team, requiring a version, a file path and a reproduction |
 | Workaround register                | `docs/adf-hx-workarounds.md`, gated **in both directions**: a marker without a row, or a row without a marker, fails the build               |
@@ -129,16 +130,16 @@ tracked at the code _and_ in a register, and leadership can read the count.
 
 ## 7. Deployment and upgrade
 
-| Aspect                          | Position                                                                                                     |
-| ------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Deployment unit                 | Maven marketplace package: the Angular app + a small Java/OSGi bundle                                        |
-| Install                         | Nuxeo marketplace install; assets served by Nuxeo's Tomcat                                                   |
-| Config seeding                  | Ships `bootstrap.example.json` only; the customer's `bootstrap.json` is never installed, replaced or deleted |
-| Upgrade of our app              | Overwrites the app directory; leaves `bootstrap.json` alone — rehearsed with an edit (NXSAT-317)             |
-| Upgrade of the platform library | Customer's `npm version` bump, then their build                                                              |
-| Rollback                        | Nuxeo marketplace package rollback. **Not verified in repository**                                           |
-| Zero-downtime                   | **Not verified.** Depends on the customer's Nuxeo deployment topology                                        |
-| Release automation              | `release.yml` (manual dispatch), `build-marketplace.yml`, `changelog.yml`                                    |
+| Aspect                          | Position                                                                                                                        |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Deployment unit                 | Maven marketplace package: the Angular app + a small Java/OSGi bundle                                                           |
+| Install                         | Nuxeo marketplace install; assets served by Nuxeo's Tomcat                                                                      |
+| Config seeding                  | Ships no configuration file; our defaults are a contribution in our bundle, and a customer's configuration is their own package |
+| Upgrade of our app              | Overwrites the app directory; customer configuration packages are untouched — rehearsed (NXSAT-312)                             |
+| Upgrade of the platform library | Customer's `npm version` bump, then their build                                                                                 |
+| Rollback                        | Nuxeo marketplace package rollback. **Not verified in repository**                                                              |
+| Zero-downtime                   | **Not verified.** Depends on the customer's Nuxeo deployment topology                                                           |
+| Release automation              | `release.yml` (manual dispatch), `build-marketplace.yml`, `changelog.yml`                                                       |
 
 Not owning the customer's file is the operationally important detail, and its reasoning is
 recorded in `install.xml`. Two earlier designs were wrong. One placed the file in `nxserver/web`,

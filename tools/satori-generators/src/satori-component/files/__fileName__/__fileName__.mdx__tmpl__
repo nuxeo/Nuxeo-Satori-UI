@@ -1,0 +1,76 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as <%= storiesName %> from './<%= fileName %>.stories';
+
+<Meta of={<%= storiesName %>} name="Overview" />
+
+# <%= title %>
+
+A component the `<%= slot %>` slot places by its registered ID, `<%= componentId %>`, so a manifest
+puts it on screen with no rebuild. It shows a heading<% if (isDocumentView) { %> and the title of the document the page is showing<% } %>.
+Use it <%- host.whenToUse %>.
+
+## Key features
+
+- **Placed by a manifest.** It is registered as `<%= componentId %>`, so a `<%= slot %>` entry
+  naming it puts it on screen, and removing the entry takes it off, with no rebuild.
+- **A real heading.** The heading is a native `<h1>` to `<h6>`, at the level you choose, so
+  heading navigation stays in order. A blank heading renders nothing.<% if (isDocumentView) { %>
+- **The page's document.** The `documentView` slot passes the focused document as `document`, so
+  it always describes the document the toolbar and the properties panel act on.<% } %>
+- **Theme tokens only.** Its colours and type come from the theme, so it is the same component
+  with or without Satori.
+
+## Demo showcase
+
+<Canvas of={<%= storiesName %>.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { <%= className %> } from '@nuxeo/satori-platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-<%= fileName %> [heading]="'acme.<%= propertyName %>.heading' | translate"<% if (isDocumentView) { %> [document]="document"<% } %> />`}
+/>
+
+Every input is optional. `heading` takes text you have already translated: the library ships no
+translations for the text you give it. Used directly, it needs no providers.
+
+### By registered ID
+
+`provideNxsComponents()` registers it as `<%= componentId %>`. <%- host.placement %>
+
+<Source language="json" dark code={`<%- placement %>`} />
+
+## Where its data comes from
+
+<%- host.data %> Anything more it needs comes through the platform's services, which carry the
+application's sign-in, never `fetch()`.
+
+## Examples
+
+### Inside a section
+
+Set `headingLevel` one below the heading of the section it sits in. The default is `2`.
+
+<Canvas of={<%= storiesName %>.InsideASection} /><% if (isDocumentView) { %>
+
+### Without a document
+
+Until the host has a document to pass, only the heading renders.
+
+<Canvas of={<%= storiesName %>.WithoutADocument} /><% } %>
+
+## Accessibility
+
+- **Heading.** The heading is a native heading element at `headingLevel`. Choose the level that
+  fits the page outline. A blank heading renders no element, rather than an empty one.
+- **Reading order.** Everything it shows is text, read in the order it appears. It has no role of
+  its own.
+- **Keyboard.** The component takes no focus.

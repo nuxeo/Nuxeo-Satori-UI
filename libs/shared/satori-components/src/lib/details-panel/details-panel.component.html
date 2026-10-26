@@ -1,0 +1,43 @@
+<div class="nxs-details-panel__header">
+  <span class="nxs-details-panel__title">{{ heading() }}</span>
+  <button
+    mat-icon-button
+    type="button"
+    class="nxs-details-panel__close"
+    [attr.aria-label]="ownCloseLabel() || ('satori-components.details-panel.close' | translate)"
+    (click)="closed.emit()"
+  >
+    <mat-icon aria-hidden="true" svgIcon="x_large" />
+  </button>
+</div>
+
+<div class="nxs-details-panel__tabs" role="tablist">
+  @for (tab of tabs(); track tab.id; let i = $index) {
+    <button
+      #tabButton
+      type="button"
+      role="tab"
+      class="nxs-details-panel__tab"
+      [class.nxs-details-panel__tab--active]="tab.id === activeId()"
+      [id]="tabId(tab.id)"
+      [attr.data-tab-id]="tab.id"
+      [attr.aria-selected]="tab.id === activeId()"
+      [attr.aria-controls]="panelId"
+      [tabIndex]="tab.id === activeId() ? 0 : -1"
+      (click)="select(tab)"
+      (keydown)="onKeydown($event, i)"
+    >
+      {{ tab.label }}
+    </button>
+  }
+</div>
+
+<div
+  class="nxs-details-panel__body"
+  role="tabpanel"
+  tabindex="0"
+  [id]="panelId"
+  [attr.aria-labelledby]="activeId() ? tabId(activeId()) : null"
+>
+  <ng-content />
+</div>

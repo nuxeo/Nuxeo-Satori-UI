@@ -8,7 +8,7 @@ import {
   ExtensionActionRegistry,
   ExtensionRuleContextService,
   type ExtensionRuleContext,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { AcmePanelComponent } from './acme-panel';
 import { ACME_EXTENSIONS_EXTENSION_IDS } from '../extensions';

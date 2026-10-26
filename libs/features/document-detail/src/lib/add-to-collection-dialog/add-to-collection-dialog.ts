@@ -1,4 +1,11 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  computed,
+  OnInit,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -8,13 +15,15 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 
-import { NuxeoDocument, DocumentDetailService } from '@nuxeo-satori/platform/nuxeo-client';
+import { NuxeoDocument, DocumentDetailService } from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe } from '@ngx-translate/core';
+import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
 
 @Component({
   selector: 'lib-add-to-collection-dialog',
   standalone: true,
   imports: [
+    NxsSpinnerComponent,
     TranslatePipe,
     FormsModule,
     MatDialogModule,
@@ -26,6 +35,7 @@ import { TranslatePipe } from '@ngx-translate/core';
     MatProgressSpinnerModule,
   ],
   templateUrl: './add-to-collection-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

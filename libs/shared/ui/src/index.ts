@@ -55,9 +55,25 @@ export {
   stripRedundantMatInputAriaRequired,
 } from './lib/login-mat-input-required-a11y';
 export {
+  MAT_TAB_LIST_IBM_ONKEYDOWN,
+  MAT_TAB_LIST_KEYDOWN_ATTR,
+  observeMatTabListKeyboardA11y,
+  wireMatTabListKeyboardA11y,
+} from './lib/mat-tab-list-keyboard-a11y';
+export { MatTabListKeydownDirective } from './lib/mat-tab-list-keydown.directive';
+export {
   TranslatedDatepickerIntl,
   provideTranslatedDatepickerIntl,
 } from './lib/datepicker-intl/translated-datepicker-intl';
+// Only the provider. `libs/platform/package.json` already declares `date-fns` and
+// `@angular/material-date-fns-adapter` as peer dependencies, so a customer's install depends on
+// that choice either way; what stays unexported is the date-fns `Locale` type, which
+// `dateFnsLocaleFor` returns and which would otherwise enter our TypeScript API.
+export { provideSatoriDateAdapter } from './lib/date-adapter/satori-date-adapter';
+// `dateMaskFor` takes and returns strings, so it carries no date-fns type into the API. It is
+// exported beside the pipe for a host that renders its own date hint.
+export { dateMaskFor } from './lib/date-adapter/date-mask';
+export { DateMaskPipe } from './lib/date-adapter/date-mask.pipe';
 export { PLATFORM_EN_TRANSLATIONS } from './lib/i18n/platform-en';
 export {
   PLATFORM_MISSING_TRANSLATION_NEXT,

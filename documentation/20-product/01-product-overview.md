@@ -2,14 +2,16 @@
 title: Product Overview
 parent: Product
 order: 1
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: product
 ---
 
 # Product Overview
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> The rest of the page as of 2026-08-24 · `77265f9`.
 > Grounded in the repository and in
 > [RFC: Nuxeo Satori Beta](https://hyland.atlassian.net/wiki/spaces/~71202090f2a61ef96d4f57a5104efe296c1f5b/pages/4256993484)
 > (revision 6, 20 Aug 2026), tickets **NXENG-619** under epic **NXENG-615**.
@@ -45,7 +47,7 @@ fourth ships AI generators and guardrails so that writing the third is cheap.
 | **The problem**     | The existing Web UI cannot be customised economically. This "costs deals and blocks expansion in strategic accounts" (RFC §2)                                                                     |
 | **The central bet** | _The extension contract is the product; AI agents are the accelerator._ Customisation is governed by a versioned API, not by pointing an agent at our source                                      |
 | **Maturity**        | Phases 0–5 complete with evidence; Phase 6 (quality bar) in progress at **5 of 7** as of 2026-09-23 — steps 3 (WCAG) and 6 (coverage) open. **Not yet published, not yet in front of a customer** |
-| **Distribution**    | One npm package (`@nuxeo-satori/platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
+| **Distribution**    | One npm package (`@nuxeo/satori-platform`, 4 entry points) + a forkable app template + the marketplace package                                                                                    |
 | **Runtime AI**      | 12 `AI.*` Nuxeo Automation operations. The backend implementing them is **a separate package, not in this repository**                                                                            |
 
 ---
@@ -72,25 +74,28 @@ product follows from it.
 
 ## What a customer actually receives
 
-| Artifact                                  | What they do with it                                                                                                                 |
-| ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| **The marketplace package**               | Install into Nuxeo. Gets the application, plus a `bootstrap.example.json` to copy to `bootstrap.json`, a file **no upgrade touches** |
-| **`@nuxeo-satori/platform`** (npm)        | Depend on it from their own extension library. 4 entry points, 10 declared peers, 347 kB                                             |
-| **The app template**                      | Fork it. Deliberately thin, and ships **no design system**, so they add their own rather than removing ours                          |
-| **The generators**                        | `npx nx g @nuxeo-satori/platform:extension-library …` — shipped inside the package                                                   |
-| **The guardrail script**                  | Run in their own CI, so an AI agent can verify its own output before a human reviews it                                              |
-| **`AGENTS.md` + the extension reference** | A knowledge base any AI coding tool can read, versioned as a product artifact                                                        |
+| Artifact                                  | What they do with it                                                                                                                                                               |
+| ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **The marketplace package**               | Install into Nuxeo. Gets the application and our configuration defaults; their own configuration is a package of theirs that depends on ours, which **no upgrade of ours touches** |
+| **`@nuxeo/satori-platform`** (npm)        | Depend on it from their own extension library. 4 entry points, 10 declared peers, 347 kB                                                                                           |
+| **The app template**                      | Fork it. Deliberately thin, and ships **no design system**, so they add their own rather than removing ours                                                                        |
+| **The generators**                        | `npx nx g @nuxeo/satori-platform:extension-library …` — shipped inside the package                                                                                                 |
+| **The guardrail script**                  | Run in their own CI, so an AI agent can verify its own output before a human reviews it                                                                                            |
+| **`AGENTS.md` + the extension reference** | A knowledge base any AI coding tool can read, versioned as a product artifact                                                                                                      |
 
 ---
 
 ## The four layers — the core of the value proposition
 
-| Layer                      | Customer writes                 | Build?      | Example                                                                                       |
-| -------------------------- | ------------------------------- | ----------- | --------------------------------------------------------------------------------------------- |
-| **0 — Configuration**      | JSON + CSS variables            | **No**      | Rebrand: colours, product name, logo, default language — not the favicon yet                  |
-| **1 — Declarative wiring** | JSON referencing registered IDs | **No**      | Hide the Reports nav entry; relabel Home to "Dashboard"; add a Contracts entry at position 35 |
-| **2 — Customer code**      | TypeScript in **their** repo    | Yes, theirs | A contract-approval action visible only to users who can write the document                   |
-| **3 — Agent harness**      | Prompts                         | Yes, theirs | The same request as a short agent session against a defined API                               |
+| Layer                      | Customer writes                 | App rebuild? | Example                                                                                                              |
+| -------------------------- | ------------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| **0 — Configuration**      | JSON + CSS variables            | **No**       | Rebrand: colours, product name, header and sign-in logo, default language — not the rail mark, rail title or favicon |
+| **1 — Declarative wiring** | JSON referencing registered IDs | **No**       | Hide the Reports nav entry; relabel Home to "Dashboard"; add a Contracts entry at position 35                        |
+| **2 — Customer code**      | TypeScript in **their** repo    | Yes, theirs  | A contract-approval action visible only to users who can write the document                                          |
+| **3 — Agent harness**      | Prompts                         | Yes, theirs  | The same request as a short agent session against a defined API                                                      |
+
+For Layers 0 and 1 the only build is the customer's configuration package, zipped by a
+dependency-free script (`npx nx build <package>`) and installed; the application is not rebuilt.
 
 RFC §6.3 describes the intended Layer 3 experience:
 
@@ -117,16 +122,16 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 ### Demonstrated with evidence
 
-| Capability                                                  | Evidence                                                                                    |
-| ----------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| A deep ECM slice works against real Nuxeo                   | 9 feature libraries, ~53.6k lines; 12 E2E specs on browse, search, document detail and auth |
-| Configuration alone changes the app, with no rebuild        | `phase-1-config` evidence, 39 checks                                                        |
-| A manifest edit changes the addressable surface, no rebuild | `phase-2-registry` evidence, 46 checks                                                      |
-| Real adf-hx components render against Nuxeo                 | `phase-3-adf-hx` evidence, 55 checks; 12 API ports bound                                    |
-| The platform is an installable, publishable package         | `phase-4-platform`, 25 checks; `npm publish --dry-run` passes                               |
-| Generators produce **live** registrations                   | `phase-5-harness`, 27 checks                                                                |
-| A Layer 0/1/2 customisation **survives an upgrade**         | `npm run beta:upgrade`, 8 assertions                                                        |
-| 52 addressable IDs, documented and drift-gated              | `npm run beta:reference`                                                                    |
+| Capability                                                                          | Evidence                                                                                                                                                                                                   |
+| ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A deep ECM slice works against real Nuxeo                                           | 9 feature libraries, ~53.6k lines; 12 E2E specs on browse, search, document detail and auth                                                                                                                |
+| Configuration alone changes the app, with no rebuild of the application             | `phase-1-config` evidence, 39 checks: a swapped configuration response changes the app while the bundle stays byte-identical. Installing it as a package: NXSAT-312 rehearsal (`docs/demo-deck-claims.md`) |
+| A manifest edit changes the addressable surface, with no rebuild of the application | `phase-2-registry` evidence, 46 checks, by the same swapped-response method                                                                                                                                |
+| Real adf-hx components render against Nuxeo                                         | `phase-3-adf-hx` evidence, 55 checks; 12 API ports bound                                                                                                                                                   |
+| The platform is an installable, publishable package                                 | `phase-4-platform`, 25 checks; `npm publish --dry-run` passes                                                                                                                                              |
+| Generators produce **live** registrations                                           | `phase-5-harness`, 27 checks                                                                                                                                                                               |
+| A Layer 0/1/2 customisation **survives an upgrade**                                 | `npm run beta:upgrade`, 8 assertions                                                                                                                                                                       |
+| 52 addressable IDs, documented and drift-gated                                      | `npm run beta:reference`                                                                                                                                                                                   |
 
 ### Not demonstrated
 
@@ -146,12 +151,12 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 ## Key differentiators
 
-1. **Configuration and wiring survive upgrades — rehearsed, not assumed.** The package never
-   installs the customer's `bootstrap.json` — it ships a sample — and an edited file was shown
-   to survive a real marketplace upgrade (NXSAT-317, which fixed the first design: it installed
-   the file with `overwrite="false"` and that broke the upgrade). The Layer 1 manifest is a
-   **Nuxeo document**, so it inherits the repository's versioning, audit, ACLs and per-tenant
-   scoping.
+1. **Configuration and wiring survive upgrades — rehearsed, not assumed.** Both are fragments in
+   the customer's own Marketplace package, which depends on ours, and our package installs no
+   configuration file. Upgrading ours with two customer packages installed served byte-identical
+   configuration (`nuxeoctl mp-install`, NXSAT-312). The earlier designs, an installed
+   `bootstrap.json` (which broke the upgrade, NXSAT-317) and a manifest held in a Nuxeo document,
+   are gone.
 2. **The customisation surface is addressable by ID, not by class name.** A manifest never
    names a component, so we can rename one without breaking a customer.
 3. **The extension contract is gated, not just documented.** Four separate gates guard the
@@ -168,10 +173,10 @@ the API-surface gate and the upgrade rehearsal exist.**
 
 Worth knowing if you are reading the RFC alongside the code.
 
-| RFC planned                                                                                                                   | What shipped                                                                                                                                                                                        |
-| ----------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo-satori/platform`, with 4 secondary entry points. Simpler to version and to support; the bridge is deliberately _not_ published, keeping adf-hx types out of the public API |
-| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                    |
+| RFC planned                                                                                                                   | What shipped                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Five or more npm packages** — `@nuxeo-satori/nuxeo-client`, `/adf-hx-bridge`, `/extensions`, `/ui`, `/feature-*` (RFC §5.2) | **One** package, `@nuxeo/satori-platform`, with 4 secondary entry points. Simpler to version and to support; the bridge was deliberately never published, keeping adf-hx types out of the public API, and was removed on 2026-10-14 (NXSAT-635) |
+| **Three repositories** — the monorepo, `nuxeo-satori-app-template`, `nuxeo-satori-extension-starter` (RFC §5.1)               | **One** monorepo. The template is `apps/nuxeo-satori-template`; the starter is `libs/extensions/acme-extensions`                                                                                                                                |
 
 Neither is a defect — both are simplifications — but the RFC has not been revised, so the
 two documents disagree. Flagged in

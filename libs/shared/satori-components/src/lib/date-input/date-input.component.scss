@@ -1,0 +1,5 @@
+@use '../pickers/picker';
+
+:host {
+  @include picker.field;
+}

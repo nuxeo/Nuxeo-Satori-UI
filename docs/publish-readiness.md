@@ -1,4 +1,4 @@
-# Publishing `@nuxeo-satori/platform` — what is left, and who decides
+# Publishing `@nuxeo/satori-platform` — what is left, and who decides
 
 > **SUPERSEDED, for the scope decision only.** The scope is settled:
 > **`@nuxeo/satori-platform` on `https://packages.nuxeo.com/repository/npm-public/`**,
@@ -25,7 +25,7 @@ application against its published types, and — since 2026-08-24 — **survives
 
 ## 1. The decision — superseded, see the note above
 
-`@nuxeo-satori` is **unclaimed** on public npm — `npm view @nuxeo-satori/platform`
+`@nuxeo-satori` is **unclaimed** on public npm — `npm view @nuxeo/satori-platform`
 returns 404 and no package exists under the scope. So nothing is blocked by a name
 collision; the question is which registry and scope the Beta should ship under.
 
@@ -37,7 +37,7 @@ collision; the question is which registry and scope the Beta should ship under.
 ```
 
 **Why this first:** the repo already does exactly this in both directions.
-`.npmrc` maps `@alfresco` and `@hylandsoftware` to `npm.pkg.github.com`, and CI already
+`.npmrc` maps `@hylandsoftware` to `npm.pkg.github.com`, and CI already
 holds `SATORI_GH_READONLY_TOKEN`. A Beta with named customers wants an access-controlled
 registry anyway, and GitHub Packages requires the scope to match the owning
 org — so an existing org is a scope we demonstrably own.
@@ -74,7 +74,7 @@ The package name is authored in two files, and only one of them is a single line
 
 | File                         | What it holds                                      | Edit size  |
 | ---------------------------- | -------------------------------------------------- | ---------- |
-| `libs/platform/package.json` | `"name": "@nuxeo-satori/platform"`                 | one line   |
+| `libs/platform/package.json` | `"name": "@nuxeo/satori-platform"`                 | one line   |
 | `tsconfig.base.json`         | five alias keys mapping the entry points to source | five lines |
 
 Everything downstream is derived:
@@ -84,7 +84,7 @@ Everything downstream is derived:
 - `scripts/beta-harness/fork-simulation.mjs` — reads `name` from the built
   `package.json` and repoints aliases by prefix, so it needs no edit
 
-The **import specifiers** in source (`@nuxeo-satori/platform/extensions`) and their
+The **import specifiers** in source (`@nuxeo/satori-platform/extensions`) and their
 `tsconfig.base.json` aliases do need a rename, which is a mechanical find-and-replace
 across 190 sites — the same operation already done once, verified by running
 `typecheck build test` across all projects.
@@ -106,6 +106,13 @@ across 190 sites — the same operation already done once, verified by running
 | The surface cannot change by accident            | `npm run beta:api` — 2026 lines of signatures, watched failing                      |
 | Peers are declared                               | 10 peers; every specifier in the emitted `.d.ts` is a peer or a sibling entry point |
 | **`npm publish` is not refused**                 | `npm run beta:publishable` — a real `--dry-run` on a copy of the built bytes        |
+
+**No `@alfresco` package is a peer** since NXSAT-308. `@alfresco/adf-extensions` was one, for three
+functions the extension engine imported (`filterEnabled`, `sortByOrder`, `mergeObjects`); the engine
+now has its own, pinned case by case to 9.0.0's output. The peer was dropped with the import still in
+place first, and `beta:publishable` refused it — `Bundle imports "@alfresco/adf-extensions" but the
+built package.json declares it nowhere` — so the declared-imports check catches a peer dropped while
+something still imports it. It cannot tell you a peer is no longer needed.
 
 ### The row that was missing, and what it cost
 
@@ -138,8 +145,10 @@ before being trusted.
 2. In `libs/platform/package.json`: remove `"private": true`, add `publishConfig`.
 3. If the scope changes, rename the 190 import specifiers and the `tsconfig.base.json`
    aliases, then `npm run beta:api -- --update`.
-4. Decide a version. It is `0.1.0`, hand-maintained and not tied to the app version.
-   A Beta wants `0.x` so the API can move without a major bump every sprint.
+4. Decide a version. It is `0.2.0`, hand-maintained and not tied to the app version. NXSAT-308
+   moved it from `0.1.0`: `CHANGELOG.md`'s Unreleased section holds breaking changes, and
+   `^0.1.0` admits only `0.1.x`. A Beta wants `0.x` so the API can move without a major bump
+   every sprint.
 5. `npm publish dist/libs/platform --dry-run` to confirm the tarball, then publish.
 
 `private: true` is what makes step 2 deliberate: `npm publish` refuses outright rather
@@ -154,10 +163,11 @@ than pushing to a scope we might not own.
 - **Version is not automated.** No changesets, no semantic-release. With one package and
   a hand-written changelog that is fine; it stops being fine with three.
 - **No real `npm install` of the template against the tarball.** `fork-simulation`
-  covers type resolution offline; a full install needs every Angular peer plus a
-  GitHub Packages token for `@hylandsoftware/satori-ui`, so it cannot run in a fork's CI
-  without secrets. The remaining uncovered risk is peer _installability_, not type
-  correctness.
+  covers type resolution offline. Peer _installability_, the risk this bullet once called
+  uncovered, is now checked: `@hylandsoftware/satori-ui` is an optional peer that only
+  `/components-satori` imports, and `npm run beta:installable` (a `beta:gate` gate and a CI step)
+  installs the built tarball from public npm with no credentials, then proves the same install
+  fails with the peer made required. What it does not do is build the template from that install.
 
 ## References
 

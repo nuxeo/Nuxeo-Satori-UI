@@ -1,99 +1,78 @@
 @if (activeItem(); as item) {
-  @if (!isBrowseAdfHx) {
-    <div class="drawer-header" [class.drawer-header--tasks]="isTasksPanel">
-      <div
-        class="drawer-title"
-        [class.drawer-title--tasks]="isTasksPanel"
-        role="heading"
-        aria-level="2"
-      >
-        {{ item | descriptorLabel }}
-      </div>
-      @if (isTasksPanel) {
-        <button
-          mat-icon-button
-          (click)="loadTasks()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isRecentlyViewed) {
-        <button
-          mat-icon-button
-          (click)="refreshRecentlyViewed()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isExpiredQueue) {
-        <button
-          mat-icon-button
-          (click)="refreshExpired()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isBrowse) {
-        <button
-          mat-icon-button
-          (click)="refreshBrowseTree()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
-      @if (isPersonalSpace) {
-        <button
-          mat-icon-button
-          (click)="refreshPersonalSpaceTree()"
-          [matTooltip]="'nav.refresh' | translate"
-          [attr.aria-label]="'nav.refresh' | translate"
-          class="refresh-btn"
-        >
-          <mat-icon>refresh</mat-icon>
-        </button>
-      }
+  <div class="drawer-header" [class.drawer-header--tasks]="isTasksPanel">
+    <div
+      class="drawer-title"
+      [class.drawer-title--tasks]="isTasksPanel"
+      role="heading"
+      aria-level="2"
+    >
+      {{ item | descriptorLabel }}
     </div>
-  }
+    @if (isTasksPanel) {
+      <button
+        mat-icon-button
+        (click)="loadTasks()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon svgIcon="refresh" />
+      </button>
+    }
+    @if (isRecentlyViewed) {
+      <button
+        mat-icon-button
+        (click)="refreshRecentlyViewed()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon svgIcon="refresh" />
+      </button>
+    }
+    @if (isExpiredQueue) {
+      <button
+        mat-icon-button
+        (click)="refreshExpired()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon svgIcon="refresh" />
+      </button>
+    }
+    @if (isBrowse) {
+      <button
+        mat-icon-button
+        (click)="refreshBrowseTree()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon svgIcon="refresh" />
+      </button>
+    }
+    @if (isPersonalSpace) {
+      <button
+        mat-icon-button
+        (click)="refreshPersonalSpaceTree()"
+        [matTooltip]="'nav.refresh' | translate"
+        [attr.aria-label]="'nav.refresh' | translate"
+        class="refresh-btn"
+      >
+        <mat-icon svgIcon="refresh" />
+      </button>
+    }
+  </div>
 
   @if (isBrowse) {
     <div class="folder-tree">
-      @if (rootLoading()) {
-        <div class="tree-loading">
-          <mat-spinner diameter="24" [attr.aria-label]="'nav.loading' | translate" />
-        </div>
-      } @else if (rootNodes().length === 0) {
-        <div class="tree-empty">{{ 'nav.folders.empty' | translate }}</div>
-      } @else {
-        @if (browseTreeShowRootBack()) {
-          <button class="tree-back" type="button" (click)="navigateToBrowseRoot()">
-            <mat-icon>chevron_left</mat-icon>
-            {{ 'nav.tree.root' | translate }}
-          </button>
-        }
-        <div class="tree-list">
-          @for (node of browseDisplayNodes(); track node.doc.uid) {
-            <ng-container *ngTemplateOutlet="folderTpl; context: { $implicit: node, depth: 0 }" />
-          }
-        </div>
-      }
+      <nxs-document-tree
+        [label]="'nav.tree.label' | translate"
+        [currentPath]="browseTreePath()"
+        (navigate)="onBrowseTreeNavigate($event)"
+      />
     </div>
-  } @else if (isBrowseAdfHx) {
-    <hxp-browse-nav-drawer
-      [title]="item | descriptorLabel"
-      (navigatePath)="onAdfHxBrowseNavigate($event)"
-    />
   } @else if (isPersonalSpace) {
     <div class="folder-tree">
       @if (personalSpaceLoading()) {
@@ -127,7 +106,7 @@
       <div class="tree-empty error">{{ recentlyViewedError() }}</div>
     } @else if (recentlyViewed().length === 0) {
       <div class="tree-empty">
-        <mat-icon class="empty-icon">visibility_off</mat-icon>
+        <mat-icon class="empty-icon" svgIcon="view_off" />
         <span>{{ 'nav.recent.empty' | translate }}</span>
       </div>
     } @else {
@@ -138,7 +117,7 @@
               @if (thumbnailMap()[doc.uid]; as thumbUrl) {
                 <img [src]="thumbUrl" alt="" class="rv-thumb-img" />
               } @else {
-                <mat-icon class="rv-thumb-icon">{{ docIcon(doc) }}</mat-icon>
+                <mat-icon class="rv-thumb-icon" [svgIcon]="docIcon(doc)" />
               }
             </div>
             <div class="rv-info">
@@ -162,7 +141,7 @@
       <div class="tree-empty error">{{ expiredError() }}</div>
     } @else if (expiredDocs().length === 0) {
       <div class="tree-empty">
-        <mat-icon class="empty-icon">timer_off</mat-icon>
+        <mat-icon class="empty-icon" svgIcon="timer_off" />
         <span>{{ 'nav.expired.empty' | translate }}</span>
       </div>
     } @else {
@@ -173,7 +152,7 @@
               @if (thumbnailMap()[doc.uid]; as thumbUrl) {
                 <img [src]="thumbUrl" alt="" class="expired-thumb-img" />
               } @else {
-                <mat-icon class="expired-thumb-icon">{{ docIcon(doc) }}</mat-icon>
+                <mat-icon class="expired-thumb-icon" [svgIcon]="docIcon(doc)" />
               }
             </div>
             <div class="expired-info">
@@ -186,7 +165,7 @@
                 }}</span>
               </div>
             </div>
-            <mat-icon class="expired-warning-icon">warning</mat-icon>
+            <mat-icon class="expired-warning-icon" svgIcon="report_problem" />
           </button>
         }
       </div>
@@ -207,7 +186,7 @@
                 <img [src]="thumb" alt="" class="collection-thumb" />
               } @else {
                 <div class="collection-thumb-placeholder">
-                  <mat-icon>collections_bookmark</mat-icon>
+                  <mat-icon svgIcon="bookmark_filled" />
                 </div>
               }
               <div class="collection-card-body">
@@ -229,7 +208,7 @@
   } @else if (isAssets) {
     <lib-extension-outlet componentId="app.sidebar.assets" />
   } @else if (isSearchFilters) {
-    <lib-extension-outlet componentId="app.sidebar.searchFilters" />
+    <lib-extension-outlet class="search-filters-outlet" componentId="app.sidebar.searchFilters" />
   } @else if (isTrash) {
     <lib-extension-outlet componentId="app.sidebar.trashFilters" />
   } @else if (isTasksPanel) {
@@ -249,7 +228,7 @@
         <div class="tasks-panel-body">
           @if (tasks().length === 0) {
             <div class="tree-empty">
-              <mat-icon class="empty-icon">task_alt</mat-icon>
+              <mat-icon class="empty-icon" svgIcon="tasks" />
               <span>{{ 'nav.tasks.empty' | translate }}</span>
             </div>
           } @else {
@@ -306,7 +285,7 @@
         </div>
       } @else if (favorites().length === 0) {
         <div class="tree-empty">
-          <mat-icon class="clipboard-empty-icon">star_border</mat-icon>
+          <mat-icon class="clipboard-empty-icon" svgIcon="star" />
           <p>{{ 'nav.favorites.empty' | translate }}</p>
           <span class="clipboard-hint">{{ 'nav.favorites.hint' | translate }}</span>
         </div>
@@ -319,7 +298,7 @@
                   <img [src]="thumb" alt="" class="favorite-thumb" />
                 } @else {
                   <div class="favorite-thumb-placeholder">
-                    <mat-icon>insert_drive_file</mat-icon>
+                    <mat-icon svgIcon="page" />
                   </div>
                 }
                 <span class="favorite-card-title">{{ doc.title }}</span>
@@ -331,7 +310,7 @@
                 [attr.aria-label]="'nav.favorites.remove' | translate"
                 (click)="removeFromFavorites(doc)"
               >
-                <mat-icon>close</mat-icon>
+                <mat-icon svgIcon="x_large" />
               </button>
             </div>
           }
@@ -342,7 +321,7 @@
     <div class="clipboard-panel">
       @if (clipboardEmpty()) {
         <div class="tree-empty">
-          <mat-icon class="clipboard-empty-icon">content_paste</mat-icon>
+          <mat-icon class="clipboard-empty-icon" svgIcon="content_paste" />
           <p>{{ 'nav.clipboard.empty' | translate }}</p>
           <span class="clipboard-hint">{{ 'nav.clipboard.hint' | translate }}</span>
         </div>
@@ -355,7 +334,7 @@
                   <img [src]="thumb" alt="" class="clipboard-thumb" />
                 } @else {
                   <div class="clipboard-thumb-placeholder">
-                    <mat-icon>description</mat-icon>
+                    <mat-icon svgIcon="page" />
                   </div>
                 }
                 <span class="clipboard-card-title">{{ doc.title }}</span>
@@ -367,7 +346,7 @@
                 [attr.aria-label]="'nav.clipboard.remove' | translate"
                 (click)="removeFromClipboard(doc)"
               >
-                <mat-icon>close</mat-icon>
+                <mat-icon svgIcon="x_large" />
               </button>
             </div>
           }
@@ -387,7 +366,7 @@
               [disabled]="!clipboardCanPaste() || clipboardActionLoading()"
               (click)="copyClipboard()"
             >
-              <mat-icon>content_copy</mat-icon>
+              <mat-icon svgIcon="pages" />
               {{ 'nav.clipboard.copy' | translate }}
             </button>
             <button
@@ -397,7 +376,7 @@
               [disabled]="!clipboardCanPaste() || clipboardActionLoading()"
               (click)="moveClipboard()"
             >
-              <mat-icon>drive_file_move</mat-icon>
+              <mat-icon svgIcon="add_to_drive" />
               {{ 'nav.clipboard.move' | translate }}
             </button>
           </div>
@@ -469,9 +448,11 @@
         @if (node.loading) {
           <mat-spinner diameter="14" [attr.aria-label]="'nav.loading' | translate" />
         } @else {
-          <mat-icon class="tree-arrow" [class.tree-arrow--expanded]="node.expanded">
-            chevron_right
-          </mat-icon>
+          <mat-icon
+            class="tree-arrow"
+            [class.tree-arrow--expanded]="node.expanded"
+            svgIcon="chevron_right"
+          />
         }
       </button>
     } @else {

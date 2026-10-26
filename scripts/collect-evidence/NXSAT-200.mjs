@@ -5,13 +5,18 @@
  * Run with:
  *   npm run evidence:collect -- NXSAT-200 scripts/collect-evidence/NXSAT-200.mjs
  *
- * Optional env:
+ * Required env (no default — the runner refuses without them):
  *   NUXEO_USER=<username> NUXEO_PASS=<password> npm run evidence:collect -- …
  */
 
+import { requireStepCredentials } from '../beta-harness/helpers.mjs';
+
 /** @param {import('@playwright/test').Page} page */
 export default async function collectEvidence(page, helpers, _outDir) {
-  const user = process.env['NUXEO_USER'] ?? 'Administrator';
+  // The heading asserted below is the signed-in user's name, so it has to be the identity the
+  // run actually used. This defaulted to `Administrator`, which matched only when the login did
+  // too (NXSAT-649).
+  const { username: user } = requireStepCredentials('collect NXSAT-200 evidence');
 
   await helpers.login();
 

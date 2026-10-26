@@ -40,8 +40,9 @@
  * - Step 9: the published `.d.ts` carries nullable types. A direct regression guard
  *   for the defect where the package was compiled without `strictNullChecks` and
  *   shipped 27 wrongly non-nullable public types.
- * - Step 10: the `exports` map advertises five entry points and every `types` file
- *   it names exists. An entry pointing at a missing file is an unresolvable import
+ * - Step 10: the `exports` map advertises exactly the expected entry points — the root and six
+ *   subpaths, `./components-satori` among them — by
+ *   name, and every `types` file it names exists. An entry pointing at a missing file is an unresolvable import
  *   for a customer, which is how `ng-packagr-lite` shipped four broken subpaths.
  * - Step 11: `private: true` survives into the built artifact, so an accidental
  *   `npm publish` is refused while the scope is unconfirmed (R10).
@@ -49,11 +50,11 @@
  * **Negative / fallback** — regression guards that would also pass if parts of the
  * system were inert:
  *
- * - Step 8: the diagnostics panel reports the Layer 1 manifest falling back to
- *   packaged defaults. The template ships no Nuxeo server, so this is the *expected*
- *   path; it proves the fallback is reported honestly, not that the manifest works.
- * - Step 12: no unexpected console errors. The manifest 404 is expected and excluded
- *   by URL, so this cannot quietly absorb it.
+ * - Step 8: the diagnostics panel reports both halves as served by the
+ *   configuration response, and the manifest as naming no package. The template
+ *   serves a manifest with no fragments, so this proves the source is reported
+ *   honestly, not that a manifest works.
+ * - Step 12: no unexpected console errors, and no failed request at all.
  *
  * That is 9 load-bearing steps and 2 negative ones.
  *
@@ -77,6 +78,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { entryTypes } from '../package-types.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
 
@@ -84,6 +87,26 @@ const DIST = join(ROOT, 'dist', 'libs', 'platform');
 const PACKAGED_NAV_BG = 'rgb(246, 248, 250)';
 /** #0f2b46 — the Acme theme in the template's bootstrap.json. */
 const THEMED_NAV_BG = 'rgb(15, 43, 70)';
+
+/** The subpaths the built package must export, by name: a count alone passes a swapped entry. */
+const EXPECTED_EXPORTS = Object.freeze([
+  '.',
+  './app-config',
+  './components',
+  './components-satori',
+  './extensions',
+  './nuxeo-client',
+  './ui',
+]);
+
+/** The expected subpaths an `exports` map lacks, and the ones it has that nobody expected. */
+export function exportsMismatch(exportsMap) {
+  const actual = Object.keys(exportsMap ?? {}).filter((k) => k !== './package.json');
+  return {
+    missing: EXPECTED_EXPORTS.filter((k) => !actual.includes(k)),
+    unexpected: actual.filter((k) => !EXPECTED_EXPORTS.includes(k)),
+  };
+}
 
 /** Perceived luminance, for the contrast guard. */
 function luminance(rgb) {
@@ -96,6 +119,13 @@ function luminance(rgb) {
 const readNav = (page) =>
   page.$$eval('.shell__nav-link', (els) => els.map((e) => e.textContent.trim()));
 
+/**
+ * No Nuxeo, so no credentials: the runner neither requires `NUXEO_USER` / `NUXEO_PASS` for this
+ * file nor sends them. The static server never challenges, so Basic auth was never part of what
+ * this phase observes.
+ */
+export const skipHttpCredentials = true;
+
 export default async function run(page, h) {
   const consoleErrors = [];
   page.on('console', (msg) => {
@@ -107,7 +137,7 @@ export default async function run(page, h) {
   });
 
   // ---------------------------------------------------------------------------
-  h.step('The served application is the template, not the product');
+  await h.step('The served application is the template, not the product');
 
   await page.goto(`${h.baseUrl}/`, { waitUntil: 'networkidle' });
 
@@ -130,7 +160,7 @@ export default async function run(page, h) {
   await page.waitForSelector('.shell__nav-link');
 
   // ---------------------------------------------------------------------------
-  h.step('Layer 0 branding reaches the DOM and the document title');
+  await h.step('Layer 0 branding reaches the DOM and the document title');
 
   const heading = (await page.textContent('h1'))?.trim();
   h.check(
@@ -148,7 +178,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('A Layer 0 theme token is written to <html> and actually consumed');
+  await h.step('A Layer 0 theme token is written to <html> and actually consumed');
 
   const inlineToken = await page.evaluate(() =>
     document.documentElement.style.getPropertyValue('--shell-nav-bg').trim(),
@@ -180,7 +210,7 @@ export default async function run(page, h) {
   await h.screenshot('home-branded-themed-and-nav-from-registry');
 
   // ---------------------------------------------------------------------------
-  h.step('The rebrand cannot make navigation unreadable');
+  await h.step('The rebrand cannot make navigation unreadable');
 
   const navFg = await page.evaluate(() => {
     const link = document.querySelector('.shell__nav-link');
@@ -194,7 +224,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('The navbar is resolved from the extension registry');
+  await h.step('The navbar is resolved from the extension registry');
 
   const nav = await readNav(page);
   h.check(
@@ -204,7 +234,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('A generated extension library contributes with zero platform edits');
+  await h.step('A generated extension library contributes with zero platform edits');
 
   h.check(
     'the generated library’s nav entry renders alongside the template’s',
@@ -241,7 +271,7 @@ export default async function run(page, h) {
   await page.waitForSelector('.shell__nav-link');
 
   // ---------------------------------------------------------------------------
-  h.step('inventory() lists the generated library’s registered ids');
+  await h.step('inventory() lists the generated library’s registered ids');
 
   const inventoryText = (await page.textContent('.home__panel:last-of-type')) ?? '';
   for (const id of [
@@ -253,53 +283,51 @@ export default async function run(page, h) {
   }
 
   // ---------------------------------------------------------------------------
-  h.step('Configuration diagnostics report the fallback honestly (negative check)');
+  await h.step('Configuration diagnostics report where configuration came from (negative check)');
 
   const diagnostics = (await page.textContent('.home__panel')) ?? '';
   h.check(
-    'bootstrap.json was loaded as a deployed file, not a packaged default',
-    diagnostics.includes('deployed-file'),
+    'both halves were loaded from the configuration response, not packaged defaults',
+    /Bootstrap\s*configuration-service\s*Manifest\s*configuration-service/.test(diagnostics),
     `diagnostics panel read: ${diagnostics.slice(0, 200)}`,
   );
   h.check(
-    'the Layer 1 manifest is reported as falling back to packaged defaults',
-    diagnostics.includes('packaged-default'),
-    'The template ships no Nuxeo server, so this is the expected path. This check ' +
-      'proves the fallback is surfaced rather than swallowed — not that the manifest works.',
+    'the manifest is reported as naming no package',
+    /Manifest packages\s*none/.test(diagnostics),
+    'The template serves a manifest with no fragments, so this is the expected path. This ' +
+      'check proves the source is surfaced rather than assumed — not that a manifest works.',
   );
   // Scrolled to the inventory panel, so this image shows the registered-ID list rather
   // than repeating the same above-the-fold viewport as the first shot.
-  await h.screenshot(
-    'registered-ids-and-config-sources',
-    page.locator('.home__panel').last(),
-  );
+  await h.screenshot('registered-ids-and-config-sources', page.locator('.home__panel').last());
 
   // ---------------------------------------------------------------------------
-  h.step('The published declarations carry nullable types');
+  await h.step('The published declarations carry nullable types');
 
-  const extensionsDts = readFileSync(join(DIST, 'extensions', 'index.d.ts'), 'utf8');
+  const extensionsDts = readFileSync(entryTypes(DIST, './extensions'), 'utf8');
   h.check(
     'ExtensionRuleContextService.username is WritableSignal<string | null>',
-    /readonly username: [\w.]*WritableSignal<string \| null>/.test(extensionsDts),
+    /readonly username: (?:[\w.]*|import\([^)]+\)\.)WritableSignal<string \| null>/.test(extensionsDts),
     'The package was once compiled without strictNullChecks, which collapsed ' +
       '`string | null` to `string` and shipped 27 wrongly non-nullable public types. ' +
       'A customer calling .set(null) on sign-out got a compile error our source does not.',
   );
   h.check(
     'ExtensionRuleContextService.document is WritableSignal<NuxeoDocument | null>',
-    /readonly document: [\w.]*WritableSignal<NuxeoDocument \| null>/.test(extensionsDts),
+    /readonly document: (?:[\w.]*|import\([^)]+\)\.)WritableSignal<NuxeoDocument \| null>/.test(extensionsDts),
     'same strictNullChecks regression',
   );
 
   // ---------------------------------------------------------------------------
-  h.step('The exports map advertises five entry points, all resolvable');
+  await h.step('The exports map advertises the root and six subpaths, all resolvable');
 
   const pkg = JSON.parse(readFileSync(join(DIST, 'package.json'), 'utf8'));
   const subpaths = Object.keys(pkg.exports ?? {}).filter((k) => k !== './package.json');
+  const { missing: absent, unexpected } = exportsMismatch(pkg.exports);
   h.check(
-    'five entry points are exported',
-    subpaths.length === 5,
-    `found ${subpaths.length}: ${subpaths.join(', ')}`,
+    'exactly the expected entry points are exported: the root and six subpaths',
+    absent.length === 0 && unexpected.length === 0,
+    `missing: ${absent.join(', ') || 'none'}; unexpected: ${unexpected.join(', ') || 'none'}`,
   );
 
   const missing = subpaths
@@ -312,7 +340,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('Publishing is still blocked while the scope is unconfirmed');
+  await h.step('Publishing is still blocked while the scope is unconfirmed');
 
   h.check(
     'private: true survives into the built artifact',
@@ -333,13 +361,13 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('No unexpected console errors (negative check)');
+  await h.step('No unexpected console errors (negative check)');
 
-  // The manifest fetch 404s because the template ships no Nuxeo server. Excluded by
-  // URL rather than by count, so this check cannot quietly absorb a different failure.
-  const unexpectedRequests = failedRequests.filter((r) => !/\/nuxeo\/api\/v1\/path/.test(r));
+  // Both configuration files are served beside the template, and it reads no Nuxeo
+  // document for configuration, so no request is expected to fail.
+  const unexpectedRequests = failedRequests;
   h.check(
-    'no failed requests other than the expected manifest 404',
+    'no failed requests',
     unexpectedRequests.length === 0,
     `unexpected: ${unexpectedRequests.join(', ')}`,
   );

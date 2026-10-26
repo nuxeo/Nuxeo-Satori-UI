@@ -38,7 +38,7 @@ Point out:
 - Browse real Nuxeo repository
 - Document tree navigation
 - Search functionality
-- All built with `@nuxeo-satori/platform` APIs
+- All built with `@nuxeo/satori-platform` APIs
 
 **Key message:** _"This entire UI is 1,401 lines of TypeScript. Zero imports from our internal libraries."_
 
@@ -56,8 +56,8 @@ Point out:
 
 ```typescript
 // ONLY public imports
-import { DocumentService } from '@nuxeo-satori/platform/nuxeo-client';
-import { WidgetContainerComponent } from '@nuxeo-satori/platform/ui';
+import { DocumentService } from '@nuxeo/satori-platform/nuxeo-client';
+import { WidgetContainerComponent } from '@nuxeo/satori-platform/ui';
 ```
 
 **Key message:** _"If we break an internal API, this code keeps working because it never depended on our internals."_
@@ -129,7 +129,7 @@ import {
   EXTENSION_SLOTS,
   provideSatoriExtensions,
   type SatoriExtensionContributions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 export function provideInsuranceExtensions(): EnvironmentProviders {
   return provideSatoriExtensions((): SatoriExtensionContributions => {
@@ -247,8 +247,8 @@ Create `src/app/pages/stats/stats.ts`:
 ```typescript
 import { Component, inject, computed } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { SearchService } from '@nuxeo-satori/platform/nuxeo-client';
-import { WidgetGridComponent, WidgetContainerComponent } from '@nuxeo-satori/platform/ui';
+import { SearchService } from '@nuxeo/satori-platform/nuxeo-client';
+import { WidgetGridComponent, WidgetContainerComponent } from '@nuxeo/satori-platform/ui';
 
 @Component({
   selector: 'app-stats',
@@ -415,14 +415,14 @@ Translation: When you generate a rule/action/component, you get the code file bu
 ## Questions You'll Be Asked
 
 **Q: "Do I have to use the template?"**  
-A: No. You can start from scratch with just `npm install @nuxeo-satori/platform` and build whatever structure you want. The template shows one way, not the only way.
+A: No. You can start from scratch with just `npm install @nuxeo/satori-platform` and build whatever structure you want. The template shows one way, not the only way.
 
 **Q: "Can I use the generators in my own repo?"**  
-A: Yes. They're published in the `@nuxeo-satori/platform` package under `/generators`. Run them with:
+A: Yes. They're published in the `@nuxeo/satori-platform` package under `/generators`. Run them with:
 
 ```bash
-npm install -D @nuxeo-satori/platform
-npx nx g @nuxeo-satori/platform:extension-library my-extensions
+npm install -D @nuxeo/satori-platform
+npx nx g @nuxeo/satori-platform:extension-library my-extensions
 ```
 
 **Q: "What if I want a different framework?"**  

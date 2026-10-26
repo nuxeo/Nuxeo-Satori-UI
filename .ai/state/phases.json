@@ -34,7 +34,7 @@
       "evidence": {
         "manifest": "phase-0-baseline/2026-08-21T11-47-33",
         "gate": "gates/latest:phase-0-committed",
-        "regate": "gates/latest:review-fixes-applied"
+        "regate": "gates/2026-10-08T12-01-28-nxsat-308-dependency-tree-gate"
       },
       "deviations": [],
       "notCovered": [
@@ -49,7 +49,7 @@
       "evidence": {
         "manifest": "phase-1-config/2026-08-21T11-47-45",
         "gate": "gates/latest:phase-1-remediation",
-        "regate": "gates/latest:review-fixes-applied"
+        "regate": "gates/2026-10-08T12-01-28-nxsat-308-dependency-tree-gate"
       },
       "deviations": [
         "Declared complete once with the config path wrong by one segment; remediated after independent review. Risk R7 was dropped to Low on the strength of the wrong path and has been withdrawn."
@@ -66,7 +66,7 @@
       "evidence": {
         "manifest": "phase-2-registry/2026-08-21T11-51-02",
         "gate": "gates/latest:phase-2-closure",
-        "regate": "gates/latest:review-fixes-applied"
+        "regate": "gates/2026-10-08T12-01-28-nxsat-308-dependency-tree-gate"
       },
       "deviations": [
         "Shipped a `typecheck` target where the plan said `build`: Nx's module-boundary rule forbids a buildable library from importing a non-buildable one, and nothing in libs/ is buildable until Phase 4 adds ng-packagr."
@@ -91,7 +91,7 @@
         "manifest": "phase-3-adf-hx/2026-08-24T03-03-48",
         "searchManifest": "phase-3-search/2026-08-24T02-58-00",
         "gate": "gates/2026-08-24T03-05-47-all-phases-signoff",
-        "regate": "gates/latest:review-fixes-applied"
+        "regate": "gates/2026-10-08T12-01-28-nxsat-308-dependency-tree-gate"
       },
       "deviations": [
         "2026-09-23, after sign-off: the adopted breadcrumb is now upstream's inner HxpUiBreadcrumbComponent, fed the ancestors plus the current folder, rather than HxpBreadcrumbComponent, which never showed the current folder. The capture's 'links target browse-adf-hx' check had passed while every crumb but Home linked to browse-adf-hx%3Fpath%3D… — NuxeoDocumentRouterService.urlFor returned a string, and [routerLink] escapes a string's '?'. urlFor now returns a UrlTree, and the check requires the query to survive.",
@@ -199,7 +199,7 @@
       "evidence": {
         "manifest": "phase-4-platform/2026-08-23T03-22-29",
         "gate": "gates/2026-08-23T03-47-19-phase-4-signoff",
-        "regate": "gates/latest:review-fixes-applied"
+        "regate": "gates/2026-10-08T12-01-28-nxsat-308-dependency-tree-gate"
       },
       "deviations": [
         "Merged from two duplicate entries. `phase-4-layer2` and `phase-4-platform` both carried the title \"Layer 2 \u2014 publishable platform\"; the latter was a stub whose notCovered read \"everything\". Kept the id the gate reports and the evidence directory use.",
@@ -214,15 +214,15 @@
         "docs/publish-readiness.md \u00a74 step 5 prescribed npm publish --dry-run and was never run, because publishing was deferred \u2014 so the one procedure step that exercised this failure was the step the deferral skipped. Recorded there: a procedure step is not a check until something runs it."
       ],
       "notCovered": [
-        "PEER INSTALLABILITY: nothing resolves the ten declared peerDependencies from a registry at the versions declared. fork-simulation compiles the template against the built declarations offline, which proves type resolution and says nothing about whether `npm install` succeeds. The first real publish must use --tag alpha for this reason.",
+        "PEER INSTALLABILITY, narrowed: the `peer-installability` gate (scripts/beta-harness/peer-installability.mjs, run by `beta:gate` and by the \"Verify the published package\" step of .github/workflows/ci.yml) installs the built tarball from public npm with no credentials, so the nine required peers resolve at their declared ranges, and its negative control requires the same install to fail with E404 once `@hylandsoftware/satori-ui` is made required. Not covered: that optional peer itself, which only `@nuxeo/satori-platform/components-satori` imports and which needs GitHub Packages access, so nothing installs it outside this monorepo; and the template is never built from that install. The Phase 4 capture predates the gate and does not include it.",
         "NOT PUBLISHED: `private: true` is still set and no package has ever been pushed to a registry. The scope decision is recorded in docs/publishing-to-nuxeo-registry.md (@nuxeo on packages.nuxeo.com, the registry nuxeo-elements already uses) but deliberately not executed \u2014 deferred to the final deployment stage.",
         "The Layer 1 manifest is unexercised in the template: it ships no Nuxeo server, so `overrides` and manifest-added slots are not observed here. Phase 2 evidence covers that mechanism against the product.",
-        "The template resolves @nuxeo-satori/platform/* through workspace tsconfig aliases to source for its normal build. Only the fork-simulation gate compiles it against dist/, so the day-to-day build does not exercise a customer's resolution.",
+        "The template resolves @nuxeo/satori-platform/* through workspace tsconfig aliases to source for its normal build. Only the fork-simulation gate compiles it against dist/, so the day-to-day build does not exercise a customer's resolution.",
         "No release CI workflow, no provenance or signing, and the version (0.1.0) is hand-maintained and not tied to any release train. Whether the platform follows the Nuxeo calendar version or an independent 0.x is still an open product decision.",
         "The api-surface gate records names, kinds and signatures only. It does not read Angular decorator metadata, so a changed component selector or input alias is invisible to it. A green run is not a promise of backwards compatibility.",
         "@nuxeo-satori/generators has neither a test nor a typecheck target, so the generator's own code is only exercised by running it."
       ],
-      "verifiedOnCi": "NOT yet verified on CI at the time of writing. ci.yml was extended in the same change to run `typecheck`, `api-surface` and `fork-simulation` \u2014 before that it ran 5 checks against the local gate's 11, so neither new gate could protect main. The next CI run on this branch is the authoritative verification; local gates run on Node 25 with a webstorage workaround and are not authoritative."
+      "verifiedOnCi": "CI run 38158501328, completed success on Node 20, 2026-10-11: its \"Verify the published package\" step, which runs unconditionally, passed api-surface, publishability, peer-installability (with its E404 control), fork-simulation and upgrade-rehearsal. That verifies those gates against the package as it is now, not the Phase 4 capture, which predates peer-installability. At sign-off: NOT yet verified on CI at the time of writing. ci.yml was extended in the same change to run `typecheck`, `api-surface` and `fork-simulation` \u2014 before that it ran 5 checks against the local gate's 11, so neither new gate could protect main. The next CI run on this branch is the authoritative verification; local gates run on Node 25 with a webstorage workaround and are not authoritative."
     },
     {
       "id": "phase-5-harness",
@@ -231,7 +231,7 @@
       "evidence": {
         "manifest": "phase-5-harness/2026-08-24T03-08-47",
         "gate": "gates/2026-08-24T03-05-47-all-phases-signoff",
-        "regate": "gates/latest:review-fixes-applied"
+        "regate": "gates/2026-10-08T12-01-28-nxsat-308-dependency-tree-gate"
       },
       "deviations": [
         "Departed from the plan's wording deliberately, and measured first. The plan said 'split the AGENTS/ knowledge base'; 50 files carry 185 references to AGENTS/ paths, and .github/workflows/staleness-check.yml asserts AGENTS/01-services.md and AGENTS/${i}-*.md exist \u2014 so a split breaks CI and every skill. Measuring the content settled it too: 3,177 lines, of which only 3 of 13 files mention extensions, slots or the Layers. libs/platform/AGENTS.md is therefore authored for the audience, not extracted.",

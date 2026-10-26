@@ -25,7 +25,7 @@ export const PACKAGED_DOCUMENT_TABS: readonly ExtensionTabDescriptor[] = [
     id: 'app.tabs.aiInsights',
     labelKey: 'tab.tabs-ai-insights',
     label: 'AI Insights',
-    icon: 'auto_awesome',
+    icon: 'ai',
     order: 60,
     rule: 'app.rules.isAiEnabled',
   },

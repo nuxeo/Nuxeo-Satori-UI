@@ -1,7 +1,7 @@
 <div class="ud-page">
   <div class="ud-back">
     <a routerLink="/administration/users-groups" mat-button>
-      <mat-icon>arrow_back</mat-icon>
+      <mat-icon svgIcon="arrow_left" />
       {{ 'admin.admin-user-details-page.back-to-users-amp-groups' | translate }}
     </a>
   </div>
@@ -20,7 +20,7 @@
       <section class="ud-card mat-elevation-z1 ud-profile">
         <div class="ud-profile__main">
           <div class="ud-avatar" aria-hidden="true">
-            <mat-icon>person</mat-icon>
+            <mat-icon svgIcon="user" />
           </div>
           <div class="ud-profile__text">
             <div class="ud-title" role="heading" aria-level="1">{{ u.id }}</div>
@@ -29,15 +29,15 @@
         </div>
         <div class="ud-actions">
           <button type="button" mat-button (click)="confirmDelete()">
-            <mat-icon>delete_outline</mat-icon>
+            <mat-icon svgIcon="trash" />
             {{ 'admin.admin-user-details-page.delete' | translate }}
           </button>
           <button type="button" mat-button (click)="openChangePassword()">
-            <mat-icon>lock</mat-icon>
+            <mat-icon svgIcon="lock" />
             {{ 'admin.admin-user-details-page.change-password' | translate }}
           </button>
           <button type="button" mat-flat-button color="primary" (click)="openEdit()">
-            <mat-icon>edit</mat-icon>
+            <mat-icon svgIcon="pencil" />
             {{ 'admin.admin-user-details-page.edit' | translate }}
           </button>
         </div>
@@ -59,7 +59,7 @@
             {{ 'admin.admin-user-details-page.groups' | translate }}
           </div>
           <button type="button" mat-stroked-button color="primary" (click)="openEdit()">
-            <mat-icon>add</mat-icon>
+            <mat-icon svgIcon="plus_large" />
             {{ 'admin.admin-user-details-page.add-to-group' | translate }}
           </button>
         </header>
@@ -90,7 +90,7 @@
                 [attr.aria-label]="'admin.admin-user-details-page.remove-group' | translate"
                 [matTooltip]="'admin.admin-user-details-page.remove-group' | translate"
               >
-                <mat-icon>close</mat-icon>
+                <mat-icon svgIcon="x_large" />
               </button>
             </td>
           </ng-container>
@@ -163,7 +163,7 @@
                     "
                     [matTooltip]="'admin.admin-user-details-page.remove-permission' | translate"
                   >
-                    <mat-icon>delete_outline</mat-icon>
+                    <mat-icon svgIcon="trash" />
                   </button>
                 </td>
               </ng-container>
@@ -246,7 +246,7 @@
                       "
                       [matTooltip]="'admin.admin-user-details-page.remove-permission' | translate"
                     >
-                      <mat-icon>delete_outline</mat-icon>
+                      <mat-icon svgIcon="trash" />
                     </button>
                   </td>
                 </ng-container>

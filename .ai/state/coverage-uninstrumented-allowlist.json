@@ -11,13 +11,13 @@
     "its 1303-line filters drawer counted for nothing on either side of that fraction.",
     "",
     "`files` is dated debt: real code that no test reaches. An entry is a record that the file is",
-    "untested and a date by which that stops being acceptable — not permission to leave it so.",
+    "untested and a date by which that stops being acceptable \u2014 not permission to leave it so.",
     "`noStatements` is a permanent exemption for files with nothing to measure; it is self-policing,",
     "because an entry whose file starts producing statements is reported stale.",
     "",
     "REGENERATED 2026-08-25 from fresh reports. The previous hand-authored version was built from",
     "stale artifacts in coverage/ and nine of its eighteen adf-hx-bridge entries were wrong on the",
-    "day they were written — it listed hxql-literal.ts as having no in-project spec while",
+    "day they were written \u2014 it listed hxql-literal.ts as having no in-project spec while",
     "hxql-literal.spec.ts sat beside it, committed in a0528ab. The gate now refuses to read a",
     "report older than the sources it describes, so that cannot recur silently."
   ],
@@ -30,35 +30,7 @@
       "until": "2027-06-30",
       "reason": "Untested assets drawer component (649 lines). Assets feature is out of Beta scope per coverage-gate.mjs. Component sits in report with empty statement map."
     },
-    "libs/features/browse/src/lib/browse-adf-hx-poc/browse-adf-hx-poc.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/features/browse/src/lib/folder-picker/folder-picker-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/features/browse/src/lib/search-adf-hx/search-adf-hx.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/features/search/src/lib/search-filters-drawer/search-filters-drawer.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/constants/avatar-colors.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/constants/doc-type-icons.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
     "libs/shared/nuxeo-client/src/lib/constants/folderish-types.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/queries/nxql-queries.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
@@ -75,10 +47,6 @@
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
     "libs/shared/nuxeo-client/src/lib/services/clipboard-target.service.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/services/collection.service.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
@@ -99,14 +67,6 @@
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
     "libs/shared/nuxeo-client/src/lib/services/search-aggregation.service.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/services/search.service.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/nuxeo-client/src/lib/services/tag.service.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
@@ -142,23 +102,7 @@
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     },
-    "libs/shared/ui/src/lib/saved-search-dialog/saved-search-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
     "libs/shared/ui/src/lib/share-dialog/share-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/ui/src/lib/share-saved-search-add-permission-dialog/share-saved-search-add-permission-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/ui/src/lib/share-saved-search-dialog/share-saved-search-dialog.component.ts": {
-      "until": "2026-11-30",
-      "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
-    },
-    "libs/shared/ui/src/lib/share-saved-search-external-dialog/share-saved-search-external-dialog.component.ts": {
       "until": "2026-11-30",
       "reason": "Present in the coverage report with an empty statement map, because no test imports it. Contributes nothing to the denominator, so it cannot lower the percentage."
     }
@@ -170,19 +114,10 @@
     "libs/extensions/acme-extensions/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
-    "libs/features/administration/src/index.ts": {
-      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
-    },
-    "libs/features/browse/src/adf-hx-poc.ts": {
-      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
-    },
     "libs/features/browse/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/features/browse/src/lib/lib.routes.ts": {
-      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
-    },
-    "libs/features/browse/src/search-adf-hx.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/features/collections/src/index.ts": {
@@ -209,10 +144,13 @@
     "libs/features/search/src/lib/lib.routes.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
-    "libs/shared/adf-hx-bridge/src/lib/models/hxp-browse-folder-node.ts": {
+    "libs/shared/app-config/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
-    "libs/shared/app-config/src/index.ts": {
+    "libs/shared/document-layouts/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/document-layouts/src/lib/layout.model.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/shared/extensions/src/index.ts": {
@@ -287,6 +225,15 @@
     "libs/shared/permission-dialogs/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
+    "libs/shared/satori-components-satori/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/satori-components/src/lib/heading-level.ts": {
+      "reason": "No executable statements to measure: one exported type alias. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/satori-components/src/lib/metadata-editor/metadata-editor.model.ts": {
+      "reason": "No executable statements to measure: the metadata editor\u2019s exported interfaces and type aliases. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
     "libs/shared/ui/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
@@ -298,6 +245,21 @@
     },
     "libs/features/tasks/src/index.ts": {
       "reason": "Pure export barrel with no executable statements. Tasks feature is out of Beta scope. Permanent exemption."
+    },
+    "libs/integration-tests/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/ai-client/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/satori-components/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/testing/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/features/administration/src/index.ts": {
+      "reason": "No executable statements to measure: re-export barrel. Reported stale if it ever gains a statement."
     }
   }
 }

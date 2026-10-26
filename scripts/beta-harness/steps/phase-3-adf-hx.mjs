@@ -41,8 +41,8 @@ const EXPECTED_HEADERS = ['Title', 'Modified', 'Last Contributor'];
 const ENVIRONMENTAL_ERRORS = [
   /automation\/AI\./,
   '/nuxeo/logout',
-  '/nuxeo/api/v1/path/default-domain/config/agentic-ui',
   '/agentic-ui-config/bootstrap.json',
+  '/agentic-ui-config/manifest.json',
   // sys_acl principal resolution: probes /group/ first for every principal, gets 404 for users
   /HTTP 404 \/nuxeo\/api\/v1\/group\//,
   // adf-core viewer / pdfjs-dist passive event listener warning
@@ -61,7 +61,9 @@ const FIXTURE_FILE_TEXT = 'phase-3 evidence: this text is rendered by the adf-hx
  *
  * Built through Nuxeo's REST API rather than through the UI: this is *setup*, and driving it
  * through the surface under test would make the fixture and the assertion the same claim.
- * `page.request` inherits the context's `httpCredentials`, which is what authenticates it.
+ * `page.request` inherits the context's `httpCredentials`, which the runner sends with every
+ * request (`send: 'always'`); until NXSAT-643 they were sent only on a challenge that a
+ * guest-enabled Nuxeo never issues, and these writes ran as `Anonymous`.
  *
  * The document is deleted and recreated on every run so the version labels are the same every
  * run. Only this folder is touched, and only the document this step created inside it.
@@ -158,7 +160,7 @@ export default async function run(page, h) {
     if (/\/nuxeo\/api\/v1\/(group|user)\/[^/?]+$/.test(url)) principalLookups.push(url);
   });
 
-  h.step("Precondition: the dev server serves adf-core's translation catalogue");
+  await h.step("Precondition: the dev server serves adf-core's translation catalogue");
   // adf-hx components fetch `assets/adf-core/i18n/<lang>.json` at runtime, copied in by an
   // asset glob in `angular.json`. Without it one accessibility label renders as a raw key and
   // the console fills with 404s — asserted as a precondition so the run says so instead of
@@ -181,7 +183,7 @@ export default async function run(page, h) {
       'angular.json still lists the adf-core glob (it replaces the array, it does not merge), ' +
       'then restart: npx nx serve nuxeo-ui',
   );
-  h.step('Precondition: a backend is reachable, so the list has real rows');
+  await h.step('Precondition: a backend is reachable, so the list has real rows');
   const probe = await page.request
     .get(`${h.baseUrl}/nuxeo/api/v1/me`, { failOnStatusCode: false })
     .catch(() => null);
@@ -192,7 +194,7 @@ export default async function run(page, h) {
       'about a document list. Run `npm run beta:backend` first.',
   );
 
-  h.step('The POC route renders a document list over real Nuxeo children');
+  await h.step('The POC route renders a document list over real Nuxeo children');
   await h.login();
   await h.goTo('/#/browse-adf-hx');
   await page.waitForTimeout(1500);
@@ -256,7 +258,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('document-list');
 
-  h.step('Fixed: the column sort reaches the server, and the list pages');
+  await h.step('Fixed: the column sort reaches the server, and the list pages');
   // Two of the five recorded bridge defects, both previously reported as closed and neither of
   // which was. `(sortingClicked)` went nowhere, so clicking a header reordered only the loaded
   // rows — measured at 37 before and after with no refetch — and the fetch took a hardcoded
@@ -341,7 +343,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('sorted-list');
 
-  h.step('Upstream capability: rows are selectable');
+  await h.step('Upstream capability: rows are selectable');
   // What the swap *gains*. The hand-written list had its own checkbox column; upstream's
   // DataTable provides multiselect natively, which is why `[multiselect]="true"` is set.
   const rowCheckboxes = page.locator('hxp-document-list adf-datatable-row mat-checkbox');
@@ -373,7 +375,7 @@ export default async function run(page, h) {
     .catch(() => {}); // best-effort reset; the later steps select their own rows
   await page.waitForTimeout(300);
 
-  h.step('adf-core strings are translated, not raw keys');
+  await h.step('adf-core strings are translated, not raw keys');
   // adf-core ships its own catalogue and this app has to serve it. Without the asset glob
   // the DataTable renders `ADF-DATATABLE.ACCESSIBILITY.SELECT_ALL` to screen readers.
   const rawKeys = await page.$$eval('hxp-document-list', (roots) =>
@@ -385,7 +387,7 @@ export default async function run(page, h) {
     `found ${rawKeys.length}: ${JSON.stringify(rawKeys.slice(0, 3))}`,
   );
 
-  h.step('Upstream breadcrumb renders, and its links point at OUR routes');
+  await h.step('Upstream breadcrumb renders, and its links point at OUR routes');
   // The interesting part is not that it renders. adf-hx's own `DocumentRouterService` builds
   // `/{repository}/documents/{id}`, which this app has no route for, and the breadcrumb feeds
   // that straight into `[routerLink]`. `NuxeoDocumentRouterService` is bound against it, so
@@ -427,7 +429,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('upstream-breadcrumb');
 
-  h.step('Rehomed: the column picker is back, and driven by Layer 1');
+  await h.step('Rehomed: the column picker is back, and driven by Layer 1');
   // Upstream's DataTable has no picker. Losing it would have been a silent regression, so
   // it moved to the host. Asserting it here is what makes "rehomed" a fact.
   const columnsBtn = page.locator('button[aria-label="Manage columns"]').first();
@@ -453,7 +455,7 @@ export default async function run(page, h) {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(400);
 
-  h.step('Rehomed: the card view renders with thumbnails');
+  await h.step('Rehomed: the card view renders with thumbnails');
   // By accessible name. The toggle is icon-only, so filtering on text finds nothing —
   // the first draft of this step did exactly that and reported zero cards.
   const cardToggle = page.locator('button[aria-label="Card view"]').first();
@@ -465,7 +467,7 @@ export default async function run(page, h) {
   h.check('card view renders a card per document', cardCount >= 1, `found ${cardCount}`);
   await h.screenshot('card-view');
 
-  h.step('Upstream document tree mounts in the shell nav drawer');
+  await h.step('Upstream document tree mounts in the shell nav drawer');
   // The tree lives in the **app shell's** nav drawer, not the POC page, and only mounts when
   // the route is entered through the platform nav item — the shell owns the drawer state, so
   // a direct `goTo` renders the page without one. Section 3 records that.
@@ -494,7 +496,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('upstream-document-tree');
 
-  h.step('Fixture: a document with two known Nuxeo versions');
+  await h.step('Fixture: a document with two known Nuxeo versions');
   // Built by the step rather than assumed to exist, so the version *labels* below are
   // deterministic. A fixture left over from a previous run would have grown to 0.3, 0.4 …
   // and an assertion loose enough to tolerate that would no longer be asserting the
@@ -506,7 +508,7 @@ export default async function run(page, h) {
     `Document.GetVersions reported ${fixture.versionCount} version(s) for ${fixture.uid}`,
   );
 
-  h.step('Folder tabs match production browse');
+  await h.step('Folder tabs match production browse');
   await h.goTo(`/#/browse-adf-hx?path=${encodeURIComponent(FIXTURE_FOLDER_PATH)}`);
   await page.waitForTimeout(2000);
 
@@ -542,7 +544,7 @@ export default async function run(page, h) {
   await fixtureRow.locator('mat-checkbox').first().click();
   await page.waitForTimeout(600);
 
-  h.step('Adopted: upstream document viewer');
+  await h.step('Adopted: upstream document viewer');
   // Load-bearing: the fixture's own text on screen. Opening the overlay and finding the component
   // were the only checks here once, and both passed while the viewer said "Couldn't load preview"
   // for every file, because nothing mapped the main file to `sysfile_blob`.
@@ -595,7 +597,7 @@ export default async function run(page, h) {
     h.check("the viewer's close button closes it", (await viewerOverlay.count()) === 0);
   }
 
-  h.step('Health');
+  await h.step('Health');
   // sys_acl assertions - principal lookups are async and complete after the folder reads above
   h.check(
     'the bridge probes the directory to classify ACL principals',

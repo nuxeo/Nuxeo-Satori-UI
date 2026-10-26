@@ -27,16 +27,6 @@
     "toolbar-unlock": "Déverrouiller",
     "toolbar-unsubscribe": "Se désabonner"
   },
-  "adf-hx-bridge": {
-    "loading": "Chargement",
-    "notify-me": "M'avertir",
-    "pager": {
-      "no-documents": "Aucun document",
-      "range": "{{ first }}–{{ last }}",
-      "range-of-total": "{{ first }}–{{ last }} sur {{ total }}"
-    },
-    "unsubscribe": "Se désabonner"
-  },
   "admin": {
     "admin-analytics-page": {
       "ai-audit-anomalies": "Anomalies d'audit IA",
@@ -517,6 +507,9 @@
     "placeholder-page": {
       "coming-soon": "Prochainement disponible"
     },
+    "preset": {
+      "badge": "Preset: {{ label }}"
+    },
     "profile-page": {
       "change-password": "Changer le mot de passe",
       "company": "Société",
@@ -706,17 +699,6 @@
       "user-group": "Utilisateur / Groupe",
       "username": "Nom d'utilisateur"
     },
-    "browse-adf-hx-poc": {
-      "columns": "Colonnes",
-      "manage-columns": "Gérer les colonnes",
-      "preview": "Aperçu",
-      "preview-document": "Aperçu du document",
-      "retry": "Réessayer",
-      "select-a-single-document-in-the": "Sélectionnez un seul document dans l'onglet Afficher pour voir ses propriétés.",
-      "select-a-single-document-in-the-2": "Sélectionnez un seul document dans l'onglet Afficher pour voir ses versions.",
-      "the-repository-root-carries-no-access": "La racine de l'entrepôt ne comporte aucune liste de contrôle d'accès. Ouvrez un domaine ou un dossier pour afficher et gérer ses autorisations.",
-      "this-folder-is-empty": "Ce dossier est vide"
-    },
     "column": {
       "author": "Auteur",
       "coverage": "Couverture",
@@ -897,17 +879,6 @@
       "notify": "Notifier",
       "share": "Partager"
     },
-    "search-adf-hx": {
-      "enter-search-term": "Saisissez un terme de recherche...",
-      "loading": "Chargement",
-      "next-page": "Page suivante",
-      "no-results-found": "Aucun résultat trouvé",
-      "previous-page": "Page précédente",
-      "search": "Rechercher",
-      "search-documents": "Rechercher des documents",
-      "searching": "Recherche en cours...",
-      "try-a-different-search-term": "Essayez un autre terme de recherche"
-    },
     "show-details": "Afficher les détails",
     "tab": {
       "history": "Historique",
@@ -989,7 +960,6 @@
       "notifications-enabled": "Notifications activées",
       "removed-from-clipboard": "Supprimé du presse-papiers"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "notify-me": "M'avertir",
     "remove-from-clipboard": "Supprimer du presse-papiers",
     "share-fallback-title": "Collection",
@@ -1055,9 +1025,16 @@
       "trashed-document-many": "{{ count }} documents dans la corbeille",
       "trashed-document-one": "{{ count }} document dans la corbeille"
     },
-    "date-mask": "mm/dd/yyyy",
+    "date-mask": "jj/mm/aaaa",
     "dismiss": "Abandonner",
     "email-example": "nom@entreprise.com",
+    "lock": {
+      "already-locked": "Document déjà verrouillé par un autre utilisateur, veuillez rafraîchir votre page.",
+      "lock-no-permission": "Vous n'avez pas l'autorisation de verrouiller ce document.",
+      "locked-by": "Verrouillé par {{ owner }} le {{ date }}",
+      "locked-by-another-user": "Vous ne pouvez pas déverrouiller ce document car il est verrouillé par un autre utilisateur.",
+      "unlock-no-permission": "Vous n'avez pas l'autorisation de déverrouiller ce document."
+    },
     "ok": "OK",
     "page-number": "Page {{ page }}",
     "page-of": "Page {{ page }} sur {{ total }}",
@@ -1103,7 +1080,7 @@
   "contracts": {
     "sample-document-title": "Contrat ABC-123.pdf",
     "saved-search-placeholder": "ex. : « Contrats T3 en attente de vérification »",
-    "showcase-dialog-message": "Cette boîte de dialogue est importée depuis @nuxeo-satori/platform/ui. Les clients peuvent l'utiliser pour les invites de confirmation, les avertissements et les actions destructrices.",
+    "showcase-dialog-message": "Cette boîte de dialogue est importée depuis @nuxeo/satori-platform/ui. Les clients peuvent l'utiliser pour les invites de confirmation, les avertissements et les actions destructrices.",
     "showcase-dialog-title": "Démonstration de la vitrine des composants"
   },
   "dashboard": {
@@ -1411,6 +1388,8 @@
       "publication-removed": "Publication supprimée",
       "removed-from-favorites": "Supprimé des favoris",
       "reply-deleted": "Réponse supprimée",
+      "restore-version-conflict": "Cette version ne peut pas être restaurée en raison d'un conflit avec l'état actuel du document. Rechargez la page et réessayez.",
+      "restore-version-forbidden": "Vous ne pouvez pas restaurer cette version : vous n'avez pas l'autorisation, ou un autre utilisateur a verrouillé le document.",
       "search-failed-try-again": "Échec de la recherche. Réessayez.",
       "section-not-found": "Section introuvable",
       "selected-documents-have-no-insertable-image-url": "Les documents sélectionnés n'ont pas d'URL d'image insérable",
@@ -1421,7 +1400,6 @@
       "workflow-abandoned": "Flux de travail abandonné.",
       "workflow-started-successfully": "Flux de travail démarré avec succès"
     },
-    "mmmm-d-yyyy": "MMMM d, yyyy",
     "note-editor": {
       "align-center": "Aligner au centre",
       "align-left": "Aligner à gauche",
@@ -1505,10 +1483,20 @@
     "task-due-before": "avant le {{ due }}",
     "unblock": "Débloquer",
     "unknown": "Inconnu",
+    "version-go-to-latest": "Aller à la dernière version",
     "version-latest": "{{ version }} récente",
+    "version-latest-entry": "Dernière version",
     "version-modified-by": "Modifié {{ when }} par {{ who }}",
+    "version-restore": "Restaurer {{ version }}",
+    "version-restore-confirm-title": "Êtes-vous sûr ?",
+    "version-viewing": "Vous consultez la version {{ version }}.",
     "visual-editor": "Editeur visuel",
     "workflow-started-on-document": "Vous avez démarré un flux de travail {{ workflow }} sur ce document."
+  },
+  "document-layouts": {
+    "no": "No",
+    "sections": "Property sections",
+    "yes": "Yes"
   },
   "drawer": {
     "administration-analytics": "Analyse",
@@ -1526,104 +1514,6 @@
   "extensions": {
     "extension-outlet": {
       "loading": "Chargement…"
-    }
-  },
-  "hxp": {
-    "hxp-browse-details-panel": {
-      "activity": "Activité",
-      "by": "Par",
-      "close-panel": "Fermer le panneau",
-      "contributors": "Contributeurs",
-      "created": "Créé",
-      "document-details": "Détails du document",
-      "info": "Informations",
-      "last-modified": "Dernière modification",
-      "no-recent-activity": "Aucune activité récente",
-      "no-tags-yet": "Aucune balise pour l'instant",
-      "properties": "Propriétés",
-      "search-or-create-a-tag": "Rechercher ou créer une balise",
-      "state": "État",
-      "tags": "Balises",
-      "title": "Titre",
-      "type": "Type"
-    },
-    "hxp-browse-history": {
-      "action": "Action",
-      "all": "Tout",
-      "category": "Catégorie",
-      "comment": "Commentaire",
-      "date": "Date",
-      "from": "De",
-      "next": "Suivant",
-      "no-audit-entries-found": "Aucune entrée d'audit trouvée.",
-      "performed-action": "Action effectuée",
-      "previous": "Précédent",
-      "state": "État",
-      "to": "A",
-      "username": "Nom d'utilisateur"
-    },
-    "hxp-browse-nav-drawer": {
-      "refresh": "Actualiser"
-    },
-    "hxp-browse-pager": {
-      "document-list-pages": "Pages de la liste de documents",
-      "next": "Suivant",
-      "next-page": "Page suivante",
-      "previous": "Précédent",
-      "previous-page": "Page précédente"
-    },
-    "hxp-browse-tabs": {
-      "browse-folder-tabs": "Onglets pour parcourir les dossiers"
-    },
-    "hxp-browse-toolbar": {
-      "all-types": "Tous les types",
-      "card-view": "Affichage carte",
-      "clear-contributor-filter": "Effacer le filtre de contributeur",
-      "clear-title-filter": "Effacer le filtre de titre",
-      "contributor": "Contributeur...",
-      "export-csv": "Exporter CSV",
-      "filter-by-title": "Filtrer par titre...",
-      "last-contributor": "Dernier contributeur",
-      "list-view": "Affichage liste",
-      "modified-from": "Modifié du",
-      "modified-to": "Modifié au",
-      "type": "Type"
-    },
-    "hxp-browse-trash": {
-      "actions": "Actions",
-      "failed-to-load": "Impossible de charger la corbeille.",
-      "last-modified": "Dernière modification",
-      "name": "Nom",
-      "restore": "Restaurer",
-      "retry": "Réessayer",
-      "trash-is-empty": "La corbeille est vide",
-      "type": "Type"
-    },
-    "hxp-column-picker": {
-      "close-column-picker": "Fermer le sélecteur de colonnes",
-      "column-settings": "Paramètres des colonnes",
-      "done": "Terminé",
-      "reset": "Réinitialiser"
-    },
-    "hxp-folder-header": {
-      "close-menu": "Fermer le menu",
-      "create-folder-upload-files-or-import": "Créer un dossier, importer des fichiers ou importer un CSV",
-      "create-import": "Créer / Importer",
-      "delete": "Supprimer",
-      "download-all": "Tout télécharger",
-      "edit": "Modifier",
-      "export": "Exporter",
-      "more-actions": "Plus d'actions",
-      "share": "Partager",
-      "upload-with-nuxeo-drive": "Importer avec Nuxeo Drive"
-    },
-    "tab": {
-      "history": "Historique",
-      "permissions": "Autorisations",
-      "properties": "Propriétés",
-      "trash": "Corbeille",
-      "versions": "Versions",
-      "view": "Afficher"
     }
   },
   "kd": {
@@ -1777,7 +1667,6 @@
       "administration": "Administration",
       "assets": "Ressources",
       "browse": "Parcourir",
-      "browse-adf-hx": "Parcourir",
       "clipboard": "Presse-papiers",
       "collections": "Collections",
       "dashboard": "Tableau de bord",

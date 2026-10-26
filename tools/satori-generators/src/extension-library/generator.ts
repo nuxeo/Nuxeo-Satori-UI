@@ -157,7 +157,7 @@ TWO STEPS, not one. The navbar entry points at /${name.fileName} and NOTHING ROU
 THERE YET, so it falls through your wildcard to /home — a menu item that silently goes
 to the wrong page. Add the route to your app as well:
 
-  import { ExtensionOutletComponent } from '@nuxeo-satori/platform/extensions';
+  import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 
   { path: '${name.fileName}',
     component: ExtensionOutletComponent,

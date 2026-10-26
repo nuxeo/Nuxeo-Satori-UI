@@ -1,12 +1,17 @@
 /**
- * NXENG-781 / NXENG-786 — additional-format download icon buttons must show a keyboard focus
- * indicator on the fixed light `.picture-cards` strip (IBM `style_focus_visible`, WCAG 2.4.7 /
- * 1.4.11). Karma loads `apps/nuxeo-ui/src/styles.scss`, so `data-app-theme` resolves real tokens.
+ * NXENG-781 / NXENG-786 / NXENG-800 / NXSAT-505 / NXSAT-527 — additional-format download icon
+ * buttons (e.g. Download Thumbnail / Download Small / Download OriginalJpeg; IBM 1635062655 /
+ * 368748540 / 2294099067) must show a keyboard focus indicator on the fixed light `.picture-cards`
+ * strip (IBM `style_focus_visible`, WCAG 2.4.7 / 1.4.11). Karma loads `apps/nuxeo-ui/src/styles.scss`,
+ * so `data-app-theme` resolves real tokens. Published focus-visibility verdicts are a11y-scout-owned
+ * (`docs/accessibility.md` §19–33); per-theme contrast loops here are observational cross-checks.
+ * Ticket-level regressions (NXSAT-505 / NXSAT-527) assert `.format-download-btn` wiring and IBM
+ * `:focus` outline geometry only — not `assertFocusRingContrast`.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { DocumentViewerComponent } from '@nuxeo-satori/platform/ui';
+import { DocumentViewerComponent } from '@nuxeo/satori-platform/ui';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -95,7 +100,7 @@ function assertFocusRingContrast(
     .toBeGreaterThanOrEqual(WCAG_FOCUS_INDICATOR);
 }
 
-describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-786)', () => {
+describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-786, NXENG-800, NXSAT-505)', () => {
   let fixture: ComponentFixture<DocumentViewerComponent>;
   let originalTheme: string | null;
 
@@ -122,12 +127,36 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
     });
     fixture.componentRef.setInput('pictureViews', [
       {
+        title: 'Thumbnail',
+        width: 100,
+        height: 100,
+        fileSize: '512 Bytes',
+        format: 'JPEG',
+        downloadUrl: '/nuxeo/thumbnail',
+      },
+      {
+        title: 'Small',
+        width: 480,
+        height: 270,
+        fileSize: '2048 Bytes',
+        format: 'JPEG',
+        downloadUrl: '/nuxeo/small',
+      },
+      {
         title: 'FullHD',
         width: 1920,
         height: 1080,
         fileSize: '8792 Bytes',
         format: 'JPEG',
         downloadUrl: '/nuxeo/fullhd',
+      },
+      {
+        title: 'OriginalJpeg',
+        width: 1920,
+        height: 1080,
+        fileSize: '8792 Bytes',
+        format: 'JPEG',
+        downloadUrl: '/nuxeo/originaljpeg',
       },
     ]);
     fixture.detectChanges();
@@ -147,6 +176,61 @@ describe('DocumentViewer format download focus ring by theme (NXENG-781, NXENG-7
     } else {
       document.documentElement.setAttribute('data-app-theme', originalTheme);
     }
+  });
+
+  it('draws a visible ring on :focus when :focus-visible is false (IBM style_focus_visible, NXSAT-505)', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
+    const thumbRow = rows.find((row) => row.textContent?.includes('Thumbnail'));
+    const button = thumbRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    if (!button) return;
+
+    button.focus({ focusVisible: false } as FocusOptions);
+    expect(button.matches(':focus')).toBe(true);
+    expect(button.matches(':focus-visible')).toBe(false);
+
+    const style = getComputedStyle(button);
+    expect(style.outlineStyle).withContext('IBM :focus path').not.toBe('none');
+    expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
+  });
+
+  // NXSAT-527: control wiring + IBM :focus path only (no contrast verdict — a11y-scout owns that).
+  it('focuses the Download OriginalJpeg control with IBM-readable outline (NXSAT-527 / IBM 2294099067)', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
+    const originalRow = rows.find((row) => row.textContent?.includes('OriginalJpeg'));
+    expect(originalRow).withContext('expected OriginalJpeg format row').toBeTruthy();
+    const button = originalRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    if (!button) return;
+
+    expect(button.getAttribute('aria-label')).toBe('Download OriginalJpeg');
+    expect(button.classList.contains('format-download-btn')).toBe(true);
+
+    button.focus({ focusVisible: false } as FocusOptions);
+    expect(button.matches(':focus')).toBe(true);
+    expect(button.matches(':focus-visible')).toBe(false);
+
+    const style = getComputedStyle(button);
+    expect(style.outlineStyle)
+      .withContext('NXSAT-527 / IBM 2294099067 — IBM :focus path')
+      .not.toBe('none');
+    expect(parseFloat(style.outlineWidth)).toBeGreaterThanOrEqual(2);
+  });
+
+  it('focuses the Download Small control with IBM-readable outline (NXENG-800)', () => {
+    const rows = Array.from(fixture.nativeElement.querySelectorAll('.format-row')) as HTMLElement[];
+    const smallRow = rows.find((row) => row.textContent?.includes('Small'));
+    expect(smallRow).withContext('expected Small format row').toBeTruthy();
+    const button = smallRow?.querySelector('.format-download-btn') as HTMLButtonElement | null;
+    expect(button).not.toBeNull();
+    if (!button) return;
+
+    expect(button.getAttribute('aria-label')).toContain('Small');
+    const cards = fixture.nativeElement.querySelector('.picture-cards') as HTMLElement | null;
+    expect(cards).not.toBeNull();
+    if (!cards) return;
+
+    assertFocusRingContrast(button, cards, 'Download Small (NXENG-800)');
   });
 
   it('wires the focus ring through --document-viewer-focus-on-light-surface on the viewer host', () => {

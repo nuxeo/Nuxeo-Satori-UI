@@ -5,7 +5,7 @@ import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { Subject, of, type Observable } from 'rxjs';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -18,8 +18,8 @@ import {
   WorkflowService,
   type NuxeoDocument,
   type NuxeoTask,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import { DocumentViewerComponent } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import { DocumentViewerComponent } from '@nuxeo/satori-platform/ui';
 
 import { TasksPageComponent } from './tasks-page.component';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -122,7 +122,7 @@ describe('TasksPageComponent — the MIME type bound to the viewer', () => {
     (globalThis as { ResizeObserver?: unknown }).ResizeObserver ??= ResizeObserverStub;
 
     await TestBed.configureTestingModule({
-      // `TranslateModule` is bootstrapped by the app, not the feature: the Satori breadcrumbs inside
+      // `testTranslateModule()` is bootstrapped by the app, not the feature: the Satori breadcrumbs inside
       // this template inject `TranslateService`. Same pattern as `document-detail-slots.spec.ts`.
       imports: [TasksPageComponent, NoopAnimationsModule, testTranslateModule()],
       providers: [

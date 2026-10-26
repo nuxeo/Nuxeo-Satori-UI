@@ -10,6 +10,35 @@ export function decodeNuxeoPathSegment(segment: string): string {
   }
 }
 
+/**
+ * Ancestor titles from Nuxeo's `breadcrumb` enricher, keyed by normalized repository path.
+ *
+ * Nuxeo Web UI's `nuxeo-breadcrumb` renders `contextParameters.breadcrumb.entries` and uses each
+ * entry's `title`; this reads the same list, so a trail built from it needs no request per
+ * ancestor. An entry without a usable title is left out, so the caller's own fallback decides what
+ * that crumb reads rather than it coming back blank.
+ *
+ * The repository root is never in the map, whatever the server calls it. Web UI's `_title()` maps a
+ * `Root` entry to its `browse.root` label rather than to the document's title, and a trail here does
+ * the same by giving the root a first crumb of its own; returning the server's title under `/` would
+ * let a caller label the root "Repository" and lose the translation. It is dropped here, in the one
+ * place that reads the enricher, rather than left to each caller to remember. (Measured on Nuxeo
+ * 2025.21: `/`'s own breadcrumb is `entries: []` and a descendant's chain starts at its Domain, so
+ * the server does not send a root entry either — this is for one that does.)
+ */
+export function nuxeoBreadcrumbTitles(
+  doc: Pick<NuxeoDocument, 'contextParameters'> | null | undefined,
+): Map<string, string> {
+  const titles = new Map<string, string>();
+  for (const entry of doc?.contextParameters?.breadcrumb?.entries ?? []) {
+    if (!entry?.path) continue;
+    const path = normalizeNuxeoPath(entry.path);
+    const title = entry.title?.trim();
+    if (path !== '/' && title) titles.set(path, title);
+  }
+  return titles;
+}
+
 /** True when the router URL is a browse main-view route. */
 export function isBrowseRouterUrl(routerUrl: string): boolean {
   const withoutQuery = routerUrl.split('?')[0];
@@ -75,49 +104,6 @@ export function toBrowseRouterUrl(nuxeoPath: string): string {
     .map((segment) => encodeURIComponent(segment))
     .join('/');
   return `/browse/${encodedPath}`;
-}
-
-/** Query param preserved when opening document detail from adf-hx browse. */
-export const BROWSE_RETURN_MODE_PARAM = 'browseReturn';
-
-export type BrowseReturnMode = 'default' | 'adf-hx';
-
-export function parseBrowseReturnMode(value: string | null | undefined): BrowseReturnMode {
-  return value === 'adf-hx' ? 'adf-hx' : 'default';
-}
-
-/** Build an adf-hx browse route from a repository path (`?path=` query model). */
-export function toAdfHxBrowseRouterUrl(nuxeoPath: string): string {
-  const normalized = normalizeNuxeoPath(nuxeoPath);
-  if (normalized === '/') {
-    return '/browse-adf-hx';
-  }
-  return `/browse-adf-hx?path=${encodeURIComponent(normalized)}`;
-}
-
-/** True when the router URL targets the adf-hx browse POC route. */
-export function isAdfHxBrowseRouterUrl(routerUrl: string): boolean {
-  const hashIndex = routerUrl.indexOf('#');
-  const pathAndQuery = hashIndex >= 0 ? routerUrl.slice(hashIndex + 1) : routerUrl;
-  const path = pathAndQuery.split('?')[0] ?? '';
-  return path === '/browse-adf-hx' || path.startsWith('/browse-adf-hx/');
-}
-
-/** Parse the Nuxeo repository path from an adf-hx browse router URL. */
-export function parseAdfHxBrowsePathFromRouterUrl(routerUrl: string): string {
-  const hashIndex = routerUrl.indexOf('#');
-  const pathAndQuery = hashIndex >= 0 ? routerUrl.slice(hashIndex + 1) : routerUrl;
-  const queryIndex = pathAndQuery.indexOf('?');
-  if (queryIndex < 0) {
-    return '/';
-  }
-  const params = new URLSearchParams(pathAndQuery.slice(queryIndex + 1));
-  return normalizeNuxeoPath(params.get('path') ?? '/');
-}
-
-/** Browse route for returning from document detail (production vs adf-hx POC). */
-export function toBrowseRouterUrlForReturnMode(mode: BrowseReturnMode, nuxeoPath: string): string {
-  return mode === 'adf-hx' ? toAdfHxBrowseRouterUrl(nuxeoPath) : toBrowseRouterUrl(nuxeoPath);
 }
 
 /** Parent folder path for a document path (e.g. `/a/b/file.pdf` → `/a/b`). */

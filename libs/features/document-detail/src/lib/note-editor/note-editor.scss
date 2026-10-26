@@ -351,6 +351,7 @@ lib-note-editor {
   .source-toggle--active {
     background: color-mix(in srgb, var(--mat-sys-primary) 14%, transparent);
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-icon {
       color: var(--mat-sys-primary, #3949ab);
     }

@@ -1,8 +1,9 @@
 # CLAUDE.md — Nuxeo Agentic UI
 
-Angular 20 + Nx monorepo. A Nuxeo content management UI being converted into a
-customer-shippable Beta ("Nuxeo Satori") on real `adf-hx` components, with a
-four-layer customisation contract.
+Angular 22 + Nx monorepo. A Nuxeo content management UI being converted into a
+customer-shippable Beta ("Nuxeo Satori") on our own `nxs-` components
+(`libs/shared/satori-components`), with a four-layer customisation contract. It began on
+`adf-hx`; NXSAT-308 removed adf-hx and ADF.
 
 ---
 
@@ -18,8 +19,7 @@ four-layer customisation contract.
 4. The `AGENTS/` file for your task — `01-services.md`, `02-nuxeo-apis.md`,
    `05-test-standards.md`, `07-security.md`, `08-bug-patterns.md`.
 
-For Beta work also read `docs/extension-reference.md` (the registered-ID contract) and
-`libs/shared/adf-hx-bridge/ARCHITECTURE.md`.
+For Beta work also read `docs/extension-reference.md` (the registered-ID contract).
 
 ## Where the programme stands
 
@@ -48,15 +48,18 @@ before starting.
 and run `npm run mirror:agents`. The `agent-mirror` gate fails when they drift, because three
 copies with nothing comparing them is how a wrong half survives unread.
 
-| Skill                             | Use for                                                    |
-| --------------------------------- | ---------------------------------------------------------- |
-| `beta-phase/SKILL.md`             | Running any Beta phase end to end. **Start here.**         |
-| `verify-gate/SKILL.md`            | Getting to green without churning                          |
-| `capture-phase-evidence/SKILL.md` | Producing evidence that proves something                   |
-| `implement-api-port/SKILL.md`     | One of the twelve adf-hx API ports (Phase 3, ~10 of these) |
-| `adopt-adf-hx-component/SKILL.md` | Swapping a hand-written `hxp-*` for the real component     |
-| `add-extension-point/SKILL.md`    | Making something manifest-addressable                      |
-| `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket            |
+| Skill                             | Use for                                            |
+| --------------------------------- | -------------------------------------------------- |
+| `beta-phase/SKILL.md`             | Running any Beta phase end to end. **Start here.** |
+| `verify-gate/SKILL.md`            | Getting to green without churning                  |
+| `capture-phase-evidence/SKILL.md` | Producing evidence that proves something           |
+| `add-extension-point/SKILL.md`    | Making something manifest-addressable              |
+| `batch-bug-fixes/SKILL.md`        | Many bug fixes at once, one subagent per ticket    |
+
+`implement-api-port` and `adopt-adf-hx-component` are kept as a record only: the adf-hx API
+ports and components they describe were removed with adf-hx (NXSAT-635, NXSAT-637). A new
+`nxs-` component starts from the `satori-component` generator — `AGENTS/00-architecture.md`,
+"Adding a component".
 
 ## The gate — six, not three
 
@@ -70,8 +73,8 @@ Two traps that have each cost a phase:
 
 - **`test` does not typecheck.** Vitest strips types through esbuild. Only `build` and
   `typecheck` catch a `TS` error, and they run last. A green `test` is not type safety.
-- **Nothing except the `lockfile` gate reads `package-lock.json`.** CI was red for the
-  whole of Phase 2 while every local gate was green.
+- **Nothing except the `lockfile` gate checks that `package-lock.json` will install.** CI was
+  red for the whole of Phase 2 while every local gate was green.
 
 ## Hard-won rules — the expensive ones
 
@@ -109,7 +112,8 @@ Two traps that have each cost a phase:
   `error` with Nx's permissive default and could not reject a single edge, and four
   violations had accumulated
 - Credentials from environment only; never hardcoded, never in a URL query string
-- **adf-hx types must never appear in our public API** — wrap them in `adf-hx-bridge`
+- **adf-hx types must never appear in our public API** — nothing imports adf-hx since its
+  bridge, `libs/shared/adf-hx-bridge`, was removed with the POC routes
 - Anything a customer might want to change goes through Layer 0 or 1, not a hardcoded value
 - **Hiding an action in a manifest is not a security control** — server-side Nuxeo
   permissions still gate operations
@@ -119,11 +123,14 @@ Two traps that have each cost a phase:
 - Nuxeo runs locally in Docker (container `nuxeo`, port 8080) with OpenSearch. The dev
   server proxies to it via `apps/nuxeo-ui/proxy.conf.json`.
 - `npx nx serve nuxeo-ui` → `http://localhost:4200`.
-- Credentials from `NUXEO_USER`/`NUXEO_PASS`, default `Administrator`.
-- `SATORI_GH_READONLY_TOKEN` is required to install `@hylandsoftware` and `@alfresco`
-  packages from GitHub Packages.
-- Node is pinned to 20 (`.nvmrc`). On Node 22+ a built-in `localStorage` shadows jsdom's;
-  `npm run beta:gate` works around it, a bare `nx test` does not.
+- Credentials from `NUXEO_USER`/`NUXEO_PASS`, **required — there is no default**. Export them
+  yourself; a local Docker Nuxeo uses its documented default administrator account. A steps or
+  scenes file that needs no backend opts out with `skipHttpCredentials = true`. What refuses,
+  and with which exit code, is in `scripts/beta-harness/README.md`.
+- `SATORI_GH_READONLY_TOKEN` is required to install the `@hylandsoftware` packages from
+  GitHub Packages. No `@alfresco` package is installed since NXSAT-637.
+- Node is pinned to 24 (`.nvmrc`); Angular 22 refuses Node 20. On Node 25+ a built-in `localStorage`
+  shadows jsdom's; `npm run beta:gate` works around it, a bare `nx test` does not.
 - Playwright is installed with `--no-save` on purpose, so CI installs stay unaffected.
 - The AI backend is **not** in this repo — AI features are `AI.*` Nuxeo Automation
   operations from a separate marketplace package. Absent package means HTTP 500, which is

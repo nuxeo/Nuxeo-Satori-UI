@@ -10,8 +10,9 @@ support ticket. This skill converts one of them into something a manifest can
 address.
 
 Context: `AGENTS/11-beta-program.md` sections 2 and 7, `.cursor/rules/beta-program.mdc`.
-Framework: `@alfresco/adf-extensions` — public npm, stable 9.0.0, runtime
-dependency `tslib` only, so this work needs no privileged registry access.
+Framework: our own, in `libs/shared/extensions`. It follows ACA's extension model and
+reproduces `@alfresco/adf-extensions` 9.0.0's merge and ordering semantics without
+importing it, so this work needs no privileged registry access.
 
 ## 1. Decide the layer
 
@@ -73,10 +74,11 @@ inspection.
 
 ## 6. Configuration must survive upgrade
 
-Anything a customer edits cannot live in the packaged web directory —
-`install.xml` copies it with `overwrite="true"` and destroys it on upgrade.
-Bootstrap settings go to a non-overwritten static path; the runtime manifest is
-read from a Nuxeo document with the packaged default as fallback.
+Anything a customer changes cannot live in our package — an upgrade replaces it.
+Since NXSAT-312 both halves are fragments the customer's own Marketplace package
+contributes to `org.nuxeo.agentic.ui.config`, served after our defaults at
+`agentic-ui-config/bootstrap.json` and `manifest.json`, anonymously. Nothing is
+edited on the server and nothing is read from the repository.
 
 If your change adds a customer-editable value, state in the PR where it lives and
 how it survives an upgrade. If you cannot answer that, the change is not done.
@@ -87,7 +89,7 @@ The assertion that matters is that configuration alone changes behaviour:
 
 ```js
 h.step('Manifest can hide a toolbar action without a rebuild');
-await h.goTo('/#/browse-adf-hx');
+await h.goToDoc(docUid); // the toolbar slot renders on document detail
 await h.expectVisible('delete action present by default', '[data-action-id="app.toolbar.delete"]');
 await h.screenshot('action-visible-default');
 // apply the override manifest, reload — no recompilation

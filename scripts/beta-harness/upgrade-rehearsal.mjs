@@ -49,7 +49,7 @@
  * `--break-slot toolbar` is the one that matters. `toolbar` is named in the JSON manifest
  * and referenced by **no** TypeScript in the customer's tree, so:
  *
- *     the customer app compiles against @nuxeo-satori/platform@0.2.0 (after the upgrade)
+ *     the customer app compiles against @nuxeo/satori-platform@0.2.0 (after the upgrade)
  *     upgrade-rehearsal: FAIL — 1 problem(s)
  *     - The manifest names 1 slot(s) the upgraded package no longer has: toolbar.
  *
@@ -79,6 +79,8 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
+
+import { entryTypes } from './package-types.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
@@ -174,7 +176,7 @@ try {
   if (breakSlot) {
     // The negative control. Removes one slot id from the new package's declarations, which
     // is exactly what a careless rename looks like to a customer's manifest.
-    const decl = join(installedNew, 'extensions', 'index.d.ts');
+    const decl = entryTypes(installedNew, './extensions');
     const text = readFileSync(decl, 'utf8');
     // `breakSlot` comes from `--break-slot` on the command line, so it is interpolated into the
     // pattern escaped. Unescaped it is regex injection (CodeQL `js/regex-injection`): a slot name
@@ -262,7 +264,7 @@ try {
    *
    * ## What survives an upgrade, and therefore what is worth asserting
    *
-   * A deep import into platform internals. `@nuxeo-satori/platform/extensions` is supported
+   * A deep import into platform internals. `@nuxeo/satori-platform/extensions` is supported
    * and will still resolve next version; a path into its guts is not, and is precisely what
    * breaks when the internals move — the failure this phase's claim depends on not
    * happening. So the staged customer tree is checked for specifiers outside the published
@@ -274,7 +276,7 @@ try {
       .map((s) => s.replace(/^\./, pkg.name)),
   );
   // Four forms, and the fourth was missing until a probe used it. A **bare side-effect
-  // import** — `import '@nuxeo-satori/platform/extensions/internal/x';` — has no `from` and
+  // import** — `import '@nuxeo/satori-platform/extensions/internal/x';` — has no `from` and
   // no parentheses, so the first version of this regex sailed straight past the exact shape
   // the check exists to reject. `\\bimport\\s*['"]` is that case.
   const SPECIFIER = new RegExp(
@@ -366,10 +368,10 @@ function compileCustomerApp(installed, label, when) {
   let repointed = 0;
   for (const [alias, targets] of Object.entries(base.compilerOptions?.paths ?? {})) {
     if (alias === pkg.name) {
-      rewritten[alias] = [join(installed, 'index.d.ts')];
+      rewritten[alias] = [entryTypes(installed, '.')];
       repointed += 1;
     } else if (alias.startsWith(`${pkg.name}/`)) {
-      rewritten[alias] = [join(installed, alias.slice(pkg.name.length + 1), 'index.d.ts')];
+      rewritten[alias] = [entryTypes(installed, `./${alias.slice(pkg.name.length + 1)}`)];
       repointed += 1;
     } else {
       rewritten[alias] = targets;
@@ -431,7 +433,7 @@ function compileCustomerApp(installed, label, when) {
 
 /** Slot ids as the upgraded package declares them. */
 function slotsFrom(installed) {
-  const decl = join(installed, 'extensions', 'index.d.ts');
+  const decl = entryTypes(installed, './extensions');
   if (!existsSync(decl)) return [];
   const text = readFileSync(decl, 'utf8');
   const block = /declare const EXTENSION_SLOTS:\s*\{([\s\S]*?)\n\};/.exec(text);

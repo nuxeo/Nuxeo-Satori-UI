@@ -1,30 +1,30 @@
 <div class="contracts-page">
   <div class="page-header">
     <div>
-      <h1>&#64;nuxeo-satori/platform/ui Component Showcase</h1>
+      <h1>&#64;nuxeo/satori-platform/ui Component Showcase</h1>
       <p class="page-subtitle">
         {{ 'app.contracts-page.all-components-below-are-imported-from' | translate }}
       </p>
     </div>
     <div class="header-actions">
       <button mat-raised-button color="primary" (click)="openConfirmDialog()">
-        <mat-icon>help_outline</mat-icon>
+        <mat-icon svgIcon="help" />
         {{ 'app.contracts-page.confirm-dialog' | translate }}
       </button>
       <button mat-raised-button color="primary" (click)="openShareDialog()">
-        <mat-icon>share</mat-icon>
+        <mat-icon svgIcon="share" />
         {{ 'app.contracts-page.share-dialog' | translate }}
       </button>
       <button mat-raised-button color="primary" (click)="openExportDialog()">
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
         {{ 'app.contracts-page.export-dialog' | translate }}
       </button>
       <button mat-raised-button color="primary" (click)="openSavedSearchDialog()">
-        <mat-icon>save</mat-icon>
+        <mat-icon svgIcon="save" />
         {{ 'app.contracts-page.saved-search' | translate }}
       </button>
       <button mat-raised-button color="primary" (click)="toggleSelection()">
-        <mat-icon>check_box</mat-icon>
+        <mat-icon svgIcon="checkbox" />
         {{ 'app.contracts-page.toggle-selection-bar' | translate }}
       </button>
     </div>
@@ -42,11 +42,11 @@
 
   <!-- Stats using WidgetGrid -->
   <h2 class="section-title">
-    <mat-icon>widgets</mat-icon>
+    <mat-icon svgIcon="apps" />
     {{ 'app.contracts-page.widgetgridcomponent' | translate }}
   </h2>
   <p class="section-note">
-    <code>import {{ '{' }} WidgetGridComponent {{ '}' }} from '&#64;nuxeo-satori/platform/ui'</code>
+    <code>import {{ '{' }} WidgetGridComponent {{ '}' }} from '&#64;nuxeo/satori-platform/ui'</code>
   </p>
 
   <lib-widget-grid [columns]="3">
@@ -55,7 +55,7 @@
       [title]="'app.contracts-page.active-contracts' | translate"
     >
       <div class="stat">
-        <mat-icon class="stat-icon info">description</mat-icon>
+        <mat-icon class="stat-icon info" svgIcon="page" />
         <p class="stat-value">24</p>
         <p class="stat-caption">{{ 'app.contracts-page.updated-2-hours-ago' | translate }}</p>
       </div>
@@ -66,7 +66,7 @@
       [title]="'app.contracts-page.expiring-soon' | translate"
     >
       <div class="stat">
-        <mat-icon class="stat-icon warning">warning</mat-icon>
+        <mat-icon class="stat-icon warning" svgIcon="report_problem" />
         <p class="stat-value warning">3</p>
         <p class="stat-caption">{{ 'app.contracts-page.next-30-days' | translate }}</p>
       </div>
@@ -74,7 +74,7 @@
 
     <lib-widget-container [headingLevel]="3" [title]="'app.contracts-page.total-value' | translate">
       <div class="stat">
-        <mat-icon class="stat-icon success">attach_money</mat-icon>
+        <mat-icon class="stat-icon success" svgIcon="attach" />
         <p class="stat-value">$2.4M</p>
         <p class="stat-caption">{{ 'app.contracts-page.current-quarter' | translate }}</p>
       </div>
@@ -83,13 +83,13 @@
 
   <!-- Recent Activity using WidgetContainer -->
   <h2 class="section-title">
-    <mat-icon>view_agenda</mat-icon>
+    <mat-icon svgIcon="view" />
     {{ 'app.contracts-page.widgetcontainercomponent' | translate }}
   </h2>
   <p class="section-note">
     <code
       >import {{ '{' }} WidgetContainerComponent {{ '}' }} from
-      '&#64;nuxeo-satori/platform/ui'</code
+      '&#64;nuxeo/satori-platform/ui'</code
     >
   </p>
 
@@ -100,21 +100,21 @@
     <div class="activity">
       <div class="activity-list">
         <div class="activity-item">
-          <mat-icon class="activity-icon success">check_circle</mat-icon>
+          <mat-icon class="activity-icon success" svgIcon="circle_check" />
           <div class="activity-details">
             <strong>{{ 'app.contracts-page.contract-abc-123-renewed' | translate }}</strong>
             <p class="activity-time">2 days ago</p>
           </div>
         </div>
         <div class="activity-item">
-          <mat-icon class="activity-icon warning">schedule</mat-icon>
+          <mat-icon class="activity-icon warning" svgIcon="clock" />
           <div class="activity-details">
             <strong>{{ 'app.contracts-page.contract-xyz-789-pending-review' | translate }}</strong>
             <p class="activity-time">3 days ago</p>
           </div>
         </div>
         <div class="activity-item">
-          <mat-icon class="activity-icon info">edit</mat-icon>
+          <mat-icon class="activity-icon info" svgIcon="pencil" />
           <div class="activity-details">
             <strong>{{ 'app.contracts-page.contract-def-456-signed' | translate }}</strong>
             <p class="activity-time">1 week ago</p>
@@ -126,7 +126,7 @@
 
   <!-- Interactive Component Demos -->
   <h2 class="section-title">
-    <mat-icon>touch_app</mat-icon>
+    <mat-icon svgIcon="view" />
     {{ 'app.contracts-page.interactive-component-demos' | translate }}
   </h2>
   <p class="section-note">{{ 'app.contracts-page.click-the-buttons-at-the-top' | translate }}</p>
@@ -200,7 +200,7 @@
 
   <!-- Code Example -->
   <h2 class="section-title">
-    <mat-icon>code</mat-icon>
+    <mat-icon svgIcon="code" />
     {{ 'app.contracts-page.usage-example' | translate }}
   </h2>
 
@@ -213,7 +213,7 @@ import {{ '{' }} Component {{ '}' }} from '&#64;angular/core';
 import {{ '{' }}
   WidgetContainerComponent,
   WidgetGridComponent,
-{{ '}' }} from '&#64;nuxeo-satori/platform/ui';
+{{ '}' }} from '&#64;nuxeo/satori-platform/ui';
 
 &#64;Component({{ '{' }}
   selector: 'app-my-page',
@@ -231,15 +231,12 @@ export class MyPageComponent {{ '{' }} {{ '}' }}</pre>
     </mat-card-content>
   </mat-card>
 
-  <div class="info-banner">
-    <p>
-      <mat-icon class="banner-icon info">info</mat-icon>
-      <span>
-        <strong>{{ 'app.contracts-page.for-customers' | translate }}</strong>
-        {{ 'app.contracts-page.all-components-shown-are-available-from' | translate }}
-        <code>&#64;nuxeo-satori/platform/ui</code>. Import them directly into your extension
-        libraries to build custom pages and features.
-      </span>
-    </p>
-  </div>
+  <sat-banner variant="info">
+    <sat-banner-message>
+      <strong>{{ 'app.contracts-page.for-customers' | translate }}</strong>
+      {{ 'app.contracts-page.all-components-shown-are-available-from' | translate }}
+      <code>&#64;nuxeo/satori-platform/ui</code>. Import them directly into your extension libraries
+      to build custom pages and features.
+    </sat-banner-message>
+  </sat-banner>
 </div>

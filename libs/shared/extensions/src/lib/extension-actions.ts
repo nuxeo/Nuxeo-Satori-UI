@@ -9,8 +9,9 @@ import type { ExtensionElement } from './extension-slots';
  * The shape follows adf-hx's action services (`content-delete`,
  * `content-share`, `single-item-download`, `permissions-management` in the
  * published package's `/ui` entry point): a declarative descriptor naming a
- * service that performs the work. Phase 3 adopts those components, so matching
- * the pattern now is what avoids migrating the action surface twice.
+ * service that performs the work. It was matched so that adopting those
+ * components would not mean migrating the action surface twice; adf-hx was
+ * removed instead, and the shape stays because handlers are written against it.
  *
  * **A descriptor is not a permission.** `rule` decides what the interface
  * offers; Nuxeo evaluates the real permission server-side on every operation.
@@ -135,6 +136,41 @@ export interface ExtensionDocumentViewDescriptor extends ExtensionElement {
   readonly componentId?: string;
   /** Static values set on the component's declared inputs. Unknown keys are ignored. */
   readonly inputs?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * Replaces a document type's layout in one mode for the documents a rule selects: the type's
+ * section of the Properties panel (`documentMetadata`), the edit form (`documentEdit`) or the
+ * create form (`documentCreate`).
+ *
+ * Resolved like `documentView`: the first entry, by `order`, whose rule passes and whose
+ * component is registered renders; nothing resolving leaves the layout — a contributed file or
+ * the generated one — in place. For `documentCreate` the rule reads the type being created,
+ * not the folder it is created in.
+ *
+ * What the rendered component receives depends on the mode, and the host's values overwrite
+ * `inputs` of the same name: `document` for metadata and edit; `type` and `parentPath` for
+ * create; and, for edit and create, `showErrors` and an `onChange` callback taking a
+ * {@link DocumentLayoutChange}. The host still owns Save.
+ */
+export interface ExtensionDocumentLayoutDescriptor extends ExtensionElement {
+  readonly rule?: ExtensionRule;
+  /** Registered component id rendering the layout. Defaults to the descriptor `id`. */
+  readonly componentId?: string;
+  /** Static values set on the component's declared inputs. Unknown keys are ignored. */
+  readonly inputs?: Readonly<Record<string, unknown>>;
+}
+
+/**
+ * What a `documentEdit` or `documentCreate` component reports through its `onChange` input,
+ * each time its values change: the properties to save, by xpath, and whether they may be.
+ *
+ * For an edit, send only what the user changed; for a create, everything the new document
+ * should have. While `valid` is `false` the host does not save, and the component shows why.
+ */
+export interface DocumentLayoutChange {
+  readonly properties: Readonly<Record<string, unknown>>;
+  readonly valid: boolean;
 }
 
 /**
@@ -310,7 +346,7 @@ export class ExtensionActionRegistry {
  * from here leaves a component undefined at module-initialisation time and takes six `AppShellComponent`
  * specs with it. So the honest statement is the one above — the function and the data contract are
  * agnostic, the library's own Angular components are not, and `@ngx-translate/core` is a declared
- * peer dependency of `@nuxeo-satori/platform` for exactly that reason.
+ * peer dependency of `@nuxeo/satori-platform` for exactly that reason.
  *
  * Falls back to the literal when a key does not resolve, because ngx-translate passes an
  * unknown key straight through and a column header reading `column.last-contributor` is worse

@@ -1,10 +1,11 @@
 import {
   canAddChildren,
   canManageDocumentPermissions,
+  canPublishDocument,
   canRemoveDocument,
   canWriteDocument,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import type { ExtensionRuleEvaluator } from './extension-rules';
 
@@ -16,6 +17,18 @@ function isTrashedDocument(document: NuxeoDocument | null): boolean {
 /** Manifest parameters are untyped JSON; only the strings can name a type or a facet. */
 function stringParameters(parameters: readonly unknown[]): string[] {
   return parameters.filter((parameter): parameter is string => typeof parameter === 'string');
+}
+
+/**
+ * The document's type is one of `types`, matched exactly. `app.rules.isType` and
+ * `app.rules.isNote` both answer through this, so they cannot disagree about a Note.
+ */
+export function documentTypeIsOneOf(
+  document: NuxeoDocument | null,
+  types: readonly string[],
+): boolean {
+  const type = document?.type;
+  return type !== undefined && types.includes(type);
 }
 
 /**
@@ -41,20 +54,31 @@ export const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEval
   'app.rules.canRemove': (context) => canRemoveDocument(context.document),
   'app.rules.canAddChildren': (context) => canAddChildren(context.document),
   'app.rules.canManagePermissions': (context) => canManageDocumentPermissions(context.document),
+  /**
+   * Web UI's `isPublishable`: not a proxy, a record or trashed, `Publishable`, and `WriteVersion`.
+   * True on a version — Web UI publishes one as it is.
+   */
+  'app.rules.canPublish': (context) => canPublishDocument(context.document),
   'app.rules.hasDocument': (context) => context.document !== null,
   /**
    * The focused document's type is one of `parameters` — `["Case", "Claim"]`. Exact match, as
    * Nuxeo type names are case-sensitive. No parameters means no type matches, so a rule
    * misconfigured that way hides its entry rather than showing it everywhere.
    */
-  'app.rules.isType': (context, parameters) => {
-    const type = context.document?.type;
-    return type !== undefined && stringParameters(parameters).includes(type);
-  },
+  'app.rules.isType': (context, parameters) =>
+    documentTypeIsOneOf(context.document, stringParameters(parameters)),
   /** The focused document carries at least one facet in `parameters` — `["Folderish"]`. */
   'app.rules.hasFacet': (context, parameters) => {
     const facets = context.document?.facets ?? [];
     return stringParameters(parameters).some((facet) => facets.includes(facet));
+  },
+  /**
+   * The focused document holds a main file, `file:content` — what Download downloads. Nuxeo's
+   * `Downloadable` facet is not a test for it: Picture holds a file and has no such facet.
+   */
+  'app.rules.hasFile': (context) => {
+    const content = context.document?.properties?.['file:content'];
+    return typeof content === 'object' && content !== null && !Array.isArray(content);
   },
   /** The focused document is in the trash — gates the whole write half of the toolbar. */
   'app.rules.isTrashed': (context) => isTrashedDocument(context.document),

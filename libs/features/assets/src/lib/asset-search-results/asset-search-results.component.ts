@@ -1,5 +1,13 @@
-import { Component, computed, inject, signal, DestroyRef, effect } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+  DestroyRef,
+  effect,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
 import { switchMap, map, catchError, of, tap, finalize } from 'rxjs';
@@ -22,13 +30,13 @@ import {
   type NuxeoDocument,
   type AssetAggregations,
   DocTypeLabelPipe,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   ConfirmDialogComponent,
   SavedSearchDialogComponent,
   ShareSavedSearchDialogComponent,
   type ConfirmDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 export type SortDirection = 'asc' | 'desc' | null;
@@ -304,6 +312,7 @@ function inVideoDurationBucket(durationSec: number | undefined, bucket: string):
     MatSnackBarModule,
   ],
   templateUrl: './asset-search-results.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './asset-search-results.component.scss',
 })
 export class AssetSearchResultsComponent {

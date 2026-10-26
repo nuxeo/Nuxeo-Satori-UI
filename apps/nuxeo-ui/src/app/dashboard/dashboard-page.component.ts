@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DatePipe } from '@angular/common';
 import { Router } from '@angular/router';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -9,7 +9,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { CdkAriaLive } from '@angular/cdk/a11y';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { catchError, of } from 'rxjs';
-import { WidgetContainerComponent, WidgetGridComponent } from '@nuxeo-satori/platform/ui';
+import { WidgetContainerComponent, WidgetGridComponent } from '@nuxeo/satori-platform/ui';
 import type { CreateImportDialogResult } from '@agentic-ui/feature-browse';
 
 import {
@@ -24,10 +24,11 @@ import {
   FOLDERISH_TYPES,
   avatarColor,
   formatRelativeTime,
-} from '@nuxeo-satori/platform/nuxeo-client';
+  type AvatarColor,
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { AuthService } from '../auth/auth.service';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
-import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
+import { SatAvatarModule, type SatAvatarCategory } from '@hylandsoftware/satori-ui/avatar';
 import {
   AiGatewayService,
   AiFeatureFlagService,
@@ -35,6 +36,20 @@ import {
   type Insight,
 } from '@agentic-ui/shared/ai-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+
+/**
+ * `AvatarColor` is nuxeo-client's own copy of `SatAvatarCategory`, because that library may not
+ * import a design system. It must stay exactly upstream's, since `avatarColor()` feeds
+ * `<sat-avatar [category]>`, so the check lives here: both types are in scope and CI's build
+ * compiles it. A colour missing on either side is TS2344.
+ *
+ * Two details are load-bearing. The else branch is `false`, because `never` satisfies
+ * `extends true`. The conditions are tuple-wrapped, because a bare union distributes and
+ * collapses to `true`.
+ */
+type Assert<T extends true> = T;
+type _AvatarColorFitsUpstream = Assert<[AvatarColor] extends [SatAvatarCategory] ? true : false>;
+type _AvatarColorCoversUpstream = Assert<[SatAvatarCategory] extends [AvatarColor] ? true : false>;
 
 @Component({
   selector: 'app-dashboard-page',
@@ -54,6 +69,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     SatAvatarModule,
   ],
   templateUrl: './dashboard-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './dashboard-page.component.scss',
 })
 export class DashboardPageComponent {
@@ -148,6 +164,13 @@ export class DashboardPageComponent {
         this.favoritesLoading.set(false);
       },
     });
+
+    // The banner is already hidden by the same flag, but hiding it never stopped the request:
+    // an opted-out user still had their dashboard sent to `AI.Insights` on every load.
+    if (!this.featureFlags.aiEnabled()) {
+      this.aiInsightsLoading.set(false);
+      return;
+    }
 
     this.aiGateway.getInsights(userId).subscribe({
       next: (res) => {
@@ -272,7 +295,7 @@ export class DashboardPageComponent {
    * word order. See `formatRelativeTime`.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.currentLang() ?? 'en');
   }
 
   goToTask(task: NuxeoTask): void {
@@ -281,11 +304,11 @@ export class DashboardPageComponent {
 
   insightIcon(icon: string): string {
     const map: Record<string, string> = {
-      task: 'assignment',
-      document: 'description',
+      task: 'tasks',
+      document: 'page',
       warning: 'warning',
       info: 'info',
-      workflow: 'account_tree',
+      workflow: 'processes',
     };
     return map[icon] ?? 'info';
   }

@@ -1,0 +1,74 @@
+<mat-form-field appearance="outline" class="nxs-picker__field" subscriptSizing="dynamic">
+  <mat-label>{{ label() }}</mat-label>
+  <input
+    matInput
+    type="text"
+    autocomplete="off"
+    [matAutocomplete]="auto"
+    [value]="text()"
+    [required]="required()"
+    [disabled]="isDisabled()"
+    [errorStateMatcher]="errorState"
+    (input)="onInput($event)"
+    (blur)="blurred()"
+  />
+  @if (value() && !isDisabled()) {
+    <button
+      matIconSuffix
+      mat-icon-button
+      type="button"
+      class="nxs-picker__clear"
+      [attr.aria-label]="'satori-components.pickers.clear' | translate"
+      (click)="clear()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="x_large" />
+    </button>
+  }
+  @if (unmatched()) {
+    <mat-error>{{ 'satori-components.pickers.choose-from-list' | translate }}</mat-error>
+  } @else if (missing()) {
+    <mat-error>{{ 'satori-components.pickers.required' | translate }}</mat-error>
+  }
+  @if (finder.state().status === 'short') {
+    <mat-hint>{{
+      'satori-components.pickers.min-chars-many' | translate: { count: minChars }
+    }}</mat-hint>
+  } @else if (hint()) {
+    <mat-hint>{{ hint() }}</mat-hint>
+  }
+  <mat-autocomplete
+    #auto="matAutocomplete"
+    [displayWith]="displayWith"
+    (optionSelected)="choose($event.option.value)"
+  >
+    @switch (finder.state().status) {
+      @case ('searching') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.searching' | translate
+        }}</mat-option>
+      }
+      @case ('none') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.no-results' | translate
+        }}</mat-option>
+      }
+      @case ('failed') {
+        <mat-option disabled class="nxs-picker__status">{{
+          'satori-components.pickers.failed' | translate
+        }}</mat-option>
+      }
+      @case ('found') {
+        @for (document of finder.state().results; track document.uid) {
+          <mat-option [value]="document" [attr.data-uid]="document.uid">
+            <nxs-doc-type-icon class="nxs-document-reference-input__icon" [type]="document.type" />
+            <span class="nxs-picker__option">
+              <span class="nxs-picker__option-label">{{ document.title }}</span
+              >&ngsp;
+              <span class="nxs-picker__option-detail">{{ document.path }}</span>
+            </span>
+          </mat-option>
+        }
+      }
+    }
+  </mat-autocomplete>
+</mat-form-field>

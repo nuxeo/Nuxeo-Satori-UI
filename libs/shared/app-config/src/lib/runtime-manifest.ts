@@ -1,15 +1,10 @@
 /**
- * Layer 0/1 runtime manifest — the configuration a customer edits day to day.
+ * Layer 0/1 runtime manifest.
  *
- * It is loaded from a Nuxeo document rather than a file on disk, which buys
- * versioning, audit, ACLs and per-tenant scoping for free, lets the manifest be
- * edited from the application itself, and puts it somewhere the marketplace
- * installer cannot reach.
- *
- * Phase 1 loads, validates and exposes the manifest, and consumes `labels` and
- * `featureToggles`. `navItems`, `actions`, `rules` and `presets` are declared
- * here so the document schema is stable from the start; the registry that
- * resolves them by ID arrives in Phase 2.
+ * Contributed by Marketplace packages as `manifest` fragments to the server's configuration
+ * service and served, in contribution order, at `agentic-ui-config/manifest.json`. The browser
+ * folds the fragments over {@link DEFAULT_APP_RUNTIME_MANIFEST} with
+ * {@link mergeRuntimeManifest}, so a later package wins key by key.
  */
 
 export interface ManifestNavItem {
@@ -48,17 +43,16 @@ export interface AppRuntimeManifest {
    */
   readonly labels: Readonly<Record<string, string>>;
   /**
-   * The Layer 1 extension config — slot contributions, per-id overrides and
-   * `$references` layering.
+   * The Layer 1 extension config of each fragment that has one — slot contributions, per-id
+   * overrides and `$references` layering — in contribution order.
    *
-   * Held **opaquely** on purpose. Its schema belongs to
-   * `@nuxeo-satori/platform/extensions`, which parses it with
-   * `readExtensionConfig()`; keeping the type out of this library is what stops
-   * the configuration loader depending on the registry it configures. This
-   * whole subtree is passed through unvalidated by design — the registry
-   * validates it, and it must tolerate whatever a customer saved.
+   * Kept as layers rather than merged here, and held **opaquely**, on purpose. Their schema
+   * and their merge (`mergeExtensionConfigs`) belong to `@nuxeo/satori-platform/extensions`;
+   * keeping both out of this library is what stops the configuration loader depending on the
+   * registry it configures. Each layer is passed through unvalidated — the registry validates
+   * it, and it must tolerate whatever a package contributed.
    */
-  readonly extensions: Readonly<Record<string, unknown>>;
+  readonly extensionLayers: readonly Readonly<Record<string, unknown>>[];
 }
 
 /** An empty manifest: no overrides, so the packaged behaviour stands unchanged. */
@@ -70,7 +64,7 @@ export const DEFAULT_APP_RUNTIME_MANIFEST: AppRuntimeManifest = {
   presets: {},
   featureToggles: {},
   labels: {},
-  extensions: {},
+  extensionLayers: [],
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -142,10 +136,10 @@ function readStringMap(value: unknown): Readonly<Record<string, string>> {
 }
 
 /**
- * Overlay a parsed manifest document onto the defaults.
+ * Overlay one manifest fragment onto the manifest built so far.
  *
- * Total in the same way as {@link mergeBootstrapConfig}: a customer who saves a
- * broken manifest must get the packaged application back, not a blank screen.
+ * Total in the same way as {@link mergeBootstrapConfig}: a package that contributes a
+ * malformed fragment must get the packaged application back, not a blank screen.
  */
 export function mergeRuntimeManifest(base: AppRuntimeManifest, patch: unknown): AppRuntimeManifest {
   if (!isRecord(patch)) return base;
@@ -161,25 +155,11 @@ export function mergeRuntimeManifest(base: AppRuntimeManifest, patch: unknown): 
       ...readBooleanMap(patch['featureToggles']),
     },
     labels: { ...base.labels, ...readStringMap(patch['labels']) },
-    // Passed through whole rather than deep-merged here. The `$references`
-    // layering inside this subtree has its own semantics, implemented once in
-    // `@nuxeo-satori/platform/extensions`; a second, shallower merge at this level
-    // would silently disagree with it.
-    extensions: isRecord(patch['extensions']) ? patch['extensions'] : base.extensions,
+    // Appended as a layer rather than merged here. The merge of this subtree has its own
+    // semantics, implemented once in `@nuxeo/satori-platform/extensions`; a second, shallower
+    // merge at this level would silently disagree with it.
+    extensionLayers: isRecord(patch['extensions'])
+      ? [...base.extensionLayers, patch['extensions']]
+      : base.extensionLayers,
   };
-}
-
-/**
- * Parse the manifest JSON out of a Nuxeo document property.
- *
- * Returns `null` rather than throwing: an absent or malformed configuration
- * document is a supported state, not an error the shell should surface.
- */
-export function parseRuntimeManifest(raw: unknown): AppRuntimeManifest | null {
-  if (typeof raw !== 'string' || raw.trim() === '') return null;
-  try {
-    return mergeRuntimeManifest(DEFAULT_APP_RUNTIME_MANIFEST, JSON.parse(raw));
-  } catch {
-    return null;
-  }
 }

@@ -2,15 +2,16 @@
 title: Nuxeo Agentic UI — the short version
 parent: Product
 order: 0
-last_reviewed: 2026-10-07
-repo_commit: 8be3182
+last_reviewed: 2026-10-09
+repo_commit: 97c6794
 audience: presales, customers, partners
 ---
 
 # Nuxeo Agentic UI — the short version
 
-For presales engineers, customers and partners. It takes about five minutes, describes what the
-`main` branch does today (checked on 7 October 2026), and leaves the longer documents to the end.
+For presales engineers, customers and partners. It takes about five minutes, describes the
+product as it is today (checked on 7 October 2026; the permission-level item under "What it does
+not do today" was re-checked on 9 October), and leaves the longer documents to the end.
 
 ## What it is
 
@@ -43,7 +44,7 @@ those features do not work, and the rest of the application does.
 
 The longer documents sort every change into four numbered layers:
 
-| Layer | In plain words                                                                                                  | Code?                  | Rebuild?            |
+| Layer | In plain words                                                                                                  | Code?                  | Rebuild the app?    |
 | ----- | --------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------- |
 | 0     | **Settings**: product name, colours, language, on-screen wording                                                | No                     | No                  |
 | 1     | **Arrangement**: which menu entries, buttons, tabs and columns appear, in what order, under what name, for whom | No                     | No                  |
@@ -54,43 +55,60 @@ On this page, layers 0 and 1 are "configuration" and layers 2 and 3 are "code".
 
 ## Where configuration lives today
 
-In two places, and both are a known problem:
+Configuration has two parts:
 
-1. **A settings file on the Nuxeo server**,
-   `nxserver/nuxeo.war/agentic-ui-config/bootstrap.json`, created by someone with access to the
-   server's files by copying the sample the package installs beside it, `bootstrap.example.json`,
-   and editing the copy. It holds the name, colours and default language. The package never
-   installs, replaces or deletes `bootstrap.json`, so an upgrade leaves it alone; that was
-   rehearsed on a real server with `nuxeoctl` (NXSAT-317). Without the file the application uses
-   its defaults. Users see a change the next time they open the application.
-2. **A configuration document in the repository**: a Nuxeo Note at
-   `/default-domain/config/agentic-ui` whose text is JSON, in plain-text format, edited by any
-   Nuxeo user allowed to write it. It holds the wording and the whole arrangement. The longer documents call it the
-   _manifest_. Each user reads it with their own permissions, and a change applies at their next
-   sign-in or page reload.
+1. **The settings** (bootstrap): the name, logo, colours and default language.
+2. **The manifest**, which holds the wording and the whole arrangement.
 
-Editing files on a server is not a deployment, and some regulated customers require configuration
-to be kept apart from repository data. The plan is to let you ship your configuration in **your
-own Marketplace package that depends on ours**. That is planned, not built.
+You ship both in **your own Marketplace package that depends on ours**. It
+contributes configuration fragments, and the server serves them after our defaults, in dependency
+order. Nothing is edited on the server and nothing is stored in the Nuxeo content repository. The
+application reads both at startup, before sign-in, so they are the same for every user (except on a
+demo server whose package turns on presales presets, where a preset applies per browser) and must
+hold nothing secret. Users see a change the next time they open the application. An edited
+`bootstrap.json` beside the bundle and the old manifest Note are not read, and nothing converts
+them.
+
+Creating and building such a package needs only Node.js 20: no `npm ci`, no GitHub token, none of
+this repository's dependencies. In a clone of this repository:
+
+```bash
+node tools/satori-generators/src/config-package/create.mjs acme-config --owner=acme
+node config-packages/acme-config/build.mjs     # checks the fragments, writes the zip
+nuxeoctl mp-install config-packages/acme-config/dist/acme-config-1.0.0.zip   # on the Nuxeo server, then restart
+```
+
+What it writes is plain JSON, XML and a build script with no dependencies, so it can live in your
+own repository. `config-packages/presales-demo` is a finished example that builds the same way,
+with `node config-packages/presales-demo/build.mjs`; copying it instead also needs only Node, but
+means renaming it in `package.xml`, `MANIFEST.MF` and the component XML (and that file's name), and
+removing its presets.
+With this repository fully installed (which does need the token), the `config-package` Nx generator
+in [the guide for extenders](../../libs/platform/AGENTS.md#2-start-with-a-generator) writes the same
+files.
 
 ## What you can change without code
 
-| You want to…                                                                                                                   | Where                                          | Details                                                                                                         |
-| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Change the product name and the browser-tab title                                                                              | settings file, `branding`                      | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                             |
-| Change the colours, or add your own colour theme and make it the default                                                       | settings file, `themes` and `defaultThemeId`   | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                             |
-| Choose the default language                                                                                                    | settings file, `defaultLanguage`               | [Our default settings](../../nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json)   |
-| Change on-screen wording — the same text in every language                                                                     | configuration document, `labels`               | [Runbook, beat 4](../../docs/beta-demo-runbook.md#beat-4--relabel-the-product-2-min)                            |
-| Hide, reorder or rename a menu entry, toolbar button, tab, list column or bulk action                                          | configuration document, `extensions.overrides` | [Extension reference, overrides](../../docs/extension-reference.md#per-id-overrides)                            |
-| Add a menu entry that opens an existing page                                                                                   | configuration document, `extensions.slots`     | [Runbook, beat 5](../../docs/beta-demo-runbook.md#beat-5--nav-hide-one-add-one-and-the-security-question-4-min) |
-| Show an entry only when a condition holds: the user can edit the document, is an administrator, has several documents selected | configuration document, a `rule` on the entry  | [Extension reference, rules](../../docs/extension-reference.md#4-rules--the-registered-predicates)              |
-| Choose which list columns are offered, and which start switched on                                                             | configuration document, `extensions.slots`     | [Runbook, beat 6](../../docs/beta-demo-runbook.md#beat-6--columns-3-min)                                        |
+| You want to…                                                                                                                   | Where                                                            | Details                                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| Change the product name and the browser-tab title                                                                              | settings fragment, `branding`                                    | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
+| Change the colours, or add your own colour theme and make it the default                                                       | settings fragment, `themes`, `defaultThemeId`                    | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
+| Put your logo in the header and on the sign-in page                                                                            | settings fragment, `branding.logo`                               | [Runbook, beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min)                                                    |
+| Choose the default language                                                                                                    | settings fragment, `defaultLanguage`                             | [Our default settings](../../nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json)                          |
+| Change on-screen wording — the same text in every language                                                                     | manifest fragment, `labels`                                      | [Runbook, beat 4](../../docs/beta-demo-runbook.md#beat-4--relabel-the-product-2-min)                                                   |
+| Hide, reorder or rename a menu entry, toolbar button, tab, list column or bulk action                                          | manifest fragment, `extensions.overrides`                        | [Extension reference, overrides](../../docs/extension-reference.md#per-id-overrides)                                                   |
+| Add a menu entry that opens an existing page                                                                                   | manifest fragment, `extensions.slots`                            | [Runbook, beat 5](../../docs/beta-demo-runbook.md#beat-5--nav-hide-one-add-one-and-the-security-question-4-min)                        |
+| Show an entry only when a condition holds: the user can edit the document, is an administrator, has several documents selected | manifest fragment, a `rule` on the entry                         | [Extension reference, rules](../../docs/extension-reference.md#4-rules--the-registered-predicates)                                     |
+| Choose which list columns are offered, and which start switched on                                                             | manifest fragment, `extensions.slots`                            | [Runbook, beat 6](../../docs/beta-demo-runbook.md#beat-6--columns-3-min)                                                               |
+| Show a tab or toolbar action only on some document types, or only on documents with a facet                                    | manifest fragment, `app.rules.isType` or `app.rules.hasFacet`    | [Extension reference, document rules](../../docs/extension-reference.md#document-rules)                                                |
+| Choose which of a document type's own fields the Properties panel shows, in which order (read-only)                            | a layout file in the package, named by a `<layout>` contribution | [Extension reference, per-type layouts](../../docs/extension-reference.md#9b-per-type-layouts--which-properties-a-document-type-shows) |
+| Keep several demo configurations on one server and switch between them per browser                                             | settings fragment, `presales`                                    | [Extension reference, presales presets](../../docs/extension-reference.md#presales-presets)                                            |
 
 The conditions are a fixed list that ships with the product; adding your own is code. Every name
 that configuration can address is listed in the
 [extension reference](../../docs/extension-reference.md).
 
-For example, this configuration document hides Trash, renames Collections to "Repository", and
+For example, this manifest fragment hides Trash, renames Collections to "Repository", and
 shows Administration to administrators only:
 
 ```json
@@ -118,20 +136,24 @@ shows Administration to administrators only:
 
 ## What it does not do today
 
-- **Change the logo.** Name and colours, yes; logo, no. A configurable logo is in review:
-  [pull request #307](https://github.com/nuxeo/agentic-ui-poc/pull/307).
-- **Vary the fields by document type.** The page shows and edits a fixed set of standard
-  fields, so the fields of your own document types are not shown or editable. Conditions on a
-  document's type exist (`app.rules.isType`), and a type can have its own View tab through the
-  `documentView` slot, but the properties and edit form are the same for every type.
-- **Deploy configuration from your own package.** Planned, not built; see above.
+- **Change every mark.** The settings fragment's `branding.logo` replaces the header word mark
+  and the sign-in page logo. The small mark at the
+  top of the navigation rail and the "Content Innovation Cloud" title shown when the rail is
+  expanded belong to the Satori design system and stay, and so does the browser-tab icon.
+- **Edit the fields of your own document types.** The Properties panel shows a type's own fields,
+  generated from its schemas or arranged by a layout file in your package
+  ([extension reference, per-type layouts](../../docs/extension-reference.md#9b-per-type-layouts--which-properties-a-document-type-shows)),
+  but read-only. The edit form is the same standard fields for every type.
 - **Install from a public registry.** The Marketplace package has only been published to Nuxeo's
   pre-production Marketplace. The developer package your own code builds against,
-  `@nuxeo-satori/platform`, is not on any npm registry yet.
+  `@nuxeo/satori-platform`, is not on any npm registry yet.
 - **Run your own code inside the shipped application.** See the next section.
-- **Edit every permission level.** The Permissions tab on the Browse page handles Nuxeo's Read,
-  ReadWrite and Everything. On a folder that also carries any other permission it refuses to save
-  rather than delete that entry; manage those in Nuxeo.
+- **Edit every permission level on the rail's Browse page.** That page is still the adf-hx proof
+  of concept, and its Permissions tab handles only Nuxeo's Read, ReadWrite and Everything. On a
+  folder that also carries any other permission it refuses to save rather than delete that entry.
+  The Permissions tab on a document's own page, and on `/browse`, offers all of Nuxeo's standard
+  permissions and the others the server reports
+  ([extension reference, section 13](../../docs/extension-reference.md#13-what-beta-does-not-yet-address)).
 
 ## What needs code
 
@@ -140,9 +162,9 @@ shows Administration to administrators only:
   action that code has registered);
 - your own conditions, such as "the user is in the legal team";
 - changing what a shipped button does;
-- screens and fields specific to your document types.
+- screens specific to your document types, and a form that edits their own fields.
 
-Today a developer writes an Angular library against `@nuxeo-satori/platform`, starting from the
+Today a developer writes an Angular library against `@nuxeo/satori-platform`, starting from the
 code generators that ship with it, and adds it to an application built from our template app,
 `apps/nuxeo-satori-template`. That code does not plug into the shipped application, and because
 the package is not published yet, you build it from this repository. Publishing it is planned.
@@ -152,22 +174,21 @@ the package is not published yet, you build it from this repository. Publishing 
 1. **Run it.** On your own machine, against Nuxeo in Docker: follow
    [Developer Getting Started](../30-engineering/01-getting-started.md). You need Docker,
    Node.js 20, and a GitHub token that can read Hyland's and Alfresco's GitHub Packages.
-2. **Change something without code.** Copy the sample settings file to `bootstrap.json` and edit
-   the copy ([beat 3](../../docs/beta-demo-runbook.md#beat-3--rebrand-no-rebuild-3-min) shows
-   where), or create the configuration document
-   and paste the example above. Create it as a plain-text Note (`note:mime_type` `text/plain`) as
-   [Part 0.6 of the runbook](../../docs/beta-demo-runbook.md#06-create-the-manifest-document)
-   does. In any other format Nuxeo escapes the quotes in the JSON, and the application then
-   ignores the document and keeps its defaults, without an error. Beats 3 to 7 of the
+2. **Change something without code.** Locally, put the example above in a file and run
+   `npm run config:dev -- --manifest <file>` before `nx serve`
+   ([Part 0.6 of the runbook](../../docs/beta-demo-runbook.md#06-write-the-dev-configuration)).
+   On a server, contribute the same JSON as a fragment from your own package, created and built
+   with Node alone as [above](#where-configuration-lives-today). Beats 3 to 7 of the
    [demo runbook](../../docs/beta-demo-runbook.md#part-4--the-demo-script) give the exact JSON
    for each change and what you should see.
 3. **Customise it with an AI coding agent.** Use the
    [Nuxeo Agentic UI prompt library](https://github.com/nuxeo-sandbox/nuxeo-agentic-ui-prompts),
    started by Nuxeo presales. Its rule is that the agent reads our source but never changes it,
    and writes everything into your own Marketplace package that depends on `nuxeo-agentic-ui`.
-   Its branding prompt makes your package's installer overwrite our settings file; that prompt is
-   marked "Not tested yet", and this product does not yet support or test that route. Prompts are
-   collected there rather than in this repository.
+   Its branding prompt was written before configuration moved into packages and copies a
+   settings file onto the server, which is no longer read; put the same JSON in your package's
+   `bootstrap.json` fragment instead.
+   Prompts are collected there rather than in this repository.
 
 ## Read more
 

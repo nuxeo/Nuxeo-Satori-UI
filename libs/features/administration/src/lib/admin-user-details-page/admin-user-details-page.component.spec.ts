@@ -15,7 +15,7 @@ import {
   type NuxeoUser,
   type PrincipalPermissionPage,
   type PrincipalPermissionRow,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 
 import { AdminUserDetailsPageComponent } from './admin-user-details-page.component';

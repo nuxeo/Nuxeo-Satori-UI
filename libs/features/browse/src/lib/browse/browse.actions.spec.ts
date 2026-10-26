@@ -3,17 +3,16 @@ import { TranslateService } from '@ngx-translate/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router, provideRouter, withDisabledInitialNavigation } from '@angular/router';
 import { EMPTY, Subject, of, throwError } from 'rxjs';
 import { vi } from 'vitest';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   ExtensionActionRegistry,
   ExtensionRuleContextService,
   type ExtensionActionDescriptor,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   ADMIN_ACCESS_CHECKS,
   BrowseContextService,
@@ -21,15 +20,17 @@ import {
   CURRENT_USERNAME,
   DirectoryService,
   DocumentDetailService,
+  DocumentImportService,
   PERMISSION_DENIED_KEY,
   TagService,
   type AuditEntry,
   type DirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
-import type { ExportDialogData } from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/nuxeo-client';
+import type { ExportDialogData } from '@nuxeo/satori-platform/ui';
 
 import { BrowseComponent } from './browse';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 /** A complete `NuxeoDocument`, so a fixture states only the fields its test is about. */
 function doc(overrides: Partial<NuxeoDocument> & Pick<NuxeoDocument, 'uid'>): NuxeoDocument {
@@ -130,7 +131,7 @@ const tag = {
   removeTag: vi.fn((): TagReturn<'removeTag'> => EMPTY),
 };
 
-const manifest = signal<{ extensions?: unknown }>({});
+const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLayers: [] });
 
 /**
  * Every action the browse toolbar, side panel and tabs can start, in both its
@@ -143,7 +144,7 @@ const manifest = signal<{ extensions?: unknown }>({});
 describe('BrowseComponent — actions', () => {
   let component: BrowseComponent;
   let fixture: ComponentFixture<BrowseComponent>;
-  let snackBar: ReturnType<typeof vi.fn>;
+  let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
   let dialogOpen: ReturnType<typeof vi.fn>;
   let anchorClicks: { href: string; download: string }[];
   let originalAnchorClick: () => void;
@@ -153,7 +154,8 @@ describe('BrowseComponent — actions', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    snackBar = vi.fn();
+    toast = { show: vi.fn(), error: vi.fn() };
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     dialogOpen = vi.fn(() => ({ afterClosed: () => of(undefined) }));
     // `vi.clearAllMocks()` clears recorded calls but keeps implementations, and the
     // component issues its first folder request from the constructor — so without
@@ -190,13 +192,14 @@ describe('BrowseComponent — actions', () => {
     URL.createObjectURL = vi.fn(() => `blob:mock/${counter++}`);
     URL.revokeObjectURL = vi.fn((url: string) => revoked.push(url));
 
-    manifest.set({});
+    manifest.set({ extensionLayers: [] });
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), BrowseComponent],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
         { provide: BrowseService, useValue: browse },
+        { provide: DocumentImportService, useValue: { importFiles: () => EMPTY } },
         { provide: DocumentDetailService, useValue: detail },
         { provide: DirectoryService, useValue: directory },
         { provide: TagService, useValue: tag },
@@ -209,7 +212,6 @@ describe('BrowseComponent — actions', () => {
             hasAdministrationAccess: () => false,
           },
         },
-        { provide: MatSnackBar, useValue: { open: snackBar } },
         { provide: MatDialog, useValue: { open: dialogOpen } },
         { provide: AppConfigService, useValue: { manifest } },
       ],
@@ -247,7 +249,7 @@ describe('BrowseComponent — actions', () => {
     expect(anchorClicks).toEqual([{ href: 'blob:mock/0', download: 'Q3 Workspace.csv' }]);
     expect(revoked).toEqual(['blob:mock/0']);
     expect(component.csvExporting()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('CSV exported successfully', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('CSV exported successfully');
   });
 
   it('exportCsv clears the exporting flag when the bulk action fails, so the user can retry', () => {
@@ -258,7 +260,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(component.csvExporting()).toBe(false);
     expect(anchorClicks).toEqual([]);
-    expect(snackBar).toHaveBeenCalledWith('CSV export failed.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('CSV export failed.');
   });
 
   it('exportCsv clears the exporting flag when polling for the result fails', () => {
@@ -269,7 +271,7 @@ describe('BrowseComponent — actions', () => {
     component.exportCsv();
 
     expect(component.csvExporting()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('CSV export failed.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('CSV export failed.');
   });
 
   it('exportCsv does nothing without a browsed document', () => {
@@ -310,7 +312,7 @@ describe('BrowseComponent — actions', () => {
     component.downloadAll();
 
     expect(anchorClicks).toEqual([]);
-    expect(snackBar).toHaveBeenCalledWith('Download failed.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Download failed.');
   });
 
   it('downloadAll does nothing without a browsed document', () => {
@@ -366,17 +368,16 @@ describe('BrowseComponent — actions', () => {
   it('openDriveDialog falls back to the repository root when nothing is browsed', () => {
     component.openDriveDialog();
 
-    expect(dialogData<{ docUid: string; docPath: string }>()).toEqual({ docUid: '', docPath: '/' });
+    expect(dialogData<{ folderPath: string }>()).toEqual({ folderPath: '/' });
   });
 
-  it('openDriveDialog passes the browsed folder uid and path', () => {
+  it('openDriveDialog opens Drive on the browsed folder', () => {
     component.currentDoc.set(folder);
 
     component.openDriveDialog();
 
-    expect(dialogData<{ docUid: string; docPath: string }>()).toEqual({
-      docUid: 'ws-1',
-      docPath: '/default-domain/workspaces/ws-1',
+    expect(dialogData<{ folderPath: string }>()).toEqual({
+      folderPath: '/default-domain/workspaces/ws-1',
     });
   });
 
@@ -393,7 +394,7 @@ describe('BrowseComponent — actions', () => {
     expect(detail.subscribe).toHaveBeenCalledWith('ws-1');
     expect(detail.unsubscribe).not.toHaveBeenCalled();
     expect(component.isSubscribed()).toBe(true);
-    expect(snackBar).toHaveBeenCalledWith('Subscribed to notifications', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Subscribed to notifications');
   });
 
   it('toggleNotify unsubscribes an already-subscribed folder and announces that', () => {
@@ -408,7 +409,7 @@ describe('BrowseComponent — actions', () => {
     expect(detail.unsubscribe).toHaveBeenCalledWith('ws-1');
     expect(detail.subscribe).not.toHaveBeenCalled();
     expect(component.isSubscribed()).toBeFalsy();
-    expect(snackBar).toHaveBeenCalledWith('Unsubscribed', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('Unsubscribed');
   });
 
   it('toggleNotify leaves the subscription state untouched when the call fails', () => {
@@ -419,9 +420,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(browse.getByPath).not.toHaveBeenCalled();
     expect(component.isSubscribed()).toBeFalsy();
-    expect(snackBar).toHaveBeenCalledWith('Failed to update notifications', 'OK', {
-      duration: 3000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to update notifications');
   });
 
   it('toggleNotify does nothing without a browsed document', () => {
@@ -439,9 +438,7 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Open a folder to create or import content.', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Open a folder to create or import content.');
   });
 
   it('openCreateImportDialog refuses a folder the user cannot add children to', () => {
@@ -452,10 +449,8 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -473,9 +468,8 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.show).toHaveBeenCalledWith(
       'Open Sections, Templates, or Workspaces, then create content inside those folders.',
-      'OK',
       { duration: 6000 },
     );
   });
@@ -560,9 +554,7 @@ describe('BrowseComponent — actions', () => {
     component.openCreateImportDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Open a folder to create or import content.', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.show).toHaveBeenCalledWith('Open a folder to create or import content.');
   });
 
   // ── Metadata edit ──
@@ -634,10 +626,8 @@ describe('BrowseComponent — actions', () => {
     component.openEditDialog();
 
     expect(dialogOpen).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      { duration: 4000 },
     );
   });
 
@@ -694,7 +684,7 @@ describe('BrowseComponent — actions', () => {
     expect(browse.restoreDocument).toHaveBeenCalledWith('del-1');
     expect(browse.getTrashedChildren).toHaveBeenCalled();
     expect(load).toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('"Deleted.txt" restored', 'OK', { duration: 3000 });
+    expect(toast.show).toHaveBeenCalledWith('"Deleted.txt" restored');
   });
 
   it('restoreDocument leaves the listing alone when the untrash operation fails', () => {
@@ -706,7 +696,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(load).not.toHaveBeenCalled();
     expect(browse.getTrashedChildren).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to restore document.', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to restore document.');
   });
 
   // ── Tags ──
@@ -716,7 +706,7 @@ describe('BrowseComponent — actions', () => {
     component.tagInput = 'legal';
     component.tagSearchResults.set(['legal']);
     component.showCreateOption.set(true);
-    tag.addTag.mockReturnValue(of(undefined));
+    tag.addTag.mockReturnValue(of([]));
     browse.getByPath.mockReturnValue(
       of(doc({ ...folder, properties: { 'nxtag:tags': [{ label: 'legal' }] } })),
     );
@@ -728,7 +718,7 @@ describe('BrowseComponent — actions', () => {
     expect(component.tagInput).toBe('');
     expect(component.tagSearchResults()).toEqual([]);
     expect(component.showCreateOption()).toBe(false);
-    expect(snackBar).toHaveBeenCalledWith('Tag "legal" added', 'OK', { duration: 2000 });
+    expect(toast.show).toHaveBeenCalledWith('Tag "legal" added');
   });
 
   it('keeps the typed tag in the input when adding it fails', () => {
@@ -740,12 +730,12 @@ describe('BrowseComponent — actions', () => {
 
     expect(component.tagInput).toBe('legal');
     expect(browse.getByPath).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to add tag', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to add tag');
   });
 
   it('createTag applies the trimmed input and ignores a blank one', () => {
     component.currentDoc.set(folder);
-    tag.addTag.mockReturnValue(of(undefined));
+    tag.addTag.mockReturnValue(of([]));
     browse.getByPath.mockReturnValue(of(folder));
 
     component.tagInput = '   ';
@@ -762,7 +752,7 @@ describe('BrowseComponent — actions', () => {
       doc({ ...folder, properties: { 'nxtag:tags': [{ label: 'legal' }, 'urgent'] } }),
     );
     expect(component.tags()).toEqual(['legal', 'urgent']);
-    tag.removeTag.mockReturnValue(of(undefined));
+    tag.removeTag.mockReturnValue(of([]));
     browse.getByPath.mockReturnValue(
       of(doc({ ...folder, properties: { 'nxtag:tags': ['urgent'] } })),
     );
@@ -781,7 +771,7 @@ describe('BrowseComponent — actions', () => {
 
     expect(component.tags()).toEqual(['legal']);
     expect(browse.getByPath).not.toHaveBeenCalled();
-    expect(snackBar).toHaveBeenCalledWith('Failed to remove tag', 'OK', { duration: 3000 });
+    expect(toast.error).toHaveBeenCalledWith('Failed to remove tag');
   });
 
   it('does not attempt to tag anything without a browsed document', () => {
@@ -1067,44 +1057,107 @@ describe('BrowseComponent — actions', () => {
 
   // ── Breadcrumbs ──
 
-  it('onBreadcrumbClick navigates to the crumb href and updates the tree context', () => {
-    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
-    const anchor = document.createElement('a');
-    anchor.setAttribute('href', '/browse/default-domain/workspaces');
-    const span = document.createElement('span');
-    anchor.appendChild(span);
-    const event = new MouseEvent('click', { cancelable: true });
-    span.dispatchEvent(event);
-
-    component.onBreadcrumbClick(event);
-
-    expect(event.defaultPrevented).toBe(true);
-    expect(navigate).toHaveBeenCalledWith('/browse/default-domain/workspaces');
-    expect(TestBed.inject(BrowseContextService).contextPath()).toBe('/default-domain/workspaces');
-  });
-
-  it('onBreadcrumbClick ignores a click that is not on a crumb link', () => {
-    const navigate = vi.spyOn(TestBed.inject(Router), 'navigateByUrl');
-    const div = document.createElement('div');
-    const event = new MouseEvent('click', { cancelable: true });
-    div.dispatchEvent(event);
-
-    component.onBreadcrumbClick(event);
-
-    expect(event.defaultPrevented).toBe(false);
-    expect(navigate).not.toHaveBeenCalled();
-  });
-
   it('breadcrumbs link every ancestor and leave the current folder unlinked', () => {
+    component.currentDoc.set(
+      doc({
+        uid: 'ws-1',
+        title: 'My Workspace',
+        path: '/default-domain/workspaces/ws-1',
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              doc({ uid: 'dom', title: 'Domain', type: 'Domain', path: '/default-domain' }),
+              doc({
+                uid: 'wsr',
+                title: 'Workspaces',
+                type: 'WorkspaceRoot',
+                path: '/default-domain/workspaces',
+              }),
+              doc({ uid: 'ws-1', title: 'My Workspace', path: '/default-domain/workspaces/ws-1' }),
+            ],
+          },
+        },
+      }),
+    );
+
+    // Router links: a crumb navigates in the app, and the router's NavigationEnd moves the tree.
+    expect(component.breadcrumbs()).toEqual([
+      { label: 'Root', routerLink: '/browse' },
+      { label: 'Domain', routerLink: '/browse/default-domain' },
+      { label: 'Workspaces', routerLink: '/browse/default-domain/workspaces' },
+      { label: 'My Workspace' },
+    ]);
+    expect(component.breadcrumbsId).toBe('nxs.primitives.breadcrumbs');
+  });
+
+  it('falls back to path segments for a folder fetched without the breadcrumb enricher', () => {
     component.currentDoc.set(
       doc({ uid: 'ws-1', title: 'My Workspace', path: '/default-domain/workspaces/ws-1' }),
     );
 
+    // Not the defect this replaced, which showed segments even when titles were available: with no
+    // enricher the segment is all there is, and a blank crumb would be worse.
     expect(component.breadcrumbs()).toEqual([
-      { label: 'Root', href: '/browse' },
-      { label: 'default-domain', href: '/browse/default-domain' },
-      { label: 'workspaces', href: '/browse/default-domain/workspaces' },
+      { label: 'Root', routerLink: '/browse' },
+      { label: 'default-domain', routerLink: '/browse/default-domain' },
+      { label: 'workspaces', routerLink: '/browse/default-domain/workspaces' },
       { label: 'My Workspace' },
+    ]);
+  });
+
+  it('falls back per crumb when an enricher entry carries no title', () => {
+    component.currentDoc.set(
+      doc({
+        uid: 'ws-1',
+        title: 'My Workspace',
+        path: '/default-domain/workspaces/ws-1',
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              doc({ uid: 'dom', title: '', type: 'Domain', path: '/default-domain' }),
+              doc({
+                uid: 'wsr',
+                title: 'Workspaces',
+                type: 'WorkspaceRoot',
+                path: '/default-domain/workspaces',
+              }),
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(component.breadcrumbs().map((c) => c.label)).toEqual([
+      'Root',
+      'default-domain',
+      'Workspaces',
+      'My Workspace',
+    ]);
+  });
+
+  it('keeps the repository root as a single first crumb, labelled from browse.breadcrumb.root', () => {
+    component.currentDoc.set(
+      doc({
+        uid: 'dom',
+        title: 'Domain',
+        type: 'Domain',
+        path: '/default-domain',
+        // Web UI's `_title()` labels a Root entry `browse.root`; the trail's own first crumb is
+        // that label, so a root the enricher happens to send must not become a crumb of its own.
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              doc({ uid: 'repo-root', title: 'Repository', type: 'Root', path: '/' }),
+              doc({ uid: 'dom', title: 'Domain', type: 'Domain', path: '/default-domain' }),
+            ],
+          },
+        },
+      }),
+    );
+
+    expect(component.breadcrumbs()).toEqual([
+      { label: 'Root', routerLink: '/browse' },
+      { label: 'Domain' },
     ]);
   });
 

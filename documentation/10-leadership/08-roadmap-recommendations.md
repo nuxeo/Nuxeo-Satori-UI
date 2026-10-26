@@ -2,17 +2,19 @@
 title: Roadmap Recommendations
 parent: Executive / Leadership
 order: 8
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-08
+repo_commit: 2898046
 audience: leadership
 ---
 
 # Roadmap Recommendations
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
+> Only the repository links were re-verified at that commit: made relative rather than pinned to
+> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 >
 > **These are recommendations, not commitments, and not a plan of record.** The plan of record
-> is [`docs/adf-hx-beta-plan.md`](https://github.com/nuxeo/agentic-ui-poc/blob/feature/adf-hx-browse-poc/docs/adf-hx-beta-plan.md).
+> is [`docs/adf-hx-beta-plan.md`](../../docs/adf-hx-beta-plan.md).
 > Sequencing here is derived from what the repository shows and what the RFC identifies as
 > unresolved. No dates are given, because effort in this programme has never been measured and
 > a date derived from an unmeasured baseline would be quoted as though it were real.
@@ -94,13 +96,13 @@ Deliberately after validation, not before.
 
 ## Strategic options — worth a decision, not yet a plan
 
-| #      | Option                                                  | Argument                                                                                                                                              | Counter-argument                                                                                    |
-| ------ | ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
-| **S1** | **Productise the verification apparatus** beyond Satori | It answers the industry's live question — how to ship AI-written code safely — and is product-independent. Arguably more broadly valuable than Satori | It is currently a by-product, not a product. Packaging it is real work and a different go-to-market |
-| **S2** | **Customer self-service Layer 0/1 UI**                  | The manifest is already a Nuxeo document, so storage, versioning, audit and ACLs are solved. The hard part is done                                    | Only worth it if N1 shows Layer 0/1 is where the demand is                                          |
-| **S3** | **Extension marketplace**                               | Generators + a stable contract + a guardrail is the substrate                                                                                         | Needs publishing, a versioning policy and curation. Premature at zero customers                     |
-| **S4** | **AI-assisted upgrade migration**                       | The rehearsal proves _whether_ a customisation survives; this would help when it does not                                                             | Speculative until customers have Layer 2 code to migrate                                            |
-| **S5** | **Measure the AI leverage** we are claiming             | We assert AI-assisted benefits with no instrumentation. 111 commits of history could be reconciled against calendar time                              | Retrospective and imperfect — but it is the only baseline we will ever get for this phase           |
+| #      | Option                                                  | Argument                                                                                                                                                                                                       | Counter-argument                                                                                    |
+| ------ | ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| **S1** | **Productise the verification apparatus** beyond Satori | It answers the industry's live question — how to ship AI-written code safely — and is product-independent. Arguably more broadly valuable than Satori                                                          | It is currently a by-product, not a product. Packaging it is real work and a different go-to-market |
+| **S2** | **Customer self-service Layer 0/1 UI**                  | ~~The manifest is already a Nuxeo document, so storage, versioning, audit and ACLs are solved.~~ Superseded by NXSAT-312: the manifest is now a fragment in the customer's package, so this needs re-assessing | Only worth it if N1 shows Layer 0/1 is where the demand is                                          |
+| **S3** | **Extension marketplace**                               | Generators + a stable contract + a guardrail is the substrate                                                                                                                                                  | Needs publishing, a versioning policy and curation. Premature at zero customers                     |
+| **S4** | **AI-assisted upgrade migration**                       | The rehearsal proves _whether_ a customisation survives; this would help when it does not                                                                                                                      | Speculative until customers have Layer 2 code to migrate                                            |
+| **S5** | **Measure the AI leverage** we are claiming             | We assert AI-assisted benefits with no instrumentation. 111 commits of history could be reconciled against calendar time                                                                                       | Retrospective and imperfect — but it is the only baseline we will ever get for this phase           |
 
 ---
 

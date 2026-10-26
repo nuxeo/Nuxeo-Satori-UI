@@ -1,8 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 
 import { TemplateSessionService } from '../../template-session.service';
 
@@ -12,7 +12,7 @@ import { TemplateSessionService } from '../../template-session.service';
  * The shell renders this instead of the router outlet while there is no session,
  * so no page has to defend itself against an unauthenticated request. A fork on
  * SSO deletes this component and redirects instead — nothing in
- * `@nuxeo-satori/platform` knows it exists.
+ * `@nuxeo/satori-platform` knows it exists.
  *
  * The credential is never a default, a placeholder or a compiled-in value: it is
  * typed by the person signing in and handed straight to
@@ -22,6 +22,7 @@ import { TemplateSessionService } from '../../template-session.service';
   selector: 'app-sign-in',
   standalone: true,
   templateUrl: './sign-in.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './sign-in.scss',
 })
 export class SignInComponent {

@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -7,7 +7,7 @@ import {
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, throwError, type Observable } from 'rxjs';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { DEFAULT_KE_CIC_OPERATIONS, KE_CIC_OPERATIONS } from './ke.config';
 import { KeClientService, KeEnrichmentError } from './ke-client.service';
@@ -65,7 +65,7 @@ describe('KeClientService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
         { provide: KE_CIC_OPERATIONS, useValue: DEFAULT_KE_CIC_OPERATIONS },
@@ -296,7 +296,7 @@ describe('KeClientService', () => {
       TestBed.resetTestingModule();
       TestBed.configureTestingModule({
         providers: [
-          provideHttpClient(),
+          provideHttpClient(withXhr()),
           provideHttpClientTesting(),
           { provide: NUXEO_API_ORIGIN, useValue: 'https://nuxeo.example.com/' },
           { provide: KE_CIC_OPERATIONS, useValue: DEFAULT_KE_CIC_OPERATIONS },
@@ -704,7 +704,10 @@ describe('KeClientService when the failure is not an HTTP response', () => {
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([(): Observable<never> => throwError(() => cause)])),
+        provideHttpClient(
+          withXhr(),
+          withInterceptors([(): Observable<never> => throwError(() => cause)]),
+        ),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
         { provide: KE_CIC_OPERATIONS, useValue: DEFAULT_KE_CIC_OPERATIONS },

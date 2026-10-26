@@ -36,7 +36,8 @@
  * Usage:
  *   node scripts/demo-deck/capture.mjs [--only=id,id] [--out=DIR]
  *
- * Requires: Nuxeo on :8080, product app on :4200, template app on :4310.
+ * Requires: Nuxeo on :8080, product app on :4200, template app on :4310, and NUXEO_USER /
+ * NUXEO_PASS — no default; exits 2 before launching a browser when either is unset.
  */
 
 import { createHash } from 'node:crypto';
@@ -45,6 +46,11 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import { EVIDENCE_ROOT } from '../collect-evidence/evidence-path.mjs';
+import { nuxeoCredentialsOrExit } from '../beta-harness/nuxeo-credentials.mjs';
+
+// Both defaulted to the local Docker administrator pair (NXSAT-649). The whoami gate below
+// compares against USER, so a default also made that gate agree with an identity nobody chose.
+const { username: USER, password: PASS } = nuxeoCredentialsOrExit('capture the demo deck');
 
 let chromium;
 try {
@@ -63,9 +69,6 @@ const arg = (name) =>
 
 const APP = process.env['APP_URL'] ?? 'http://localhost:4200';
 const TEMPLATE = process.env['TEMPLATE_URL'] ?? 'http://localhost:4310';
-const NUXEO = process.env['NUXEO_URL'] ?? 'http://localhost:8080';
-const USER = process.env['NUXEO_USER'] ?? 'Administrator';
-const PASS = process.env['NUXEO_PASS'] ?? 'Administrator';
 
 /** Gate 6: one viewport, one scale, for every shot. */
 const VIEWPORT = { width: 1440, height: 900 };
@@ -89,18 +92,11 @@ const outDir = resolve(arg('out') ?? resolve(EVIDENCE_ROOT, 'demo', `capture-${s
  * as substrings of the console text, each tied to a stated cause:
  *
  *   - AI.Insights 500      — the AI marketplace package is not installed. Expected, not a defect.
- *   - anonymous 403        — the pre-auth manifest fetch, before a session exists.
  *   - group/Administrator  — Administrator is a user, not a group; the permissions panel probes both.
  */
 const CONSOLE_ALLOW = [
   'automation/AI.Insights',
-  'config/agentic-ui',
   'api/v1/group/Administrator',
-  // The template app's own manifest fetch, while signed out. Same class as the product's
-  // `config/agentic-ui` 403 above: a pre-auth read of a document the anonymous user cannot see.
-  // Nuxeo answers 404 rather than 403 for this one. Established that the proxy is fine —
-  // `:4310/nuxeo/api/v1/me` answers 200 through it — so this is authorisation, not routing.
-  'config/satori-template',
   // A FOURTH expected failure, found by this gate on its first honest run and documented in no
   // runbook. `AuthService.clearStaleNuxeoCookieSession()` GETs /nuxeo/logout to drop a stale
   // JSESSIONID before login, and swallows the result with `catchError(() => of(undefined))` — so the
@@ -166,10 +162,7 @@ const CUSTOM_PAGES_MANIFEST = {
   extensions: {
     $name: 'acme-insurance',
     overrides: {
-      // `app.navbar.browseAdfHx` is the browse entry the product renders — the
-      // legacy `app.navbar.browse` ships `disabled`, so relabelling it would
-      // photograph a nav with no Claim Files in it.
-      'app.navbar.browseAdfHx': { label: 'Claim Files', order: 10 },
+      'app.navbar.browse': { label: 'Claim Files', order: 10 },
       'app.navbar.knowledgeDiscovery': { visible: false },
     },
     slots: {
@@ -206,7 +199,7 @@ const CUSTOM_PAGES_MANIFEST = {
 const SHOTS = [
   // =====================================================================================
   // TRACK A — customise the shipped app. Every "after" here is produced by an edit to
-  // configuration or to the manifest document. No rebuild, no deploy.
+  // the bootstrap or manifest configuration (see `configLayer`). No rebuild, no deploy.
   // =====================================================================================
   {
     id: 'a0-browse-before',
@@ -241,10 +234,8 @@ const SHOTS = [
       extensions: {
         $name: 'acme-insurance',
         overrides: {
-          // Every nav id the product renders is relabellable this way. The
-          // fifteenth, `app.navbar.browse`, ships `disabled`, so an override on
-          // it is applied to a descriptor the registry drops — see nav-items.ts.
-          'app.navbar.browseAdfHx': { label: 'Claim Files', order: 10 },
+          // Every nav id the product renders is relabellable this way.
+          'app.navbar.browse': { label: 'Claim Files', order: 10 },
           'app.navbar.collections': { label: 'Policies', order: 20 },
           'app.navbar.tasks': { label: 'Underwriting Queue', order: 30 },
           'app.navbar.favorites': { label: 'Flagged Claims', order: 40 },
@@ -300,7 +291,7 @@ const SHOTS = [
     waitFor: 'body',
   },
   {
-    // Layer 0 branding lives in a FILE, not the manifest document — a distinction that trips people
+    // Layer 0 branding is bootstrap configuration, not the manifest — a distinction that trips people
     // up, and the reason `runtime-manifest.ts` has no `branding` or `themes` key at all.
     id: 'a3-rebrand-after',
     slide: 'Rebrand — the result',
@@ -409,7 +400,7 @@ const SHOTS = [
 
   // =====================================================================================
   // TRACK B — build a UI from scratch on the published package. A separate app on :4310,
-  // importing only @nuxeo-satori/platform entry points.
+  // importing only @nuxeo/satori-platform entry points.
   // =====================================================================================
   // The template app authenticates through its OWN login form — it does not share the product's
   // session. Without `signIn`, every one of these captures the login page instead of the page named,
@@ -531,86 +522,87 @@ async function signInToTemplate(page) {
 const STRUCTURAL_MARKER = 'adf-datatable-marker';
 
 // ---------------------------------------------------------------------------------------------
-// Manifest application. `note:note` holds a JSON *string*, not nested JSON — writing an object
-// there makes the parser return null and the packaged UI renders silently.
+// Configuration. Both halves are files the dev server serves from the gitignored
+// `apps/nuxeo-ui/public/agentic-ui-config/`, each the configuration servlet's envelope of
+// fragments, written by `npm run config:dev`. A shot's branding or manifest is applied as one more
+// fragment — `demo-deck`, after ours, as a customer package's would be — and withdrawn after it.
+//
+// The dev server serves only asset files that existed when it started — a file created afterwards
+// stays 404 while edits to an existing one are re-served — so the files must exist before
+// `nx serve`. A file on disk does not prove the server sees it, so this asks the running server
+// instead, and refuses rather than patch a file nothing serves.
+//
+// Doing this inside the run rather than by hand matters for a reason that already bit once: with the
+// rebrand left applied, the BASELINE capture came back in Acme purple while its slide called it "the
+// product as shipped". Patch it for the shots that need it, restore it immediately after, and the
+// mismatch cannot happen.
 // ---------------------------------------------------------------------------------------------
-async function applyManifest(manifest) {
-  const body = JSON.stringify({
-    'entity-type': 'document',
-    properties: { 'note:note': JSON.stringify(manifest) },
-  });
-  const res = await fetch(`${NUXEO}/nuxeo/api/v1/path/default-domain/config/agentic-ui`, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Basic ${Buffer.from(`${USER}:${PASS}`).toString('base64')}`,
-    },
-    body,
-  });
-  if (!res.ok) throw new Error(`manifest PUT failed: HTTP ${res.status}`);
-}
-
-/**
- * Layer 0 branding lives in a FILE, not the manifest document, and the harness owns the edit.
- *
- * `runtime-manifest.ts` has no `branding` or `themes` key — those come from
- * `/agentic-ui-config/bootstrap.json`, which the dev server serves from the gitignored
- * `apps/nuxeo-ui/public/agentic-ui-config/bootstrap.json`. The packaged file is a sample the app
- * never reads (NXSAT-317). The dev server serves only asset files that existed when it started — a
- * file created afterwards stays 404 while edits to an existing one are re-served — so the local
- * copy must be made before `nx serve`. A file on disk does not prove the server sees it, so this
- * asks the running server instead, and refuses rather than patch a file nothing serves.
- *
- * Doing this inside the run rather than by hand matters for a reason that already bit once: with the
- * rebrand left applied, the BASELINE capture came back in Acme purple while its slide called it "the
- * product as shipped". Patch it for the shots that need it, restore it immediately after, and the
- * mismatch cannot happen.
- */
-const BOOTSTRAP = resolve(
+const CONFIG_DIR = resolve(
   import.meta.dirname,
   '..',
   '..',
-  'apps/nuxeo-ui/public/agentic-ui-config/bootstrap.json',
+  'apps/nuxeo-ui/public/agentic-ui-config',
 );
-const SERVED_BOOTSTRAP = new URL('/agentic-ui-config/bootstrap.json', APP).href;
-let bootstrapOriginal = null;
+const DEMO_FRAGMENT = 'demo-deck';
 
-async function fetchServedBootstrap() {
-  const res = await fetch(SERVED_BOOTSTRAP, { cache: 'no-store' }).catch(() => null);
-  return res?.ok ? res.json().catch(() => null) : null;
+function configLayer(layer) {
+  const file = resolve(CONFIG_DIR, `${layer}.json`);
+  const servedUrl = new URL(`/agentic-ui-config/${layer}.json`, APP).href;
+  let original = null;
+
+  const fetchServed = async () => {
+    const res = await fetch(servedUrl, { cache: 'no-store' }).catch(() => null);
+    return res?.ok ? res.json().catch(() => null) : null;
+  };
+
+  const write = async (content) => {
+    const served = await fetchServed();
+    if (!existsSync(file) || served?.format !== 'nuxeo-agentic-ui-config/1') {
+      throw new Error(
+        `${servedUrl} is not serving a configuration response, so a patch to ${file} would not ` +
+          'take effect. The dev server only serves a file that existed when it started. Write ' +
+          'both files, then restart nx serve:\n  npm run config:dev',
+      );
+    }
+    const raw = await readFile(file, 'utf8');
+    if (original === null) original = raw;
+    const envelope = JSON.parse(original);
+    envelope.fragments = [
+      ...envelope.fragments.filter((fragment) => fragment.name !== DEMO_FRAGMENT),
+      {
+        name: DEMO_FRAGMENT,
+        component: 'local.demo-deck',
+        bundle: 'local.demo-deck',
+        source: 'scripts/demo-deck/capture.mjs',
+        content,
+      },
+    ];
+    await writeFile(file, `${JSON.stringify(envelope, null, 2)}\n`);
+    const expected = JSON.stringify(envelope);
+    for (let waited = 0; waited < 15000; waited += 500) {
+      if (JSON.stringify(await fetchServed()) === expected) return;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+    await restore();
+    throw new Error(`${servedUrl} did not reflect the patch within 15 s; restored the original.`);
+  };
+
+  const restore = async () => {
+    if (original === null) return;
+    await writeFile(file, original);
+    original = null;
+    await new Promise((r) => setTimeout(r, 6000));
+  };
+
+  return { write, restore };
 }
 
-async function patchBootstrap(patch) {
-  const served = await fetchServedBootstrap();
-  if (!existsSync(BOOTSTRAP) || served === null) {
-    throw new Error(
-      `${SERVED_BOOTSTRAP} is not being served, so a patch to ${BOOTSTRAP} would not take ` +
-        'effect. The dev server only serves a file that existed when it started. Copy the ' +
-        'packaged defaults, then restart nx serve:\n' +
-        '  mkdir -p apps/nuxeo-ui/public/agentic-ui-config && cp ' +
-        'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json ' +
-        'apps/nuxeo-ui/public/agentic-ui-config/bootstrap.json',
-    );
-  }
-  const raw = await readFile(BOOTSTRAP, 'utf8');
-  if (bootstrapOriginal === null) bootstrapOriginal = raw;
-  const merged = { ...JSON.parse(raw), ...patch };
-  await writeFile(BOOTSTRAP, `${JSON.stringify(merged, null, 2)}\n`);
-  const expected = JSON.stringify(merged);
-  for (let waited = 0; waited < 15000; waited += 500) {
-    if (JSON.stringify(await fetchServedBootstrap()) === expected) return;
-    await new Promise((r) => setTimeout(r, 500));
-  }
-  await restoreBootstrap();
-  throw new Error(`${SERVED_BOOTSTRAP} did not reflect the patch within 15 s; restored the original.`);
-}
-
-async function restoreBootstrap() {
-  if (bootstrapOriginal === null) return;
-  await writeFile(BOOTSTRAP, bootstrapOriginal);
-  bootstrapOriginal = null;
-  await new Promise((r) => setTimeout(r, 6000));
-}
+const bootstrapConfig = configLayer('bootstrap');
+const manifestConfig = configLayer('manifest');
+const patchBootstrap = bootstrapConfig.write;
+const restoreBootstrap = bootstrapConfig.restore;
+const applyManifest = manifestConfig.write;
+const restoreManifest = manifestConfig.restore;
 
 // ---------------------------------------------------------------------------------------------
 
@@ -623,7 +615,9 @@ const context = await browser.newContext({
   // httpCredentials guarantees Basic on every request to the origin. Seeding the session into
   // sessionStorage alone satisfies the route guard but does not reliably authenticate XHRs, which
   // surfaces as intermittent 403s on /nuxeo/api paths — the Phase 0 harness defect.
-  httpCredentials: { username: USER, password: PASS, origin: APP },
+  // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never challenges, so a
+  // challenge-based credential is never sent and `page.request` runs as Anonymous.
+  httpCredentials: { username: USER, password: PASS, origin: APP, send: 'always' },
 });
 
 /**
@@ -727,158 +721,162 @@ console.log(`auth ok: ${whoami}\n`);
 const results = [];
 const shots = ONLY ? SHOTS.filter((s) => ONLY.includes(s.id)) : SHOTS;
 
-for (const shot of shots) {
-  currentShot = shot.id;
+try {
+  for (const shot of shots) {
+    currentShot = shot.id;
 
-  // ---- negative controls: break exactly one gate's input, leave the rest intact ----
-  let route = shot.route;
-  let expected = [...shot.expect];
-  if (NEGATIVE_CONTROL === 'route' && shot === shots[0]) route = '/#/settings/themes';
-  if (NEGATIVE_CONTROL === 'content' && shot === shots[0]) expected = ['ThisStringIsNotOnAnyPage'];
+    // ---- negative controls: break exactly one gate's input, leave the rest intact ----
+    let route = shot.route;
+    let expected = [...shot.expect];
+    if (NEGATIVE_CONTROL === 'route' && shot === shots[0]) route = '/#/settings/themes';
+    if (NEGATIVE_CONTROL === 'content' && shot === shots[0])
+      expected = ['ThisStringIsNotOnAnyPage'];
 
-  if (shot.manifest) await applyManifest(shot.manifest);
-  // Branding is a file edit, so it is applied and withdrawn per shot rather than left in place.
-  if (shot.bootstrap) await patchBootstrap(shot.bootstrap);
-  else await restoreBootstrap();
-  if (shot.signIn) await signInToTemplate(page);
+    // Both layers are file edits, so each is applied and withdrawn per shot rather than left in
+    // place: with --only, a shot must not inherit whatever the previous selected shot applied.
+    if (shot.manifest) await applyManifest(shot.manifest);
+    else await restoreManifest();
+    if (shot.bootstrap) await patchBootstrap(shot.bootstrap);
+    else await restoreBootstrap();
+    if (shot.signIn) await signInToTemplate(page);
 
-  const url = `${shot.base}${route}`;
-  await page.goto(url, { waitUntil: 'domcontentloaded' });
+    const url = `${shot.base}${route}`;
+    await page.goto(url, { waitUntil: 'domcontentloaded' });
 
-  // Gate 4. A manifest- or bootstrap-dependent shot needs a document reload, not a hash
-  // navigation: `withHashLocation()` makes `goto('/#/x')` same-document, so `APP_INITIALIZER` —
-  // which is what reads bootstrap.json — never runs again.
-  if (shot.manifest || shot.bootstrap) {
-    await page.reload({ waitUntil: 'domcontentloaded' });
-  }
+    // Gate 4. A manifest- or bootstrap-dependent shot needs a document reload, not a hash
+    // navigation: `withHashLocation()` makes `goto('/#/x')` same-document, so `APP_INITIALIZER` —
+    // which is what reads bootstrap.json — never runs again.
+    if (shot.manifest || shot.bootstrap) {
+      await page.reload({ waitUntil: 'domcontentloaded' });
+    }
 
-  // A swallowed wait failure is how the false pass happened: the selector never appeared, the run
-  // continued, and the shot photographed whatever was on screen. Record it instead of discarding it,
-  // so it reaches the report even when the content gate would also have caught it.
-  let waitFailed = null;
-  try {
-    await page.waitForSelector(shot.waitFor, { timeout: 30000 });
-  } catch {
-    waitFailed = shot.waitFor;
-  }
-  await page.waitForTimeout(2500);
-  if (shot.act) await shot.act(page);
+    // A swallowed wait failure is how the false pass happened: the selector never appeared, the run
+    // continued, and the shot photographed whatever was on screen. Record it instead of discarding it,
+    // so it reaches the report even when the content gate would also have caught it.
+    let waitFailed = null;
+    try {
+      await page.waitForSelector(shot.waitFor, { timeout: 30000 });
+    } catch {
+      waitFailed = shot.waitFor;
+    }
+    await page.waitForTimeout(2500);
+    if (shot.act) await shot.act(page);
 
-  // Gate 3 — route assertion, against the shot's DECLARED route (`shot.route`), never against the
-  // possibly-mutated `route` used to navigate.
-  //
-  // The first cut compared `landed` against `route`, which the negative control had just rewritten —
-  // so it asked "did I arrive where I told myself to go", was true by construction, and passed a
-  // deliberate mis-route. Only the content gate caught it. That is the tautological path check this
-  // repo has already been burned by once, reproduced exactly.
-  const landed = page.url();
-  const declared = shot.route.replace(/^\/#/, '#').split('?')[0];
-  const routeOk = landed.includes(declared);
+    // Gate 3 — route assertion, against the shot's DECLARED route (`shot.route`), never against the
+    // possibly-mutated `route` used to navigate.
+    //
+    // The first cut compared `landed` against `route`, which the negative control had just rewritten —
+    // so it asked "did I arrive where I told myself to go", was true by construction, and passed a
+    // deliberate mis-route. Only the content gate caught it. That is the tautological path check this
+    // repo has already been burned by once, reproduced exactly.
+    const landed = page.url();
+    const declared = shot.route.replace(/^\/#/, '#').split('?')[0];
+    const routeOk = landed.includes(declared);
 
-  // Gate 2 — content assertion, against the live DOM. Read input VALUES as well as text: adf-core
-  // renders property values inside <input> elements, so a text-only assertion passed while the
-  // screenshot showed a raw ISO string and [object Object].
-  const domText = await page.evaluate(() => {
-    const inputs = [...document.querySelectorAll('input')].map((i) => i.value).join(' ');
-    return `${document.body.innerText}\n${inputs}`;
-  });
-  // Structural claims are checked by predicate, not by text. The marker is swapped out of the
-  // string list so it is never searched for literally.
-  const textExpected = expected.filter((e) => e !== STRUCTURAL_MARKER);
-  const missing = textExpected.filter((e) => !domText.includes(e));
-  // `domAssert` runs whenever a shot declares one — NOT only when `expect` carries the structural
-  // marker.
-  //
-  // The first cut gated it on `expected.includes(STRUCTURAL_MARKER)`, which meant any shot with a
-  // `domAssert` and ordinary text expectations had its structural assertion **silently skipped**.
-  // Three shots were in that state, and one of them asserted that "No attachment on this document"
-  // was absent while the capture plainly showed those words. The gate reported `ok`.
-  //
-  // That is this harness's own failure mode turned inward: an assertion that does not run is worse
-  // than no assertion, because it reads as coverage. A skipped check must never be indistinguishable
-  // from a passing one.
-  if (shot.domAssert) {
-    const structureOk =
-      NEGATIVE_CONTROL === 'content' && shot === shots[0]
-        ? false
-        : await page.evaluate(shot.domAssert);
-    if (!structureOk) missing.push(`domAssert failed for ${shot.id}`);
-  }
+    // Gate 2 — content assertion, against the live DOM. Read input VALUES as well as text: adf-core
+    // renders property values inside <input> elements, so a text-only assertion passed while the
+    // screenshot showed a raw ISO string and [object Object].
+    const domText = await page.evaluate(() => {
+      const inputs = [...document.querySelectorAll('input')].map((i) => i.value).join(' ');
+      return `${document.body.innerText}\n${inputs}`;
+    });
+    // Structural claims are checked by predicate, not by text. The marker is swapped out of the
+    // string list so it is never searched for literally.
+    const textExpected = expected.filter((e) => e !== STRUCTURAL_MARKER);
+    const missing = textExpected.filter((e) => !domText.includes(e));
+    // `domAssert` runs whenever a shot declares one — NOT only when `expect` carries the structural
+    // marker.
+    //
+    // The first cut gated it on `expected.includes(STRUCTURAL_MARKER)`, which meant any shot with a
+    // `domAssert` and ordinary text expectations had its structural assertion **silently skipped**.
+    // Three shots were in that state, and one of them asserted that "No attachment on this document"
+    // was absent while the capture plainly showed those words. The gate reported `ok`.
+    //
+    // That is this harness's own failure mode turned inward: an assertion that does not run is worse
+    // than no assertion, because it reads as coverage. A skipped check must never be indistinguishable
+    // from a passing one.
+    if (shot.domAssert) {
+      const structureOk =
+        NEGATIVE_CONTROL === 'content' && shot === shots[0]
+          ? false
+          : await page.evaluate(shot.domAssert);
+      if (!structureOk) missing.push(`domAssert failed for ${shot.id}`);
+    }
 
-  // Callout geometry, read from the live DOM immediately before the screenshot so the boxes and the
-  // pixels agree. Rects are CSS px; the PNG is scaled by SCALE, so the consumer multiplies.
-  let callouts = null;
-  if (shot.callouts) {
-    callouts = await page.evaluate((defs) => {
-      return defs.map((d) => {
-        const el = document.querySelector(d.selector);
-        if (!el) return { ...d, found: false };
-        const r = el.getBoundingClientRect();
-        return {
-          ...d,
-          found: r.width > 0 && r.height > 0,
-          x: r.x,
-          y: r.y,
-          w: r.width,
-          h: r.height,
-        };
-      });
-    }, shot.callouts);
-  }
+    // Callout geometry, read from the live DOM immediately before the screenshot so the boxes and the
+    // pixels agree. Rects are CSS px; the PNG is scaled by SCALE, so the consumer multiplies.
+    let callouts = null;
+    if (shot.callouts) {
+      callouts = await page.evaluate((defs) => {
+        return defs.map((d) => {
+          const el = document.querySelector(d.selector);
+          if (!el) return { ...d, found: false };
+          const r = el.getBoundingClientRect();
+          return {
+            ...d,
+            found: r.width > 0 && r.height > 0,
+            x: r.x,
+            y: r.y,
+            w: r.width,
+            h: r.height,
+          };
+        });
+      }, shot.callouts);
+    }
 
-  const file = resolve(outDir, `${shot.id}.png`);
-  await page.screenshot({ path: file, fullPage: false });
-  const bytes = await readFile(file);
-  const sha = createHash('sha256').update(bytes).digest('hex');
+    const file = resolve(outDir, `${shot.id}.png`);
+    await page.screenshot({ path: file, fullPage: false });
+    const bytes = await readFile(file);
+    const sha = createHash('sha256').update(bytes).digest('hex');
 
-  results.push({
-    id: shot.id,
-    slide: shot.slide,
-    url: landed,
-    intendedRoute: shot.route,
-    navigatedTo: route,
-    routeOk,
-    waitFailed,
-    expected,
-    missing,
-    sha256: sha,
-    bytes: bytes.length,
-    file: `${shot.id}.png`,
-    scale: SCALE,
-    callouts,
-  });
-
-  console.log(
-    `${missing.length === 0 && routeOk ? 'ok  ' : 'FAIL'} ${shot.id}  ` +
-      `${bytes.length} B  sha=${sha.slice(0, 12)}${missing.length ? `  MISSING: ${missing}` : ''}`,
-  );
-
-  // dedup negative control: capture the same shot a second time under a different id.
-  if (NEGATIVE_CONTROL === 'dedup' && shot === shots[0]) {
-    const dupFile = resolve(outDir, `${shot.id}-DUP.png`);
-    await page.screenshot({ path: dupFile, fullPage: false });
-    const dupBytes = await readFile(dupFile);
     results.push({
-      id: `${shot.id}-DUP`,
+      id: shot.id,
       slide: shot.slide,
       url: landed,
-      intendedRoute: route,
-      routeOk: true,
+      intendedRoute: shot.route,
+      navigatedTo: route,
+      routeOk,
+      waitFailed,
       expected,
-      missing: [],
-      sha256: createHash('sha256').update(dupBytes).digest('hex'),
-      bytes: dupBytes.length,
-      file: `${shot.id}-DUP.png`,
+      missing,
+      sha256: sha,
+      bytes: bytes.length,
+      file: `${shot.id}.png`,
+      scale: SCALE,
+      callouts,
     });
+
+    console.log(
+      `${missing.length === 0 && routeOk ? 'ok  ' : 'FAIL'} ${shot.id}  ` +
+        `${bytes.length} B  sha=${sha.slice(0, 12)}${missing.length ? `  MISSING: ${missing}` : ''}`,
+    );
+
+    // dedup negative control: capture the same shot a second time under a different id.
+    if (NEGATIVE_CONTROL === 'dedup' && shot === shots[0]) {
+      const dupFile = resolve(outDir, `${shot.id}-DUP.png`);
+      await page.screenshot({ path: dupFile, fullPage: false });
+      const dupBytes = await readFile(dupFile);
+      results.push({
+        id: `${shot.id}-DUP`,
+        slide: shot.slide,
+        url: landed,
+        intendedRoute: route,
+        routeOk: true,
+        expected,
+        missing: [],
+        sha256: createHash('sha256').update(dupBytes).digest('hex'),
+        bytes: dupBytes.length,
+        file: `${shot.id}-DUP.png`,
+      });
+    }
   }
+} finally {
+  // Leave the world at baseline, whatever happened. A harness that leaves customisation applied is
+  // exactly how the dirty manifest and the purple baseline both happened.
+  await restoreManifest();
+  await restoreBootstrap();
+  await browser.close();
 }
-
-// Leave the world at baseline, whatever happened. A harness that leaves customisation applied is
-// exactly how the dirty manifest and the purple baseline both happened.
-await applyManifest({ version: 1 });
-await restoreBootstrap();
-
-await browser.close();
 
 // ---- Gate 1: dedup across the whole run ----
 const byHash = new Map();

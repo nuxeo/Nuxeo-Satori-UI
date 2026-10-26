@@ -1,10 +1,10 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import {
   AppExtensionsService,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { ACME_EXTENSIONS_EXTENSION_IDS } from '../extensions';
 
@@ -23,6 +23,7 @@ import { ACME_EXTENSIONS_EXTENSION_IDS } from '../extensions';
   selector: 'acme-panel',
   standalone: true,
   templateUrl: './acme-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './acme-panel.scss',
 })
 export class AcmePanelComponent {

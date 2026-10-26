@@ -1,11 +1,11 @@
 import { Injectable } from '@angular/core';
 
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * What a rule may inspect.
  *
- * **This is deliberately not `RuleContext` from `@alfresco/adf-extensions`.**
+ * **This is deliberately not ACA's `RuleContext`** (`@alfresco/adf-extensions`).
  * Upstream's is typed on Alfresco Content Services domain objects — `NodeEntry`,
  * `SiteEntry`, `RepositoryInfo` from `@alfresco/js-api` — which describe a
  * repository we do not talk to. Reusing it would have put ACS types in the

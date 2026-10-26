@@ -1,8 +1,8 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, computed, inject, signal } from '@angular/core';
+import { Injectable, Injector, computed, inject, signal } from '@angular/core';
 import { Observable, map, tap } from 'rxjs';
 
-import { NUXEO_API_ORIGIN } from '@nuxeo-satori/platform/nuxeo-client';
+import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
 /** What the template keeps about a signed-in user. */
 interface TemplateSession {
@@ -15,12 +15,9 @@ interface TemplateSession {
 /**
  * `sessionStorage`, not `localStorage`, and not a field.
  *
- * Not a field, because the Layer 1 manifest is fetched from Nuxeo by
- * `AppConfigService` during `provideAppInitializer` — before any component
- * exists and long before a user could type a password. Without a credential
- * that survives a reload, that request is anonymous, Nuxeo answers 401, and the
- * manifest silently falls back to the packaged default. Persisting the session
- * is what makes Layer 1 work on the second load.
+ * Not a field, so that reloading the page does not sign the user out. The
+ * configuration itself never needs it: `AppConfigService` fetches both halves
+ * without the interceptor, so without this session's `Authorization` header.
  *
  * `sessionStorage` rather than `localStorage` because the value is a reversible
  * encoding of a password: scoping it to the tab means closing the tab ends the
@@ -64,12 +61,14 @@ function readStoredSession(): TemplateSession | null {
  *
  * All of it. A customer on SAML/OIDC keeps the signals and the
  * `isSignedIn()`/`username()` surface, and swaps the body for their identity
- * provider. Nothing in `@nuxeo-satori/platform` depends on this class.
+ * provider. Nothing in `@nuxeo/satori-platform` depends on this class.
  */
 @Injectable({ providedIn: 'root' })
 export class TemplateSessionService {
   private readonly http = inject(HttpClient);
-  private readonly apiOrigin = inject(NUXEO_API_ORIGIN);
+  // `NUXEO_API_ORIGIN` is read at sign-in, not here: the rule-context initializer constructs this
+  // service before the configuration loads, and the token keeps the first value it resolves to.
+  private readonly injector = inject(Injector);
 
   private readonly session = signal<TemplateSession | null>(readStoredSession());
 
@@ -95,7 +94,7 @@ export class TemplateSessionService {
   signIn(username: string, password: string): Observable<string> {
     const basic = btoa(`${username}:${password}`);
     return this.http
-      .get<unknown>(`${this.apiOrigin.replace(/\/$/, '')}/nuxeo/api/v1/me`, {
+      .get<unknown>(`${this.injector.get(NUXEO_API_ORIGIN).replace(/\/$/, '')}/nuxeo/api/v1/me`, {
         headers: { Authorization: `Basic ${basic}` },
       })
       .pipe(

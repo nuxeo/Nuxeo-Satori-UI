@@ -8,7 +8,7 @@ import {
   DirectoryService,
   type AuditEntry,
   type DirectoryEntry,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,
@@ -366,7 +366,7 @@ describe('AdminAuditPageComponent', () => {
 
     it('should pick an icon per severity', () => {
       expect(component.severityIcon('high')).toBe('error');
-      expect(component.severityIcon('medium')).toBe('warning');
+      expect(component.severityIcon('medium')).toBe('report_problem');
       expect(component.severityIcon('low')).toBe('info');
       expect(component.severityIcon('anything-else')).toBe('info');
     });
@@ -547,12 +547,12 @@ describe('AdminAuditPageComponent', () => {
     });
 
     it('should map each known stat icon and fall back to info', () => {
-      expect(component.summaryStatIcon('edit')).toBe('edit');
-      expect(component.summaryStatIcon('delete')).toBe('delete');
+      expect(component.summaryStatIcon('edit')).toBe('pencil');
+      expect(component.summaryStatIcon('delete')).toBe('trash');
       expect(component.summaryStatIcon('security')).toBe('shield');
-      expect(component.summaryStatIcon('login')).toBe('login');
+      expect(component.summaryStatIcon('login')).toBe('key');
       expect(component.summaryStatIcon('download')).toBe('download');
-      expect(component.summaryStatIcon('workflow')).toBe('account_tree');
+      expect(component.summaryStatIcon('workflow')).toBe('tree');
       expect(component.summaryStatIcon('info')).toBe('info');
       expect(component.summaryStatIcon('not-a-known-icon')).toBe('info');
     });

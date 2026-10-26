@@ -2,14 +2,16 @@
 title: Code KT
 parent: Engineering
 order: 11
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-15
+repo_commit: c053e63
 audience: engineering
 ---
 
 # Code Knowledge Transfer — "where do I make this change?"
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-15 · **Repository:** `c053e63` (`integration/nxsat-308`)
+> Only the adf-hx bridge and POC-route passages were re-verified at that commit, for NXSAT-648.
+> The rest of the page as of 2026-08-24 · `77265f9`.
 
 The page to keep open while working. It answers _where_, not _what_ — see
 [Architecture](02-architecture.md) for how the pieces fit.
@@ -28,8 +30,8 @@ The page to keep open while working. It answers _where_, not _what_ — see
 | Change what the nav shows                          | Nothing in code if a manifest can express it — Layer 1                                                  | Otherwise `apps/nuxeo-ui/src/app/extensions/provide-app-extensions.ts`                                                                      |
 | Make something customer-configurable               | Layer 0 (`bootstrap.json`) or Layer 1 (manifest)                                                        | [Extensibility Contract](07-extensibility-contract.md). Use `add-extension-point` skill                                                     |
 | Add a rule a manifest can reference                | `provide-app-extensions.ts`, plus `libs/shared/extensions/src/lib/document-rules.ts` for document rules | Document it in `docs/extension-reference.md`; `npm run beta:reference` gates both directions                                                |
-| Add an adf-hx API port                             | `libs/shared/adf-hx-bridge/src/lib/api/`                                                                | Use `implement-api-port` skill. Port goes in the **root** injector                                                                          |
-| Swap a hand-written `hxp-*` for the real component | The feature library + the bridge                                                                        | Use `adopt-adf-hx-component` skill. Capture evidence **before** the swap                                                                    |
+| Add an adf-hx API port                             | Nothing — the bridge and its ports were removed on 2026-10-14 (NXSAT-635)                               | A new Nuxeo call goes in `nuxeo-client`: `add-nuxeo-api` skill. `implement-api-port` is a record only                                       |
+| Swap a hand-written `hxp-*` for the real component | Nothing — adf-hx was removed (NXSAT-635, NXSAT-637)                                                     | A new `nxs-` component: `satori-component` generator. `adopt-adf-hx-component` is a record only                                             |
 | Change theming                                     | `bootstrap.json` `themes[].tokens`, or a `--*` token declaration in `.scss`                             | Never a raw colour literal — `checkThemeTokens` fails it                                                                                    |
 | Change auth behaviour                              | `apps/nuxeo-ui/src/app/auth/`                                                                           | Read `AGENTS/07-security.md`. Note the anonymous-auth fact in [Architecture §5](02-architecture.md#5-authentication-and-authorisation)      |
 | Add an AI feature                                  | `libs/shared/ai-client` for the client; the **operation itself is in another repository**               | [Runtime AI Features](10-runtime-ai-features.md)                                                                                            |
@@ -67,20 +69,20 @@ Traced with browse as the example:
 
 ## 3. Where things live
 
-| Concern                 | Location                                                                                                      |
-| ----------------------- | ------------------------------------------------------------------------------------------------------------- |
-| Business logic          | The feature library, or `libs/shared/nuxeo-client` if it is repository semantics                              |
-| Integrations            | `libs/shared/nuxeo-client` (Nuxeo), `adf-hx-bridge` (adf-hx), `ai-client` (AI ops), `kd-client` / `ke-client` |
-| Prompts / instructions  | `AGENTS/*.md`, `CLAUDE.md`, `.cursor/rules/*.mdc`, `.windsurfrules`, `.github/copilot-instructions.md`        |
-| Procedures for AI tools | `.cursor/skills/*/SKILL.md`                                                                                   |
-| Review agents           | `.claude/agents/` — specified in `AGENTS/12-review-agents.md`                                                 |
-| Configuration (runtime) | `bootstrap.json` → `libs/shared/app-config`                                                                   |
-| Configuration (build)   | `angular.json`, `nx.json`, `tsconfig.base.json`, `eslint.config.mjs`                                          |
-| Unit tests              | Beside the code, `*.spec.ts`                                                                                  |
-| E2E tests               | `apps/nuxeo-ui-e2e/src/`                                                                                      |
-| Evidence steps          | `scripts/beta-harness/steps/`                                                                                 |
-| Gates                   | `scripts/beta-harness/`                                                                                       |
-| Machine state           | `.ai/state/` — only through the gates                                                                         |
+| Concern                 | Location                                                                                               |
+| ----------------------- | ------------------------------------------------------------------------------------------------------ |
+| Business logic          | The feature library, or `libs/shared/nuxeo-client` if it is repository semantics                       |
+| Integrations            | `libs/shared/nuxeo-client` (Nuxeo), `ai-client` (AI ops), `kd-client` / `ke-client`                    |
+| Prompts / instructions  | `AGENTS/*.md`, `CLAUDE.md`, `.cursor/rules/*.mdc`, `.windsurfrules`, `.github/copilot-instructions.md` |
+| Procedures for AI tools | `.cursor/skills/*/SKILL.md`                                                                            |
+| Review agents           | `.claude/agents/` — specified in `AGENTS/12-review-agents.md`                                          |
+| Configuration (runtime) | `bootstrap.json` → `libs/shared/app-config`                                                            |
+| Configuration (build)   | `angular.json`, `nx.json`, `tsconfig.base.json`, `eslint.config.mjs`                                   |
+| Unit tests              | Beside the code, `*.spec.ts`                                                                           |
+| E2E tests               | `apps/nuxeo-ui-e2e/src/`                                                                               |
+| Evidence steps          | `scripts/beta-harness/steps/`                                                                          |
+| Gates                   | `scripts/beta-harness/`                                                                                |
+| Machine state           | `.ai/state/` — only through the gates                                                                  |
 
 ---
 
@@ -120,16 +122,16 @@ The most common failure in this repository. Ask, in order:
 
 ### An application failure
 
-| Symptom                                           | First look                                                                                                                       |
-| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
-| `NG0201: No provider`                             | An upstream `providedIn: 'root'` service resolving a port from the root injector. Provide it in root                             |
-| Raw i18n keys on screen                           | A catalogue missing or empty in the bundle. `npm run beta:bundle`                                                                |
-| Empty lists, intermittent 403                     | XHRs unauthenticated. Session in `sessionStorage` satisfies the _guard_; `httpCredentials` authenticates _requests_. Both needed |
-| Broken image, or an internal URL in the DOM       | `<img [src]>` bound to a Nuxeo URL. `checkNoNuxeoUrlInImgSrc`                                                                    |
-| Memory growth over a session                      | An un-revoked blob URL. `checkBlobUrlLifecycle`                                                                                  |
-| A nav entry that goes to the wrong page           | A registered path with no route — it falls through the wildcard. The host must map the path                                      |
-| HTTP 500 from `AI.*`                              | The AI backend package is absent. Expected                                                                                       |
-| Specs fail with `SecurityError` on `localStorage` | Node 22+. Use Node 20 or `npm run beta:gate`                                                                                     |
+| Symptom                                           | First look                                                                                                                                                                                                                                                       |
+| ------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `NG0201: No provider`                             | An upstream `providedIn: 'root'` service resolving a port from the root injector. Provide it in root                                                                                                                                                             |
+| Raw i18n keys on screen                           | A catalogue missing or empty in the bundle. `npm run beta:bundle`                                                                                                                                                                                                |
+| Empty lists, intermittent 403                     | XHRs unauthenticated. The session in `sessionStorage` satisfies the _guard_ and gives the app's XHRs their header; `httpCredentials` with `send: 'always'` authenticates `page.request`. Both needed; the identity guard (NXSAT-643) catches a run that lost one |
+| Broken image, or an internal URL in the DOM       | `<img [src]>` bound to a Nuxeo URL. `checkNoNuxeoUrlInImgSrc`                                                                                                                                                                                                    |
+| Memory growth over a session                      | An un-revoked blob URL. `checkBlobUrlLifecycle`                                                                                                                                                                                                                  |
+| A nav entry that goes to the wrong page           | A registered path with no route — it falls through the wildcard. The host must map the path                                                                                                                                                                      |
+| HTTP 500 from `AI.*`                              | The AI backend package is absent. Expected                                                                                                                                                                                                                       |
+| Specs fail with `SecurityError` on `localStorage` | Node 22+. Use Node 20 or `npm run beta:gate`                                                                                                                                                                                                                     |
 
 ### Getting a trace out of E2E
 

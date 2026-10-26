@@ -1,17 +1,17 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
 
-import { PACKAGED_NAV_ITEMS } from '@nuxeo-satori/platform/extensions';
+import { testTranslateModule } from '../i18n/translate-testing';
+import { PACKAGED_NAV_ITEMS } from '@nuxeo/satori-platform/extensions';
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 /**
  * NXENG-898 — IBM Equal Access Issue ID 3170739755 on the Favorites sidebar link
- * (`sat-platform-nav-list-item[10]` / `aria-label="Favorites"`).
+ * (`a[sat-platform-nav-menu-item]` / `aria-label="Favorites"`).
  *
  * Same mechanism as NXENG-761 / NXENG-794: Satori reads `--sat-platform-nav-outline` for every
  * `.sat-platform-nav-item`, and IBM `style_focus_visible` reads `:focus` only — mirrored in
@@ -31,11 +31,12 @@ function favoritesNavDescriptor() {
 
 const FAVORITES_NAV = favoritesNavDescriptor();
 
-const FAVORITES_LINK = `sat-platform-nav-list-item[data-nav-id="${FAVORITES_NAV.id}"] .sat-platform-nav-item`;
+const FAVORITES_LINK = `a[sat-platform-nav-menu-item][data-nav-id="${FAVORITES_NAV.id}"]`;
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, testTranslateModule()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './favorites-nav-focus-visible.host.html',
 })
 class FavoritesNavHostComponent {
@@ -96,7 +97,7 @@ describe('Favorites sidebar nav — keyboard focus visible (NXENG-898)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [FavoritesNavHostComponent, TranslateModule.forRoot()],
+      imports: [FavoritesNavHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');

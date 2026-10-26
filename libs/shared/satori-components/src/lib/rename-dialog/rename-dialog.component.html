@@ -1,0 +1,46 @@
+<h2 mat-dialog-title>{{ 'satori-components.rename-dialog.title' | translate }}</h2>
+<form class="nxs-rename-dialog__form" (ngSubmit)="save()">
+  <mat-dialog-content>
+    <mat-form-field class="nxs-rename-dialog__field" appearance="outline">
+      <mat-label>{{ 'satori-components.rename-dialog.label' | translate }}</mat-label>
+      <input
+        matInput
+        name="title"
+        required
+        cdkFocusInitial
+        [ngModel]="title()"
+        (ngModelChange)="title.set($event)"
+        [disabled]="saving()"
+      />
+      @if (trimmed().length === 0) {
+        <mat-error>{{ 'satori-components.rename-dialog.required' | translate }}</mat-error>
+      }
+    </mat-form-field>
+    @if (failure(); as status) {
+      <p class="nxs-rename-dialog__failure" role="alert">
+        @switch (status) {
+          @case (403) {
+            {{ 'satori-components.rename-dialog.forbidden' | translate }}
+          }
+          @case (409) {
+            {{ 'satori-components.rename-dialog.locked' | translate }}
+          }
+          @case (404) {
+            {{ 'satori-components.rename-dialog.not-found' | translate }}
+          }
+          @default {
+            {{ 'satori-components.rename-dialog.failed' | translate }}
+          }
+        }
+      </p>
+    }
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" (click)="cancel()">
+      {{ 'satori-components.rename-dialog.cancel' | translate }}
+    </button>
+    <button mat-flat-button type="submit" [disabled]="!canSave()">
+      {{ 'satori-components.rename-dialog.save' | translate }}
+    </button>
+  </mat-dialog-actions>
+</form>

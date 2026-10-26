@@ -1,0 +1,708 @@
+<div class="nxs-permissions-panel__header">
+  <div class="nxs-permissions-panel__title" role="heading" aria-level="2">
+    {{ 'satori-components.permissions-panel.title' | translate }}
+  </div>
+  @if (snapshot(); as current) {
+    <p class="nxs-permissions-panel__document">{{ current.title }}</p>
+  }
+</div>
+
+@if (loading() && !snapshot()) {
+  <div class="nxs-permissions-panel__loading" role="status">
+    <mat-progress-spinner
+      mode="indeterminate"
+      diameter="28"
+      [attr.aria-label]="'satori-components.permissions-panel.loading' | translate"
+    />
+  </div>
+} @else if (loadError(); as error) {
+  <div class="nxs-permissions-panel__error" role="alert">
+    <p>{{ loadErrorKey() | translate }}</p>
+    @if (error === 'failed') {
+      <button mat-stroked-button type="button" (click)="reload()">
+        {{ 'satori-components.permissions-panel.retry' | translate }}
+      </button>
+    }
+  </div>
+} @else if (snapshot(); as current) {
+  @if (outcome(); as result) {
+    @switch (result.kind) {
+      @case ('saved') {
+        <p class="nxs-permissions-panel__status" role="status">
+          {{
+            (result.count === 1
+              ? 'satori-components.permissions-panel.saved.one'
+              : 'satori-components.permissions-panel.saved.many'
+            ) | translate: { count: result.count }
+          }}
+        </p>
+      }
+      @case ('refused') {
+        <div class="nxs-permissions-panel__alert" role="alert">
+          <p class="nxs-permissions-panel__alert-heading">
+            {{ 'satori-components.permissions-panel.refused.heading' | translate }}
+          </p>
+          <ul class="nxs-permissions-panel__refusals">
+            @for (refusal of result.refusals; track $index) {
+              <li>
+                <span class="nxs-permissions-panel__entry">{{
+                  entryLabel(refusal.principal, refusal.permission)
+                }}</span
+                >: {{ refusalReasonKey(refusal) | translate }}
+              </li>
+            }
+          </ul>
+          <div class="nxs-permissions-panel__alert-actions">
+            <button mat-stroked-button type="button" (click)="reload()">
+              {{ 'satori-components.permissions-panel.reload' | translate }}
+            </button>
+            <button mat-button type="button" (click)="dismissOutcome()">
+              {{ 'satori-components.permissions-panel.dismiss' | translate }}
+            </button>
+          </div>
+        </div>
+      }
+      @case ('unconfirmed') {
+        <div class="nxs-permissions-panel__alert" role="alert">
+          <p class="nxs-permissions-panel__alert-heading">
+            {{ 'satori-components.permissions-panel.unconfirmed.heading' | translate }}
+          </p>
+          <ul class="nxs-permissions-panel__refusals">
+            @for (refusal of result.refusals; track $index) {
+              <li>
+                <span class="nxs-permissions-panel__entry">{{
+                  entryLabel(refusal.principal, refusal.permission)
+                }}</span
+                >: {{ refusalReasonKey(refusal) | translate }}
+              </li>
+            }
+          </ul>
+        </div>
+      }
+      @case ('unread') {
+        <div class="nxs-permissions-panel__alert" role="alert">
+          <p class="nxs-permissions-panel__alert-heading">
+            {{ 'satori-components.permissions-panel.unread.heading' | translate }}
+          </p>
+          <p class="nxs-permissions-panel__server-message">{{ serverMessage(result.error) }}</p>
+          <button mat-stroked-button type="button" (click)="reload()">
+            {{ 'satori-components.permissions-panel.reload' | translate }}
+          </button>
+        </div>
+      }
+      @case ('unverified') {
+        <div class="nxs-permissions-panel__alert" role="alert">
+          <p class="nxs-permissions-panel__alert-heading">
+            {{ 'satori-components.permissions-panel.unverified.heading' | translate }}
+          </p>
+          <button mat-stroked-button type="button" (click)="reload()">
+            {{ 'satori-components.permissions-panel.reload' | translate }}
+          </button>
+        </div>
+      }
+      @case ('failed') {
+        <div class="nxs-permissions-panel__alert" role="alert">
+          <p class="nxs-permissions-panel__alert-heading">
+            {{
+              'satori-components.permissions-panel.failed.heading'
+                | translate: { applied: result.applied, total: result.total }
+            }}
+          </p>
+          <p>
+            <span class="nxs-permissions-panel__entry">{{ failedEntry(result) }}</span>
+            @if (isDenied(result.error)) {
+              {{ 'satori-components.permissions-panel.failed.denied' | translate }}
+            }
+            <span class="nxs-permissions-panel__server-message">{{
+              serverMessage(result.error)
+            }}</span>
+          </p>
+          @if (result.unconfirmed.length > 0) {
+            <p class="nxs-permissions-panel__alert-heading">
+              {{ 'satori-components.permissions-panel.unconfirmed.heading' | translate }}
+            </p>
+            <ul class="nxs-permissions-panel__refusals">
+              @for (refusal of result.unconfirmed; track $index) {
+                <li>
+                  <span class="nxs-permissions-panel__entry">{{
+                    entryLabel(refusal.principal, refusal.permission)
+                  }}</span
+                  >: {{ refusalReasonKey(refusal) | translate }}
+                </li>
+              }
+            </ul>
+          }
+          @if (!result.snapshot) {
+            <p>{{ 'satori-components.permissions-panel.unverified.heading' | translate }}</p>
+            <button mat-stroked-button type="button" (click)="reload()">
+              {{ 'satori-components.permissions-panel.reload' | translate }}
+            </button>
+          }
+        </div>
+      }
+    }
+  }
+
+  <!-- Local -->
+  <section class="nxs-permissions-panel__section" [attr.aria-labelledby]="idPrefix + '-local'">
+    <div class="nxs-permissions-panel__section-header">
+      <div
+        class="nxs-permissions-panel__section-title"
+        [id]="idPrefix + '-local'"
+        role="heading"
+        aria-level="3"
+      >
+        {{ 'satori-components.permissions-panel.local.heading' | translate }}
+      </div>
+      @if (canManage() && !editor()) {
+        <button
+          mat-stroked-button
+          type="button"
+          color="primary"
+          [disabled]="!editable()"
+          (click)="openAdd()"
+        >
+          <mat-icon aria-hidden="true" svgIcon="plus_large" />
+          {{ 'satori-components.permissions-panel.add' | translate }}
+        </button>
+      }
+    </div>
+
+    @if (editor(); as edit) {
+      <form
+        class="nxs-permissions-panel__editor"
+        [attr.aria-labelledby]="idPrefix + '-editor-heading'"
+        (submit)="$event.preventDefault(); applyEditor()"
+      >
+        <div
+          class="nxs-permissions-panel__editor-heading"
+          [id]="idPrefix + '-editor-heading'"
+          role="heading"
+          aria-level="4"
+        >
+          @if (edit.mode === 'add') {
+            {{ 'satori-components.permissions-panel.editor.add-heading' | translate }}
+          } @else {
+            {{
+              'satori-components.permissions-panel.editor.edit-heading'
+                | translate: { principal: edit.item?.principal }
+            }}
+          }
+        </div>
+        @if (edit.mode === 'add') {
+          <mat-form-field appearance="outline" class="nxs-permissions-panel__field--wide">
+            <mat-label>{{
+              'satori-components.permissions-panel.editor.principal' | translate
+            }}</mat-label>
+            <input
+              #principalInput
+              matInput
+              type="text"
+              autocomplete="off"
+              [value]="editorQuery()"
+              [matAutocomplete]="principalAuto"
+              (input)="onPrincipalInput(principalInput.value)"
+            />
+            <mat-autocomplete
+              #principalAuto="matAutocomplete"
+              [displayWith]="displaySuggestion"
+              (optionSelected)="onPrincipalSelected($event.option.value)"
+            >
+              @for (suggestion of suggestions(); track suggestion.id) {
+                <mat-option [value]="suggestion">
+                  <mat-icon
+                    aria-hidden="true"
+                    [svgIcon]="suggestion.type === 'GROUP_TYPE' ? 'user_group' : 'user'"
+                  />
+                  {{ suggestion.displayLabel }}
+                  <span class="nxs-permissions-panel__id">{{ suggestion.id }}</span>
+                </mat-option>
+              }
+            </mat-autocomplete>
+          </mat-form-field>
+          @if (editorSubmitted() && !editorPrincipal()) {
+            <p class="nxs-permissions-panel__field-error" role="alert">
+              {{ 'satori-components.permissions-panel.editor.no-principal' | translate }}
+            </p>
+          }
+        }
+        <mat-form-field appearance="outline" class="nxs-permissions-panel__field--wide">
+          <mat-label>{{
+            'satori-components.permissions-panel.editor.permission' | translate
+          }}</mat-label>
+          <mat-select
+            [value]="editorPermission()"
+            (selectionChange)="editorPermission.set($event.value)"
+          >
+            <mat-select-trigger>
+              {{ permissionLabel(editorPermission()) }}
+              @if (permissionLabel(editorPermission()) !== editorPermission()) {
+                <span class="nxs-permissions-panel__id">{{ editorPermission() }}</span>
+              }
+            </mat-select-trigger>
+            @for (extra of editorExtraPermissions(); track extra) {
+              <mat-option [value]="extra" [attr.data-permission]="extra">
+                {{ permissionLabel(extra) }}
+                <span class="nxs-permissions-panel__id">{{ extra }}</span>
+              </mat-option>
+            }
+            @for (group of permissionGroups(); track group.label) {
+              <mat-optgroup [label]="group.label | translate">
+                @for (permission of group.permissions; track permission) {
+                  <mat-option [value]="permission" [attr.data-permission]="permission">
+                    {{ permissionLabel(permission) }}
+                    @if (permissionLabel(permission) !== permission) {
+                      <span class="nxs-permissions-panel__id">{{ permission }}</span>
+                    }
+                  </mat-option>
+                }
+              </mat-optgroup>
+            }
+          </mat-select>
+        </mat-form-field>
+        <mat-radio-group
+          class="nxs-permissions-panel__time-frame"
+          [attr.aria-label]="'satori-components.permissions-panel.column.time-frame' | translate"
+          [value]="editorDated() ? 'dated' : 'permanent'"
+          (change)="editorDated.set($event.value === 'dated')"
+        >
+          <mat-radio-button value="permanent">{{
+            'satori-components.permissions-panel.editor.permanent' | translate
+          }}</mat-radio-button>
+          <mat-radio-button value="dated">{{
+            'satori-components.permissions-panel.editor.date-based' | translate
+          }}</mat-radio-button>
+        </mat-radio-group>
+        @if (editorDated()) {
+          <div class="nxs-permissions-panel__dates">
+            <mat-form-field appearance="outline">
+              <mat-label>{{
+                'satori-components.permissions-panel.editor.from' | translate
+              }}</mat-label>
+              <input
+                matInput
+                [matDatepicker]="beginPicker"
+                [value]="editorBeginField()"
+                (dateChange)="editorBegin.set(fieldDay($event.value))"
+              />
+              <mat-datepicker-toggle matIconSuffix [for]="beginPicker" />
+              <mat-datepicker #beginPicker />
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>{{
+                'satori-components.permissions-panel.editor.to' | translate
+              }}</mat-label>
+              <input
+                matInput
+                [matDatepicker]="endPicker"
+                [value]="editorEndField()"
+                (dateChange)="editorEnd.set(fieldDay($event.value))"
+              />
+              <mat-datepicker-toggle matIconSuffix [for]="endPicker" />
+              <mat-datepicker #endPicker />
+            </mat-form-field>
+          </div>
+          @if (editorInvalidRange()) {
+            <p class="nxs-permissions-panel__field-error" role="alert">
+              {{ 'satori-components.permissions-panel.editor.end-before-begin' | translate }}
+            </p>
+          }
+        }
+        <div class="nxs-permissions-panel__editor-actions">
+          <button mat-button type="button" (click)="closeEditor()">
+            {{ 'satori-components.permissions-panel.editor.cancel' | translate }}
+          </button>
+          <button mat-flat-button color="primary" type="submit" [disabled]="!editable()">
+            {{
+              (edit.mode === 'add'
+                ? 'satori-components.permissions-panel.editor.add'
+                : 'satori-components.permissions-panel.editor.apply'
+              ) | translate
+            }}
+          </button>
+        </div>
+      </form>
+    }
+
+    @if (localItems().length === 0) {
+      <p class="nxs-permissions-panel__empty">
+        {{ 'satori-components.permissions-panel.local.empty' | translate }}
+      </p>
+    } @else {
+      <table
+        mat-table
+        class="nxs-permissions-panel__table"
+        [attr.aria-labelledby]="idPrefix + '-local'"
+        [dataSource]="localItems()"
+        [trackBy]="trackItem"
+      >
+        <ng-container matColumnDef="principal">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.principal' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let item">
+            @if (item.principalLabel && item.principalLabel !== item.principal) {
+              {{ item.principalLabel }}
+              <span class="nxs-permissions-panel__id">{{ item.principal }}</span>
+            } @else {
+              {{ item.principal }}
+            }
+            @switch (item.state) {
+              @case ('added') {
+                <span class="nxs-permissions-panel__badge">{{
+                  'satori-components.permissions-panel.state.added' | translate
+                }}</span>
+              }
+              @case ('changed') {
+                <span class="nxs-permissions-panel__badge">{{
+                  'satori-components.permissions-panel.state.changed' | translate
+                }}</span>
+              }
+              @case ('removed') {
+                <span class="nxs-permissions-panel__badge nxs-permissions-panel__badge--removed">{{
+                  'satori-components.permissions-panel.state.removed' | translate
+                }}</span>
+              }
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="permission">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.permission' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let item">
+            @if (canManage() && !item.lockedReason && item.state !== 'removed') {
+              <mat-select
+                class="nxs-permissions-panel__select"
+                [value]="item.permission"
+                [disabled]="!editable()"
+                [aria-label]="
+                  'satori-components.permissions-panel.permission-for'
+                    | translate: { principal: item.principal }
+                "
+                (selectionChange)="setPermission(item, $event.value)"
+              >
+                <mat-select-trigger>
+                  {{ permissionLabel(item.permission) }}
+                  @if (permissionLabel(item.permission) !== item.permission) {
+                    <span class="nxs-permissions-panel__id">{{ item.permission }}</span>
+                  }
+                </mat-select-trigger>
+                @for (extra of item.extraPermissions; track extra) {
+                  <mat-option [value]="extra" [attr.data-permission]="extra">
+                    {{ permissionLabel(extra) }}
+                    <span class="nxs-permissions-panel__id">{{ extra }}</span>
+                  </mat-option>
+                }
+                @for (group of permissionGroups(); track group.label) {
+                  <mat-optgroup [label]="group.label | translate">
+                    @for (permission of group.permissions; track permission) {
+                      <mat-option [value]="permission" [attr.data-permission]="permission">
+                        {{ permissionLabel(permission) }}
+                        @if (permissionLabel(permission) !== permission) {
+                          <span class="nxs-permissions-panel__id">{{ permission }}</span>
+                        }
+                      </mat-option>
+                    }
+                  </mat-optgroup>
+                }
+              </mat-select>
+            } @else {
+              {{ permissionLabel(item.permission) }}
+              @if (permissionLabel(item.permission) !== item.permission) {
+                <span class="nxs-permissions-panel__id">{{ item.permission }}</span>
+              }
+              @if (!item.granted) {
+                <span class="nxs-permissions-panel__badge nxs-permissions-panel__badge--removed">{{
+                  'satori-components.permissions-panel.denied' | translate
+                }}</span>
+              }
+            }
+            @if (item.lockedReason && canManage()) {
+              <span class="nxs-permissions-panel__hint">{{ item.lockedReason | translate }}</span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="timeFrame">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.time-frame' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let item">
+            {{ timeFrame(item.begin, item.end) }}
+            @if (item.state === 'unchanged' && item.row?.status === 'pending') {
+              <span class="nxs-permissions-panel__badge">{{
+                'satori-components.permissions-panel.status.pending' | translate
+              }}</span>
+            }
+            @if (item.state === 'unchanged' && item.row?.status === 'archived') {
+              <span class="nxs-permissions-panel__badge">{{
+                'satori-components.permissions-panel.status.archived' | translate
+              }}</span>
+            }
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="grantedBy">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.granted-by' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let item">{{ item.row?.creator || '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="actions">
+          <th mat-header-cell *matHeaderCellDef>
+            <span class="nxs-permissions-panel__visually-hidden">{{
+              'satori-components.permissions-panel.column.actions' | translate
+            }}</span>
+          </th>
+          <td mat-cell *matCellDef="let item" class="nxs-permissions-panel__actions">
+            @if (canManage()) {
+              @if (!item.lockedReason && item.state !== 'removed') {
+                <button
+                  mat-icon-button
+                  type="button"
+                  [matTooltip]="'satori-components.permissions-panel.edit' | translate"
+                  [attr.aria-label]="
+                    'satori-components.permissions-panel.edit-entry'
+                      | translate: { principal: item.principal }
+                  "
+                  [disabled]="!editable()"
+                  (click)="openEdit(item)"
+                >
+                  <mat-icon aria-hidden="true" svgIcon="pencil" />
+                </button>
+              }
+              @if (item.state === 'removed') {
+                <button
+                  mat-button
+                  type="button"
+                  [disabled]="!editable()"
+                  (click)="toggleRemove(item)"
+                >
+                  {{ 'satori-components.permissions-panel.undo' | translate }}
+                </button>
+              } @else if (
+                item.lockedReason !== 'satori-components.permissions-panel.locked.no-id'
+              ) {
+                <button
+                  mat-icon-button
+                  type="button"
+                  [matTooltip]="'satori-components.permissions-panel.remove' | translate"
+                  [attr.aria-label]="
+                    'satori-components.permissions-panel.remove-entry'
+                      | translate
+                        : {
+                            principal: item.principal,
+                            permission: permissionLabel(item.permission),
+                          }
+                  "
+                  [disabled]="!editable()"
+                  (click)="toggleRemove(item)"
+                >
+                  <mat-icon aria-hidden="true" svgIcon="trash" />
+                </button>
+              }
+            }
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="localColumns"></tr>
+        <tr
+          mat-row
+          *matRowDef="let item; columns: localColumns"
+          [class.nxs-permissions-panel__row--removed]="item.state === 'removed'"
+          [class.nxs-permissions-panel__row--pending]="item.state !== 'unchanged'"
+        ></tr>
+      </table>
+    }
+
+    @if (pendingCount() > 0) {
+      <div class="nxs-permissions-panel__pending">
+        <span role="status">{{
+          (pendingCount() === 1
+            ? 'satori-components.permissions-panel.pending.one'
+            : 'satori-components.permissions-panel.pending.many'
+          ) | translate: { count: pendingCount() }
+        }}</span>
+        <span class="nxs-permissions-panel__spacer"></span>
+        <button mat-button type="button" [disabled]="saving()" (click)="discard()">
+          {{ 'satori-components.permissions-panel.discard' | translate }}
+        </button>
+        <button
+          mat-flat-button
+          color="primary"
+          type="button"
+          [disabled]="saving()"
+          (click)="save()"
+        >
+          {{ 'satori-components.permissions-panel.save' | translate }}
+        </button>
+      </div>
+    }
+  </section>
+
+  <!-- Inherited -->
+  <section class="nxs-permissions-panel__section" [attr.aria-labelledby]="idPrefix + '-inherited'">
+    <div class="nxs-permissions-panel__section-header">
+      <div
+        class="nxs-permissions-panel__section-title"
+        [id]="idPrefix + '-inherited'"
+        role="heading"
+        aria-level="3"
+      >
+        {{ 'satori-components.permissions-panel.inherited.heading' | translate }}
+      </div>
+      @if (canManage()) {
+        <button
+          mat-stroked-button
+          type="button"
+          [disabled]="inheritanceBusy() || pendingCount() > 0"
+          [matTooltip]="
+            pendingCount() > 0
+              ? ('satori-components.permissions-panel.inherited.save-first' | translate)
+              : ''
+          "
+          (click)="toggleInheritance()"
+        >
+          {{
+            (current.inheritanceBlocked
+              ? 'satori-components.permissions-panel.inherited.unblock'
+              : 'satori-components.permissions-panel.inherited.block'
+            ) | translate
+          }}
+        </button>
+      }
+    </div>
+    @if (inheritanceError(); as message) {
+      <p class="nxs-permissions-panel__field-error" role="alert">
+        {{ 'satori-components.permissions-panel.inherited.toggle-failed' | translate }}
+        <span class="nxs-permissions-panel__server-message">{{ message }}</span>
+      </p>
+    }
+    @if (current.inheritanceBlocked) {
+      <p class="nxs-permissions-panel__empty">
+        {{ 'satori-components.permissions-panel.inherited.blocked' | translate }}
+      </p>
+    } @else if (current.inherited.length === 0) {
+      <p class="nxs-permissions-panel__empty">
+        {{ 'satori-components.permissions-panel.inherited.empty' | translate }}
+      </p>
+    } @else {
+      <table
+        mat-table
+        class="nxs-permissions-panel__table"
+        [attr.aria-labelledby]="idPrefix + '-inherited'"
+        [dataSource]="current.inherited"
+      >
+        <ng-container matColumnDef="principal">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.principal' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">
+            @if (row.principalLabel && row.principalLabel !== row.principal) {
+              {{ row.principalLabel }}
+              <span class="nxs-permissions-panel__id">{{ row.principal }}</span>
+            } @else {
+              {{ row.principal }}
+            }
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="permission">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.permission' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">
+            {{ permissionLabel(row.permission) }}
+            @if (permissionLabel(row.permission) !== row.permission) {
+              <span class="nxs-permissions-panel__id">{{ row.permission }}</span>
+            }
+            @if (!row.granted) {
+              <span class="nxs-permissions-panel__badge nxs-permissions-panel__badge--removed">{{
+                'satori-components.permissions-panel.denied' | translate
+              }}</span>
+            }
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="timeFrame">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.time-frame' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ timeFrame(row.begin, row.end) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="grantedBy">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.granted-by' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ row.creator || '—' }}</td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="inheritedColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: inheritedColumns"></tr>
+      </table>
+    }
+  </section>
+
+  @if (current.otherAcls.length > 0) {
+    <section class="nxs-permissions-panel__section" [attr.aria-labelledby]="idPrefix + '-other'">
+      <div
+        class="nxs-permissions-panel__section-title"
+        [id]="idPrefix + '-other'"
+        role="heading"
+        aria-level="3"
+      >
+        {{ 'satori-components.permissions-panel.other.heading' | translate }}
+      </div>
+      <table
+        mat-table
+        class="nxs-permissions-panel__table"
+        [attr.aria-labelledby]="idPrefix + '-other'"
+        [dataSource]="current.otherAcls"
+      >
+        <ng-container matColumnDef="principal">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.principal' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">
+            @if (row.principalLabel && row.principalLabel !== row.principal) {
+              {{ row.principalLabel }}
+              <span class="nxs-permissions-panel__id">{{ row.principal }}</span>
+            } @else {
+              {{ row.principal }}
+            }
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="permission">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.permission' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">
+            {{ permissionLabel(row.permission) }}
+            @if (permissionLabel(row.permission) !== row.permission) {
+              <span class="nxs-permissions-panel__id">{{ row.permission }}</span>
+            }
+            @if (!row.granted) {
+              <span class="nxs-permissions-panel__badge nxs-permissions-panel__badge--removed">{{
+                'satori-components.permissions-panel.denied' | translate
+              }}</span>
+            }
+          </td>
+        </ng-container>
+        <ng-container matColumnDef="timeFrame">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.time-frame' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ timeFrame(row.begin, row.end) }}</td>
+        </ng-container>
+        <ng-container matColumnDef="acl">
+          <th mat-header-cell *matHeaderCellDef>
+            {{ 'satori-components.permissions-panel.column.acl' | translate }}
+          </th>
+          <td mat-cell *matCellDef="let row">{{ row.acl }}</td>
+        </ng-container>
+        <tr mat-header-row *matHeaderRowDef="otherColumns"></tr>
+        <tr mat-row *matRowDef="let row; columns: otherColumns"></tr>
+      </table>
+    </section>
+  }
+}

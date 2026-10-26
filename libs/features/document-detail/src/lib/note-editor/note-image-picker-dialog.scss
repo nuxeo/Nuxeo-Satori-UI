@@ -23,6 +23,7 @@
   border-radius: 4px;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 :host ::ng-deep .note-image-picker__filters .mat-expansion-panel-body {
   padding: 0 16px 16px;
 }
@@ -127,7 +128,7 @@
   overflow: hidden;
   background: var(--mat-sys-surface-container-high, #eceff1);
 
-  img {
+  .note-image-picker__image {
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -143,6 +144,7 @@
   display: flex;
   line-height: 0;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-icon {
     font-size: 22px;
     width: 22px;
@@ -180,6 +182,7 @@ mat-dialog-actions {
   padding: 12px 24px 20px !important;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .note-image-picker-panel .mat-mdc-dialog-container .mdc-dialog__surface {
   overflow: hidden;
 }

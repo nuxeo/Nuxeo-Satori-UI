@@ -2,14 +2,16 @@
 title: Runtime AI Features
 parent: Engineering
 order: 10
-last_reviewed: 2026-08-24
-repo_commit: 77265f9
+last_reviewed: 2026-10-08
+repo_commit: 2898046
 audience: engineering
 ---
 
 # Runtime AI Features — the 12 `AI.*` operations
 
-> **Last reviewed:** 2026-08-24 · **Repository:** `77265f9`
+> **Last reviewed:** 2026-10-08 · **Repository:** `2898046` (`feature/nxsat-308-ci-cold-cache-tooling`)
+> Only the repository links were re-verified at that commit: made relative rather than pinned to
+> `feature/adf-hx-browse-poc`, every target present. The rest of the page as of 2026-08-24 · `77265f9`.
 > These are the **customer-facing** AI features. For the development harness see
 > [Skills, Agents & Generators](09-skills-agents-generators.md). They are unrelated.
 
@@ -33,7 +35,7 @@ Component
 ```
 
 **Absent package ⇒ HTTP 500.** That is expected behaviour, documented in
-[`CLAUDE.md`](https://github.com/nuxeo/agentic-ui-poc/blob/feature/adf-hx-browse-poc/CLAUDE.md),
+[`CLAUDE.md`](../../CLAUDE.md),
 and **not a client defect**. If you are debugging a 500 from an `AI.*` call, check whether the
 package is installed before looking at this code.
 
@@ -111,7 +113,7 @@ that is a gap worth closing — the client is thin, so the tests would be cheap.
 
 `AI.NlToNxql` produces a **query** which is then executed. An HXQL/NXQL injection was already
 found and fixed in the _hand-built_ search path
-([`hxql-literal.ts`](https://github.com/nuxeo/agentic-ui-poc/blob/feature/adf-hx-browse-poc/libs/shared/adf-hx-bridge/src/lib/api/hxql-literal.ts)) —
+(`hxql-literal.ts`, since removed with the adf-hx search route) —
 it returned 155 documents against 0 for the plain term by escaping out of a literal and lifting
 its own clause to a top-level `OR`, defeating the `isVersion` and `isTrashed` hygiene filters.
 
@@ -133,8 +135,8 @@ allowlists in every steps file include `/automation\/AI\./`:
 // scripts/beta-harness/steps/*.mjs — ENVIRONMENTAL_ERRORS
 /automation\/AI\./,          // the AI backend is a separate package
 '/nuxeo/logout',
-'/nuxeo/api/v1/path/default-domain/config/agentic-ui',
 '/agentic-ui-config/bootstrap.json',
+'/agentic-ui-config/manifest.json',
 ```
 
 Those suppressions are **listed in the `beta:audit` output** on every run, because a suppression

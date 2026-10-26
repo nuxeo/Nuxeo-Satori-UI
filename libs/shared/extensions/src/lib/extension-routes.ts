@@ -64,11 +64,11 @@ export interface ExtensionRoutesOptions {
  *
  * ## Why this is an effect rather than a one-shot
  *
- * The manifest lives in a Nuxeo document and is fetched **after** sign-in — see
- * `provideManifestRefresh` — so at the moment `provideRouter()` builds the
- * config there is nothing to contribute yet. Re-resolving on the manifest signal
- * is what makes a manifest-declared route exist for the session that loaded it,
- * rather than only for the next full page load.
+ * The manifest is fetched by `AppConfigService.load()` in an `APP_INITIALIZER`,
+ * which nothing guarantees has settled when `provideRouter()` builds the config,
+ * so there may be nothing to contribute yet. Re-resolving on the manifest signal
+ * is what makes a manifest-declared route exist as soon as the manifest lands,
+ * rather than only on the next full page load.
  *
  * ## What it deliberately does not do
  *

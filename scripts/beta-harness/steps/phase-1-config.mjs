@@ -44,11 +44,16 @@
  *        the phase would be a regression rather than a feature.
  *   5-7. A customised bootstrap file rebrands the product, overrides theme
  *        tokens and adds a whole theme — same bundle, no rebuild.
- *   8.   The runtime manifest, served as a Nuxeo configuration document,
+ *   8.   The runtime manifest, served as a package's manifest fragment,
  *        relabels the product.
  *   9-10. Tolerant failure: malformed configuration and an absent configuration
- *        document must both leave a working application. A fresh install is in
- *        the second state, so it is not an edge case.
+ *        service must both leave a working application.
+ *
+ * Both configuration URLs answer the configuration servlet's envelope
+ * (`nuxeo-agentic-ui-config/1`): ordered fragments, one per package. The bodies
+ * below are built the way the servlet builds them — our defaults first, then a
+ * customer's fragment — so the default passes serve exactly what an install with
+ * no customer package serves.
  *
  * Prerequisites:
  *   docker start nuxeo          (container `nuxeo`, published on 8080)
@@ -62,6 +67,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { configResponse } from '../config-response.mjs';
+
 /**
  * Console errors this environment always produces.
  *
@@ -69,31 +76,30 @@ import { resolve } from 'node:path';
  * operations come from a marketplace package that is not installed on a plain
  * local Nuxeo, and the app probes `/nuxeo/logout` on boot.
  *
- * The last two are the tolerant path working as designed, and step 9 induces them
- * on purpose. An unconfigured install has neither a configuration file nor a
- * configuration document, and the browser logs a console entry for any 404
- * regardless of whether the application handled it. Suppressing them here hides
+ * The last two are the tolerant path working as designed, and step 10 induces them
+ * on purpose: with no configuration service both URLs 404, and the browser logs a
+ * console entry for any 404 regardless of whether the application handled it. Suppressing them here hides
  * nothing: steps 7 and 9 assert the present and absent cases separately, and the
  * count of ignored errors is still reported.
  */
 const ENVIRONMENTAL_ERRORS = [
   /automation\/AI\./,
   '/nuxeo/logout',
-  '/nuxeo/api/v1/path/default-domain/config/agentic-ui',
   '/agentic-ui-config/bootstrap.json',
+  '/agentic-ui-config/manifest.json',
 ];
 
 const BOOTSTRAP_ROUTE = '**/agentic-ui-config/bootstrap.json';
-const MANIFEST_ROUTE = '**/api/v1/path/default-domain/config/agentic-ui';
+const MANIFEST_ROUTE = '**/agentic-ui-config/manifest.json';
 const BOOTSTRAP_PATH = '/agentic-ui-config/bootstrap.json';
 const LOCAL_BOOTSTRAP = 'apps/nuxeo-ui/public/agentic-ui-config/bootstrap.json';
 
-/**
- * The defaults our bundle contributes to the configuration service, whose values are the compiled defaults. Served
- * verbatim for the default passes.
- */
-const PACKAGED_BOOTSTRAP = readFileSync(
-  resolve(process.cwd(), 'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json'),
+const CORE_RESOURCES = 'nuxeo-agentic-core/src/main/resources';
+
+const PACKAGED_BOOTSTRAP = configResponse('bootstrap');
+const PACKAGED_MANIFEST = configResponse('manifest');
+const DEPLOYMENT_FRAGMENT = readFileSync(
+  resolve(process.cwd(), `${CORE_RESOURCES}/OSGI-INF/deployment-fragment.xml`),
   'utf8',
 );
 
@@ -101,58 +107,35 @@ const INSTALL_XML = readFileSync(
   resolve(process.cwd(), 'nuxeo-agentic-ui-package/src/main/resources/install.xml'),
   'utf8',
 );
-const ASSEMBLY_XML = readFileSync(
-  resolve(process.cwd(), 'nuxeo-agentic-ui-package/src/main/assemble/assembly.xml'),
-  'utf8',
-);
-
-/**
- * Deployment facts about the target server, established by first-hand inspection
- * of the running `nuxeo` container rather than assumed:
- *
- *   $ docker exec nuxeo grep docBase /opt/nuxeo/server/conf/Catalina/localhost/nuxeo.xml
- *     <Context ... docBase="../nxserver/nuxeo.war" ...>
- *   $ docker exec nuxeo ls /opt/nuxeo/server/nxserver/web
- *     root.war
- *
- * So the `/nuxeo` context is served out of `nxserver/nuxeo.war`, and
- * `nxserver/web` is not a docBase at all — a file installed there is never
- * reachable over HTTP. Phase 1 originally installed the bootstrap file into
- * `nxserver/web/nuxeo.war/agentic-ui-config` and it would have 404'd in every
- * real deployment. The checks below exist so that regression cannot recur
- * silently.
- */
-const SERVER_HOME = '${env.server.home}';
-const TOMCAT_DOC_BASE = `${SERVER_HOME}/nxserver/nuxeo.war`;
 /** Production base href of the packaged application. */
 const PRODUCTION_BASE_HREF = 'https://server.example/nuxeo/agentic-ui/';
-/** Web context path the docBase above is mounted at. */
+/** Web context path the application and the configuration servlet are mounted under. */
 const CONTEXT_PATH = '/nuxeo';
 
-/**
- * The `todir` of the `install.xml` copy step that installs `${package.root}/config`.
- *
- * @returns {string | null}
- */
-function installedConfigDir() {
-  const match = INSTALL_XML.match(
-    /<copy\s+dir="\$\{package\.root\}\/config"\s+todir="([^"]+)"/,
-  );
-  return match ? match[1] : null;
+/** The `url-pattern`s the deployment fragment maps the configuration servlet and the auth filter on. */
+function deploymentMappings() {
+  const patterns = (block) =>
+    [...DEPLOYMENT_FRAGMENT.matchAll(new RegExp(`<${block}>([\\s\\S]*?)</${block}>`, 'g'))].map(
+      (m) => ({
+        name: /<(?:servlet|filter)-name>([^<]+)</.exec(m[1])?.[1] ?? '',
+        urls: [...m[1].matchAll(/<url-pattern>([^<]+)</g)].map((u) => u[1].trim()),
+      }),
+    );
+  return { servlets: patterns('servlet-mapping'), filters: patterns('filter-mapping') };
 }
 
 /**
- * The `todir` of the destructive `overwrite="true"` copy, and the assembly
- * output directories staged beneath its source (`${package.root}/web`).
+ * Servlet-spec `url-pattern` matching for a path inside the context: exact, `/prefix/*`,
+ * `*.extension`, and `/` (the default servlet, which every path falls through to).
  */
-function destructiveCopy() {
-  const match = INSTALL_XML.match(
-    /<copy\s+dir="\$\{package\.root\}\/web"\s+todir="([^"]+)"\s+overwrite="true"/,
-  );
-  const stagedUnderWeb = [...ASSEMBLY_XML.matchAll(/<outputDirectory>([^<]+)<\/outputDirectory>/g)]
-    .map((m) => m[1])
-    .filter((dir) => dir === '/web' || dir.startsWith('/web/'));
-  return { todir: match ? match[1] : null, stagedUnderWeb };
+function urlPatternMatches(pattern, path) {
+  if (pattern === '/' || pattern === '/*') return true;
+  if (pattern.endsWith('/*')) {
+    const prefix = pattern.slice(0, -2);
+    return path === prefix || path.startsWith(`${prefix}/`);
+  }
+  if (pattern.startsWith('*.')) return path.endsWith(pattern.slice(1));
+  return pattern === path;
 }
 
 /**
@@ -209,7 +192,7 @@ const CUSTOMISED_BOOTSTRAP = {
   ],
 };
 
-/** Served from the `note:note` property of the Nuxeo configuration document. */
+/** A customer package's manifest fragment. */
 const CUSTOMISED_MANIFEST = {
   version: 1,
   labels: {
@@ -253,10 +236,17 @@ async function reloadApp(page) {
  * @param {ReturnType<import('../helpers.mjs').createHelpers>} h
  */
 export default async function run(page, h) {
-  /** Mutable bodies for the two configuration URLs, swapped between passes. */
+  /** Mutable bodies for the two configuration URLs, swapped between passes; `null` is a 404. */
   let bootstrapBody = PACKAGED_BOOTSTRAP;
-  /** `null` lets the real Nuxeo answer, which is a 404 on an unconfigured instance. */
-  let manifestBody = null;
+  let manifestBody = PACKAGED_MANIFEST;
+
+  /** Any request for a Nuxeo document under a `config` folder — the path this app no longer reads. */
+  const documentReads = [];
+  page.on('request', (request) => {
+    if (/\/api\/v1\/(path|repo\/[^/]+\/path)\/[^?]*\/config\//.test(request.url())) {
+      documentReads.push(request.url());
+    }
+  });
 
   // Installed before the first navigation and answering `no-store`, so that
   // every later reload actually re-requests the configuration instead of reusing
@@ -270,20 +260,18 @@ export default async function run(page, h) {
     }),
   );
   await page.route(MANIFEST_ROUTE, (route) =>
-    manifestBody === null
-      ? route.fallback()
-      : route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          headers: { 'cache-control': 'no-store' },
-          body: typeof manifestBody === 'string' ? manifestBody : JSON.stringify(manifestBody),
-        }),
+    route.fulfill({
+      status: manifestBody === null ? 404 : 200,
+      contentType: 'application/json',
+      headers: { 'cache-control': 'no-store' },
+      body: manifestBody ?? 'Not Found',
+    }),
   );
 
   // ---------------------------------------------------------------------------
   // The packaged default must change nothing.
   // ---------------------------------------------------------------------------
-  h.step('The configuration file is served from outside the application bundle');
+  await h.step('The configuration file is served from outside the application bundle');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
 
@@ -310,25 +298,31 @@ export default async function run(page, h) {
   // The application resolves the configuration URL relative to its own base
   // href. Under production packaging that is `/nuxeo/agentic-ui/`, so the URL is
   // `/nuxeo/agentic-ui-config/bootstrap.json`. Strip the context path and what is
-  // left is the path Tomcat looks up under its docBase.
-  const productionUrl = new URL('../agentic-ui-config/bootstrap.json', PRODUCTION_BASE_HREF)
-    .pathname;
-  const servedFrom = `${TOMCAT_DOC_BASE}${productionUrl.slice(CONTEXT_PATH.length)}`;
-  const configDir = installedConfigDir();
-  h.check(
-    'the installer targets the directory the /nuxeo context is actually served from',
-    configDir !== null && `${configDir}/bootstrap.json` === servedFrom,
-    `install.xml installs into "${configDir}", but ${productionUrl} is served from "${servedFrom}"`,
+  // left must fall under the servlet's mapping, with no authentication filter on it.
+  const productionPaths = ['bootstrap.json', 'manifest.json'].map(
+    (file) => new URL(`../agentic-ui-config/${file}`, PRODUCTION_BASE_HREF).pathname,
   );
-
-  const { todir: webCopyTodir, stagedUnderWeb } = destructiveCopy();
-  const overwrittenDirs = stagedUnderWeb.map((dir) => `${webCopyTodir}${dir.slice('/web'.length)}`);
+  const inContext = productionPaths.map((path) => path.slice(CONTEXT_PATH.length));
+  const { servlets, filters } = deploymentMappings();
   h.check(
-    'the installed configuration directory is outside the destructive copy',
-    configDir !== null &&
-      overwrittenDirs.length > 0 &&
-      !overwrittenDirs.some((dir) => configDir === dir || configDir.startsWith(`${dir}/`)),
-    `overwrite="true" replaces ${overwrittenDirs.join(', ')}; config installs into "${configDir}"`,
+    'both URLs the application fetches are mapped to the configuration servlet',
+    inContext.every((path) =>
+      servlets.some(
+        (m) =>
+          m.name === 'Agentic UI Configuration' && m.urls.some((u) => urlPatternMatches(u, path)),
+      ),
+    ),
+    `${inContext.join(', ')}; servlet mappings: ${JSON.stringify(servlets)}`,
+  );
+  h.check(
+    'no filter mapping of any pattern form covers either, so both answer before sign-in',
+    !filters.some((m) => m.urls.some((u) => inContext.some((path) => urlPatternMatches(u, path)))),
+    `filter mappings: ${JSON.stringify(filters)}`,
+  );
+  h.check(
+    'the installer copies nothing into the path the servlet owns',
+    !/<copy[^>]*agentic-ui-config/.test(INSTALL_XML),
+    'install.xml has a copy into agentic-ui-config',
   );
 
   const defaultBundle = await bundleFingerprint(page);
@@ -361,20 +355,20 @@ export default async function run(page, h) {
   );
   await h.screenshot('default-config-shell');
 
-  h.step('Default configuration reproduces production browse unchanged');
+  await h.step('Default configuration reproduces production browse unchanged');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.expectText('repository content listed', 'lib-browse', 'Default domain');
   await h.screenshot('default-config-production-browse');
 
-  h.step('Default configuration reproduces the adf-hx POC route unchanged');
+  await h.step('Default configuration reproduces the adf-hx POC route unchanged');
   await h.goTo('/#/browse-adf-hx');
   await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
   await h.expectVisible('hxp document list present', 'hxp-document-list');
   await h.expectText('Nuxeo children listed', 'hxp-document-list', 'Default domain');
   await h.screenshot('default-config-adf-hx-browse');
 
-  h.step('Translations resolve rather than leaking raw keys');
+  await h.step('Translations resolve rather than leaking raw keys');
   await h.goTo('/#/settings/themes');
   await h.expectVisible('themes page rendered', 'app-themes-page');
   await h.expectText('translated page title rendered', 'app-themes-page', 'Themes');
@@ -395,8 +389,8 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // The same bundle, different configuration.
   // ---------------------------------------------------------------------------
-  h.step('A customised configuration file rebrands the application, with no rebuild');
-  bootstrapBody = JSON.stringify(CUSTOMISED_BOOTSTRAP);
+  await h.step('A customised configuration file rebrands the application, with no rebuild');
+  bootstrapBody = configResponse('bootstrap', { customer: [CUSTOMISED_BOOTSTRAP] });
   // Clear the stored preference so the *configured* default is what applies.
   await page.evaluate(() => localStorage.removeItem('agentic_ui_color_theme'));
   await h.goTo('/#/settings/themes');
@@ -438,7 +432,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('customised-config-theme-applied');
 
-  h.step('The configured theme set is open, not the four compiled ones');
+  await h.step('The configured theme set is open, not the four compiled ones');
   const customisedThemeCount = await page.locator('app-themes-page .theme-card').count();
   h.check(
     'a fifth theme added in JSON appears in the picker',
@@ -448,14 +442,14 @@ export default async function run(page, h) {
   await h.expectText('the configured theme label is rendered', 'app-themes-page', 'Acme Brand');
   await h.screenshot('customised-config-theme-picker');
 
-  h.step('The runtime manifest relabels the product from a Nuxeo document');
-  manifestBody = {
-    'entity-type': 'document',
-    path: '/default-domain/config/agentic-ui',
-    properties: { 'note:note': JSON.stringify(CUSTOMISED_MANIFEST) },
-  };
+  await h.step("The runtime manifest relabels the product from a package's manifest fragment");
+  manifestBody = configResponse('manifest', { customer: [CUSTOMISED_MANIFEST] });
   await reloadApp(page);
-  await h.expectText('manifest label overrides the shipped string', 'app-themes-page', 'Appearance');
+  await h.expectText(
+    'manifest label overrides the shipped string',
+    'app-themes-page',
+    'Appearance',
+  );
   await h.expectText('manifest label overrides a button', 'app-themes-page', 'Use this one');
   const stillRenders = await page.locator('app-themes-page .theme-card').count();
   h.check(
@@ -468,7 +462,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // Failure paths.
   // ---------------------------------------------------------------------------
-  h.step('A malformed configuration file degrades to the packaged defaults');
+  await h.step('A malformed configuration file degrades to the packaged defaults');
   bootstrapBody = '{"branding": {"applicationTitle": ';
   manifestBody = '{"labels": ';
   await h.goTo('/#/browse');
@@ -488,7 +482,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('malformed-config-falls-back');
 
-  h.step('An absent configuration file and document leave a working application');
+  await h.step('An absent configuration service leaves a working application');
   bootstrapBody = null;
   manifestBody = null;
   await h.goTo('/#/browse-adf-hx');
@@ -510,6 +504,11 @@ export default async function run(page, h) {
   );
   await h.screenshot('absent-config-still-works');
 
-  h.step('Configuration health');
+  await h.step('Configuration health');
+  h.check(
+    'no request read a configuration document from the repository',
+    documentReads.length === 0,
+    documentReads.join(', '),
+  );
   h.expectNoConsoleErrors('no unexpected browser console errors', ENVIRONMENTAL_ERRORS);
 }

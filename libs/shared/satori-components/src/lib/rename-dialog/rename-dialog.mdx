@@ -1,0 +1,69 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as RenameDialogStories from './rename-dialog.stories';
+
+<Meta of={RenameDialogStories} name="Overview" />
+
+# Rename dialog
+
+The rename dialog changes a document's title. Open it from a document's menu — browse's row menu
+does, as **Rename**. It writes the new title itself and closes with the updated document.
+
+## Key features
+
+- **A title, not a path.** Renaming changes `dc:title`, as Nuxeo Web UI's title edit does. The name
+  in the document's path stays, so links to it keep working.
+- **Nothing to save, nothing saved.** Rename stays disabled until the title changes, and a blank
+  title — whitespace included — is refused. The title is trimmed before it is written.
+- **A refusal is not lost.** When the server refuses, the dialog stays open and says why: no
+  permission, the document locked by someone else, the document gone, or a failure.
+
+## Demo showcase
+
+<Canvas of={RenameDialogStories.Renaming} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsRenameDialogComponent,
+  type NxsRenameDialogData,
+} from '@nuxeo/satori-platform/components';
+
+this.dialog
+  .open<NxsRenameDialogComponent, NxsRenameDialogData, NuxeoDocument>(NxsRenameDialogComponent, {
+    data: { documentId: doc.uid, title: doc.title },
+  })
+  .afterClosed()
+  .subscribe((updated) => {
+    if (updated) this.reload();
+  });`;
+
+<Source language="typescript" dark code={usageTs} />
+
+`documentId` and `title` are required. `afterClosed()` gives the updated document, or nothing when the
+user cancels. The dialog's words are translated with ngx-translate under
+`satori-components.rename-dialog.*`; `providePlatformEnglishFallback()` supplies the English when your
+catalogue does not. It has no registered ID: open it with `MatDialog`.
+
+## Where its data comes from
+
+It writes the title through `BrowseService.updateDocument`, with the application's sign-in. Nuxeo
+checks the permission on that request; the dialog only reports the answer.
+
+**In these stories** the server is a fake that answers from memory, and every call is recorded in the
+Actions panel.
+
+## Examples
+
+### Refused
+
+<Canvas of={RenameDialogStories.Refused} />
+
+## Accessibility
+
+- **A dialog.** It is a Material dialog named by its heading, "Rename", with focus on the title field
+  when it opens. **Escape** closes it without saving.
+- **The field** is labelled "Title" and is required; an empty title says "Enter a title".
+- **Keyboard.** **Enter** in the field saves; **Tab** reaches Cancel and Rename.
+- **A refusal is announced.** The reason appears as an alert, so a screen reader reads it without the
+  user moving focus.

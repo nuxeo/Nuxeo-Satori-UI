@@ -1,3 +1,4 @@
+import { documentTypeIsOneOf } from './document-rules';
 import type { ExtensionRuleEvaluator } from './extension-rules';
 
 /**
@@ -35,8 +36,14 @@ export const SURFACE_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEvalu
    * there and plain "Edit" everywhere else. That is the same shape as the
    * favourite and subscription toggles: two descriptors gated by opposite
    * rules, so a customer relabelling one does not silently lose the other.
+   *
+   * The one rule in this map that reads the document rather than a flag: it is
+   * exactly `app.rules.isType` with `["Note"]`. It read a `note` flag the page
+   * derived from that same document, which `ExtensionRuleContext.flags` exists
+   * to exclude. It stays in this map so that code registering either map on
+   * its own still gets the ids it always did.
    */
-  'app.rules.isNote': (context) => context.flags['note'] === true,
+  'app.rules.isNote': (context) => documentTypeIsOneOf(context.document, ['Note']),
   /**
    * No named operation is in flight — the `enabledRule` behind every control
    * that used to carry `[disabled]="actionInProgress() === 'trash'"`.

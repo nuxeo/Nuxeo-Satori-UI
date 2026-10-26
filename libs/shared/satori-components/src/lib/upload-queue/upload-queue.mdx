@@ -1,0 +1,95 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as UploadQueueStories from './upload-queue.stories';
+
+<Meta of={UploadQueueStories} name="Overview" />
+
+# Upload queue
+
+The upload queue is the list of files in an upload, each with its own state: chosen, waiting, uploading
+with its progress, uploaded, or refused with the reason. Use it wherever files are uploaded — the
+Create / Import dialog's import, and files dropped on browse's list, both use it.
+
+## Key features
+
+- **One file at a time, each its own state.** `NxsUploadQueue` follows a batch file by file from the
+  progress `DocumentImportService` reports, so a long upload says which file is in hand and how far
+  along it is.
+- **A failure keeps what worked.** When the server refuses a file, the files before it stay uploaded,
+  the refused one says why — no permission, the folder gone, or a failure — and the rest go back to the
+  queue. Retry runs only what was not uploaded.
+- **The page runs the upload.** The queue makes no request; the page uploads with the call it already
+  makes and reports the outcome, so the same queue serves a dialog and a drop.
+- **Announced, not chatty.** The count of files uploaded and refused is a polite live region; each bar
+  is named for its file.
+
+## Demo showcase
+
+<Canvas of={UploadQueueStories.Uploading} />
+
+## Usage
+
+export const usageTs = `import { NxsUploadQueue, NxsUploadQueueComponent } from '@nuxeo/satori-platform/components';
+
+readonly uploads = new NxsUploadQueue();
+
+upload(path: string, files: File[]): void {
+  this.uploads.stage(files);
+  const pending = this.uploads.pending();
+  this.uploads.start();
+  this.importService
+    .importFiles(path, pending, { onProgress: (progress) => this.uploads.progress(progress) })
+    .subscribe({
+      next: (documents) => this.uploads.complete(documents),
+      error: (error) => this.uploads.fail(error),
+    });
+}`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-upload-queue
+  [items]="uploads.items()"
+  [label]="'acme.files-to-upload' | translate"
+  (remove)="uploads.remove($event)"
+  (retry)="upload(path, [])"
+/>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`items` and `label` are required. `NxsUploadQueue` is a plain class: create one per upload surface. Its
+`busy`, `done` and `failed` signals say where the run stands. The component's own words are translated
+with ngx-translate under `satori-components.upload-queue.*`.
+
+## Where its data comes from
+
+From the page. The page uploads — `DocumentImportService.importFiles` or `importFilesWithProperties`,
+with the application's sign-in — and passes each progress report and the outcome to the queue. Nuxeo
+decides whether each document may be created.
+
+**In these stories** the queue is driven by hand to each moment of a run, and Remove and Retry are
+recorded in the Actions panel.
+
+## Examples
+
+### Chosen
+
+<Canvas of={UploadQueueStories.Chosen} />
+
+### Refused
+
+<Canvas of={UploadQueueStories.Refused} />
+
+### Uploaded
+
+<Canvas of={UploadQueueStories.Uploaded} />
+
+## Accessibility
+
+- **A named list.** The files are a list named by `label`; each says its name and its state in text,
+  not only by icon or colour.
+- **Progress.** A file uploading has a progress bar named "Uploading" and its name; the summary
+  "1 of 3 uploaded" is announced politely as it changes.
+- **Buttons.** Retry and Remove are icon buttons named for their file, with matching tooltips. A file
+  in a run under way cannot be removed.
+- **Scrolling.** Past 280 px the list scrolls. It then takes keyboard focus itself, with a focus ring,
+  because a run of waiting and uploading files has no button to reach it by.

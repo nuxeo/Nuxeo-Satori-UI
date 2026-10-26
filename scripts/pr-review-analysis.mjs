@@ -338,6 +338,97 @@ function suppressedFindings(body) {
   return found;
 }
 
+/** The characters outside `<…>`; no angle bracket survives, however the markup nests. */
+function textOutsideTags(html) {
+  let text = '';
+  let inTag = false;
+  for (const ch of html) {
+    if (ch === '<') inTag = true;
+    else if (ch === '>') inTag = false;
+    else if (!inTag) text += ch;
+  }
+  return text;
+}
+
+/**
+ * The findings in a review body's "Previously missed (N)" block — defects Copilot found on a
+ * later pass in code that had not changed since its last review.
+ *
+ * They are not threads, so `reviewThreads` never sees them, and they arrive in reviews that also
+ * carry ordinary threads, which is exactly when the summary body is skipped as a restatement. So
+ * before this parser they were dropped twice over: absent from the record, and absent from
+ * `roundFindings`, which let a round whose only findings were previously missed read clean.
+ * Ten of #333's sixteen Copilot reviews carry one, holding 38 findings the harvest had never
+ * recorded.
+ *
+ * The shape, from review 5454141630 on #333
+ * (`scripts/fixtures/copilot-review-previously-missed.txt`):
+ *
+ *     <summary><strong>Previously missed (4)</strong></summary>
+ *     In code that hasn't changed since last review
+ *     <details>
+ *     <summary><picture>…</picture> Missing --root causes exit 1 instead of documented exit 2</summary>
+ *     `scripts/beta-harness/dependency-tree.mjs:131`
+ *     The documented exit-code contract is not honored …
+ *     </details>
+ *
+ * The path carries zero-width spaces after each `/`, which are removed. If fewer entries parse
+ * than the heading declares, the shortfall is recorded as one row naming it, so a change of shape
+ * under-describes findings rather than silently losing them.
+ */
+export function previouslyMissedFindings(body) {
+  const text = String(body ?? '');
+  const heading = /Previously missed \((\d+)\)/.exec(text);
+  if (!heading) return [];
+  const declared = Number(heading[1]);
+  const section = text.slice(heading.index + heading[0].length);
+  // Neither lazy group may cross a `<details` boundary, or one malformed entry would swallow the
+  // next and report two findings as one under the wrong title.
+  const inside = '((?:(?!</?details\\b)[\\s\\S])*?)';
+  const entry = new RegExp(
+    `<details\\b[^>]*>\\s*<summary\\b[^>]*>${inside}</summary\\s*>\\s*\`([^\`\\n]+?):(\\d+)\`\\s*${inside}</details\\s*>`,
+    'gi',
+  );
+  const found = [];
+  for (const match of section.matchAll(entry)) {
+    if (found.length === declared) break;
+    const title = textOutsideTags(match[1]).replace(/\s+/g, ' ').trim();
+    found.push({
+      file: match[2].replace(/[\u200b-\u200d\u2060\ufeff]/g, '').trim(),
+      line: Number(match[3]),
+      finding: (title || findingLine(match[4])).slice(0, 220),
+    });
+  }
+  if (found.length < declared) {
+    found.push({
+      file: '(review summary)',
+      line: null,
+      finding:
+        `Previously missed (${declared}): ${declared - found.length} of them could not be ` +
+        'parsed — read the review body.',
+    });
+  }
+  return found;
+}
+
+/**
+ * The rows one Copilot review **body** contributes, given whether the review already produced a
+ * finding by another route (an inline thread).
+ *
+ * "Previously missed" entries are always counted: they are in code the threads do not cover, so
+ * they never restate one. A plain summary verdict earns a row only when nothing else did and it
+ * is not an approval — see the comment at the call site in `harvestPr` for why both halves of
+ * that test exist.
+ * @param {string} body
+ * @param {boolean} hasOtherFindings
+ */
+export function reviewBodyItems(body, hasOtherFindings) {
+  const listed = [...suppressedFindings(body), ...previouslyMissedFindings(body)];
+  if (listed.length) return listed;
+  if (hasOtherFindings || CLEAN_VERDICT.test(body)) return [];
+  return [{ file: '(review summary)', line: null, finding: findingLine(body) }];
+}
+
 /**
  * Resolve a review id for a command that filters by it, or exit 3 rather than let an id
  * matching nothing masquerade as an empty result.
@@ -543,24 +634,17 @@ export function harvestPr(pr) {
     '$pr.reviews.nodes[] | select(.body != "") | {title: $pr.title} + .',
   )) {
     if (!isReviewer(r.author?.login)) continue;
-    const suppressed = suppressedFindings(r.body);
-    const clean = CLEAN_VERDICT.test(r.body);
     // A summary verdict restates the findings under it, so it earns a row only when the review
     // contributed none by any other route *and* is not an approval.
     //
-    // Two earlier versions of this test were wrong in opposite directions. `suppressed.length`
-    // alone asks whether the *body* embedded a block, not whether the *review* already
-    // produced findings, so a review with ordinary inline threads and a plain summary was
-    // harvested as every thread plus an extra summary row — PR #180's first review is that
-    // shape. Then falling back to "any non-empty body is a finding" turned an approval into a
-    // defect: PR #178's reviews say "Approval recommended" and "Comments generated: 0", so
-    // `round` returned 1 for a genuinely clean review and the corpus gained a row for a
-    // review that found nothing.
-    const items = suppressed.length
-      ? suppressed
-      : reviewsWithFindings.has(r.id) || clean
-        ? []
-        : [{ file: '(review summary)', line: null, finding: findingLine(r.body) }];
+    // Two earlier versions of this test were wrong in opposite directions. Asking only whether
+    // the *body* embedded a block, not whether the *review* already produced findings, harvested
+    // a review with ordinary inline threads and a plain summary as every thread plus an extra
+    // summary row — PR #180's first review is that shape. Then falling back to "any non-empty
+    // body is a finding" turned an approval into a defect: PR #178's reviews say "Approval
+    // recommended" and "Comments generated: 0", so `round` returned 1 for a genuinely clean
+    // review and the corpus gained a row for a review that found nothing.
+    const items = reviewBodyItems(r.body, reviewsWithFindings.has(r.id));
     if (items.length) reviewsWithFindings.add(r.id);
     for (const item of items) {
       rows.push(

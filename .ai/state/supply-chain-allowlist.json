@@ -39,8 +39,9 @@
     "`unreferencedDependencies` excuses a production dependency that no source file imports. Four",
     "of these turned out to be genuinely unused — `openai`, `express`, `cors`, `dotenv` — and were",
     "removed rather than listed. An entry here means the package is required by something other",
-    "than an import: the Angular runtime, or a version pin that satisfies an adf-core peer. If the",
-    "package becomes referenced, or stops being a dependency, its entry fails as unnecessary."
+    "than an import: the Angular runtime, or a helper library the compiler emits. The ADF-era",
+    "version pins and the ng-mocks stub that used to be listed here went in NXSAT-672.",
+    "If the package becomes referenced, or stops being a dependency, its entry fails as unnecessary."
   ],
   "advisories": {
     "quill": {
@@ -92,12 +93,6 @@
   },
   "unreferencedDependencies": {
     "tslib": "Emitted helper library. The TypeScript compiler generates imports of it into the build output; no source file names it.",
-    "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source.",
-    "@angular/material-date-fns-adapter": "Version pin only. @alfresco/adf-core declares it as an unbounded `>=` peer, so without an exact pin a clean install floats it to the Angular 22 line and the build dies with `Unsupported enum value`. See docs/adf-hx-upstream-findings.md 2.1.",
-    "@mat-datetimepicker/core": "Version pin only, and one of the two that deliberately differ from adf-core's suggestion: its major track is offset from Angular's, so 16.0.1 is correct for Angular 20.",
-    "date-fns": "Version pin only, to keep @angular/material-date-fns-adapter and adf-core agreeing on one copy.",
-    "pdfjs-dist": "Version pin only, and the second deliberate deviation: 4.x downgrades a shared native package, so 6.2.108 is pinned.",
-    "minimatch": "Version pin only. Declared as a `>=10.0.0` peer by @alfresco/adf-core.",
-    "angular-oauth2-oidc": "Version pin only. A direct dependency of @alfresco/adf-core; pinned here so a clean install cannot float it."
+    "@angular/animations": "Required by @angular/material at runtime for its transitions. Never imported by our source."
   }
 }

@@ -1,54 +1,59 @@
 {
-  "$schema": "Layer 0 bootstrap configuration for the template. Every key is optional; anything omitted falls back to the value compiled into the application, so an untouched file behaves exactly like no file at all.",
-  "$deployment": "In production this file lives BESIDE the application bundle, not inside it — the marketplace installer copies the bundle directory with overwrite=\"true\" and would destroy customer edits. `resolveBootstrapConfigUrl()` looks for it one level up from the base href, which is why it is served here from `public/agentic-ui-config/`.",
-
-  "$nuxeoApiOrigin": "Origin for Nuxeo REST calls, read once at startup and provided as NUXEO_API_ORIGIN. Empty keeps requests relative, which is correct behind `proxy.conf.json` under `nx serve` and for a same-origin production deployment. A cross-origin value needs CORS configured on Nuxeo — the stock Docker image sends no CORS headers, so a statically served bundle must sit behind a proxy instead.",
-  "nuxeoApiOrigin": "",
-
-  "$manifestDocumentPath": "Repository path of the Nuxeo document holding the Layer 1 manifest. Created by `tools/video/mock-customer/seed-nuxeo.mjs` on a local instance. It is fetched during startup, so it only resolves once a session exists — on a first, anonymous load Nuxeo answers 401 and the application falls back to packaged defaults. Both outcomes are visible on the Diagnostics page under 'Configuration sources'.",
-  "manifestDocumentPath": "/default-domain/config/satori-template",
-  "manifestDocumentProperty": "note:note",
-
-  "$branding": "Rendered by the shell and written to document.title. Change these two strings and reload — no rebuild.",
-  "branding": {
-    "applicationTitle": "Acme Insurance",
-    "documentTitle": "Acme Insurance — Content"
-  },
-
-  "$themes": "Merged over the packaged themes by id. `tokens` are CSS custom properties written onto <html> by TemplateThemeService, so a rebrand genuinely needs no rebuild — edit a hex value below, reload, and the shell changes. The `--shell-*` names are the ones this template's own SCSS reads; a fork renames them to whatever its CSS uses. `base` names a compiled Material palette and is ignored by this template, which ships no Material.",
-  "defaultThemeId": "acme",
-  "themes": [
+  "$comment": "What the template dev server answers at agentic-ui-config/bootstrap.json: the response the configuration servlet in nuxeo-agentic-core sends in production, with one fragment. On a server, these values are a bootstrap fragment in your own configuration package, contributed to org.nuxeo.agentic.ui.config; nothing is edited on the server. Everything here is public: it is read before sign-in.",
+  "format": "nuxeo-agentic-ui-config/1",
+  "layer": "bootstrap",
+  "fragments": [
     {
-      "id": "acme",
-      "label": "Acme",
-      "base": "nuxeo",
-      "preview": {
-        "sidebar": "#0f2b46",
-        "surface": "#ffffff",
-        "header": "#0f2b46",
-        "accent": "#1f6feb",
-        "tile": "#dbeafe"
-      },
-      "tokens": {
-        "--shell-fg": "#0f172a",
-        "--shell-muted": "#5b6b7f",
-        "--shell-border": "#c7d3e0",
-        "--shell-surface": "#ffffff",
-        "--shell-surface-alt": "#eef4fb",
-        "--shell-accent": "#1f6feb",
-        "--shell-accent-fg": "#ffffff",
-        "--shell-nav-fg": "#eef4fb",
-        "--shell-nav-muted": "#9fb4ca",
-        "--shell-nav-bg": "#0f2b46",
-        "--shell-nav-hover": "#1c3d5c",
-        "--shell-nav-active": "#1f6feb",
-        "--shell-warn-bg": "#fff4d6",
-        "--shell-warn-border": "#d99b1c"
+      "name": "template",
+      "component": "nuxeo-satori-template (nx serve)",
+      "bundle": "nuxeo-satori-template",
+      "source": "apps/nuxeo-satori-template/public/agentic-ui-config/bootstrap.json",
+      "content": {
+        "$schema": "Layer 0 bootstrap fragment for the template. Every key is optional; anything omitted keeps the value compiled into the application.",
+        "$nuxeoApiOrigin": "Origin for Nuxeo REST calls, read once at startup and provided as NUXEO_API_ORIGIN. Empty keeps requests relative, which is correct behind `proxy.conf.json` under `nx serve` and for a same-origin production deployment. A cross-origin value needs CORS configured on Nuxeo — the stock Docker image sends no CORS headers, so a statically served bundle must sit behind a proxy instead.",
+        "nuxeoApiOrigin": "",
+        "$branding": "Rendered by the shell and written to document.title. Change these two strings and reload — no rebuild.",
+        "branding": {
+          "applicationTitle": "Acme Insurance",
+          "documentTitle": "Acme Insurance — Content"
+        },
+        "$themes": "Merged over the packaged themes by id. `tokens` are CSS custom properties written onto <html> by TemplateThemeService, so a rebrand genuinely needs no rebuild — edit a hex value below, reload, and the shell changes. The `--shell-*` names are the ones this template's own SCSS reads; a fork renames them to whatever its CSS uses. `base` names a compiled Material palette and is ignored by this template, which ships no Material.",
+        "defaultThemeId": "acme",
+        "themes": [
+          {
+            "id": "acme",
+            "label": "Acme",
+            "base": "nuxeo",
+            "preview": {
+              "sidebar": "#0f2b46",
+              "surface": "#ffffff",
+              "header": "#0f2b46",
+              "accent": "#1f6feb",
+              "tile": "#dbeafe"
+            },
+            "tokens": {
+              "--shell-fg": "#0f172a",
+              "--shell-muted": "#5b6b7f",
+              "--shell-border": "#c7d3e0",
+              "--shell-surface": "#ffffff",
+              "--shell-surface-alt": "#eef4fb",
+              "--shell-accent": "#1f6feb",
+              "--shell-accent-fg": "#ffffff",
+              "--shell-nav-fg": "#eef4fb",
+              "--shell-nav-muted": "#9fb4ca",
+              "--shell-nav-bg": "#0f2b46",
+              "--shell-nav-hover": "#1c3d5c",
+              "--shell-nav-active": "#1f6feb",
+              "--shell-warn-bg": "#fff4d6",
+              "--shell-warn-border": "#d99b1c"
+            }
+          }
+        ],
+        "$language-note": "English only, on purpose. This template ships no catalogue directory and wires no TranslateModule, so listing fr and de here advertised two languages it could not render — in the public Layer 0 example a customer copies. Add a locale here only together with apps/nuxeo-satori-template/public/i18n/<locale>.json and the loader to read it; checkAdvertisedLocalesShip now fails this file if you do not.",
+        "defaultLanguage": "en",
+        "availableLanguages": ["en"]
       }
     }
   ],
-
-  "$language-note": "English only, on purpose. This template ships no catalogue directory and wires no TranslateModule, so listing fr and de here advertised two languages it could not render — in the public Layer 0 example a customer copies. Add a locale here only together with apps/nuxeo-satori-template/public/i18n/<locale>.json and the loader to read it; checkAdvertisedLocalesShip now fails this file if you do not.",
-  "defaultLanguage": "en",
-  "availableLanguages": ["en"]
+  "diagnostics": []
 }

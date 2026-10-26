@@ -1,5 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -19,10 +19,10 @@ import {
   type ShareDialogData,
   type ExportDialogData,
   type SavedSearchDialogData,
-} from '@nuxeo-satori/platform/ui';
+} from '@nuxeo/satori-platform/ui';
 
 /**
- * Demonstrates all available UI components from `@nuxeo-satori/platform/ui`.
+ * Demonstrates all available UI components from `@nuxeo/satori-platform/ui`.
  *
  * This page serves as both documentation and a working example for customers
  * building their own Layer 2 extensions. Every component shown here is imported
@@ -32,7 +32,6 @@ import {
   selector: 'app-components',
   standalone: true,
   imports: [
-    CommonModule,
     MatButtonModule,
     MatCardModule,
     MatDialogModule,
@@ -42,6 +41,7 @@ import {
     SelectionTopbarComponent,
   ],
   templateUrl: './components.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './components.scss',
 })
 export class ComponentsShowcaseComponent {

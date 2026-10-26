@@ -1,0 +1,70 @@
+name: Registry auth (cold cache)
+
+# Proves SATORI_GH_READONLY_TOKEN still installs every GitHub Packages dependency from the
+# registry. `ci.yml` cannot: it restores the npm cache, and `npm ci` takes tarballs from the cache
+# by integrity without asking the registry, so a revoked token keeps passing there until the first
+# cache miss (found in PR #335). See scripts/registry-auth-check.mjs for what is asserted.
+#
+# Why these triggers and not every PR:
+#   - The token is revoked, expires or loses org access with no commit at all, so the trigger that
+#     actually detects it is the schedule. Daily bounds the blind window to a day.
+#   - A PR can change what has to authenticate — a new @alfresco or @hylandsoftware dependency, a
+#     version on a package the token cannot see, a registry mapping in .npmrc — so PRs touching
+#     those files run it before merge, as does a change to this check itself.
+#   - Every other PR would spend a full uncached install (about 30 s on a runner) re-proving the
+#     schedule's answer about a secret the PR cannot affect.
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - .npmrc
+      - .github/workflows/registry-auth.yml
+      - scripts/registry-auth-check.mjs
+      - scripts/registry-auth-check.selftest.mjs
+  push:
+    branches: [main]
+    paths:
+      - package.json
+      - package-lock.json
+      - .npmrc
+      - .github/workflows/registry-auth.yml
+      - scripts/registry-auth-check.mjs
+      - scripts/registry-auth-check.selftest.mjs
+
+concurrency:
+  group: registry-auth-${{ github.ref }}
+  cancel-in-progress: true
+
+# The token under test is the PAT in the secret, not GITHUB_TOKEN, so this job needs no
+# `packages: read`: leaving it out means a pass cannot have come from the workflow's own token.
+permissions:
+  contents: read
+
+jobs:
+  cold-install:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Deliberately no `cache:` and no `registry-url:`. A cache is the thing being bypassed, and
+      # `registry-url` writes a second .npmrc with its own token line; the script isolates npm's
+      # user and global config anyway, so only the repository's .npmrc is under test.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Classifier controls (offline)
+        run: node scripts/registry-auth-check.selftest.mjs
+
+      - name: Cold-cache install against GitHub Packages
+        run: node scripts/registry-auth-check.mjs
+        env:
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}

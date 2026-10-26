@@ -30,7 +30,7 @@ says "the harness", it means the second.** This page is about the second.
 
 ## What the customer actually receives
 
-Four artifacts, all inside `@nuxeo-satori/platform`. Verified present in the 347 kB tarball
+Four artifacts, all inside `@nuxeo/satori-platform`. Verified present in the 347 kB tarball
 by unpacking it.
 
 | Artifact                    | What it does                                                                                                                     | Status      |
@@ -42,9 +42,9 @@ by unpacking it.
 
 ```bash
 # What a customer's developer runs — from the installed package, no clone of ours
-npx nx g @nuxeo-satori/platform:extension-library acme-extensions --owner=acme
-npx nx g @nuxeo-satori/platform:extension-rule      is-legal-team --library=acme-extensions
-node node_modules/@nuxeo-satori/platform/guardrails/check-extension-library.mjs libs/acme-extensions
+npx nx g @nuxeo/satori-platform:extension-library acme-extensions --owner=acme
+npx nx g @nuxeo/satori-platform:extension-rule      is-legal-team --library=acme-extensions
+node node_modules/@nuxeo/satori-platform/guardrails/check-extension-library.mjs libs/acme-extensions
 ```
 
 ---
@@ -77,7 +77,7 @@ disappeared.
 | The generated library registers **live**, not merely present                      | `phase-5-harness` evidence, 27 checks; guardrail check 3 requires a spec asserting registry state                                                                 |
 | The guardrail catches five specific classes of mistake                            | Each corresponds to a mistake actually made in this repository. All five probed                                                                                   |
 | A Layer 0/1/2 customisation **survives a version bump**                           | `npm run beta:upgrade`, 8 assertions incl. slot existence                                                                                                         |
-| Config and manifest survive a **marketplace upgrade**                             | Edited `bootstrap.json` survives — rehearsed (NXSAT-317); the package ships only a sample. Manifest is a Nuxeo document                                           |
+| Config and manifest survive a **marketplace upgrade**                             | Both are fragments in the customer's own package; ours installs no configuration file. Rehearsed with two customer packages installed (NXSAT-312)                 |
 
 ### Tier 2 · Shipped but unproven with a customer
 
@@ -95,8 +95,9 @@ disappeared.
 - **AI-assisted upgrade migration** — an agent reading a changelog and adapting a customer's
   Layer 2 code. Nothing exists.
 - **Automated customer support triage** — nothing exists.
-- **Customer self-service configuration UI** for Layer 0/1 — the manifest is a Nuxeo document,
-  so a UI over it is plausible. Nothing exists.
+- **Customer self-service configuration UI** for Layer 0/1 — since NXSAT-312 the manifest is a
+  fragment in the customer's own package, not a Nuxeo document, so a UI would need somewhere to
+  keep it. Nothing exists.
 
 ### Tier 4 · Claims not to make
 

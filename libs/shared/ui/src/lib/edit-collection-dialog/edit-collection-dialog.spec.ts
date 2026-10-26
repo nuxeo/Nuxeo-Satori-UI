@@ -1,9 +1,11 @@
+import { DateAdapter } from '@angular/material/core';
+import { enUS, fr, de, nl, ja, th, zhCN } from 'date-fns/locale';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -14,9 +16,10 @@ import {
   type DirectoryEntry,
   type L10nDirectoryEntry,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import { EditCollectionDialogComponent } from './edit-collection-dialog';
+import { NxsToastService } from '@nuxeo/satori-platform/components';
 
 function l10n(id: string, parent: string, labelEn: string): L10nDirectoryEntry {
   return {
@@ -54,7 +57,7 @@ const mockCollectionService = {
       of({} as NuxeoDocument),
   ),
 };
-const snackBarOpenSpy = vi.fn();
+const toast = { show: vi.fn(), error: vi.fn() };
 
 const document: NuxeoDocument = {
   uid: 'col-1',
@@ -77,6 +80,7 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), testTranslateModule(), EditCollectionDialogComponent],
       providers: [
@@ -85,7 +89,6 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
         { provide: MAT_DIALOG_DATA, useValue: { document } },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: CollectionService, useValue: mockCollectionService },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(EditCollectionDialogComponent, {
@@ -193,6 +196,50 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
       component.removeSubject('art');
       expect(component.subjects).toEqual(['cinema']);
     });
+  });
+
+  it.each([
+    { locale: enUS, input: '12/31/2026' },
+    { locale: fr, input: '31/12/2026' },
+    { locale: de, input: '31.12.2026' },
+    { locale: nl, input: '31-12-2026' },
+    { locale: ja, input: '2026/12/31' },
+    { locale: th, input: '31/12/2026' },
+    { locale: zhCN, input: '26-12-31' },
+  ])(
+    'accepts Expires "$input" using $locale.code and retains the parsed date',
+    ({ locale, input }) => {
+      fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(locale);
+      component.onExpiresInput({ target: { value: input } } as unknown as Event);
+      expect(component.isExpiresValid()).toBe(true);
+      expect(component.showExpiresError()).toBe(false);
+      expect(component.expiresErrorMatcher.isErrorState()).toBe(false);
+      expect([
+        component.expires?.getFullYear(),
+        component.expires?.getMonth(),
+        component.expires?.getDate(),
+      ]).toEqual([2026, 11, 31]);
+      component.save();
+      expect(mockCollectionService.updateProperties).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({ 'dc:expired': new Date(2026, 11, 31).toISOString() }),
+      );
+    },
+  );
+
+  it('shows and blocks locale-invalid Expires text even when the model previously held a valid date', () => {
+    fixture.debugElement.injector.get<DateAdapter<Date>>(DateAdapter).setLocale(de);
+    component.expires = new Date(2026, 3, 3);
+    component.onExpiresInput({ target: { value: '03/04/2026' } } as unknown as Event);
+    expect(component.isExpiresValid()).toBe(false);
+    expect(component.showExpiresError()).toBe(true);
+    expect(component.expiresErrorMatcher.isErrorState()).toBe(true);
+    // Material's ngModel turns an invalid adapter date into null. Non-empty raw text must
+    // still block submission rather than clearing the stored expiry.
+    component.onExpiresChange(null);
+    expect(component.isExpiresValid()).toBe(false);
+    component.save();
+    expect(mockCollectionService.updateProperties).not.toHaveBeenCalled();
   });
 
   describe('expires field', () => {
@@ -366,12 +413,8 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
 
     component.save();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith(
+    expect(toast.error).toHaveBeenCalledWith(
       TestBed.inject(TranslateService).instant(PERMISSION_DENIED_KEY),
-      'OK',
-      {
-        duration: 4000,
-      },
     );
     expect(component.saving()).toBe(false);
     expect(mockDialogRef.close).not.toHaveBeenCalled();
@@ -383,9 +426,7 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
 
     component.save();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Failed to update collection', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to update collection');
     expect(component.saving()).toBe(false);
   });
 
@@ -395,6 +436,7 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
     mockDirectoryService.getAllL10nEntries.mockReturnValue(of([]));
 
     await TestBed.resetTestingModule();
+    TestBed.overrideProvider(NxsToastService, { useValue: toast });
     await TestBed.configureTestingModule({
       imports: [testTranslateModule(), EditCollectionDialogComponent],
       providers: [
@@ -403,7 +445,6 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
         { provide: MAT_DIALOG_DATA, useValue: { document } },
         { provide: DirectoryService, useValue: mockDirectoryService },
         { provide: CollectionService, useValue: mockCollectionService },
-        { provide: MatSnackBar, useValue: { open: snackBarOpenSpy } },
       ],
     })
       .overrideComponent(EditCollectionDialogComponent, {
@@ -415,8 +456,53 @@ describe('EditCollectionDialogComponent (NXSAT-192)', () => {
     failureFixture.detectChanges();
     await flushAsync();
 
-    expect(snackBarOpenSpy).toHaveBeenCalledWith('Failed to load vocabulary options', 'OK', {
-      duration: 4000,
-    });
+    expect(toast.error).toHaveBeenCalledWith('Failed to load vocabulary options');
+  });
+});
+
+/** Types `text` one keystroke at a time with change detection after each, as a browser does. */
+async function typeKeystrokes(
+  fixture: ComponentFixture<unknown>,
+  input: HTMLInputElement,
+  text: string,
+): Promise<string[]> {
+  const shown: string[] = [];
+  for (let end = 1; end <= text.length; end++) {
+    input.value = text.slice(0, end);
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    shown.push(input.value);
+  }
+  return shown;
+}
+
+const TYPED_EXPIRY = '12/31/2027';
+const TYPED_PREFIXES = [...TYPED_EXPIRY].map((_, index) => TYPED_EXPIRY.slice(0, index + 1));
+const dayOf = (date: Date | null) => date && [date.getFullYear(), date.getMonth(), date.getDate()];
+
+// Material keeps null for a partial date; a handler that stored anything else made [ngModel]
+// write back and erase the text mid-entry. Only a real template exercises that write-back.
+describe('EditCollectionDialogComponent Expires typed into the real field', () => {
+  it('keeps every partial entry in the field and holds the finished date', async () => {
+    TestBed.resetTestingModule();
+    await TestBed.configureTestingModule({
+      imports: [testTranslateModule(), EditCollectionDialogComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideNoopAnimations(),
+        { provide: MatDialogRef, useValue: { close: vi.fn() } },
+        { provide: MAT_DIALOG_DATA, useValue: { document } },
+        { provide: DirectoryService, useValue: mockDirectoryService },
+        { provide: CollectionService, useValue: mockCollectionService },
+      ],
+    }).compileComponents();
+    const fixture = TestBed.createComponent(EditCollectionDialogComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const input = fixture.nativeElement.querySelector('input[name="expires"]') as HTMLInputElement;
+
+    expect(await typeKeystrokes(fixture, input, TYPED_EXPIRY)).toEqual(TYPED_PREFIXES);
+    expect(dayOf(fixture.componentInstance.expires)).toEqual([2027, 11, 31]);
   });
 });

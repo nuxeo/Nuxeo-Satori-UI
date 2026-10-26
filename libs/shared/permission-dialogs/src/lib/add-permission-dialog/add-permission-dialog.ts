@@ -1,5 +1,5 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -10,11 +10,9 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { provideNativeDateAdapter } from '@angular/material/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, debounceTime, distinctUntilChanged, switchMap, of } from 'rxjs';
 
 import {
@@ -23,9 +21,13 @@ import {
   PERMISSION_NOTIFICATION_MAIL_HINT_KEY,
   isMailSendError,
   permissionCreateMailFailureMessage,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
-import { provideTranslatedDatepickerIntl } from '@nuxeo-satori/platform/ui';
+import {
+  provideSatoriDateAdapter,
+  provideTranslatedDatepickerIntl,
+} from '@nuxeo/satori-platform/ui';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface AddPermissionDialogData {
   documentUid: string;
@@ -56,10 +58,10 @@ const PERMISSION_OPTIONS = [
     MatIconModule,
     MatProgressSpinnerModule,
     MatAutocompleteModule,
-    MatSnackBarModule,
   ],
-  providers: [provideNativeDateAdapter(), provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './add-permission-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {
@@ -155,7 +157,7 @@ export class AddPermissionDialogComponent {
   private readonly translate = inject(TranslateService);
   private readonly data = inject<AddPermissionDialogData>(MAT_DIALOG_DATA);
   private readonly detailService = inject(DocumentDetailService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
   private readonly destroyRef = inject(DestroyRef);
 
   private readonly searchSubject = new Subject<string>();
@@ -230,27 +232,19 @@ export class AddPermissionDialogComponent {
           const message = this.successMessage(result.notificationSent, result.notificationErrorKey);
           if (andAddAnother) {
             if (message) {
-              this.snackBar.open(message, this.translate.instant('common.dismiss'), {
-                duration: 7000,
-              });
+              this.toast.show(message, { duration: 7000 });
             }
             this.resetForm();
           } else {
             if (message) {
-              this.snackBar.open(message, this.translate.instant('common.dismiss'), {
-                duration: 7000,
-              });
+              this.toast.show(message, { duration: 7000 });
             }
             this.dialogRef.close(true);
           }
         },
         error: (err) => {
           this.saving.set(false);
-          this.snackBar.open(
-            this.permissionErrorMessage(err),
-            this.translate.instant('common.dismiss'),
-            { duration: 7000 },
-          );
+          this.toast.error(this.permissionErrorMessage(err), { duration: 7000 });
         },
       });
   }

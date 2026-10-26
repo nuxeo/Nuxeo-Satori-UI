@@ -1,6 +1,6 @@
 import { provideZonelessChangeDetection } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { provideTranslateService, TranslateService } from '@ngx-translate/core';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { DescriptorLabelPipe } from './descriptor-label.pipe';
@@ -19,8 +19,7 @@ describe('DescriptorLabelPipe', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      imports: [TranslateModule.forRoot()],
-      providers: [provideZonelessChangeDetection(), DescriptorLabelPipe],
+      providers: [provideZonelessChangeDetection(), provideTranslateService(), DescriptorLabelPipe],
     });
     translate = TestBed.inject(TranslateService);
     translate.setTranslation('en', { nav: { browse: 'Browse' } }, true);

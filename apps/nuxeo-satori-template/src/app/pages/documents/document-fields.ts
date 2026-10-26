@@ -1,4 +1,4 @@
-import type { NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 /**
  * Reading Nuxeo document properties, in one place.

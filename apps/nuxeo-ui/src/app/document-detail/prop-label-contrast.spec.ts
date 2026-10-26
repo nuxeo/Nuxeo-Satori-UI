@@ -1,25 +1,46 @@
 /**
- * NXENG-858 / NXENG-891 / NXENG-895 — `.prop-label` on `.properties-panel` under every compiled palette
+ * NXENG-858 / NXENG-891 / NXENG-895 — the field labels (Title, Description, …) of the real
+ * `nxs-properties-panel` inside `.properties-panel`, under every compiled palette
  * (IBM 1792790291, 2951482449, 2993932592). Karma loads `apps/nuxeo-ui/src/styles.scss`, so
  * `data-app-theme` resolves real token pairs. Host tokens come from `:host` in
  * `document-detail.scss` (no inline overrides on the test host).
  */
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import {
+  NxsDetailsPanelComponent,
+  NxsPropertiesPanelComponent,
+  type NxsDetailsPanelTab,
+} from '@nuxeo/satori-platform/components';
+import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
+import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 const WCAG_AA_NORMAL_TEXT = 4.5;
 
 @Component({
   standalone: true,
+  imports: [NxsDetailsPanelComponent, NxsPropertiesPanelComponent],
   templateUrl: './prop-label-contrast.host.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],
 })
-class PropLabelContrastHostComponent {}
+class PropLabelContrastHostComponent {
+  readonly views: readonly NxsDetailsPanelTab[] = [{ id: 'properties', label: 'Properties' }];
+  readonly heading = 'Sample document.pdf';
+  readonly document: NuxeoDocument = {
+    uid: 'doc-1',
+    path: '/default-domain/workspaces/ws/sample',
+    type: 'File',
+    title: 'Sample document',
+    lastModified: '2026-08-24T10:00:00.000Z',
+    properties: {},
+  };
+}
 
 function parseColor(value: string): { rgb: number[]; alpha: number } {
   const parts = value
@@ -97,7 +118,7 @@ describe('Document detail prop-label contrast by theme (NXENG-858, NXENG-891, NX
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [PropLabelContrastHostComponent],
+      imports: [PropLabelContrastHostComponent, testTranslateModule()],
       providers: [provideNoopAnimations()],
     }).compileComponents();
   });
@@ -142,9 +163,11 @@ describe('Document detail prop-label contrast by theme (NXENG-858, NXENG-891, NX
           .toBe('#ffffff');
 
         const panel = host.querySelector('.properties-panel') as HTMLElement | null;
-        const propLabel = host.querySelector('.prop-label') as HTMLElement | null;
+        const propLabel = host.querySelector(
+          '.nxs-properties-panel__field .nxs-properties-panel__label',
+        ) as HTMLElement | null;
         expect(panel).withContext('expected .properties-panel').not.toBeNull();
-        expect(propLabel).withContext('expected .prop-label').not.toBeNull();
+        expect(propLabel).withContext('expected a field label').not.toBeNull();
         if (!panel || !propLabel) return;
 
         const panelBg = getComputedStyle(panel).backgroundColor;

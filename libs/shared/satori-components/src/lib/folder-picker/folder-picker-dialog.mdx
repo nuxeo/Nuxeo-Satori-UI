@@ -1,0 +1,88 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as FolderPickerStories from './folder-picker-dialog.stories';
+
+<Meta of={FolderPickerStories} name="Overview" />
+
+# Folder picker
+
+The folder picker chooses a destination folder: where to copy a document, or where to move it. It
+opens on a folder and lists the folders in it; the user goes into one or up a level, and chooses the
+folder on screen. Browse's row menu opens it for **Copy to…** and **Move to…**.
+
+## Key features
+
+- **Only chooses.** It closes with the folder chosen — its `uid`, `path` and `title` — or nothing;
+  your component copies or moves.
+- **Your words.** The heading and the choose button are yours, already translated: "Move "Claim 42"
+  to" and "Move here".
+- **No pointless destination.** Give it `excludePath`, the folder being moved, and that folder and
+  everything inside it cannot be chosen, which Nuxeo would refuse. Give it `currentParentPath` when
+  moving, and the folder the document is already in cannot be chosen either.
+- **Says why.** A folder the user may not open, a folder gone, a location that is not a folder, or a
+  failure with Retry — each says so, and Up stays available.
+
+## Demo showcase
+
+<Canvas of={FolderPickerStories.ChoosingAFolder} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsFolderPickerDialogComponent,
+  type NxsFolderPickerDialogData,
+  type NxsFolderPickerDialogResult,
+} from '@nuxeo/satori-platform/components';
+
+const data: NxsFolderPickerDialogData = {
+  heading: this.translate.instant('acme.move-heading', { name: doc.title }),
+  confirmLabel: this.translate.instant('acme.move-here'),
+  initialPath: this.folder().path,
+  excludePath: doc.path,
+  currentParentPath: this.folder().path,
+};
+this.dialog
+  .open<NxsFolderPickerDialogComponent, NxsFolderPickerDialogData, NxsFolderPickerDialogResult>(
+    NxsFolderPickerDialogComponent,
+    { data },
+  )
+  .afterClosed()
+  .subscribe((target) => {
+    if (target) this.browse.moveDocuments([doc.uid], target.uid).subscribe();
+  });`;
+
+<Source language="typescript" dark code={usageTs} />
+
+`heading` and `confirmLabel` are required; `initialPath` defaults to `/default-domain`. Its own words —
+the empty message, the reasons, Up, Retry and Cancel — are translated with ngx-translate under
+`satori-components.folder-picker.*`. It has no registered ID: open it with `MatDialog`.
+
+## Where its data comes from
+
+It reads each folder and its children through `BrowseService` — `getByPath` and `getChildren`, up to
+200 children — with the application's sign-in, and lists the ones that are folders. Nuxeo decides what
+the user may see and, on your copy or move request, whether it is allowed.
+
+**In these stories** the repository is a fixed set of folders answered from memory, and closing the
+dialog is recorded in the Actions panel.
+
+## Examples
+
+### Already in this folder
+
+<Canvas of={FolderPickerStories.AlreadyHere} />
+
+### No access
+
+<Canvas of={FolderPickerStories.NoAccess} />
+
+## Accessibility
+
+- **A dialog** named by your heading, with Cancel and your choose button. **Escape** closes it
+  without choosing.
+- **Location.** The folder on screen is shown as a trail in a named region, announced politely when
+  it changes; **Up one level** is a named icon button.
+- **Folders** are a named list of buttons, one per folder: **Tab** reaches them, **Enter** goes into
+  one.
+- **Reasons** — no access, gone, failed — are alerts, read without moving focus. When the folder on
+  screen cannot be chosen, the choose button is disabled and the reason is shown beside it.

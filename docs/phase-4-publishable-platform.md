@@ -13,7 +13,7 @@ code, without forking it.
 
 | #   | Deliverable                                                             | Status                                                                                |
 | --- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
-| 1   | Libraries build to `dist/` as an installable package                    | **done** — `@nuxeo-satori/platform`, installed from a tarball and typechecked against |
+| 1   | Libraries build to `dist/` as an installable package                    | **done** — `@nuxeo/satori-platform`, installed from a tarball and typechecked against |
 | 2   | Public API surface declared and pinned against accidental change        | **done** — `docs/api/platform.api.md`, 233 symbols, gated                             |
 | 3   | Registration API — our `setComponents` / `setEvaluators` / `setActions` | **done** — `provideSatoriExtensions()`, 8 specs, and the app uses it                  |
 | 4   | Thin forkable app template                                              | **done** — `apps/nuxeo-satori-template`, 401 kB, a working Nuxeo client (§4)          |
@@ -21,15 +21,15 @@ code, without forking it.
 
 ## 1. The package
 
-**`@nuxeo-satori/platform`** — one versioned package, five entry points:
+**`@nuxeo/satori-platform`** — one versioned package, five entry points:
 
 | Import specifier                      | What it is                                          |
 | ------------------------------------- | --------------------------------------------------- |
-| `@nuxeo-satori/platform`              | `PLATFORM_ENTRY_POINTS`                             |
-| `@nuxeo-satori/platform/extensions`   | Layer 1/2 — slots, rules, actions, registration     |
-| `@nuxeo-satori/platform/app-config`   | Layer 0 — bootstrap config and the runtime manifest |
-| `@nuxeo-satori/platform/nuxeo-client` | Nuxeo REST services and document models             |
-| `@nuxeo-satori/platform/ui`           | Shared components and dialogs                       |
+| `@nuxeo/satori-platform`              | `PLATFORM_ENTRY_POINTS`                             |
+| `@nuxeo/satori-platform/extensions`   | Layer 1/2 — slots, rules, actions, registration     |
+| `@nuxeo/satori-platform/app-config`   | Layer 0 — bootstrap config and the runtime manifest |
+| `@nuxeo/satori-platform/nuxeo-client` | Nuxeo REST services and document models             |
+| `@nuxeo/satori-platform/ui`           | Shared components and dialogs                       |
 
 ```bash
 npx nx build platform     # -> dist/libs/platform
@@ -134,7 +134,7 @@ diagnostics page and a demo panel, and its manifest request 404ed against nothin
 demonstrated the extension contract and nothing about building a content application,
 which is most of what a customer actually has to do.
 
-It now signs in and reads the repository, using `@nuxeo-satori/platform/nuxeo-client`
+It now signs in and reads the repository, using `@nuxeo/satori-platform/nuxeo-client`
 and no adf-hx:
 
 | Route              | What it does                                                                     |
@@ -167,11 +167,12 @@ describes:
 | Layer | Where                                       | What it demonstrates                                   |
 | ----- | ------------------------------------------- | ------------------------------------------------------ |
 | 0     | `public/agentic-ui-config/bootstrap.json`   | branding, theme tokens and the API origin; reload only |
-| 1     | a Nuxeo document at `manifestDocumentPath`  | `overrides` relabel, reorder and hide navigation       |
+| 1     | `public/agentic-ui-config/manifest.json`    | `overrides` relabel, reorder and hide navigation       |
 | 2     | `src/app/extensions/template-extensions.ts` | all five contribution kinds, in the factory form       |
 
-`manifest.example.json` is the Layer 1 payload to paste into that document; it is not
-loaded from the bundle.
+Both files are the configuration servlet's envelope, standing in for it under `nx serve`; the
+template's manifest has no fragments. `manifest.example.json` is a Layer 1 fragment to add there
+— on a server, to a configuration package — and is not loaded from the bundle.
 
 The nav is **resolved from the registry**, not written in the template — that is what
 makes it addressable. The brand is read from Layer 0 too; it used to be the literal
@@ -189,7 +190,7 @@ npx nx serve nuxeo-satori-template              # proxies /nuxeo to localhost:80
 
 Yes. It ships ~150 lines of plain CSS and every one of its `var()` uses carries an
 inline fallback, so it renders even with `styles.scss` deleted. What it does not ship
-is a component library: `@nuxeo-satori/platform/ui` needs Angular Material (already a
+is a component library: `@nuxeo/satori-platform/ui` needs Angular Material (already a
 declared peer). The chain is **template CSS built in → add Material + `/ui` → replace
 with your own**.
 

@@ -4,6 +4,8 @@
 /dist
 /tmp
 /out-tsc
+# Compodoc's input table for the nxs- Storybook, written before every Storybook run.
+/libs/shared/satori-components/documentation.json
 /bazel-out
 **/target/
 
@@ -49,6 +51,9 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
+# Nx 22 shares one cache across every worktree of a checkout, so a validation run that must not
+# replay another worktree's results points NX_CACHE_DIRECTORY here. Cache output either way.
+.nx/suite-cache
 .angular
 
 vitest.config.*.timestamp*
@@ -143,6 +148,9 @@ playwright-report/
 # untracked so a stray `git add -A` cannot put it back.
 /docs/security-next-steps.md
 apps/nuxeo-ui/public/agentic-ui-config/bootstrap.json
+apps/nuxeo-ui/public/agentic-ui-config/manifest.json
+apps/nuxeo-ui/public/agentic-ui-config/layouts.json
+apps/nuxeo-ui/public/agentic-ui-config/layouts/
 apps/nuxeo-ui/public/i18n/zz.json
 
 # Local planning scratch. Two stray files were swept into a translation PR by `git add -A`, and
@@ -157,3 +165,4 @@ scripts/Untitled*
 # the consolidated reports but never these, and a 12-minute 11y:scan -- modes leaves a dozen
 # untracked directories here that a git add -A would commit.
 /a11y-reports/
+.nx/migrate-runs

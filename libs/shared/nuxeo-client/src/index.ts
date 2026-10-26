@@ -24,7 +24,12 @@ export type {
   ContentLakeIngestStatus,
 } from './lib/models/content-lake-ingest.model';
 export type { NuxeoTask, NuxeoTaskList } from './lib/models/task.model';
-export type { AuditEntry, AuditLogList } from './lib/models/audit.model';
+export type {
+  AuditEntry,
+  AuditLogList,
+  AuditLogQuery,
+  AuditLogSortField,
+} from './lib/models/audit.model';
 export { auditActivityLabel, auditActivityLabelKey } from './lib/utils/audit-activity-label';
 export {
   BLOB_CLIENT_REASON_HEADER,
@@ -160,7 +165,11 @@ export {
 } from './lib/services/document-import.service';
 export { TaskService } from './lib/services/task.service';
 export { CollectionService } from './lib/services/collection.service';
-export { BrowseService } from './lib/services/browse.service';
+export {
+  BrowseService,
+  type BrowsePageRequest,
+  type BrowseSortEntry,
+} from './lib/services/browse.service';
 export {
   BrowseContextService,
   type ClipboardPasteEvent,
@@ -172,6 +181,7 @@ export {
   decodeNuxeoPathSegment,
   expandableNuxeoPathPrefixes,
   normalizeNuxeoPath,
+  nuxeoBreadcrumbTitles,
   parentNuxeoFolderPath,
   parseBrowseNuxeoPathFromRouterUrl,
   nuxeoPathsEqual,
@@ -180,13 +190,6 @@ export {
   toBrowseRouterUrl,
   isBrowseRouterUrl,
   topLevelNuxeoFolderPath,
-  BROWSE_RETURN_MODE_PARAM,
-  parseBrowseReturnMode,
-  toAdfHxBrowseRouterUrl,
-  isAdfHxBrowseRouterUrl,
-  parseAdfHxBrowsePathFromRouterUrl,
-  toBrowseRouterUrlForReturnMode,
-  type BrowseReturnMode,
   isUserWorkspacePath,
   userWorkspaceOwnerFromPath,
   userWorkspaceRootFromPath,
@@ -258,16 +261,21 @@ export {
   REMOVE_DOCUMENT,
   WRITE_DOCUMENT,
   WRITE_PROPERTIES,
+  WRITE_VERSION,
   canAddChildren,
+  canCreateDocumentVersion,
   canManageDocumentPermissions,
+  canPublishDocument,
   canRemoveDocument,
   canShowRemoveDocumentAction,
   canShowWriteDocumentAction,
+  canTagDocument,
   canViewDocumentAuditLog,
   canWriteDocument,
   hasDocumentPermission,
   hasDocumentPermissionsEnricher,
   isPermissionDeniedError,
+  isRecordDocument,
   READ_WRITE_DOCUMENT,
 } from './lib/utils/document-permissions';
 export {

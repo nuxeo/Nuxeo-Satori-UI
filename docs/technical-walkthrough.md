@@ -22,7 +22,7 @@
 
 ## 1. Repository & Tooling
 
-### Monorepo with Nx 22
+### Monorepo with Nx 23
 
 ```
 agentic-ui-poc/
@@ -66,7 +66,7 @@ agentic-ui-poc/
 | Layer               | Technology                                           | Version  |
 | ------------------- | ---------------------------------------------------- | -------- |
 | Frontend framework  | Angular                                              | 20.3     |
-| UI design system    | Hyland Satori UI (`@hylandsoftware/satori-ui`)       | 0.2.0    |
+| UI design system    | Hyland Satori UI (`@hylandsoftware/satori-ui`)       | 0.2.1    |
 | Material components | Angular Material                                     | 20.2     |
 | State management    | Angular Signals (`signal`, `computed`, `effect`)     | built-in |
 | HTTP                | Angular `HttpClient` with functional interceptors    | built-in |
@@ -114,10 +114,15 @@ The codebase follows a **strict 4-layer architecture** enforced by Nx boundary r
 ### Bootstrap (`apps/nuxeo-ui/src/main.ts`)
 
 ```typescript
-bootstrapApplication(App, appConfig);
+bootstrapApplication(App, {
+  ...appConfig,
+  providers: [provideZoneChangeDetection(), ...appConfig.providers],
+});
 ```
 
-Single-file bootstrap — no `NgModule` anywhere in the codebase. All 247 source files are **standalone components**.
+Single-file bootstrap — no `NgModule` anywhere in the application code (the library test setups
+declare one to give TestBed zone change detection). Zoneless is the default from Angular 21, so
+`provideZoneChangeDetection()` keeps the application on zone.js. All 247 source files are **standalone components**.
 
 ### Application config (`apps/nuxeo-ui/src/app/app.config.ts`)
 

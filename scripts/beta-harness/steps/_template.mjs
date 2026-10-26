@@ -9,7 +9,7 @@
  * 1. Every `h.step()` must record at least one check. A screenshot with no
  *    assertion behind it proves only that a page rendered something.
  * 2. Assert the thing the phase claims to deliver, not that the page is alive.
- *    "hxp-document-list present" is weak; "column header shows Modified By and
+ *    "nxs-document-list present" is weak; "column header shows Modified By and
  *    the first row is a folder" is the claim a reviewer cares about.
  * 3. Capture the failure states too. If a phase adds an error path, drive it and
  *    photograph it — reviewers ask about those first.
@@ -24,9 +24,30 @@
  *    reports how many distinct images the run produced; a shot called
  *    `manifest-relabels-nav` that is byte-identical to the default one claims an
  *    observation it cannot support. Change what is on screen, or rename the shot.
+ * 7. The runner requires `NUXEO_USER` / `NUXEO_PASS` — there is no default — and
+ *    exits 2 before launching a browser when either is unset. A file that needs
+ *    no backend (`phase-0-no-backend`, `phase-4-platform`) exports
+ *    `skipHttpCredentials = true` instead, and then runs with no credentials sent.
+ * 8. `await h.step(...);`, as a statement. Every step boundary is where the identity
+ *    guard asks Nuxeo who the previous step ran as (NXSAT-643, `identity-guard.mjs`);
+ *    a result obtained as `Anonymous` or another user makes the run
+ *    `precondition-not-met`, and so does a boundary that was not awaited, which cannot
+ *    speak for its step. `npm run beta:audit` refuses any other form of the call.
+ *    An in-page `fetch` of your own to `/nuxeo/` sends the session's header, as the
+ *    app does: the guard judges every request the page sends to Nuxeo.
+ *    A step that deliberately signs the browser in as someone else says so with
+ *    `await h.signedInAs(user, reason)` first, and one that signs out says
+ *    `await h.signedOut(reason)`. Declare either one *before* installing the new
+ *    session: each judges the identity it is leaving before restarting the request
+ *    window, so a headerless read is refused rather than discarded, and the new
+ *    session must not be what it reads. `npm run beta:audit` refuses a call that is
+ *    not awaited as a statement. A second API identity needs its own request context
+ *    or `fetch`: `page.request` always sends the run's own user.
  *
  * Helper reference: see `scripts/beta-harness/helpers.mjs`.
- *   h.step(label)                        open a named step
+ *   await h.step(label)                  open a named step; the guard judges the last
+ *   await h.signedInAs(user, reason)     declare a deliberate change of browser identity
+ *   await h.signedOut(reason)            declare that the app may be signed out from here
  *   h.screenshot(name, locator?)         capture into the phase folder
  *   h.check(name, condition, detail?)    record an arbitrary assertion
  *   h.note(text)                         record what this run does NOT cover
@@ -36,6 +57,10 @@
  *   h.expectNoConsoleErrors(name?)       assert a clean browser console
  *   h.goTo(route) / h.goToDoc(uid)       navigate
  *   h.login()                            inject an authenticated session
+ *
+ * And one import, for a file that needs the credentials outside `h.login()`:
+ *   import { requireStepCredentials } from '../helpers.mjs';
+ *   requireStepCredentials(purpose)      the env pair, or a PreconditionError
  */
 
 /**
@@ -45,16 +70,16 @@
  */
 // eslint-disable-next-line no-unused-vars
 export default async function run(page, h, outDir) {
-  h.step('Set up');
+  await h.step('Set up');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
 
-  h.step('Describe what this phase delivers');
-  await h.goTo('/#/browse-adf-hx');
+  await h.step('Describe what this phase delivers');
+  await h.goTo('/#/browse');
   // Replace with assertions specific to the phase.
-  await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
+  await h.expectVisible('browse page rendered', 'lib-browse');
   await h.screenshot('phase-outcome');
 
-  h.step('Health');
+  await h.step('Health');
   h.expectNoConsoleErrors();
 }

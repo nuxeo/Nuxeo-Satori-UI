@@ -6,7 +6,7 @@ When reviewing pull requests in this Angular 19 + Nx monorepo, enforce the follo
 
 ## Architecture
 
-- **Shared code lives in `libs/shared/`**. Feature libs must NOT define their own copies of constants, models, or utilities that already exist in `@nuxeo-satori/platform/nuxeo-client` or `@nuxeo-satori/platform/ui`.
+- **Shared code lives in `libs/shared/`**. Feature libs must NOT define their own copies of constants, models, or utilities that already exist in `@nuxeo/satori-platform/nuxeo-client` or `@nuxeo/satori-platform/ui`.
 - **`NuxeoApiBase`** is a thin HTTP wrapper. Domain-specific API methods belong in their respective services — never in `NuxeoApiBase` directly.
 - **Features never import from other features.** If `libs/features/browse` imports from `libs/features/search`, flag it as an Nx boundary violation. Shared logic belongs in `libs/shared/`.
 - If a constant or utility is duplicated across feature libraries, flag it and recommend importing from the shared library.

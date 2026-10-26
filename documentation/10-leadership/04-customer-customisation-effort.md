@@ -43,7 +43,7 @@ Because "hours vs days" needs a basis, here is the mechanical difference:
 
 | Band      | What the customer must do                                                                                                                                                                      |
 | --------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Hours** | Edit one JSON file (Layer 0) or one Nuxeo document (Layer 1). No build, no deploy, no test suite, no CI. Layer 0 takes effect on reload; Layer 1 on the next config fetch                      |
+| **Hours** | Edit one JSON fragment (Layer 0 or Layer 1) in their configuration package and install it. No application build, no test suite, no CI. Takes effect the next time the application is opened    |
 | **Days**  | Generate scaffolding, implement a handler or rule, run 5 guardrail checks, write a spec asserting registry state, build their library, add a provider line, wire a route, deploy their package |
 | **Weeks** | The above, several times, plus their own design system, their own tests at whatever bar they hold, and integration with their systems                                                          |
 
@@ -110,14 +110,14 @@ toolbar action cannot do it in Layer 1 today, so it becomes Layer 2 work.
 
 ## 5. Risk profile by layer
 
-| Layer | Failure mode                   | Blast radius                                                                                | Recovery                                                      |
-| ----- | ------------------------------ | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------- |
-| 0     | Malformed JSON, bad token      | Cosmetic or a failed load                                                                   | Edit the file. Config is validated and falls back to defaults |
-| 1     | Unknown ID                     | **Fails open** — the entry stays visible. Deliberate: a typo must not strip working actions | Edit the manifest. It is a Nuxeo document, so it is versioned |
-| 1     | Slot renamed upstream          | **Silent** — entry disappears, app still boots and compiles                                 | Only `beta:upgrade`'s slot check catches this class           |
-| 2     | Defective component            | Their code, their support boundary                                                          | Their release process                                         |
-| 2     | Deep import into our internals | Breaks on our next release **without that being a breaking change**                         | Guardrail check 2 rejects it — if they run it                 |
-| Nuxeo | Bad server config              | Server-wide                                                                                 | Nuxeo administration                                          |
+| Layer | Failure mode                   | Blast radius                                                                                | Recovery                                                       |
+| ----- | ------------------------------ | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| 0     | Malformed JSON, bad token      | Cosmetic or a failed load                                                                   | Edit the file. Config is validated and falls back to defaults  |
+| 1     | Unknown ID                     | **Fails open** — the entry stays visible. Deliberate: a typo must not strip working actions | Edit the manifest fragment. It is versioned with their package |
+| 1     | Slot renamed upstream          | **Silent** — entry disappears, app still boots and compiles                                 | Only `beta:upgrade`'s slot check catches this class            |
+| 2     | Defective component            | Their code, their support boundary                                                          | Their release process                                          |
+| 2     | Deep import into our internals | Breaks on our next release **without that being a breaking change**                         | Guardrail check 2 rejects it — if they run it                  |
+| Nuxeo | Bad server config              | Server-wide                                                                                 | Nuxeo administration                                           |
 
 **Note on Layer 1 fail-open:** it is the right default, because Layer 1 visibility is **not an
 authorisation boundary** — server-side Nuxeo permissions still decide what succeeds. The

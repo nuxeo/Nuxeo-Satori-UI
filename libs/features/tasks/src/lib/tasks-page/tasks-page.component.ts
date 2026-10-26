@@ -1,4 +1,13 @@
-import { Component, DestroyRef, LOCALE_ID, inject, signal, OnInit, computed } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  LOCALE_ID,
+  inject,
+  signal,
+  OnInit,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -11,7 +20,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
 import { MatDatepickerModule } from '@angular/material/datepicker';
-import { MatNativeDateModule } from '@angular/material/core';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -30,13 +38,15 @@ import {
   CURRENT_USERNAME,
   trustObjectUrl,
   taskDueDistance,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   DocumentViewerComponent,
+  provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
-} from '@nuxeo-satori/platform/ui';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+} from '@nuxeo/satori-platform/ui';
+import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 const DUE_LABEL_KEYS = {
@@ -57,7 +67,7 @@ const DUE_LABEL_KEYS = {
 @Component({
   selector: 'lib-tasks-page',
   standalone: true,
-  providers: [provideTranslatedDatepickerIntl()],
+  providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   imports: [
     TranslatePipe,
     FormsModule,
@@ -68,15 +78,16 @@ const DUE_LABEL_KEYS = {
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    MatNativeDateModule,
     MatSnackBarModule,
     MatTooltipModule,
     MatTabsModule,
     MatDividerModule,
     DocumentViewerComponent,
-    SatBreadcrumbsComponent,
+    SatBreadcrumbs,
+    SatHeaderBar,
   ],
   templateUrl: './tasks-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './tasks-page.component.scss',
 })
 export class TasksPageComponent implements OnInit {
@@ -939,9 +950,9 @@ export class TasksPageComponent implements OnInit {
 
   actionIcon(action: { name: string }): string {
     const n = action.name.toLowerCase();
-    if (n.includes('approve') || n.includes('validate')) return 'check_circle';
-    if (n.includes('reject')) return 'cancel';
-    if (n.includes('start')) return 'play_arrow';
+    if (n.includes('approve') || n.includes('validate')) return 'circle_check';
+    if (n.includes('reject')) return 'x_large';
+    if (n.includes('start')) return 'triangle_right';
     if (n.includes('cancel')) return 'block';
     return 'send';
   }

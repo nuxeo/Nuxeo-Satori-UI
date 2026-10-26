@@ -20,13 +20,13 @@ audience: leadership
         ┌─────────────────────────────────────────────────────┐
         │  CUSTOMER OWNS                                      │
         │  ├─ Layer 0 config  (JSON — survives our upgrades)  │
-        │  ├─ Layer 1 manifest (a Nuxeo document)             │
+        │  ├─ Layer 1 manifest (JSON — in their own package)  │
         │  └─ Layer 2 library  (their repo, their build)      │
         └────────────────────────┬────────────────────────────┘
                                  │ depends on, by version
         ┌────────────────────────┴────────────────────────────┐
         │  WE OWN AND VERSION                                 │
-        │  ├─ @nuxeo-satori/platform  (npm, 4 entry points)   │
+        │  ├─ @nuxeo/satori-platform  (npm, 4 entry points)   │
         │  ├─ The application  (marketplace package)          │
         │  └─ Layer 3 harness  (generators + guardrails,      │
         │                       shipped INSIDE the package)   │
@@ -50,13 +50,13 @@ audience: leadership
 
 The line between "we own it" and "the customer owns it" is not a convention — it is enforced:
 
-| Guarantee                                   | Mechanism                                                       |
-| ------------------------------------------- | --------------------------------------------------------------- |
-| Their config survives our upgrade           | Package ships a sample, never their file; rehearsed (NXSAT-317) |
-| Their wiring survives our upgrade           | The manifest is a Nuxeo **document**, not a bundled file        |
-| Their code depends only on published API    | 4 entry points; a guardrail rejects deep imports                |
-| Our public API cannot change by accident    | A 2,221-line snapshot gate                                      |
-| Their customisation survives a version bump | An upgrade rehearsal, run on every build                        |
+| Guarantee                                   | Mechanism                                                                           |
+| ------------------------------------------- | ----------------------------------------------------------------------------------- |
+| Their config survives our upgrade           | It is their own package; ours installs no configuration file; rehearsed (NXSAT-312) |
+| Their wiring survives our upgrade           | The manifest is a fragment in **their** package, not a bundled file                 |
+| Their code depends only on published API    | 4 entry points; a guardrail rejects deep imports                                    |
+| Our public API cannot change by accident    | A 2,221-line snapshot gate                                                          |
+| Their customisation survives a version bump | An upgrade rehearsal, run on every build                                            |
 
 **Why leadership should care:** this is what makes a support boundary defensible, an upgrade
 shippable, and a certification claim makeable. Without it, every customer is a fork.
@@ -123,13 +123,15 @@ Java/OSGi bundle, and installed into Nuxeo. Static assets are served by Nuxeo's 
 **no separate server to run and no new infrastructure** — which is a genuine operational
 advantage, and the reason the runtime cost delta for a customer is close to zero.
 
-The one subtlety that has already caused two defects: the customer-editable config must land inside
-the directory Tomcat actually serves, and the package must not own it. An earlier version installed
-to a path that is not a docBase and **would have 404'd on every install** — it was recorded complete
-before that was caught, which is why the phase-state gate now exists. The next installed the file
-itself with `overwrite="false"`, documented as upgrade-safe; the first real rehearsal showed an
-upgrade after a customer edit left **no version installed** (NXSAT-317). The package now ships only
-a sample, and that upgrade was rehearsed after the fix.
+Configuration is not a file on the server. A customer ships it in their own Marketplace package,
+which depends on ours; our Java bundle serves every package's fragments, and our package installs
+no configuration file (NXSAT-312). Upgrading ours with two customer packages installed was
+rehearsed and served the same configuration. Two earlier designs, both of which kept a
+customer-edited file on the server, each caused a defect. One installed to a path that is not a
+docBase and **would have 404'd on every install** — it was recorded complete before that was
+caught, which is why the phase-state gate now exists. The next installed the file itself with
+`overwrite="false"`, documented as upgrade-safe; the first real rehearsal showed an upgrade after a
+customer edit left **no version installed** (NXSAT-317).
 
 ---
 

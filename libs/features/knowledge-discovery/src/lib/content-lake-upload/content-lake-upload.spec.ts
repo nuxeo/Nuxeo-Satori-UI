@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MatDialogRef } from '@angular/material/dialog';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { of } from 'rxjs';
@@ -11,7 +12,7 @@ import {
   BrowseService,
   ContentLakeIngestService,
   DocumentImportService,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import { KdClientService } from '@agentic-ui/shared/kd-client';
 
 import { ContentLakeUploadComponent } from './content-lake-upload';
@@ -127,7 +128,12 @@ async function createComponent(): Promise<{
   fixture: ComponentFixture<ContentLakeUploadComponent>;
 }> {
   await TestBed.configureTestingModule({
-    imports: [testTranslateModule(), testTranslateModule(), ContentLakeUploadComponent],
+    imports: [
+      testTranslateModule(),
+      testTranslateModule(),
+      MatIconTestingModule,
+      ContentLakeUploadComponent,
+    ],
     providers: [
       provideZonelessChangeDetection(),
       { provide: DocumentImportService, useValue: mockImportService },

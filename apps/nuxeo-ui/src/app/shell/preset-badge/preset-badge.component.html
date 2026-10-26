@@ -1,0 +1,10 @@
+@if (preset(); as active) {
+  <span
+    class="preset-badge"
+    role="status"
+    [attr.data-preset]="active.name"
+    [attr.title]="active.label"
+  >
+    {{ 'app.preset.badge' | translate: { label: active.label } }}
+  </span>
+}

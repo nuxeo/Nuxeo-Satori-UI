@@ -1,7 +1,7 @@
 import { DOCUMENT } from '@angular/common';
-import { HttpClient } from '@angular/common/http';
+import { HttpBackend, HttpClient } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
-import { catchError, firstValueFrom, of } from 'rxjs';
+import { TimeoutError, catchError, firstValueFrom, of, timeout } from 'rxjs';
 
 import {
   AppBootstrapConfig,
@@ -12,71 +12,94 @@ import {
   resolveBrandingLogoUrl,
   resolveTheme,
 } from './bootstrap-config';
-import { APP_BOOTSTRAP_CONFIG_URL } from './app-config.tokens';
+import { APP_BOOTSTRAP_CONFIG_URL, APP_MANIFEST_CONFIG_URL } from './app-config.tokens';
+import {
+  AppConfigFragmentInfo,
+  AppConfigLayer,
+  AppConfigResponse,
+  AppConfigServerDiagnostic,
+  readConfigResponse,
+} from './config-response';
+import { AppPreset, PRESET_STORAGE_KEY, readPresales, requestedPreset } from './presales-presets';
 import {
   AppRuntimeManifest,
   DEFAULT_APP_RUNTIME_MANIFEST,
-  parseRuntimeManifest,
+  mergeRuntimeManifest,
 } from './runtime-manifest';
 
-/** Where a loaded configuration actually came from, so the shell can show it rather than guess. */
-export type AppConfigSource = 'packaged-default' | 'deployed-file' | 'nuxeo-document';
-
 /**
- * How the most recent manifest attempt ended.
- *
- * `manifestSource` cannot answer this: it records where the manifest in force came from, so it
- * still reads `nuxeo-document` after a later attempt fails, and a caller reading it would conclude
- * the fetch had succeeded. The distinction between `unavailable` and `failed` is what makes a retry
- * policy possible — an absent document is a deployment that never saved one and will not start
- * working, a failed request may.
+ * How long each half may take before the application starts on the packaged defaults instead.
+ * `load()` runs as an `APP_INITIALIZER` and `HttpClient` has no timeout of its own, so a server that
+ * accepts the request and never answers would otherwise hold the first render forever.
  */
-export type AppManifestAttempt = 'not-attempted' | 'applied' | 'unavailable' | 'failed';
+export const CONFIG_LOAD_TIMEOUT_MS = 10_000;
+
+/** Where a loaded half of the configuration came from, so the shell can show it rather than guess. */
+export type AppConfigSource = 'packaged-default' | 'configuration-service';
 
 export interface AppConfigDiagnostics {
   readonly bootstrapSource: AppConfigSource;
   readonly manifestSource: AppConfigSource;
-  /** Outcome of the most recent {@link AppConfigService.loadManifest} call. */
-  readonly manifestAttempt: AppManifestAttempt;
-  /** Human-readable reasons a load fell back, in the order they happened. */
+  /** The fragments applied, in order, with the package component that contributed each. */
+  readonly bootstrapFragments: readonly AppConfigFragmentInfo[];
+  readonly manifestFragments: readonly AppConfigFragmentInfo[];
+  /** What the server reported about contributions it rejected, replaced or removed. */
+  readonly serverDiagnostics: readonly AppConfigServerDiagnostic[];
+  /** Human-readable reasons a load fell back or a preset was refused, in the order they happened. */
   readonly messages: readonly string[];
 }
 
+/** The presales preset in force, for the badge that says so. */
+export interface AppActivePreset {
+  readonly name: string;
+  readonly label: string;
+}
+
 /**
- * Loads the two halves of the Layer 0 configuration and exposes them as signals.
+ * Loads the two halves of the Layer 0/1 configuration and exposes them as signals.
  *
- * Injects `HttpClient` directly, which the repository otherwise reserves for
- * `NuxeoApiBase`. That is deliberate and confined to this service: the Nuxeo API
- * origin is itself one of the values being configured, so a loader built on the
- * configured client would depend on its own output.
+ * Both come from the server's configuration service: `bootstrap.json` and `manifest.json`, each an
+ * ordered list of fragments contributed by Marketplace packages. Both are anonymous, so they are
+ * fetched once, together, before sign-in, and nothing about them changes with the session.
  *
- * Both loads are **tolerant by contract**. A missing configuration file, an
- * absent configuration document, a 403, or malformed JSON all fall back to the
- * packaged defaults and record why. The application must start for a customer
- * who has configured nothing, and must keep working for one who has saved
- * something invalid.
+ * Uses an `HttpClient` of its own, built on `HttpBackend`, which the repository otherwise reserves
+ * for `NuxeoApiBase`. That is deliberate and confined to this service: these two requests skip
+ * every interceptor. An interceptor that reads configuration — the host application's auth
+ * interceptor resolves the Nuxeo API origin and the sign-in services — would otherwise resolve it
+ * while it is still loading, and Angular keeps a token's first value for the life of the
+ * application, so every package-contributed value it read would be replaced by its default. Both
+ * halves are anonymous, so skipping the interceptor also keeps the signed-in user's
+ * `Authorization` header off them.
+ *
+ * The load is **tolerant by contract**. An unreachable service, an error status, a malformed
+ * response or no answer within {@link CONFIG_LOAD_TIMEOUT_MS} falls back to the packaged defaults
+ * and records why. The application must start on a server where nothing is configured.
  */
 @Injectable({ providedIn: 'root' })
 export class AppConfigService {
-  private readonly http = inject(HttpClient);
+  private readonly http = new HttpClient(inject(HttpBackend));
   private readonly bootstrapUrl = inject(APP_BOOTSTRAP_CONFIG_URL);
+  private readonly manifestUrl = inject(APP_MANIFEST_CONFIG_URL);
   private readonly document = inject(DOCUMENT);
 
   private readonly bootstrapConfig = signal<AppBootstrapConfig>(DEFAULT_APP_BOOTSTRAP_CONFIG);
   private readonly runtimeManifest = signal<AppRuntimeManifest>(DEFAULT_APP_RUNTIME_MANIFEST);
+  private readonly presetState = signal<AppActivePreset | null>(null);
+  private loading: Promise<void> | null = null;
   private readonly diagnosticsState = signal<AppConfigDiagnostics>({
     bootstrapSource: 'packaged-default',
     manifestSource: 'packaged-default',
-    manifestAttempt: 'not-attempted',
+    bootstrapFragments: [],
+    manifestFragments: [],
+    serverDiagnostics: [],
     messages: [],
   });
-
-  /** Incremented per manifest fetch, so a superseded response cannot apply. See `loadManifest`. */
-  private manifestGeneration = 0;
 
   readonly bootstrap = this.bootstrapConfig.asReadonly();
   readonly manifest = this.runtimeManifest.asReadonly();
   readonly diagnostics = this.diagnosticsState.asReadonly();
+  /** The presales preset in force, or `null`. Only ever set where a package enables switching. */
+  readonly activePreset = this.presetState.asReadonly();
 
   /** Themes available to the theme picker — packaged ones merged with configured ones. */
   readonly themes = computed<readonly AppThemeConfig[]>(() => this.bootstrapConfig().themes);
@@ -95,139 +118,56 @@ export class AppConfigService {
     return url === null ? null : { url, alt: logo.alt };
   });
 
-  /** Load both halves. Never rejects, so it is safe as an `APP_INITIALIZER`. */
-  async load(): Promise<void> {
-    await this.loadBootstrap();
-    await this.loadManifest();
-  }
-
   /**
-   * Fetch the deployed bootstrap file and overlay it on the packaged defaults.
-   * Runs before authentication, so it must not assume a session exists.
-   */
-  async loadBootstrap(): Promise<AppBootstrapConfig> {
-    const raw = await firstValueFrom(
-      this.http
-        .get<unknown>(this.bootstrapUrl, { responseType: 'json' })
-        .pipe(catchError((error: unknown) => of(this.failure(error)))),
-    );
-
-    if (raw instanceof ConfigLoadFailure) {
-      this.note(`bootstrap configuration not loaded from ${this.bootstrapUrl}: ${raw.reason}`);
-      return this.bootstrapConfig();
-    }
-
-    const merged = mergeBootstrapConfig(DEFAULT_APP_BOOTSTRAP_CONFIG, raw);
-    this.bootstrapConfig.set(merged);
-    this.diagnosticsState.update((current) => ({ ...current, bootstrapSource: 'deployed-file' }));
-    return merged;
-  }
-
-  /**
-   * Fetch the runtime manifest from the Nuxeo configuration document.
+   * Fetch both halves, choose the preset, and apply everything in order. Never rejects, so it is
+   * safe as an `APP_INITIALIZER`.
    *
-   * The document is expected to be absent on a fresh install, which is why a
-   * failure here is recorded and ignored rather than propagated.
+   * Runs once: a later call returns the first call's promise. That is what lets another
+   * initializer wait for the configuration instead of racing it, since Angular runs
+   * `APP_INITIALIZER` functions concurrently.
    */
-  async loadManifest(): Promise<AppRuntimeManifest> {
-    const config = this.bootstrapConfig();
-    const url = `${config.nuxeoApiOrigin}/nuxeo/api/v1/path${config.manifestDocumentPath}`;
+  load(): Promise<void> {
+    this.loading ??= this.fetchAndApply();
+    return this.loading;
+  }
 
-    // A logout followed quickly by a sign-in can leave two fetches in flight. Neither is
-    // cancellable from here, so the later one wins by generation rather than by whichever
-    // response happens to land last — otherwise the previous user's manifest could be applied
-    // after the current user's.
-    const generation = ++this.manifestGeneration;
+  private async fetchAndApply(): Promise<void> {
+    const [bootstrap, manifest] = await Promise.all([
+      this.fetch(this.bootstrapUrl, 'bootstrap'),
+      this.fetch(this.manifestUrl, 'manifest'),
+    ]);
+    const bootstrapFragments = bootstrap?.fragments ?? [];
+    const preset = this.choosePreset(bootstrapFragments.map((fragment) => fragment.content));
 
-    const response = await firstValueFrom(
-      this.http
-        .get<unknown>(url, {
-          // `properties: *` asks Nuxeo for every schema, without which the
-          // property holding the manifest is not in the payload at all.
-          headers: { properties: '*', Accept: 'application/json' },
-        })
-        .pipe(catchError((error: unknown) => of(this.failure(error)))),
+    let bootstrapConfig = bootstrapFragments.reduce(
+      (merged, fragment) => mergeBootstrapConfig(merged, fragment.content),
+      DEFAULT_APP_BOOTSTRAP_CONFIG,
     );
-
-    if (generation !== this.manifestGeneration) {
-      // Superseded while in flight. Deliberately records nothing: this answer is about a session
-      // that has already been replaced, so both the manifest and the diagnostics belong to the
-      // newer load.
-      return this.runtimeManifest();
+    let runtimeManifest = (manifest?.fragments ?? []).reduce(
+      (merged, fragment) => mergeRuntimeManifest(merged, fragment.content),
+      DEFAULT_APP_RUNTIME_MANIFEST,
+    );
+    if (preset) {
+      bootstrapConfig = mergeBootstrapConfig(bootstrapConfig, preset.bootstrap);
+      runtimeManifest = mergeRuntimeManifest(runtimeManifest, preset.manifest);
     }
 
-    if (response instanceof ConfigLoadFailure) {
-      this.note(
-        `runtime manifest not loaded from ${config.manifestDocumentPath}: ${response.reason}`,
-      );
-      // A failed load must reset to packaged defaults rather than returning the stale manifest.
-      // Without this, after user A loads a tenant manifest, user B who gets a 403/404 inherits
-      // user A's routes, labels and actions. A 404 is expected (no saved manifest) and won't retry;
-      // other failures may be transient.
-      this.runtimeManifest.set(DEFAULT_APP_RUNTIME_MANIFEST);
-      this.diagnosticsState.update((current) => ({
-        ...current,
-        manifestSource: 'packaged-default',
-        manifestAttempt: response.status === 404 ? 'unavailable' : 'failed',
-      }));
-      return this.runtimeManifest();
-    }
-
-    const properties =
-      typeof response === 'object' && response !== null
-        ? (response as { properties?: Record<string, unknown> }).properties
-        : undefined;
-    const parsed = parseRuntimeManifest(properties?.[config.manifestDocumentProperty]);
-
-    if (!parsed) {
-      this.note(
-        `runtime manifest document ${config.manifestDocumentPath} has no readable JSON in ` +
-          `"${config.manifestDocumentProperty}"`,
-      );
-      // The document answered but its content is unusable. Reset to packaged defaults rather than
-      // leaving a stale manifest active. On a logout/login transition, an unreadable manifest for
-      // the new session must replace the previous tenant configuration, not retain it.
-      this.runtimeManifest.set(DEFAULT_APP_RUNTIME_MANIFEST);
-      this.diagnosticsState.update((current) => ({
-        ...current,
-        manifestSource: 'packaged-default',
-        manifestAttempt: 'unavailable',
-      }));
-      return this.runtimeManifest();
-    }
-
-    this.runtimeManifest.set(parsed);
+    this.bootstrapConfig.set(bootstrapConfig);
+    this.runtimeManifest.set(runtimeManifest);
+    this.presetState.set(preset ? { name: preset.name, label: preset.label } : null);
     this.diagnosticsState.update((current) => ({
       ...current,
-      manifestSource: 'nuxeo-document',
-      manifestAttempt: 'applied',
+      bootstrapSource: bootstrap ? 'configuration-service' : 'packaged-default',
+      manifestSource: manifest ? 'configuration-service' : 'packaged-default',
+      bootstrapFragments: bootstrapFragments.map(info),
+      manifestFragments: (manifest?.fragments ?? []).map(info),
+      serverDiagnostics: [...(bootstrap?.diagnostics ?? []), ...(manifest?.diagnostics ?? [])],
     }));
-    return parsed;
-  }
-
-  /**
-   * Drop the loaded manifest back to the packaged default.
-   *
-   * Called on sign-out. Without it the previous user's manifest stayed in force for the next one
-   * in the same tab, because a failed re-fetch returns the value already held — so a user who
-   * could not read the configuration document inherited the nav, labels and hidden actions of
-   * whoever signed in before them, while diagnostics still claimed `nuxeo-document`.
-   *
-   * Also bumps the generation, so a fetch already in flight for the previous session cannot land
-   * afterwards and reinstate it.
-   */
-  resetManifest(): void {
-    this.manifestGeneration += 1;
-    this.runtimeManifest.set(DEFAULT_APP_RUNTIME_MANIFEST);
-    this.diagnosticsState.update((current) => ({
-      ...current,
-      manifestSource: 'packaged-default',
-      manifestAttempt: 'not-attempted',
-    }));
-  }
-
-  private setManifestAttempt(attempt: AppManifestAttempt): void {
-    this.diagnosticsState.update((current) => ({ ...current, manifestAttempt: attempt }));
+    for (const { level, code, message, component } of this.diagnosticsState().serverDiagnostics) {
+      console.warn(
+        `[agentic-ui-config] server ${level} ${code}${component ? ` (${component})` : ''}: ${message}`,
+      );
+    }
   }
 
   /** The active theme definition for a stored or configured theme id. */
@@ -235,22 +175,77 @@ export class AppConfigService {
     return resolveTheme(this.bootstrapConfig(), id);
   }
 
-  /** A manifest feature toggle, or `fallback` when the customer has not set it. */
+  /** A manifest feature toggle, or `fallback` when no package has set it. */
   featureToggle(id: string, fallback: boolean): boolean {
     const configured = this.runtimeManifest().featureToggles[id];
     return typeof configured === 'boolean' ? configured : fallback;
   }
 
-  private failure(error: unknown): ConfigLoadFailure {
-    const status = (error as { status?: unknown } | null)?.status;
-    const message = (error as { message?: unknown } | null)?.message;
-    if (typeof status === 'number' && status !== 0) {
-      return new ConfigLoadFailure(`HTTP ${status}`, status);
+  private async fetch(url: string, layer: AppConfigLayer): Promise<AppConfigResponse | null> {
+    const raw = await firstValueFrom(
+      this.http.get<unknown>(url, { responseType: 'json' }).pipe(
+        timeout(CONFIG_LOAD_TIMEOUT_MS),
+        catchError((error: unknown) => of(new ConfigLoadFailure(describe(error)))),
+      ),
+    );
+    if (raw instanceof ConfigLoadFailure) {
+      this.note(`${layer} configuration not loaded from ${url}: ${raw.reason}`);
+      return null;
     }
-    return new ConfigLoadFailure(typeof message === 'string' ? message : 'request failed');
+    const response = readConfigResponse(raw, layer);
+    if ('invalid' in response) {
+      this.note(`${layer} configuration from ${url} ignored: ${response.invalid}`);
+      return null;
+    }
+    return response;
   }
 
+  /**
+   * The preset to apply, if switching is enabled and one is chosen. The URL wins over the stored
+   * choice and replaces it; an unknown name is reported and forgotten.
+   */
+  private choosePreset(bootstrapFragments: readonly unknown[]): AppPreset | null {
+    const presales = readPresales(bootstrapFragments);
+    const view = this.document.defaultView;
+    const requested = view ? requestedPreset(view.location) : undefined;
+    if (!presales.presetSwitching) {
+      const ignored = requested || this.stored();
+      if (ignored) this.note(`preset "${ignored}" ignored: preset switching is not enabled`);
+      return null;
+    }
+    if (requested !== undefined) this.store(requested);
+    const name = requested ?? this.stored();
+    if (!name) return null;
+    const preset = presales.presets[name];
+    if (!preset) {
+      this.note(`preset "${name}" is not defined by any package`);
+      this.store('');
+      return null;
+    }
+    return preset;
+  }
+
+  private stored(): string | null {
+    try {
+      return this.document.defaultView?.localStorage.getItem(PRESET_STORAGE_KEY) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private store(name: string): void {
+    try {
+      const storage = this.document.defaultView?.localStorage;
+      if (name) storage?.setItem(PRESET_STORAGE_KEY, name);
+      else storage?.removeItem(PRESET_STORAGE_KEY);
+    } catch {
+      // Storage refused (private mode, quota): the preset still applies to this load.
+    }
+  }
+
+  /** Recorded and logged: the product app has no page showing diagnostics, so the console is where support finds them. */
   private note(message: string): void {
+    console.warn(`[agentic-ui-config] ${message}`);
     this.diagnosticsState.update((current) => ({
       ...current,
       messages: [...current.messages, message],
@@ -258,17 +253,24 @@ export class AppConfigService {
   }
 }
 
+function info({ name, component, bundle, source }: AppConfigFragmentInfo): AppConfigFragmentInfo {
+  return { name, component, bundle, source };
+}
+
+function describe(error: unknown): string {
+  if (error instanceof TimeoutError) return `no response within ${CONFIG_LOAD_TIMEOUT_MS / 1000} s`;
+  const status = (error as { status?: unknown } | null)?.status;
+  const message = (error as { message?: unknown } | null)?.message;
+  // A 2xx failure is a body that did not parse: its status says nothing, its message says why.
+  const ok = typeof status === 'number' && status >= 200 && status < 300;
+  if (typeof status === 'number' && status !== 0 && !ok) return `HTTP ${status}`;
+  return typeof message === 'string' ? message : 'request failed';
+}
+
 /**
  * Sentinel returned into the success channel by `catchError`, so a failed load
  * takes the same code path as a successful one and cannot throw past the caller.
  */
 class ConfigLoadFailure {
-  /**
-   * `status` is carried alongside the reason so a caller can tell an absent document from a
-   * failed request without parsing the message. `undefined` when the error had no HTTP status.
-   */
-  constructor(
-    readonly reason: string,
-    readonly status?: number,
-  ) {}
+  constructor(readonly reason: string) {}
 }

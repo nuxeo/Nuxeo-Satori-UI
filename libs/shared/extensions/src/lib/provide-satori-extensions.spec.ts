@@ -50,7 +50,7 @@ describe('provideSatoriExtensions', () => {
 
   it('runs the factory form in an injection context, so a rule can inject', () => {
     // The whole reason the factory form exists: the application's own
-    // `hasAdministrationAccess` rule closes over `AuthService`, and a plain
+    // `hasAdministrationAccess` rule reads `AuthService`, and a plain
     // object cannot `inject()`.
     //
     // The evaluator answers **false** deliberately. An *unregistered* rule id

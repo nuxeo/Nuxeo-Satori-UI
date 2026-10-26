@@ -1,4 +1,4 @@
-import { hasInsertablePictureBlob, type NuxeoDocument } from '@nuxeo-satori/platform/nuxeo-client';
+import { hasInsertablePictureBlob, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
 import {
   buildNotePictureNxfileUrl,

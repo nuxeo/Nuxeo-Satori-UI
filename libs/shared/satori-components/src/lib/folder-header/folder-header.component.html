@@ -1,0 +1,36 @@
+<div class="nxs-folder-header__lead">
+  @if (documentType()) {
+    <nxs-doc-type-icon class="nxs-folder-header__icon" [type]="documentType()" />
+  }
+  <div class="nxs-folder-header__text">
+    @if (heading()) {
+      @switch (headingLevel()) {
+        @case (2) {
+          <h2 class="nxs-folder-header__heading">{{ heading() }}</h2>
+        }
+        @case (3) {
+          <h3 class="nxs-folder-header__heading">{{ heading() }}</h3>
+        }
+        @case (4) {
+          <h4 class="nxs-folder-header__heading">{{ heading() }}</h4>
+        }
+        @case (5) {
+          <h5 class="nxs-folder-header__heading">{{ heading() }}</h5>
+        }
+        @case (6) {
+          <h6 class="nxs-folder-header__heading">{{ heading() }}</h6>
+        }
+        @default {
+          <h1 class="nxs-folder-header__heading">{{ heading() }}</h1>
+        }
+      }
+    }
+    @if (subheading()) {
+      <span class="nxs-folder-header__subheading">{{ subheading() }}</span>
+    }
+    <ng-content select="[nxsFolderHeaderDetail]" />
+  </div>
+</div>
+<div class="nxs-folder-header__actions">
+  <ng-content />
+</div>

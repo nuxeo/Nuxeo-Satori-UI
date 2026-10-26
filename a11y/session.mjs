@@ -20,7 +20,26 @@
  * accepts is validated against `/me` and re-persisted from its own known fields, which drops
  * the marker. The marker gone, with `kind: 'basic'` and the expected user, can only mean the app
  * read this session and kept it.
+ *
+ * ## Why adoption is not enough either
+ *
+ * Adoption proves which session the app holds, not who Nuxeo answers it as. On a Nuxeo with
+ * guests enabled those can differ — a guest `JSESSIONID` that has answered an API call outranks
+ * the session's Basic header — and every scan still renders. So `sessionIdentityProblem` asks
+ * `/me` the way the app does, from inside the page, and `apiIdentityProblem` asks it through the
+ * context the specs' `page.request` calls use. Both are the shared guard in
+ * `scripts/beta-harness/identity-guard.mjs` (NXSAT-643) — imported rather than copied, against
+ * this folder's usual rule, because two copies of a security check are two things to keep right.
  */
+
+import {
+  checkPageIdentity,
+  checkRequestIdentity,
+  ME_PATH,
+  watchNuxeoApiOrigins,
+} from '../scripts/beta-harness/identity-guard.mjs';
+
+export { watchNuxeoApiOrigins };
 
 /** Mirrors `STORAGE_KEY` in `apps/nuxeo-ui/src/app/auth/auth.service.ts`. */
 export const SESSION_KEY = 'agentic_ui_nuxeo_session';
@@ -104,7 +123,7 @@ async function readProblem(page, username) {
     return (
       `the app is signed in with a "${String(stored['kind'])}" session, not the injected basic ` +
       'one — it did not find or did not accept the injected session, and signed in through ' +
-      'httpCredentials instead. Compare SESSION_KEY and injectedSession() in session.mjs with ' +
+      'its /me fallback instead. Compare SESSION_KEY and injectedSession() in session.mjs with ' +
       'STORAGE_KEY and BasicStoredSession in auth.service.ts.'
     );
   }
@@ -118,4 +137,47 @@ async function readProblem(page, username) {
     );
   }
   return null;
+}
+
+/**
+ * `null` when Nuxeo answers the app in this page as `username`, otherwise why not — the app's
+ * stored session read the way the app reads it, and `/me` asked with the header it sends.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {string} username
+ * @param {object} options
+ * @param {string} options.baseUrl the app's configured URL. Not `page.url()`: the trusted origin
+ *   must come from the configuration, or a page redirected to another deployment would be
+ *   judged by that deployment's `/me`
+ * @param {Set<string>} [options.foreignApiOrigins] from `watchNuxeoApiOrigins`, started before
+ *   the first navigation, and told `restartAtNextLoad()` before a reload that signs in
+ * @returns {Promise<string | null>}
+ */
+export async function sessionIdentityProblem(page, username, { baseUrl, foreignApiOrigins }) {
+  const report = await checkPageIdentity(page, username, new URL(baseUrl).origin, {
+    foreignApiOrigins,
+  });
+  if (!report.ok) return `identity guard: ${report.problem}`;
+  if (report.state !== 'authenticated') {
+    return `identity guard: the page holds no session for ${username} (${report.state})`;
+  }
+  return null;
+}
+
+/**
+ * `null` when the context's requests run as `username`, otherwise why not.
+ *
+ * @param {import('@playwright/test').APIRequestContext} request e.g. `page.request`
+ * @param {string} baseUrl
+ * @param {string} username
+ * @returns {Promise<string | null>}
+ */
+export async function apiIdentityProblem(request, baseUrl, username) {
+  const report = await checkRequestIdentity(
+    request,
+    new URL(ME_PATH, baseUrl).href,
+    username,
+    'page.request',
+  );
+  return report.ok ? null : `identity guard: ${report.problem}`;
 }

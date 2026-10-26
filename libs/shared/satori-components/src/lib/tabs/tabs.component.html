@@ -1,0 +1,26 @@
+<mat-tab-group
+  class="nxs-tabs__group"
+  animationDuration="0ms"
+  [aria-label]="ownLabel()"
+  [selectedIndex]="selectedIndex()"
+  (selectedIndexChange)="select($event)"
+>
+  @for (tab of tabs(); track tab.id) {
+    <mat-tab>
+      <ng-template mat-tab-label>
+        <span class="nxs-tabs__label" [attr.data-tab-id]="tab.id">
+          @if (tab.icon) {
+            <mat-icon class="nxs-tabs__icon" aria-hidden="true" [svgIcon]="tab.icon" />
+          }
+          {{ tab.label }}
+        </span>
+      </ng-template>
+      @if (body(); as bodyTemplate) {
+        <ng-container
+          [ngTemplateOutlet]="bodyTemplate.template"
+          [ngTemplateOutletContext]="{ $implicit: tab }"
+        />
+      }
+    </mat-tab>
+  }
+</mat-tab-group>

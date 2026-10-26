@@ -1,26 +1,38 @@
-import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+  type Type,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
-import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { By } from '@angular/platform-browser';
+import { provideHttpClient, withXhr } from '@angular/common/http';
+import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
-import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   ActivatedRoute,
   convertToParamMap,
   provideRouter,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { Observable, of } from 'rxjs';
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
+import {
+  NxsDeletePermissionDialogComponent,
+  NxsShareExternalDialogComponent,
+  NxsUpdatePermissionDialogComponent,
+} from '@nuxeo/satori-platform/components';
 
-import { AppConfigService } from '@nuxeo-satori/platform/app-config';
+import { AppConfigService } from '@nuxeo/satori-platform/app-config';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
   PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
   provideSatoriExtensions,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 import {
   ARenderService,
   BrowseService,
@@ -31,14 +43,16 @@ import {
   TagService,
   TaskService,
   WorkflowService,
+  type NuxeoAce,
   type NuxeoDocument,
-} from '@nuxeo-satori/platform/nuxeo-client';
+} from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiChatService,
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
 import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
+import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/satori-platform/ui';
 
 import { DocumentDetailComponent } from './document-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
@@ -75,6 +89,7 @@ const CONTRIBUTED_TAB_MARKER = 'CONTRIBUTED CLAIMS PANEL';
 @Component({
   standalone: true,
   selector: 'lib-test-claims-panel',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="claims">CONTRIBUTED CLAIMS PANEL</p>',
 })
 class ClaimsPanelComponent {}
@@ -82,6 +97,7 @@ class ClaimsPanelComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-claim-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="claim-view">CLAIM VIEW {{ document()?.title }} {{ heading() }}</p>',
 })
 class ClaimViewComponent {
@@ -92,9 +108,22 @@ class ClaimViewComponent {
 @Component({
   standalone: true,
   selector: 'lib-test-case-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="case-view">CASE VIEW</p>',
 })
 class CaseViewComponent {}
+
+/** A customer's permissions panel, registered under the packaged panel's ID. */
+@Component({
+  standalone: true,
+  selector: 'lib-test-custom-permissions',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '<p>CUSTOM PERMISSIONS for {{ documentId() }}</p>',
+})
+class CustomPermissionsComponent {
+  readonly documentId = input('');
+  readonly permissionsChanged = input<(() => void) | null>(null);
+}
 
 /** The packaged type rule, so these tests exercise the rule a customer is told to write. */
 const IS_TYPE_RULE = 'app.rules.isType';
@@ -116,6 +145,25 @@ function doc(over: Partial<NuxeoDocument> = {}): NuxeoDocument {
   };
 }
 
+/** `/config/types/<type>` as Nuxeo answers it; only Claim carries a schema of its own. */
+const nuxeoGet = vi.fn((path: string): Observable<unknown> =>
+  of(
+    path === '/nuxeo/api/v1/config/types/Claim'
+      ? {
+          name: 'Claim',
+          schemas: [
+            { name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } },
+            {
+              name: 'claim',
+              '@prefix': 'claim',
+              fields: { number: 'string', billedAmount: 'double' },
+            },
+          ],
+        }
+      : { schemas: [{ name: 'dublincore', '@prefix': 'dc', fields: { title: 'string' } }] },
+  ),
+);
+
 const emptyKe = (): Observable<KeEnrichmentResult> =>
   of({ textClassification: { result: '' } } as KeEnrichmentResult);
 
@@ -129,6 +177,7 @@ const mockDetailService = {
   ),
   getAllComments: vi.fn((): Observable<{ entries: unknown[] }> => of({ entries: [] })),
   getVersions: vi.fn((): Observable<unknown[]> => of([])),
+  getVersionsDirect: vi.fn((): Observable<NuxeoDocument[]> => of([])),
   getPublishedVersions: vi.fn((): Observable<unknown[]> => of([])),
   getSectionTree: vi.fn((): Observable<unknown[]> => of([])),
   getRunnableWorkflows: vi.fn((): Observable<unknown[]> => of([])),
@@ -147,7 +196,30 @@ const mockDirectoryService = {
   getAllL10nEntries: vi.fn((): Observable<unknown[]> => of([])),
 };
 
-const manifest = signal<{ extensions?: unknown }>({});
+const manifest = signal<{
+  extensionLayers: readonly unknown[];
+  featureToggles?: Readonly<Record<string, boolean>>;
+}>({ extensionLayers: [] });
+/** `AppConfigService.featureToggle`, over the same manifest the slots read. */
+const featureToggle = (id: string, fallback: boolean): boolean =>
+  manifest().featureToggles?.[id] ?? fallback;
+
+/** A raw comment document, as `getAllComments` returns them. */
+function commentEntry(
+  uid: string,
+  text: string,
+  parentId = 'doc-1',
+): { uid: string; properties: Record<string, unknown> } {
+  return {
+    uid,
+    properties: {
+      'comment:parentId': parentId,
+      'comment:text': text,
+      'comment:author': 'alice',
+      'comment:creationDate': '2026-08-24T10:00:00.000Z',
+    },
+  };
+}
 
 describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
   let fixture: ComponentFixture<DocumentDetailComponent>;
@@ -156,18 +228,22 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
   (URL as unknown as { createObjectURL: unknown }).createObjectURL = vi.fn(() => 'blob:mock/1');
   (URL as unknown as { revokeObjectURL: unknown }).revokeObjectURL = vi.fn();
 
-  async function render(extensions: unknown, focused: NuxeoDocument = doc()): Promise<void> {
-    manifest.set({ extensions });
+  async function render(
+    extensions: unknown,
+    focused: NuxeoDocument = doc(),
+    components: Readonly<Record<string, Type<unknown>>> = {},
+  ): Promise<void> {
+    manifest.set({ extensionLayers: [extensions] });
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
-      // `TranslateModule` is bootstrapped by the app, not the feature: the
-      // adf-hx components inside the detail template inject `TranslateService`.
+      // `testTranslateModule()` is bootstrapped by the app, not the feature: the
+      // detail template's `translate` pipes inject `TranslateService`.
       imports: [DocumentDetailComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -197,14 +273,16 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         },
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
-        { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
+        {
+          provide: NuxeoApiBase,
+          useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })), get: nuxeoGet },
+        },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
-        { provide: MatSnackBar, useValue: { open: vi.fn() } },
         {
           provide: MatDialog,
           useValue: { open: vi.fn(() => ({ afterClosed: () => of(undefined) })) },
         },
-        { provide: AppConfigService, useValue: { manifest } },
+        { provide: AppConfigService, useValue: { manifest, featureToggle } },
         provideSatoriExtensions({
           slots: {
             [EXTENSION_SLOTS.toolbar]: PACKAGED_DOCUMENT_TOOLBAR_ACTIONS,
@@ -219,6 +297,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
               ++flakyLoads === 1
                 ? Promise.reject(new Error('chunk failed to load'))
                 : Promise.resolve(ClaimViewComponent),
+            ...components,
           },
         }),
       ],
@@ -245,8 +324,8 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
   }
 
   /**
-   * NXENG-915. The properties sidebar is an `<aside>`, so it carries an implicit
-   * `role="complementary"`. A complementary landmark with no accessible name is announced
+   * NXENG-915. The properties sidebar is a `complementary` landmark (`nxs-details-panel` sets the
+   * role an `<aside>` used to imply). A complementary landmark with no accessible name is announced
    * only as "complementary", so a screen-reader user navigating by landmark cannot tell what
    * the region is — WCAG 2.1 1.3.1 Info and Relationships, level A.
    *
@@ -259,13 +338,261 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
    * violation intermittently, and a landmark whose name changes per document cannot be
    * navigated to reliably.
    */
+  describe('the History tab', () => {
+    it('creates nxs-document-history on first show, so the page asks for no audit on load', async () => {
+      mockDirectoryService.getEventCategories.mockClear();
+      await render({});
+      const page = fixture.componentInstance;
+      expect(page.activeTabId()).toBe('app.tabs.view');
+      expect(fixture.nativeElement.querySelector('nxs-document-history')).toBeNull();
+      expect(mockDirectoryService.getEventCategories).not.toHaveBeenCalled();
+
+      page.onTabChange(page.detailTabs().findIndex((tab) => tab.id === 'app.tabs.history'));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('nxs-document-history')).not.toBeNull();
+      expect(mockDirectoryService.getEventCategories).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('accessibility', () => {
     it('names the properties sidebar landmark', async () => {
       await render({});
 
-      const panel = fixture.nativeElement.querySelector('aside.properties-panel') as HTMLElement;
+      const panel = fixture.nativeElement.querySelector(
+        'nxs-details-panel.properties-panel',
+      ) as HTMLElement;
       expect(panel).toBeTruthy();
+      expect(panel.getAttribute('role')).toBe('complementary');
       expect(panel.getAttribute('aria-label')).toBe('Document properties');
+    });
+
+    it('sets data-satori-tablist-keydown on the detail tablist (NXENG-821)', async () => {
+      await render({});
+
+      const tabList = fixture.nativeElement.querySelector(
+        'nxs-tabs.detail-tabs .mat-mdc-tab-list[role="tablist"]',
+      ) as HTMLElement | null;
+
+      expect(tabList?.getAttribute(MAT_TAB_LIST_KEYDOWN_ATTR)).toBe('true');
+    });
+  });
+
+  describe('details panel', () => {
+    const viewLabels = (): string[] =>
+      [...fixture.nativeElement.querySelectorAll('.properties-panel [role="tab"]')].map(
+        (el) => (el as HTMLElement).textContent?.trim() ?? '',
+      );
+
+    it('offers Comments only on a document with the Commentable facet, as Web UI does', async () => {
+      await render({});
+      expect(viewLabels()).toEqual(['Properties', 'Activity']);
+
+      await render({}, doc({ facets: ['Commentable'] }));
+      expect(viewLabels()).toEqual(['Properties', 'Comments', 'Activity']);
+    });
+
+    describe('comments', () => {
+      async function showComments(): Promise<HTMLElement | null> {
+        fixture.componentInstance.switchPanelSubTab('comments');
+        fixture.detectChanges();
+        await fixture.whenStable();
+        fixture.detectChanges();
+        return fixture.nativeElement.querySelector('.properties-panel nxs-comments');
+      }
+
+      it('shows the open document’s thread and keeps it for the sentiment analysis', async () => {
+        mockDetailService.getAllComments.mockReturnValueOnce(
+          of({
+            entries: [
+              commentEntry('c1', 'top level'),
+              commentEntry('r1', 'a reply', 'c1'),
+              commentEntry('r2', 'another reply', 'c1'),
+            ],
+          }),
+        );
+        await render({}, doc({ facets: ['Commentable'] }));
+
+        const thread = await showComments();
+
+        expect(mockDetailService.getAllComments).toHaveBeenCalledWith('doc-1');
+        expect(thread?.textContent).toContain('top level');
+        expect(thread?.textContent).toContain('2 replies');
+        expect(fixture.componentInstance.comments().map((c) => c.id)).toEqual(['c1', 'r1', 'r2']);
+      });
+
+      it('lets a reader without Write comment, as Web UI does', async () => {
+        await render(
+          {},
+          doc({ facets: ['Commentable'], contextParameters: { permissions: ['Read'] } }),
+        );
+
+        const thread = await showComments();
+
+        expect(thread?.querySelector('textarea')).not.toBeNull();
+      });
+
+      it('shows a sentiment result under the comment it is about', async () => {
+        mockDetailService.getAllComments.mockReturnValueOnce(
+          of({ entries: [commentEntry('c1', 'great work')] }),
+        );
+        await render({}, doc({ facets: ['Commentable'] }));
+        fixture.componentInstance.aiSentimentMap.set({
+          c1: { id: 'c1', sentiment: 'positive', summary: 'Praise for the work' },
+        });
+
+        const thread = await showComments();
+
+        const sentiment = thread?.querySelector('.comment-sentiment');
+        expect(sentiment?.textContent).toContain('positive');
+        expect(sentiment?.textContent).toContain('Praise for the work');
+      });
+    });
+
+    describe('tags', () => {
+      const editor = (): HTMLElement | null =>
+        fixture.nativeElement.querySelector('.properties-panel nxs-tag-editor');
+      const tagged = (over: Partial<NuxeoDocument> = {}): NuxeoDocument =>
+        doc({ facets: ['NXTag'], properties: { 'nxtag:tags': [{ label: 'q3' }] }, ...over });
+
+      it('offers the tag editor in the panel’s Tags field to a user with Write', async () => {
+        await render({}, tagged());
+
+        expect(editor()?.closest('dd')).not.toBeNull();
+        expect(editor()?.querySelector('input')).not.toBeNull();
+        expect(editor()?.textContent).toContain('q3');
+      });
+
+      it('shows the tags read-only to a reader, as Web UI does', async () => {
+        await render({}, tagged({ contextParameters: { permissions: ['Read'] } }));
+
+        expect(editor()?.querySelector('input')).toBeNull();
+        expect(editor()?.textContent).toContain('q3');
+      });
+
+      it('shows the tags read-only on a version and on a proxy, whatever the permissions', async () => {
+        await render({}, tagged({ isVersion: true }));
+        expect(editor()?.querySelector('input')).toBeNull();
+
+        await render({}, tagged({ isProxy: true }));
+        expect(editor()?.querySelector('input')).toBeNull();
+      });
+
+      it('shows no Tags field on a document without the NXTag facet', async () => {
+        await render({}, doc());
+        expect(editor()).toBeNull();
+      });
+    });
+
+    it('lists the collections the document is in, leaving out Favorites (NXSAT-191)', async () => {
+      await render(
+        {},
+        doc({
+          contextParameters: {
+            permissions: ['Read'],
+            collections: [
+              { uid: 'fav-1', title: 'My Favorites', type: 'Favorites' },
+              { uid: 'col-1', title: 'Project Alpha', type: 'Collection' },
+            ],
+          },
+        }),
+      );
+
+      const panel = fixture.nativeElement.querySelector('.detail-properties') as HTMLElement;
+      expect(panel.textContent).toContain('Project Alpha');
+      expect(panel.textContent).not.toContain('My Favorites');
+    });
+
+    it('shows no Collections heading when Favorites is the only membership', async () => {
+      await render(
+        {},
+        doc({
+          contextParameters: {
+            permissions: ['Read'],
+            collections: [{ uid: 'fav-1', title: 'My Favorites', type: 'Favorites' }],
+          },
+        }),
+      );
+
+      const headings = [
+        ...fixture.nativeElement.querySelectorAll('.detail-properties [role="heading"]'),
+      ].map((el) => (el as HTMLElement).textContent?.trim());
+      expect(headings).not.toContain('Collections');
+    });
+
+    it('puts focus back on the toggle when the panel closes', async () => {
+      await render({});
+      document.body.appendChild(fixture.nativeElement);
+      try {
+        (
+          fixture.nativeElement.querySelector(
+            '.properties-panel .nxs-details-panel__close',
+          ) as HTMLButtonElement
+        ).click();
+        fixture.detectChanges();
+        await fixture.whenStable();
+
+        expect(fixture.nativeElement.querySelector('.properties-panel')).toBeNull();
+        expect(document.activeElement).toBe(
+          fixture.nativeElement.querySelector('.panel-toggle-btn'),
+        );
+      } finally {
+        fixture.nativeElement.remove();
+      }
+    });
+  });
+
+  /**
+   * NXSAT-311. The properties panel hosts the per-type layout, fed the focused document. With
+   * no package layout (the index 404s here) it is generated from the type's own schemas, so a
+   * Claim shows its `claim` fields and a File, whose schemas the panel already presents, gets
+   * nothing added. Seen red on purpose by removing `<lib-document-layout>` from the template.
+   */
+  describe('per-type layout', () => {
+    async function settle(): Promise<void> {
+      TestBed.inject(HttpTestingController)
+        .match((request) => request.url.endsWith('/agentic-ui-config/layouts.json'))
+        .forEach((request) => request.flush('', { status: 404, statusText: 'Not Found' }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    const layoutIn = (): HTMLElement | null =>
+      fixture.nativeElement.querySelector('nxs-details-panel.properties-panel lib-document-layout');
+
+    it('shows a Claim the fields of its own schema, with its values', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render(
+        {},
+        doc({ type: 'Claim', properties: { 'claim:number': 'CLM-1', 'claim:billedAmount': 2480 } }),
+      );
+      await settle();
+
+      const section = layoutIn()?.querySelector('[data-section-id="claim"]');
+      expect(section?.querySelector('.document-layout__heading')?.textContent?.trim()).toBe(
+        'Claim',
+      );
+      expect(
+        [...(section?.querySelectorAll('[data-field]') ?? [])].map((row) => [
+          row.getAttribute('data-field'),
+          row.querySelector('.document-layout__value')?.textContent?.trim(),
+        ]),
+      ).toEqual([
+        ['claim:billedAmount', '2,480'],
+        ['claim:number', 'CLM-1'],
+      ]);
+    });
+
+    it('adds nothing to the panel of a File', async () => {
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      await render({}, doc({ type: 'File' }));
+      await settle();
+
+      expect(layoutIn()).toBeTruthy();
+      expect(layoutIn()?.querySelector('[data-section-id]')).toBeNull();
     });
   });
 
@@ -295,8 +622,11 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       const button = fixture.nativeElement.querySelector(
         '[data-action-id="acme.toolbar.archive"]',
       ) as HTMLElement;
-      expect(button.getAttribute('aria-label')).toBe('Archive');
-      expect(button.textContent).toContain('inventory_2');
+      expect(button.getAttribute('aria-label')).toBeNull();
+      expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Archive');
+      const icon = button.querySelector('mat-icon');
+      expect(icon?.getAttribute('aria-hidden')).toBe('true');
+      expect(icon?.getAttribute('data-mat-icon-name')).toBe('inventory_2');
     });
 
     /** The shipped default is unchanged: the packaged ids are the ones that render. */
@@ -328,6 +658,26 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
 
       const inline = actionIds();
       expect(inline.indexOf('app.toolbar.delete')).toBeLessThan(inline.indexOf('app.toolbar.edit'));
+    });
+
+    /** NXSAT-535 / IBM 2589851771 — overflow menu trigger matches header toolbar icon styling. */
+    it('renders the production More actions overflow trigger in .header-actions', async () => {
+      await render({});
+
+      const buttons = Array.from(
+        fixture.nativeElement.querySelectorAll(
+          '.detail-header .header-actions button.mat-mdc-icon-button',
+        ),
+      ) as HTMLButtonElement[];
+      const button = buttons.find(
+        (b) => b.querySelector('mat-icon')?.getAttribute('data-mat-icon-name') === 'more_vert',
+      );
+      expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
+      expect(
+        button!.querySelector('.cdk-visually-hidden')?.textContent?.trim(),
+        'More actions visually hidden accessible name',
+      ).toBeTruthy();
+      expect(button!.querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
     });
   });
 
@@ -607,7 +957,9 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(viewBody().textContent).toContain('CLAIM VIEW');
       expect(tabLabels()).toEqual(['View', 'Annotations', 'Permissions', 'History', 'Publishing']);
       expect(actionIds()).toContain('app.toolbar.edit');
-      expect(fixture.nativeElement.querySelector('aside.properties-panel')).toBeTruthy();
+      expect(
+        fixture.nativeElement.querySelector('nxs-details-panel.properties-panel'),
+      ).toBeTruthy();
 
       const annotations = [...fixture.nativeElement.querySelectorAll('.mat-mdc-tab')].find((el) =>
         (el as HTMLElement).textContent?.includes('Annotations'),
@@ -619,6 +971,355 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
 
       expect(viewBody().querySelector('lib-document-viewer')).toBeTruthy();
       expect(viewBody().textContent).not.toContain('CLAIM VIEW');
+    });
+  });
+
+  describe('permissions tab', () => {
+    const withWriteVersion = () =>
+      doc({
+        contextParameters: {
+          permissions: ['Everything'],
+          acls: [
+            {
+              name: 'local',
+              aces: [
+                {
+                  id: 'jdoe:WriteVersion:true:Administrator::',
+                  username: 'jdoe',
+                  permission: 'WriteVersion',
+                  granted: true,
+                  externalUser: false,
+                  creator: 'Administrator',
+                  begin: null,
+                  end: null,
+                  status: 'effective',
+                },
+              ],
+            },
+          ],
+        },
+      });
+
+    async function openPermissions(): Promise<HTMLElement> {
+      const tab = [...fixture.nativeElement.querySelectorAll('.mat-mdc-tab')].find((el) =>
+        (el as HTMLElement).textContent?.includes('Permissions'),
+      ) as HTMLElement;
+      tab.click();
+      for (let i = 0; i < 3; i++) {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        fixture.detectChanges();
+        await fixture.whenStable();
+      }
+      const body = fixture.nativeElement.querySelector('.mat-mdc-tab-body-active') as HTMLElement;
+      if (!body) throw new Error('no active tab body');
+      return body;
+    }
+
+    it('renders the library panel, with every permission the ACL holds', async () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(of(withWriteVersion()));
+      await render({});
+
+      const body = await openPermissions();
+
+      const panel = body.querySelector('nxs-permissions-panel');
+      expect(panel).toBeTruthy();
+      expect(panel?.textContent).toContain('Write versions');
+      expect(panel?.textContent).toContain('WriteVersion');
+      // The external-user section stays the host's.
+      expect(body.textContent).toContain('Permissions Assigned to External Users');
+    });
+
+    it('renders a component a customer registered under the panel ID instead', async () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(of(withWriteVersion()));
+      await render({}, doc(), { 'nxs.components.permissionsPanel': CustomPermissionsComponent });
+
+      const body = await openPermissions();
+
+      expect(body.querySelector('nxs-permissions-panel')).toBeNull();
+      expect(body.textContent).toContain('CUSTOM PERMISSIONS for doc-1');
+    });
+
+    it('hands the panel a callback that re-reads the external-user shares after a write', async () => {
+      mockDetailService.getDocumentPermissions.mockReturnValue(of(withWriteVersion()));
+      await render({}, doc(), { 'nxs.components.permissionsPanel': CustomPermissionsComponent });
+      await openPermissions();
+      const custom = fixture.debugElement.query(By.directive(CustomPermissionsComponent))
+        .componentInstance as CustomPermissionsComponent;
+      const reads = mockDetailService.getDocumentPermissions.mock.calls.length;
+
+      custom.permissionsChanged()?.();
+
+      expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+    });
+
+    describe('external-user shares', () => {
+      const share = (email: string, status: NuxeoAce['status'], granted = true): NuxeoAce => ({
+        id: `transient/${email}:Read:${granted}:Administrator::1924905600000`,
+        username: `transient/${email}`,
+        permission: 'Read',
+        granted,
+        externalUser: true,
+        creator: 'Administrator',
+        begin: null,
+        end: '2030-12-31T00:00:00.000Z',
+        status,
+      });
+      const shared = (canManage = true) =>
+        doc({
+          contextParameters: {
+            permissions: canManage ? ['Everything'] : ['Read'],
+            userVisiblePermissions: ['Read', 'ReadWrite'],
+            acls: [
+              {
+                name: 'local',
+                aces: [
+                  share('effective@example.com', 'effective'),
+                  share('pending@example.com', 'pending'),
+                  share('archived@example.com', 'archived'),
+                  share('denied@example.com', 'effective', false),
+                ],
+              },
+              { name: 'inherited', aces: [share('parent@example.com', 'effective')] },
+            ],
+          },
+        });
+      const rows = (body: HTMLElement): string[] =>
+        [...body.querySelectorAll('.perm-table tbody tr')].map(
+          (row) => (row as HTMLElement).querySelector('td')?.textContent?.trim() ?? '',
+        );
+      /** The detail screen's own `MatDialog`: its standalone imports shadow the root mock. */
+      const spyDialog = (closedWith?: boolean): Mock =>
+        vi
+          .spyOn(fixture.debugElement.injector.get(MatDialog), 'open')
+          .mockReturnValue({ afterClosed: () => of(closedWith) } as never) as unknown as Mock;
+
+      it('lists only the document’s own pending and effective shares, as Web UI does', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({});
+
+        const body = await openPermissions();
+
+        expect(rows(body)).toEqual(['effective@example.com', 'pending@example.com']);
+      });
+
+      it('hides the card when a package turns permissions.externalUsers off', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({});
+        manifest.update((m) => ({ ...m, featureToggles: { 'permissions.externalUsers': false } }));
+
+        const body = await openPermissions();
+
+        expect(body.textContent).not.toContain('Permissions Assigned to External Users');
+        expect(body.querySelector('nxs-permissions-panel')).toBeTruthy();
+      });
+
+      it('offers a user without WriteSecurity no way to change a share', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared(false)));
+        await render({});
+
+        const body = await openPermissions();
+
+        expect(rows(body)).toHaveLength(2);
+        expect(body.querySelector('.perm-row-actions')).toBeNull();
+        expect(body.querySelector('.perm-action-btn')).toBeNull();
+      });
+
+      it('opens the share dialog with the rights the document offers', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({}, shared());
+        const body = await openPermissions();
+        const open = spyDialog();
+
+        (body.querySelector('.perm-action-btn') as HTMLButtonElement).click();
+
+        expect(open).toHaveBeenCalledWith(NxsShareExternalDialogComponent, {
+          maxWidth: '95vw',
+          data: { documentUid: 'doc-1', permissions: ['Read', 'ReadWrite'] },
+        });
+      });
+
+      it('deletes the one entry, naming the ACL it is on, behind an alert dialog', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({});
+        const body = await openPermissions();
+        const open = spyDialog();
+
+        const remove = body.querySelector(
+          '.perm-row-actions button:last-child',
+        ) as HTMLButtonElement;
+        remove.click();
+
+        const [component, config] = open.mock.calls[0];
+        expect(component).toBe(NxsDeletePermissionDialogComponent);
+        expect(config.role).toBe('alertdialog');
+        expect(config.data.acl).toBe('local');
+        expect(config.data.ace.id).toBe(
+          'transient/effective@example.com:Read:true:Administrator::1924905600000',
+        );
+      });
+
+      it('re-reads the shares once an update is saved, leaving the toast to the dialog', async () => {
+        mockDetailService.getDocumentPermissions.mockReturnValue(of(shared()));
+        await render({}, shared());
+        const body = await openPermissions();
+        const open = spyDialog(true);
+        const reads = mockDetailService.getDocumentPermissions.mock.calls.length;
+
+        (body.querySelector('.perm-row-actions button') as HTMLButtonElement).click();
+
+        const [component, config] = open.mock.calls[0];
+        expect(component).toBe(NxsUpdatePermissionDialogComponent);
+        expect(config.data.permissions).toEqual(['Read', 'ReadWrite']);
+        expect(mockDetailService.getDocumentPermissions).toHaveBeenCalledTimes(reads + 1);
+      });
+    });
+  });
+
+  /**
+   * Which packaged piece each document type gets, pinned against the rendered template before
+   * the type checks moved out of `document-detail.ts`, and run unchanged after. A Note opens on
+   * the note editor; every other type, Picture and Video included, opens on the document viewer,
+   * which picks its presentation from the loaded content rather than from the type.
+   */
+  describe('packaged view per document type', () => {
+    function viewBody(): HTMLElement {
+      const body = fixture.nativeElement.querySelector('.mat-mdc-tab-body-active') as HTMLElement;
+      if (!body) throw new Error('no active tab body');
+      return body;
+    }
+
+    async function openTab(label: string): Promise<void> {
+      const tab = [...fixture.nativeElement.querySelectorAll('.mat-mdc-tab')].find((el) =>
+        (el as HTMLElement).textContent?.includes(label),
+      ) as HTMLElement;
+      tab.click();
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    async function settleLoad(): Promise<void> {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      fixture.detectChanges();
+      await fixture.whenStable();
+      fixture.detectChanges();
+    }
+
+    const note = (): NuxeoDocument =>
+      doc({ type: 'Note', properties: { 'note:note': 'hello', 'note:mime_type': 'text/plain' } });
+
+    const propLabels = (): string[] =>
+      [
+        ...fixture.nativeElement.querySelectorAll(
+          'nxs-details-panel.properties-panel .nxs-properties-panel__label',
+        ),
+      ].map((el) => (el as HTMLElement).textContent?.trim() ?? '');
+
+    /** The document viewer in the selected tab only, so the View tab's viewer cannot answer. */
+    const viewerControls = (): boolean | undefined =>
+      (
+        fixture.debugElement
+          .query(By.css('.mat-mdc-tab-body-active'))
+          ?.query(By.directive(DocumentViewerComponent))?.componentInstance as
+          DocumentViewerComponent | undefined
+      )?.showMainFileControls();
+
+    const file = (name: string, mimeType: string) => ({
+      'file:content': { name, 'mime-type': mimeType, length: 1 },
+    });
+
+    it.each<['lib-note-editor' | 'lib-document-viewer', string, Record<string, unknown>]>([
+      ['lib-note-editor', 'Note', { 'note:note': 'hello', 'note:mime_type': 'text/plain' }],
+      ['lib-document-viewer', 'File', file('a.pdf', 'application/pdf')],
+      ['lib-document-viewer', 'Picture', file('a.png', 'image/png')],
+      ['lib-document-viewer', 'Video', file('v.mp4', 'video/mp4')],
+      ['lib-document-viewer', 'Audio', file('a.mp3', 'audio/mpeg')],
+      ['lib-document-viewer', 'Claim', {}],
+    ])('renders %s for a %s', async (expected, type, properties) => {
+      await render({}, doc({ type, properties }));
+
+      const other = expected === 'lib-note-editor' ? 'lib-document-viewer' : 'lib-note-editor';
+      expect(viewBody().querySelector(expected)).toBeTruthy();
+      expect(viewBody().querySelector(other)).toBeNull();
+      expect(viewBody().querySelector('.document-view-outlet')).toBeNull();
+    });
+
+    it('shows the note format row for a Note only', async () => {
+      await render({}, note());
+      expect(propLabels()).toContain('Format');
+
+      await render({}, doc({ type: 'File' }));
+      expect(propLabels()).not.toContain('Format');
+    });
+
+    it('shows the file name only for a document with a stored main file (NXSAT-190)', async () => {
+      await render({}, note());
+      expect(propLabels()).not.toContain('File name');
+
+      await render({}, doc({ properties: file('a.pdf', 'application/pdf') }));
+      expect(propLabels()).toContain('File name');
+    });
+
+    it('offers the main-file controls on a File but not on a Note in the Annotations tab', async () => {
+      await render({}, doc({ type: 'File' }));
+      await openTab('Annotations');
+      expect(viewerControls()).toBe(true);
+
+      await render({}, note());
+      await openTab('Annotations');
+      expect(viewerControls()).toBe(false);
+    });
+
+    it('labels the pencil "Edit properties" on a Note and "Edit" elsewhere', async () => {
+      await render({}, note());
+      expect(actionIds()).toContain('app.toolbar.editProperties');
+      expect(actionIds()).not.toContain('app.toolbar.edit');
+
+      await render({}, doc({ type: 'File' }));
+      expect(actionIds()).toContain('app.toolbar.edit');
+      expect(actionIds()).not.toContain('app.toolbar.editProperties');
+    });
+
+    it.each<[string, unknown]>([
+      ['app.rules.isType', { type: 'app.rules.isType', parameters: ['Note'] }],
+      ['app.rules.isNote', 'app.rules.isNote'],
+    ])('lets a contributed view gated by %s replace the Note editor', async (_label, rule) => {
+      await render(
+        {
+          slots: {
+            documentView: [
+              { id: 'acme.documentView.notes', componentId: 'acme.views.claim', rule },
+            ],
+          },
+        },
+        note(),
+      );
+
+      expect(viewBody().textContent).toContain('CLAIM VIEW');
+      expect(viewBody().querySelector('lib-note-editor')).toBeNull();
+      expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
+    });
+
+    /** The fallback is the packaged view for the type, not the generic viewer. */
+    it('falls back to the Note editor when a contributed Note view fails to load', async () => {
+      await render(
+        {
+          slots: {
+            documentView: [
+              {
+                id: 'acme.documentView.notes',
+                componentId: 'acme.views.broken',
+                rule: { type: IS_TYPE_RULE, parameters: ['Note'] },
+              },
+            ],
+          },
+        },
+        note(),
+      );
+      await settleLoad();
+
+      expect(viewBody().querySelector('lib-note-editor')).toBeTruthy();
+      expect(viewBody().querySelector('lib-document-viewer')).toBeNull();
     });
   });
 });

@@ -1,0 +1,15 @@
+<?xml version="1.0"?>
+<component name="<%= component %>" version="1.0">
+  <!-- Registers after Satori's defaults, so every fragment below applies on top of them. -->
+  <require>org.nuxeo.agentic.ui.config.defaults</require>
+
+  <extension target="org.nuxeo.agentic.ui.config" point="configuration">
+    <fragment name="<%= name %>" layer="bootstrap" src="agentic-ui-config/bootstrap.json" />
+    <fragment name="<%= name %>" layer="manifest" src="agentic-ui-config/manifest.json" />
+
+    <!-- An image the bootstrap fragment can name as "logo": { "src": "assets/<name>" }.
+         Put the file in agentic-ui-config/assets/ and uncomment:
+    <asset name="logo.svg" src="agentic-ui-config/assets/logo.svg" />
+    -->
+  </extension>
+</component>

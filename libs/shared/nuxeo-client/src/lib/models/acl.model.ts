@@ -1,6 +1,8 @@
 export interface NuxeoAce {
   id: string;
   username: string;
+  /** The principal's display name, when the read asked for `fetch-acls: extended`. */
+  usernameLabel?: string;
   externalUser: boolean;
   permission: string;
   granted: boolean;

@@ -136,7 +136,7 @@
         <li>
           Their own shell, sign-in, browser, metadata view and search — no adf-hx, no Material
         </li>
-        <li>Built only on <code>@nuxeo-satori/platform</code> and its services</li>
+        <li>Built only on <code>@nuxeo/satori-platform</code> and its services</li>
         <li>Then customised through the four layers, live, with no rebuild</li>
       </ul>
     </main>
@@ -150,16 +150,16 @@
           <code>localhost:8080</code> — 11 seeded Acme documents in a repository of ~120
         </li>
         <li>
-          <strong>Layer 0</strong> — <code>bootstrap.json</code> beside the bundle: rebranded and
-          re-themed two ways on the same bytes, reload only
+          <strong>Layer 0</strong> — a bootstrap fragment in their configuration package: rebranded
+          and re-themed two ways on the same bytes, reload only
         </li>
         <li>
           <strong>Layer 2</strong> — <code>provideAcmeExtensions()</code>, one line in
           <code>app.config.ts</code>: a nav entry, a fail-closed rule and a panel resolved by ID
         </li>
         <li>
-          <strong>Layer 1</strong> — a Nuxeo document: renamed, reordered and hid navigation the
-          build knows nothing about
+          <strong>Layer 1</strong> — a manifest fragment in their configuration package: renamed,
+          reordered and hid navigation the build knows nothing about
         </li>
       </ul>
       <p class="foot">

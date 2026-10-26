@@ -1,4 +1,4 @@
-import type { AppThemeConfig } from '@nuxeo-satori/platform/app-config';
+import type { AppThemeConfig } from '@nuxeo/satori-platform/app-config';
 
 /**
  * Theme identifiers are open, not a closed union.

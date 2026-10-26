@@ -1,0 +1,218 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 16px 0;
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-permissions-panel__header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nxs-permissions-panel__title {
+  font-size: 1rem;
+  font-weight: 500;
+  line-height: 1.5rem;
+}
+
+.nxs-permissions-panel__document {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-permissions-panel__loading {
+  display: flex;
+  justify-content: center;
+  padding: 24px;
+}
+
+.nxs-permissions-panel__error,
+.nxs-permissions-panel__alert {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+
+  p {
+    margin: 0;
+  }
+}
+
+.nxs-permissions-panel__alert-heading {
+  font-weight: 500;
+}
+
+.nxs-permissions-panel__alert-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.nxs-permissions-panel__refusals {
+  margin: 0;
+  padding-inline-start: 20px;
+}
+
+.nxs-permissions-panel__entry {
+  font-weight: 500;
+}
+
+.nxs-permissions-panel__server-message {
+  display: block;
+  font-size: 0.75rem;
+}
+
+.nxs-permissions-panel__status {
+  margin: 0;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+}
+
+.nxs-permissions-panel__section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.nxs-permissions-panel__section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.nxs-permissions-panel__section-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.nxs-permissions-panel__empty {
+  margin: 0;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-permissions-panel__table {
+  width: 100%;
+}
+
+.nxs-permissions-panel__select {
+  min-width: 200px;
+}
+
+.nxs-permissions-panel__id {
+  margin-inline-start: 6px;
+  font-size: 0.75rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-permissions-panel__badge {
+  display: inline-block;
+  margin-inline-start: 8px;
+  padding: 0 8px;
+  border-radius: 999px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  background: var(--mat-sys-surface-container-highest);
+  color: var(--mat-sys-on-surface);
+}
+
+.nxs-permissions-panel__badge--removed {
+  background: var(--mat-sys-error-container);
+  color: var(--mat-sys-on-error-container);
+}
+
+.nxs-permissions-panel__hint {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.nxs-permissions-panel__row--pending {
+  background: var(--mat-sys-surface-container-low);
+}
+
+.nxs-permissions-panel__row--removed td {
+  text-decoration: line-through;
+}
+
+.nxs-permissions-panel__actions {
+  white-space: nowrap;
+  text-align: end;
+}
+
+.nxs-permissions-panel__pending {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--mat-sys-surface-container);
+}
+
+.nxs-permissions-panel__spacer {
+  flex: 1;
+}
+
+.nxs-permissions-panel__editor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 8px;
+}
+
+.nxs-permissions-panel__editor-heading {
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.nxs-permissions-panel__field--wide {
+  width: 100%;
+}
+
+.nxs-permissions-panel__time-frame {
+  display: flex;
+  gap: 24px;
+}
+
+.nxs-permissions-panel__dates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+
+  mat-form-field {
+    flex: 1;
+    min-width: 160px;
+  }
+}
+
+.nxs-permissions-panel__field-error {
+  margin: 0;
+  color: var(--mat-sys-error);
+}
+
+.nxs-permissions-panel__editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.nxs-permissions-panel__visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

@@ -1,5 +1,5 @@
 import { Route } from '@angular/router';
-import { fullAdministratorGuard } from '@nuxeo-satori/platform/nuxeo-client';
+import { fullAdministratorGuard } from '@nuxeo/satori-platform/nuxeo-client';
 import { AdministrationShellComponent } from './administration-shell/administration-shell.component';
 import { AdminAnalyticsPageComponent } from './admin-analytics-page/admin-analytics-page.component';
 import { AdminUsersGroupsPageComponent } from './admin-users-groups-page/admin-users-groups-page.component';

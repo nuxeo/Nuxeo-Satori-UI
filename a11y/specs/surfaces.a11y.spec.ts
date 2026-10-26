@@ -73,7 +73,6 @@ const SURFACES: ReadonlyArray<readonly [label: string, route: string, host: stri
   // which is a fixture this suite does not have yet.
   ['administration', '/#/administration', 'lib-administration-shell'],
   ['knowledge discovery', '/#/knowledge-discovery', 'lib-knowledge-discovery'],
-  ['adf-hx browse POC', '/#/browse-adf-hx', 'lib-browse-adf-hx-poc'],
 ];
 
 test.describe('accessibility: authenticated surfaces', () => {

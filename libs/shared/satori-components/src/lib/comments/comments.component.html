@@ -1,0 +1,299 @@
+@if (loading()) {
+  <div class="nxs-comments__loading">
+    <nxs-spinner diameter="28" [label]="'satori-components.comments.loading' | translate" />
+  </div>
+} @else if (failed()) {
+  <div class="nxs-comments__failed" role="alert">
+    <p>{{ 'satori-components.comments.load-failed' | translate }}</p>
+    <button mat-button type="button" (click)="reload()">
+      {{ 'satori-components.comments.retry' | translate }}
+    </button>
+  </div>
+} @else {
+  @if (hiddenCount() > 0) {
+    <button class="nxs-comments__more" type="button" (click)="allShown.set(true)">
+      {{ 'satori-components.comments.view-all-comments' | translate: { count: comments().length } }}
+    </button>
+  }
+  @if (comments().length === 0) {
+    <p class="nxs-comments__empty">{{ 'satori-components.comments.empty' | translate }}</p>
+  }
+  <ul
+    class="nxs-comments__list"
+    tabindex="-1"
+    [id]="id + '-list'"
+    [attr.aria-label]="'satori-components.comments.list' | translate"
+  >
+    @for (comment of shown(); track comment.id) {
+      @let count = repliesOf(comment.id).length;
+      @let open = opened().has(comment.id);
+      <li class="nxs-comments__comment">
+        <ng-container *ngTemplateOutlet="entry; context: { $implicit: comment, parent: null }" />
+        @if (count > 0 && !open) {
+          <button
+            class="nxs-comments__summary"
+            type="button"
+            aria-expanded="false"
+            (click)="openReplies(comment.id)"
+          >
+            {{
+              (count === 1
+                ? 'satori-components.comments.replies-one'
+                : 'satori-components.comments.replies-other'
+              ) | translate: { count }
+            }}
+            ·
+            {{
+              'satori-components.comments.last-reply' | translate: { time: lastReply(comment.id) }
+            }}
+          </button>
+        }
+        @if (open) {
+          <div class="nxs-comments__replies">
+            @if (shownReplies(comment.id).length < count) {
+              <button class="nxs-comments__more" type="button" (click)="showAllReplies(comment.id)">
+                {{ 'satori-components.comments.view-all-replies' | translate: { count } }}
+              </button>
+            }
+            @if (count > 0) {
+              <ul class="nxs-comments__list">
+                @for (reply of shownReplies(comment.id); track reply.id) {
+                  <li class="nxs-comments__comment nxs-comments__comment--reply">
+                    <ng-container
+                      *ngTemplateOutlet="entry; context: { $implicit: reply, parent: comment }"
+                    />
+                  </li>
+                }
+              </ul>
+            }
+            @if (!readOnly()) {
+              <div class="nxs-comments__composer">
+                <mat-form-field appearance="outline" subscriptSizing="dynamic">
+                  <mat-label>{{ 'satori-components.comments.reply-label' | translate }}</mat-label>
+                  <textarea
+                    matInput
+                    cdkTextareaAutosize
+                    cdkAutosizeMinRows="1"
+                    cdkAutosizeMaxRows="4"
+                    aria-keyshortcuts="Control+Enter"
+                    [id]="id + '-reply-' + comment.id"
+                    [placeholder]="'satori-components.comments.write-reply' | translate"
+                    [value]="replyText(comment.id)"
+                    (input)="setReplyText(comment.id, textOf($event))"
+                    (keydown.control.enter)="$event.preventDefault(); submitReply(comment)"
+                    (keydown.meta.enter)="$event.preventDefault(); submitReply(comment)"
+                  ></textarea>
+                </mat-form-field>
+                @if (replyText(comment.id).trim()) {
+                  <button
+                    mat-icon-button
+                    type="button"
+                    [disabled]="saving()"
+                    [attr.aria-label]="'satori-components.comments.submit-reply' | translate"
+                    [matTooltip]="'satori-components.comments.submit-hint' | translate"
+                    (click)="submitReply(comment)"
+                  >
+                    <mat-icon svgIcon="check" />
+                  </button>
+                  <button
+                    mat-icon-button
+                    type="button"
+                    [attr.aria-label]="'satori-components.comments.clear' | translate"
+                    (click)="setReplyText(comment.id, '')"
+                  >
+                    <mat-icon svgIcon="x_large" />
+                  </button>
+                }
+              </div>
+            }
+          </div>
+        }
+      </li>
+    }
+  </ul>
+  @if (!readOnly()) {
+    <div class="nxs-comments__composer">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>{{ 'satori-components.comments.comment-label' | translate }}</mat-label>
+        <textarea
+          matInput
+          cdkTextareaAutosize
+          cdkAutosizeMinRows="1"
+          cdkAutosizeMaxRows="4"
+          aria-keyshortcuts="Control+Enter"
+          [id]="id + '-new'"
+          [placeholder]="'satori-components.comments.write-comment' | translate"
+          [value]="newText()"
+          (input)="newText.set(textOf($event))"
+          (keydown.control.enter)="$event.preventDefault(); submitComment()"
+          (keydown.meta.enter)="$event.preventDefault(); submitComment()"
+        ></textarea>
+      </mat-form-field>
+      @if (newText().trim()) {
+        <button
+          mat-icon-button
+          type="button"
+          [disabled]="saving()"
+          [attr.aria-label]="'satori-components.comments.submit-comment' | translate"
+          [matTooltip]="'satori-components.comments.submit-hint' | translate"
+          (click)="submitComment()"
+        >
+          <mat-icon svgIcon="check" />
+        </button>
+        <button
+          mat-icon-button
+          type="button"
+          [attr.aria-label]="'satori-components.comments.clear' | translate"
+          (click)="newText.set('')"
+        >
+          <mat-icon svgIcon="x_large" />
+        </button>
+      }
+    </div>
+  }
+}
+
+<ng-template #entry let-comment let-parent="parent">
+  @let isReply = parent !== null;
+  <div class="nxs-comments__header">
+    <nxs-avatar
+      [initials]="initial(comment.author)"
+      [color]="color(comment.author)"
+      [size]="isReply ? '24' : '28'"
+    />
+    <span class="nxs-comments__author">{{ comment.author }}</span>
+    <time class="nxs-comments__time" [attr.datetime]="comment.creationDate">
+      @if (edited(comment)) {
+        {{ 'satori-components.comments.edited' | translate: { time: when(comment.creationDate) } }}
+      } @else {
+        {{ when(comment.creationDate) }}
+      }
+    </time>
+    @if (canModify(comment)) {
+      <button
+        mat-icon-button
+        type="button"
+        class="nxs-comments__menu"
+        [matMenuTriggerFor]="menu"
+        (menuClosed)="menuClosed()"
+        [attr.aria-label]="
+          (isReply
+            ? 'satori-components.comments.reply-actions'
+            : 'satori-components.comments.comment-actions'
+          ) | translate: { author: comment.author }
+        "
+      >
+        <mat-icon svgIcon="more_vert" />
+      </button>
+      <mat-menu #menu="matMenu">
+        <button mat-menu-item type="button" (click)="choose('edit', comment, parent)">
+          <mat-icon svgIcon="pencil" />
+          {{ 'satori-components.comments.edit' | translate }}
+        </button>
+        <button mat-menu-item type="button" (click)="choose('delete', comment, parent)">
+          <mat-icon svgIcon="trash" />
+          {{ 'satori-components.comments.delete' | translate }}
+        </button>
+      </mat-menu>
+    }
+  </div>
+  @if (editing() === comment.id) {
+    <div class="nxs-comments__composer nxs-comments__composer--edit">
+      <mat-form-field appearance="outline" subscriptSizing="dynamic">
+        <mat-label>{{
+          (isReply
+            ? 'satori-components.comments.edit-reply'
+            : 'satori-components.comments.edit-comment'
+          ) | translate
+        }}</mat-label>
+        <textarea
+          matInput
+          cdkTextareaAutosize
+          cdkAutosizeMinRows="1"
+          cdkAutosizeMaxRows="4"
+          aria-keyshortcuts="Control+Enter"
+          [id]="id + '-edit-' + comment.id"
+          [value]="editText()"
+          (input)="editText.set(textOf($event))"
+          (keydown.control.enter)="$event.preventDefault(); saveEdit(comment, parent)"
+          (keydown.meta.enter)="$event.preventDefault(); saveEdit(comment, parent)"
+          (keydown.escape)="cancelEdit()"
+        ></textarea>
+      </mat-form-field>
+      <button
+        mat-icon-button
+        type="button"
+        [disabled]="saving() || !editText().trim()"
+        [attr.aria-label]="'satori-components.comments.save' | translate"
+        [matTooltip]="'satori-components.comments.submit-hint' | translate"
+        (click)="saveEdit(comment, parent)"
+      >
+        <mat-icon svgIcon="check" />
+      </button>
+      <button
+        mat-icon-button
+        type="button"
+        [attr.aria-label]="'satori-components.comments.cancel' | translate"
+        (click)="cancelEdit()"
+      >
+        <mat-icon svgIcon="x_large" />
+      </button>
+    </div>
+  } @else {
+    <p class="nxs-comments__text">
+      <span class="nxs-comments__body">{{
+        truncated(comment) ? shortText(comment) : comment.text
+      }}</span>
+      @if (truncated(comment)) {
+        <button class="nxs-comments__show-all" type="button" (click)="showFullText(comment)">
+          {{ 'satori-components.comments.show-all' | translate }}
+        </button>
+      }
+    </p>
+  }
+  @if (extra(); as projected) {
+    <ng-container *ngTemplateOutlet="projected.template; context: { $implicit: comment }" />
+  }
+  @if (!isReply && !readOnly()) {
+    <button
+      class="nxs-comments__reply"
+      type="button"
+      [attr.aria-label]="
+        'satori-components.comments.reply-to' | translate: { author: comment.author }
+      "
+      (click)="openReplies(comment.id, true)"
+    >
+      <mat-icon aria-hidden="true" svgIcon="replay" />
+      {{ 'satori-components.comments.reply' | translate }}
+    </button>
+  }
+</ng-template>
+
+<ng-template #deleteConfirmation let-data>
+  <h2 mat-dialog-title>
+    {{
+      (data.reply
+        ? 'satori-components.comments.delete-reply-title'
+        : 'satori-components.comments.delete-comment-title'
+      ) | translate
+    }}
+  </h2>
+  <mat-dialog-content>
+    {{
+      (data.reply
+        ? 'satori-components.comments.delete-reply-message'
+        : data.replies > 0
+          ? 'satori-components.comments.delete-comment-with-replies'
+          : 'satori-components.comments.delete-comment-message'
+      ) | translate
+    }}
+  </mat-dialog-content>
+  <mat-dialog-actions align="end">
+    <button mat-button type="button" mat-dialog-close>
+      {{ 'satori-components.comments.cancel' | translate }}
+    </button>
+    <button mat-flat-button type="button" [mat-dialog-close]="true">
+      {{ 'satori-components.comments.delete' | translate }}
+    </button>
+  </mat-dialog-actions>
+</ng-template>

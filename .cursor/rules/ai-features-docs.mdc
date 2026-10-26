@@ -13,6 +13,12 @@ alwaysApply: false
 
 # AI Features Documentation Rule
 
+**AI features are currently switched OFF for every user** and cannot be enabled at runtime. The
+single switch is `AI_FEATURES_ENABLED` in `libs/shared/ai-client/src/lib/ai-feature-flag.service.ts`.
+No feature code was removed, so everything below still describes what is in the tree — but do not
+assume any of it is reachable, and do not "fix" the flag because a feature looks broken.
+See `AGENTS/10-ai-features.md` for what the kill switch covers.
+
 AI features are served by Nuxeo Automation operations (`AI.*`) from a **separate** marketplace
 package repository. This repo contains only the Angular client (`libs/shared/ai-client`).
 

@@ -1,0 +1,23 @@
+:host {
+  display: contents;
+}
+
+.preset-badge {
+  display: inline-block;
+  // The label is package text of any length, and the title slot is narrow: shrink and truncate
+  // rather than push into the absolutely positioned search.
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  align-self: center;
+  margin-inline: 12px 8px;
+  padding: 2px 10px;
+  border: 1px solid var(--mat-sys-tertiary);
+  border-radius: 999px;
+  background: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+  font: var(--mat-sys-label-medium);
+  white-space: nowrap;
+}

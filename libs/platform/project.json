@@ -4,7 +4,14 @@
   "sourceRoot": "libs/platform/src",
   "projectType": "library",
   "tags": ["scope:shared", "type:publishable"],
-  "implicitDependencies": ["shared-extensions", "shared-app-config", "nuxeo-client", "ui"],
+  "implicitDependencies": [
+    "shared-extensions",
+    "shared-app-config",
+    "nuxeo-client",
+    "ui",
+    "satori-components",
+    "satori-components-satori"
+  ],
   "targets": {
     "lint": {
       "executor": "@nx/eslint:lint",

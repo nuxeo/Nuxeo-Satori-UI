@@ -7,7 +7,7 @@ import {
   ExtensionComponentRegistry,
   ExtensionRuleRegistry,
   ExtensionSlotRegistry,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 import { ACME_EXTENSIONS_EXTENSION_IDS, provideAcmeExtensions } from './extensions';
 

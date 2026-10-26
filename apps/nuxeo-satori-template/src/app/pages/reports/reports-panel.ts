@@ -1,10 +1,10 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import {
   AppExtensionsService,
   ExtensionActionRegistry,
   ExtensionRuleContextService,
-} from '@nuxeo-satori/platform/extensions';
+} from '@nuxeo/satori-platform/extensions';
 
 /**
  * A customer-owned component, reachable two ways at once.
@@ -22,6 +22,7 @@ import {
   selector: 'app-reports-panel',
   standalone: true,
   templateUrl: './reports-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reports-panel.scss',
 })
 export class ReportsPanelComponent {

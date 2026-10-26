@@ -1,0 +1,91 @@
+<h2 mat-dialog-title>{{ data.heading }}</h2>
+<mat-dialog-content class="nxs-folder-picker-dialog__body">
+  <nav
+    class="nxs-folder-picker-dialog__location"
+    [attr.aria-label]="'satori-components.folder-picker.location' | translate"
+  >
+    <button
+      mat-icon-button
+      type="button"
+      [disabled]="!canGoUp() || loading()"
+      [attr.aria-label]="'satori-components.folder-picker.up' | translate"
+      (click)="up()"
+    >
+      <mat-icon aria-hidden="true" svgIcon="arrow_up" />
+    </button>
+    <span class="nxs-folder-picker-dialog__trail" aria-live="polite">{{
+      trail().join(' › ')
+    }}</span>
+  </nav>
+
+  @if (loading()) {
+    <div class="nxs-folder-picker-dialog__state">
+      <nxs-spinner diameter="28" [label]="'satori-components.folder-picker.loading' | translate" />
+    </div>
+  } @else if (failure(); as reason) {
+    <div class="nxs-folder-picker-dialog__failure" role="alert">
+      @switch (reason) {
+        @case (403) {
+          {{ 'satori-components.folder-picker.forbidden' | translate }}
+        }
+        @case (404) {
+          {{ 'satori-components.folder-picker.not-found' | translate }}
+        }
+        @case ('not-a-folder') {
+          {{ 'satori-components.folder-picker.not-a-folder' | translate }}
+        }
+        @default {
+          {{ 'satori-components.folder-picker.failed' | translate }}
+          <button mat-stroked-button type="button" (click)="load()">
+            {{ 'satori-components.folder-picker.retry' | translate }}
+          </button>
+        }
+      }
+    </div>
+  } @else if (folders().length === 0) {
+    <p class="nxs-folder-picker-dialog__empty">
+      {{ 'satori-components.folder-picker.empty' | translate }}
+    </p>
+  } @else {
+    <ul
+      class="nxs-folder-picker-dialog__list"
+      [attr.aria-label]="'satori-components.folder-picker.folders' | translate"
+    >
+      @for (doc of folders(); track doc.uid) {
+        <li>
+          <button type="button" class="nxs-folder-picker-dialog__folder" (click)="open(doc)">
+            <mat-icon
+              class="nxs-folder-picker-dialog__folder-icon"
+              aria-hidden="true"
+              svgIcon="folder"
+            />
+            <span class="nxs-folder-picker-dialog__folder-title">{{ doc.title }}</span>
+            <mat-icon
+              class="nxs-folder-picker-dialog__chevron"
+              aria-hidden="true"
+              svgIcon="chevron_right"
+            />
+          </button>
+        </li>
+      }
+    </ul>
+  }
+  @if (refusal(); as why) {
+    <p class="nxs-folder-picker-dialog__refusal">
+      {{
+        (why === 'inside'
+          ? 'satori-components.folder-picker.inside-itself'
+          : 'satori-components.folder-picker.already-here'
+        ) | translate
+      }}
+    </p>
+  }
+</mat-dialog-content>
+<mat-dialog-actions align="end">
+  <button mat-button type="button" (click)="cancel()">
+    {{ 'satori-components.folder-picker.cancel' | translate }}
+  </button>
+  <button mat-flat-button type="button" [disabled]="!canChoose()" (click)="choose()">
+    {{ data.confirmLabel }}
+  </button>
+</mat-dialog-actions>

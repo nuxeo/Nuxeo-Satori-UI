@@ -4,7 +4,7 @@ import { provideZonelessChangeDetection, signal, type WritableSignal } from '@an
 import { NoopAnimationsModule } from '@angular/platform-browser/animations';
 import { Subject, of, throwError } from 'rxjs';
 import { AdminAnalyticsPageComponent } from './admin-analytics-page.component';
-import { AdministrationService } from '@nuxeo-satori/platform/nuxeo-client';
+import { AdministrationService } from '@nuxeo/satori-platform/nuxeo-client';
 import {
   AiGatewayService,
   AiFeatureFlagService,

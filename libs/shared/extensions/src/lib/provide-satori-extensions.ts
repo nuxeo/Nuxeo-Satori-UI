@@ -77,9 +77,14 @@ export interface SatoriExtensionContributions {
  * Contributions, or a factory that produces them inside an injection context.
  *
  * The factory form exists because real contributions need dependencies: the
- * application's own `app.rules.hasAdministrationAccess` closes over
- * `AuthService`, and a customer's action handler is normally an injectable
- * service. A plain object cannot `inject()`; a factory can.
+ * application's own `app.rules.hasAdministrationAccess` reads `AuthService`, and
+ * a customer's action handler is normally an injectable service. A plain object
+ * cannot `inject()`; a factory can.
+ *
+ * The factory runs before the configuration loads, and a configuration token
+ * keeps the first value it resolves to. So a service that reads one when it is
+ * constructed — every `NuxeoApiBase` service reads `NUXEO_API_ORIGIN` — belongs
+ * behind an `Injector` lookup inside the rule or handler, not in the factory.
  */
 export type SatoriExtensionContributor =
   SatoriExtensionContributions | (() => SatoriExtensionContributions);
@@ -94,10 +99,13 @@ export type SatoriExtensionContributor =
  *   providers: [
  *     ...provideAppConfig(),
  *     provideSatoriExtensions(PACKAGED_CONTRIBUTIONS),
- *     provideSatoriExtensions(() => ({
- *       rules: { 'acme.rules.isPilotUser': () => inject(AcmeService).isPilot() },
- *       components: { 'acme.sidebar.reports': () => import('./reports').then((m) => m.Reports) },
- *     })),
+ *     provideSatoriExtensions(() => {
+ *       const injector = inject(Injector);
+ *       return {
+ *         rules: { 'acme.rules.isPilotUser': () => injector.get(AcmeService).isPilot() },
+ *         components: { 'acme.sidebar.reports': () => import('./reports').then((m) => m.Reports) },
+ *       };
+ *     }),
  *   ],
  * });
  * ```

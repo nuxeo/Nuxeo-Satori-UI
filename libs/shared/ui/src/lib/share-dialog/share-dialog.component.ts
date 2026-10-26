@@ -1,9 +1,9 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
+import { NxsToastService, provideNxsToast } from '@nuxeo/satori-platform/components';
 
 export interface ShareDialogData {
   title: string;
@@ -13,8 +13,10 @@ export interface ShareDialogData {
 @Component({
   selector: 'lib-share-dialog',
   standalone: true,
-  imports: [TranslatePipe, MatDialogModule, MatButtonModule, MatIconModule, MatSnackBarModule],
+  imports: [TranslatePipe, MatDialogModule, MatButtonModule, MatIconModule],
+  providers: [provideNxsToast()],
   templateUrl: './share-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {
@@ -64,22 +66,12 @@ export class ShareDialogComponent {
   readonly data = inject<ShareDialogData>(MAT_DIALOG_DATA);
   private readonly dialogRef = inject(MatDialogRef<ShareDialogComponent>);
   private readonly translate = inject(TranslateService);
-  private readonly snackBar = inject(MatSnackBar);
+  private readonly toast = inject(NxsToastService);
 
   copyLink(): void {
     navigator.clipboard.writeText(this.data.url).then(
-      () =>
-        this.snackBar.open(
-          this.translate.instant('shared-ui.message.link-copied-to-clipboard'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
-      () =>
-        this.snackBar.open(
-          this.translate.instant('shared-ui.message.failed-to-copy-link'),
-          this.translate.instant('common.ok'),
-          { duration: 3000 },
-        ),
+      () => this.toast.show(this.translate.instant('shared-ui.message.link-copied-to-clipboard')),
+      () => this.toast.error(this.translate.instant('shared-ui.message.failed-to-copy-link')),
     );
   }
 }

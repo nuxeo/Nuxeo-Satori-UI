@@ -16,10 +16,10 @@ export default async function collectEvidence(page, helpers, _outDir) {
 
   async function openBrowseDrawer() {
     const browseByIcon = page
-      .locator('sat-platform-nav-list-item')
+      .locator('a[sat-platform-nav-menu-item]')
       .filter({ has: page.locator('mat-icon', { hasText: 'folder' }) })
       .first();
-    const browseByIndex = page.locator('sat-platform-nav sat-platform-nav-list-item').nth(2);
+    const browseByIndex = page.locator('sat-platform-nav a[sat-platform-nav-menu-item]').nth(2);
     const browseNav = (await browseByIcon.count()) > 0 ? browseByIcon : browseByIndex;
 
     await browseNav.click({ timeout: 10000 });

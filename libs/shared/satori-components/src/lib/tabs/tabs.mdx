@@ -1,0 +1,103 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as TabsStories from './tabs.stories';
+
+<Meta of={TabsStories} name="Overview" />
+
+# Tabs
+
+The tabs are the strip across a document page — View, Permissions, History, Publishing — and the
+body under it. They are the counterpart of the view tabs in Web UI's document page. Every body
+renders from one template you provide, so a tab added by a manifest renders exactly as a packaged
+one does.
+
+## Key features
+
+- **Tabs you resolve.** Each tab is an `NxsTab`: its registered ID, its label already translated and
+  an optional icon. Hide, reorder or relabel tabs by changing the list.
+- **One body template.** Mark an `<ng-template nxsTabBody let-tab>`; it renders for every tab and
+  receives the tab, so an `@switch (tab.id)` with an extension outlet as its default covers packaged
+  and contributed tabs alike.
+- **Selection both ways.** `[(selectedIndex)]` lets your component select a tab itself;
+  `selectedTabChange` names the tab selected by ID, which stays right when a manifest hides or
+  reorders tabs.
+- **Addressable tabs.** Each label carries its ID as `data-tab-id`.
+
+## Demo showcase
+
+<Canvas of={TabsStories.FileTabs} />
+
+## Usage
+
+export const usageTs = `import {
+  NxsTabBodyDirective,
+  NxsTabsComponent,
+  type NxsTab,
+} from '@nuxeo/satori-platform/components';
+
+readonly tabs = computed<readonly NxsTab[]>(() =>
+  this.extensions
+    .resolve<ExtensionTabDescriptor>(EXTENSION_SLOTS.tabs, this.ruleContext.context())
+    .map((tab) => ({
+      id: tab.id,
+      label: descriptorLabel(tab, (key) => this.translate.instant(key)),
+      icon: tab.icon,
+    })),
+);
+readonly selected = signal(0);`;
+
+<Source language="typescript" dark code={usageTs} />
+
+export const usageHtml = `<nxs-tabs [tabs]="tabs()" [(selectedIndex)]="selected" (selectedTabChange)="load($event.id)">
+  <ng-template nxsTabBody let-tab>
+    @switch (tab.id) {
+      @case ('app.tabs.view') {
+        <acme-viewer [document]="doc()" />
+      }
+      @default {
+        <lib-extension-outlet [componentId]="tab.id" />
+      }
+    }
+  </ng-template>
+</nxs-tabs>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`tabs` is required. `label` names the tab list and is optional. Import `NxsTabBodyDirective` with
+the component to mark the body template; without one, the strip renders with empty bodies. The tabs
+need no providers, show no text of their own and have no registered ID.
+
+## Where its data comes from
+
+The tabs read nothing. Your component supplies them, usually from the `tabs` slot of the extension
+manifest, whose rules decide which tabs a document shows. Hiding a tab is not a permission: Nuxeo
+still checks what its body requests.
+
+**In these stories** the tabs are a fixed list and each body only names its tab.
+
+## Examples
+
+### Selected by the host
+
+Your component sets `selectedIndex`, as the Properties panel's Publications count selects
+Publishing.
+
+<Canvas of={TabsStories.SelectedByTheHost} />
+
+### Selected from the keyboard
+
+The **Selected from the keyboard** story in the sidebar moves to Permissions with the right arrow
+and selects it with Enter. It runs only on its own story page, because it moves focus.
+
+## Accessibility
+
+- **ARIA tabs.** The strip is a `tablist` of `tab`s, each controlling its `tabpanel`; the selected
+  tab is `aria-selected="true"`. `label` names the tab list; a blank one leaves it unnamed rather
+  than naming it with whitespace.
+- **Keyboard.** **Tab** moves into the strip and on into the selected body. **Left** and **Right**
+  move between tabs, **Home** and **End** go to the first and last, and **Enter** or **Space**
+  selects the focused tab.
+- **Focus ring.** A focused tab draws a 2 px ring in `--nxs-tabs-focus-outline`, the theme's primary
+  colour by default; set the token where the strip sits on a surface the primary colour does not
+  contrast with.
+- **Icons** are hidden from assistive technology; each tab is named by its label.

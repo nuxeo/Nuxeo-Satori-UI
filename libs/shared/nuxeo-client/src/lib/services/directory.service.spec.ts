@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom } from 'rxjs';
@@ -13,7 +13,7 @@ describe('DirectoryService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
       ],
@@ -211,6 +211,14 @@ describe('DirectoryService', () => {
     const entries = await second$;
     expect(entries).toHaveLength(2);
     expect(entries[1].displayLabel).toBe('My Custom');
+  });
+
+  it('getEntries asks for the labels in the language it is given', async () => {
+    const entries$ = firstValueFrom(service.getEntries('nature', 'fr'));
+    const req = httpMock.expectOne('/nuxeo/api/v1/automation/Directory.SuggestEntries');
+    expect((req.request.body as { params: { lang: string } }).params.lang).toBe('fr');
+    req.flush([]);
+    await entries$;
   });
 
   it('getEntries resolves i18n display labels for custom vocabulary entries', async () => {

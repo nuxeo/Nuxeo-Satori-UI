@@ -1,5 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
-import { DescriptorLabelPipe } from '@nuxeo-satori/platform/extensions';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -35,6 +35,7 @@ interface ExportOption {
     MatProgressSpinnerModule,
   ],
   templateUrl: './export-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {
@@ -103,8 +104,8 @@ export class ExportDialogComponent {
 
   readonly options: ExportOption[] = [
     { type: 'thumbnail', labelKey: 'rendition.thumbnail', label: 'Thumbnail', icon: 'image' },
-    { type: 'pdf', labelKey: 'rendition.pdf', label: 'PDF', icon: 'picture_as_pdf' },
-    { type: 'zip', labelKey: 'rendition.zip', label: 'ZIP Export', icon: 'folder_zip' },
+    { type: 'pdf', labelKey: 'rendition.pdf', label: 'PDF', icon: 'pdf' },
+    { type: 'zip', labelKey: 'rendition.zip', label: 'ZIP Export', icon: 'archive' },
     { type: 'xml', labelKey: 'rendition.xml', label: 'XML Export', icon: 'code' },
   ];
 

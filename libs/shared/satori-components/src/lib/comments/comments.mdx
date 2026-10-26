@@ -1,0 +1,142 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as CommentsStories from './comments.stories';
+
+<Meta of={CommentsStories} name="Overview" />
+
+# Comments
+
+The comments component is a document's comment thread: its comments, their replies, and the boxes
+to add, reply and edit. It is the counterpart of Web UI's `nuxeo-document-comment-thread` and
+`nuxeo-document-comment`, and it follows their rules.
+
+## Key features
+
+- **Reads and writes the thread itself.** Give it the document's UID; it loads the comments and
+  sends every change through `DocumentDetailService`.
+- **The newest page first.** The newest 10 comments show, oldest at the top, with "View all" above
+  them for the rest. A comment's replies page the same way.
+- **Replies fold away.** A comment with replies shows "2 replies · Last reply 3 hours ago" until it
+  is opened. Only top-level comments take replies, as in Web UI.
+- **Edit and Delete for the author and administrators.** Nobody else is offered them. Delete asks
+  first, and says so when the replies go with the comment.
+- **Anyone who can read may comment.** Nuxeo decides whether a comment is accepted, and a refusal
+  reads as a refusal — "You do not have permission to comment on this document" — not as a failure.
+  `readOnly` takes the box and the actions away.
+- **Ctrl+Enter submits.** Enter starts a new line. A comment longer than 256 characters is cut
+  short behind "Show all".
+- **Room for more.** A projected `nxsCommentExtra` template renders under each comment and reply,
+  and `threadChange` hands the host every loaded comment.
+
+## Demo showcase
+
+<Canvas of={CommentsStories.Thread} />
+
+## Usage
+
+export const usageHtml = `<nxs-comments [documentUid]="doc().uid" (threadChange)="comments.set($event)">
+  <ng-template nxsCommentExtra let-comment>
+    <acme-sentiment [comment]="comment" />
+  </ng-template>
+</nxs-comments>`;
+
+<Source language="html" dark code={usageHtml} />
+
+`documentUid` is required. Import `NxsCommentExtraDirective` with the component to project a
+template. The component lists its own toast provider; it needs `DocumentDetailService`, and reads
+the signed-in user from `CURRENT_USERNAME` and `ADMIN_ACCESS_CHECKS`, which the app provides. Its
+labels are translated under `satori-components.comments.*`, with English from
+`providePlatformEnglishFallback()`.
+
+Show it only on a document with the `Commentable` facet, as Web UI does; the component does not
+check the facet itself.
+
+## Where its data comes from
+
+<table>
+  <thead>
+    <tr>
+      <th>What</th>
+      <th>Call</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>The thread</td>
+      <td>
+        <code>getAllComments</code> — every <code>Comment</code> under the document, oldest first,
+        in one NXQL query
+      </td>
+    </tr>
+    <tr>
+      <td>Add a comment, add a reply</td>
+      <td>
+        <code>createComment</code>, <code>createReply</code> — <code>POST @comment</code> on the
+        document or on the comment replied to
+      </td>
+    </tr>
+    <tr>
+      <td>Edit, delete</td>
+      <td>
+        <code>updateComment</code>, <code>deleteComment</code> — <code>PUT</code> and{' '}
+        <code>DELETE @comment/&lt;id&gt;</code>
+      </td>
+    </tr>
+  </tbody>
+</table>
+
+"(edited)" shows when `comment:modificationDate` is later than the creation date. Nuxeo 2025
+stamps both with the same time when a comment is made, so Web UI's test — a modification date at
+all — would mark every comment edited. A comment someone else deleted reloads the thread when it is
+edited, deleted or replied to.
+
+**In these stories** the service is an in-memory fake: adding, editing and deleting change the
+story's thread, and each call is logged in the Actions panel.
+
+## Examples
+
+### As an administrator
+
+Edit and Delete on every comment.
+
+<Canvas of={CommentsStories.AsAdministrator} />
+
+### Read-only
+
+<Canvas of={CommentsStories.ReadOnly} />
+
+### More than one page
+
+With `pageSize` 2, the oldest comment waits behind "View all 3 comments".
+
+<Canvas of={CommentsStories.ManyComments} />
+
+### Writes refused
+
+Every write fails with 403, as for a user Nuxeo does not let comment. The toast says so.
+
+<Canvas of={CommentsStories.WritesRefused} />
+
+### Empty, failed and loading
+
+<Canvas of={CommentsStories.Empty} />
+
+<Canvas of={CommentsStories.LoadFailed} />
+
+<Canvas of={CommentsStories.Loading} />
+
+## Accessibility
+
+- **A list.** The comments are a list named "Comments", so a screen reader says how many there are;
+  replies are a nested list.
+- **Names that say whose.** Each menu button is named "Actions for the comment by jdoe", and each
+  Reply button "Reply to jdoe" — the visible word first, so voice control still finds it.
+- **Labelled boxes.** The comment, reply and edit boxes have visible labels. They announce the
+  Ctrl+Enter shortcut through `aria-keyshortcuts`, and the submit button's tooltip names it.
+- **Focus goes where the work is.** Reply moves the cursor into the reply box, Edit into the edit
+  box. Escape leaves an edit. After a delete, focus returns to the list rather than to the page.
+- **A real confirmation.** Delete opens an alert dialog that traps focus and returns it on Cancel.
+- **Times.** Each time is a `<time>` element carrying the exact date.
+- **Avatars are decoration.** The author's name is read as text.
+- **Colours.** Override `--nxs-comments-text`, `--nxs-comments-muted` and `--nxs-comments-link`
+  together when the thread sits on a fixed surface, and keep them at 4.5:1 against it.

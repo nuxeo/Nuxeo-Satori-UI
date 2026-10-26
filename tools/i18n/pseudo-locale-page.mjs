@@ -16,6 +16,8 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { requireNuxeoCredentials } from '../../scripts/beta-harness/nuxeo-credentials.mjs';
+
 /** The Layer 0 config request the application makes at startup. */
 export const BOOTSTRAP_ROUTE = '**/agentic-ui-config/bootstrap.json';
 
@@ -38,13 +40,29 @@ const PACKAGED_BOOTSTRAP = join(
   'nuxeo-agentic-core/src/main/resources/agentic-ui-config/bootstrap.defaults.json',
 );
 
-/** The packaged defaults with only the language swapped, leaving branding and the rest alone. */
+/**
+ * The configuration servlet's bootstrap response — the envelope the application accepts, and
+ * nothing else — with our defaults and the language swapped, leaving branding and the rest alone.
+ */
 const bootstrapForPseudoLocale = () => {
   const config = JSON.parse(readFileSync(PACKAGED_BOOTSTRAP, 'utf8'));
   config.defaultLanguage = 'zz';
   // The default must also be advertised, or it is not selectable and the loader may refuse it.
   config.availableLanguages = [...new Set([...(config.availableLanguages ?? []), 'zz'])];
-  return JSON.stringify(config, null, 2);
+  return JSON.stringify({
+    format: 'nuxeo-agentic-ui-config/1',
+    layer: 'bootstrap',
+    fragments: [
+      {
+        name: 'defaults',
+        component: 'org.nuxeo.agentic.ui.config.defaults',
+        bundle: 'org.nuxeo.agentic.ui.config.defaults',
+        source: 'agentic-ui-config/bootstrap.defaults.json',
+        content: config,
+      },
+    ],
+    diagnostics: [],
+  });
 };
 
 /** Serves `defaultLanguage: 'zz'` for every bootstrap request this page makes. */
@@ -144,10 +162,15 @@ export function routeReached(page, requested) {
  * second way of constructing a session is a second thing to keep in step. The page is reloaded
  * afterwards: `withHashLocation()` makes a `goto('/#/x')` same-document, so `APP_INITIALIZER` would
  * not otherwise re-run and the session would not be picked up.
+ *
+ * Credentials from `NUXEO_USER` / `NUXEO_PASS`, with no default: unset, this throws rather than
+ * signing in as the local Docker administrator, which both halves used to fall back to
+ * (NXSAT-649). Both audits check first and exit 2, so this is the backstop, not the message.
  */
 export async function signIn(page, baseUrl) {
-  const user = process.env['NUXEO_USER'] ?? 'Administrator';
-  const pass = process.env['NUXEO_PASS'] ?? 'Administrator';
+  const { username: user, password: pass } = requireNuxeoCredentials(
+    'sign the pseudo-locale audit in',
+  );
 
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' });
   await page.waitForTimeout(800);
