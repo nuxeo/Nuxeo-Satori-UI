@@ -73,6 +73,8 @@ Set `multiple` and bind an array: `readonly string[]` through
 the last chip emits `[]`. Without `multiple`, the value remains one uid or path or
 `null`. Typing an unselected term is an `nxsChooseFromList` error in either mode, even when
 other chips are selected. Resetting the form replaces all chips and clears the pending query.
+Changing `multiple` refreshes the displayed selection and clears any pending query without
+emitting a value change.
 Stored ids are resolved independently; missing or unreadable documents remain as chips labelled by their id. `idProperty="path"` applies to every reference. `documentChange` keeps reporting the individual document selected, or `null` on removal; the ordered array is available from `valueChange`.
 
 <Canvas of={ReferenceStories.Multiple} />

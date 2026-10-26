@@ -369,4 +369,26 @@ describe('NxsDocumentReferenceInputComponent', () => {
     expect(chips()).toHaveLength(0);
     expect(input().value).toBe('');
   });
+
+  it('refreshes the displayed selection when multiple changes without a new value', async () => {
+    nxqlSearch.mockReturnValue(of({ entries: [doc('c1', 'Contract')] }));
+    const picker = TestBed.createComponent(NxsDocumentReferenceInputComponent);
+    picker.componentRef.setInput('label', 'Related contract');
+    picker.componentRef.setInput('value', 'c1');
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('Contract');
+
+    picker.componentRef.setInput('multiple', true);
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('');
+    expect(picker.nativeElement.querySelector('mat-chip-row').textContent.trim()).toBe('Contract');
+    expect(picker.componentInstance.validate(new FormControl())).toBeNull();
+
+    picker.componentRef.setInput('multiple', false);
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('Contract');
+  });
 });

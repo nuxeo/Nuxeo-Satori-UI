@@ -138,6 +138,7 @@ export class NxsDocumentReferenceInputComponent
   private readonly lookups = new Subject<{ ids: readonly string[]; idProperty: 'uid' | 'path' }>();
   /** The value the field last set itself, so its own changes are not mistaken for a host's. */
   private committed: string | readonly string[] | null = null;
+  private committedMultiple = false;
   private lookupProperty: 'uid' | 'path' = 'uid';
 
   /** The document the value names, once known: chosen here, or looked up from a stored uid. */
@@ -215,15 +216,21 @@ export class NxsDocumentReferenceInputComponent
     effect(() => {
       const value = this.value();
       const idProperty = this.idProperty();
-      this.multiple();
+      const multiple = this.multiple();
       untracked(() => {
-        if (value === this.committed && idProperty === this.lookupProperty) return;
+        if (
+          value === this.committed &&
+          idProperty === this.lookupProperty &&
+          multiple === this.committedMultiple
+        )
+          return;
         this.committed = value;
+        this.committedMultiple = multiple;
         this.lookupProperty = idProperty;
         this.finder.reset();
         this.document.set(null);
         this.references.set(new Map());
-        this.text.set(this.multiple() ? '' : (this.chosen()[0] ?? ''));
+        this.text.set(multiple ? '' : (this.chosen()[0] ?? ''));
         this.lookups.next({ ids: this.chosen(), idProperty });
       });
     });

@@ -66,6 +66,8 @@ Set `multiple` and bind an array: `readonly NxsPrincipal[]` through
 the last chip emits `[]`. Without `multiple`, the value remains one principal or
 `null`. Typing an unselected term is an `nxsChooseFromList` error in either mode, even when
 other chips are selected. Resetting the form replaces all chips and clears the pending query.
+Changing `multiple` refreshes the displayed selection and clears any pending query without
+emitting a value change.
 
 
 <Canvas of={PickerStories.Multiple} />

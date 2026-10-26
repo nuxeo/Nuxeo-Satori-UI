@@ -303,6 +303,32 @@ describe('NxsUserGroupPickerComponent', () => {
   }
   const chips = (): HTMLElement[] => [...root().querySelectorAll<HTMLElement>('mat-chip-row')];
 
+  it('refreshes the displayed selection when multiple changes without a new value', async () => {
+    const picker = TestBed.createComponent(NxsUserGroupPickerComponent);
+    picker.componentRef.setInput('label', 'Grant to');
+    picker.componentRef.setInput('value', {
+      id: 'jdoe',
+      label: 'Jane Doe',
+      kind: 'user',
+      prefixedId: 'user:jdoe',
+    });
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('Jane Doe');
+
+    picker.componentRef.setInput('multiple', true);
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('');
+    expect(picker.nativeElement.querySelector('mat-chip-row').textContent.trim()).toBe('Jane Doe');
+    expect(picker.componentInstance.validate(new FormControl())).toBeNull();
+
+    picker.componentRef.setInput('multiple', false);
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('Jane Doe');
+  });
+
   it('collects distinct principals in order and keeps them when typing the next search', async () => {
     await multiple();
     await type('adm');

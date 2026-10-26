@@ -116,6 +116,7 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   private readonly control = new NxsPickerControl<NxsPrincipal | readonly NxsPrincipal[] | null>();
 
   private committed: NxsPrincipal | readonly NxsPrincipal[] | null = null;
+  private committedMultiple = false;
 
   /** What the input shows: the chosen principal's label, or what the user is typing. */
   protected readonly text = signal('');
@@ -169,12 +170,13 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   constructor() {
     effect(() => {
       const value = this.value();
-      this.multiple();
+      const multiple = this.multiple();
       untracked(() => {
-        if (value === this.committed) return;
+        if (value === this.committed && multiple === this.committedMultiple) return;
         this.committed = value;
+        this.committedMultiple = multiple;
         this.finder.reset();
-        this.text.set(this.multiple() ? '' : (this.chosen()[0]?.label ?? ''));
+        this.text.set(multiple ? '' : (this.chosen()[0]?.label ?? ''));
       });
     });
     effect(() => {
