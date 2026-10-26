@@ -50,7 +50,7 @@ describe('platform nav Trash focus unobscured (NXENG-868)', () => {
     expect(getComputedStyle(list).minHeight).toBe('0px');
   });
 
-  it('fits all 15 destinations below the logo at a 900px desktop height (NXSAT-213)', () => {
+  it('fits every fixture destination below the logo at a 900px desktop height (NXSAT-213)', () => {
     const panel = fixture.nativeElement.querySelector('.sat-platform-nav-panel') as HTMLElement;
     const list = fixture.nativeElement.querySelector(NAV_LIST_SELECTOR) as HTMLElement;
     panel.style.height = '900px';
@@ -71,7 +71,9 @@ describe('platform nav Trash focus unobscured (NXENG-868)', () => {
     panel.style.height = '480px';
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(getComputedStyle(list).scrollbarWidth).toBe('thin');
-    expect(getComputedStyle(list, '::-webkit-scrollbar').display).not.toBe('none');
+    // The rendered gutter, not the pseudo-element's style: Chromium ignores
+    // `::-webkit-scrollbar` once `scrollbar-width` is set, so that could not fail.
+    expect(list.offsetWidth - list.clientWidth).toBeGreaterThan(0);
   });
 
   it('scrolls Trash fully into view when it receives keyboard focus', () => {
