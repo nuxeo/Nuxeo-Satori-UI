@@ -13,7 +13,9 @@ This guide explains how to set up GPG commit signing for GitHub Actions bot comm
 
 The following workflows create bot commits that need signing:
 
-- `changelog.yml` - Automatic CHANGELOG.md updates on main branch pushes
+- `release.yml` - Version bump and changelog commit on a manual release
+
+`changelog.yml`, which committed CHANGELOG.md updates on every push to `main`, has been removed.
 
 ## Setup Steps
 
@@ -91,8 +93,8 @@ To show the "Verified" badge on bot commits:
 
 ### 6. Test the Setup
 
-1. Make a change that triggers the changelog workflow
-2. Push to main branch
+1. Run the release workflow
+2. Let it push its version-bump commit
 3. Check that the bot commit shows "Verified" badge
 4. Verify with: `git log --show-signature`
 
@@ -121,7 +123,7 @@ If you prefer to avoid bot commits in the repository history, consider these alt
 
 ### Option A: Manual Changelog Updates
 
-- Remove the automatic changelog workflow
+- Remove the automatic changelog workflow (done: `changelog.yml` has been removed)
 - Update CHANGELOG.md manually as part of the release process
 - Include changelog updates in feature PRs
 

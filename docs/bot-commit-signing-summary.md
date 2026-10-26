@@ -4,12 +4,7 @@
 
 ### 1. Modified Workflows
 
-Two workflows have been updated to support GPG commit signing:
-
-#### [changelog.yml:36-43](../.github/workflows/changelog.yml#L36-L43)
-
-- Added `Import GPG key` step before committing CHANGELOG.md updates
-- Conditional on `GPG_BOT_SIGNING_ENABLED` variable
+One workflow has been updated to support GPG commit signing (`changelog.yml` also was, and has since been removed):
 
 #### [release.yml:42-48](../.github/workflows/release.yml#L42-L48)
 
@@ -18,7 +13,7 @@ Two workflows have been updated to support GPG commit signing:
 
 ### 2. How It Works
 
-When enabled, the workflows will:
+When enabled, the workflow will:
 
 1. Import a GPG private key from repository secrets
 2. Configure git to automatically sign commits
@@ -73,7 +68,7 @@ gpg --armor --export YOUR_KEY_ID > bot-public.asc
    - **Leave as-is** (unsigned bot commits, simpler but less secure)
 
 3. **If enabling signing**, follow setup steps in the full guide
-4. **Test** by triggering the changelog workflow
+4. **Test** by triggering the release workflow
 
 ## Security Note
 
@@ -88,7 +83,7 @@ The GPG private key and passphrase are sensitive secrets. Ensure:
 
 If you prefer to avoid bot commits entirely:
 
-1. Remove or disable the `changelog.yml` workflow
+1. Remove or disable the `changelog.yml` workflow (done: it has been removed)
 2. Update CHANGELOG.md manually as part of releases
 3. Consider using GitHub Releases for changelogs instead
 
