@@ -290,15 +290,36 @@ interface NxsBannerAction {
 }
 type NxsBannerAnnounce = 'alert' | 'none' | 'status';
 class NxsBannerComponent implements NxsBannerInputs {
-    readonly message: _angular_core.InputSignal<string>;
-    readonly tone: _angular_core.InputSignal<NxsBannerTone>;
-    readonly announce: _angular_core.InputSignal<NxsBannerAnnounce>;
-    readonly actions: _angular_core.InputSignal<readonly NxsBannerAction[]>;
-    protected readonly icon: _angular_core.Signal<string>;
-    protected readonly role: _angular_core.Signal<string | null>;
+    readonly message: import("@angular/core").InputSignal<string>;
+    readonly tone: import("@angular/core").InputSignal<NxsBannerTone>;
+    readonly announce: import("@angular/core").InputSignal<NxsBannerAnnounce>;
+    readonly actions: import("@angular/core").InputSignal<readonly NxsBannerAction[]>;
+    protected readonly icon: import("@angular/core").Signal<string>;
+    protected readonly role: import("@angular/core").Signal<string | null>;
     protected press(action: NxsBannerAction): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsBannerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsBannerComponent, "nxs-banner", never, { "message": { "alias": "message"; "required": false; "isSignal": true; }; "tone": { "alias": "tone"; "required": false; "isSignal": true; }; "announce": { "alias": "announce"; "required": false; "isSignal": true; }; "actions": { "alias": "actions"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsBannerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsBannerComponent, "nxs-banner", never, {
+    "message": {
+    "alias": "message";
+    "required": false;
+    "isSignal": true;
+    };
+    "tone": {
+    "alias": "tone";
+    "required": false;
+    "isSignal": true;
+    };
+    "announce": {
+    "alias": "announce";
+    "required": false;
+    "isSignal": true;
+    };
+    "actions": {
+    "alias": "actions";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsBannerInputs {
@@ -352,13 +373,31 @@ interface NxsChipItem {
     }
 }
 class NxsChipSetComponent implements NxsChipSetInputs {
-    readonly items: _angular_core.InputSignal<readonly NxsChipItem[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly removeHandler: _angular_core.InputSignal<((item: NxsChipItem) => void) | null>;
-    readonly removed: _angular_core.OutputEmitterRef<NxsChipItem>;
+    readonly items: import("@angular/core").InputSignal<readonly NxsChipItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly removeHandler: import("@angular/core").InputSignal<((item: NxsChipItem) => void) | null>;
+    readonly removed: import("@angular/core").OutputEmitterRef<NxsChipItem>;
     protected pressRemove(item: NxsChipItem): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsChipSetComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsChipSetComponent, "nxs-chip-set", never, { "items": { "alias": "items"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "removeHandler": { "alias": "removeHandler"; "required": false; "isSignal": true; }; }, { "removed": "removed"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsChipSetComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsChipSetComponent, "nxs-chip-set", never, {
+    "items": {
+    "alias": "items";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "removeHandler": {
+    "alias": "removeHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "removed": "removed";
+    }, never, never, true, never>;
     }
 }
 interface NxsChipSetInputs {
