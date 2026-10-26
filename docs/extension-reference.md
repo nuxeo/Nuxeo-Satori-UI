@@ -294,22 +294,22 @@ Find an entry's `labelKey` in `PACKAGED_NAV_ITEMS`; they follow `nav.item.<slug>
 
 Registered by `PACKAGED_NAV_ITEMS` in `libs/shared/extensions/src/lib/nav-items.ts`.
 
-| ID                              | Label               | Path                   | Order | Rule                                |
-| ------------------------------- | ------------------- | ---------------------- | ----- | ----------------------------------- |
-| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                   |
-| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                   |
-| `app.navbar.browse`             | Browse              | `/browse`              | 30    | —                                   |
-| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                   |
-| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                   |
-| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                   |
-| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                   |
-| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                   |
-| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | —                                   |
-| `app.navbar.collections`        | Collections         | `/collections`         | 110   | —                                   |
-| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                   |
-| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                   |
-| `app.navbar.trash`              | Trash               | `/trash`               | 140   | —                                   |
-| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess` |
+| ID                              | Label               | Path                   | Order | Rule                                | Notes    |
+| ------------------------------- | ------------------- | ---------------------- | ----- | ----------------------------------- | -------- |
+| `app.navbar.knowledgeDiscovery` | Knowledge Discovery | `/knowledge-discovery` | 10    | —                                   | Disabled |
+| `app.navbar.dashboard`          | Dashboard           | `/dashboard`           | 20    | —                                   | —        |
+| `app.navbar.browse`             | Browse              | `/browse`              | 30    | —                                   | —        |
+| `app.navbar.recentlyViewed`     | Recently viewed     | `/recently-viewed`     | 50    | —                                   | —        |
+| `app.navbar.search`             | Search filters      | `/search`              | 60    | —                                   | —        |
+| `app.navbar.expiredQueue`       | Expired Queue       | `/expired-queue`       | 70    | —                                   | —        |
+| `app.navbar.assets`             | Assets              | `/documents`           | 80    | —                                   | —        |
+| `app.navbar.tasks`              | Tasks               | `/tasks`               | 90    | —                                   | —        |
+| `app.navbar.favorites`          | Favorites           | `/favorites`           | 100   | —                                   | —        |
+| `app.navbar.collections`        | Collections         | `/collections`         | 110   | —                                   | —        |
+| `app.navbar.personalSpace`      | Personal Space      | `/personal-space`      | 120   | —                                   | —        |
+| `app.navbar.clipboard`          | Clipboard           | `/clipboard`           | 130   | —                                   | —        |
+| `app.navbar.trash`              | Trash               | `/trash`               | 140   | —                                   | —        |
+| `app.navbar.administration`     | Administration      | `/administration`      | 150   | `app.rules.hasAdministrationAccess` | —        |
 
 `app.navbar.browse` is the one browse entry, at `/browse`. The adf-hx proof of concept's entry,
 app.navbar.browseAdfHx at `/browse-adf-hx`, is **retired** with its route — written here without
