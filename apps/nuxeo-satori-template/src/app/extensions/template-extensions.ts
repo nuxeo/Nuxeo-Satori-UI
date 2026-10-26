@@ -71,7 +71,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: 'template.navbar.caseFile',
     label: 'Case File',
     path: '/case-file',
-    icon: 'folder_special',
+    icon: 'folder_shortcut',
     order: 15,
     rule: 'template.rules.isSignedIn',
   },
@@ -79,7 +79,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: 'template.navbar.components',
     label: 'UI Components',
     path: '/components',
-    icon: 'widgets',
+    icon: 'components',
     order: 25,
   },
   {
@@ -100,7 +100,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: 'template.navbar.reports',
     label: 'Reports',
     path: '/reports',
-    icon: 'assessment',
+    icon: 'table_chart',
     order: 40,
     // Gated in code. A manifest can still hide it outright, reorder it or
     // relabel it without this file changing.

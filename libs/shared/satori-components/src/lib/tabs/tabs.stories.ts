@@ -6,11 +6,11 @@ import { NxsTabsComponent } from './tabs.component';
 
 /** The packaged `tabs` slot of a File the user can manage, plus one a manifest adds. */
 const FILE_TABS: readonly NxsTab[] = [
-  { id: 'app.tabs.view', label: 'View', icon: 'visibility' },
+  { id: 'app.tabs.view', label: 'View', icon: 'display_properties' },
   { id: 'app.tabs.permissions', label: 'Permissions', icon: 'lock' },
-  { id: 'app.tabs.history', label: 'History', icon: 'history' },
+  { id: 'app.tabs.history', label: 'History', icon: 'clock' },
   { id: 'app.tabs.publishing', label: 'Publishing', icon: 'publish' },
-  { id: 'acme.tabs.claims', label: 'Claims', icon: 'assignment' },
+  { id: 'acme.tabs.claims', label: 'Claims', icon: 'tasks' },
 ];
 
 const BODY = `

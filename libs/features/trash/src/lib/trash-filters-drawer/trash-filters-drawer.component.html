@@ -49,9 +49,7 @@
     type="button"
     (click)="toggleLayout()"
   >
-    <mat-icon
-      [svgIcon]="trashFilterService.layoutMode() === 'filters' ? 'view_sidebar' : 'filter_list'"
-    />
+    <mat-icon [svgIcon]="trashFilterService.layoutMode() === 'filters' ? 'panel_open' : 'filter'" />
   </button>
 </div>
 

@@ -22,10 +22,7 @@
     "
     (click)="viewMode() === 'filter' ? switchToQueueView() : switchToFilterView()"
   >
-    <mat-icon
-      aria-hidden="true"
-      [svgIcon]="viewMode() === 'filter' ? 'bullet_list' : 'filter_list'"
-    />
+    <mat-icon aria-hidden="true" [svgIcon]="viewMode() === 'filter' ? 'bullet_list' : 'filter'" />
   </button>
 </div>
 

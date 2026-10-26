@@ -26,7 +26,7 @@ const FILE_TOOLBAR: readonly NxsToolbarAction[] = [
     overflow: true,
   },
   { id: 'app.toolbar.export', label: 'Export', icon: 'import_export', overflow: true },
-  { id: 'app.toolbar.startProcess', label: 'Start Process', icon: 'account_tree', overflow: true },
+  { id: 'app.toolbar.startProcess', label: 'Start Process', icon: 'processes', overflow: true },
 ];
 
 /**
