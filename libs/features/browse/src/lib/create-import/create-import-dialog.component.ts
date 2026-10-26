@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
 import {
   Component,
@@ -172,6 +173,7 @@ const DIALOG_SIZE = {
   standalone: true,
   imports: [
     DateMaskPipe,
+    NgTemplateOutlet,
     NxsBannerComponent,
     NxsChipSetComponent,
     NxsDocTypeIconComponent,

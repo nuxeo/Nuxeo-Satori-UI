@@ -461,13 +461,7 @@
                   (selectionChange)="natureSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (nature) {
-                      <nxs-chip-set
-                        class="subjects-trigger-chips"
-                        [items]="natureChips()"
-                        (removed)="clearNature()"
-                      />
-                    }
+                    <ng-container *ngTemplateOutlet="natureChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -500,11 +494,7 @@
                   (openedChange)="onSubjectsPanelOpen($event)"
                 >
                   <mat-select-trigger>
-                    <nxs-chip-set
-                      class="subjects-trigger-chips"
-                      [items]="subjectChips()"
-                      (removed)="removeSubject($event.id)"
-                    />
+                    <ng-container *ngTemplateOutlet="subjectsChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -544,13 +534,7 @@
                   (selectionChange)="coverageSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (coverage) {
-                      <nxs-chip-set
-                        class="subjects-trigger-chips"
-                        [items]="coverageChips()"
-                        (removed)="clearCoverage()"
-                      />
-                    }
+                    <ng-container *ngTemplateOutlet="coverageChip" />
                   </mat-select-trigger>
                   <div class="vocab-panel__search">
                     <input
@@ -674,13 +658,7 @@
                       (selectionChange)="importNatureSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (nature) {
-                          <nxs-chip-set
-                            class="subjects-trigger-chips"
-                            [items]="natureChips()"
-                            (removed)="clearNature()"
-                          />
-                        }
+                        <ng-container *ngTemplateOutlet="natureChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -715,11 +693,7 @@
                       (openedChange)="onSubjectsPanelOpen($event)"
                     >
                       <mat-select-trigger>
-                        <nxs-chip-set
-                          class="subjects-trigger-chips"
-                          [items]="subjectChips()"
-                          (removed)="removeSubject($event.id)"
-                        />
+                        <ng-container *ngTemplateOutlet="subjectsChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -759,13 +733,7 @@
                       (selectionChange)="importCoverageSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (coverage) {
-                          <nxs-chip-set
-                            class="subjects-trigger-chips"
-                            [items]="coverageChips()"
-                            (removed)="clearCoverage()"
-                          />
-                        }
+                        <ng-container *ngTemplateOutlet="coverageChip" />
                       </mat-select-trigger>
                       <div class="vocab-panel__search">
                         <input
@@ -1006,3 +974,31 @@
     </mat-dialog-actions>
   }
 </div>
+
+<ng-template #natureChip>
+  @if (nature) {
+    <nxs-chip-set
+      class="subjects-trigger-chips"
+      [items]="natureChips()"
+      (removed)="clearNature()"
+    />
+  }
+</ng-template>
+
+<ng-template #coverageChip>
+  @if (coverage) {
+    <nxs-chip-set
+      class="subjects-trigger-chips"
+      [items]="coverageChips()"
+      (removed)="clearCoverage()"
+    />
+  }
+</ng-template>
+
+<ng-template #subjectsChip>
+  <nxs-chip-set
+    class="subjects-trigger-chips"
+    [items]="subjectChips()"
+    (removed)="removeSubject($event.id)"
+  />
+</ng-template>
