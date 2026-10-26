@@ -66,11 +66,11 @@ let nextId = 0;
  * - `readOnly` shows the tags without the box or the remove buttons. Web UI's rule for it is
  *   `canTagDocument`: Write on the document itself, not a version or a proxy.
  *
- * Changes are sent one at a time, in order, so an answer can never overwrite a later one. They are
- * held at the root, not by the editor, so closing the panel or moving to another document neither
- * cancels a change nor drops the ones queued behind it. `tagsChange` hands the document's tags to
- * the host after each saved change — or, for a change answered while no editor was open, when the
- * next editor for that document appears.
+ * Changes are sent one at a time, in order, so an answer can never overwrite a later one, and
+ * closing the editor or moving it to another document neither cancels a change nor drops the ones
+ * queued behind it. `tagsChange` hands the document's tags to the host after each saved change —
+ * or, with `provideNxsTagWrites()` installed, for a change answered while no editor was open, when
+ * the next editor for that document appears.
  */
 @Component({
   selector: 'nxs-tag-editor',
@@ -95,7 +95,9 @@ let nextId = 0;
 })
 export class NxsTagEditorComponent {
   private readonly tagService = inject(TagService);
-  private readonly writes = inject(NxsTagWrites);
+  // The host's, from `provideNxsTagWrites()`; otherwise this editor's own, which still finishes
+  // its changes after the editor closes but cannot hand their answers to the next one.
+  private readonly writes = inject(NxsTagWrites, { optional: true }) ?? new NxsTagWrites();
 
   /** The document to tag. */
   readonly documentUid = input.required<string>();
@@ -121,9 +123,7 @@ export class NxsTagEditorComponent {
   /** This document's tags on their way in, from the changes still queued. */
   protected readonly adding = computed(() => this.queued('add'));
   /** This document's tags on their way out. */
-  protected readonly removing = computed<ReadonlySet<string>>(
-    () => new Set(this.queued('remove')),
-  );
+  protected readonly removing = computed<ReadonlySet<string>>(() => new Set(this.queued('remove')));
   protected readonly term = signal('');
   private readonly suggestions = signal<readonly string[]>([]);
 

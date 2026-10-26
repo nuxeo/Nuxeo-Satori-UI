@@ -1666,10 +1666,13 @@ remove immediately and apply the returned tags to their document state.
 `nxs-date-input` makes no request.
 
 **Usage:** Add permission and saved-search sharing use `nxs-user-group-picker`, with its default
-three-character minimum. A selected `NxsPrincipal` supplies the raw username or group id for
-document permission writes, and its label and kind for saved-search permission entries. Editing
-the text clears the selection; failed searches remain retryable in the picker. Browse and document
-detail use `nxs-tag-editor` for immediate saves, with `canTagDocument` controlling read-only state.
+three-character minimum. A selected `NxsPrincipal` supplies the raw username or group id for both
+document and saved-search permission writes — never its label, which is a display name — and its
+kind for the saved-search entry's `grantedBy`. Editing the text clears the selection; failed
+searches remain retryable in the picker. Browse and document detail use `nxs-tag-editor` for
+immediate saves, with `canTagDocument` controlling read-only state. Its writes are queued by
+`provideNxsTagWrites()` in the app config, so closing the panel or moving to another document
+mid-write neither cancels a change nor drops the ones behind it.
 `nxs-tag-input` remains a form control for labels that are saved with a form.
 
 ---

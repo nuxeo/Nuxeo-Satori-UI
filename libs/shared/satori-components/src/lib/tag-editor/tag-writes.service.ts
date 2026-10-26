@@ -6,6 +6,7 @@ import {
   inject,
   Injectable,
   signal,
+  type Provider,
 } from '@angular/core';
 import { TranslateService } from '@ngx-translate/core';
 import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
@@ -24,12 +25,12 @@ export interface NxsTagWrite {
 
 /** What the server answered to one write: the document's tags afterwards, or why not. */
 export type NxsTagAnswer = { readonly write: NxsTagWrite } & (
-  | { readonly tags: string[] }
-  | { readonly error: unknown }
+  { readonly tags: string[] } | { readonly error: unknown }
 );
 
 /**
- * The tag editor's writes, held at the root so they outlive the editor that made them.
+ * The tag editor's writes, held by the injector that provides them so they outlive the editor that
+ * made them.
  *
  * A host shows the editor in a tab or a panel the user can close while a change is still on its
  * way. Destroying the editor used to cancel that request and drop every change queued behind it,
@@ -41,9 +42,9 @@ export type NxsTagAnswer = { readonly write: NxsTagWrite } & (
  * document takes it, so a reopened panel shows what Nuxeo stored rather than the tags the host
  * loaded before the change.
  *
- * Not exported: it is how the editor keeps its promise, not something a host calls.
+ * Not exported: a host installs it with `provideNxsTagWrites()`, and only the editor calls it.
  */
-@Injectable({ providedIn: 'root' })
+@Injectable()
 export class NxsTagWrites {
   private readonly tagService = inject(TagService);
   private readonly translate = inject(TranslateService);
@@ -67,14 +68,14 @@ export class NxsTagWrites {
   readonly answers: Observable<NxsTagAnswer> = this.answered.asObservable();
 
   constructor() {
-    // Not tied to any view: the root lives as long as the app, and so must a change the user made.
-    this.queue.pipe(concatMap((write) => this.send(write))).subscribe((answer) => {
-      this.settle(answer);
+    // When the provider goes, no change is taken any more, but those already made are still sent
+    // and answered: completing the queue lets `concatMap` finish them, where unsubscribing would
+    // cancel the one in flight and drop the rest.
+    this.queue.pipe(concatMap((write) => this.send(write))).subscribe({
+      next: (answer) => this.settle(answer),
+      complete: () => this.toastInjector.destroy(),
     });
-    inject(DestroyRef).onDestroy(() => {
-      this.queue.complete();
-      this.toastInjector.destroy();
-    });
+    inject(DestroyRef).onDestroy(() => this.queue.complete());
   }
 
   /** Queues a change to `uid`'s tags, which the caller last saw as `tags`. */
@@ -140,4 +141,21 @@ export class NxsTagWrites {
         : `satori-components.tag-editor.error.${change}`;
     return this.translate.instant(key, { tag });
   }
+}
+
+/**
+ * Keeps `nxs-tag-editor`'s changes for as long as the injector it is listed in, so one the user
+ * made is never cancelled or dropped by the editor closing first — a tab or panel switched away, or
+ * the host moving to another document. An answer that arrives with no editor open is shown by the
+ * next editor for that document, which passes it on in `tagsChange`.
+ *
+ * List it once, in the application's providers. A host and a remote share the instance the host
+ * provides; a `providedIn` singleton would become one per side of a federation boundary.
+ *
+ * Without it, each editor keeps its own: its changes are still sent and answered after it closes,
+ * with their toasts, but a reopened editor shows the tags its host passes in until the host
+ * reloads the document.
+ */
+export function provideNxsTagWrites(): Provider {
+  return NxsTagWrites;
 }

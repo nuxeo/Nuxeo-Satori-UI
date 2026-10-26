@@ -11,10 +11,12 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { of, Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { testTranslateProviders } from '@agentic-ui/testing/i18n';
 import { TagService } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { NxsToastService } from '../toast/toast.service';
 import { NxsTagEditorComponent } from './tag-editor.component';
+import { provideNxsTagWrites } from './tag-writes.service';
 
 @Component({
   standalone: true,
@@ -87,18 +89,29 @@ describe('NxsTagEditorComponent', () => {
     await settle();
   }
 
-  beforeEach(async () => {
-    tags = { addTag: vi.fn(), removeTag: vi.fn(), suggestTags: vi.fn(() => of([])) };
-    toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
-    toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
+  /**
+   * As the app runs it: with `provideNxsTagWrites()` at the root, unless told otherwise. It resets
+   * the module, so it lists the translations the test setup would otherwise have provided.
+   */
+  async function configure({ writes = true } = {}): Promise<void> {
+    TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
       imports: [HostComponent],
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
+        testTranslateProviders(),
         { provide: TagService, useValue: tags },
+        ...(writes ? [provideNxsTagWrites()] : []),
       ],
     }).compileComponents();
+  }
+
+  beforeEach(async () => {
+    tags = { addTag: vi.fn(), removeTag: vi.fn(), suggestTags: vi.fn(() => of([])) };
+    toastShow = vi.spyOn(NxsToastService.prototype, 'show').mockImplementation(() => undefined);
+    toastError = vi.spyOn(NxsToastService.prototype, 'error').mockImplementation(() => undefined);
+    await configure();
   });
 
   afterEach(() => {
@@ -460,7 +473,9 @@ describe('NxsTagEditorComponent', () => {
       expect(tags.removeTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
       expect(closed.changes).toEqual([]);
       expect(toastShow).toHaveBeenCalledWith('The tag invoice has been added to the document.');
-      expect(toastShow).toHaveBeenCalledWith('The tag contract has been removed from the document.');
+      expect(toastShow).toHaveBeenCalledWith(
+        'The tag contract has been removed from the document.',
+      );
 
       // Reopened with the tags the host loaded before the change: it catches up once, and only once.
       await mount();
@@ -470,6 +485,34 @@ describe('NxsTagEditorComponent', () => {
       host.tags.set(['q3', 'invoice']);
       await settle();
       expect(host.changes).toEqual([['q3', 'invoice']]);
+    });
+
+    it('without provideNxsTagWrites, still finishes the changes of a closed editor', async () => {
+      await configure({ writes: false });
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+      fixture.destroy();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      expect(tags.removeTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
+      expect(toastShow).toHaveBeenCalledWith(
+        'The tag contract has been removed from the document.',
+      );
+
+      // The documented limit: the next editor has its own writes, so it shows what the host passes.
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
+      expect(host.changes).toEqual([]);
     });
 
     it('still says a change failed when the editor was closed before the answer', async () => {
