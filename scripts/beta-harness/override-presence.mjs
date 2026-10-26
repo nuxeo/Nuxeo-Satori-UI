@@ -89,15 +89,13 @@ function indexLock(packages) {
       Object.entries(entry[kind] ?? {}).map(([name, spec]) => ({ name, spec })),
     );
     const at = path.lastIndexOf('node_modules/');
-    // An npm alias (`"foo": "npm:bar@1"`) sits at `node_modules/foo` with `name: "bar"`. Its
-    // dependents' edges say `foo`, so it is indexed under both names; indexing only `name` would
-    // break the walk at the alias and report a reachable child as stale.
-    const names = new Set(
-      [at >= 0 ? path.slice(at + 'node_modules/'.length) : null, entry.name].filter(Boolean),
-    );
-    for (const name of names) {
-      index.set(name, [...(index.get(name) ?? []), { version: entry.version, edges }]);
-    }
+    // An npm alias (`"foo": "npm:bar@1"`) sits at `node_modules/foo` with `name: "bar"`. npm
+    // matches override keys against dependency-edge names, and its dependents' edges say `foo`, so
+    // it is indexed under its installation name only; indexing `bar` would accept an override that
+    // affects nothing. Its own edges are kept, so the walk still passes through it.
+    const name = at >= 0 ? path.slice(at + 'node_modules/'.length) : entry.name;
+    if (!name) continue;
+    index.set(name, [...(index.get(name) ?? []), { version: entry.version, edges }]);
   }
   return { index, requests };
 }
@@ -234,7 +232,7 @@ const CONTROLS = [
   ['nested, transitive child', { a: { c: '1.4.1' } }, []],
   ['nested, reached through a peer', { '@s/p': { c: '1.4.1' } }, []],
   ['nested, "." pinning the parent itself', { a: { '.': '1.0.1' } }, []],
-  ['npm alias, by its real name', { real: '1.0.1' }, []],
+  ['npm alias, by its real name', { real: '1.0.1' }, ['real']],
   ['nested, reached through an npm alias', { y: { c: '1.4.1' } }, []],
   ['absent package', { zzz: '1.0.0' }, ['zzz']],
   ['absent scoped package', { '@s/q': '1.0.0' }, ['@s/q']],
