@@ -78,7 +78,9 @@ describe('NxsActionMenuComponent', () => {
     expect(trigger()?.getAttribute('aria-label')).toBe('Folder actions');
     expect(tooltip()).toBe('Folder actions');
     expect(trigger()?.getAttribute('aria-haspopup')).toBe('menu');
-    expect(trigger()?.textContent?.trim()).toBe('more_vert');
+    expect(trigger()?.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe(
+      'more_vert',
+    );
   });
 
   it.each([' \n\t ', '\u200b', '\u2060\ufeff'])(
@@ -97,7 +99,9 @@ describe('NxsActionMenuComponent', () => {
     host.icon.set('settings');
     await render();
 
-    expect(trigger()?.textContent?.trim()).toBe('settings');
+    expect(trigger()?.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe(
+      'settings',
+    );
   });
 
   it('lists every entry in order, by label and action ID', async () => {
@@ -109,9 +113,9 @@ describe('NxsActionMenuComponent', () => {
       'app.contextMenu.export',
     ]);
     expect(items().map((node) => node.textContent?.trim())).toEqual([
-      'shareShare',
+      'Share',
       'Subscribe',
-      'downloadExport',
+      'Export',
     ]);
     expect(
       item('app.contextMenu.share').querySelector('mat-icon')?.getAttribute('aria-hidden'),

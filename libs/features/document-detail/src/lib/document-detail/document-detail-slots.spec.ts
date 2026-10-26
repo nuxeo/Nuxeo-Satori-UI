@@ -626,7 +626,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Archive');
       const icon = button.querySelector('mat-icon');
       expect(icon?.getAttribute('aria-hidden')).toBe('true');
-      expect(icon?.textContent?.trim()).toBe('inventory_2');
+      expect(icon?.getAttribute('data-mat-icon-name')).toBe('inventory_2');
     });
 
     /** The shipped default is unchanged: the packaged ids are the ones that render. */
@@ -670,7 +670,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         ),
       ) as HTMLButtonElement[];
       const button = buttons.find(
-        (b) => b.querySelector('mat-icon')?.getAttribute('svgicon') === 'more_vert',
+        (b) => b.querySelector('mat-icon')?.getAttribute('data-mat-icon-name') === 'more_vert',
       );
       expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
       expect(

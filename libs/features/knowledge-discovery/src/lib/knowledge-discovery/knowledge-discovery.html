@@ -21,7 +21,7 @@
   </header>
 
   @if (agentsError()) {
-    <sat-banner variant="important">
+    <sat-banner class="kd-banner--error" variant="important">
       <sat-banner-message>{{ agentsError() }}</sat-banner-message>
     </sat-banner>
     @if (debugMode() && agentsErrorDetail(); as detail) {
@@ -77,7 +77,7 @@
     }
   }
   @if (agentDetailsError()) {
-    <sat-banner variant="important">
+    <sat-banner class="kd-banner--error" variant="important">
       <sat-banner-message>{{ agentDetailsError() }}</sat-banner-message>
     </sat-banner>
     @if (debugMode() && agentDetailsErrorDetail(); as detail) {

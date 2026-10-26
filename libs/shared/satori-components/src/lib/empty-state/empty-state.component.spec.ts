@@ -101,7 +101,7 @@ describe('NxsEmptyStateComponent', () => {
     host.icon.set('folder_open');
     await render();
     const icon = query('mat-icon');
-    expect(icon?.textContent?.trim()).toBe('folder_open');
+    expect(icon?.getAttribute('data-mat-icon-name')).toBe('folder_open');
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 

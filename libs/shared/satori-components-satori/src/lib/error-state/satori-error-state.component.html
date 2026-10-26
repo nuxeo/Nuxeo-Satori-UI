@@ -1,8 +1,21 @@
+@let level = headingLevel();
 @switch (status()) {
   @case (401) {
     <sat-401-error-state>
       @if (ownHeading()) {
-        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        @if (level === 1) {
+          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
+        } @else if (level === 3) {
+          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
+        } @else if (level === 4) {
+          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
+        } @else if (level === 5) {
+          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
+        } @else if (level === 6) {
+          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
+        } @else {
+          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        }
       }
       @if (canRetry()) {
         <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
@@ -16,7 +29,19 @@
   @case (403) {
     <sat-403-error-state>
       @if (ownHeading()) {
-        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        @if (level === 1) {
+          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
+        } @else if (level === 3) {
+          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
+        } @else if (level === 4) {
+          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
+        } @else if (level === 5) {
+          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
+        } @else if (level === 6) {
+          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
+        } @else {
+          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        }
       }
       @if (canRetry()) {
         <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
@@ -30,7 +55,19 @@
   @case (404) {
     <sat-404-error-state>
       @if (ownHeading()) {
-        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        @if (level === 1) {
+          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
+        } @else if (level === 3) {
+          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
+        } @else if (level === 4) {
+          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
+        } @else if (level === 5) {
+          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
+        } @else if (level === 6) {
+          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
+        } @else {
+          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        }
       }
       @if (canRetry()) {
         <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
@@ -44,7 +81,19 @@
   @default {
     <sat-500-error-state>
       @if (ownHeading()) {
-        <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        @if (level === 1) {
+          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
+        } @else if (level === 3) {
+          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
+        } @else if (level === 4) {
+          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
+        } @else if (level === 5) {
+          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
+        } @else if (level === 6) {
+          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
+        } @else {
+          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+        }
       }
       @if (canRetry()) {
         <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">

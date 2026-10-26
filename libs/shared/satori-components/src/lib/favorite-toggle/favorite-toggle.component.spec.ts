@@ -57,7 +57,7 @@ describe('NxsFavoriteToggleComponent', () => {
   }
 
   function icon(): string {
-    return button().querySelector('mat-icon')?.textContent?.trim() ?? '';
+    return button().querySelector('mat-icon')?.getAttribute('data-mat-icon-name') ?? '';
   }
 
   beforeEach(async () => {
@@ -87,7 +87,7 @@ describe('NxsFavoriteToggleComponent', () => {
     expect(button().getAttribute('type')).toBe('button');
     expect(button().getAttribute('aria-label')).toBe('Favorite');
     expect(button().getAttribute('aria-pressed')).toBe('false');
-    expect(icon()).toBe('star_border');
+    expect(icon()).toBe('star');
     expect(button().querySelector('mat-icon')?.getAttribute('aria-hidden')).toBe('true');
 
     host.favorite.set(true);
@@ -95,7 +95,7 @@ describe('NxsFavoriteToggleComponent', () => {
 
     expect(button().getAttribute('aria-label')).toBe('Favorite');
     expect(button().getAttribute('aria-pressed')).toBe('true');
-    expect(icon()).toBe('star');
+    expect(icon()).toBe('star_filled');
     expect(button().classList.contains('nxs-favorite-toggle__button--on')).toBe(true);
   });
 

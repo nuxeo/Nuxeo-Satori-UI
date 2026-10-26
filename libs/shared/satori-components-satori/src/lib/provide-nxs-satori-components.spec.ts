@@ -314,7 +314,7 @@ describe('the Satori primitives, rendered by ID', () => {
     });
     const trigger = host.querySelector('nxs-satori-rich-tooltip button');
     expect(trigger?.getAttribute('aria-label')).toBe('About versioning');
-    expect(trigger?.querySelector('mat-icon')?.textContent?.trim()).toBe('info');
+    expect(trigger?.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe('info');
     expect(host.querySelector('nxs-satori-rich-tooltip sat-rich-tooltip')).not.toBeNull();
   });
 });

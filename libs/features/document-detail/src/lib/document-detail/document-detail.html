@@ -168,7 +168,11 @@
   </div>
 
   @if (keStatus() || keError()) {
-    <sat-banner [variant]="keError() ? 'important' : 'info'" [border]="true">
+    <sat-banner
+      [class.ke-status-banner--error]="keError()"
+      [variant]="keError() ? 'important' : 'info'"
+      [border]="true"
+    >
       <sat-banner-message>{{ keError() || keStatus() }}</sat-banner-message>
     </sat-banner>
   }
@@ -212,15 +216,22 @@
   }
 
   @if (isVersionView()) {
-    <sat-banner variant="info" [border]="true">
+    <sat-banner class="version-banner" variant="info" [border]="true">
       <sat-banner-message>{{
         'document-detail.version-viewing' | translate: { version: versionLabel() }
       }}</sat-banner-message>
-      <button mat-button type="button" satBannerAction (click)="showLatestVersion()">
+      <button
+        class="version-banner-latest"
+        mat-button
+        type="button"
+        satBannerAction
+        (click)="showLatestVersion()"
+      >
         {{ 'document-detail.version-go-to-latest' | translate }}
       </button>
       @if (canRestoreVersion()) {
         <button
+          class="version-banner-restore"
           mat-flat-button
           type="button"
           satBannerAction
@@ -1151,7 +1162,7 @@
             </div>
 
             @if (aiError()) {
-              <sat-banner variant="important">
+              <sat-banner class="ai-error-banner" variant="important">
                 <sat-banner-message>{{ aiError() }}</sat-banner-message>
               </sat-banner>
             }

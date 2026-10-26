@@ -91,7 +91,7 @@ describe('NxsFolderHeaderComponent', () => {
 
   it('shows the type’s icon, decorative beside the title', () => {
     const icon = query('nxs-doc-type-icon mat-icon');
-    expect(icon?.textContent?.trim()).toBe('folder');
+    expect(icon?.getAttribute('data-mat-icon-name')).toBe('folder');
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 
