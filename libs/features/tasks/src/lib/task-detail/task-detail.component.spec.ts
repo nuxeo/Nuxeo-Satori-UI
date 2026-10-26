@@ -758,8 +758,8 @@ describe('TaskDetailComponent', () => {
     it('picks an icon per action kind', () => {
       expect(component.actionIcon({ name: 'approve' })).toBe('circle_check');
       expect(component.actionIcon({ name: 'validate' })).toBe('circle_check');
-      expect(component.actionIcon({ name: 'reject' })).toBe('cancel');
-      expect(component.actionIcon({ name: 'start_review' })).toBe('play_arrow');
+      expect(component.actionIcon({ name: 'reject' })).toBe('x_large');
+      expect(component.actionIcon({ name: 'start_review' })).toBe('triangle_right');
       expect(component.actionIcon({ name: 'cancel_workflow' })).toBe('block');
       expect(component.actionIcon({ name: 'comment' })).toBe('send');
     });
