@@ -17,7 +17,7 @@ On GitHub they show as missing images, by design.
 
 ## Summary
 
-The `nxs-` library renders the same pages whether or not a customer has access to Satori. Four primitives — avatar, tag, breadcrumbs and rich tooltip — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs. A fifth registered ID, the error state's, has only the built-in version until Satori's error states can be installed.
+The `nxs-` library renders the same pages whether or not a customer has access to Satori. Eight primitives — avatar, tag, status tag, breadcrumbs, rich tooltip, error state, tabs and the document toolbar's action bar — exist twice, under one registered ID each: a built-in version in `@nuxeo/satori-platform/components`, and a thin wrapper around Satori's own component in `@nuxeo/satori-platform/components-satori`. Every other component is the same component in both cases; only the theme differs.
 
 > **Note:** the library is not published yet; this page describes the configuration it is built to support.
 
@@ -37,7 +37,7 @@ A page never names a component; it asks for the ID, e.g. `nxs.primitives.avatar`
 
 Install `@hylandsoftware/satori-ui` from GitHub Packages (this needs a token) alongside our library.
 
-Register the providers `provideSatori()` (theme and icons), `provideNxsComponents()`, then `provideNxsSatoriComponents()` — the later registration wins, so every avatar, tag, breadcrumb and rich-tooltip slot renders `<sat-avatar>`, `<sat-category-tag>`, `<sat-breadcrumbs>` and `<sat-rich-tooltip>` in Satori's theme.
+Register the providers `provideSatori()` (theme and icons), `provideNxsComponents()`, then `provideNxsSatoriComponents()` — the later registration wins, so everything rendered by one of these IDs renders Satori's component in Satori's theme: `<sat-avatar>`, `<sat-category-tag>`, `<sat-status-tag>`, `<sat-breadcrumbs>`, `<sat-rich-tooltip>`, the error states, `<sat-navigation-tabs>`, and Satori's action-bar buttons.
 
 The Satori components also need Satori's translation strings: register `provideAndConfigureSatoriUITranslations()` from `@hylandsoftware/satori-ui/translations`, or add Satori's `sat.*` strings to your own translation loader. Without them, the breadcrumbs' "Show more breadcrumbs" button, the breadcrumbs' screen-reader name when no `label` is given, and the rich tooltip's close hint show raw translation keys.
 
@@ -51,7 +51,7 @@ Install from public npm only. Satori is an optional peer, so the install succeed
 
 Register only `provideNxsComponents()`; the same IDs render the built-in `nxs-` versions. Same page template, IDs and inputs.
 
-The whole app takes the customer's own Material theme, not only these four.
+The whole app takes the customer's own Material theme, not only these eight.
 
 ## Satori installed but not registered
 
@@ -59,7 +59,7 @@ Leaving out `provideNxsSatoriComponents()` gives the built-in versions; nothing 
 
 ## Side by side
 
-Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The four primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
+Every component in the library, with the same inputs on both sides: on the left without Satori (built-in components, Material theme), on the right with Satori. The eight primitives with a Satori variant render Satori's own component when Satori is registered, and come from the "Primitives/By registered ID" story, whose template and inputs are the same in both Storybooks — only what is registered differs. Every other component is the same story under Satori's theme.
 
 ### Avatar
 
@@ -518,31 +518,33 @@ Save as, Save and the menu button for a saved search the user owns, with its fil
 
 ### Document toolbar
 
-| Field           | Value                                                     |
-| --------------- | --------------------------------------------------------- |
-| Component       | `NxsDocumentToolbarComponent`                             |
-| Registered ID   | —                                                         |
-| With Satori     | Same component; theme only                                |
-| Storybook story | `documents-document-toolbar--file-locked-by-another-user` |
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsDocumentToolbarComponent`                                                                                        |
+| Registered ID   | `nxs.primitives.actionBar`                                                                                           |
+| With Satori     | Satori's own component: `NxsSatoriActionBarComponent` renders `<button satActionBarButton>`                          |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
 
-![Document toolbar: without Satori on the left, with Satori on the right](document-toolbar-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+![Document toolbar: without Satori on the left, with Satori on the right](document-toolbar-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-The action row of a File locked by another user: Edit, Add to collection, the padlock drawn as on, Add to Favorites, Share and Delete as icon buttons, and a "More actions" button for the rest. The same buttons in both; the theme sets the icon colour, the "on" colour of the padlock and the focus ring.
+The action row of a File someone else has locked: Edit, Add to collection, the padlock — disabled, because this reader cannot unlock it — and Delete as icon buttons, and a "More actions" button for Publish document and Export. Without Satori they are Material icon buttons; with Satori they are Satori's action-bar buttons — the buttons `sat-action-group` is made of — with Satori's rounded hover layer and focus ring.
 
-The page gives the toolbar its entries and runs the one chosen. A disabled entry stays focusable so its tooltip, such as who holds the lock, can be read; with nothing to overflow, no "More actions" button renders.
+Both keep what the page relies on: an entry marked `overflow` is always in the menu, a disabled entry stays focusable so its tooltip — who holds the lock — can be read from the keyboard, an enabled padlock on a locked document is drawn in its "on" colour, and every control carries `data-action-id`. That is why the Satori version lays its buttons out itself rather than in `sat-action-group`, which disables an entry so it cannot take focus, moves entries into its menu by width alone, and renders neither the "on" colour nor `data-action-id`. So neither version moves an inline entry into the menu when space runs out. The page gives the toolbar its entries and runs the one chosen; with nothing to overflow, no "More actions" button renders.
 
 ### Tabs
 
-| Field           | Value                       |
-| --------------- | --------------------------- |
-| Component       | `NxsTabsComponent`          |
-| Registered ID   | —                           |
-| With Satori     | Same component; theme only  |
-| Storybook story | `documents-tabs--file-tabs` |
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsTabsComponent`                                                                                                   |
+| Registered ID   | `nxs.primitives.tabs`                                                                                                |
+| With Satori     | Satori's own component: `NxsSatoriTabsComponent` renders `<sat-navigation-tabs>`                                     |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
 
-![Tabs: without Satori on the left, with Satori on the right](tabs-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
+![Tabs: without Satori on the left, with Satori on the right](tabs-side-by-side.png 'Left: without Satori (built-in component, Material theme). Right: with Satori. Same inputs.')
 
-A File's View, Permissions, History and Publishing tabs and a "Claims" tab a manifest adds, with View selected. The same strip in both; the theme sets the type, the icon colour and the selection underline.
+A document's View, Permissions and History tabs and a "Claims" tab a manifest adds, with View selected and its body under the strip. Without Satori, Material's tab group underlines the selected tab; with Satori, Satori's navigation tabs draw it on a tinted background with a short bar beneath.
+
+Satori's tabs are a strip of links and show no panel, so the Satori version renders the selected tab's body under the strip itself, as the panel its tab names, and adds what Satori's strip leaves out: Enter and Space select the focused tab, and the selected tab is the strip's tab stop. On both, the arrow keys move between tabs and Home and End go to the first and last. When the tabs do not fit, Material's strip scrolls and Satori's wraps onto a second row. The `--nxs-tabs-*` tokens style Material's strip only.
 
 The page gives the tabs their list and one template every body renders from, so a tab a manifest adds renders like a packaged one.
 
@@ -715,13 +717,13 @@ It follows Web UI's audit search: every filter and the sort go to the server, so
 
 ## Full screenshots
 
-Storybook's "Primitives/By registered ID" story renders the five registered IDs that have a Satori variant — avatar, tag, status tag, breadcrumbs and rich tooltip — with one template and the same inputs. The sixth, `nxs.primitives.errorState`, has no Satori variant yet, so the story leaves it out.
+Storybook's "Primitives/By registered ID" story renders all eight registered IDs — avatar, breadcrumbs, tag, status tag, rich tooltip, error state, tabs and action bar — with one template and the same inputs.
 
-![The five primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
+![The eight primitives without Satori](without-satori-full.png 'Without Satori (built-in components, Material theme).')
 
-![The five primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
+![The eight primitives with Satori](with-satori-full.png 'With Satori. Same inputs.')
 
-![The five primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
+![The eight primitives: without Satori on the left, with Satori on the right](full-side-by-side.png 'Left: without Satori (built-in components, Material theme). Right: with Satori. Same inputs.')
 
 ## Detailed differences
 
@@ -740,7 +742,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
+The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, document detail renders its tab strip and its header's action row by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
 
 Only things rendered by ID, such as customer extensions, go through the choice.
 
@@ -795,8 +797,8 @@ The components in the library today:
 | Search filters                  | —                                                                                                                       | Same component; theme only   |
 | Saved search select             | —                                                                                                                       | Same component; theme only   |
 | Saved search actions            | —                                                                                                                       | Same component; theme only   |
-| Document toolbar                | —                                                                                                                       | Same component; theme only   |
-| Tabs                            | —                                                                                                                       | Same component; theme only   |
+| Document toolbar                | `nxs.primitives.actionBar`                                                                                              | Yes — Satori's own component |
+| Tabs                            | `nxs.primitives.tabs`                                                                                                   | Yes — Satori's own component |
 | Details panel                   | —                                                                                                                       | Same component; theme only   |
 | Properties panel                | —                                                                                                                       | Same component; theme only   |
 | Metadata editor                 | —                                                                                                                       | Same component; theme only   |
