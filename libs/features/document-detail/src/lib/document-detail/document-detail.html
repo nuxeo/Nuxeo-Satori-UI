@@ -32,13 +32,26 @@
         (click)="onBreadcrumbClick($event)"
       ></sat-breadcrumbs>
     </div>
-    <nxs-document-toolbar
+    <!-- By ID, so whatever is registered as the action bar renders here: Satori's in our app. -->
+    <lib-extension-outlet
+      #actionBarOutlet
       class="header-actions"
-      [actions]="toolbarEntries()"
-      [moreLabel]="'document-detail.document-detail.more-actions' | translate"
-      (selected)="runToolbarEntry($event)"
-    >
-    </nxs-document-toolbar>
+      [class.header-actions--unresolved]="actionBarOutlet.unresolved()"
+      [componentId]="actionBarId"
+      [componentInputs]="{
+        actions: toolbarEntries(),
+        moreLabel: ('document-detail.document-detail.more-actions' | translate),
+        actionHandler: toolbarActionHandler,
+      }"
+    />
+    @if (actionBarOutlet.unresolved()) {
+      <nxs-document-toolbar
+        class="header-actions"
+        [actions]="toolbarEntries()"
+        [moreLabel]="'document-detail.document-detail.more-actions' | translate"
+        (selected)="runToolbarEntry($event)"
+      />
+    }
   </div>
 
   @if (isTrashed()) {
@@ -200,38 +213,56 @@
     <!-- Left: Tabs + content -->
     <div class="detail-main">
       <div class="tabs-header-row">
-        <nxs-tabs
+        <!-- By ID, so whatever is registered as the tabs renders here: Satori's in our app. The
+             outlet projects nothing and binds no outputs, so the body template and the
+             selection callback go in as inputs. -->
+        <lib-extension-outlet
+          #tabsOutlet
           class="detail-tabs"
-          [tabs]="detailTabEntries()"
-          [selectedIndex]="activeTabIndex()"
-          (selectedIndexChange)="onTabChange($event)"
-        >
-          <ng-template nxsTabBody let-tab>
-            @switch (tab.id) {
-              @case ('app.tabs.view') {
-                <ng-container [ngTemplateOutlet]="viewTabContent" />
-              }
-              @case ('app.tabs.annotations') {
-                <ng-container [ngTemplateOutlet]="annotationsTabContent" />
-              }
-              @case ('app.tabs.permissions') {
-                <ng-container [ngTemplateOutlet]="permissionsTabContent" />
-              }
-              @case ('app.tabs.history') {
-                <ng-container [ngTemplateOutlet]="historyTabContent" />
-              }
-              @case ('app.tabs.publishing') {
-                <ng-container [ngTemplateOutlet]="publishingTabContent" />
-              }
-              @case ('app.tabs.aiInsights') {
-                <ng-container [ngTemplateOutlet]="aiInsightsTabContent" />
-              }
-              @default {
-                <lib-extension-outlet [componentId]="tabComponentId(tab.id)" />
-              }
+          [class.detail-tabs--unresolved]="tabsOutlet.unresolved()"
+          [componentId]="tabsId"
+          [componentInputs]="{
+            tabs: detailTabEntries(),
+            selectedIndex: activeTabIndex(),
+            body: detailTabBody,
+            selectHandler: tabSelectHandler,
+          }"
+        />
+        @if (tabsOutlet.unresolved()) {
+          <nxs-tabs
+            class="detail-tabs"
+            [tabs]="detailTabEntries()"
+            [selectedIndex]="activeTabIndex()"
+            [body]="detailTabBody"
+            (selectedIndexChange)="onTabChange($event)"
+          />
+        }
+
+        <ng-template #detailTabBody let-tab>
+          @switch (tab.id) {
+            @case ('app.tabs.view') {
+              <ng-container [ngTemplateOutlet]="viewTabContent" />
             }
-          </ng-template>
-        </nxs-tabs>
+            @case ('app.tabs.annotations') {
+              <ng-container [ngTemplateOutlet]="annotationsTabContent" />
+            }
+            @case ('app.tabs.permissions') {
+              <ng-container [ngTemplateOutlet]="permissionsTabContent" />
+            }
+            @case ('app.tabs.history') {
+              <ng-container [ngTemplateOutlet]="historyTabContent" />
+            }
+            @case ('app.tabs.publishing') {
+              <ng-container [ngTemplateOutlet]="publishingTabContent" />
+            }
+            @case ('app.tabs.aiInsights') {
+              <ng-container [ngTemplateOutlet]="aiInsightsTabContent" />
+            }
+            @default {
+              <lib-extension-outlet [componentId]="tabComponentId(tab.id)" />
+            }
+          }
+        </ng-template>
 
         <ng-template #viewTabContent>
           @if (documentView(); as view) {
