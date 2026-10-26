@@ -1988,12 +1988,28 @@ class NxsSpinnerComponent {
     }
 }
 class NxsStatusTagComponent implements NxsStatusTagInputs {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly status: _angular_core.InputSignal<NxsTagStatus>;
-    readonly hideIcon: _angular_core.InputSignal<boolean>;
-    protected readonly icon: _angular_core.Signal<string | null>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsStatusTagComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsStatusTagComponent, "nxs-status-tag", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "status": { "alias": "status"; "required": false; "isSignal": true; }; "hideIcon": { "alias": "hideIcon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly status: import("@angular/core").InputSignal<NxsTagStatus>;
+    readonly hideIcon: import("@angular/core").InputSignal<boolean>;
+    protected readonly icon: import("@angular/core").Signal<string | null>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsStatusTagComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsStatusTagComponent, "nxs-status-tag", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "status": {
+    "alias": "status";
+    "required": false;
+    "isSignal": true;
+    };
+    "hideIcon": {
+    "alias": "hideIcon";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsStatusTagInputs {
