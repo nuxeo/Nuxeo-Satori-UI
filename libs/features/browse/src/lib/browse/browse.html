@@ -66,15 +66,16 @@
   <!-- Breadcrumbs -->
   @if (showBreadcrumbs()) {
     @let trailLabel = 'browse.breadcrumb.label' | translate;
-    <lib-extension-outlet
-      #breadcrumbsOutlet
-      class="browse-breadcrumbs"
-      [componentId]="breadcrumbsId"
-      [componentInputs]="{ items: breadcrumbs(), label: trailLabel }"
-    />
-    @if (breadcrumbsOutlet.unresolved()) {
-      <nxs-breadcrumbs class="browse-breadcrumbs" [items]="breadcrumbs()" [label]="trailLabel" />
-    }
+    <div class="browse-breadcrumbs">
+      <lib-extension-outlet
+        #breadcrumbsOutlet
+        [componentId]="breadcrumbsId"
+        [componentInputs]="{ items: breadcrumbs(), label: trailLabel }"
+      />
+      @if (breadcrumbsOutlet.unresolved()) {
+        <nxs-breadcrumbs [items]="breadcrumbs()" [label]="trailLabel" />
+      }
+    </div>
   }
 
   <nxs-domain-hint [documentType]="currentDoc()?.type" [path]="browsePath()" />

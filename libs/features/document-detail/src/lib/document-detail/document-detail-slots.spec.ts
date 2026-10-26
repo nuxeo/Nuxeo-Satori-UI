@@ -3,6 +3,7 @@ import {
   input,
   provideZonelessChangeDetection,
   signal,
+  type EnvironmentProviders,
   type Type,
   type WritableSignal,
 } from '@angular/core';
@@ -23,8 +24,11 @@ import {
 import { TranslateModule } from '@ngx-translate/core';
 import { Observable, of } from 'rxjs';
 import { vi, type Mock } from 'vitest';
+import { resolve } from 'node:path';
+import { compile } from 'sass';
 import {
   NXS_PRIMITIVE_IDS,
+  NxsBreadcrumbsComponent,
   NxsDeletePermissionDialogComponent,
   NxsShareExternalDialogComponent,
   NxsUpdatePermissionDialogComponent,
@@ -62,6 +66,8 @@ import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/sator
 
 import { DocumentDetailComponent } from './document-detail';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
+import { provideNxsSatoriComponents } from '@nuxeo/satori-platform/components-satori';
+import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 /**
  * The `toolbar` and `tabs` slots, asserted **against the rendered template**.
@@ -272,6 +278,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     extensions: unknown,
     focused: NuxeoDocument = doc(),
     components: Readonly<Record<string, Type<unknown>>> = {},
+    extraProviders: EnvironmentProviders[] = [],
   ): Promise<void> {
     manifest.set({ extensionLayers: [extensions] });
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
@@ -340,6 +347,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
             ...components,
           },
         }),
+        ...extraProviders,
       ],
     }).compileComponents();
 
@@ -1385,6 +1393,61 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(trail.getAttribute('aria-label')).toBe('Breadcrumbs');
       expect(header().querySelector('nxs-breadcrumbs')).toBeNull();
     });
+
+    it.each(['fallback', 'registered Material', 'registered Satori'] as const)(
+      'keeps the compact header typography and one separator per boundary with %s breadcrumbs',
+      async (mode) => {
+        await render(
+          {},
+          doc(),
+          mode === 'registered Material'
+            ? { [NXS_PRIMITIVE_IDS.breadcrumbs]: NxsBreadcrumbsComponent }
+            : {},
+          mode === 'registered Satori' ? [provideSatori(), provideNxsSatoriComponents()] : [],
+        );
+
+        const wrapper = header().querySelector('.detail-breadcrumbs') as HTMLElement;
+        expect(wrapper).toBeTruthy();
+        const satori = mode === 'registered Satori';
+        const trail = wrapper.querySelector(
+          satori ? '.sat-breadcrumbs-nav' : 'nxs-breadcrumbs',
+        ) as HTMLElement;
+        expect(trail).toBeTruthy();
+        // TestBed omits component styles. Apply the compiled SCSS without Angular's deep marker.
+        const style = document.createElement('style');
+        const detailStyles = compile(
+          resolve(
+            process.cwd(),
+            'libs/features/document-detail/src/lib/document-detail/document-detail.scss',
+          ),
+        ).css;
+        style.textContent = detailStyles.replaceAll('::ng-deep', '');
+        document.head.append(style);
+        try {
+          expect(getComputedStyle(wrapper).fontSize).toBe('11px');
+          expect(getComputedStyle(trail).font).toBe('inherit');
+          if (satori) {
+            const chevrons = trail.querySelectorAll('.sat-breadcrumbs-chevron');
+            expect(chevrons).toHaveLength(3);
+            for (const chevron of chevrons) {
+              expect(getComputedStyle(chevron).display).toBe('none');
+            }
+            expect(
+              trail.querySelectorAll('.sat-breadcrumbs-list li:not(:last-child)'),
+            ).toHaveLength(2);
+            const separatorRule = [...(style.sheet?.cssRules ?? [])].find((rule) =>
+              rule.cssText.includes('.sat-breadcrumbs-list li:not(:last-child)::after'),
+            );
+            expect(separatorRule?.cssText).toContain('content: "›"');
+          } else {
+            const list = trail.querySelector('.nxs-breadcrumbs__nav > ol') as HTMLElement;
+            expect(list.querySelectorAll('.nxs-breadcrumbs__separator')).toHaveLength(2);
+          }
+        } finally {
+          style.remove();
+        }
+      },
+    );
 
     /** Clicks `link` and returns the URL the router was asked for, or null for none. */
     function routedTo(link: HTMLAnchorElement): string | null {

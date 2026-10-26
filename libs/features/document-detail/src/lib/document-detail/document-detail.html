@@ -29,14 +29,16 @@
     <div class="header-info">
       <div class="header-title" role="heading" aria-level="1">{{ doc()!.title }}</div>
       @let trailLabel = 'document-detail.document-detail.breadcrumbs' | translate;
-      <lib-extension-outlet
-        #breadcrumbsOutlet
-        [componentId]="primitiveIds.breadcrumbs"
-        [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
-      />
-      @if (breadcrumbsOutlet.unresolved()) {
-        <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
-      }
+      <div class="detail-breadcrumbs">
+        <lib-extension-outlet
+          #breadcrumbsOutlet
+          [componentId]="primitiveIds.breadcrumbs"
+          [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+        />
+        @if (breadcrumbsOutlet.unresolved()) {
+          <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
+        }
+      </div>
     </div>
     <nxs-document-toolbar
       class="header-actions"

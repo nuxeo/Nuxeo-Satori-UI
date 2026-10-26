@@ -64,7 +64,15 @@
   margin-top: 2px;
 }
 
-sat-breadcrumbs {
+.collection-breadcrumbs {
+  min-width: 0;
+
+  ::ng-deep nxs-breadcrumbs,
+  ::ng-deep .sat-breadcrumbs-nav {
+    font: inherit;
+    color: inherit;
+  }
+
   ::ng-deep .sat-breadcrumbs-chevron {
     display: none;
   }

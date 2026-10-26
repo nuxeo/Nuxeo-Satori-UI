@@ -26,14 +26,16 @@
                 {{ targetDoc()!.title }}
               </div>
               @let trailLabel = 'tasks.breadcrumbs' | translate;
-              <lib-extension-outlet
-                #breadcrumbsOutlet
-                [componentId]="breadcrumbsId"
-                [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
-              />
-              @if (breadcrumbsOutlet.unresolved()) {
-                <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
-              }
+              <div class="task-breadcrumbs">
+                <lib-extension-outlet
+                  #breadcrumbsOutlet
+                  [componentId]="breadcrumbsId"
+                  [componentInputs]="{ items: breadcrumbItems(), label: trailLabel }"
+                />
+                @if (breadcrumbsOutlet.unresolved()) {
+                  <nxs-breadcrumbs [items]="breadcrumbItems()" [label]="trailLabel" />
+                }
+              </div>
             } @else {
               <div class="doc-main-title" role="heading" aria-level="1">
                 {{ selectedTask()!.targetDocTitle || ('tasks.document' | translate) }}

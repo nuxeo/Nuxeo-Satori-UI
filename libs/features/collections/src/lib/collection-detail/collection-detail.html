@@ -37,7 +37,7 @@
       [heading]="collection()?.title ?? ('collections.collection' | translate)"
     >
       @if (showBreadcrumbs() && breadcrumbItems().length) {
-        <div class="header-path-row" nxsFolderHeaderDetail>
+        <div class="header-path-row collection-breadcrumbs" nxsFolderHeaderDetail>
           @let trailLabel = 'collections.collection-detail.breadcrumbs' | translate;
           <lib-extension-outlet
             #breadcrumbsOutlet

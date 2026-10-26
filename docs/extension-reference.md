@@ -687,6 +687,14 @@ ID reaches it. The uses resolved by ID are these:
 Search shows no avatar or breadcrumb trail. The status tags (`sat-status-tag`) are not one of these
 primitives and are still rendered directly, until NXSAT-653 gives them an ID.
 
+Breadcrumb page layout belongs to the screen, not the registered implementation. Browse,
+document detail, collections and tasks wrap both the outlet and its fallback in the same layout
+container, preserving spacing and compact header typography when the registration changes.
+The built-in Material breadcrumb inherits that compact typography in headers; its own component
+still owns separators, folding and RTL mirroring. The packaged Satori registration retains the
+screens' compact text separators, scoped through the wrapper rather than the outlet's internals.
+Custom implementations own their internal separators and may deliberately supply their own typography.
+
 **Not reached by an override yet.** Four library components on document detail draw the built-in
 `nxs-avatar` or `nxs-tag` themselves rather than resolving the ID, so an override does not replace
 them there: `nxs-comments` (each author's avatar), `nxs-document-history` (each entry's avatar and
