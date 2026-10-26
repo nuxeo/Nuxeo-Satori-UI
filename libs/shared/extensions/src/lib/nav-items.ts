@@ -81,14 +81,15 @@ export interface NavItemDescriptor extends ExtensionElement {
  */
 export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
   // Temporarily disabled: Knowledge Discovery
-  // {
-  //   id: 'app.navbar.knowledgeDiscovery',
-  //   labelKey: 'nav.item.knowledge-discovery',
-  //   label: 'Knowledge Discovery',
-  //   path: '/knowledge-discovery',
-  //   icon: 'star',
-  //   order: 10,
-  // },
+  {
+    id: 'app.navbar.knowledgeDiscovery',
+    labelKey: 'nav.item.knowledge-discovery',
+    label: 'Knowledge Discovery',
+    path: '/knowledge-discovery',
+    icon: 'star',
+    order: 10,
+    disabled: true,
+  },
   {
     id: 'app.navbar.dashboard',
     labelKey: 'nav.item.dashboard',
