@@ -9,6 +9,16 @@ const TRASH_NAV_ID = 'app.navbar.trash';
 const TRASH_LINK_SELECTOR = `a[sat-platform-nav-menu-item][data-nav-id="${TRASH_NAV_ID}"]`;
 const NAV_LIST_SELECTOR = 'sat-platform-nav nav.sat-platform-nav-list';
 
+/** Whether this browser draws scrollbars that take layout width, measured on a probe element. */
+function platformHasClassicScrollbars(): boolean {
+  const probe = document.createElement('div');
+  probe.style.cssText = 'position:absolute;top:-9999px;width:100px;height:100px;overflow:scroll';
+  document.body.appendChild(probe);
+  const classic = probe.offsetWidth > probe.clientWidth;
+  probe.remove();
+  return classic;
+}
+
 /**
  * NXENG-868 — keyboard-focused Trash (and other bottom sidebar links) must stay visible
  * (IBM element_tabbable_unobscured / WCAG 2.4.11).
@@ -72,8 +82,12 @@ describe('platform nav Trash focus unobscured (NXENG-868)', () => {
     expect(list.scrollHeight).toBeGreaterThan(list.clientHeight);
     expect(getComputedStyle(list).scrollbarWidth).toBe('thin');
     // The rendered gutter, not the pseudo-element's style: Chromium ignores
-    // `::-webkit-scrollbar` once `scrollbar-width` is set, so that could not fail.
-    expect(list.offsetWidth - list.clientWidth).toBeGreaterThan(0);
+    // `::-webkit-scrollbar` once `scrollbar-width` is set, so that could not fail. Only a
+    // classic scrollbar takes layout width — an overlay one (macOS "automatic") takes none —
+    // so the gutter is asserted where the platform draws classic scrollbars, as CI's does.
+    if (platformHasClassicScrollbars()) {
+      expect(list.offsetWidth - list.clientWidth).toBeGreaterThan(0);
+    }
   });
 
   it('scrolls Trash fully into view when it receives keyboard focus', () => {
