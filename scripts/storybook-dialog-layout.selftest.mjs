@@ -106,6 +106,25 @@ test('a visually hidden title in the corner is not judged', async () => {
   assert.deepEqual(await check(dialog({ title: hidden })), []);
 });
 
+/** A required field that, once left empty, shows its message under it and grows the surface. */
+const REVEALS_ON_LEAVE =
+  '<input aria-label="To" required onblur="this.nextElementSibling.hidden = this.value !== \'\'" />' +
+  '<p hidden style="margin: 4px 0 0; color: #b00020">Required</p>';
+
+test('a message that leaving a required field reveals is not focus painting outside', async () => {
+  assert.deepEqual(await check(dialog({ content: REVEALS_ON_LEAVE })), []);
+  assert.deepEqual(
+    await check(
+      dialog({
+        content: REVEALS_ON_LEAVE,
+        css: '.mat-mdc-dialog-surface { width: auto; max-width: 288px; }',
+      }),
+      320,
+    ),
+    [],
+  );
+});
+
 test('a free-text field scrolling a long value is not judged', async () => {
   const content = '<input aria-label="Title" value="Claim 42 — water damage, final, reviewed" />';
   assert.deepEqual(await check(dialog({ content, css: 'input { width: 120px; }' })), []);
@@ -213,6 +232,19 @@ test('a focus ring painting outside the rounded corner', async () => {
   reports(failures, /focusing <button> "Cancel" paints \d+ px outside the surface/);
 });
 
+test('a focus ring outside the corner, in a dialog whose fields reveal messages when left', async () => {
+  // The unjudged first pass settles the revealed message; it must not settle the ring as well.
+  const failures = await check(
+    dialog({
+      content: REVEALS_ON_LEAVE,
+      css:
+        '.mat-mdc-dialog-surface { overflow: visible; }' +
+        '.mat-mdc-dialog-actions { padding: 0; justify-content: flex-start; }',
+    }),
+  );
+  reports(failures, /focusing <button> "Cancel" paints \d+ px outside the surface/);
+});
+
 test('no surface: nothing paints the dialog', async () => {
   const html = dialog().replace('class="mat-mdc-dialog-surface"', 'class="bare"');
   reports(await check(html), /no dialog surface/);
@@ -226,16 +258,12 @@ test('no dialog on the page', async () => {
 });
 
 test('a hidden surface is reported, not passed with a zero-rect', async () => {
-  const failures = await check(
-    dialog({ css: '.mat-mdc-dialog-surface { display: none; }' }),
-  );
+  const failures = await check(dialog({ css: '.mat-mdc-dialog-surface { display: none; }' }));
   reports(failures, /the dialog surface is hidden/);
 });
 
 test('an invisible preview container hides the dialog', async () => {
   // opacity: 0 on the story root makes the dialog invisible while layout measurements pass.
-  const failures = await check(
-    dialog({ css: '#storybook-root { opacity: 0; }' }),
-  );
+  const failures = await check(dialog({ css: '#storybook-root { opacity: 0; }' }));
   reports(failures, /the dialog surface is hidden/);
 });

@@ -25,7 +25,8 @@
  * - **Focus stays inside.** Tabbing through the dialog, focusing an element changes no pixel outside
  *   the surface's rounded outline. A screenshot around the surface with the element focused is
  *   compared with one taken with nothing focused, so the surface's own shadow and anti-aliasing,
- *   which do not change, are never counted.
+ *   which do not change, are never counted. That baseline is taken after one unjudged pass of Tab,
+ *   so a message that leaving a field reveals, such as a required field's, is already in it.
  *
  * A title that is visually hidden (Nuxeo Drive's while it checks) names the dialog and paints
  * nothing, so it is not judged.
@@ -483,15 +484,50 @@ export async function checkDialogLayout(page, options = {}) {
   return failures;
 }
 
+/** Clicks the page beside the surface, so nothing is focused and the next Tab starts at the top. */
+async function clickBeside(page, surface) {
+  const beside =
+    surface.left >= 2 ? [1, Math.max(1, surface.top)] : [1, Math.max(1, surface.top - 2)];
+  await page.mouse.click(beside[0], beside[1]);
+  await page.mouse.move(0, 0);
+  await page.waitForTimeout(SETTLE_MS);
+}
+
+/**
+ * Tabs through the dialog once, judging nothing, and leaves nothing focused.
+ *
+ * Leaving a field can change the dialog: a required field left empty shows its message under the
+ * field, and the surface grows by a line. That is the form's validation, not a focus indicator,
+ * and with the baseline taken before it, the grown surface and its moved shadow read as focus
+ * painting outside. Once every field has been left, focusing one changes only its indicator.
+ */
+async function settleByTabbing(page, rules) {
+  const { surface } = await page.evaluate(measureDialogLayout, rules);
+  if (!surface) return;
+  await clickBeside(page, surface);
+  const seen = new Set();
+  for (let i = 0; i < MAX_TABS; i++) {
+    await page.keyboard.press('Tab');
+    const state = await page.evaluate(focusState, rules);
+    if (!state.focused || seen.has(state.id)) break;
+    seen.add(state.id);
+  }
+  const { surface: settled } = await page.evaluate(measureDialogLayout, rules);
+  await clickBeside(page, settled ?? surface);
+}
+
 /**
  * Tab through the dialog and fail each element whose focus indicator paints outside the surface.
  *
- * The window is made as tall as the page first, so focusing an element never scrolls it out of
- * the screenshot, and restored after. Tabbing starts from a click beside the surface: after a
- * `blur()` the browser would resume from the element that had focus and skip those before it.
+ * The dialog is tabbed through once unjudged first (`settleByTabbing`), so the baseline shows
+ * what leaving each field reveals. The window is then made as tall as the page, so focusing an
+ * element never scrolls it out of the screenshot, and restored after. Tabbing starts from a click
+ * beside the surface: after a `blur()` the browser would resume from the element that had focus
+ * and skip those before it.
  */
 async function checkFocus(page, rules) {
   const failures = [];
+  await settleByTabbing(page, rules);
   const viewport = page.viewportSize();
   const height = await page.evaluate(() => document.documentElement.scrollHeight);
   if (viewport && height > viewport.height) {
@@ -511,11 +547,7 @@ async function checkFocus(page, rules) {
     };
     if (clip.width <= 0 || clip.height <= 0) return failures;
 
-    const beside =
-      surface.left >= 2 ? [1, Math.max(1, surface.top)] : [1, Math.max(1, surface.top - 2)];
-    await page.mouse.click(beside[0], beside[1]);
-    await page.mouse.move(0, 0);
-    await page.waitForTimeout(SETTLE_MS);
+    await clickBeside(page, surface);
     const start = await page.evaluate(focusState, rules);
     const before = (await page.screenshot({ clip })).toString('base64');
     const seen = new Set();
