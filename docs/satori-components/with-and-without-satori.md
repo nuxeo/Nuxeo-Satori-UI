@@ -740,7 +740,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori. The screens resolve each avatar, category tag, status tag and breadcrumb trail of their own by ID ? `docs/extension-reference.md` ?6a lists where ? so there the app shows Satori's, and a component registered later under the same ID, with `provideSatoriExtensions({ components })`, replaces it; no JSON manifest entry selects a component for these IDs. Library components nested in a screen, such as the comments, history and properties panel on document detail, still draw the built-in avatar and tag directly; a registration does not reach them until they render by ID.
+The app registers both entry points, so anything rendered by ID shows Satori. The screens resolve each avatar, category tag, status tag and breadcrumb trail of their own by ID — `docs/extension-reference.md` §6a lists where — so there the app shows Satori's, and a component registered later under the same ID, with `provideSatoriExtensions({ components })`, replaces it; no JSON manifest entry selects a component for these IDs. Library components nested in a screen, such as the comments, history and properties panel on document detail, still draw the built-in avatar and tag directly; a registration does not reach them until they render by ID.
 
 Only things rendered by ID — these screens, and customer extensions — go through the choice.
 
