@@ -54,7 +54,7 @@ export class NxsTabsComponent implements NxsTabsInputs {
   readonly tabs = input.required<readonly NxsTab[]>();
   /** The tab list's accessible name, already translated. Optional. */
   readonly label = input('');
-  /** The selected tab's position. Two-way. */
+  /** The selected tab's position. Two-way. Past the last tab selects the last. */
   readonly selectedIndex = model(0);
   /**
    * The template every tab's body renders from, given the tab as `let-tab`. Takes precedence over

@@ -130,6 +130,13 @@ describe('NxsTabsComponent', () => {
     expect(activeBody()?.textContent).toContain('Permissions body');
   });
 
+  it('selects the last tab for an index past it', async () => {
+    host.index.set(7);
+    await render();
+    expect(tabs()[2].getAttribute('aria-selected')).toBe('true');
+    expect(activeBody()?.getAttribute('data-for')).toBe('acme.tabs.claims');
+  });
+
   it('types the body template context as the tab', () => {
     const directive = host.bodyTemplate();
     expect(directive).toBeInstanceOf(NxsTabBodyDirective);

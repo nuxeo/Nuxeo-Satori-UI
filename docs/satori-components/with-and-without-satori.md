@@ -750,6 +750,7 @@ Only things rendered by ID, such as customer extensions, go through the choice.
 
 - Satori breadcrumbs hide everything at 110 px or less.
 - Storybook's default theme names Roboto but doesn't load it, so the built-in screenshots render in Arial.
+- The built-in Storybook registers no SVG icons — the icon set is Satori's, which a build without GitHub Packages cannot include — so icon buttons in the without-Satori screenshots, such as the document toolbar's, render empty. In an application the host registers the icons.
 
 ## Open questions
 
