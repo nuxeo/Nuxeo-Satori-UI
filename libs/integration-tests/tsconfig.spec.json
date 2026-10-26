@@ -2,7 +2,8 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "../../dist/out-tsc",
-    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"]
+    "types": ["vitest/globals", "vitest/importMeta", "vite/client", "node", "vitest"],
+    "rootDir": ".."
   },
   "$setupFileComment": "`vitest.setup.ts` is executed by Vitest for every spec in this project, and until it was listed here no TypeScript project included it: `tsconfig.lib.json` takes `src/**/*.ts` only, and this config listed the Vitest configs but not the setup. So the file that bootstraps the Angular test environment — the one thing every spec here depends on before it runs — was the one file the `spec-types` gate could not see.",
   "include": [

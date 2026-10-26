@@ -11,6 +11,7 @@ import {
   untracked,
   LOCALE_ID,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NgTemplateOutlet, DatePipe, formatDate } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
@@ -102,6 +103,7 @@ export interface FolderNode {
     NxsDocumentTreeComponent,
   ],
   templateUrl: './nav-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nav-drawer.component.scss',
 })
 export class NavDrawerComponent {
@@ -484,7 +486,7 @@ export class NavDrawerComponent {
    * word order. See `formatRelativeTime`.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   // ── Collections ──

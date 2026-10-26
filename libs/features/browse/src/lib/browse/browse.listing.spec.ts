@@ -1,6 +1,12 @@
-import { Component, input, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  input,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
@@ -113,6 +119,7 @@ const manifest = signal<{ extensionLayers: readonly unknown[] }>({ extensionLaye
 @Component({
   standalone: true,
   selector: 'lib-test-custom-permissions',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="custom-permissions">CUSTOM PERMISSIONS for {{ documentId() }}</p>',
 })
 class CustomPermissionsComponent {
@@ -175,7 +182,7 @@ describe('BrowseComponent — rendered document list', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: BrowseService, useValue: browse },
         { provide: DocumentDetailService, useValue: detail },

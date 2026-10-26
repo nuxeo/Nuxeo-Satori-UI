@@ -6,7 +6,8 @@
     "declarationMap": true,
     "sourceMap": true,
     "inlineSources": true,
-    "types": []
+    "types": [],
+    "rootDir": "src"
   },
   "exclude": ["**/*.spec.ts", "**/*.test.ts"],
   "include": ["src/**/*.ts"]

@@ -1,4 +1,4 @@
-import { Component, inject, signal, OnDestroy } from '@angular/core';
+import { Component, inject, signal, OnDestroy, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
 import { MatButtonModule } from '@angular/material/button';
@@ -85,6 +85,7 @@ const PREVIEWABLE_TEXT_TYPES = new Set(['text/plain', 'text/csv', 'application/j
   standalone: true,
   imports: [TranslatePipe, MatDialogModule, MatIconModule, MatButtonModule, MatTooltipModule],
   templateUrl: './attachment-preview-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

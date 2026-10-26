@@ -43,7 +43,7 @@
 // than from `@angular-eslint/eslint-plugin-template` and `@angular-eslint/template-parser`
 // directly. Those two are undeclared transitives here, so importing them worked only because
 // npm happened to hoist them — the class of thing that resolves locally and fails on a runner.
-import { templatePlugin, templateParser } from 'angular-eslint';
+import { configs, templatePlugin, templateParser } from 'angular-eslint';
 
 export default [
   {
@@ -53,8 +53,10 @@ export default [
     files: ['**/*.html'],
     languageOptions: { parser: templateParser },
     plugins: { '@angular-eslint/template': templatePlugin },
-    // The plugin's own `accessibility` preset, taken wholesale rather than hand-listed, so a
-    // rule added to it upstream is picked up instead of silently missed.
-    rules: templatePlugin.configs.accessibility.rules,
+    // The plugin's own `accessibility` preset from the top-level configs export (angular-eslint v22+).
+    // Taken wholesale rather than hand-listed, so a rule added to it upstream is picked up instead
+    // of silently missed. Note: in v22+, configs.templateAccessibility is an array; we spread the
+    // second element which contains the accessibility rules configuration.
+    ...configs.templateAccessibility[1],
   },
 ];

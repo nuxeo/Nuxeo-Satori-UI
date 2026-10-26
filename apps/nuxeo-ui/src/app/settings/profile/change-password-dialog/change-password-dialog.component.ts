@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import {
   AbstractControl,
   FormBuilder,
@@ -33,6 +33,7 @@ function passwordsMatch(control: AbstractControl): ValidationErrors | null {
     MatIconModule,
   ],
   templateUrl: './change-password-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './change-password-dialog.component.scss',
 })
 export class ChangePasswordDialogComponent {

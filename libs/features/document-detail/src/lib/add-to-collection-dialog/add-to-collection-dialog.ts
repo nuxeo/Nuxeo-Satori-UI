@@ -1,4 +1,11 @@
-import { Component, inject, signal, computed, OnInit } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  computed,
+  OnInit,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatDialogRef, MatDialogModule } from '@angular/material/dialog';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -28,6 +35,7 @@ import { NxsSpinnerComponent } from '@nuxeo/satori-platform/components';
     MatProgressSpinnerModule,
   ],
   templateUrl: './add-to-collection-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

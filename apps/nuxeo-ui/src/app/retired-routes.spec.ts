@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { Router, provideRouter, type Routes } from '@angular/router';
 import { RouterTestingHarness } from '@angular/router/testing';
@@ -7,7 +7,12 @@ import { parseBrowseNuxeoPathFromRouterUrl } from '@nuxeo/satori-platform/nuxeo-
 import { routes } from './app.routes';
 import { RETIRED_ROUTES } from './retired-routes';
 
-@Component({ standalone: true, selector: 'app-test-page', template: '' })
+@Component({
+  standalone: true,
+  selector: 'app-test-page',
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '',
+})
 class PageComponent {}
 
 /** The two pages the retired routes hand over to, shaped as the application routes them. */

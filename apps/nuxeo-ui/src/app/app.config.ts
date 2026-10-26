@@ -1,9 +1,9 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { APP_INITIALIZER, ApplicationConfig, importProvidersFrom, inject } from '@angular/core';
 import { provideAnimations } from '@angular/platform-browser/animations';
 import { provideRouter, withComponentInputBinding, withHashLocation } from '@angular/router';
 import { MAT_FAB_DEFAULT_OPTIONS } from '@angular/material/button';
-import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
+import { TranslateLoader, provideTranslateService } from '@ngx-translate/core';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 
 import { CURRENT_USERNAME, ADMIN_ACCESS_CHECKS } from '@nuxeo/satori-platform/nuxeo-client';
@@ -49,18 +49,16 @@ export const appConfig: ApplicationConfig = {
       multi: true,
     },
     provideAnimations(),
-    provideHttpClient(withInterceptors([nuxeoAuthInterceptor])),
+    provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding(), withHashLocation()),
     provideSatori(),
     {
       provide: MAT_FAB_DEFAULT_OPTIONS,
       useValue: { color: 'primary' },
     },
-    importProvidersFrom(
-      TranslateModule.forRoot({
-        loader: { provide: TranslateLoader, useClass: AppTranslateLoader },
-      }),
-    ),
+    provideTranslateService({
+      loader: { provide: TranslateLoader, useClass: AppTranslateLoader },
+    }),
     {
       provide: CURRENT_USERNAME,
       useFactory: () => {

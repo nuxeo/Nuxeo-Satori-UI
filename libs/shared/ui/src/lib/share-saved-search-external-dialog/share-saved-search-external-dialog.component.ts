@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -48,6 +48,7 @@ const RIGHT_OPTIONS = [
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl()],
   templateUrl: './share-saved-search-external-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './share-saved-search-external-dialog.component.scss',
 })
 export class ShareSavedSearchExternalDialogComponent {

@@ -1,5 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { toObservable, toSignal } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { catchError, debounceTime, map, of, startWith, switchMap } from 'rxjs';
@@ -42,6 +42,7 @@ const MINIMUM_TERM_LENGTH = 2;
   standalone: true,
   imports: [RouterLink],
   templateUrl: './search.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search.scss',
 })
 export class SearchComponent {

@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 
+import { testTranslateModule } from '../i18n/translate-testing';
 const TRASH_NAV_ID = 'app.navbar.trash';
 const TRASH_LINK_SELECTOR = `sat-platform-nav-list-item[data-nav-id="${TRASH_NAV_ID}"] .sat-platform-nav-item`;
 const NAV_LIST_SELECTOR = 'sat-platform-nav nav.sat-platform-nav-list';
@@ -17,7 +18,8 @@ const NAV_LIST_SELECTOR = 'sat-platform-nav nav.sat-platform-nav-list';
  */
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, testTranslateModule()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-trash-focus-unobscured.host.html',
 })
 class NavTrashHostComponent {}
@@ -27,7 +29,7 @@ describe('platform nav Trash focus unobscured (NXENG-868)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [NavTrashHostComponent, TranslateModule.forRoot()],
+      imports: [NavTrashHostComponent, testTranslateModule()],
       providers: [provideNoopAnimations()],
     }).compileComponents();
 

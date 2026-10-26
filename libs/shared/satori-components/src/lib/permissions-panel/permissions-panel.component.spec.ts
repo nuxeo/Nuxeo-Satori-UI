@@ -5,6 +5,7 @@ import {
   provideZonelessChangeDetection,
   signal,
   type Type,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
@@ -111,6 +112,7 @@ function contextOf(doc: NuxeoDocument): Record<string, unknown> {
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel [documentId]="uid()" [permissionsChanged]="changed" />`,
 })
 class HostComponent {
@@ -121,6 +123,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-permissions-panel documentId="doc-1" />
     <nxs-permissions-panel documentId="doc-2" />
@@ -131,6 +134,7 @@ class TwoPanelsHostComponent {}
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" offer="type" />`,
 })
 class TypeOfferHostComponent {}
@@ -1506,6 +1510,7 @@ class HostLibraryAdapter extends NativeDateAdapter {
 @Component({
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" />`,
 })
 class DatesHostComponent {}
@@ -1514,6 +1519,7 @@ class DatesHostComponent {}
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
   providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" />`,
 })
 class DatesHostWithAdapterComponent {}
@@ -1523,6 +1529,7 @@ class DatesHostWithAdapterComponent {}
   standalone: true,
   imports: [NxsPermissionsPanelComponent],
   providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-permissions-panel documentId="doc-1" />`,
 })
 class CalendarDaysHostComponent {}

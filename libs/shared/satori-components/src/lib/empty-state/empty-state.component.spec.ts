@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsEmptyStateComponent } from './empty-state.component';
@@ -10,6 +15,7 @@ import { NxsEmptyStateComponent } from './empty-state.component';
 @Component({
   standalone: true,
   imports: [NxsEmptyStateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-empty-state
       [heading]="heading()"

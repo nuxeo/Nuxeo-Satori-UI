@@ -1,4 +1,12 @@
-import { Component, computed, inject, signal, DestroyRef, effect } from '@angular/core';
+import {
+  Component,
+  computed,
+  inject,
+  signal,
+  DestroyRef,
+  effect,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { toSignal, takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, ParamMap, Router } from '@angular/router';
@@ -304,6 +312,7 @@ function inVideoDurationBucket(durationSec: number | undefined, bucket: string):
     MatSnackBarModule,
   ],
   templateUrl: './asset-search-results.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './asset-search-results.component.scss',
 })
 export class AssetSearchResultsComponent {

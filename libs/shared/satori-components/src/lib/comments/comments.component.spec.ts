@@ -1,5 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -68,6 +73,7 @@ const httpError = (status: number) => new HttpErrorResponse({ status });
 @Component({
   standalone: true,
   imports: [NxsCommentsComponent, NxsCommentExtraDirective],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-comments
       [documentUid]="uid()"

@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import {
   type ApplicationConfig,
   DestroyRef,
@@ -31,7 +31,7 @@ export const appConfig: ApplicationConfig = {
     // Every Nuxeo request this application makes is signed by one interceptor.
     // The platform's services never build an auth header themselves — they cannot,
     // because only a host knows whether it is doing Basic, SSO or a token.
-    provideHttpClient(withInterceptors([templateNuxeoAuthInterceptor])),
+    provideHttpClient(withXhr(), withInterceptors([templateNuxeoAuthInterceptor])),
     provideRouter(routes, withComponentInputBinding()),
 
     /**

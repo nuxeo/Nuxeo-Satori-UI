@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateService } from '@ngx-translate/core';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
@@ -152,6 +152,9 @@ describe('DocumentDetailComponent', () => {
   let toast: { show: ReturnType<typeof vi.fn>; error: ReturnType<typeof vi.fn> };
 
   beforeEach(async () => {
+    // The service mocks live at module scope, and since Vitest 4 `vi.spyOn` on one returns
+    // that same mock, so call history would carry over from the previous test.
+    vi.clearAllMocks();
     toast = { show: vi.fn(), error: vi.fn() };
     TestBed.overrideProvider(NxsToastService, { useValue: toast });
     mockBrowseService.updateDocument.mockReturnValue(of(STUB_DOC));
@@ -160,7 +163,7 @@ describe('DocumentDetailComponent', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -527,7 +530,7 @@ describe('DocumentDetailComponent', () => {
         providers: [
           provideZonelessChangeDetection(),
           provideRouter([], withDisabledInitialNavigation()),
-          provideHttpClient(),
+          provideHttpClient(withXhr()),
           provideHttpClientTesting(),
           {
             provide: ActivatedRoute,
