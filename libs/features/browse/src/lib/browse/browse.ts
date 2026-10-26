@@ -977,6 +977,8 @@ export class BrowseComponent {
     this.permissionsLoading.set(false);
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
+    this.clearFilters();
+    this.selectionService.clear();
   }
 
   loadContent(): void {
