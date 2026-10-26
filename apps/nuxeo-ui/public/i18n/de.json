@@ -1507,7 +1507,8 @@
       "type-to-browse-subfolders": "Geben Sie / ein, um Unterordner zu durchsuchen",
       "up-one-folder-level": "Eine Ordnerebene nach oben",
       "upload-or-ingest-failed": "Hochladen oder Erfassung in Content Lake fehlgeschlagen.",
-      "upload-to-content-lake": "In Content Lake hochladen"
+      "upload-to-content-lake": "In Content Lake hochladen",
+      "ingesting-into-content-lake": "Wird in Content Lake aufgenommen..."
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Debug: {{ operation }}",

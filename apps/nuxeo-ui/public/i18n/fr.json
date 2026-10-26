@@ -1507,7 +1507,8 @@
       "type-to-browse-subfolders": "Tapez / pour parcourir les sous-dossiers",
       "up-one-folder-level": "Remonter d'un niveau de dossier",
       "upload-or-ingest-failed": "Échec de l'importation ou de l'ingestion dans Content Lake.",
-      "upload-to-content-lake": "Importer dans Content Lake"
+      "upload-to-content-lake": "Importer dans Content Lake",
+      "ingesting-into-content-lake": "Ingestion dans Content Lake..."
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Débogage : {{ operation }}",

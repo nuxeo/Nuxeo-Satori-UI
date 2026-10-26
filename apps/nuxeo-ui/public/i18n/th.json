@@ -1507,7 +1507,8 @@
       "type-to-browse-subfolders": "พิมพ์ / เพื่อเรียกดูโฟลเดอร์ย่อย",
       "up-one-folder-level": "ขึ้นไปหนึ่งระดับโฟลเดอร์",
       "upload-or-ingest-failed": "การอัปโหลดหรือการนำเข้า Content Lake ล้มเหลว",
-      "upload-to-content-lake": "อัปโหลดไปยัง Content Lake"
+      "upload-to-content-lake": "อัปโหลดไปยัง Content Lake",
+      "ingesting-into-content-lake": "กำลังนำเข้าสู่ Content Lake..."
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "ดีบัก: {{ operation }}",

@@ -1541,7 +1541,8 @@
       "type-to-browse-subfolders": "Type / to browse subfolders",
       "up-one-folder-level": "Up one folder level",
       "upload-or-ingest-failed": "Upload or Content Lake ingest failed.",
-      "upload-to-content-lake": "Upload to Content Lake"
+      "upload-to-content-lake": "Upload to Content Lake",
+      "ingesting-into-content-lake": "Ingesting into Content Lake..."
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Debug: {{ operation }}",

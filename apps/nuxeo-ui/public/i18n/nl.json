@@ -1507,7 +1507,8 @@
       "type-to-browse-subfolders": "Typ / om door submappen te bladeren",
       "up-one-folder-level": "Eén mapniveau omhoog",
       "upload-or-ingest-failed": "Uploaden of Content Lake-opname mislukt.",
-      "upload-to-content-lake": "Uploaden naar Content Lake"
+      "upload-to-content-lake": "Uploaden naar Content Lake",
+      "ingesting-into-content-lake": "Bezig met opnemen in Content Lake..."
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "Foutopsporing: {{ operation }}",

@@ -1507,7 +1507,8 @@
       "type-to-browse-subfolders": "输入 / 以浏览子文件夹",
       "up-one-folder-level": "向上一级文件夹",
       "upload-or-ingest-failed": "上传或 Content Lake 引入失败。",
-      "upload-to-content-lake": "上传到 Content Lake"
+      "upload-to-content-lake": "上传到 Content Lake",
+      "ingesting-into-content-lake": "正在摄取到 Content Lake..."
     },
     "debug-http-status": "HTTP {{ status }}",
     "debug-operation": "调试：{{ operation }}",
