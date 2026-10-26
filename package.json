@@ -171,7 +171,7 @@
     "@vitest/coverage-v8": "4.1.10",
     "@vitest/ui": "4.1.10",
     "angular-eslint": "^22.0.0",
-    "eslint": "^9.8.0",
+    "eslint": "^10.13.0",
     "eslint-config-prettier": "^10.0.0",
     "husky": "^9.1.7",
     "istanbul-lib-instrument": "^6.0.3",
