@@ -1,8 +1,8 @@
 /**
- * Layer 0 bootstrap configuration — the part of the configuration the shell
- * needs before the user authenticates: where Nuxeo is, what the product is
- * called, which theme to start in, sign-in options and the integrations it
- * reaches. What the interface offers and how it is arranged belongs in the
+ * Layer 0 bootstrap configuration — the part of the configuration the shell needs
+ * before the user authenticates: where Nuxeo is, what the product is called,
+ * which theme to start in, sign-in options and the integrations it reaches.
+ * What the interface offers and how it is arranged belongs in the
  * runtime manifest (Layer 1), which is fetched beside this file; the fields a
  * document type shows are per-type layout files, indexed by `layouts.json`.
  *
