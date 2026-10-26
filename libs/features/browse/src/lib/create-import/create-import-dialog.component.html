@@ -461,17 +461,10 @@
                   (selectionChange)="natureSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (nature; as natureId) {
+                    @if (nature) {
                       <nxs-chip-set
                         class="subjects-trigger-chips"
-                        [items]="[
-                          {
-                            id: natureId,
-                            label: naturePillLabel(natureId),
-                            removeLabel:
-                              'shared.remove-item' | translate: { name: naturePillLabel(natureId) },
-                          },
-                        ]"
+                        [items]="natureChips()"
                         (removed)="clearNature()"
                       />
                     }
@@ -551,18 +544,10 @@
                   (selectionChange)="coverageSelect.close()"
                 >
                   <mat-select-trigger>
-                    @if (coverage; as coverageId) {
+                    @if (coverage) {
                       <nxs-chip-set
                         class="subjects-trigger-chips"
-                        [items]="[
-                          {
-                            id: coverageId,
-                            label: coveragePillLabel(coverageId),
-                            removeLabel:
-                              'shared.remove-item'
-                              | translate: { name: coveragePillLabel(coverageId) },
-                          },
-                        ]"
+                        [items]="coverageChips()"
                         (removed)="clearCoverage()"
                       />
                     }
@@ -689,18 +674,10 @@
                       (selectionChange)="importNatureSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (nature; as natureId) {
+                        @if (nature) {
                           <nxs-chip-set
                             class="subjects-trigger-chips"
-                            [items]="[
-                              {
-                                id: natureId,
-                                label: naturePillLabel(natureId),
-                                removeLabel:
-                                  'shared.remove-item'
-                                  | translate: { name: naturePillLabel(natureId) },
-                              },
-                            ]"
+                            [items]="natureChips()"
                             (removed)="clearNature()"
                           />
                         }
@@ -782,18 +759,10 @@
                       (selectionChange)="importCoverageSelect.close()"
                     >
                       <mat-select-trigger>
-                        @if (coverage; as coverageId) {
+                        @if (coverage) {
                           <nxs-chip-set
                             class="subjects-trigger-chips"
-                            [items]="[
-                              {
-                                id: coverageId,
-                                label: coveragePillLabel(coverageId),
-                                removeLabel:
-                                  'shared.remove-item'
-                                  | translate: { name: coveragePillLabel(coverageId) },
-                              },
-                            ]"
+                            [items]="coverageChips()"
                             (removed)="clearCoverage()"
                           />
                         }

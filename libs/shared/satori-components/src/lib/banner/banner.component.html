@@ -9,7 +9,7 @@
             mat-flat-button
             type="button"
             [class]="action.cssClass ?? null"
-            [color]="action.danger ? 'warn' : 'primary'"
+            [class.nxs-banner__danger]="action.danger"
             [disabled]="action.disabled"
             (click)="press(action)"
           >
@@ -24,7 +24,7 @@
             mat-stroked-button
             type="button"
             [class]="action.cssClass ?? null"
-            [color]="action.danger ? 'warn' : 'primary'"
+            [class.nxs-banner__danger]="action.danger"
             [disabled]="action.disabled"
             (click)="press(action)"
           >
@@ -39,7 +39,7 @@
             mat-button
             type="button"
             [class]="action.cssClass ?? null"
-            [color]="action.danger ? 'warn' : 'primary'"
+            [class.nxs-banner__danger]="action.danger"
             [disabled]="action.disabled"
             (click)="press(action)"
           >

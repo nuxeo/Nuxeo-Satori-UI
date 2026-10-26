@@ -764,6 +764,51 @@ describe('DocumentDetailComponent — load chain', () => {
       expect(mockDetailService.trashDocument).not.toHaveBeenCalled();
     });
 
+    it('offers Restore and Delete permanently on a trashed document, each pressing its own action', async () => {
+      await build(doc({ isTrashed: true }));
+      const restore = vi.spyOn(component, 'restoreFromTrash').mockImplementation(() => undefined);
+      const remove = vi.spyOn(component, 'permanentlyDelete').mockImplementation(() => undefined);
+
+      const [restoreAction, deleteAction] = component.trashedBannerActions();
+      restoreAction.press();
+      deleteAction.press();
+
+      expect(restoreAction).toEqual(
+        expect.objectContaining({ emphasis: 'outlined', disabled: false }),
+      );
+      expect(deleteAction).toEqual(expect.objectContaining({ danger: true, disabled: false }));
+      expect(restore).toHaveBeenCalledTimes(1);
+      expect(remove).toHaveBeenCalledTimes(1);
+    });
+
+    it('offers no trashed-banner action to a reader who may neither restore nor remove', async () => {
+      await build(doc({ isTrashed: true, contextParameters: { permissions: ['Read'] } }));
+
+      expect(component.trashedBannerActions()).toEqual([]);
+    });
+
+    it('offers Go to latest on an older version, and Restore only to a user who may restore it', async () => {
+      await build(doc({ isVersion: true, contextParameters: { permissions: ['Read'] } }));
+      expect(component.versionBannerActions().map((a) => a.cssClass)).toEqual([
+        'version-banner-latest',
+      ]);
+
+      await build(
+        doc({ isVersion: true, contextParameters: { permissions: ['Read', 'WriteVersion'] } }),
+      );
+      const restore = vi
+        .spyOn(component, 'confirmRestoreVersion')
+        .mockImplementation(() => undefined);
+      const actions = component.versionBannerActions();
+      actions[1].press();
+
+      expect(actions.map((a) => a.cssClass)).toEqual([
+        'version-banner-latest',
+        'version-banner-restore',
+      ]);
+      expect(restore).toHaveBeenCalledTimes(1);
+    });
+
     it('restores from trash and reloads the document', async () => {
       await build();
       mockDetailService.restoreFromTrash.mockReturnValue(of(undefined));

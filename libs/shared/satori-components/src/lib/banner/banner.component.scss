@@ -38,10 +38,21 @@
   flex-wrap: wrap;
   gap: 8px;
   flex-shrink: 0;
+  max-width: 100%;
 
   mat-icon {
     font-size: 16px;
     width: 16px;
     height: 16px;
   }
+}
+
+// Material 3 ignores a button's `color` palette variants, so a destructive action takes the error tokens
+// itself, in each emphasis. Disabled buttons keep Material's own disabled styling.
+.nxs-banner__danger {
+  --mat-text-button-label-text-color: var(--mat-sys-error);
+  --mat-outlined-button-label-text-color: var(--mat-sys-error);
+  --mat-outlined-button-outline-color: var(--mat-sys-error);
+  --mat-filled-button-container-color: var(--mat-sys-error);
+  --mat-filled-button-label-text-color: var(--mat-sys-on-error);
 }

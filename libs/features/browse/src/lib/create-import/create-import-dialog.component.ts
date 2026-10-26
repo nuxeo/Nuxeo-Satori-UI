@@ -796,6 +796,26 @@ export class CreateImportDialogComponent implements OnInit {
     });
   }
 
+  /** The nature chip: one when the file has a nature, shown as its pill label. */
+  natureChips(): NxsChipItem[] {
+    return this.nature ? [this.chipFor(this.nature, this.naturePillLabel(this.nature))] : [];
+  }
+
+  /** The coverage chip: one when the file has a coverage, shown as its pill label. */
+  coverageChips(): NxsChipItem[] {
+    return this.coverage
+      ? [this.chipFor(this.coverage, this.coveragePillLabel(this.coverage))]
+      : [];
+  }
+
+  private chipFor(id: string, label: string): NxsChipItem {
+    return {
+      id,
+      label,
+      removeLabel: this.translate.instant('shared.remove-item', { name: label }),
+    };
+  }
+
   naturePillLabel(id: string): string {
     const entry = this.natureEntries().find((e) => e.id === id);
     return entry ? directoryPickerLabel(entry) : id;

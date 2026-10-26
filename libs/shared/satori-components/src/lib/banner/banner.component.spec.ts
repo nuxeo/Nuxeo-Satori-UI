@@ -112,12 +112,12 @@ describe('NxsBannerComponent', () => {
     expect(buttons()[0].classList).toContain(className);
   });
 
-  it('draws a danger action in the warn colour', async () => {
+  it('marks a danger action so its error-token styling applies', async () => {
     host.actions.set([
       { label: 'Delete', emphasis: 'outlined', danger: true, press: () => undefined },
     ]);
     await render();
-    expect(buttons()[0].classList).toContain('mat-warn');
+    expect(buttons()[0].classList).toContain('nxs-banner__danger');
   });
 
   it('disables an action the host disables, and does not press it', async () => {

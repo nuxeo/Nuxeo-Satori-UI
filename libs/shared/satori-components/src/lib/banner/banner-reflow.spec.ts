@@ -23,6 +23,10 @@ describe('NxsBannerComponent — reflow (NXSAT-332)', () => {
     expect(block('.nxs-banner__message')).toMatch(/flex:\s*1\s+1\s+\S+/);
   });
 
+  it('caps the actions group at the banner width so its buttons can wrap', () => {
+    expect(block('.nxs-banner__actions')).toMatch(/max-width:\s*100%/);
+  });
+
   it('keeps the actions whole instead of shrinking them', () => {
     expect(block('.nxs-banner__actions')).toMatch(/flex-shrink:\s*0/);
     expect(block('.nxs-banner__actions')).toMatch(/flex-wrap:\s*wrap/);
