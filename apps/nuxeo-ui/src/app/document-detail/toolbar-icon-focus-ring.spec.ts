@@ -13,7 +13,7 @@
  * That verdict belongs to a11y-scout (`docs/accessibility.md`); the NXENG-808 evidence script
  * records measurements without duplicating it.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
@@ -30,6 +30,7 @@ import { testTranslateModule } from '../i18n/translate-testing';
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './toolbar-icon-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './toolbar-icon-focus-ring.spec.html',
 })
 class ToolbarIconFocusHostComponent {

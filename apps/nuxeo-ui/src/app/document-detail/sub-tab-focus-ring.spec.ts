@@ -7,7 +7,7 @@
  * The token wiring is owned by `document-detail-sub-tab-focus-ring.spec.ts` (feature Vitest); this
  * suite owns compiled contrast, inset geometry, and IBM `:focus`-only focus-visible behaviour.
  */
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import {
@@ -24,6 +24,7 @@ const MINIMUM_RATIO = 3;
   standalone: true,
   imports: [NxsDetailsPanelComponent],
   templateUrl: './sub-tab-focus-ring.host.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
   ],

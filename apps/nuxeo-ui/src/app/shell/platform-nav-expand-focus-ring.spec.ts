@@ -1,9 +1,10 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
+import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
  * NXENG-796 — keyboard focus indicator on the sidebar **Expand navigation** rail toggle
@@ -19,6 +20,7 @@ import { TranslateModule } from '@ngx-translate/core';
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-expand-focus-ring.host.html',
 })
 class ExpandNavHostComponent {}
@@ -72,7 +74,7 @@ describe('Expand navigation rail toggle focus ring (NXENG-796)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ExpandNavHostComponent, TranslateModule.forRoot()],
+      imports: [ExpandNavHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');
@@ -154,9 +156,7 @@ describe('Expand navigation rail toggle focus ring (NXENG-796)', () => {
       }
       for (const rule of Array.from(rules)) {
         const styleRule = rule as CSSStyleRule;
-        const canonical = styleRule.selectorText
-          ?.replace(/\[_ngcontent-[^\]]+\]/g, '')
-          .trim();
+        const canonical = styleRule.selectorText?.replace(/\[_ngcontent-[^\]]+\]/g, '').trim();
         if (canonical === target) {
           matched = styleRule;
           break;
@@ -165,7 +165,9 @@ describe('Expand navigation rail toggle focus ring (NXENG-796)', () => {
       if (matched) break;
     }
 
-    expect(matched).withContext(`stylesheet must contain ${target} without a comma list`).toBeDefined();
+    expect(matched)
+      .withContext(`stylesheet must contain ${target} without a comma list`)
+      .toBeDefined();
     expect(matched!.cssText).toMatch(/outline:\s*2px\s+solid/);
     expect(matched!.cssText).toMatch(/outline-offset:\s*-2px/);
   });

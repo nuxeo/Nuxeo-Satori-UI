@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { vi } from 'vitest';
 
@@ -7,6 +12,7 @@ import { NxsDropzoneComponent } from './dropzone.component';
 @Component({
   standalone: true,
   imports: [NxsDropzoneComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-dropzone
     label="Drag and drop files here"
     [buttonLabel]="buttonLabel()"
@@ -26,6 +32,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsDropzoneComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-dropzone label="Drop invoices here" buttonLabel="Choose invoices" />
     <nxs-dropzone label="Drop receipts here" buttonLabel="Choose receipts" />`,
 })

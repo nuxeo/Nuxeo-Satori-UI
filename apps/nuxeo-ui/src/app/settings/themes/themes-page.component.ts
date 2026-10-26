@@ -1,5 +1,5 @@
 import { NgStyle } from '@angular/common';
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -13,6 +13,7 @@ import { AppThemeService } from '../../theme/app-theme.service';
   selector: 'app-themes-page',
   imports: [NgStyle, MatButtonModule, MatIconModule, TranslatePipe, DescriptorLabelPipe],
   templateUrl: './themes-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './themes-page.component.scss',
 })
 export class ThemesPageComponent {

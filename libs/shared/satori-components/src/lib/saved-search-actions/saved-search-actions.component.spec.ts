@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, type Observable } from 'rxjs';
@@ -11,6 +16,7 @@ import { NxsSavedSearchActionsComponent } from './saved-search-actions.component
 @Component({
   standalone: true,
   imports: [NxsSavedSearchActionsComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-saved-search-actions
     [savedSearchId]="savedSearchId()"
     [dirty]="dirty()"

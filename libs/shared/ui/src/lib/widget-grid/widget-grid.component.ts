@@ -1,9 +1,10 @@
-import { Component, input } from '@angular/core';
+import { Component, input, ChangeDetectionStrategy } from '@angular/core';
 
 @Component({
   selector: 'lib-widget-grid',
   standalone: true,
   templateUrl: './widget-grid.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './widget-grid.component.scss',
 })
 export class WidgetGridComponent {

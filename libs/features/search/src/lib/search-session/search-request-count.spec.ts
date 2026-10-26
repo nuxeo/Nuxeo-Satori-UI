@@ -1,5 +1,10 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
-import { provideHttpClient } from '@angular/common/http';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -32,13 +37,14 @@ const answer = {
   },
 };
 
-@Component({ standalone: true, template: '' })
+@Component({ standalone: true, changeDetection: ChangeDetectionStrategy.Eager, template: '' })
 class BlankPage {}
 
 /** The search page and the search drawer, side by side as the shell shows them. */
 @Component({
   standalone: true,
   imports: [SearchComponent, SearchFiltersDrawerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<lib-search-filters-drawer /><lib-search />',
 })
 class SearchScreen {}
@@ -60,7 +66,7 @@ describe('one change of the search, one request', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         provideRouter([{ path: 'search', component: BlankPage }]),
         { provide: NUXEO_API_ORIGIN, useValue: '' },

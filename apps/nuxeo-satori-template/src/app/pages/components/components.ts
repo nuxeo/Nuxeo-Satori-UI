@@ -1,5 +1,5 @@
-import { Component, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
+
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
 import { MatDialog, MatDialogModule } from '@angular/material/dialog';
@@ -32,7 +32,6 @@ import {
   selector: 'app-components',
   standalone: true,
   imports: [
-    CommonModule,
     MatButtonModule,
     MatCardModule,
     MatDialogModule,
@@ -42,6 +41,7 @@ import {
     SelectionTopbarComponent,
   ],
   templateUrl: './components.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './components.scss',
 })
 export class ComponentsShowcaseComponent {

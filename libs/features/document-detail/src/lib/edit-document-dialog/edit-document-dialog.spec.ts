@@ -5,6 +5,7 @@ import {
   input,
   provideZonelessChangeDetection,
   signal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
@@ -37,6 +38,7 @@ const DOC: NuxeoDocument = {
   selector: 'lib-document-layout-form',
   standalone: true,
   template: `<p class="form">{{ mode() }} {{ document()?.uid }} {{ disabled() }}</p>`,
+  changeDetection: ChangeDetectionStrategy.Eager,
   providers: [
     {
       provide: DocumentLayoutFormComponent,

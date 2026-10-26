@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TranslatePipe } from '@ngx-translate/core';
 
 /** PoC placeholder for routes not yet backed by feature libraries. */
@@ -6,6 +6,7 @@ import { TranslatePipe } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslatePipe],
   templateUrl: './placeholder-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       .placeholder {

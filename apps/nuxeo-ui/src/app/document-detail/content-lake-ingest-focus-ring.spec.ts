@@ -6,7 +6,7 @@
  * IBM `style_focus_visible` constraints: standalone `:focus` selector, token wiring, outline
  * width/style when focused. WCAG 1.4.11 contrast on the live route is owned by a11y-scout.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -20,6 +20,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './content-lake-ingest-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './content-lake-ingest-focus-ring.spec.html',
 })
 class ContentLakeIngestFocusHostComponent {}

@@ -1,4 +1,11 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
 import { filter, map, startWith, switchMap } from 'rxjs';
@@ -59,6 +66,7 @@ const QUEUE_QUICK_FILTER_OPTIONS = [
   ],
   providers: [provideNxsToast()],
   templateUrl: './search-filters-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search-filters-drawer.component.scss',
 })
 export class SearchFiltersDrawerComponent {
@@ -88,7 +96,7 @@ export class SearchFiltersDrawerComponent {
   readonly facetLabels = toSignal(
     this.translate.onLangChange.pipe(
       map((event) => event.lang),
-      startWith(this.translate.currentLang || this.translate.defaultLang || 'en'),
+      startWith(this.translate.getCurrentLang() ?? 'en'),
       switchMap((lang) => loadFacetLabels(this.directoryService, lang)),
     ),
     { initialValue: {} },

@@ -134,8 +134,9 @@ there is a whole tier missing, and that the tests which exist are not run by any
 
 This is not documented anywhere and is the root of finding §1.3.4.
 
-- **19 library projects run Vitest** via `vite.config.mts`, discovered by
-  `vitest.workspace.ts` (`['**/vite.config.{mjs,js,ts,mts}', '**/vitest.config.{mjs,js,ts,mts}']`).
+- **19 library projects run Vitest** via `vite.config.mts`, each as its own Nx `test` target. A root
+  `vitest.workspace.ts` listed them until Vitest 4, which no longer reads that file; it was deleted
+  rather than replaced, because nothing ran Vitest from the workspace root.
 - **`nuxeo-ui` runs Karma + Jasmine.** `apps/nuxeo-ui/project.json:51-57` declares
   `ng test nuxeo-ui --no-watch --browsers=ChromeHeadless`; `angular.json` wires
   `@angular/build:karma` with `apps/nuxeo-ui/karma.conf.js`. There is no `vite.config.mts` and

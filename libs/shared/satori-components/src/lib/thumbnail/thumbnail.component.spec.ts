@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { Subject, throwError, type Observable } from 'rxjs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -11,6 +16,7 @@ import { NxsThumbnailComponent } from './thumbnail.component';
 @Component({
   standalone: true,
   imports: [NxsThumbnailComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (shown()) {
       <nxs-thumbnail class="probe-thumb" [documentId]="documentId()" [alt]="alt()">

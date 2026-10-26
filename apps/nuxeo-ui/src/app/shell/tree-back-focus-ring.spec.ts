@@ -6,7 +6,7 @@
  * What these tests do NOT cover: focus visibility on a live document-detail route. That verdict
  * belongs to a11y-scout; this Karma suite renders the real tree and asserts its computed outline.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { TranslatePipe } from '@ngx-translate/core';
@@ -38,6 +38,7 @@ const DOMAIN = {
   standalone: true,
   imports: [NxsDocumentTreeComponent, TranslatePipe],
   styleUrls: ['./tree-back-focus-ring.fixture.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './tree-back-focus-ring.spec.html',
 })
 class TreeBackFocusHostComponent {}
