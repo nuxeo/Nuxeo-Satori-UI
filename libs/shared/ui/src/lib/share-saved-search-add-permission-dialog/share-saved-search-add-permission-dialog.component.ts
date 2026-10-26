@@ -207,7 +207,8 @@ export class ShareSavedSearchAddPermissionDialogComponent {
 
   private buildResultEntry(): ShareSavedSearchAddPermissionResult {
     const principal = this.selectedPrincipal();
-    const userGroup = principal?.label ?? '';
+    // The caller sends this as the permission's `username`, so it is the id, never the label.
+    const userGroup = principal?.id ?? '';
     const grantedBy =
       this.isEditMode && this.data.initialData?.grantedBy
         ? this.data.initialData.grantedBy

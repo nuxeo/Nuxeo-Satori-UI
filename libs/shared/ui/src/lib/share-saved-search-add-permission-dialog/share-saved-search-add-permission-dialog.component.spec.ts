@@ -71,7 +71,7 @@ describe('Saved-search sharing — principal picker integration', () => {
     TestBed.resetTestingModule();
   });
 
-  it('waits for three characters and returns the chosen group label and kind', async () => {
+  it('waits for three characters and returns the chosen group id, not its label', async () => {
     await render();
     await type('le');
     expect(search).not.toHaveBeenCalled();
@@ -80,7 +80,7 @@ describe('Saved-search sharing — principal picker integration', () => {
     expect(search).toHaveBeenCalledWith('legal');
     fixture.componentInstance.create(false);
     expect(close).toHaveBeenCalledWith([
-      { userGroup: 'Legal team', right: 'Read', timeFrame: 'Permanent', grantedBy: 'Group' },
+      { userGroup: 'legal-team', right: 'Read', timeFrame: 'Permanent', grantedBy: 'Group' },
     ]);
   });
 
