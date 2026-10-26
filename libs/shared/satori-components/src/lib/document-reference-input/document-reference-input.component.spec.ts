@@ -289,6 +289,23 @@ describe('NxsDocumentReferenceInputComponent', () => {
     expect(options().map((option) => option.getAttribute('data-uid'))).toEqual(['n1']);
   });
 
+  it('shows a disabled empty state when every matching document is selected', async () => {
+    await multiple();
+    host.many.setValue(['c1', 'n1']);
+    await render();
+    await type('contract');
+    expect(options().map((option) => option.textContent?.trim())).toEqual(['No results']);
+    expect(options()[0].getAttribute('aria-disabled')).toBe('true');
+    options()[0].click();
+    await render();
+    expect(host.many.value).toEqual(['c1', 'n1']);
+    root()
+      .querySelector<HTMLButtonElement>('button[aria-label="Remove Supplier contract"]')
+      ?.click();
+    await render();
+    expect(options().map((option) => option.getAttribute('data-uid'))).toEqual(['c1']);
+  });
+
   it('shows each stored title as it arrives while another lookup is still pending', async () => {
     await multiple();
     const slow = new Subject<{ entries: NuxeoDocument[] }>();

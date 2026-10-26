@@ -321,6 +321,30 @@ describe('NxsUserGroupPickerComponent', () => {
     expect(chips()).toHaveLength(2);
   });
 
+  it('shows a disabled empty state when every matching principal is selected', async () => {
+    await multiple();
+    host.many.setValue([
+      { id: ADMIN.id, label: ADMIN.displayLabel, kind: 'user', prefixedId: ADMIN.prefixed_id },
+      { id: ADMINS.id, label: ADMINS.displayLabel, kind: 'group', prefixedId: ADMINS.prefixed_id },
+    ]);
+    await render();
+    await type('adm');
+    await settle();
+    expect(options().map((option) => option.textContent?.trim())).toEqual(['No results']);
+    expect(options()[0].getAttribute('aria-disabled')).toBe('true');
+    options()[0].click();
+    await render();
+    expect(host.many.value.map((principal) => principal.prefixedId)).toEqual([
+      'user:Administrator',
+      'group:administrators',
+    ]);
+    root().querySelector<HTMLButtonElement>('button[aria-label="Remove Administrator"]')?.click();
+    await render();
+    expect(options().map((option) => option.getAttribute('data-principal'))).toEqual([
+      'user:Administrator',
+    ]);
+  });
+
   it('removes just the named principal and validates the empty required list', async () => {
     await multiple();
     host.many.setValue([

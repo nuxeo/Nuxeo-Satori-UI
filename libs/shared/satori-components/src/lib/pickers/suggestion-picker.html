@@ -123,6 +123,10 @@
               >
             </span>
           </mat-option>
+        } @empty {
+          <mat-option disabled class="nxs-picker__status">{{
+            'satori-components.pickers.no-results' | translate
+          }}</mat-option>
         }
       }
     }
