@@ -917,7 +917,7 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     protected labelOf(id: string): string;
     protected remove(id: string): void;
     protected clear(): void;
-    protected blurred(): void;
+    protected blurred(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentReferenceInputComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, {
     "label": {
@@ -2396,7 +2396,7 @@ class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, Do
     protected choose(principal: NxsPrincipal | null): void;
     protected clear(): void;
     protected remove(principal: NxsPrincipal): void;
-    protected blurred(): void;
+    protected blurred(event: FocusEvent): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserGroupPickerComponent, never>;
     static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserGroupPickerComponent, "nxs-user-group-picker", never, {
     "label": {

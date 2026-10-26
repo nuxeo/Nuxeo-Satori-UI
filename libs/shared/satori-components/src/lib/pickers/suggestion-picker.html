@@ -33,7 +33,6 @@
       [matAutocomplete]="auto"
       [value]="text()"
       (input)="onInput($event)"
-      (blur)="blurred()"
     />
   } @else {
     <input
@@ -47,7 +46,6 @@
       [disabled]="isDisabled()"
       [errorStateMatcher]="errorState"
       (input)="onInput($event)"
-      (blur)="blurred()"
     />
     @if (chosenItems().length && !isDisabled()) {
       <button

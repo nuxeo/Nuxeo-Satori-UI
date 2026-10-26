@@ -86,6 +86,23 @@ class HostComponent {
   readonly chosen: (NxsDocumentReference | null)[] = [];
 }
 
+/** Forms that update on blur take the picker's value only when the user leaves the field. */
+@Component({
+  standalone: true,
+  imports: [NxsDocumentReferenceInputComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<nxs-document-reference-input label="Related" multiple [formControl]="many" />
+    <nxs-document-reference-input label="Related" [formControl]="one" />
+    <button type="button" class="elsewhere">Elsewhere</button>`,
+})
+class BlurHostComponent {
+  readonly many = new FormControl<readonly string[]>(['c1', 'n1'], {
+    nonNullable: true,
+    updateOn: 'blur',
+  });
+  readonly one = new FormControl<string | null>('c1', { updateOn: 'blur' });
+}
+
 describe('NxsDocumentReferenceInputComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -117,7 +134,7 @@ describe('NxsDocumentReferenceInputComponent', () => {
       return of({ entries: uid === undefined ? docs : docs.filter((d) => d.uid === uid) });
     });
     await TestBed.configureTestingModule({
-      imports: [HostComponent],
+      imports: [HostComponent, BlurHostComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: NuxeoApiBase, useValue: { nxqlSearch } },
@@ -220,6 +237,22 @@ describe('NxsDocumentReferenceInputComponent', () => {
     await render();
     expect(host.reference.value).toBeNull();
     expect(host.chosen).toEqual([null]);
+  });
+
+  it('looks the title up again when a form resets and repopulates the same uid at once', async () => {
+    host.reference.setValue('c1');
+    await render();
+    expect(input().value).toBe('Supplier contract');
+    nxqlSearch.mockClear();
+    host.reference.reset();
+    host.reference.setValue('c1');
+    await render();
+    expect(nxqlSearch).toHaveBeenCalledExactlyOnceWith(
+      "SELECT * FROM Document WHERE ecm:uuid = 'c1'",
+      1,
+    );
+    expect(input().value).toBe('Supplier contract');
+    expect(host.reference.value).toBe('c1');
   });
 
   it('keeps a uid it cannot look up, shown as it is', async () => {
@@ -390,5 +423,86 @@ describe('NxsDocumentReferenceInputComponent', () => {
     picker.detectChanges();
     await picker.whenStable();
     expect(picker.nativeElement.querySelector('input').value).toBe('Contract');
+  });
+
+  it('shows only the first stored document when two switch to single mode, whatever answers last', async () => {
+    const picker = TestBed.createComponent(NxsDocumentReferenceInputComponent);
+    picker.componentRef.setInput('label', 'Related contract');
+    picker.componentRef.setInput('multiple', true);
+    picker.componentRef.setInput('value', ['c1', 'n1']);
+    picker.detectChanges();
+    await picker.whenStable();
+    const late = new Subject<{ entries: NuxeoDocument[] }>();
+    nxqlSearch
+      .mockReturnValueOnce(of({ entries: [doc('c1', 'Supplier contract')] }))
+      .mockReturnValueOnce(late);
+    picker.componentRef.setInput('multiple', false);
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('Supplier contract');
+    late.next({ entries: [doc('n1', 'Contract notes', 'Note')] });
+    late.complete();
+    picker.detectChanges();
+    await picker.whenStable();
+    expect(picker.nativeElement.querySelector('input').value).toBe('Supplier contract');
+  });
+
+  describe('with a form that updates on blur', () => {
+    let blurFixture: ComponentFixture<BlurHostComponent>;
+    const pickers = (): HTMLElement[] => [
+      ...(blurFixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        'nxs-document-reference-input',
+      ),
+    ];
+    const elsewhere = (): HTMLButtonElement =>
+      (blurFixture.nativeElement as HTMLElement).querySelector('.elsewhere') as HTMLButtonElement;
+    async function settleBlur(): Promise<void> {
+      blurFixture.detectChanges();
+      await blurFixture.whenStable();
+    }
+
+    beforeEach(async () => {
+      blurFixture = TestBed.createComponent(BlurHostComponent);
+      await settleBlur();
+    });
+
+    it('takes a chip removed with the mouse once focus leaves, though the input never had it', async () => {
+      const remove = pickers()[0].querySelector<HTMLButtonElement>(
+        'button[aria-label="Remove Supplier contract"]',
+      ) as HTMLButtonElement;
+      remove.focus();
+      remove.click();
+      await settleBlur();
+      expect(pickers()[0].querySelectorAll('mat-chip-row')).toHaveLength(1);
+      elsewhere().focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.value).toEqual(['n1']);
+      expect(blurFixture.componentInstance.many.touched).toBe(true);
+    });
+
+    it('does not count moving between its own input and chips as leaving', async () => {
+      const field = pickers()[0];
+      field.querySelector('input')?.focus();
+      field.querySelector<HTMLElement>('mat-chip-row [role="gridcell"]')?.focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.touched).toBe(false);
+      elsewhere().focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.touched).toBe(true);
+    });
+
+    it('returns focus to the input after the x button, so leaving then takes the cleared value', async () => {
+      const field = pickers()[1];
+      const clear = field.querySelector<HTMLButtonElement>(
+        'button.nxs-picker__clear',
+      ) as HTMLButtonElement;
+      clear.focus();
+      clear.click();
+      await settleBlur();
+      expect(document.activeElement).toBe(field.querySelector('input'));
+      elsewhere().focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.one.value).toBeNull();
+    });
   });
 });

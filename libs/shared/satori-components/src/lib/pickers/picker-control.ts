@@ -72,6 +72,17 @@ export class NxsPickerControl<T> {
     this.onTouched();
   }
 
+  /**
+   * Focus left an element of the picker, whose `host` holds the input and every chip. Moving
+   * between them is not leaving; anywhere else is, even when the input never had focus — a chip
+   * removed with the mouse is otherwise never reported to a form that updates on blur.
+   */
+  focusLeft(host: HTMLElement, event: FocusEvent): void {
+    const next = event.relatedTarget;
+    if (next instanceof Node && host.contains(next)) return;
+    this.blurred();
+  }
+
   /** Touched here or in the form — `markAllAsTouched()` on submit, for example. */
   wasTouched(): boolean {
     return this.touched() || Boolean(this.control?.touched);

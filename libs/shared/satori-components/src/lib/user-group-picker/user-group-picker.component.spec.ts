@@ -63,6 +63,31 @@ class HostComponent {
   readonly principal = new FormControl<NxsPrincipal | null>(null, Validators.required);
 }
 
+const JANE: NxsPrincipal = { id: 'jdoe', label: 'Jane Doe', kind: 'user', prefixedId: 'user:jdoe' };
+const SALES: NxsPrincipal = {
+  id: 'sales',
+  label: 'Sales',
+  kind: 'group',
+  prefixedId: 'group:sales',
+};
+
+/** Forms that update on blur take the picker's value only when the user leaves the field. */
+@Component({
+  standalone: true,
+  imports: [NxsUserGroupPickerComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: `<nxs-user-group-picker label="Grant to" multiple [formControl]="many" />
+    <nxs-user-group-picker label="Grant to" [formControl]="one" />
+    <button type="button" class="elsewhere">Elsewhere</button>`,
+})
+class BlurHostComponent {
+  readonly many = new FormControl<readonly NxsPrincipal[]>([JANE, SALES], {
+    nonNullable: true,
+    updateOn: 'blur',
+  });
+  readonly one = new FormControl<NxsPrincipal | null>(JANE, { updateOn: 'blur' });
+}
+
 describe('NxsUserGroupPickerComponent', () => {
   let fixture: ComponentFixture<HostComponent>;
   let host: HostComponent;
@@ -93,13 +118,19 @@ describe('NxsUserGroupPickerComponent', () => {
     await render();
   }
 
+  /** The user leaves the text input for somewhere outside the picker. */
+  function leave(): void {
+    input().focus();
+    input().blur();
+  }
+
   beforeEach(async () => {
     vi.useFakeTimers();
     suggestions = vi.fn(() => of([ADMIN, ADMINS]));
     users = { searchUsers: vi.fn(), searchGroups: vi.fn() };
     announce = vi.fn(() => Promise.resolve());
     await TestBed.configureTestingModule({
-      imports: [HostComponent],
+      imports: [HostComponent, BlurHostComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: DocumentDetailService, useValue: { searchUsersGroups: suggestions } },
@@ -175,7 +206,7 @@ describe('NxsUserGroupPickerComponent', () => {
     await type('Administrato');
     expect(host.principal.value).toBeNull();
     expect(host.principal.hasError('nxsChooseFromList')).toBe(true);
-    input().dispatchEvent(new Event('blur'));
+    leave();
     await render();
     expect(text('mat-error')).toBe('Choose an entry from the list');
   });
@@ -286,7 +317,7 @@ describe('NxsUserGroupPickerComponent', () => {
 
   it('shows the form’s required error once the user has left the field empty', async () => {
     expect(root().querySelector('mat-error')).toBeNull();
-    input().dispatchEvent(new Event('blur'));
+    leave();
     await render();
     expect(text('mat-error')).toBe('Required');
     expect(host.principal.touched).toBe(true);
@@ -389,7 +420,7 @@ describe('NxsUserGroupPickerComponent', () => {
     await render();
     expect(host.many.value.map((p) => p.prefixedId)).toEqual(['group:same']);
     root().querySelector<HTMLButtonElement>('button[aria-label="Remove Same group"]')?.click();
-    input().dispatchEvent(new Event('blur'));
+    leave();
     await render();
     expect(host.many.value).toEqual([]);
     expect(host.many.hasError('required')).toBe(true);
@@ -423,5 +454,64 @@ describe('NxsUserGroupPickerComponent', () => {
     await render();
     expect(chips()).toHaveLength(0);
     expect(input().value).toBe('');
+  });
+
+  describe('with a form that updates on blur', () => {
+    let blurFixture: ComponentFixture<BlurHostComponent>;
+    const pickers = (): HTMLElement[] => [
+      ...(blurFixture.nativeElement as HTMLElement).querySelectorAll<HTMLElement>(
+        'nxs-user-group-picker',
+      ),
+    ];
+    const elsewhere = (): HTMLButtonElement =>
+      (blurFixture.nativeElement as HTMLElement).querySelector('.elsewhere') as HTMLButtonElement;
+    async function settleBlur(): Promise<void> {
+      blurFixture.detectChanges();
+      await blurFixture.whenStable();
+    }
+
+    beforeEach(async () => {
+      blurFixture = TestBed.createComponent(BlurHostComponent);
+      await settleBlur();
+    });
+
+    it('takes a chip removed with the mouse once focus leaves, though the input never had it', async () => {
+      const remove = pickers()[0].querySelector<HTMLButtonElement>(
+        'button[aria-label="Remove Jane Doe"]',
+      ) as HTMLButtonElement;
+      remove.focus();
+      remove.click();
+      await settleBlur();
+      expect(pickers()[0].querySelectorAll('mat-chip-row')).toHaveLength(1);
+      elsewhere().focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.value).toEqual([SALES]);
+      expect(blurFixture.componentInstance.many.touched).toBe(true);
+    });
+
+    it('does not count moving between its own input and chips as leaving', async () => {
+      const field = pickers()[0];
+      field.querySelector('input')?.focus();
+      field.querySelector<HTMLElement>('mat-chip-row [role="gridcell"]')?.focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.touched).toBe(false);
+      elsewhere().focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.many.touched).toBe(true);
+    });
+
+    it('returns focus to the input after the x button, so leaving then takes the cleared value', async () => {
+      const field = pickers()[1];
+      const clear = field.querySelector<HTMLButtonElement>(
+        'button.nxs-picker__clear',
+      ) as HTMLButtonElement;
+      clear.focus();
+      clear.click();
+      await settleBlur();
+      expect(document.activeElement).toBe(field.querySelector('input'));
+      elsewhere().focus();
+      await settleBlur();
+      expect(blurFixture.componentInstance.one.value).toBeNull();
+    });
   });
 });

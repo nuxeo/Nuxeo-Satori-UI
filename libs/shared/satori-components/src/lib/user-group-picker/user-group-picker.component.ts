@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   type DoCheck,
+  ElementRef,
   booleanAttribute,
   computed,
   effect,
@@ -86,7 +87,7 @@ let nextId = 0;
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: nxsPickerProviders(() => NxsUserGroupPickerComponent),
-  host: { class: 'nxs-user-group-picker' },
+  host: { class: 'nxs-user-group-picker', '(focusout)': 'blurred($event)' },
 })
 export class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
   /** The field's label, already translated. Required: the input has no other name. */
@@ -113,6 +114,7 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
   private readonly users = inject(UserService);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly control = new NxsPickerControl<NxsPrincipal | readonly NxsPrincipal[] | null>();
 
   private committed: NxsPrincipal | readonly NxsPrincipal[] | null = null;
@@ -271,8 +273,8 @@ export class NxsUserGroupPickerComponent implements ControlValueAccessor, Valida
     this.control.changed(value);
   }
 
-  protected blurred(): void {
-    this.control.blurred();
+  protected blurred(event: FocusEvent): void {
+    this.control.focusLeft(this.host.nativeElement, event);
   }
 
   private find(term: string): Observable<readonly NxsPrincipal[]> {

@@ -3,6 +3,7 @@ import {
   ChangeDetectionStrategy,
   Component,
   type DoCheck,
+  ElementRef,
   booleanAttribute,
   computed,
   effect,
@@ -103,7 +104,7 @@ function lookupQuery(id: string, idProperty: 'uid' | 'path'): string {
   ],
   changeDetection: ChangeDetectionStrategy.OnPush,
   providers: nxsPickerProviders(() => NxsDocumentReferenceInputComponent),
-  host: { class: 'nxs-document-reference-input' },
+  host: { class: 'nxs-document-reference-input', '(focusout)': 'blurred($event)' },
 })
 export class NxsDocumentReferenceInputComponent
   implements ControlValueAccessor, Validator, DoCheck
@@ -131,6 +132,7 @@ export class NxsDocumentReferenceInputComponent
   private readonly api = inject(NuxeoApiBase);
   private readonly announcer = inject(LiveAnnouncer);
   private readonly translate = inject(TranslateService);
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   protected readonly inputId = `nxs-document-reference-input-${nextId++}`;
   private readonly input = viewChild(MatInput);
   private readonly grid = viewChild(MatChipGrid);
@@ -207,7 +209,8 @@ export class NxsDocumentReferenceInputComponent
       .subscribe(({ id, found }) => {
         if (!this.chosen().includes(id) || !found) return;
         this.references.update((references) => new Map(references).set(id, found));
-        if (!this.multiple()) {
+        // A single field shows only the first stored id, whichever lookup answers last.
+        if (!this.multiple() && id === this.chosen()[0]) {
           this.document.set(found);
           this.text.set(found.title);
         }
@@ -272,6 +275,8 @@ export class NxsDocumentReferenceInputComponent
       this.document.set(null);
       this.references.set(new Map());
       this.lookups.next({ ids: [], idProperty: this.idProperty() });
+      // The titles are gone, so the host writing the previous value again must look it up again.
+      this.committed = this.value();
     }
     this.text.set(this.multiple() ? '' : this.labelOf(this.chosen()[0] ?? ''));
   }
@@ -362,8 +367,8 @@ export class NxsDocumentReferenceInputComponent
     });
   }
 
-  protected blurred(): void {
-    this.control.blurred();
+  protected blurred(event: FocusEvent): void {
+    this.control.focusLeft(this.host.nativeElement, event);
   }
 
   private find(term: string): Observable<readonly NxsDocumentReference[]> {
