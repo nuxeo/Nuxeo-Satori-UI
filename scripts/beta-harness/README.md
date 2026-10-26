@@ -13,6 +13,8 @@ TypeScript declarations supply Windows paths; filesystem operations retain nativ
 The platform jobs use the runtime pinned in `.nvmrc`. The Windows workflow explicitly builds
 `nuxeo-ui` because an affected build need not select the application, whereas the bundle
 gate always requires its output.
+Both Windows verification and CodeQL run for PRs into `feature/nxsat-673-satori-1.0`;
+otherwise the fixed target would silently omit the Windows gate or its prerequisite.
 
 `npm run beta:e2e-negative-control` uses the portable Node runner (the `.sh` file is only
 a compatibility wrapper). It preserves separate baseline/starved reports and artifacts,

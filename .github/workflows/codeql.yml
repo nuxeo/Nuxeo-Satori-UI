@@ -18,7 +18,7 @@ on:
   push:
     branches: [ "main", "integration/**" ]
   pull_request:
-    branches: [ "main", "integration/**" ]
+    branches: [ "main", "integration/**", "feature/nxsat-673-satori-1.0" ]
   schedule:
     - cron: '22 6 * * 5'
 

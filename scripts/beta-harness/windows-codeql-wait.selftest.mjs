@@ -27,6 +27,14 @@ const success = {
 };
 const analysis = { ref: context.ref, commit_sha: context.sha, tool: { name: 'CodeQL' } };
 
+test('Windows verification and its CodeQL prerequisite run for the fixed Satori target', () => {
+  const codeql = load(
+    readFileSync(new URL('../../.github/workflows/codeql.yml', import.meta.url), 'utf8'),
+  );
+  for (const config of [workflow, codeql])
+    assert.ok(config.on.pull_request.branches.includes('feature/nxsat-673-satori-1.0'));
+});
+
 test('all platform jobs use the repository-pinned runtime accepted by gate zero', () => {
   for (const job of Object.values(workflow.jobs)) {
     const setup = job.steps.find((step) => step.uses?.startsWith('actions/setup-node@'));
