@@ -80,14 +80,15 @@ export interface NavItemDescriptor extends ExtensionElement {
  * packaged entries without restating the list.
  */
 export const PACKAGED_NAV_ITEMS: readonly NavItemDescriptor[] = [
-  {
-    id: 'app.navbar.knowledgeDiscovery',
-    labelKey: 'nav.item.knowledge-discovery',
-    label: 'Knowledge Discovery',
-    path: '/knowledge-discovery',
-    icon: 'star',
-    order: 10,
-  },
+  // Temporarily disabled: Knowledge Discovery
+  // {
+  //   id: 'app.navbar.knowledgeDiscovery',
+  //   labelKey: 'nav.item.knowledge-discovery',
+  //   label: 'Knowledge Discovery',
+  //   path: '/knowledge-discovery',
+  //   icon: 'star',
+  //   order: 10,
+  // },
   {
     id: 'app.navbar.dashboard',
     labelKey: 'nav.item.dashboard',
