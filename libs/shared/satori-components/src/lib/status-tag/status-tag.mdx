@@ -1,0 +1,100 @@
+import { Canvas, Meta, Source } from '@storybook/addon-docs/blocks';
+
+import * as StatusTagStories from './status-tag.stories';
+
+<Meta of={StatusTagStories} name="Overview" />
+
+# Status tag
+
+A status tag is a short label that shows the state of something — a lifecycle state, a task's
+progress, an overdue flag. Use it where a status is read at a glance. A status tag is not a button
+and not a filter chip: it does nothing when clicked.
+
+## Key features
+
+- **Seven statuses**: `neutral`, the default, `neutral-quiet`, `info`, `success`, `warning`,
+  `important` and `important-loud`, the same names Satori's status tag takes.
+- **An icon per status**, shown unless `hideIcon` is set. `neutral` and `neutral-quiet` show none.
+- **Never cut short.** A label longer than the space it has wraps onto a further line inside the
+  tag rather than spilling out of its box.
+- **Each status is its own colour, in any theme.** Each takes a container role from your Material
+  theme. Set `--nxs-status-tag-<status>-background` and `--nxs-status-tag-<status>-foreground` to
+  give a status your own colours.
+- **Replaceable by ID.** It is registered as `nxs.primitives.statusTag`, so Satori's status tag or
+  your own can take its place.
+
+## Demo showcase
+
+<Canvas of={StatusTagStories.Default} />
+
+## Usage
+
+<Source
+  language="typescript"
+  dark
+  code={`import { NxsStatusTagComponent } from '@nuxeo/satori-platform/components';`}
+/>
+
+<Source
+  language="html"
+  dark
+  code={`<nxs-status-tag [label]="'acme.state.overdue' | translate" status="important-loud" />`}
+/>
+
+Only `label` is required, already translated. `status` defaults to `neutral`, and `hideIcon`
+defaults to `false`. Used directly, the status tag needs no providers.
+
+### By registered ID
+
+`provideNxsComponents()` registers the status tag as `nxs.primitives.statusTag`, exported as
+`NXS_PRIMITIVE_IDS.statusTag`:
+
+export const byIdHtml = `<lib-extension-outlet
+  [componentId]="statusTagId"
+  [componentInputs]="{ label: 'Overdue', status: 'important-loud', hideIcon: false }"
+/>`;
+
+<Source
+  language="html"
+  dark
+  code={byIdHtml}
+/>
+
+## Examples
+
+### Statuses
+
+Pick the status that matches the meaning, and keep the label saying the same thing on its own.
+The colour and icon are visual aids only.
+
+<Canvas of={StatusTagStories.Statuses} />
+
+### A long label
+
+<Canvas of={StatusTagStories.LongLabel} />
+
+The label wraps inside the tag, so the whole text stays on screen.
+
+### By registered ID
+
+<Canvas of={StatusTagStories.ByRegisteredId} />
+
+## Accessibility
+
+- **Name.** The label is plain text, and assistive technology reads it. The icon is decorative and
+  hidden from assistive technology.
+- **Colour.** A status is never announced by colour alone. The label must say the status.
+- **Keyboard.** The status tag is not interactive and takes no focus.
+
+## Satori and the built-in status tag
+
+The same ID, `nxs.primitives.statusTag`, renders **Satori's status tag** when
+`@nuxeo/satori-platform/components-satori` is installed and `provideNxsSatoriComponents()` is listed
+after `provideNxsComponents()`. Otherwise it renders the **built-in status tag** shown on this page.
+Both take the same inputs and the same seven status names.
+
+What looks different: the built-in one takes Material's theme colours, so its palette is not
+Satori's.
+
+This Storybook is built without access to GitHub Packages, so every example here shows the built-in
+status tag. Satori's status tag is shown in Satori's documentation.

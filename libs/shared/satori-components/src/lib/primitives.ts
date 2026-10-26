@@ -6,7 +6,7 @@ import type { NxsHeadingLevel } from './heading-level';
 /**
  * The IDs of the primitives Satori also ships, registered by `provideNxsComponents()`.
  *
- * Each ID resolves to a Material implementation from this entry point, and the first four to a
+ * Each ID resolves to a Material implementation from this entry point, and all but `errorState` to a
  * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
  * is provided after it. `errorState` stays on Material there: Satori's error states arrive in
  * Satori 1.0, which needs a newer Angular than this package supports. Both implement the same `Nxs…Inputs` contract below, so whoever renders an ID — a
@@ -17,6 +17,7 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   avatar: 'nxs.primitives.avatar',
   breadcrumbs: 'nxs.primitives.breadcrumbs',
   tag: 'nxs.primitives.tag',
+  statusTag: 'nxs.primitives.statusTag',
   richTooltip: 'nxs.primitives.richTooltip',
   errorState: 'nxs.primitives.errorState',
 } as const);
@@ -69,6 +70,18 @@ export interface NxsBreadcrumbsInputs {
 export interface NxsTagInputs {
   readonly label: InputSignal<string>;
   readonly color: InputSignal<NxsTagColor>;
+}
+
+/** Status tag statuses: the statuses Satori's status tag takes, which `/components-satori` asserts. */
+export type NxsTagStatus =
+  'important-loud' | 'important' | 'success' | 'warning' | 'info' | 'neutral' | 'neutral-quiet';
+
+/** `nxs.primitives.statusTag`. Text inputs arrive already translated. */
+export interface NxsStatusTagInputs {
+  readonly label: InputSignal<string>;
+  readonly status: InputSignal<NxsTagStatus>;
+  /** Hide the status's icon, which Satori's status tag shows by default. */
+  readonly hideIcon: InputSignal<boolean>;
 }
 
 /**
