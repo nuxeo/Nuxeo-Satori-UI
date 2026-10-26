@@ -322,7 +322,13 @@ function hierarchical(entries: L10nDirectoryEntry[]): Loaded {
   };
   const valueOf = (entry: L10nDirectoryEntry) =>
     entry.properties.parent ? `${entry.properties.parent}/${entry.id}` : entry.id;
-  const selectable = entries.filter((entry) => entry.properties.parent || !parentIds.has(entry.id));
+  const selectable = entries
+    .filter((entry) => entry.properties.parent || !parentIds.has(entry.id))
+    .sort(
+      (a, b) =>
+        a.properties.ordering - b.properties.ordering ||
+        l10nEntryLabel(a).localeCompare(l10nEntryLabel(b)),
+    );
   const labels = new Map(
     selectable.map((entry) => [
       valueOf(entry),
@@ -354,8 +360,12 @@ function hierarchical(entries: L10nDirectoryEntry[]): Loaded {
       return [
         ...(leaves.length ? [{ label: '', entries: leaves }] : []),
         ...[...groups]
-          .map(([parent, children]) => ({ label: parentLabel(parent), entries: children }))
-          .sort((a, b) => a.label.localeCompare(b.label)),
+          .sort(
+            ([a], [b]) =>
+              (byId.get(a)?.properties.ordering ?? 0) - (byId.get(b)?.properties.ordering ?? 0) ||
+              parentLabel(a).localeCompare(parentLabel(b)),
+          )
+          .map(([parent, children]) => ({ label: parentLabel(parent), entries: children })),
       ];
     },
   };

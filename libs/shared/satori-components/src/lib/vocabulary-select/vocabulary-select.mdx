@@ -65,6 +65,10 @@ by page, from `/api/v1/directory/<name>`, with each entry's parent. Both go thro
 `DirectoryService` when the field appears and again when `directory` changes; after a failure,
 focusing the field tries again.
 
+Hierarchical siblings, standalone entries and parent groups follow their configured
+`properties.ordering`, with labels breaking ties. Standalone entries appear before the groups.
+Filtering preserves this order.
+
 **In these stories** `DirectoryService` is an in-memory fake: `nature` holds four entries and
 `l10ncoverage` three continents and four countries, held as the server holds them.
 

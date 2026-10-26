@@ -22,10 +22,10 @@ const flat = (id: string, label: string, ordering = 0): DirectoryEntry => ({
 });
 const NATURE = [flat('invoice', 'Invoice'), flat('contract', 'Contract'), flat('memo', 'Memo')];
 
-const l10n = (id: string, parent: string, label: string): L10nDirectoryEntry => ({
+const l10n = (id: string, parent: string, label: string, ordering = 0): L10nDirectoryEntry => ({
   id,
   directoryName: 'l10ncoverage',
-  properties: { id, parent, ordering: 0, obsolete: 0, label_en: label },
+  properties: { id, parent, ordering, obsolete: 0, label_en: label },
 });
 /** As the server holds `l10ncoverage`: bare ids, each child naming its parent. */
 const COVERAGE = [
@@ -261,6 +261,52 @@ describe('NxsVocabularySelectComponent', () => {
       await render();
       expect(host.many.value).toEqual(['europe/France', 'africa/Kenya', 'antarctica']);
       expect(chips()).toEqual(['Europe/France', 'Africa/Kenya', 'Antarctica']);
+    });
+
+    it('orders siblings, standalone entries and parent groups by configured order before labels', async () => {
+      const entries = [
+        l10n('africa', '', 'Africa', 20),
+        l10n('antarctica', '', 'Antarctica', 20),
+        l10n('australia', '', 'Australia', 10),
+        l10n('europe', '', 'Europe', 10),
+        l10n('France', 'europe', 'France', 20),
+        l10n('Kenya', 'africa', 'Kenya', 0),
+        l10n('Spain', 'europe', 'Spain', 10),
+      ];
+      const original = [...entries];
+      directories.getAllL10nEntries.mockReturnValue(of(entries));
+      host.directory.set('l10nsubjects');
+      await render();
+      await focus();
+      expect(options()).toEqual(['Australia', 'Antarctica', 'Spain', 'France', 'Kenya']);
+      expect(
+        [...document.querySelectorAll('.mat-mdc-optgroup-label')].map((label) =>
+          label.textContent?.trim(),
+        ),
+      ).toEqual(['Europe', 'Africa']);
+      await type('eur');
+      expect(options()).toEqual(['Spain', 'France']);
+      option('europe/Spain').click();
+      await render();
+      expect(host.many.value).toEqual(['europe/Spain']);
+      expect(chips()).toEqual(['Europe/Spain']);
+      expect(entries).toEqual(original);
+    });
+
+    it('uses labels to break equal ordering values for children and standalone entries', async () => {
+      directories.getAllL10nEntries.mockReturnValue(
+        of([
+          l10n('europe', '', 'Europe'),
+          l10n('australia', '', 'Australia'),
+          l10n('antarctica', '', 'Antarctica'),
+          l10n('Spain', 'europe', 'Spain'),
+          l10n('France', 'europe', 'France'),
+        ]),
+      );
+      host.directory.set('l10nsubjects');
+      await render();
+      await focus();
+      expect(options()).toEqual(['Antarctica', 'Australia', 'France', 'Spain']);
     });
 
     it('stops offering an entry once chosen', async () => {
