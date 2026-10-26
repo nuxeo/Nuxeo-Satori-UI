@@ -128,6 +128,7 @@
                   ' — ' +
                   ('browse.browse.from' | translate)
                 "
+                [max]="filterModifiedTo()"
                 [ngModel]="filterModifiedFrom()"
                 (ngModelChange)="filterModifiedFrom.set($event)"
               />
@@ -136,6 +137,7 @@
                 [label]="
                   ('browse.browse.modified' | translate) + ' — ' + ('browse.browse.to' | translate)
                 "
+                [min]="filterModifiedFrom()"
                 [ngModel]="filterModifiedTo()"
                 (ngModelChange)="filterModifiedTo.set($event)"
               />

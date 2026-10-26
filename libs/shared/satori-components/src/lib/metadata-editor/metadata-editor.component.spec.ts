@@ -883,6 +883,20 @@ describe('NxsMetadataEditorComponent, with a host adapter that does not hold JS 
     });
   });
 
+  it('keeps the property’s time of day when its date is cleared and typed again', async () => {
+    const day = written(new Date(EXPIRES));
+    expires().value = '';
+    expires().dispatchEvent(new Event('input'));
+    await render();
+    expect(editor().dirtyProperties()).toEqual({ 'dc:expired': null });
+    expires().value = day;
+    expires().dispatchEvent(new Event('input'));
+    expires().dispatchEvent(new Event('blur'));
+    await render();
+    expect(expires().value).toBe(day);
+    expect(editor().properties()['dc:expired']).toBe(EXPIRES);
+  });
+
   it('writes a day picked from the calendar as an ISO instant', async () => {
     (
       (fixture.nativeElement as HTMLElement).querySelector(
