@@ -83,66 +83,6 @@ sat-breadcrumbs {
   }
 }
 
-.content-lake-ingest-loader,
-.content-lake-ingest-marker {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  flex-shrink: 0;
-  cursor: default;
-}
-
-.ke-action-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-}
-
-// Spin the leading <mat-icon> on KE buttons while an action is in flight.
-// We deliberately use a spinning mat-icon instead of <mat-spinner>, because
-// <mat-spinner> renders as a block-level element that breaks Material's
-// stroked-button content alignment (the text gets pushed onto the next line).
-// A mat-icon is laid out identically to the static leading icon, so swapping
-// in and out causes zero layout shift.
-//
-// IMPORTANT: the glyph MUST exist in the legacy "Material Icons" font that
-// apps/nuxeo-ui/src/index.html loads. `progress_activity` is in Material
-// Symbols only and renders as an empty box here, so use `autorenew`.
-.ke-action-btn mat-icon.ke-spinning {
-  animation: ke-spin 1s linear infinite;
-}
-
-// NXENG-789 / IBM issue 299839583 — Material stroked buttons suppress the default focus ring.
-// IBM Equal Access `style_focus_visible` reads `:focus` only; keep this selector standalone.
-//
-// Positive `outline-offset` paints outside the button; the pixels behind it are the header's
-// fixed `#fff` (`.detail-header` above), not the themed page chrome. In dark and kawaii,
-// `--mat-sys-primary` resolves too pale on that surface (1.71:1). Use the same indigo as the
-// panel toggle so 1.4.11 holds on the white header in every theme.
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-.ke-action-btn.mat-mdc-outlined-button:focus {
-  outline-style: solid;
-  outline-width: 2px;
-  outline-color: var(--agentic-document-detail-header-focus-outline);
-  outline-offset: 2px;
-}
-
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
-.ke-action-btn.mat-mdc-outlined-button:focus-visible {
-  outline-style: solid;
-  outline-width: 2px;
-  outline-color: var(--agentic-document-detail-header-focus-outline);
-  outline-offset: 2px;
-}
-
-@keyframes ke-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .action-active {
   color: var(--mat-sys-tertiary) !important;
 }
