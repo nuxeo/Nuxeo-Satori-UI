@@ -55,6 +55,11 @@ export const SatoriRegistration: StoryObj = {
         content: 'A new version is created each time you check in.',
         triggerLabel: 'About versioning',
       },
+      errorState: {
+        status: 500,
+        heading: 'Server error',
+        canRetry: true,
+      },
     },
     template: `
       <div style="display: grid; gap: 16px; justify-items: start">
@@ -62,6 +67,7 @@ export const SatoriRegistration: StoryObj = {
         <lib-extension-outlet [componentId]="ids.breadcrumbs" [componentInputs]="breadcrumbs" />
         <lib-extension-outlet [componentId]="ids.tag" [componentInputs]="tag" />
         <lib-extension-outlet [componentId]="ids.richTooltip" [componentInputs]="tooltip" />
+        <lib-extension-outlet [componentId]="ids.errorState" [componentInputs]="errorState" />
       </div>
     `,
   }),

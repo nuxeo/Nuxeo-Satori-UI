@@ -608,7 +608,7 @@ describe('DocumentDetailComponent — toolbar actions and dialogs', () => {
       await fixture.whenStable();
 
       const lock = offered('app.toolbar.lock');
-      expect(lock.icon).toBe('lock_open');
+      expect(lock.icon).toBe('unlocked');
       expect(component.isToolbarActionActive(lock)).toBe(false);
     });
 

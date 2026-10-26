@@ -110,7 +110,7 @@
               isLocked() ? ('collections.unlock' | translate) : ('collections.lock' | translate)
             "
           >
-            <mat-icon [svgIcon]="isLocked() ? 'lock' : 'lock_open'" />
+            <mat-icon [svgIcon]="isLocked() ? 'lock' : 'unlocked'" />
           </button>
         }
         <button
@@ -140,7 +140,7 @@
           (click)="toggleSubscription()"
           [disabled]="actionInProgress() === 'subscribe'"
         >
-          <mat-icon [svgIcon]="isSubscribed() ? 'notifications_active' : 'notifications'" />
+          <mat-icon [svgIcon]="isSubscribed() ? 'bell' : 'bell'" />
           <span>{{
             isSubscribed()
               ? ('collections.unsubscribe' | translate)
