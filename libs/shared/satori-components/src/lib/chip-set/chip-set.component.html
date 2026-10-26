@@ -5,6 +5,7 @@
       <button
         type="button"
         matChipRemove
+        [tabIndex]="0"
         [disabled]="item.disabled ?? false"
         [attr.aria-label]="item.removeLabel"
         (click)="$event.stopPropagation()"

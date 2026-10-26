@@ -66,6 +66,10 @@ describe('NxsChipSetComponent', () => {
     expect(set().hasAttribute('aria-label')).toBe(false);
   });
 
+  it('keeps each enabled remove button in the Tab order, since a basic chip set has no arrow keys', () => {
+    expect(removeButtons()[0].tabIndex).toBe(0);
+  });
+
   it('labels each remove button by its removeLabel', () => {
     expect(removeButtons().map((b) => b.getAttribute('aria-label'))).toEqual([
       'Remove Europe',
