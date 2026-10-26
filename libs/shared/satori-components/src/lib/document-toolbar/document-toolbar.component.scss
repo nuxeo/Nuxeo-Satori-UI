@@ -16,7 +16,7 @@
 }
 
 // Never on a disabled control, so the highlight does not read as "you can press this".
-/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
+// stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides
 .nxs-document-toolbar__action--active:not(.mat-mdc-button-disabled) {
   color: var(--nxs-document-toolbar-active);
 }
