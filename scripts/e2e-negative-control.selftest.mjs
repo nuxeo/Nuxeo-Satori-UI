@@ -1,8 +1,27 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { minimumFailures, runVacuity } from './e2e-negative-control.mjs';
+
+test('a symlinked CLI entry still rejects an invalid threshold', () => {
+  // Node resolves the main module through links, so `import.meta.url` is the real path while
+  // `process.argv[1]` keeps the alias. Comparing them unresolved skips `main()` and exits 0.
+  const aliasRoot = mkdtempSync(join(tmpdir(), 'e2e-negative-control-selftest-'));
+  try {
+    const alias = join(aliasRoot, 'scripts');
+    symlinkSync(import.meta.dirname, alias, process.platform === 'win32' ? 'junction' : 'dir');
+    const run = spawnSync(process.execPath, [join(alias, 'e2e-negative-control.mjs'), '0'], {
+      encoding: 'utf8',
+    });
+    assert.equal(run.status, 2, run.stderr);
+    assert.match(run.stderr, /min-expected-failures/);
+  } finally {
+    rmSync(aliasRoot, { recursive: true, force: true });
+  }
+});
 
 test('a threshold cannot make the negative control unconditional', () => {
   assert.equal(minimumFailures(), 5);

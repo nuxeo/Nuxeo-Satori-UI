@@ -4,7 +4,7 @@
  * Wrong credentials fail in identity setup before assertions run and cannot measure data sensitivity.
  * Discovery requests and /me remain live; only the app's repository responses are starved.
  */
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { spawnToolSync } from './beta-harness/package-command.mjs';
@@ -85,5 +85,6 @@ function main() {
   return runVacuity(root, minimum);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href)
+// Node loads the main module by its real path, so an aliased entry must be resolved to match.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href)
   process.exitCode = main();
