@@ -251,6 +251,9 @@
     },
     "libs/features/administration/src/index.ts": {
       "reason": "No executable statements to measure: re-export barrel. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/app-config/src/index.ts": {
+      "reason": "No executable statements to measure: re-export barrel. Reported stale if it ever gains a statement."
     }
   }
 }
