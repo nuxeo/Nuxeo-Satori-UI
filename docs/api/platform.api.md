@@ -189,7 +189,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-131 exported symbol(s).
+130 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
