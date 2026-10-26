@@ -50,6 +50,7 @@
 
 import { readFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
+import { parseOverrideKey } from './override-presence.mjs';
 
 const args = process.argv.slice(2);
 const lockIndex = args.indexOf('--lock');
@@ -327,32 +328,6 @@ function collectOverrideRules(overrides) {
   };
   walk(overrides, null);
   return rules;
-}
-
-/**
- * Split an `overrides` key into the package it addresses and the version selector it carries.
- *
- * npm lets an override key carry a range — `"brace-expansion@^5.0.0": "5.0.12"` — so that a pin
- * reaches one major line of a package without touching the others. That form is the only way to
- * patch a transitive package whose tree holds several incompatible majors: a bare
- * `"brace-expansion"` key would drag eslint's and glob's v1 copies up to v5, whose CJS build
- * dropped the default export, and break them.
- *
- * Storing the raw key recorded `"brace-expansion@^5.0.0"`, a string no package is ever called, so
- * the pin was reported as an unresolvable edge — the exact "24 deliberate security pins look like
- * corruption" failure the comment above describes, just one key syntax later. Discarding the
- * selector and keeping only the name fixed that and broke the other side, waiving majors npm
- * never overrode; the selector has to be kept, which is why this returns both halves.
- *
- * Scoped names carry their own leading `@`, so the separator is the LAST `@` rather than the
- * first, and a key with no separator is a bare name with no selector.
- *
- * @param {string} key
- * @returns {{ name: string, range: string | null }}
- */
-function parseOverrideKey(key) {
-  const at = key.lastIndexOf('@');
-  return at > 0 ? { name: key.slice(0, at), range: key.slice(at + 1) } : { name: key, range: null };
 }
 
 /**

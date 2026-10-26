@@ -5,7 +5,6 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 
 import { AI_BACKEND_URL } from '@agentic-ui/shared/ai-client';
 import { KD_CIC_OPERATIONS } from '@agentic-ui/shared/kd-client';
-import { KE_CIC_OPERATIONS } from '@agentic-ui/shared/ke-client';
 import {
   APP_BOOTSTRAP_CONFIG_URL,
   APP_CONFIG_FORMAT,
@@ -123,7 +122,6 @@ describe('configuration tokens from configuration packages, at startup', () => {
       integrations: {
         arender: { viewerOrigin: 'https://arender.acme.example' },
         knowledgeDiscoveryOperations: { acmeSearch: 'Acme.KdSearch' },
-        knowledgeEnrichmentOperations: { acmeEnrich: 'Acme.KeEnrich' },
       },
     });
 
@@ -132,9 +130,6 @@ describe('configuration tokens from configuration packages, at startup', () => {
     expect(TestBed.inject(ARENDER_CONFIG)?.viewerOrigin).toBe('https://arender.acme.example');
     expect(TestBed.inject(KD_CIC_OPERATIONS)).toEqual(
       jasmine.objectContaining({ acmeSearch: 'Acme.KdSearch' }),
-    );
-    expect(TestBed.inject(KE_CIC_OPERATIONS)).toEqual(
-      jasmine.objectContaining({ acmeEnrich: 'Acme.KeEnrich' }),
     );
   });
 

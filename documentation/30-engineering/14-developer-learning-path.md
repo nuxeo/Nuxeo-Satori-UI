@@ -1274,8 +1274,8 @@ Versions as resolved in `package-lock.json`. Where `package.json` declares a ran
 follows in brackets.
 
 **One baseline.** Every row was re-read from a single lockfile in NXSAT-669, the move to Angular 21,
-replacing a matrix assembled from four revisions. Packages held by `overrides` only — `axios`,
-`brace-expansion`, `undici` and the other security floors — are not listed; `package.json` is
+replacing a matrix assembled from four revisions. Packages held by `overrides` only —
+`brace-expansion`, `undici`, `ws` and the other security floors — are not listed; `package.json` is
 their record. A row can drift as soon as the lock moves, so check one with `npm ls <package>`
 before relying on it.
 
