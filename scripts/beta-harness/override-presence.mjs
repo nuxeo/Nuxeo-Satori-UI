@@ -23,7 +23,8 @@
  * - A nested entry (`"parent": { "child": "1.2.3" }`) whose child cannot be reached from the parent
  *   through declared dependencies. npm applies a nested override to the parent's whole subtree,
  *   not only its direct dependencies, so the walk is transitive. Peer dependencies count: the
- *   `@hylandsoftware/satori-ui` entry exists precisely to satisfy a peer.
+ *   `@hylandsoftware/satori-ui` entry exists precisely to satisfy a peer. A selector on the child
+ *   must match the request of some edge to it inside that subtree.
  * - When a parent is itself absent only the parent is reported; its children go with it.
  *
  * ## What this does NOT do
@@ -126,9 +127,15 @@ export function staleOverrides(overrides, packages, semver = null) {
     return (requests.get(name) ?? []).some((spec) => requestMatches(spec, range));
   };
 
-  /** Is any copy of `name` (within `range`) in the dependency subtree of `scope`? */
+  /**
+   * Is any copy of `name` (requested within `range`) in the dependency subtree of `scope`?
+   *
+   * The scope's own selector is not re-checked here: a top-level scope was checked by
+   * `hasApplicableRequest` and a nested one by this function, one level up, before its children
+   * are visited.
+   */
   const reachable = (scope, name, range) => {
-    if (copiesOf(name).length === 0 || !hasApplicableRequest(scope.name, scope.range)) return false;
+    if (copiesOf(name).length === 0) return false;
     const seen = new Set();
     const queue = copiesOf(scope.name).flatMap((c) => c.edges);
     while (queue.length) {
@@ -232,6 +239,12 @@ const CONTROLS = [
   ['absent package', { zzz: '1.0.0' }, ['zzz']],
   ['absent scoped package', { '@s/q': '1.0.0' }, ['@s/q']],
   ['selector has no matching dependency request', { 'd@^9.0.0': '9.0.1' }, ['d@^9.0.0'], true],
+  [
+    'nested selector no request in the subtree matches',
+    { x: { 'd@^9.0.0': '9.0.1' } },
+    ['x > d@^9.0.0'],
+    true,
+  ],
   ['nested child outside a leaf parent', { c: { a: '1.0.1' } }, ['c > a']],
   ['nested child outside a parent that has a subtree', { b: { a: '1.0.1' } }, ['b > a']],
   ['absent parent reports the parent only', { zzz: { c: '1.4.1' } }, ['zzz']],
