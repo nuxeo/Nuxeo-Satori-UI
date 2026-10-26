@@ -17,8 +17,9 @@
  * ## What counts as stale
  *
  * - A top-level entry whose package has no copy in the lock. With a version selector in the key
- *   (`"brace-expansion@^5.0.0"`), a copy must also satisfy the selector, because a pin aimed at a
- *   major line nobody installs is just as dead as a pin on a package nobody installs.
+ *   (`"brace-expansion@^5.0.0"`), a declared dependency request must also match the selector,
+ *   because a pin aimed at a major line nobody requests is just as dead as a pin on a package
+ *   nobody installs. The installed version may be outside the selector when the override forces it.
  * - A nested entry (`"parent": { "child": "1.2.3" }`) whose child cannot be reached from the parent
  *   through declared dependencies. npm applies a nested override to the parent's whole subtree,
  *   not only its direct dependencies, so the walk is transitive. Peer dependencies count: the
@@ -64,18 +65,28 @@ export function parseOverrideKey(key) {
 }
 
 const EDGE_KINDS = ['dependencies', 'optionalDependencies', 'peerDependencies'];
+const REQUEST_KINDS = [...EDGE_KINDS, 'devDependencies'];
 
 /**
  * Every installed copy of every package, by name.
  *
  * @param {Record<string, any>} packages  the lockfile's `packages` map
- * @returns {Map<string, { version: string | undefined, edges: string[] }[]>}
+ * @returns {{ index: Map<string, { version: string | undefined, edges: { name: string, spec: string }[] }[]>, requests: Map<string, string[]> }}
  */
 function indexLock(packages) {
   const index = new Map();
+  const requests = new Map();
   for (const [path, entry] of Object.entries(packages ?? {})) {
-    if (path === '' || !entry) continue;
-    const edges = EDGE_KINDS.flatMap((kind) => Object.keys(entry[kind] ?? {}));
+    if (!entry) continue;
+    for (const kind of REQUEST_KINDS) {
+      for (const [name, spec] of Object.entries(entry[kind] ?? {})) {
+        requests.set(name, [...(requests.get(name) ?? []), spec]);
+      }
+    }
+    if (path === '') continue;
+    const edges = EDGE_KINDS.flatMap((kind) =>
+      Object.entries(entry[kind] ?? {}).map(([name, spec]) => ({ name, spec })),
+    );
     const at = path.lastIndexOf('node_modules/');
     // An npm alias (`"foo": "npm:bar@1"`) sits at `node_modules/foo` with `name: "bar"`. Its
     // dependents' edges say `foo`, so it is indexed under both names; indexing only `name` would
@@ -87,7 +98,7 @@ function indexLock(packages) {
       index.set(name, [...(index.get(name) ?? []), { version: entry.version, edges }]);
     }
   }
-  return index;
+  return { index, requests };
 }
 
 /**
@@ -95,33 +106,37 @@ function indexLock(packages) {
  *
  * @param {Record<string, unknown>} overrides  `package.json` `overrides`
  * @param {Record<string, any>} packages        `package-lock.json` `packages`
- * @param {{ validRange: Function, satisfies: Function } | null} [semver]
+ * @param {{ validRange: Function, intersects: Function } | null} [semver]
  * @returns {{ stale: { key: string, reason: string }[], checked: number }}
  */
 export function staleOverrides(overrides, packages, semver = null) {
-  const index = indexLock(packages);
+  const { index, requests } = indexLock(packages);
   const stale = [];
   let checked = 0;
 
-  const copiesOf = (name, range) => {
-    const copies = index.get(name) ?? [];
-    if (!range || !semver?.validRange(range)) return copies;
-    return copies.filter(
-      (c) => c.version && semver.satisfies(c.version, range, { includePrerelease: true }),
-    );
+  const copiesOf = (name) => index.get(name) ?? [];
+
+  const requestMatches = (spec, range) => {
+    if (!range || !semver || !semver.validRange(range) || !semver.validRange(spec)) return true;
+    return semver.intersects(spec, range, { includePrerelease: true });
+  };
+
+  const hasApplicableRequest = (name, range) => {
+    if (!range || !semver?.validRange(range)) return copiesOf(name).length > 0;
+    return (requests.get(name) ?? []).some((spec) => requestMatches(spec, range));
   };
 
   /** Is any copy of `name` (within `range`) in the dependency subtree of `scope`? */
   const reachable = (scope, name, range) => {
-    if (copiesOf(name, range).length === 0) return false;
+    if (copiesOf(name).length === 0 || !hasApplicableRequest(scope.name, scope.range)) return false;
     const seen = new Set();
-    const queue = copiesOf(scope.name, scope.range).flatMap((c) => c.edges);
+    const queue = copiesOf(scope.name).flatMap((c) => c.edges);
     while (queue.length) {
-      const next = queue.shift();
-      if (next === name) return true;
-      if (seen.has(next)) continue;
-      seen.add(next);
-      for (const copy of index.get(next) ?? []) queue.push(...copy.edges);
+      const edge = queue.shift();
+      if (edge.name === name && requestMatches(edge.spec, range)) return true;
+      if (seen.has(edge.name)) continue;
+      seen.add(edge.name);
+      for (const copy of copiesOf(edge.name)) queue.push(...copy.edges);
     }
     return false;
   };
@@ -134,14 +149,17 @@ export function staleOverrides(overrides, packages, semver = null) {
       const { name, range } = parseOverrideKey(key);
       const label = [...path, key].join(' > ');
       const where = range ? `${name} within ${range}` : name;
-      if (!scope && copiesOf(name, range).length === 0) {
-        stale.push({ key: label, reason: `no installed copy of ${where} in the lock` });
+      if (!scope && (copiesOf(name).length === 0 || !hasApplicableRequest(name, range))) {
+        stale.push({
+          key: label,
+          reason: `no installed copy or applicable dependency request for ${where} in the lock`,
+        });
         continue;
       }
       if (scope && !reachable(scope, name, range)) {
         stale.push({
           key: label,
-          reason: `${where} is not in the dependency subtree of ${scope.name}`,
+          reason: `${where} is not applicable in the dependency subtree of ${scope.name}`,
         });
         continue;
       }
@@ -156,7 +174,11 @@ export function staleOverrides(overrides, packages, semver = null) {
 /* --------------------------------------------------------------------- controls ---- */
 
 const FIXTURE_LOCK = {
-  '': { name: 'fixture', version: '0.0.0', dependencies: { a: '^1.0.0', d: '^5.0.0' } },
+  '': {
+    name: 'fixture',
+    version: '0.0.0',
+    dependencies: { a: '^1.0.0', d: '^5.0.0', '@s/p': '^3.0.0' },
+  },
   'node_modules/a': { version: '1.0.0', dependencies: { b: '^2.0.0' } },
   'node_modules/b': { version: '2.1.0', dependencies: { c: '^1.0.0' } },
   'node_modules/c': { version: '1.4.0' },
@@ -168,11 +190,18 @@ const FIXTURE_LOCK = {
   'node_modules/al': { name: 'real', version: '1.0.0', dependencies: { c: '^1.0.0' } },
 };
 
+const FORCED_OUTSIDE_SELECTOR_LOCK = {
+  '': { name: 'fixture', version: '0.0.0', dependencies: { d: '^1.0.0', x: '^1.0.0' } },
+  'node_modules/d': { version: '2.0.0' },
+  'node_modules/x': { version: '1.0.0', dependencies: { d: '^1.0.0' } },
+  'node_modules/x/node_modules/d': { version: '2.0.0' },
+};
+
 /**
- * `[name, overrides, stale keys expected, needs semver]`. A control that needs `semver` expects
+ * `[name, overrides, stale keys expected, needs semver, lock]`. A control that needs `semver` expects
  * nothing to be found without it, because the selector is then ignored by design.
  *
- * @type {[string, Record<string, unknown>, string[], boolean?][]}
+ * @type {[string, Record<string, unknown>, string[], boolean?, Record<string, any>?][]}
  */
 const CONTROLS = [
   ['installed package', { c: '1.4.1' }, []],
@@ -180,6 +209,20 @@ const CONTROLS = [
   ['scoped package with a matching selector', { '@s/p@^3.0.0': '3.0.1' }, []],
   ['selector matching the hoisted copy', { 'd@^5.0.0': '5.0.2' }, []],
   ['selector matching only a nested copy', { 'd@^1.0.0': '1.2.1' }, []],
+  [
+    'selector request with a forced version outside it',
+    { 'd@^1.0.0': '2.0.0' },
+    [],
+    true,
+    FORCED_OUTSIDE_SELECTOR_LOCK,
+  ],
+  [
+    'nested selector request with a forced version outside it',
+    { x: { 'd@^1.0.0': '2.0.0' } },
+    [],
+    true,
+    FORCED_OUTSIDE_SELECTOR_LOCK,
+  ],
   ['nested, direct child', { a: { b: '2.1.1' } }, []],
   ['nested, transitive child', { a: { c: '1.4.1' } }, []],
   ['nested, reached through a peer', { '@s/p': { c: '1.4.1' } }, []],
@@ -188,7 +231,7 @@ const CONTROLS = [
   ['nested, reached through an npm alias', { y: { c: '1.4.1' } }, []],
   ['absent package', { zzz: '1.0.0' }, ['zzz']],
   ['absent scoped package', { '@s/q': '1.0.0' }, ['@s/q']],
-  ['selector no installed copy satisfies', { 'd@^9.0.0': '9.0.1' }, ['d@^9.0.0'], true],
+  ['selector has no matching dependency request', { 'd@^9.0.0': '9.0.1' }, ['d@^9.0.0'], true],
   ['nested child outside a leaf parent', { c: { a: '1.0.1' } }, ['c > a']],
   ['nested child outside a parent that has a subtree', { b: { a: '1.0.1' } }, ['b > a']],
   ['absent parent reports the parent only', { zzz: { c: '1.4.1' } }, ['zzz']],
@@ -198,14 +241,14 @@ const CONTROLS = [
 /**
  * Run the controls. An empty array means every control behaved as specified.
  *
- * @param {{ validRange: Function, satisfies: Function } | null} [semver]
+ * @param {{ validRange: Function, intersects: Function } | null} [semver]
  * @returns {string[]}
  */
 export function selfCheck(semver = null) {
   const failures = [];
-  for (const [name, overrides, expected, needsSemver] of CONTROLS) {
+  for (const [name, overrides, expected, needsSemver, lock = FIXTURE_LOCK] of CONTROLS) {
     const want = needsSemver && !semver ? [] : expected;
-    const got = staleOverrides(overrides, FIXTURE_LOCK, semver).stale.map((s) => s.key);
+    const got = staleOverrides(overrides, lock, semver).stale.map((s) => s.key);
     if (JSON.stringify(got) !== JSON.stringify(want)) {
       failures.push(`${name}: found [${got.join(', ')}], expected [${want.join(', ')}]`);
     }
