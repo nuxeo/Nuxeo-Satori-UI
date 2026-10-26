@@ -51,7 +51,6 @@ import {
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/satori-platform/ui';
 
 import { DocumentDetailComponent } from './document-detail';
@@ -164,9 +163,6 @@ const nuxeoGet = vi.fn((path: string): Observable<unknown> =>
   ),
 );
 
-const emptyKe = (): Observable<KeEnrichmentResult> =>
-  of({ textClassification: { result: '' } } as KeEnrichmentResult);
-
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'text/plain' }))),
@@ -256,7 +252,6 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: { updateDocument: vi.fn(() => of(doc())) } },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: KeClientService, useValue: { enrich: emptyKe } },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         {
           provide: WorkflowService,

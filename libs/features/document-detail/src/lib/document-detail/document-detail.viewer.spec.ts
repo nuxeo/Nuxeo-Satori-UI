@@ -18,7 +18,6 @@ import {
   ARenderService,
   BrowseService,
   CURRENT_USERNAME,
-  ContentLakeIngestService,
   DirectoryService,
   DocumentDetailService,
   NuxeoApiBase,
@@ -30,13 +29,11 @@ import {
   type L10nDirectoryEntry,
   type NuxeoDocument,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { KdClientService } from '@agentic-ui/shared/kd-client';
 import {
   AiChatService,
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -268,13 +265,6 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        {
-          provide: KeClientService,
-          useValue: {
-            enrich: (): Observable<KeEnrichmentResult> =>
-              of({ inProgress: false, generalProcessingErrors: [], raw: null }),
-          },
-        },
         { provide: TaskService, useValue: mockTaskService },
         { provide: WorkflowService, useValue: mockWorkflowService },
         { provide: ARenderService, useValue: mockARender },
@@ -292,18 +282,6 @@ describe('DocumentDetailComponent — viewer, renditions and vocabularies', () =
         { provide: AiChatService, useValue: { openPanel: vi.fn() } },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(false) } },
         { provide: NuxeoApiBase, useValue: { nxqlSearch: vi.fn(() => of({ entries: [] })) } },
-        {
-          provide: ContentLakeIngestService,
-          useValue: {
-            startIngest: vi.fn(() => of({ commandId: 'c1' })),
-            waitUntilComplete: vi.fn(() => of({})),
-            markIngested: vi.fn(() => of([])),
-            backfillIngestMarkerIfNeeded: vi.fn(() =>
-              of({ doc: null, presentInContentLake: false }),
-            ),
-          },
-        },
-        { provide: KdClientService, useValue: { listIngestSourceIds: vi.fn(() => of([])) } },
         { provide: CURRENT_USERNAME, useValue: () => 'tester' },
         { provide: MatDialog, useValue: mockDialog },
         provideSatoriExtensions({
