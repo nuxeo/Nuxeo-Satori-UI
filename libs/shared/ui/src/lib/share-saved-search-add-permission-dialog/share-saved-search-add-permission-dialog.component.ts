@@ -1,4 +1,4 @@
-import { NxsDateInputComponent } from '@nuxeo/satori-platform/components';
+import { NxsDateInputComponent, nxsOfferedRights } from '@nuxeo/satori-platform/components';
 import { ChangeDetectionStrategy, viewChild, Component, inject, signal } from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { FormsModule, NgModel } from '@angular/forms';
@@ -18,7 +18,6 @@ import {
   permissionRightLabel,
   type UserGroupSuggestion,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { nxsOfferedRights } from '@nuxeo/satori-platform/components';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 import { provideTranslatedDatepickerIntl } from '../datepicker-intl/translated-datepicker-intl';
 import { provideSatoriDateAdapter } from '../date-adapter/satori-date-adapter';

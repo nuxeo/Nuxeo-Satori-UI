@@ -141,4 +141,122 @@ describe('ShareSavedSearchAddPermissionDialogComponent', () => {
     expect(dialog.rightOptions[0]).toEqual({ value: 'Read', label: 'Read' });
     expect(dialog.rightOptions[1]).toEqual({ value: 'Everything', label: 'Manage everything' });
   });
+
+  it.each([
+    ['Until 2030-01-31', null, new Date(2030, 0, 31)],
+    ['From 01/02/2030', new Date(2030, 0, 2), null],
+    ['2030-01-02 - 2030-01-31', new Date(2030, 0, 2), new Date(2030, 0, 31)],
+    ['Until January 31, 2030', null, new Date(2030, 0, 31)],
+    ['Until not-a-date', null, null],
+    ['Until ', null, null],
+  ])('restores an edited date range %s', async (timeFrame, begin, end) => {
+    const dialog = await open({
+      initialData: { userGroup: 'members', right: 'Edit', timeFrame, grantedBy: 'Group' },
+    });
+    expect(dialog.timeFrameMode).toBe('date-based');
+    expect(dialog.beginDate).toEqual(begin);
+    expect(dialog.endDate).toEqual(end);
+    expect(dialog.right).toBe('ReadWrite');
+    expect(dialog.selectedPrincipal?.type).toBe('GROUP_TYPE');
+    expect(dialog.sendNotify).toBe(false);
+  });
+
+  it.each([
+    [new Date(2030, 0, 2), new Date(2030, 0, 31), '2030-01-02 - 2030-01-31'],
+    [new Date(2030, 0, 2), null, 'From 2030-01-02'],
+    [null, new Date(2030, 0, 31), 'Until 2030-01-31'],
+    [null, null, 'Permanent'],
+  ])('serializes date-based entries with begin %s and end %s', async (begin, end, timeFrame) => {
+    const dialog = await open({});
+    dialog.onSuggestionSelected(MEMBERS);
+    dialog.timeFrameMode = 'date-based';
+    dialog.beginDate = begin;
+    dialog.endDate = end;
+
+    dialog.create(false);
+
+    expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledExactlyOnceWith([
+      { userGroup: 'members', right: 'Read', timeFrame, grantedBy: 'Group' },
+    ]);
+    expect(dialog.saving()).toBe(false);
+  });
+
+  it('resets date and notification state after adding another, retaining queued entries', async () => {
+    const dialog = await open({});
+    dialog.onSuggestionSelected(MEMBERS);
+    dialog.timeFrameMode = 'date-based';
+    dialog.beginDate = new Date(2030, 0, 2);
+    dialog.endDate = new Date(2030, 0, 31);
+    dialog.sendNotify = false;
+    dialog.notifyComment = 'Notify the team';
+    dialog.suggestions.set([MEMBERS]);
+
+    dialog.create(true);
+
+    expect(dialog.searchText).toBe('');
+    expect(dialog.selectedPrincipal).toBeNull();
+    expect(dialog.beginDate).toBeNull();
+    expect(dialog.endDate).toBeNull();
+    expect(dialog.timeFrameMode).toBe('permanent');
+    expect(dialog.sendNotify).toBe(true);
+    expect(dialog.notifyComment).toBe('');
+    expect(dialog.suggestions()).toEqual([]);
+    dialog.onSuggestionSelected({
+      ...MEMBERS,
+      id: 'alice',
+      displayLabel: 'Alice',
+      type: 'USER_TYPE',
+    });
+    dialog.create(false);
+    expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ timeFrame: '2030-01-02 - 2030-01-31', grantedBy: 'Group' }),
+      { userGroup: 'Alice', right: 'Read', timeFrame: 'Permanent', grantedBy: 'User' },
+    ]);
+  });
+
+  it('preserves an edited principal and grantor when saving a normalized permission', async () => {
+    const dialog = await open({
+      initialData: {
+        userGroup: 'Alice',
+        right: 'Manage',
+        timeFrame: 'Permanent',
+        grantedBy: 'Administrator',
+      },
+    });
+    expect(dialog.selectedPrincipal?.type).toBe('USER_TYPE');
+    expect(dialog.right).toBe('Everything');
+    dialog.create(false);
+    expect(TestBed.inject(MatDialogRef).close).toHaveBeenCalledExactlyOnceWith([
+      {
+        userGroup: 'Alice',
+        right: 'Everything',
+        timeFrame: 'Permanent',
+        grantedBy: 'Administrator',
+      },
+    ]);
+  });
+
+  it('does not submit without a principal or while saving, and cancels without a result', async () => {
+    const dialog = await open({});
+    const close = TestBed.inject(MatDialogRef).close;
+    dialog.create(false);
+    expect(close).not.toHaveBeenCalled();
+    dialog.onSuggestionSelected(MEMBERS);
+    dialog.saving.set(true);
+    dialog.create(false);
+    expect(close).not.toHaveBeenCalled();
+    dialog.cancel();
+    expect(close).toHaveBeenCalledExactlyOnceWith(null);
+  });
+
+  it('displays suggestions and clears the selection when the search changes', async () => {
+    const dialog = await open({});
+    expect(dialog.displaySuggestion(null)).toBe('');
+    expect(dialog.displaySuggestion('Alice')).toBe('Alice');
+    expect(dialog.displaySuggestion(MEMBERS)).toBe('members');
+    dialog.onSuggestionSelected(MEMBERS);
+    dialog.onSearchChange('new');
+    expect(dialog.searchText).toBe('new');
+    expect(dialog.selectedPrincipal).toBeNull();
+  });
 });
