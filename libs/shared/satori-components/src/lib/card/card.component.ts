@@ -18,8 +18,8 @@ import { nxsVisibleText } from '../visible-text';
  *
  * A Material card: the host's media on top (usually the document's thumbnail), then a heading and a
  * subheading, with an optional selection checkbox in the top-left corner, an optional header action
- * in the top-right corner and an optional row of actions at the foot. It is outlined when it opens
- * something and filled when it does not.
+ * in the top-right corner (the two swap in right-to-left text) and an optional row of actions at the
+ * foot. It is outlined when it opens something and filled when it does not.
  *
  * With an `openHandler` the heading is a button whose hit area covers the whole card, so a click
  * anywhere but another control opens the item. The checkbox and the actions sit above that area as
@@ -61,7 +61,7 @@ export class NxsCardComponent implements NxsCardInputs {
   readonly openHandler = input<(() => void) | null>(null);
   /** Rendered at the top of the card, in a fixed-height frame: usually the document's thumbnail. */
   readonly media = input<TemplateRef<unknown> | null>(null);
-  /** Rendered in the card's top-right corner, over the media: usually a menu button. */
+  /** Rendered in the card's top corner opposite the checkbox, over the media: usually a menu button. */
   readonly headerAction = input<TemplateRef<unknown> | null>(null);
   /** Rendered in a row at the foot of the card: buttons such as Favorite and Download. */
   readonly actions = input<TemplateRef<unknown> | null>(null);

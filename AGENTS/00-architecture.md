@@ -170,8 +170,8 @@ branch or change history:
   when to use it, `## Key features`, `## Demo showcase` (a `<Canvas>`), `## Usage` (the import, any
   providers, the registered ID), `## Examples` (a `<Canvas>` per meaningful state), and
   `## Accessibility`. A component backed by a service adds `## Where its data comes from`, naming
-  the service, and says the stories use an in-memory fake; the five primitives add what Satori's
-  version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
+  the service, and says the stories use an in-memory fake; a primitive with a Satori version adds
+  what Satori's version of the same ID changes. `preview.ts` shows the code under every `<Canvas>`, with zoom
   tools above it, and a table of contents of the `##` and `###` headings.
 - **API**: the `autodocs` page, renamed by `docs.defaultName` in `main.ts` and rendered by
   `.storybook/api-page.ts` (`parameters.docs.page`). Inputs and outputs under the names a template
