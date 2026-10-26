@@ -13,7 +13,8 @@ This guide explains how to set up GPG commit signing for GitHub Actions bot comm
 
 The following workflows create bot commits that need signing:
 
-- `release.yml` - Version bump and changelog commit on a manual release
+- `crowdin-pull.yaml` - Translation pull request commits (signed)
+- `release.yml` - Version bump and changelog commit on a manual release (**not signed**: it has no signing step yet)
 
 `changelog.yml`, which committed CHANGELOG.md updates on every push to `main`, has been removed.
 
@@ -93,10 +94,13 @@ To show the "Verified" badge on bot commits:
 
 ### 6. Test the Setup
 
-1. Run the release workflow
-2. Let it push its version-bump commit
+1. Dispatch the Crowdin Pull workflow (it commits only when translations differ from `main`)
+2. Open its commit on the `crowdin-translations-update` branch
 3. Check that the bot commit shows "Verified" badge
 4. Verify with: `git log --show-signature`
+
+Do not dispatch `release.yml` to test this: it has no signing step, and dispatching it performs a
+real release.
 
 ## Security Best Practices
 

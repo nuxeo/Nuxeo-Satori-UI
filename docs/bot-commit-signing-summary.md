@@ -4,16 +4,19 @@
 
 ### 1. Modified Workflows
 
-One workflow has been updated to support GPG commit signing (`changelog.yml` also was, and has since been removed):
+One workflow signs its bot commits:
 
-#### [release.yml:42-48](../.github/workflows/release.yml#L42-L48)
+#### [crowdin-pull.yaml](../.github/workflows/crowdin-pull.yaml)
 
-- Added `Import GPG key` step before version bump commits
-- Conditional on `GPG_BOT_SIGNING_ENABLED` variable
+- Passes `GPG_PRIVATE_KEY` and `GPG_PASSPHRASE` to `crowdin/github-action`, which signs the commit inside its own container
+- Refuses to run unless `GPG_BOT_SIGNING_ENABLED` is `true` and both secrets are set
+
+`release.yml` also commits, and has **no** signing step; it needs one, together with its separate
+direct-push repair, before the first release. `changelog.yml` was removed.
 
 ### 2. How It Works
 
-When enabled, the workflow will:
+When enabled, the Crowdin pull workflow will:
 
 1. Import a GPG private key from repository secrets
 2. Configure git to automatically sign commits
@@ -68,7 +71,7 @@ gpg --armor --export YOUR_KEY_ID > bot-public.asc
    - **Leave as-is** (unsigned bot commits, simpler but less secure)
 
 3. **If enabling signing**, follow setup steps in the full guide
-4. **Test** by triggering the release workflow
+4. **Test** by dispatching the Crowdin Pull workflow and checking that its commit on `crowdin-translations-update` shows "Verified". It commits only when translations differ from `main`. Do not dispatch `release.yml` to test signing: it has no signing step, and dispatching it performs a real release.
 
 ## Security Note
 
