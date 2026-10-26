@@ -1,4 +1,13 @@
-import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  DestroyRef,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DescriptorLabelPipe, ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router } from '@angular/router';
@@ -16,6 +25,7 @@ import { of, finalize, filter, switchMap, map } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
 import { NXS_PRIMITIVE_IDS, NxsTagComponent } from '@nuxeo/satori-platform/components';
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import {
   ConfirmDialogComponent,
   SAVED_SEARCH_DIALOG_OPTIONS,
@@ -95,8 +105,10 @@ const SORTABLE_COLUMNS = new Set(['title', 'modified', 'contributor', 'created',
     ExtensionOutletComponent,
     NgTemplateOutlet,
     NxsTagComponent,
+    SatHeaderBar,
   ],
   templateUrl: './trash.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './trash.component.scss',
 })
 export class TrashComponent {

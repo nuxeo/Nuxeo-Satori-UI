@@ -6,10 +6,12 @@
  * that put the finding in "Needs review". These tests render the real banner styles and
  * measure the computed contrast ratio, same pattern as `nav-focus-ring-contrast.spec.ts`.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 
@@ -68,8 +70,9 @@ function paintedBackdrop(element: Element): number[] {
 
 @Component({
   standalone: true,
-  imports: [MatIconModule, TranslateModule],
+  imports: [MatIconModule, TranslatePipe, testTranslateModule()],
   styleUrls: ['./dashboard-page.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './dashboard-ai-banner-contrast.spec.html',
 })
 class DashboardAiBannerHostComponent {}
@@ -84,7 +87,7 @@ describe('dashboard AI Insights banner title contrast (NXENG-939)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DashboardAiBannerHostComponent, testTranslateModule()],
+      imports: [DashboardAiBannerHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 

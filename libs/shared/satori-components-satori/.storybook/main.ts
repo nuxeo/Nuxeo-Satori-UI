@@ -7,8 +7,8 @@ import type { StorybookConfig } from '@storybook/angular';
  */
 const config: StorybookConfig = {
   stories: ['../src/**/*.stories.ts'],
-  // Satori's `sat.*` catalogue, where `provideAndConfigureSatoriUITranslations` fetches it.
   staticDirs: [
+    { from: '../../../../apps/nuxeo-ui/public/i18n', to: 'i18n' },
     {
       from: '../../../../node_modules/@hylandsoftware/satori-ui/i18n',
       to: 'i18n/@hylandsoftware/satori-ui',

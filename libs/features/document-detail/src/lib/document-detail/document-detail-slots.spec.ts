@@ -6,10 +6,11 @@ import {
   type EnvironmentProviders,
   type Type,
   type WritableSignal,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import {
@@ -21,7 +22,7 @@ import {
   provideRouter,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { Observable, of } from 'rxjs';
 import { vi, type Mock } from 'vitest';
 import { resolve } from 'node:path';
@@ -101,6 +102,7 @@ const CONTRIBUTED_TAB_MARKER = 'CONTRIBUTED CLAIMS PANEL';
 @Component({
   standalone: true,
   selector: 'lib-test-claims-panel',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="claims">CONTRIBUTED CLAIMS PANEL</p>',
 })
 class ClaimsPanelComponent {}
@@ -108,6 +110,7 @@ class ClaimsPanelComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-claim-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="claim-view">CLAIM VIEW {{ document()?.title }} {{ heading() }}</p>',
 })
 class ClaimViewComponent {
@@ -118,6 +121,7 @@ class ClaimViewComponent {
 @Component({
   standalone: true,
   selector: 'lib-test-case-view',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p class="case-view">CASE VIEW</p>',
 })
 class CaseViewComponent {}
@@ -126,6 +130,7 @@ class CaseViewComponent {}
 @Component({
   standalone: true,
   selector: 'lib-test-custom-permissions',
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: '<p>CUSTOM PERMISSIONS for {{ documentId() }}</p>',
 })
 class CustomPermissionsComponent {
@@ -284,13 +289,13 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
     mockDetailService.getFullDocument.mockReturnValue(of(focused));
     TestBed.resetTestingModule();
     await TestBed.configureTestingModule({
-      // `TranslateModule` is bootstrapped by the app, not the feature: the
+      // `testTranslateModule()` is bootstrapped by the app, not the feature: the
       // detail template's `translate` pipes inject `TranslateService`.
       imports: [DocumentDetailComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -674,7 +679,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Archive');
       const icon = button.querySelector('mat-icon');
       expect(icon?.getAttribute('aria-hidden')).toBe('true');
-      expect(icon?.textContent?.trim()).toBe('inventory_2');
+      expect(icon?.getAttribute('data-mat-icon-name')).toBe('inventory_2');
     });
 
     /** The shipped default is unchanged: the packaged ids are the ones that render. */
@@ -718,7 +723,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         ),
       ) as HTMLButtonElement[];
       const button = buttons.find(
-        (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
+        (b) => b.querySelector('mat-icon')?.getAttribute('data-mat-icon-name') === 'more_vert',
       );
       expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
       expect(

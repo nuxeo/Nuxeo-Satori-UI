@@ -10,18 +10,25 @@
  *
  * Source-level selector contract: `document-detail-panel-toggle-focus-ring.spec.ts`.
  */
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import {
   NxsTabBodyDirective,
   NxsTabsComponent,
   type NxsTab,
 } from '@nuxeo/satori-platform/components';
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -67,13 +74,15 @@ function productionTabHeaderBackground(host: HTMLElement): string {
     MatTooltipModule,
     NxsTabBodyDirective,
     NxsTabsComponent,
-    TranslateModule,
+    TranslatePipe,
+    testTranslateModule(),
   ],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-panel-toggle-focus.scss',
     './panel-toggle-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './panel-toggle-focus-ring.spec.html',
 })
 class PanelToggleFocusHostComponent {
@@ -95,7 +104,7 @@ describe('Document detail panel toggle — keyboard focus indicator (NXSAT-544)'
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [PanelToggleFocusHostComponent, testTranslateModule()],
+      imports: [PanelToggleFocusHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });

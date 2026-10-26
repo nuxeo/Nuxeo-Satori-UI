@@ -8,7 +8,7 @@
     [matTooltip]="name"
     [attr.aria-label]="name"
   >
-    <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
+    <mat-icon aria-hidden="true" [svgIcon]="icon()" />
   </button>
   <mat-menu #menu="matMenu">
     @for (action of actions(); track action.id) {
@@ -20,7 +20,7 @@
         (click)="selected.emit(action)"
       >
         @if (action.icon) {
-          <mat-icon aria-hidden="true">{{ action.icon }}</mat-icon>
+          <mat-icon aria-hidden="true" [svgIcon]="action.icon" />
         }
         <span>{{ action.label }}</span>
       </button>

@@ -8,7 +8,7 @@ import {
   provideRouter,
   withDisabledInitialNavigation,
 } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 import { of, throwError, type Observable } from 'rxjs';
 import { vi } from 'vitest';
 

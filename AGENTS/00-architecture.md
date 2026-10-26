@@ -4,8 +4,8 @@
 
 | Layer                | Technology                                                      |
 | -------------------- | --------------------------------------------------------------- |
-| Frontend framework   | Angular 20 (standalone components, signals)                     |
-| Monorepo tool        | Nx 22                                                           |
+| Frontend framework   | Angular 22 (standalone components, signals)                     |
+| Monorepo tool        | Nx 23                                                           |
 | UI component library | Satori (Hyland design system) + Angular Material                |
 | State management     | Angular Signals — no NgRx, no BehaviorSubject for UI state      |
 | HTTP                 | Angular HttpClient via `NuxeoApiBase` wrapper                   |
@@ -130,7 +130,7 @@ library's value
 unions (`NxsAvatarColor` and the rest) are asserted equal to Satori's at compile time in
 `/components-satori`, since `/components` may not import Satori to check.
 
-**Storybook 9** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
+**Storybook 10** (`@nx/storybook`, `@storybook/angular`) documents the library, published at
 <https://nuxeo.github.io/agentic-ui-poc/>. Each component has an Overview, an API page and its
 stories, after a Getting started page:
 

@@ -564,35 +564,6 @@
   font-weight: 500;
 }
 
-// ---------- banners ----------
-
-.kd-banner {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--mat-sys-outline-variant, #e8eaef);
-  background: var(--mat-sys-surface, #fff);
-  font-size: 12.5px;
-
-  mat-icon {
-    font-size: 18px;
-    width: 18px;
-    height: 18px;
-  }
-}
-
-.kd-banner--error {
-  color: var(--mat-sys-error, #c62828);
-  background: var(--mat-sys-error-container, #fff5f5);
-  border-color: var(--mat-sys-error, #f5c2c2);
-}
-
-.kd-banner--muted {
-  color: var(--mat-sys-on-surface-variant, #5c5f6b);
-}
-
 .kd-debug {
   margin: -6px 0 0;
   border: 1px dashed var(--mat-sys-outline, #c7ccd6);
@@ -672,14 +643,17 @@
 // ---------- density overrides (shrink Material defaults to match app) ----------
 
 :host ::ng-deep {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-form-field {
     font-size: 13px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-text-field-wrapper {
     background: var(--mat-sys-surface, #fff);
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-button,
   .mat-mdc-outlined-button,
   .mat-mdc-unelevated-button,
@@ -697,11 +671,13 @@
       margin-right: 4px;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-mdc-progress-spinner {
       margin-right: 6px;
     }
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-icon-button {
     width: 32px;
     height: 32px;

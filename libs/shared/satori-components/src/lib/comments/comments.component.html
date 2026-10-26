@@ -93,7 +93,7 @@
                     [matTooltip]="'satori-components.comments.submit-hint' | translate"
                     (click)="submitReply(comment)"
                   >
-                    <mat-icon>check</mat-icon>
+                    <mat-icon svgIcon="check" />
                   </button>
                   <button
                     mat-icon-button
@@ -101,7 +101,7 @@
                     [attr.aria-label]="'satori-components.comments.clear' | translate"
                     (click)="setReplyText(comment.id, '')"
                   >
-                    <mat-icon>close</mat-icon>
+                    <mat-icon svgIcon="x_large" />
                   </button>
                 }
               </div>
@@ -138,7 +138,7 @@
           [matTooltip]="'satori-components.comments.submit-hint' | translate"
           (click)="submitComment()"
         >
-          <mat-icon>check</mat-icon>
+          <mat-icon svgIcon="check" />
         </button>
         <button
           mat-icon-button
@@ -146,7 +146,7 @@
           [attr.aria-label]="'satori-components.comments.clear' | translate"
           (click)="newText.set('')"
         >
-          <mat-icon>close</mat-icon>
+          <mat-icon svgIcon="x_large" />
         </button>
       }
     </div>
@@ -183,15 +183,15 @@
           ) | translate: { author: comment.author }
         "
       >
-        <mat-icon>more_vert</mat-icon>
+        <mat-icon svgIcon="more_vert" />
       </button>
       <mat-menu #menu="matMenu">
         <button mat-menu-item type="button" (click)="choose('edit', comment, parent)">
-          <mat-icon>edit</mat-icon>
+          <mat-icon svgIcon="pencil" />
           {{ 'satori-components.comments.edit' | translate }}
         </button>
         <button mat-menu-item type="button" (click)="choose('delete', comment, parent)">
-          <mat-icon>delete</mat-icon>
+          <mat-icon svgIcon="trash" />
           {{ 'satori-components.comments.delete' | translate }}
         </button>
       </mat-menu>
@@ -228,7 +228,7 @@
         [matTooltip]="'satori-components.comments.submit-hint' | translate"
         (click)="saveEdit(comment, parent)"
       >
-        <mat-icon>check</mat-icon>
+        <mat-icon svgIcon="check" />
       </button>
       <button
         mat-icon-button
@@ -236,7 +236,7 @@
         [attr.aria-label]="'satori-components.comments.cancel' | translate"
         (click)="cancelEdit()"
       >
-        <mat-icon>close</mat-icon>
+        <mat-icon svgIcon="x_large" />
       </button>
     </div>
   } @else {
@@ -263,7 +263,7 @@
       "
       (click)="openReplies(comment.id, true)"
     >
-      <mat-icon aria-hidden="true">reply</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="replay" />
       {{ 'satori-components.comments.reply' | translate }}
     </button>
   }

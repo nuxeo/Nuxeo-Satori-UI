@@ -73,10 +73,12 @@
     color: inherit;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-chevron {
     display: none;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .sat-breadcrumbs-list li:not(:last-child)::after {
     content: '›';
     margin-left: 4px;
@@ -114,20 +116,24 @@
 }
 
 ::ng-deep .collection-tabs {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-tab-header {
     border-bottom: 1px solid #e0e0e0;
     padding-left: 24px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-tab-labels {
     gap: 8px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-tab-body-wrapper {
     flex: 1;
     overflow: hidden;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-tab-body-content {
     overflow: auto;
   }
@@ -436,34 +442,41 @@
     flex: 1;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-form-field-subscript-wrapper {
     display: none;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-text-field-wrapper {
     padding: 0 12px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-form-field-infix {
     min-height: 40px;
     padding-top: 8px !important;
     padding-bottom: 8px !important;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-floating-label {
     font-size: 13px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mdc-text-field--outlined .mdc-notched-outline .mdc-notched-outline__leading,
   ::ng-deep .mdc-text-field--outlined .mdc-notched-outline .mdc-notched-outline__notch,
   ::ng-deep .mdc-text-field--outlined .mdc-notched-outline .mdc-notched-outline__trailing {
     border-color: #d0d0d0;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep input.mat-mdc-input-element {
     font-size: 13px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-select-trigger {
     font-size: 13px;
   }
@@ -508,6 +521,7 @@
 .history-table {
   width: 100%;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-header-cell {
     font-weight: 600;
     font-size: 12px;
@@ -517,6 +531,7 @@
     padding: 12px 16px;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-cell {
     font-size: 13px;
     color: #333;
@@ -524,6 +539,7 @@
     border-bottom: 1px solid #f0f0f0;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-row:hover {
     background: #f8f9fe;
   }
@@ -553,6 +569,7 @@
   text-transform: capitalize;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .history-container .mat-mdc-paginator {
   flex-shrink: 0;
   border-top: 1px solid #e0e0e0;
@@ -560,6 +577,7 @@
 }
 
 // The highlighted padlock Web UI shows on a locked document, only where the user may unlock it.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .header-actions button.lock-toggle--active:not(.mat-mdc-button-disabled) {
   color: var(--mat-sys-primary);
 }

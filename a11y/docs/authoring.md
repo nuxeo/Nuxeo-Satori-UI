@@ -538,7 +538,7 @@ assuming a fresh route means a fresh state.
 | A timed-out test              | Playwright **restarts the worker**, recreating the a11y-scout accumulator, so every surface already scanned is dropped. One browse timeout turned five successful scans into `pages scanned: 1` | Assert `pagesScanned.length`; it is the only thing that makes this visible |
 | A failing test                | Fragments the worker-scoped report                                                                                                                                                              | Assert `pagesScanned.length`                                               |
 | Dev proxy                     | `apps/nuxeo-ui/proxy.conf.json` is **not** hot-reloaded                                                                                                                                         | Restart `nx serve` after editing it                                        |
-| Node 22+                      | A built-in `localStorage` shadows jsdom's                                                                                                                                                       | Node is pinned to 20 in `.nvmrc`                                           |
+| Node 25+                      | A built-in `localStorage` shadows jsdom's                                                                                                                                                       | Node is pinned to 24 in `.nvmrc`                                           |
 
 ## 7. Before you commit a new check
 

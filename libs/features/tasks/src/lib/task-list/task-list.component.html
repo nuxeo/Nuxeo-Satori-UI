@@ -4,7 +4,7 @@
       {{ 'tasks.task-list.my-tasks' | translate }}
     </div>
     <button mat-icon-button (click)="loadTasks()" [title]="'tasks.task-list.refresh' | translate">
-      <mat-icon>refresh</mat-icon>
+      <mat-icon svgIcon="refresh" />
     </button>
   </div>
 
@@ -15,7 +15,7 @@
     </div>
   } @else if (error()) {
     <div class="task-error">
-      <mat-icon>error_outline</mat-icon>
+      <mat-icon svgIcon="error" />
       <span>{{ error() }}</span>
       <button mat-stroked-button (click)="loadTasks()">
         {{ 'tasks.task-list.retry' | translate }}
@@ -23,7 +23,7 @@
     </div>
   } @else if (tasks().length === 0) {
     <div class="task-empty">
-      <mat-icon class="task-empty-icon">task_alt</mat-icon>
+      <mat-icon class="task-empty-icon" svgIcon="tasks" />
       <p>{{ 'tasks.task-list.you-have-no-pending-tasks' | translate }}</p>
     </div>
   } @else {
@@ -38,20 +38,20 @@
           (keydown.space)="$event.preventDefault(); processTask(task)"
         >
           <div class="task-card-left">
-            <mat-icon class="task-type-icon">assignment</mat-icon>
+            <mat-icon class="task-type-icon" svgIcon="tasks" />
           </div>
           <div class="task-card-body">
             <div class="task-card-title">{{ taskLabel(task) }}</div>
             @if (task.targetDocTitle) {
               <div class="task-card-doc">
-                <mat-icon class="inline-icon">description</mat-icon>
+                <mat-icon class="inline-icon" svgIcon="page" />
                 {{ task.targetDocTitle }}
               </div>
             }
             <div class="task-card-meta">
               <span class="task-workflow-badge">{{ taskWorkflow(task) }}</span>
               <span class="task-due" [class.overdue]="isOverdue(task)">
-                <mat-icon class="inline-icon">schedule</mat-icon>
+                <mat-icon class="inline-icon" svgIcon="clock" />
                 {{ 'tasks.due-on' | translate: { date: dueLabel(task) } }}
               </span>
             </div>

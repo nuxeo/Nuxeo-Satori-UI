@@ -10,13 +10,13 @@
       'satori-components.manage-versions.version' | translate
     }}</span>
     {{ label() }}
-    <mat-icon aria-hidden="true" iconPositionEnd>arrow_drop_down</mat-icon>
+    <mat-icon aria-hidden="true" iconPositionEnd svgIcon="chevron_down" />
   </button>
 
   <mat-menu #list="matMenu" class="nxs-manage-versions__menu" xPosition="after">
     @if (offersCreate()) {
       <button mat-menu-item type="button" class="nxs-manage-versions__create" (click)="create()">
-        <mat-icon aria-hidden="true">add_circle_outline</mat-icon>
+        <mat-icon aria-hidden="true" svgIcon="circle_add" />
         <span>{{ 'satori-components.manage-versions.create' | translate }}</span>
       </button>
       <mat-divider />
@@ -36,7 +36,7 @@
         {{ 'satori-components.manage-versions.failed' | translate }}
       </p>
       <button mat-menu-item type="button" (click)="retry($event)">
-        <mat-icon aria-hidden="true">refresh</mat-icon>
+        <mat-icon aria-hidden="true" svgIcon="refresh" />
         <span>{{ 'satori-components.manage-versions.retry' | translate }}</span>
       </button>
     } @else if (loading() && versions().length === 0) {

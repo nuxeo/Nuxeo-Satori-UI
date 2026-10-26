@@ -1,9 +1,22 @@
+import { createRequire } from 'node:module';
 import nx from '@nx/eslint-plugin';
+
+const require = createRequire(import.meta.url);
+const satoriLint = require('@hylandsoftware/satori-lint/eslint');
 
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
+  ...satoriLint.configs['flat/recommended'],
+  {
+    files: ['**/*.html'],
+    rules: {
+      // 513 Material font icons → Satori SVG icons is a separate migration tracked by
+      // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
+      '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+    },
+  },
   {
     ignores: [
       '**/dist',
@@ -139,6 +152,12 @@ export default [
       'no-console': ['warn', { allow: ['warn', 'error'] }],
       eqeqeq: ['error', 'always'],
       'no-duplicate-imports': 'error',
+      // Angular 22 made OnPush the default. NXSAT-670 gave every component an explicit Eager
+      // strategy to preserve Angular 21 behaviour, which is exactly what this rule forbids —
+      // 126 errors across 11 projects, and no other error class. Adopting OnPush is separate
+      // work, one surface at a time with tests (docs/angular-22-migration.md). Revisit by
+      // 2027-06-30: delete this line and the rule reports every component still to convert.
+      '@angular-eslint/prefer-on-push-component-change-detection': 'off',
     },
   },
 ];

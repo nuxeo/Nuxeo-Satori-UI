@@ -6,7 +6,7 @@
     </div>
   } @else if (error()) {
     <div class="task-error">
-      <mat-icon>error_outline</mat-icon>
+      <mat-icon svgIcon="error" />
       <span>{{ error() }}</span>
       <button mat-stroked-button (click)="goBack()">
         {{ 'tasks.task-detail.back-to-tasks' | translate }}
@@ -14,21 +14,20 @@
     </div>
   } @else {
     <!-- Header -->
-    <div class="task-detail-header">
+    <sat-header-bar variant="one-row">
       <button
+        sat-header-bar-leading
         mat-icon-button
         (click)="goBack()"
         [title]="'tasks.task-detail.back-to-tasks' | translate"
       >
-        <mat-icon>arrow_back</mat-icon>
+        <mat-icon svgIcon="arrow_left" />
       </button>
-      <div class="task-detail-title-group">
-        <div class="task-detail-heading" role="heading" aria-level="2">
-          {{ taskLabel(task()!) }}
-        </div>
-        <sat-status-tag status="info" [hideIcon]="true">{{ taskWorkflow(task()!) }}</sat-status-tag>
-      </div>
-    </div>
+      {{ taskLabel(task()!) }}
+      <sat-status-tag sat-header-bar-trailing status="info" [hideIcon]="true">{{
+        taskWorkflow(task()!)
+      }}</sat-status-tag>
+    </sat-header-bar>
 
     <div class="task-detail-layout">
       <!-- Left: Task form -->
@@ -50,7 +49,7 @@
               }
               <div class="doc-banner-info">
                 <div class="doc-banner-title">
-                  <mat-icon class="doc-icon">description</mat-icon>
+                  <mat-icon class="doc-icon" svgIcon="page" />
                   {{ targetDoc()!.title }}
                 </div>
                 <div class="doc-banner-path">{{ targetDoc()!.path }}</div>
@@ -65,7 +64,7 @@
                   }
                   @if (docDownloadUrl()) {
                     <a class="doc-download-link" [href]="docDownloadUrl()" target="_blank">
-                      <mat-icon class="inline-icon">download</mat-icon>
+                      <mat-icon class="inline-icon" svgIcon="download" />
                       {{ 'tasks.task-detail.download' | translate }}
                     </a>
                   }
@@ -74,7 +73,7 @@
             </div>
           } @else {
             <div class="doc-banner-empty">
-              <mat-icon>insert_drive_file</mat-icon>
+              <mat-icon svgIcon="page" />
               <span>{{ 'tasks.task-detail.no-linked-document' | translate }}</span>
             </div>
           }
@@ -91,7 +90,7 @@
               @for (p of participants; track p) {
                 <span class="participant-chip">
                   {{ formatParticipantLabel(p) }}
-                  <mat-icon class="chip-remove" (click)="removeParticipant(p)">close</mat-icon>
+                  <mat-icon class="chip-remove" (click)="removeParticipant(p)" svgIcon="x_large" />
                 </span>
               }
               @if (participants.length === 0) {
@@ -110,7 +109,7 @@
                 [placeholder]="'tasks.task-detail.type-3-characters-to-search' | translate"
               />
               @if (searching()) {
-                <mat-icon matSuffix>hourglass_empty</mat-icon>
+                <mat-icon matSuffix svgIcon="progress_activity" />
               }
             </mat-form-field>
 
@@ -122,7 +121,7 @@
                     class="search-result-item"
                     (click)="addParticipant('user:' + user.id)"
                   >
-                    <mat-icon>person</mat-icon>
+                    <mat-icon svgIcon="user" />
                     <span>{{ user.properties.firstName }} {{ user.properties.lastName }}</span>
                     <span class="search-result-id">({{ user.id }})</span>
                   </button>
@@ -133,7 +132,7 @@
                     class="search-result-item"
                     (click)="addParticipant('group:' + group.groupname)"
                   >
-                    <mat-icon>group</mat-icon>
+                    <mat-icon svgIcon="user_group" />
                     <span>{{ group.grouplabel || group.groupname }}</span>
                     <span class="search-result-id">({{ group.groupname }})</span>
                   </button>
@@ -186,7 +185,7 @@
               [disabled]="submitting()"
               (click)="executeAction(action)"
             >
-              <mat-icon>{{ actionIcon(action) }}</mat-icon>
+              <mat-icon [svgIcon]="actionIcon(action)" />
               {{ actionLabel(action) }}
             </button>
           }
@@ -197,7 +196,7 @@
             [disabled]="submitting()"
             (click)="abandonWorkflow()"
           >
-            <mat-icon>block</mat-icon>
+            <mat-icon svgIcon="block" />
             {{ 'tasks.task-detail.abandon' | translate }}
           </button>
         </div>
@@ -217,7 +216,7 @@
       <div class="task-info-panel">
         <div class="info-card">
           <div class="info-card-heading" role="heading" aria-level="3">
-            <mat-icon class="section-icon">info</mat-icon>
+            <mat-icon class="section-icon" svgIcon="info" />
             {{ 'tasks.task-detail.task-info' | translate }}
           </div>
           <div class="info-row">

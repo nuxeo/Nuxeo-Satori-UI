@@ -198,18 +198,18 @@ The same icon, heading, message and projected action in both; the theme sets the
 
 ### Error state
 
-| Field           | Value                                         |
-| --------------- | --------------------------------------------- |
-| Component       | `NxsErrorStateComponent`                      |
-| Registered ID   | `nxs.primitives.errorState`                   |
-| With Satori     | Same component; theme only                    |
-| Storybook story | `states-error-state--server-error-with-retry` |
+| Field           | Value                                                                                                                |
+| --------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Component       | `NxsErrorStateComponent`                                                                                             |
+| Registered ID   | `nxs.primitives.errorState`                                                                                          |
+| With Satori     | Satori's own component: `NxsSatoriErrorStateComponent` renders `<sat-401-error-state>`                               |
+| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
 
 ![Error state: without Satori on the left, with Satori on the right](error-state-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
 A folder listing the server failed to answer: the same icon, heading, explanation and Retry button in both. The theme sets the type, the icon's error colour and the button's style.
 
-It has four variants, chosen by the status of the request that failed: the session has ended, the user has no access, the item is not there, or something went wrong. Retry appears only for the last, because asking again after the first three gets the same answer. It is registered under an ID, so a customer can replace it. Satori has its own error states for the same four cases, but only in Satori 1.0, which needs a newer Angular than ours; until then the ID renders this component with Satori too.
+It has four variants, chosen by the status of the request that failed: the session has ended, the user has no access, the item is not there, or something went wrong. Retry appears only for the last, because asking again after the first three gets the same answer. It is registered under an ID, so a customer can replace it. Satori 1.0.0-alpha.171 provides `NxsSatoriErrorStateComponent`, which re-registers the same ID with a Satori-specific implementation that uses Satori's `<sat-error-state>`. The Material implementation continues to use Angular Material components.
 
 ### Spinner
 
@@ -759,7 +759,7 @@ The components in the library today:
 | Folder header                   | —                                                                                                                       | Same component; theme only   |
 | Domain hint                     | —                                                                                                                       | Same component; theme only   |
 | Empty state                     | —                                                                                                                       | Same component; theme only   |
-| Error state                     | `nxs.primitives.errorState`                                                                                             | Same component; theme only   |
+| Error state                     | `nxs.primitives.errorState`                                                                                             | Yes — Satori's own component |
 | Spinner                         | —                                                                                                                       | Same component; theme only   |
 | Toast                           | —                                                                                                                       | Same component; theme only   |
 | Column picker                   | —                                                                                                                       | Same component; theme only   |

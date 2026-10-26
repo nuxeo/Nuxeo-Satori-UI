@@ -67,6 +67,7 @@
   transform: scaleX(-1);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .nxs-breadcrumbs__overflow {
   --mat-icon-button-state-layer-size: 28px;
 

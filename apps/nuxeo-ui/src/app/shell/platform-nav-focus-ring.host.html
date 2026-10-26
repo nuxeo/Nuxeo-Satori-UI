@@ -4,8 +4,10 @@
   item touching it — nav items have no gap between them.
 -->
 <sat-platform-nav>
-  <sat-platform-nav-list-item data-nav-id="idle">Browse</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item data-nav-id="active" [active]="true">{{
-    'shell.test.platform-nav-item' | translate
-  }}</sat-platform-nav-list-item>
+  <sat-platform-nav-menu>
+    <a sat-platform-nav-menu-item data-nav-id="idle">Browse</a>
+    <a sat-platform-nav-menu-item data-nav-id="active" [active]="true">{{
+      'shell.test.platform-nav-item' | translate
+    }}</a>
+  </sat-platform-nav-menu>
 </sat-platform-nav>

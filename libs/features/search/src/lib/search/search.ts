@@ -1,4 +1,13 @@
-import { Component, computed, effect, inject, signal, untracked, DestroyRef } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  DestroyRef,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import {
   DescriptorLabelPipe,
   ExtensionOutletComponent,
@@ -216,6 +225,7 @@ function mapToView(item: SearchResultItem): SearchResultViewModel {
   ],
   providers: [provideNxsToast(), provideNxsThumbnailCache()],
   templateUrl: './search.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './search.scss',
 })
 export class SearchComponent {
@@ -303,7 +313,7 @@ export class SearchComponent {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
 
   /** Every column as the picker offers it: names resolved for the active language. */
@@ -1072,7 +1082,7 @@ export class SearchComponent {
             collectionKey: '',
             tags: [],
             flags: '',
-            icon: 'description',
+            icon: 'page',
             isFavorite: doc.contextParameters?.favorites?.isFavorite ?? false,
           }));
           this.aiResults.set(items);

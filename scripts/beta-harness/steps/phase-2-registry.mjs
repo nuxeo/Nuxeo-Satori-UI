@@ -166,7 +166,7 @@ async function bundleFingerprint(page) {
  */
 function readNav(page) {
   return page.evaluate(() =>
-    [...document.querySelectorAll('sat-platform-nav-list-item[data-nav-id]')].map((el) => [
+    [...document.querySelectorAll('a[sat-platform-nav-menu-item][data-nav-id]')].map((el) => [
       el.getAttribute('data-nav-id'),
       (el.textContent ?? '').trim(),
     ]),
@@ -437,7 +437,7 @@ export default async function run(page, h) {
     'sidebar slot',
     baselineBundle,
   );
-  await page.locator('sat-platform-nav-list-item[data-nav-id="app.navbar.searchFilters"]').click();
+  await page.locator('a[sat-platform-nav-menu-item][data-nav-id="app.navbar.searchFilters"]').click();
   await page.waitForTimeout(1500);
   await h.expectVisible(
     'the shared extension outlet rendered in the drawer',

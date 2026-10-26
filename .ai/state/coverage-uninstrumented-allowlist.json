@@ -11,13 +11,13 @@
     "its 1303-line filters drawer counted for nothing on either side of that fraction.",
     "",
     "`files` is dated debt: real code that no test reaches. An entry is a record that the file is",
-    "untested and a date by which that stops being acceptable — not permission to leave it so.",
+    "untested and a date by which that stops being acceptable \u2014 not permission to leave it so.",
     "`noStatements` is a permanent exemption for files with nothing to measure; it is self-policing,",
     "because an entry whose file starts producing statements is reported stale.",
     "",
     "REGENERATED 2026-08-25 from fresh reports. The previous hand-authored version was built from",
     "stale artifacts in coverage/ and nine of its eighteen adf-hx-bridge entries were wrong on the",
-    "day they were written — it listed hxql-literal.ts as having no in-project spec while",
+    "day they were written \u2014 it listed hxql-literal.ts as having no in-project spec while",
     "hxql-literal.spec.ts sat beside it, committed in a0528ab. The gate now refuses to read a",
     "report older than the sources it describes, so that cannot recur silently."
   ],
@@ -112,9 +112,6 @@
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/extensions/acme-extensions/src/index.ts": {
-      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
-    },
-    "libs/features/administration/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/features/browse/src/index.ts": {
@@ -235,7 +232,7 @@
       "reason": "No executable statements to measure: one exported type alias. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/shared/satori-components/src/lib/metadata-editor/metadata-editor.model.ts": {
-      "reason": "No executable statements to measure: the metadata editor’s exported interfaces and type aliases. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+      "reason": "No executable statements to measure: the metadata editor\u2019s exported interfaces and type aliases. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     },
     "libs/shared/ui/src/index.ts": {
       "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
@@ -248,6 +245,18 @@
     },
     "libs/features/tasks/src/index.ts": {
       "reason": "Pure export barrel with no executable statements. Tasks feature is out of Beta scope. Permanent exemption."
+    },
+    "libs/integration-tests/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/ai-client/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/satori-components/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
+    },
+    "libs/shared/testing/src/index.ts": {
+      "reason": "No executable statements to measure: type declarations, a re-export barrel, or a route table. Permanent rather than dated, because there is no work here to schedule. Reported stale if it ever gains a statement."
     }
   }
 }

@@ -1,4 +1,10 @@
-import { Component, provideZonelessChangeDetection, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsTabBodyDirective, type NxsTab } from './tab-body.directive';
@@ -13,6 +19,7 @@ const TABS: readonly NxsTab[] = [
 @Component({
   standalone: true,
   imports: [NxsTabsComponent, NxsTabBodyDirective],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-tabs
       [tabs]="tabs()"
@@ -66,11 +73,7 @@ describe('NxsTabsComponent', () => {
   });
 
   it('renders one tab per entry, in order, each addressable by its ID', () => {
-    expect(tabs().map((tab) => tab.textContent?.trim())).toEqual([
-      'visibility View',
-      'Permissions',
-      'Claims',
-    ]);
+    expect(tabs().map((tab) => tab.textContent?.trim())).toEqual(['View', 'Permissions', 'Claims']);
     expect(
       [...el().querySelectorAll('[data-tab-id]')].map((n) => n.getAttribute('data-tab-id')),
     ).toEqual(['app.tabs.view', 'app.tabs.permissions', 'acme.tabs.claims']);
@@ -139,6 +142,7 @@ describe('NxsTabsComponent', () => {
 
   it('renders no body when the host marks no template', async () => {
     @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
       standalone: true,
       imports: [NxsTabsComponent],
       template: `<nxs-tabs [tabs]="tabs" />`,

@@ -23,7 +23,12 @@
  *   4. The loading indicator's icon name belongs to the legacy Material Icons
  *      font so the glyph actually renders at runtime.
  */
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
@@ -32,16 +37,17 @@ import { MatIconModule } from '@angular/material/icon';
 @Component({
   standalone: true,
   imports: [MatButtonModule, MatIconModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <button type="button" mat-stroked-button class="ke-action-btn" data-testid="idle-btn">
-      <mat-icon>category</mat-icon>
+      <mat-icon svgIcon="tag" />
       Classify Document
     </button>
     <button type="button" mat-stroked-button class="ke-action-btn" data-testid="loading-btn">
       @if (loading()) {
         <mat-icon class="ke-spinning">autorenew</mat-icon>
       } @else {
-        <mat-icon>category</mat-icon>
+        <mat-icon svgIcon="tag" />
       }
       Classify Document
     </button>

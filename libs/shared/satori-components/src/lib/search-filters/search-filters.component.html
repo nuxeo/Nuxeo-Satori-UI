@@ -21,7 +21,7 @@
           [attr.aria-label]="'satori-components.search-filters.clear-fulltext' | translate"
           (click)="clearFulltext()"
         >
-          <mat-icon aria-hidden="true">close</mat-icon>
+          <mat-icon aria-hidden="true" svgIcon="x_large" />
         </button>
       }
     </div>
@@ -200,7 +200,7 @@
                 | translate: { value: field === 'collections' ? collectionTitle(value) : value }
             "
           >
-            <mat-icon aria-hidden="true">cancel</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="circle_x" />
           </button>
         </mat-chip>
       }
@@ -219,9 +219,10 @@
       (click)="toggleGroup(group.field)"
     >
       <span>{{ group.titleKey | translate }}</span>
-      <mat-icon aria-hidden="true">{{
-        isExpanded(group.field) ? 'expand_less' : 'expand_more'
-      }}</mat-icon>
+      <mat-icon
+        aria-hidden="true"
+        [svgIcon]="isExpanded(group.field) ? 'expand_less' : 'chevron_down'"
+      />
     </button>
     @if (isExpanded(group.field)) {
       <div

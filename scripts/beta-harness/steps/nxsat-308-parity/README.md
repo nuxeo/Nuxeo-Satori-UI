@@ -36,6 +36,22 @@ npx nx serve nuxeo-ui --port 4216 --proxy-config scripts/beta-harness/steps/nxsa
 APP_URL=http://localhost:4216 PARITY_SURFACE=nxs npm run beta:evidence -- nxsat-308-parity
 ```
 
+## Re-seed between runs
+
+**The run is not read-only, so re-seed before every run of it.** The PermissionsPanel save step
+grants `Everything` to `members` on the `acl` folder and that write lands: the fixture it leaves
+behind no longer matches the one step 1 verifies, and a second run stops at
+`precondition-not-met` with "the acl folder holds AddChildren and ReadWrite".
+
+That is correct of both the step and the precondition. Until NXSAT-645 the save was staged by
+matching an option's translated label, which matched nothing — so no change was staged, no Save
+appeared, nothing was written, and the step's checks ran against an untouched ACL. The fixture
+surviving a run was a symptom of the save never happening.
+
+```zsh
+node scripts/beta-harness/steps/nxsat-308-parity/seed-parity-data.mjs   # before each run
+```
+
 ## The identity guard
 
 Every request the seed sends carries the `Authorization` header, and before its first write it

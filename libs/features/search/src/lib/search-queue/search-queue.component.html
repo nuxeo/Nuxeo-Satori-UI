@@ -15,7 +15,7 @@
 
   @if (items().length === 0) {
     <div class="queue-empty">
-      <mat-icon>search_off</mat-icon>
+      <mat-icon svgIcon="search" />
       <p>{{ 'search.search-queue.no-search-results' | translate }}</p>
     </div>
   } @else {
@@ -28,7 +28,7 @@
       >
         <div class="queue-item-preview">
           <nxs-thumbnail class="queue-item-image" [documentId]="item.id" [alt]="item.title">
-            <mat-icon class="queue-item-icon">{{ item.icon || 'description' }}</mat-icon>
+            <mat-icon class="queue-item-icon" [svgIcon]="item.icon || 'page'" />
           </nxs-thumbnail>
         </div>
         <div class="queue-item-content">

@@ -12,9 +12,9 @@
             [matTooltip]="more"
             [attr.aria-label]="more"
           >
-            <mat-icon aria-hidden="true">more_horiz</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="more_horiz" />
           </button>
-          <mat-icon class="nxs-breadcrumbs__separator" aria-hidden="true">chevron_right</mat-icon>
+          <mat-icon class="nxs-breadcrumbs__separator" aria-hidden="true" svgIcon="chevron_right" />
         </li>
       } @else {
         <li
@@ -50,7 +50,11 @@
             }
           }
           @if (!last) {
-            <mat-icon class="nxs-breadcrumbs__separator" aria-hidden="true">chevron_right</mat-icon>
+            <mat-icon
+              class="nxs-breadcrumbs__separator"
+              aria-hidden="true"
+              svgIcon="chevron_right"
+            />
           }
         </li>
       }
@@ -80,12 +84,12 @@
     <li class="nxs-breadcrumbs__item">
       <span class="nxs-breadcrumbs__text">{{ item.label }}</span>
       @if (!last) {
-        <mat-icon class="nxs-breadcrumbs__separator">chevron_right</mat-icon>
+        <mat-icon class="nxs-breadcrumbs__separator" svgIcon="chevron_right" />
       }
     </li>
   }
   <li class="nxs-breadcrumbs__item nxs-breadcrumbs__overflow-item">
     <span class="nxs-breadcrumbs__overflow-measure"></span>
-    <mat-icon class="nxs-breadcrumbs__separator">chevron_right</mat-icon>
+    <mat-icon class="nxs-breadcrumbs__separator" svgIcon="chevron_right" />
   </li>
 </ol>

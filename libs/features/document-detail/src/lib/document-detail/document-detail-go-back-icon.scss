@@ -1,5 +1,2 @@
-// NXENG-826 — arrow_back via codepoint (no ligature text; legacy Material Icons font).
-.detail-header mat-icon.detail-header-go-back-icon::before {
-  content: '\e5c4';
-  font: 24px/1 'Material Icons';
-}
+// NXENG-826 — arrow_left via Satori SVG icon (no ligature text).
+// CSS codepoint workaround removed in NXSAT-673 — now uses svgIcon="arrow_left".
