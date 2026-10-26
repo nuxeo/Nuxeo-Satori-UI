@@ -409,7 +409,7 @@ describe('NxsTagEditorComponent', () => {
       ]);
     });
 
-    it('drops what is still pending when the document changes', async () => {
+    it('keeps a change going when the document changes, and shows it on the way back', async () => {
       const added = new Subject<string[]>();
       tags.addTag.mockReturnValue(added);
       await mount();
@@ -423,9 +423,70 @@ describe('NxsTagEditorComponent', () => {
 
       expect(el().querySelector('.nxs-tag-editor__pending')).toBeNull();
       added.next(['contract', 'q3', 'invoice']);
+      added.complete();
       await settle();
 
+      // Not doc-2's tags, so neither the chips nor the host hear it here.
       expect(chips()).toEqual(['other']);
+      expect(host.changes).toEqual([]);
+      expect(toastShow).toHaveBeenCalledWith('The tag invoice has been added to the document.');
+
+      host.uid.set('doc-1');
+      host.tags.set(['contract', 'q3']);
+      await settle();
+
+      expect(chips()).toEqual(['contract', 'q3', 'invoice']);
+      expect(host.changes).toEqual([['contract', 'q3', 'invoice']]);
+    });
+
+    it('finishes every change when the editor is closed mid-write, for the next one to show', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      tags.removeTag.mockReturnValue(of(['q3', 'invoice']));
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      removeButton('contract').click();
+      await settle();
+      const closed = host;
+      fixture.destroy();
+
+      added.next(['contract', 'q3', 'invoice']);
+      added.complete();
+
+      // The queued removal still went out, after the add, and nothing reached the closed host.
+      expect(tags.removeTag).toHaveBeenCalledExactlyOnceWith('doc-1', 'contract');
+      expect(closed.changes).toEqual([]);
+      expect(toastShow).toHaveBeenCalledWith('The tag invoice has been added to the document.');
+      expect(toastShow).toHaveBeenCalledWith('The tag contract has been removed from the document.');
+
+      // Reopened with the tags the host loaded before the change: it catches up once, and only once.
+      await mount();
+      expect(chips()).toEqual(['q3', 'invoice']);
+      expect(host.changes).toEqual([['q3', 'invoice']]);
+
+      host.tags.set(['q3', 'invoice']);
+      await settle();
+      expect(host.changes).toEqual([['q3', 'invoice']]);
+    });
+
+    it('still says a change failed when the editor was closed before the answer', async () => {
+      const added = new Subject<string[]>();
+      tags.addTag.mockReturnValue(added);
+      await mount();
+
+      await type('invoice');
+      key(box(), 27, 'Escape');
+      await enter();
+      fixture.destroy();
+      added.error(new HttpErrorResponse({ status: 500 }));
+
+      expect(toastError).toHaveBeenCalledWith('The tag invoice could not be added.');
+
+      await mount();
+      expect(chips()).toEqual(['contract', 'q3']);
       expect(host.changes).toEqual([]);
     });
   });

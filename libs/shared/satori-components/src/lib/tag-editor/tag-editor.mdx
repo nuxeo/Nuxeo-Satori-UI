@@ -22,6 +22,9 @@ The tag editor is a document's tags, added and removed in place. It is the count
   it with `canTagDocument(doc)`: Write on the document itself, not a version or a proxy.
 - **Never out of order.** Changes are sent one at a time, so a slow answer cannot undo a later
   change. A failed change puts the chip back and says why; a 403 reads as a refusal.
+- **Never lost with the view.** A change is kept until Nuxeo answers it, even if the tab or panel
+  holding the editor closes, or the host moves to another document, first. Its toast still shows,
+  and the next editor for that document shows what Nuxeo stored and passes it on in `tagsChange`.
 
 ## Demo showcase
 
