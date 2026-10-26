@@ -110,7 +110,6 @@ type AppConfigSource = 'configuration-service' | 'packaged-default';
 interface AppIntegrationsConfig {
     readonly arender: AppARenderConfig | null;
     readonly knowledgeDiscoveryOperations: Readonly<Record<string, string>>;
-    readonly knowledgeEnrichmentOperations: Readonly<Record<string, string>>;
     }
 }
 interface AppRuntimeManifest {
