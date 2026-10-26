@@ -1,0 +1,28 @@
+// Laid out as Material's `nxs-tabs` is: the strip on top, and the body filling the space under it
+// and clipping, so a body scrolls itself.
+:host {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.nxs-satori-tabs__strip {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+}
+
+.nxs-satori-tabs__icon {
+  width: 18px;
+  height: 18px;
+  margin-inline-end: 8px;
+}
+
+.nxs-satori-tabs__panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}

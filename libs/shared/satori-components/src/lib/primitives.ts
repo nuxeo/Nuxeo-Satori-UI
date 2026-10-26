@@ -1,15 +1,16 @@
-import type { InputSignal, InputSignalWithTransform } from '@angular/core';
+import type { InputSignal, InputSignalWithTransform, TemplateRef } from '@angular/core';
 
+import type { NxsToolbarAction } from './document-toolbar/document-toolbar.component';
 import type { NxsErrorStatus } from './error-state/error-status';
 import type { NxsHeadingLevel } from './heading-level';
+import type { NxsTab, NxsTabBodyContext } from './tabs/tab-body.directive';
 
 /**
  * The IDs of the primitives Satori also ships, registered by `provideNxsComponents()`.
  *
- * Each ID resolves to a Material implementation from this entry point, and all but `errorState` to a
- * Satori-backed one once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori`
- * is provided after it. `errorState` stays on Material there: Satori's error states arrive in
- * Satori 1.0, which needs a newer Angular than this package supports. Both implement the same `Nxs…Inputs` contract below, so whoever renders an ID — a
+ * Each ID resolves to a Material implementation from this entry point, and to a Satori-backed one
+ * once `provideNxsSatoriComponents()` from `@nuxeo/satori-platform/components-satori` is provided
+ * after it. Both implement the same `Nxs…Inputs` contract below, so whoever renders an ID — a
  * `lib-extension-outlet` with `componentInputs` — gets the same inputs whichever is registered.
  * A customer overriding an ID implements that contract too.
  */
@@ -20,6 +21,8 @@ export const NXS_PRIMITIVE_IDS = Object.freeze({
   statusTag: 'nxs.primitives.statusTag',
   richTooltip: 'nxs.primitives.richTooltip',
   errorState: 'nxs.primitives.errorState',
+  tabs: 'nxs.primitives.tabs',
+  actionBar: 'nxs.primitives.actionBar',
 } as const);
 
 /** Avatar colours. The values Satori's avatar takes, which `/components-satori` asserts. */
@@ -112,4 +115,45 @@ export interface NxsRichTooltipInputs {
   readonly triggerLabel: InputSignal<string>;
   /** A Material icon ligature for the trigger. */
   readonly icon: InputSignal<string>;
+}
+
+/**
+ * `nxs.primitives.tabs`: a tab strip and the selected tab's body. Text inputs arrive already
+ * translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `body` and `selectHandler`,
+ * because the outlet sets inputs and neither projects content nor binds outputs.
+ */
+export interface NxsTabsInputs {
+  /** The tabs, in display order. */
+  readonly tabs: InputSignal<readonly NxsTab[]>;
+  /** The tab list's accessible name. Optional. */
+  readonly label: InputSignal<string>;
+  /** The selected tab's position. Past the last tab selects the last. */
+  readonly selectedIndex: InputSignal<number>;
+  /** The template every tab's body renders from, given the tab as `let-tab`. */
+  readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
+  /**
+   * Called with the selected tab and its position whenever the selection changes — the user
+   * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.
+   */
+  readonly selectHandler: InputSignal<((tab: NxsTab, index: number) => void) | null>;
+}
+
+/**
+ * `nxs.primitives.actionBar`: a row of actions, some behind a "More actions" menu. Text inputs
+ * arrive already translated.
+ *
+ * A host rendering the ID through `lib-extension-outlet` passes `actionHandler`, because the
+ * outlet sets inputs and binds no outputs.
+ */
+export interface NxsActionBarInputs {
+  /** Every entry, in display order; each one's `overflow` decides which group it is in. */
+  readonly actions: InputSignal<readonly NxsToolbarAction[]>;
+  /** The group's accessible name. Blank falls back to the library's own "Document actions". */
+  readonly label: InputSignal<string>;
+  /** The menu button's accessible name and tooltip. Blank falls back to "More actions". */
+  readonly moreLabel: InputSignal<string>;
+  /** Called with the entry the user ran. Never a disabled one. */
+  readonly actionHandler: InputSignal<((action: NxsToolbarAction) => void) | null>;
 }

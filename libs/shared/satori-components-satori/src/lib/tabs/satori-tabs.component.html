@@ -1,0 +1,42 @@
+<sat-navigation-tabs class="nxs-satori-tabs__strip" [attr.aria-label]="ownLabel() || null">
+  @for (tab of tabs(); track tab.id; let index = $index) {
+    <!-- `tabindex` is only the starting value: Satori's directive binds it, and the selected tab is
+         made the strip's one tab stop. -->
+    <a
+      satNavigationTab
+      tabindex="-1"
+      class="nxs-satori-tabs__tab"
+      [id]="tabId(index)"
+      [active]="index === shown()"
+      [attr.aria-controls]="index === shown() ? panelId : null"
+      [attr.data-tab-id]="tab.id"
+      (click)="select(index)"
+      (keydown.enter)="select(index)"
+      (keydown.space)="$event.preventDefault(); select(index)"
+    >
+      @if (tab.icon) {
+        <mat-icon class="nxs-satori-tabs__icon" aria-hidden="true" [svgIcon]="tab.icon" />
+      }
+      {{ tab.label }}
+    </a>
+  }
+</sat-navigation-tabs>
+
+@if (shownTab(); as tab) {
+  <!-- One view per tab, so a body starts afresh each time its tab is shown, as Material's does. -->
+  @for (current of [tab]; track current.id) {
+    <div
+      class="nxs-satori-tabs__panel"
+      role="tabpanel"
+      [id]="panelId"
+      [attr.aria-labelledby]="tabId(shown())"
+    >
+      @if (body(); as template) {
+        <ng-container
+          [ngTemplateOutlet]="template"
+          [ngTemplateOutletContext]="{ $implicit: current }"
+        />
+      }
+    </div>
+  }
+}

@@ -15,9 +15,11 @@ import {
   NXS_PRIMITIVE_IDS,
   NxsAvatarComponent,
   NxsBreadcrumbsComponent,
+  NxsDocumentToolbarComponent,
   NxsErrorStateComponent,
   NxsRichTooltipComponent,
   NxsStatusTagComponent,
+  NxsTabsComponent,
   NxsTagComponent,
   provideNxsComponents,
 } from '@nuxeo/satori-platform/components';
@@ -27,12 +29,14 @@ import {
 } from '@nuxeo/satori-platform/extensions';
 import { TranslateService, provideTranslateService } from '@ngx-translate/core';
 
+import { NxsSatoriActionBarComponent } from './action-bar/satori-action-bar.component';
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
 import { NxsSatoriErrorStateComponent } from './error-state/satori-error-state.component';
 import { provideNxsSatoriComponents } from './provide-nxs-satori-components';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
 import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
+import { NxsSatoriTabsComponent } from './tabs/satori-tabs.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
@@ -42,6 +46,8 @@ const PAIRS: readonly [string, Type<unknown>, Type<unknown>][] = [
   [NXS_PRIMITIVE_IDS.statusTag, NxsStatusTagComponent, NxsSatoriStatusTagComponent],
   [NXS_PRIMITIVE_IDS.richTooltip, NxsRichTooltipComponent, NxsSatoriRichTooltipComponent],
   [NXS_PRIMITIVE_IDS.errorState, NxsErrorStateComponent, NxsSatoriErrorStateComponent],
+  [NXS_PRIMITIVE_IDS.tabs, NxsTabsComponent, NxsSatoriTabsComponent],
+  [NXS_PRIMITIVE_IDS.actionBar, NxsDocumentToolbarComponent, NxsSatoriActionBarComponent],
 ];
 
 function registry(providers: (Provider | EnvironmentProviders)[]): ExtensionComponentRegistry {
@@ -58,6 +64,12 @@ describe('provideNxsSatoriComponents', () => {
   it('re-registers the error state on Satori (Satori 1.0 ships sat-{401..500}-error-state)', () => {
     const components = registry([provideNxsComponents(), provideNxsSatoriComponents()]);
     expect(components.peek(NXS_PRIMITIVE_IDS.errorState)).toBe(NxsSatoriErrorStateComponent);
+  });
+
+  // A new ID with no Satori pair here would be registered on Material only, and every check below
+  // would pass without it.
+  it('pairs every primitive ID', () => {
+    expect(PAIRS.map(([id]) => id).sort()).toEqual(Object.values(NXS_PRIMITIVE_IDS).sort());
   });
 
   it('leaves Material in place for a host that provides only the base registration', () => {
@@ -319,5 +331,77 @@ describe('the Satori primitives, rendered by ID', () => {
     expect(trigger?.getAttribute('aria-label')).toBe('About versioning');
     expect(trigger?.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe('info');
     expect(host.querySelector('nxs-satori-rich-tooltip sat-rich-tooltip')).not.toBeNull();
+  });
+
+  // The inputs a host passes through the outlet, since it can project no body and bind no output.
+  it('renders the tabs on sat-navigation-tabs, with the body and select handler the outlet passes', async () => {
+    const calls: [string, number][] = [];
+    @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
+      standalone: true,
+      imports: [ExtensionOutletComponent],
+      template: ` <ng-template #body let-tab
+          ><p class="probe-body">{{ tab.label }} body</p></ng-template
+        >
+        <lib-extension-outlet
+          [componentId]="id"
+          [componentInputs]="{ tabs, selectedIndex: 0, body, selectHandler }"
+        />`,
+    })
+    class TabsHostComponent {
+      readonly id = NXS_PRIMITIVE_IDS.tabs;
+      readonly tabs = [
+        { id: 'app.tabs.view', label: 'View' },
+        { id: 'app.tabs.history', label: 'History' },
+      ];
+      readonly selectHandler = (tab: { id: string }, index: number) => calls.push([tab.id, index]);
+    }
+
+    TestBed.configureTestingModule({
+      imports: [TabsHostComponent],
+      providers: [
+        provideZonelessChangeDetection(),
+        provideSatori(),
+        provideNxsComponents(),
+        provideNxsSatoriComponents(),
+      ],
+    });
+    const fixture = TestBed.createComponent(TabsHostComponent);
+    fixture.detectChanges();
+    await fixture.whenStable();
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('nxs-satori-tabs sat-navigation-tabs')).not.toBeNull();
+    expect(host.querySelector('nxs-tabs')).toBeNull();
+    expect(host.querySelector('[role="tabpanel"] .probe-body')?.textContent?.trim()).toBe(
+      'View body',
+    );
+
+    host.querySelectorAll<HTMLElement>('a[satNavigationTab]')[1].click();
+    await fixture.whenStable();
+    expect(calls).toEqual([['app.tabs.history', 1]]);
+    expect(host.querySelector('[role="tabpanel"] .probe-body')?.textContent?.trim()).toBe(
+      'History body',
+    );
+  });
+
+  it("renders the action bar on Satori's action-bar buttons, calling the handler the outlet passes", async () => {
+    const ran: string[] = [];
+    const host = await renderById(NXS_PRIMITIVE_IDS.actionBar, {
+      actions: [
+        { id: 'app.toolbar.edit', label: 'Edit', icon: 'edit' },
+        { id: 'app.toolbar.share', label: 'Share', icon: 'share', overflow: true },
+      ],
+      actionHandler: (action: { id: string }) => ran.push(action.id),
+    });
+    const edit = host.querySelector<HTMLElement>(
+      'nxs-satori-action-bar button[data-action-id="app.toolbar.edit"]',
+    );
+    expect(edit?.classList).toContain('sat-action-bar-button');
+    expect(host.querySelector('nxs-document-toolbar')).toBeNull();
+    expect(host.querySelector('.nxs-satori-action-bar__more')?.classList).toContain(
+      'sat-action-bar-button',
+    );
+    edit?.click();
+    expect(ran).toEqual(['app.toolbar.edit']);
   });
 });

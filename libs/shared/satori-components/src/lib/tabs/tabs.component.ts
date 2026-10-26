@@ -10,11 +10,13 @@ import {
   input,
   model,
   output,
+  type TemplateRef,
 } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTabsModule } from '@angular/material/tabs';
 
-import { NxsTabBodyDirective, type NxsTab } from './tab-body.directive';
+import type { NxsTabsInputs } from '../primitives';
+import { NxsTabBodyDirective, type NxsTab, type NxsTabBodyContext } from './tab-body.directive';
 
 /**
  * IBM Equal Access `aria_keyboard_handler_exists` only counts an inline key handler on the
@@ -27,11 +29,16 @@ const TABLIST_INERT_ONKEYDOWN = 'void(0)';
 /**
  * The tab strip of a document page — Web UI's `nuxeo-document-page` view tabs.
  *
- * Renders the tabs the host resolved, in order, and every body from the one template the host marks
- * with `nxsTabBody`, so a tab a manifest adds renders through the same template as a packaged one.
- * Selection is by index, two-way (`[(selectedIndex)]`), so the host can switch tabs itself, as the
- * Publications count does; `selectedTabChange` also names the tab by ID, which stays right when a
- * manifest hides or reorders tabs.
+ * Renders the tabs the host resolved, in order, and every body from one template — the one the host
+ * passes as `body`, else the one it marks with `nxsTabBody` — so a tab a manifest adds renders
+ * through the same template as a packaged one. Selection is by index, two-way
+ * (`[(selectedIndex)]`), so the host can switch tabs itself, as the Publications count does;
+ * `selectedTabChange` also names the tab by ID, which stays right when a manifest hides or reorders
+ * tabs.
+ *
+ * The Material implementation of `nxs.primitives.tabs`. A host rendering that ID through
+ * `lib-extension-outlet` passes `body` and `selectHandler`, since the outlet projects no content
+ * and binds no outputs.
  */
 @Component({
   selector: 'nxs-tabs',
@@ -42,18 +49,31 @@ const TABLIST_INERT_ONKEYDOWN = 'void(0)';
   changeDetection: ChangeDetectionStrategy.OnPush,
   host: { class: 'nxs-tabs' },
 })
-export class NxsTabsComponent {
+export class NxsTabsComponent implements NxsTabsInputs {
   /** The tabs, in display order. */
   readonly tabs = input.required<readonly NxsTab[]>();
   /** The tab list's accessible name, already translated. Optional. */
   readonly label = input('');
   /** The selected tab's position. Two-way. */
   readonly selectedIndex = model(0);
+  /**
+   * The template every tab's body renders from, given the tab as `let-tab`. Takes precedence over
+   * a projected `<ng-template nxsTabBody>`.
+   */
+  readonly body = input<TemplateRef<NxsTabBodyContext> | null>(null);
+  /**
+   * Called with the selected tab and its position whenever the selection changes — the user
+   * choosing a tab, or the host moving `selectedIndex` — but not for the first selection.
+   */
+  readonly selectHandler = input<((tab: NxsTab, index: number) => void) | null>(null);
 
   /** The tab the user (or the host) selected, by ID. */
   readonly selectedTabChange = output<NxsTab>();
 
-  protected readonly body = contentChild(NxsTabBodyDirective);
+  private readonly projectedBody = contentChild(NxsTabBodyDirective);
+  protected readonly bodyTemplate = computed(
+    () => this.body() ?? this.projectedBody()?.template ?? null,
+  );
   protected readonly ownLabel = computed(() => this.label().trim());
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
@@ -75,6 +95,8 @@ export class NxsTabsComponent {
   protected select(index: number): void {
     this.selectedIndex.set(index);
     const tab = this.tabs()[index];
-    if (tab) this.selectedTabChange.emit(tab);
+    if (!tab) return;
+    this.selectedTabChange.emit(tab);
+    this.selectHandler()?.(tab, index);
   }
 }
