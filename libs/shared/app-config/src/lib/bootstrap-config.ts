@@ -1,8 +1,8 @@
 /**
- * Layer 0 bootstrap configuration — the part of the configuration the shell
- * needs before the user authenticates: where Nuxeo is, what the product is
- * called, which theme to start in, sign-in options and the integrations it
- * reaches. What the interface offers and how it is arranged belongs in the
+ * Layer 0 bootstrap configuration — the part of the configuration the shell needs
+ * before the user authenticates: where Nuxeo is, what the product is called,
+ * which theme to start in, sign-in options and the integrations it reaches.
+ * What the interface offers and how it is arranged belongs in the
  * runtime manifest (Layer 1), which is fetched beside this file; the fields a
  * document type shows are per-type layout files, indexed by `layouts.json`.
  *
@@ -90,7 +90,6 @@ export interface AppARenderConfig {
 export interface AppIntegrationsConfig {
   readonly arender: AppARenderConfig | null;
   readonly knowledgeDiscoveryOperations: Readonly<Record<string, string>>;
-  readonly knowledgeEnrichmentOperations: Readonly<Record<string, string>>;
 }
 
 /** `null` means "keep the compiled default", which mirrors Nuxeo's own `nuxeo.session.timeout`. */
@@ -236,7 +235,6 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},
-    knowledgeEnrichmentOperations: {},
   },
   session: {
     idleTimeoutMs: null,
@@ -433,10 +431,6 @@ function mergeIntegrations(base: AppIntegrationsConfig, value: unknown): AppInte
     knowledgeDiscoveryOperations: {
       ...base.knowledgeDiscoveryOperations,
       ...readStringRecord(value['knowledgeDiscoveryOperations']),
-    },
-    knowledgeEnrichmentOperations: {
-      ...base.knowledgeEnrichmentOperations,
-      ...readStringRecord(value['knowledgeEnrichmentOperations']),
     },
   };
 }

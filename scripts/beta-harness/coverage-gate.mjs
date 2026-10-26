@@ -84,7 +84,6 @@ const OUT_OF_SCOPE = Object.freeze({
   tasks: 'workflow tasks — out of Beta scope per the plan',
   'knowledge-discovery': 'KD feature, not part of the core slice',
   'shared-kd-client': 'KD client, not part of the core slice',
-  'shared-ke-client': 'KE client, not part of the core slice',
   assets: 'asset search, not part of the core slice',
   trash: 'trash, not part of the core slice',
   'acme-extensions': 'reference customer extension — example code, not product',
@@ -1372,7 +1371,6 @@ function projectForPath(entry) {
     extensions: 'shared-extensions',
     'app-config': 'shared-app-config',
     'kd-client': 'shared-kd-client',
-    'ke-client': 'shared-ke-client',
     'ai-client': 'shared-ai-client',
     util: 'shared-util',
   };
