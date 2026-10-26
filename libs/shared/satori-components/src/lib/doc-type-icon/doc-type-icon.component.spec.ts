@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { docTypeIcon } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -7,6 +12,7 @@ import { NxsDocTypeIconComponent } from './doc-type-icon.component';
 @Component({
   standalone: true,
   imports: [NxsDocTypeIconComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-doc-type-icon [type]="type()" [label]="label()" />`,
 })
 class HostComponent {

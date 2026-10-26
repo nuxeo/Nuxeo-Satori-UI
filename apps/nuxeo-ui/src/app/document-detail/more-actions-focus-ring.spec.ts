@@ -13,7 +13,7 @@
  * belongs to a11y-scout (`docs/accessibility.md` §28–33); this Karma suite only asserts SCSS
  * wiring and computed outline geometry on a synthetic host.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -33,6 +33,7 @@ import { testTranslateModule } from '../i18n/translate-testing';
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './more-actions-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './more-actions-focus-ring.spec.html',
 })
 class MoreActionsFocusHostComponent {

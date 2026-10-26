@@ -1,4 +1,11 @@
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { DomSanitizer, type SafeResourceUrl } from '@angular/platform-browser';
@@ -76,6 +83,7 @@ type ListState =
   standalone: true,
   imports: [WidgetGridComponent, WidgetContainerComponent, DocumentViewerComponent],
   templateUrl: './case-file.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './case-file.scss',
 })
 export class CaseFileComponent {

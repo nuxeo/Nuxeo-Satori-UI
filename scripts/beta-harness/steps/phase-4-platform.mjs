@@ -78,6 +78,8 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
+import { entryTypes } from '../package-types.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
 
@@ -302,17 +304,17 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   await h.step('The published declarations carry nullable types');
 
-  const extensionsDts = readFileSync(join(DIST, 'extensions', 'index.d.ts'), 'utf8');
+  const extensionsDts = readFileSync(entryTypes(DIST, './extensions'), 'utf8');
   h.check(
     'ExtensionRuleContextService.username is WritableSignal<string | null>',
-    /readonly username: [\w.]*WritableSignal<string \| null>/.test(extensionsDts),
+    /readonly username: (?:[\w.]*|import\([^)]+\)\.)WritableSignal<string \| null>/.test(extensionsDts),
     'The package was once compiled without strictNullChecks, which collapsed ' +
       '`string | null` to `string` and shipped 27 wrongly non-nullable public types. ' +
       'A customer calling .set(null) on sign-out got a compile error our source does not.',
   );
   h.check(
     'ExtensionRuleContextService.document is WritableSignal<NuxeoDocument | null>',
-    /readonly document: [\w.]*WritableSignal<NuxeoDocument \| null>/.test(extensionsDts),
+    /readonly document: (?:[\w.]*|import\([^)]+\)\.)WritableSignal<NuxeoDocument \| null>/.test(extensionsDts),
     'same strictNullChecks regression',
   );
 

@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, ChangeDetectionStrategy } from '@angular/core';
 
 import {
   AppExtensionsService,
@@ -22,6 +22,7 @@ import {
   selector: 'app-reports-panel',
   standalone: true,
   templateUrl: './reports-panel.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './reports-panel.scss',
 })
 export class ReportsPanelComponent {

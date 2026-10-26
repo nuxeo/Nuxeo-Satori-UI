@@ -22,7 +22,7 @@
 
 ## 1. Repository & Tooling
 
-### Monorepo with Nx 22
+### Monorepo with Nx 23
 
 ```
 agentic-ui-poc/
@@ -114,10 +114,15 @@ The codebase follows a **strict 4-layer architecture** enforced by Nx boundary r
 ### Bootstrap (`apps/nuxeo-ui/src/main.ts`)
 
 ```typescript
-bootstrapApplication(App, appConfig);
+bootstrapApplication(App, {
+  ...appConfig,
+  providers: [provideZoneChangeDetection(), ...appConfig.providers],
+});
 ```
 
-Single-file bootstrap — no `NgModule` anywhere in the codebase. All 247 source files are **standalone components**.
+Single-file bootstrap — no `NgModule` anywhere in the application code (the library test setups
+declare one to give TestBed zone change detection). Zoneless is the default from Angular 21, so
+`provideZoneChangeDetection()` keeps the application on zone.js. All 247 source files are **standalone components**.
 
 ### Application config (`apps/nuxeo-ui/src/app/app.config.ts`)
 

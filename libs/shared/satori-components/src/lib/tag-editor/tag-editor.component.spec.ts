@@ -1,5 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { MatChipInputEvent } from '@angular/material/chips';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -14,6 +19,7 @@ import { NxsTagEditorComponent } from './tag-editor.component';
 @Component({
   standalone: true,
   imports: [NxsTagEditorComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-tag-editor
       [documentUid]="uid()"

@@ -4,9 +4,10 @@
  * document page's tags are `nxs-tag-editor` now, so this renders the real component.
  */
 import { provideZonelessChangeDetection } from '@angular/core';
+import { testTranslateModule } from '../i18n/translate-testing';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
 import { of } from 'rxjs';
 
 import { NxsTagEditorComponent } from '@nuxeo/satori-platform/components';
@@ -17,7 +18,7 @@ describe('Tag editor chip remove icon glyph (NXSAT-526)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [NxsTagEditorComponent, TranslateModule.forRoot()],
+      imports: [NxsTagEditorComponent, testTranslateModule()],
       providers: [
         provideZonelessChangeDetection(),
         provideNoopAnimations(),

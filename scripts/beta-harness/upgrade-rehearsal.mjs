@@ -80,6 +80,8 @@ import {
 } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 
+import { entryTypes } from './package-types.mjs';
+
 const ROOT = resolve(import.meta.dirname, '..', '..');
 const DIST = join(ROOT, 'dist', 'libs', 'platform');
 const STAGE = join(ROOT, '.tmp-upgrade-rehearsal');
@@ -174,7 +176,7 @@ try {
   if (breakSlot) {
     // The negative control. Removes one slot id from the new package's declarations, which
     // is exactly what a careless rename looks like to a customer's manifest.
-    const decl = join(installedNew, 'extensions', 'index.d.ts');
+    const decl = entryTypes(installedNew, './extensions');
     const text = readFileSync(decl, 'utf8');
     // `breakSlot` comes from `--break-slot` on the command line, so it is interpolated into the
     // pattern escaped. Unescaped it is regex injection (CodeQL `js/regex-injection`): a slot name
@@ -366,10 +368,10 @@ function compileCustomerApp(installed, label, when) {
   let repointed = 0;
   for (const [alias, targets] of Object.entries(base.compilerOptions?.paths ?? {})) {
     if (alias === pkg.name) {
-      rewritten[alias] = [join(installed, 'index.d.ts')];
+      rewritten[alias] = [entryTypes(installed, '.')];
       repointed += 1;
     } else if (alias.startsWith(`${pkg.name}/`)) {
-      rewritten[alias] = [join(installed, alias.slice(pkg.name.length + 1), 'index.d.ts')];
+      rewritten[alias] = [entryTypes(installed, `./${alias.slice(pkg.name.length + 1)}`)];
       repointed += 1;
     } else {
       rewritten[alias] = targets;
@@ -431,7 +433,7 @@ function compileCustomerApp(installed, label, when) {
 
 /** Slot ids as the upgraded package declares them. */
 function slotsFrom(installed) {
-  const decl = join(installed, 'extensions', 'index.d.ts');
+  const decl = entryTypes(installed, './extensions');
   if (!existsSync(decl)) return [];
   const text = readFileSync(decl, 'utf8');
   const block = /declare const EXTENSION_SLOTS:\s*\{([\s\S]*?)\n\};/.exec(text);

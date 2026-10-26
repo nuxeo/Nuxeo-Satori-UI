@@ -1,4 +1,9 @@
-import { Component, input, provideZonelessChangeDetection } from '@angular/core';
+import {
+  Component,
+  input,
+  provideZonelessChangeDetection,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -61,6 +66,7 @@ const layout = (
 @Component({
   selector: 'lib-acme-claim-form',
   standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<p class="acme-claim-form">
     {{ document()?.uid ?? type() }} {{ parentPath() }} {{ showErrors() }}
   </p>`,

@@ -1,5 +1,12 @@
 import { DatePipe, JsonPipe } from '@angular/common';
-import { Component, DestroyRef, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  computed,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -71,6 +78,7 @@ export interface KdDebugError {
     MatTooltipModule,
   ],
   templateUrl: './knowledge-discovery.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './knowledge-discovery.scss',
 })
 export class KnowledgeDiscoveryComponent {

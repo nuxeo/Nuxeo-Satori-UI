@@ -1,11 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { testTranslateModule } from '@agentic-ui/testing/i18n';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import {
   ActivatedRoute,
   convertToParamMap,
+  type Navigation,
   type ParamMap,
   provideRouter,
   Router,
@@ -225,7 +226,7 @@ describe('DocumentDetailComponent — load chain', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         {
           provide: ActivatedRoute,
@@ -667,6 +668,28 @@ describe('DocumentDetailComponent — load chain', () => {
         await build(doc({ type: 'File' }));
 
         expect(component.focusNoteEditor()).toBe(false);
+      });
+
+      // The flag usually arrives on the navigation still in flight, before it reaches
+      // `history.state`, so both are read. These cover the in-flight half.
+      it('reads both fresh-document flags from the navigation in flight', async () => {
+        vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue({
+          extras: { state: { freshNote: true, freshBlobDocument: true } },
+        } as unknown as Navigation);
+        await build(doc({ type: 'Note', properties: { 'note:note': '' } }));
+
+        expect(component.focusNoteEditor()).toBe(true);
+        expect(component['freshBlobDocument']).toBe(true);
+      });
+
+      it('treats a navigation in flight that carries no extras as not fresh', async () => {
+        vi.spyOn(TestBed.inject(Router), 'currentNavigation').mockReturnValue(
+          {} as unknown as Navigation,
+        );
+        await build(doc({ type: 'Note', properties: { 'note:note': '' } }));
+
+        expect(component.focusNoteEditor()).toBe(false);
+        expect(component['freshBlobDocument']).toBe(false);
       });
     });
   });

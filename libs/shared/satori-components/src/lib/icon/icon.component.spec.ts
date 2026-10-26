@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsIconComponent } from './icon.component';
@@ -6,6 +11,7 @@ import { NxsIconComponent } from './icon.component';
 @Component({
   standalone: true,
   imports: [NxsIconComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-icon [name]="name()" [label]="label()" />`,
 })
 class HostComponent {

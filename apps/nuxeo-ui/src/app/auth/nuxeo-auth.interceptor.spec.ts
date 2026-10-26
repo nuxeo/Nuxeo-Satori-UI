@@ -1,5 +1,11 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClient, HttpContext, provideHttpClient, withInterceptors } from '@angular/common/http';
+import {
+  HttpClient,
+  HttpContext,
+  provideHttpClient,
+  withInterceptors,
+  withXhr,
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { NUXEO_API_ORIGIN } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -32,7 +38,7 @@ describe('nuxeoAuthInterceptor', () => {
 
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([nuxeoAuthInterceptor])),
+        provideHttpClient(withXhr(), withInterceptors([nuxeoAuthInterceptor])),
         provideHttpClientTesting(),
         { provide: AuthService, useValue: auth },
         { provide: SessionTimeoutService, useValue: sessionTimeout },

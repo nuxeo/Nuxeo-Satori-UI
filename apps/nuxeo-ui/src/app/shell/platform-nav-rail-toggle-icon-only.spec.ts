@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -8,7 +8,9 @@ import {
   SatPlatformNavStateService,
 } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateService } from '@ngx-translate/core';
+
+import { testTranslateModule } from '../i18n/translate-testing';
 
 /**
  * NXENG-927 (icon-only product revert) — Satori rail expand/collapse is conveyed through
@@ -22,6 +24,7 @@ const HOST_VISIBLE_LABEL_CLASS = 'sat-platform-nav-rail-toggle-visible-label';
 @Component({
   standalone: true,
   imports: [SatPlatformNavModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './platform-nav-rail-toggle-icon-only.host.html',
 })
 class PlatformNavRailToggleIconOnlyHostComponent {}
@@ -60,7 +63,7 @@ describe('Platform nav rail toggle icon-only labels (NXENG-927)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PlatformNavRailToggleIconOnlyHostComponent, TranslateModule.forRoot()],
+      imports: [PlatformNavRailToggleIconOnlyHostComponent, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
 

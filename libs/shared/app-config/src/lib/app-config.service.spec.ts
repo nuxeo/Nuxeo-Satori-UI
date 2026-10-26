@@ -1,4 +1,4 @@
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
@@ -63,6 +63,7 @@ describe('AppConfigService and the host application’s interceptors', () => {
     TestBed.configureTestingModule({
       providers: [
         provideHttpClient(
+          withXhr(),
           withInterceptors([
             (request, next) => {
               seen.push(request.url);
@@ -101,7 +102,7 @@ describe('AppConfigService', () => {
     localStorage.removeItem(PRESET_STORAGE_KEY);
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: BOOTSTRAP_URL },
       ],

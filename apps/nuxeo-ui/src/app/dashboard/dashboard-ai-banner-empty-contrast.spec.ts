@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
@@ -19,6 +19,7 @@ const SHIPPED_THEMES: readonly (string | null)[] = [null, ...COMPILED_THEME_BASE
   standalone: true,
   imports: [MatIconModule],
   templateUrl: './dashboard-ai-banner-empty-contrast.host.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: ['./dashboard-page.component.scss'],
 })
 class DashboardAiBannerEmptyHostComponent {}

@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsDomainHintComponent } from './domain-hint.component';
@@ -6,6 +11,7 @@ import { NxsDomainHintComponent } from './domain-hint.component';
 @Component({
   standalone: true,
   imports: [NxsDomainHintComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-domain-hint [documentType]="type()" [path]="path()" />`,
 })
 class HostComponent {

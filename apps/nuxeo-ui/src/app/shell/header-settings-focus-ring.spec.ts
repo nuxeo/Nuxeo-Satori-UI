@@ -19,12 +19,14 @@
  * evidence run; what is pinned here is the invariant — a non-none 2px ring using the theme
  * primary token — matching `header-search-focus-ring.spec.ts` (NXENG-775).
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 
@@ -49,8 +51,9 @@ function rgb(css: string): [number, number, number] {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, TranslateModule],
+  imports: [MatButtonModule, MatIconModule, TranslatePipe, testTranslateModule()],
   styleUrls: ['./app-shell.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './header-settings-focus-ring.spec.html',
 })
 class HeaderSettingsHostComponent {}
@@ -61,7 +64,7 @@ describe('header Settings menu — keyboard focus indicator (NXENG-872)', () => 
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [HeaderSettingsHostComponent, testTranslateModule()],
+      imports: [HeaderSettingsHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
 

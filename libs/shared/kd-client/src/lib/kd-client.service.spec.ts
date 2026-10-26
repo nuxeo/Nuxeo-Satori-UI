@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { firstValueFrom, lastValueFrom } from 'rxjs';
@@ -36,7 +36,7 @@ describe('KdClientService', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
         { provide: KD_CIC_OPERATIONS, useValue: DEFAULT_KD_CIC_OPERATIONS },
@@ -1166,7 +1166,7 @@ describe('KdClientService with an explicit API origin', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: 'https://nuxeo.example.com/' },
         { provide: KD_CIC_OPERATIONS, useValue: DEFAULT_KD_CIC_OPERATIONS },
