@@ -490,9 +490,18 @@
                     {{ 'collections.collection-detail.state' | translate }}
                   </th>
                   <td mat-cell *matCellDef="let entry">
-                    <sat-status-tag status="info" [hideIcon]="true">{{
-                      entry.docLifeCycle
-                    }}</sat-status-tag>
+                    <lib-extension-outlet
+                      #entryStateOutlet
+                      [componentId]="statusTagId"
+                      [componentInputs]="{
+                        label: entry.docLifeCycle,
+                        status: 'info',
+                        hideIcon: true,
+                      }"
+                    />
+                    @if (entryStateOutlet.unresolved()) {
+                      {{ entry.docLifeCycle }}
+                    }
                   </td>
                 </ng-container>
 
