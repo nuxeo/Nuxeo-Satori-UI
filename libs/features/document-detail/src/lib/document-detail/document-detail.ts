@@ -825,7 +825,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   readonly tabsId = NXS_PRIMITIVE_IDS.tabs;
   readonly actionBarId = NXS_PRIMITIVE_IDS.actionBar;
-  /** What the tab strip rendered by ID calls in place of `(selectedIndexChange)`. */
+  /** What the tab strip calls when the selection changes, rendered by ID or as the fallback. */
   readonly tabSelectHandler = (_tab: NxsTab, index: number): void => this.onTabChange(index);
   /** What the action bar rendered by ID calls in place of `(selected)`. */
   readonly toolbarActionHandler = (entry: NxsToolbarAction): void => this.runToolbarEntry(entry);

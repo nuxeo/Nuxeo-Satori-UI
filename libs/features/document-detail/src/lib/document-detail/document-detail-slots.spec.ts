@@ -862,6 +862,38 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       },
     );
 
+    // A manifest that hides the selected tab puts another in its position without moving the
+    // index, so only `selectHandler` says so; the page's lazy loads for that tab hang off it.
+    it.each([
+      ['the unresolved fallback', [] as EnvironmentProviders[]],
+      ['Material by ID', [provideNxsComponents()]],
+      ['Satori by ID', SATORI],
+    ])(
+      'loads the tab that takes the selected position when the manifest hides the selected one, on %s',
+      async (_name, registrations) => {
+        await render({}, doc(), {}, registrations);
+        const strip = (): HTMLElement =>
+          fixture.nativeElement.querySelector('nxs-tabs.detail-tabs') ?? tabsOutlet();
+        [...strip().querySelectorAll<HTMLElement>('[role="tab"]')]
+          .find((el) => el.textContent?.trim() === 'History')
+          ?.click();
+        await settle();
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.history');
+        const changes = vi.spyOn(fixture.componentInstance, 'onTabChange');
+        mockDetailService.getSectionTree.mockClear();
+
+        manifest.set({
+          extensionLayers: [{ overrides: { 'app.tabs.history': { visible: false } } }],
+        });
+        await settle();
+        await settle();
+
+        expect(changes).toHaveBeenCalledWith(3);
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.publishing');
+        expect(mockDetailService.getSectionTree).toHaveBeenCalled();
+      },
+    );
+
     it('runs a Satori action through the page', async () => {
       await render({}, doc(), {}, SATORI);
       // Only that the entry reaches the page: running it opens a real dialog jsdom cannot lay out.

@@ -229,12 +229,14 @@
           }"
         />
         @if (tabsOutlet.unresolved()) {
+          <!-- The same callback as the outlet's: \`selectedIndexChange\` is silent when a different
+               tab takes the selected position, which \`selectHandler\` reports. -->
           <nxs-tabs
             class="detail-tabs"
             [tabs]="detailTabEntries()"
             [selectedIndex]="activeTabIndex()"
             [body]="detailTabBody"
-            (selectedIndexChange)="onTabChange($event)"
+            [selectHandler]="tabSelectHandler"
           />
         }
 
