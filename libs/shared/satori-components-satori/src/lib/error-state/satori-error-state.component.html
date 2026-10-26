@@ -1,107 +1,47 @@
 @let level = headingLevel();
+<ng-template #contentTpl>
+  @if (ownHeading()) {
+    @if (level === 1) {
+      <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
+    } @else if (level === 3) {
+      <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
+    } @else if (level === 4) {
+      <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
+    } @else if (level === 5) {
+      <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
+    } @else if (level === 6) {
+      <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
+    } @else {
+      <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
+    }
+  }
+  @if (canRetry()) {
+    <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
+      <mat-icon aria-hidden="true" svgIcon="refresh" />
+      {{ 'satori-components.error-state.retry' | translate }}
+    </button>
+  }
+  <ng-content />
+</ng-template>
 @switch (status()) {
   @case (401) {
     <sat-401-error-state>
-      @if (ownHeading()) {
-        @if (level === 1) {
-          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
-        } @else if (level === 3) {
-          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
-        } @else if (level === 4) {
-          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
-        } @else if (level === 5) {
-          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
-        } @else if (level === 6) {
-          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
-        } @else {
-          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
-        }
-      }
-      @if (canRetry()) {
-        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
-          <mat-icon aria-hidden="true" svgIcon="refresh" />
-          {{ 'satori-components.error-state.retry' | translate }}
-        </button>
-      }
-      <ng-content />
+      <ng-container *ngTemplateOutlet="contentTpl" />
     </sat-401-error-state>
   }
   @case (403) {
     <sat-403-error-state>
-      @if (ownHeading()) {
-        @if (level === 1) {
-          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
-        } @else if (level === 3) {
-          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
-        } @else if (level === 4) {
-          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
-        } @else if (level === 5) {
-          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
-        } @else if (level === 6) {
-          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
-        } @else {
-          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
-        }
-      }
-      @if (canRetry()) {
-        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
-          <mat-icon aria-hidden="true" svgIcon="refresh" />
-          {{ 'satori-components.error-state.retry' | translate }}
-        </button>
-      }
-      <ng-content />
+      <ng-container *ngTemplateOutlet="contentTpl" />
     </sat-403-error-state>
   }
   @case (404) {
     <sat-404-error-state>
-      @if (ownHeading()) {
-        @if (level === 1) {
-          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
-        } @else if (level === 3) {
-          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
-        } @else if (level === 4) {
-          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
-        } @else if (level === 5) {
-          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
-        } @else if (level === 6) {
-          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
-        } @else {
-          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
-        }
-      }
-      @if (canRetry()) {
-        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
-          <mat-icon aria-hidden="true" svgIcon="refresh" />
-          {{ 'satori-components.error-state.retry' | translate }}
-        </button>
-      }
-      <ng-content />
+      <ng-container *ngTemplateOutlet="contentTpl" />
     </sat-404-error-state>
   }
   @default {
     <sat-500-error-state>
-      @if (ownHeading()) {
-        @if (level === 1) {
-          <h1 satErrorStateHeadline>{{ ownHeading() }}</h1>
-        } @else if (level === 3) {
-          <h3 satErrorStateHeadline>{{ ownHeading() }}</h3>
-        } @else if (level === 4) {
-          <h4 satErrorStateHeadline>{{ ownHeading() }}</h4>
-        } @else if (level === 5) {
-          <h5 satErrorStateHeadline>{{ ownHeading() }}</h5>
-        } @else if (level === 6) {
-          <h6 satErrorStateHeadline>{{ ownHeading() }}</h6>
-        } @else {
-          <h2 satErrorStateHeadline>{{ ownHeading() }}</h2>
-        }
-      }
-      @if (canRetry()) {
-        <button mat-stroked-button sat-error-state-action type="button" (click)="pressRetry()">
-          <mat-icon aria-hidden="true" svgIcon="refresh" />
-          {{ 'satori-components.error-state.retry' | translate }}
-        </button>
-      }
-      <ng-content />
+      <ng-container *ngTemplateOutlet="contentTpl" />
     </sat-500-error-state>
   }
 }

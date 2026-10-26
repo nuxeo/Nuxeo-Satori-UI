@@ -12,6 +12,13 @@ import { NxsTagComponent } from './tag/tag.component';
 /**
  * Register the library's components by ID, on Material. Needs no Satori.
  *
+ * **SVG Icon Registration**: The Material implementations use `<mat-icon svgIcon="...">` for icons,
+ * which requires SVG registration via `MatIconRegistry`. For Satori hosts, `provideSatori()` from
+ * `@hylandsoftware/satori-ui/providers` handles this automatically. For Material-only hosts (those
+ * not using Satori), register icons by calling `provideSatori({ theme: false })` to get only icon
+ * registration, or register them manually via `MatIconRegistry.addSvgIconSetLiteral()` with
+ * `SATORI_ICONS` from `@hylandsoftware/satori-icons`.
+ *
  * Registration goes through `provideSatoriExtensions`, so it layers like every other contribution:
  * in provider order, later wins per ID. List it **before** `provideNxsSatoriComponents()` from
  * `@nuxeo/satori-platform/components-satori`, which re-registers four of the `NXS_PRIMITIVE_IDS` on

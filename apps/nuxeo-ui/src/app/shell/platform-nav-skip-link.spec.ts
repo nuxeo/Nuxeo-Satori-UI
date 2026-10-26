@@ -54,9 +54,26 @@ describe('platform shell skip link (NXENG-783)', () => {
 
   it('targets the main content landmark', () => {
     const link = skipLink();
-    expect(fixture.nativeElement.querySelector('#main-content'))
+    const mainContent = fixture.nativeElement.querySelector('#main-content');
+    expect(mainContent)
       .withContext('the container must render a #main-content target for the skip link')
       .toBeTruthy();
+    expect(link.getAttribute('href'))
+      .withContext('skip link href must target #main-content')
+      .toBe('#main-content');
+  });
+
+  it('activates the skip link and moves focus to main content', () => {
+    const link = skipLink();
+    const mainContent = fixture.nativeElement.querySelector('#main-content') as HTMLElement;
+    expect(mainContent).toBeTruthy();
+
+    link.click();
+    fixture.detectChanges();
+
+    expect(document.activeElement)
+      .withContext('clicking the skip link must move focus to #main-content')
+      .toBe(mainContent);
   });
 
   it('declares a standalone :focus rule IBM element_tabbable_visible can read', () => {

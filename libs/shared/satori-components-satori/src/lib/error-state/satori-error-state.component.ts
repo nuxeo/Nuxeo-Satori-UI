@@ -6,6 +6,7 @@ import {
   input,
   output,
 } from '@angular/core';
+import { NgTemplateOutlet } from '@angular/common';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import {
@@ -28,6 +29,7 @@ import {
   standalone: true,
   templateUrl: './satori-error-state.component.html',
   imports: [
+    NgTemplateOutlet,
     Sat401ErrorState,
     Sat403ErrorState,
     Sat404ErrorState,
