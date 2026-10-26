@@ -1,4 +1,11 @@
-import { Component, LOCALE_ID, OnInit, inject, signal } from '@angular/core';
+import {
+  Component,
+  LOCALE_ID,
+  OnInit,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -44,6 +51,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
     MatPaginatorModule,
   ],
   templateUrl: './admin-group-details-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-group-details-page.component.scss',
 })
 export class AdminGroupDetailsPageComponent implements OnInit {

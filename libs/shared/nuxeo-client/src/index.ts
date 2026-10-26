@@ -181,6 +181,7 @@ export {
   decodeNuxeoPathSegment,
   expandableNuxeoPathPrefixes,
   normalizeNuxeoPath,
+  nuxeoBreadcrumbTitles,
   parentNuxeoFolderPath,
   parseBrowseNuxeoPathFromRouterUrl,
   nuxeoPathsEqual,

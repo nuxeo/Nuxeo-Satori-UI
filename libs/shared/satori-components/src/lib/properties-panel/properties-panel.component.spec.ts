@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import type { NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
 
@@ -37,6 +42,7 @@ const FILE: NuxeoDocument = {
 @Component({
   standalone: true,
   imports: [NxsPropertiesPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-properties-panel
       [document]="doc()"
@@ -65,6 +71,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsPropertiesPanelComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-properties-panel [document]="doc">
       <button nxsVersion type="button" class="version-control">1.0+</button>

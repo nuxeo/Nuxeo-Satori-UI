@@ -5,6 +5,7 @@ import {
   decodeNuxeoPathSegment,
   expandableNuxeoPathPrefixes,
   normalizeNuxeoPath,
+  nuxeoBreadcrumbTitles,
   nuxeoPathsEqual,
   nuxeoPathsEqualFlexible,
   parentNuxeoFolderPath,
@@ -224,6 +225,70 @@ describe('browse-path.utils', () => {
       expect(isCollectionDocument({ type: 'File', facets: ['Collection'] })).toBe(true);
       expect(isCollectionDocument({ type: 'File' }, 'Collection')).toBe(true);
       expect(isCollectionDocument({ type: 'File' })).toBe(false);
+    });
+  });
+
+  describe('nuxeoBreadcrumbTitles', () => {
+    /** The enricher's own shape: one document entity per ancestor, root-most first. */
+    const entry = (path: string, title: string, type = 'Folder'): NuxeoDocument => ({
+      uid: path,
+      title,
+      type,
+      path,
+      lastModified: '2026-01-01T00:00:00.000Z',
+      properties: {},
+    });
+
+    it('keys each entry title by its normalized path', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              entry('/default-domain', 'Domain', 'Domain'),
+              entry('/default-domain/workspaces/', 'Workspaces', 'WorkspaceRoot'),
+            ],
+          },
+        },
+      });
+
+      expect([...titles]).toEqual([
+        ['/default-domain', 'Domain'],
+        ['/default-domain/workspaces', 'Workspaces'],
+      ]);
+    });
+
+    it('never returns the repository root, so its label stays the caller’s translated one', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: {
+            entries: [
+              entry('/', 'Repository', 'Root'),
+              entry('/default-domain', 'Domain', 'Domain'),
+            ],
+          },
+        },
+      });
+
+      expect(titles.has('/')).toBe(false);
+      expect(titles.get('/default-domain')).toBe('Domain');
+    });
+
+    it('omits an entry with a blank title, leaving the caller its own fallback', () => {
+      const titles = nuxeoBreadcrumbTitles({
+        contextParameters: {
+          breadcrumb: { entries: [entry('/default-domain', '   ')] },
+        },
+      });
+
+      expect(titles.has('/default-domain')).toBe(false);
+    });
+
+    it('is empty when the enricher was not requested or answered nothing', () => {
+      expect(nuxeoBreadcrumbTitles(null).size).toBe(0);
+      expect(nuxeoBreadcrumbTitles({ contextParameters: {} }).size).toBe(0);
+      expect(
+        nuxeoBreadcrumbTitles({ contextParameters: { breadcrumb: { entries: [] } } }).size,
+      ).toBe(0);
     });
   });
 });

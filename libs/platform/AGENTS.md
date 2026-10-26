@@ -316,9 +316,10 @@ import { NxsEmptyStateComponent } from '@nuxeo/satori-platform/components';
 Two kinds of ID are addressable, so you can replace what renders under them without forking.
 
 **A packaged panel.** `nxs-permissions-panel` is registered as `NXS_PERMISSIONS_PANEL_ID`
-(`nxs.components.permissionsPanel`). Register your own component under it and both Permissions
-tabs render yours, with `documentId` and `permissionsChanged`, a callback to invoke after a write
-so the host re-reads the external-user section it owns.
+(`nxs.components.permissionsPanel`). Register your own component under it and the document,
+browse and collection Permissions tabs render yours, with `documentId` and `permissionsChanged`, a
+callback to invoke after a write so the host re-reads the external-user section it owns. The
+collection tab also passes `offer: 'type'`, to offer only the type's `userVisiblePermissions`.
 
 **The primitives**, each with a Material implementation, and all but the error state with a Satori one:
 

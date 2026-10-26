@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { Subject, of, throwError, type Observable } from 'rxjs';
@@ -11,6 +16,7 @@ import { NxsSavedSearchActionsComponent } from './saved-search-actions.component
 @Component({
   standalone: true,
   imports: [NxsSavedSearchActionsComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-saved-search-actions
     [savedSearchId]="savedSearchId()"
     [dirty]="dirty()"
@@ -82,55 +88,55 @@ describe('NxsSavedSearchActionsComponent', () => {
 
     it('offers Save as for filters not saved yet', async () => {
       await show({ hasFilters: true, dirty: true });
-      expect(buttons()).toEqual(['bookmark_add Save As']);
+      expect(buttons()).toEqual(['Save As']);
     });
 
     it('offers Save as, Save and the menu on a changed saved search the user may change', async () => {
       await show({ id: 'ss-1', dirty: true });
       expect(getDocumentPermissions).toHaveBeenCalledWith('ss-1');
-      expect(buttons()).toEqual(['bookmark_add Save As', 'Save', 'Saved search actions']);
+      expect(buttons()).toEqual(['Save As', 'Save', 'Saved search actions']);
     });
 
     it('offers no Save on an unchanged saved search', async () => {
       await show({ id: 'ss-1', dirty: false });
-      expect(buttons()).toEqual(['bookmark_add Save As', 'Saved search actions']);
+      expect(buttons()).toEqual(['Save As', 'Saved search actions']);
     });
 
     it('offers only Save as on a search shared read-only', async () => {
       getDocumentPermissions.mockReturnValue(withPermissions(['Read', 'ReadProperties']));
       await show({ id: 'ss-2', dirty: true });
-      expect(buttons()).toEqual(['bookmark_add Save As']);
+      expect(buttons()).toEqual(['Save As']);
     });
 
     it('offers only Save as when the permissions cannot be read', async () => {
       getDocumentPermissions.mockReturnValue(throwError(() => ({ status: 403 })));
       await show({ id: 'ss-2', dirty: true });
-      expect(buttons()).toEqual(['bookmark_add Save As']);
+      expect(buttons()).toEqual(['Save As']);
     });
 
     it('offers only Save as when the answer carries no permission list', async () => {
       getDocumentPermissions.mockReturnValue(of({} as NuxeoDocument));
       await show({ id: 'ss-2', dirty: true });
-      expect(buttons()).toEqual(['bookmark_add Save As']);
+      expect(buttons()).toEqual(['Save As']);
     });
 
     it('holds the changes back while the permissions are read, and for the next search too', async () => {
       const first = new Subject<NuxeoDocument>();
       getDocumentPermissions.mockReturnValueOnce(first.asObservable());
       await show({ id: 'ss-1', dirty: true });
-      expect(buttons()).toEqual(['bookmark_add Save As']);
+      expect(buttons()).toEqual(['Save As']);
 
       first.next({
         contextParameters: { permissions: ['WriteProperties'] },
       } as unknown as NuxeoDocument);
       await render();
-      expect(buttons()).toEqual(['bookmark_add Save As', 'Save', 'Saved search actions']);
+      expect(buttons()).toEqual(['Save As', 'Save', 'Saved search actions']);
 
       // Another search opens: its answer is not in yet, so the first one's does not carry over.
       const second = new Subject<NuxeoDocument>();
       getDocumentPermissions.mockReturnValueOnce(second.asObservable());
       await show({ id: 'ss-2', dirty: true });
-      expect(buttons()).toEqual(['bookmark_add Save As']);
+      expect(buttons()).toEqual(['Save As']);
     });
 
     it('treats a blank id as no saved search', async () => {

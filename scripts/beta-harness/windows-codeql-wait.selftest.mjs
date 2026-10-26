@@ -27,6 +27,14 @@ const success = {
 };
 const analysis = { ref: context.ref, commit_sha: context.sha, tool: { name: 'CodeQL' } };
 
+test('a clean Windows runner explicitly builds the bundle before the full gate', () => {
+  const steps = workflow.jobs['windows-gate'].steps;
+  const build = steps.findIndex((step) => step.run === 'npx nx build nuxeo-ui');
+  const gate = steps.findIndex((step) => step.run === 'npm run beta:gate -- --phase windows-ci');
+  assert.ok(build >= 0);
+  assert.ok(gate > build);
+});
+
 function harness({ runs = () => [success], analyses = () => [analysis], event = context } = {}) {
   let now = 0;
   const calls = { runs: [], analyses: [], waits: 0 };

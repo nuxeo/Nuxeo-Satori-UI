@@ -8090,11 +8090,17 @@ function checkLibraryEntryPoint({ root, entry, barrel, ngPackage }) {
  *   `InjectionToken` with an explicit `provide…()` function, so host and remote can share one
  *   instance. Every `providedIn` value is refused, `'platform'` and `'any'` included.
  *
- * Specs are exempt: a test host is not part of the library. `/components-satori` ships in the same
- * package and is held to the same rules; its absence is `checkSatoriFallbackDependencies`' to report.
+ * Specs are exempt: a test host is not part of the library. So is `src/test-setup.ts`, which
+ * `tsconfig.lib.json` excludes from the build: since Angular 21 TestBed is zoneless unless its
+ * environment provides zone change detection, and an NgModule is the only way to give it one — the
+ * one Angular's own test runners generate. `/components-satori` ships in the same package and is
+ * held to the same rules; its absence is `checkSatoriFallbackDependencies`' to report.
  */
 function checkSatoriComponentsFederationReadiness() {
-  const nonSpec = (path) => /\.(ts|mts)$/.test(path) && !/\.(spec|test)\.ts$/.test(path);
+  const nonSpec = (path) =>
+    /\.(ts|mts)$/.test(path) &&
+    !/\.(spec|test)\.ts$/.test(path) &&
+    !/\/src\/test-setup\.ts$/.test(path);
   const sources = satoriComponentsSources().filter(nonSpec);
   if (sources.length === 0) {
     fail(
@@ -9609,6 +9615,44 @@ function checkPackageToolLaunches() {
           aliases.add(binding.name.text);
       }
     }
+    const promisifiers = new Set(['promisify']);
+    for (const statement of source.statements) {
+      if (
+        ts.isImportDeclaration(statement) &&
+        /^(node:)?util$/.test(statement.moduleSpecifier.text)
+      ) {
+        for (const binding of statement.importClause?.namedBindings?.elements ?? []) {
+          if ((binding.propertyName?.text ?? binding.name.text) === 'promisify')
+            promisifiers.add(binding.name.text);
+        }
+      }
+    }
+    const collectAliases = (node) => {
+      if (
+        ts.isVariableDeclaration(node) &&
+        ts.isIdentifier(node.name) &&
+        node.initializer &&
+        ts.isCallExpression(node.initializer)
+      ) {
+        const call = node.initializer;
+        const name = ts.isIdentifier(call.expression)
+          ? call.expression.text
+          : ts.isPropertyAccessExpression(call.expression)
+            ? call.expression.name.text
+            : '';
+        const original = call.arguments[0];
+        const launcher =
+          original &&
+          (ts.isIdentifier(original)
+            ? original.text
+            : ts.isPropertyAccessExpression(original)
+              ? original.name.text
+              : '');
+        if (promisifiers.has(name) && aliases.has(launcher)) aliases.add(node.name.text);
+      }
+      ts.forEachChild(node, collectAliases);
+    };
+    collectAliases(source);
     const visit = (node) => {
       const name =
         ts.isCallExpression(node) &&

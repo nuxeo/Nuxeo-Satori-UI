@@ -13,6 +13,6 @@
     [matTooltip]="detailsPanelToggleLabelKey() | translate"
     [attr.aria-label]="detailsPanelToggleLabelKey() | translate"
   >
-    <mat-icon aria-hidden="true">{{ propertiesPanelOpen() ? 'info' : 'info_outline' }}</mat-icon>
+    <mat-icon aria-hidden="true" [svgIcon]="propertiesPanelOpen() ? 'info' : 'info'" />
   </button>
 </div>

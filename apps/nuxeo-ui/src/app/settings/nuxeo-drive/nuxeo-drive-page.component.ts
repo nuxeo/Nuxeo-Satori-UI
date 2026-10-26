@@ -1,4 +1,4 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 import { SettingsService, type SynchronizationRootRow } from '@nuxeo/satori-platform/nuxeo-client';
@@ -8,6 +8,7 @@ import { TranslatePipe } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslatePipe],
   templateUrl: './nuxeo-drive-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './nuxeo-drive-page.component.scss',
 })
 export class NuxeoDrivePageComponent {

@@ -46,6 +46,11 @@
       "@nuxeo/satori-platform/ui": ["libs/shared/ui/src/index.ts"],
       "@agentic-ui/shared/testing": ["./libs/shared/testing/src/index.ts"],
       "@agentic-ui/integration-tests": ["./libs/integration-tests/src/index.ts"]
-    }
+    },
+    "strict": false,
+    "noUncheckedSideEffectImports": false,
+    "types": ["*"],
+    "esModuleInterop": false,
+    "ignoreDeprecations": "6.0"
   }
 }

@@ -38,10 +38,12 @@
  * running app and recorded in the evidence folder; what is pinned here is the invariant that
  * makes them hold — the ring resolves through the theme token and does not pin its scheme.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatIconModule } from '@angular/material/icon';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 
@@ -67,11 +69,12 @@ function rgb(css: string): [number, number, number] {
 
 @Component({
   standalone: true,
-  imports: [MatIconModule, TranslateModule],
+  imports: [MatIconModule, TranslatePipe, testTranslateModule()],
   // The real stylesheet under test. Emulated encapsulation scopes it to this template,
   // which is exactly what we want: the declarations are the shell's, the markup mirrors
   // app-shell.component.html.
   styleUrls: ['./app-shell.component.scss'],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './header-search-focus-ring.spec.html',
 })
 class HeaderSearchHostComponent {}
@@ -83,7 +86,7 @@ describe('header global search — keyboard focus indicator', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [HeaderSearchHostComponent, testTranslateModule()],
+      imports: [HeaderSearchHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection()],
     }).compileComponents();
 

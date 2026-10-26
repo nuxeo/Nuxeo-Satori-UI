@@ -32,7 +32,7 @@ export const WithMessageAndIcon: Story = {
   args: {
     heading: 'No results',
     message: 'Try a different search term, or clear the filters.',
-    icon: 'search_off',
+    icon: 'search',
   },
 };
 
@@ -53,5 +53,5 @@ export const WithProjectedAction: Story = {
 
 /** Inside a section whose heading is a level two, the empty state's heading is a level three. */
 export const InsideASection: Story = {
-  args: { heading: 'No comments yet', headingLevel: 3, icon: 'chat_bubble_outline' },
+  args: { heading: 'No comments yet', headingLevel: 3, icon: 'comment' },
 };

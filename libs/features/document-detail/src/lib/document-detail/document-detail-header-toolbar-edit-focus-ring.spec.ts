@@ -45,7 +45,7 @@ describe('DocumentDetailComponent — header Edit toolbar focus ring (NXSAT-542)
     expect(loop).toContain('mat-icon-button');
     expect(loop).toContain('[attr.data-action-id]="action.id"');
     expect(loop).toMatch(/cdk-visually-hidden[\s\S]*nameOf\(action\)/);
-    expect(loop).toMatch(/<mat-icon\s+aria-hidden="true">\{\{\s*action\.icon\s*\}\}<\/mat-icon>/);
+    expect(loop).toMatch(/\[svgIcon\]="action\.icon"/);
   });
 
   it('keeps the Karma host Edit toolbar button aligned with production markup', () => {

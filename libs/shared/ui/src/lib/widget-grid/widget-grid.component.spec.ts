@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { WidgetGridComponent } from './widget-grid.component';
@@ -7,6 +12,7 @@ import { WidgetGridComponent } from './widget-grid.component';
 @Component({
   standalone: true,
   imports: [WidgetGridComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <lib-widget-grid [columns]="columns()">
       <div class="probe-widget">One</div>

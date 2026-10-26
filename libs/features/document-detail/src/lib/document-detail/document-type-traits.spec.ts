@@ -36,7 +36,7 @@ describe('documentTypeTraits', () => {
   it('gives a SectionRoot its own section-tree icon, and keeps its preview', () => {
     expect(documentTypeTraits('SectionRoot')).toEqual({
       ...defaults,
-      sectionIcon: 'library_books',
+      sectionIcon: 'book',
     });
     expect(documentTypeTraits('Section').sectionIcon).toBe('folder');
   });

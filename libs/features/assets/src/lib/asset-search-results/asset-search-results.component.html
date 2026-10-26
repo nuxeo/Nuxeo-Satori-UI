@@ -8,7 +8,7 @@
         type="button"
         (click)="openSaveAsDialog()"
       >
-        <mat-icon>bookmark_add</mat-icon>
+        <mat-icon svgIcon="bookmark" />
         {{ 'assets.asset-search-results.save-as' | translate }}
       </button>
     }
@@ -29,7 +29,7 @@
         [matMenuTriggerFor]="resultsActionsMenu"
         [attr.aria-label]="'assets.asset-search-results.results-actions' | translate"
       >
-        <mat-icon>more_vert</mat-icon>
+        <mat-icon svgIcon="more_vert" />
       </button>
       <mat-menu #resultsActionsMenu="matMenu">
         <button mat-menu-item type="button" (click)="onEditSelectedSavedSearch()">
@@ -62,7 +62,7 @@
         (click)="exportCsv()"
         class="toolbar-btn"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
 
       <button
@@ -74,7 +74,7 @@
         (click)="setViewMode('grid')"
         class="toolbar-btn"
       >
-        <mat-icon>grid_view</mat-icon>
+        <mat-icon svgIcon="grid_view" />
       </button>
 
       <button
@@ -86,7 +86,7 @@
         (click)="setViewMode('list')"
         class="toolbar-btn"
       >
-        <mat-icon>view_list</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
     </div>
   </div>
@@ -128,7 +128,7 @@
               @if (thumbnailMap()[asset.id]; as thumb) {
                 <img class="asset-thumbnail-image" [src]="thumb" alt="" />
               } @else {
-                <mat-icon class="asset-icon">{{ asset.icon }}</mat-icon>
+                <mat-icon class="asset-icon" [svgIcon]="asset.icon" />
               }
             </div>
             <div class="asset-card-body">
@@ -200,13 +200,15 @@
                   (click)="sortBy(col.key)"
                 >
                   {{ col | descriptorLabel }}
-                  <mat-icon class="sort-icon" [class.sort-active]="sortColumn() === col.key">
-                    {{
+                  <mat-icon
+                    class="sort-icon"
+                    [class.sort-active]="sortColumn() === col.key"
+                    [svgIcon]="
                       sortColumn() === col.key && sortDirection() === 'desc'
-                        ? 'arrow_downward'
-                        : 'arrow_upward'
-                    }}
-                  </mat-icon>
+                        ? 'arrow_down'
+                        : 'arrow_up'
+                    "
+                  />
                 </button>
               } @else {
                 <span>{{ col | descriptorLabel }}</span>
@@ -220,7 +222,7 @@
                 [attr.aria-label]="'assets.asset-search-results.manage-columns' | translate"
                 (click)="openColumnPanel()"
               >
-                <mat-icon>tune</mat-icon>
+                <mat-icon svgIcon="settings" />
               </button>
             </span>
           </div>
@@ -245,7 +247,7 @@
                     @if (thumbnailMap()[asset.id]; as thumb) {
                       <img class="row-thumbnail-image" [src]="thumb" alt="" />
                     } @else {
-                      <mat-icon class="row-icon">{{ asset.icon }}</mat-icon>
+                      <mat-icon class="row-icon" [svgIcon]="asset.icon" />
                     }
                     <button
                       type="button"

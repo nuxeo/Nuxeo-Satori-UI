@@ -42,6 +42,6 @@ describe('Document viewer Preview label in name (NXSAT-512)', () => {
     )?.[0];
     expect(hiddenName, 'Preview visually hidden accessible name').toBeTruthy();
     expect(hiddenName).toContain(`'${PREVIEW_KEY}' | translate`);
-    expect(previewButton).toContain('<mat-icon aria-hidden="true">visibility</mat-icon>');
+    expect(previewButton).toContain('svgIcon="view"');
   });
 });

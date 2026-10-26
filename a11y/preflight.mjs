@@ -17,6 +17,7 @@
  * fix the environment, do not iterate on the code.
  */
 
+import { checkFetchIdentity, ME_PATH } from '../scripts/beta-harness/identity-guard.mjs';
 import { parseCliOrExit } from './cli.mjs';
 import {
   hasAdministrationAccess,
@@ -181,6 +182,35 @@ try {
 }
 
 /**
+ * 3a. Nuxeo answers the credentials **as NUXEO_USER**, through the same proxy (NXSAT-643).
+ *
+ * Everything below reads a `200` as "authenticated", and on a Nuxeo with guests enabled a
+ * request whose header never arrived is answered `200` as `Anonymous`: the File query still
+ * finds a document the guest can read, and 3b's `hasAdministrationAccess` grants access on the
+ * *configured* username alone. So the principal is asked for by name first, with the one guard
+ * the Playwright side uses too (`scripts/beta-harness/identity-guard.mjs`), and nothing after it
+ * runs on a run that is not the user it says.
+ */
+let identityOk = false;
+if (appStatus !== null && auth) {
+  const identity = await checkFetchIdentity(
+    new URL(ME_PATH, BASE).href,
+    auth,
+    requireNuxeoCredentials().username,
+  );
+  if (identity.ok) {
+    identityOk = true;
+    ok.push(`Nuxeo answers the credentials as ${identity.user} through the dev proxy`);
+  } else {
+    problems.push(
+      `${identity.problem}.\n` +
+        '  Every scan would run as the wrong user, and still pass, because a guest-enabled Nuxeo\n' +
+        '  answers 200 either way. Fix NUXEO_USER / NUXEO_PASS, or whatever drops the header.',
+    );
+  }
+}
+
+/**
  * 3. Nuxeo, through the app's own proxy, with documents in it.
  *
  * Reached via the proxy rather than :8080 directly, because the proxy is what the specs use —
@@ -190,7 +220,7 @@ try {
  * lists and dialogs that are empty without content, and `journey.a11y.spec.ts` resolves a real
  * `File` uid to open the document-detail screen at all.
  */
-if (appStatus !== null && auth) {
+if (appStatus !== null && auth && identityOk) {
   try {
     const url = new URL('/nuxeo/api/v1/search/lang/NXQL/execute', BASE);
     url.searchParams.set(
@@ -246,7 +276,7 @@ if (appStatus !== null && auth) {
  * that says otherwise is still let in by the app's own rule — `hasAdministrationAccess`
  * mirrors that rule exactly, including the username fallback.
  */
-if (appStatus !== null && auth) {
+if (appStatus !== null && auth && identityOk) {
   try {
     const res = await fetch(new URL('/nuxeo/api/v1/me', BASE), {
       headers: { Authorization: auth },

@@ -23,21 +23,21 @@
         (click)="runSearch()"
         [attr.aria-label]="'admin.admin-users-groups-page.run-search' | translate"
       >
-        <mat-icon>search</mat-icon>
+        <mat-icon svgIcon="search" />
       </button>
     </mat-form-field>
 
     <button type="button" mat-flat-button color="primary" [matMenuTriggerFor]="newMenu">
-      <mat-icon>add</mat-icon>
+      <mat-icon svgIcon="plus_large" />
       {{ 'admin.admin-users-groups-page.new' | translate }}
     </button>
     <mat-menu #newMenu="matMenu">
       <button type="button" mat-menu-item (click)="openCreateUser()">
-        <mat-icon>person_add</mat-icon>
+        <mat-icon svgIcon="add_user" />
         {{ 'admin.admin-users-groups-page.new-user' | translate }}
       </button>
       <button type="button" mat-menu-item (click)="openCreateGroup()">
-        <mat-icon>group_add</mat-icon>
+        <mat-icon svgIcon="add_user" />
         {{ 'admin.admin-users-groups-page.new-group' | translate }}
       </button>
     </mat-menu>
@@ -45,7 +45,7 @@
 
   <section class="ug-recent">
     <div class="ug-recent__head">
-      <mat-icon class="ug-recent__ico">history</mat-icon>
+      <mat-icon class="ug-recent__ico" svgIcon="clock" />
       <div class="ug-recent__title" role="heading" aria-level="2">
         {{ 'admin.admin-users-groups-page.recently-created-users-and-groups' | translate }}
       </div>
@@ -56,7 +56,7 @@
         [attr.aria-label]="'admin.admin-users-groups-page.refresh-recent' | translate"
         [matTooltip]="'admin.admin-users-groups-page.refresh' | translate"
       >
-        <mat-icon>refresh</mat-icon>
+        <mat-icon svgIcon="refresh" />
       </button>
     </div>
     @if (recentLoading()) {
@@ -173,7 +173,7 @@
                 </th>
                 <td mat-cell *matCellDef="let u">
                   @if (u.isAdministrator) {
-                    <mat-icon class="ok" aria-hidden="true">verified</mat-icon>
+                    <mat-icon class="ok" aria-hidden="true" svgIcon="shield_secured" />
                   }
                 </td>
               </ng-container>
@@ -187,7 +187,7 @@
                     [attr.aria-label]="'admin.admin-users-groups-page.edit-user' | translate"
                     [matTooltip]="'admin.admin-users-groups-page.edit' | translate"
                   >
-                    <mat-icon>edit</mat-icon>
+                    <mat-icon svgIcon="pencil" />
                   </button>
                   <button
                     type="button"
@@ -196,7 +196,7 @@
                     [attr.aria-label]="'admin.admin-users-groups-page.delete-user' | translate"
                     [matTooltip]="'admin.admin-users-groups-page.delete' | translate"
                   >
-                    <mat-icon>delete_outline</mat-icon>
+                    <mat-icon svgIcon="trash" />
                   </button>
                 </td>
               </ng-container>
@@ -311,7 +311,7 @@
                     [attr.aria-label]="'admin.admin-users-groups-page.edit-group' | translate"
                     [matTooltip]="'admin.admin-users-groups-page.edit' | translate"
                   >
-                    <mat-icon>edit</mat-icon>
+                    <mat-icon svgIcon="pencil" />
                   </button>
                   <button
                     type="button"
@@ -320,7 +320,7 @@
                     [attr.aria-label]="'admin.admin-users-groups-page.delete-group' | translate"
                     [matTooltip]="'admin.admin-users-groups-page.delete' | translate"
                   >
-                    <mat-icon>delete_outline</mat-icon>
+                    <mat-icon svgIcon="trash" />
                   </button>
                 </td>
               </ng-container>

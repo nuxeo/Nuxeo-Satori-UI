@@ -275,7 +275,7 @@ export default async function collectEvidence(page, helpers, outDir) {
       await snap('fix2-01-added-to-clipboard');
     }
 
-    await page.locator('sat-platform-nav-list-item').filter({ hasText: 'Clipboard' }).first().click();
+    await page.locator('a[sat-platform-nav-menu-item]').filter({ hasText: 'Clipboard' }).first().click();
     await page.waitForTimeout(1200);
     await snap('fix2-02-clipboard-drawer');
 

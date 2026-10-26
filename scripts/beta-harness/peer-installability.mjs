@@ -216,8 +216,14 @@ try {
   // A quoted module specifier — `from '…'`, `import("…")` in a declaration, `require('…')` — not
   // prose: the shipped doc comments mention the package by name, and a mention needs nothing.
   const SPECIFIER = /(['"])@hylandsoftware\/[^'"\s]*\1/;
+  // `-components-satori.` with the trailing dot, so it covers every extension ng-packagr emits for
+  // the entry point and not just the bundle. ng-packagr flattens declarations to
+  // `types/nuxeo-satori-platform-components-satori.d.ts`, which matched neither
+  // `-components-satori.mjs` nor `/components-satori/`; the one file allowed to import Satori was
+  // therefore reported as a leak. The dot also keeps `-components.` from matching this entry, so
+  // the plain `components` entry point is still checked.
   const isSatoriEntry = (file) =>
-    file.includes(`-${SATORI_ENTRY}.mjs`) || file.includes(`/${SATORI_ENTRY}/`);
+    file.includes(`-${SATORI_ENTRY}.`) || file.includes(`/${SATORI_ENTRY}/`);
   const leaking = files.filter(
     (file) => !isSatoriEntry(file) && SPECIFIER.test(readFileSync(file, 'utf8')),
   );

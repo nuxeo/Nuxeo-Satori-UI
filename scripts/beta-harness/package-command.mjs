@@ -48,7 +48,13 @@ function invocation(command, args, options) {
 }
 
 export function spawnToolSync(command, args, options = {}) {
-  const tool = invocation(command, args, options);
+  if (options?.shell) throw new Error('Package commands must run without a shell.');
+  let tool;
+  try {
+    tool = invocation(command, args, options);
+  } catch (error) {
+    return { pid: 0, output: null, stdout: null, stderr: null, status: null, signal: null, error };
+  }
   return spawnSync(tool.command, tool.args, { ...options, shell: false });
 }
 

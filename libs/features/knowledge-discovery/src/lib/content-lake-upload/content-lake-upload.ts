@@ -1,4 +1,12 @@
-import { Component, DestroyRef, ElementRef, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  ElementRef,
+  inject,
+  signal,
+  viewChild,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
@@ -93,6 +101,7 @@ function getPathCompletionContext(path: string): { parentPath: string; partial: 
     MatTooltipModule,
   ],
   templateUrl: './content-lake-upload.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './content-lake-upload.scss',
 })
 export class ContentLakeUploadComponent {

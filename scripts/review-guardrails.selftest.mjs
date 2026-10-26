@@ -6290,6 +6290,28 @@ expectRed(
   /thing\.module\.ts:2 declares an @NgModule/,
 );
 
+falsePositiveControls += 1;
+expectGreen(
+  "the TestBed setup's zone module, which the library build excludes",
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/test-setup.ts`]:
+      "import { NgModule, provideZoneChangeDetection } from '@angular/core';\n" +
+      '@NgModule({ providers: [provideZoneChangeDetection()] })\nclass ZoneModule {}\n',
+  }),
+);
+
+expectRed(
+  'an NgModule in a file named test-setup.ts anywhere but the setup itself',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/test-setup.ts`]:
+      "import { NgModule } from '@angular/core';\n@NgModule({})\nexport class ThingModule {}\n",
+  }),
+  null,
+  /thing\/test-setup\.ts:2 declares an @NgModule/,
+);
+
 expectRed(
   'a component with standalone: false',
   'checkSatoriComponentsFederationReadiness',
@@ -9016,6 +9038,10 @@ for (const [label, body] of [
     "import { execFileSync as run } from 'node:child_process'; run('npx.cmd', ['tsc']);",
   ],
   ['nx namespace', "import * as cp from 'node:child_process'; cp.spawn('nx', ['build']);"],
+  [
+    'promisified launcher',
+    "import { execFile } from 'node:child_process'; import { promisify as asyncify } from 'node:util'; const execFileAsync = asyncify(execFile); execFileAsync('npm', ['install']);",
+  ],
 ]) {
   expectRed(
     `direct package tool ${label}`,

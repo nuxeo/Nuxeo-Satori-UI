@@ -1,4 +1,12 @@
-import { Component, computed, effect, inject, signal, untracked } from '@angular/core';
+import {
+  Component,
+  computed,
+  effect,
+  inject,
+  signal,
+  untracked,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { ActivatedRoute, NavigationEnd, Router } from '@angular/router';
@@ -86,6 +94,7 @@ function toMimeType(value: string): string {
     AssetsQueueComponent,
   ],
   templateUrl: './assets-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './assets-drawer.component.scss',
 })
 export class AssetsDrawerComponent {

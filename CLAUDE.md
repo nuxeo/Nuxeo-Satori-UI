@@ -1,6 +1,6 @@
 # CLAUDE.md — Nuxeo Agentic UI
 
-Angular 20 + Nx monorepo. A Nuxeo content management UI being converted into a
+Angular 22 + Nx monorepo. A Nuxeo content management UI being converted into a
 customer-shippable Beta ("Nuxeo Satori") on our own `nxs-` components
 (`libs/shared/satori-components`), with a four-layer customisation contract. It began on
 `adf-hx`; NXSAT-308 removed adf-hx and ADF.
@@ -139,8 +139,8 @@ Two traps that have each cost a phase:
   and with which exit code, is in `scripts/beta-harness/README.md`.
 - `SATORI_GH_READONLY_TOKEN` is required to install the `@hylandsoftware` packages from
   GitHub Packages. No `@alfresco` package is installed since NXSAT-637.
-- Node is pinned to 20 (`.nvmrc`). On Node 22+ a built-in `localStorage` shadows jsdom's;
-  `npm run beta:gate` works around it, a bare `nx test` does not.
+- Node is pinned to 24 (`.nvmrc`); Angular 22 refuses Node 20. On Node 25+ a built-in `localStorage`
+  shadows jsdom's; `npm run beta:gate` works around it, a bare `nx test` does not.
 - Playwright is installed with `--no-save` on purpose, so CI installs stay unaffected.
 - The AI backend is **not** in this repo — AI features are `AI.*` Nuxeo Automation
   operations from a separate marketplace package. Absent package means HTTP 500, which is

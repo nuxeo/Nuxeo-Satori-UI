@@ -1,7 +1,7 @@
 <div class="widget">
   <div class="widget-header">
     @if (icon()) {
-      <mat-icon class="widget-header-icon" [style.color]="iconColor()">{{ icon() }}</mat-icon>
+      <mat-icon class="widget-header-icon" [style.color]="iconColor()" [svgIcon]="icon()!" />
     }
     <div class="widget-header-title" role="heading" [attr.aria-level]="headingLevel()">
       {{ title() }}

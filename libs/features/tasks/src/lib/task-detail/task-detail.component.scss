@@ -25,23 +25,8 @@
 
 /* ---------- Header ---------- */
 
-.task-detail-header {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+sat-header-bar {
   margin-bottom: 1.5rem;
-
-  .task-detail-heading {
-    margin: 0;
-    font-size: 1.25rem;
-    font-weight: 500;
-  }
-}
-
-.task-detail-title-group {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .task-workflow-badge {

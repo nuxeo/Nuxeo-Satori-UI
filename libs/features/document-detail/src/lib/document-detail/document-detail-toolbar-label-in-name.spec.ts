@@ -50,7 +50,7 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(loop).toMatch(/\[matTooltip\]="tooltipOf\(action\)"/);
     expect(loop).not.toMatch(/\[attr\.aria-label\]/);
     expect(loop).toMatch(/cdk-visually-hidden[\s\S]*nameOf\(action\)/);
-    expect(loop).toMatch(/<mat-icon\s+aria-hidden="true">\{\{\s*action\.icon\s*\}\}<\/mat-icon>/);
+    expect(loop).toMatch(/\[svgIcon\]="action\.icon"/);
   });
 
   it('names the More actions menu trigger without a conflicting icon ligature', () => {
@@ -58,7 +58,7 @@ describe('Document detail toolbar label in name (NXSAT-528)', () => {
     expect(moreBlock).toMatch(/cdk-visually-hidden/);
     expect(moreBlock).toContain('satori-components.document-toolbar.more-actions');
     expect(moreBlock).not.toMatch(/\[attr\.aria-label\]/);
-    expect(moreBlock).toMatch(/<mat-icon\s+aria-hidden="true">more_vert<\/mat-icon>/);
+    expect(moreBlock).toMatch(/svgIcon="more_vert"/);
   });
 
   it('passes the page’s own More actions wording to the toolbar', () => {

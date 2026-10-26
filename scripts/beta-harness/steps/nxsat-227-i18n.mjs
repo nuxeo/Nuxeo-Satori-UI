@@ -313,7 +313,7 @@ export default async function run(page, h) {
   });
 
   // ---------------------------------------------------------------------------
-  h.step('The packaged English application renders no raw translation keys');
+  await h.step('The packaged English application renders no raw translation keys');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
 
@@ -326,7 +326,7 @@ export default async function run(page, h) {
   await h.screenshot('en-shell-no-raw-keys');
 
   // ---------------------------------------------------------------------------
-  h.step('The document tree toggle has a real accessible name, not the raw key');
+  await h.step('The document tree toggle has a real accessible name, not the raw key');
   // The tree lives in the app shell's nav drawer and only mounts when the route is entered
   // through the platform nav item, because the shell owns the drawer state — a direct `goTo`
   // renders the page with no drawer and therefore no tree. `AGENTS/11-beta-program.md` §3
@@ -449,7 +449,7 @@ export default async function run(page, h) {
   await h.screenshot('en-document-tree-toggle-accessible-name');
 
   // ---------------------------------------------------------------------------
-  h.step('No interactive control in the shell has an empty accessible name');
+  await h.step('No interactive control in the shell has an empty accessible name');
   // The regression test for finding 4.6: a blank `aria-label` on a control is a control with no
   // accessible name — axe `button-name`, critical — and it is invisible without a screen reader.
   //
@@ -553,7 +553,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('Every shell route is free of raw translation keys');
+  await h.step('Every shell route is free of raw translation keys');
   const offendingRoutes = [];
   const unreachedRoutes = [];
   for (const route of ROUTES) {
@@ -608,7 +608,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('Layer 0 defaultLanguage: fr renders French chrome after a reload');
+  await h.step('Layer 0 defaultLanguage: fr renders French chrome after a reload');
   bootstrapBody = bootstrapWithLanguage('fr');
   // Back to a plain route first: the earlier steps left the adf-hx nav drawer open, and a
   // drawer full of upstream inputs is not what the header assertions are about.
@@ -711,7 +711,7 @@ export default async function run(page, h) {
   await h.screenshot('fr-shell-french-chrome');
 
   // ---------------------------------------------------------------------------
-  h.step('French survives an adf-hx surface, which is where it used to silently revert');
+  await h.step('French survives an adf-hx surface, which is where it used to silently revert');
   // The regression test for W14, and the gap this capture originally had.
   //
   // adf-core's `TranslationService` reads the locale from its own `UserPreferencesService` and
@@ -750,7 +750,7 @@ export default async function run(page, h) {
   await h.screenshot('fr-adf-hx-surface-keeps-french');
 
   // ---------------------------------------------------------------------------
-  h.step('German is a second locale, so the switch is not a one-off fixture');
+  await h.step('German is a second locale, so the switch is not a one-off fixture');
   bootstrapBody = bootstrapWithLanguage('de');
   await reloadApp(page);
   await h.expectVisible('app shell rendered in German pass', 'app-shell');
@@ -769,7 +769,7 @@ export default async function run(page, h) {
   await h.screenshot('de-shell-german-chrome');
 
   // ---------------------------------------------------------------------------
-  h.step('An unknown locale degrades to English rather than to raw keys');
+  await h.step('An unknown locale degrades to English rather than to raw keys');
   // The tolerance claim: a customer who sets a language we ship no catalogue for must get a
   // working application, not a page of keys.
   //
@@ -864,7 +864,7 @@ export default async function run(page, h) {
   );
 
   // ---------------------------------------------------------------------------
-  h.step('Health');
+  await h.step('Health');
   bootstrapBody = PACKAGED_BOOTSTRAP;
   await reloadApp(page);
   h.check(

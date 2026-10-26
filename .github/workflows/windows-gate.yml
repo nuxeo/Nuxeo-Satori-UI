@@ -25,7 +25,7 @@ jobs:
         with:
           node-version: 20
       - name: Argument transport and negative-control tests
-        run: node --test scripts/beta-harness/package-command.selftest.mjs scripts/e2e-negative-control.selftest.mjs
+        run: node --test scripts/beta-harness/package-command.selftest.mjs scripts/beta-harness/sanitizer-path.selftest.mjs scripts/e2e-negative-control.selftest.mjs
 
   windows-gate:
     runs-on: windows-latest
@@ -50,6 +50,8 @@ jobs:
         run: npm ci
       - name: Generate the documentation imported by spec typechecks
         run: npx nx run satori-components:compodoc
+      - name: Build the application required by the bundle gate
+        run: npx nx build nuxeo-ui
       - name: CodeQL wait controls
         run: node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs
       - name: Wait for CodeQL on this revision

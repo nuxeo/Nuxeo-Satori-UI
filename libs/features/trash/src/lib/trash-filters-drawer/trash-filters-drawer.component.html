@@ -4,7 +4,7 @@
       <span class="saved-filters-label">{{
         trashFilterService.activeSavedFilterTitle() ?? ('trash.search-filters' | translate)
       }}</span>
-      <mat-icon class="saved-filters-arrow">arrow_drop_down</mat-icon>
+      <mat-icon class="saved-filters-arrow" svgIcon="chevron_down" />
     </button>
 
     @if (savedFilterDropdownOpen()) {
@@ -24,7 +24,7 @@
             type="button"
             (mousedown)="selectSavedFilter(filter)"
           >
-            <mat-icon class="saved-filter-icon">bookmark</mat-icon>
+            <mat-icon class="saved-filter-icon" svgIcon="bookmark" />
             {{ filter.title }}
           </button>
         }
@@ -49,9 +49,7 @@
     type="button"
     (click)="toggleLayout()"
   >
-    <mat-icon>{{
-      trashFilterService.layoutMode() === 'filters' ? 'view_sidebar' : 'filter_list'
-    }}</mat-icon>
+    <mat-icon [svgIcon]="trashFilterService.layoutMode() === 'filters' ? 'panel_open' : 'filter'" />
   </button>
 </div>
 
@@ -72,7 +70,7 @@
         />
         @if (fullText()) {
           <button class="clear-btn" type="button" (click)="onFullTextClear()">
-            <mat-icon>close</mat-icon>
+            <mat-icon svgIcon="x_large" />
           </button>
         }
       </div>
@@ -128,7 +126,7 @@
             (focus)="onAuthorFocus()"
             (blur)="closeAuthorDropdown()"
           />
-          <mat-icon class="typeahead-arrow">arrow_drop_down</mat-icon>
+          <mat-icon class="typeahead-arrow" svgIcon="chevron_down" />
         </div>
         @if (authorOpen()) {
           <div class="typeahead-panel">
@@ -139,7 +137,7 @@
                   type="button"
                   (mousedown)="selectAuthorOption(opt)"
                 >
-                  <mat-icon class="suggestion-icon">person</mat-icon>
+                  <mat-icon class="suggestion-icon" svgIcon="user" />
                   {{ opt.label }}
                   <span class="option-count">({{ opt.count }})</span>
                 </button>
@@ -161,9 +159,10 @@
     <div class="filter-group">
       <button class="filter-btn" type="button" (click)="toggleSizeExpanded()">
         <span class="filter-btn-label">{{ 'trash.trash-filters-drawer.size' | translate }}</span>
-        <mat-icon class="filter-btn-icon">
-          {{ sizeExpanded() ? 'expand_less' : 'expand_more' }}
-        </mat-icon>
+        <mat-icon
+          class="filter-btn-icon"
+          [svgIcon]="sizeExpanded() ? 'chevron_up' : 'chevron_down'"
+        />
       </button>
       @if (sizeExpanded()) {
         <div class="filter-options">
@@ -223,7 +222,7 @@
             @if (trashFilterService.resultThumbnails()[item.uid]; as thumb) {
               <img class="drawer-result-thumb-img" [src]="thumb" alt="" />
             } @else {
-              <mat-icon class="drawer-result-thumb-icon">{{ docIcon(item.type) }}</mat-icon>
+              <mat-icon class="drawer-result-thumb-icon" [svgIcon]="docIcon(item.type)" />
             }
           </div>
           <div class="drawer-result-info">

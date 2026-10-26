@@ -1,7 +1,7 @@
 <div class="gd-page">
   <div class="gd-back">
     <a routerLink="/administration/users-groups" mat-button>
-      <mat-icon>arrow_back</mat-icon>
+      <mat-icon svgIcon="arrow_left" />
       {{ 'admin.admin-group-details-page.back-to-users-amp-groups' | translate }}
     </a>
   </div>
@@ -27,15 +27,15 @@
           </div>
           <div class="gd-actions">
             <button type="button" mat-button (click)="confirmDelete()">
-              <mat-icon>delete_outline</mat-icon>
+              <mat-icon svgIcon="trash" />
               {{ 'admin.admin-group-details-page.delete' | translate }}
             </button>
             <button type="button" mat-button (click)="openEdit()">
-              <mat-icon>person_add</mat-icon>
+              <mat-icon svgIcon="add_user" />
               {{ 'admin.admin-group-details-page.add-members' | translate }}
             </button>
             <button type="button" mat-flat-button color="primary" (click)="openEdit()">
-              <mat-icon>edit</mat-icon>
+              <mat-icon svgIcon="pencil" />
               {{ 'admin.admin-group-details-page.edit' | translate }}
             </button>
           </div>
@@ -84,7 +84,7 @@
                 [attr.aria-label]="'admin.admin-group-details-page.remove-member' | translate"
                 [matTooltip]="'admin.admin-group-details-page.remove-member' | translate"
               >
-                <mat-icon>close</mat-icon>
+                <mat-icon svgIcon="x_large" />
               </button>
             </td>
           </ng-container>
@@ -125,7 +125,7 @@
                 [attr.aria-label]="'admin.admin-group-details-page.remove-nested-group' | translate"
                 [matTooltip]="'admin.admin-group-details-page.remove-nested-group' | translate"
               >
-                <mat-icon>close</mat-icon>
+                <mat-icon svgIcon="x_large" />
               </button>
             </td>
           </ng-container>
@@ -198,7 +198,7 @@
                     "
                     [matTooltip]="'admin.admin-group-details-page.remove-permission' | translate"
                   >
-                    <mat-icon>delete_outline</mat-icon>
+                    <mat-icon svgIcon="trash" />
                   </button>
                 </td>
               </ng-container>

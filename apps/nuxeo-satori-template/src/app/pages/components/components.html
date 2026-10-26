@@ -14,23 +14,23 @@
 
     <div class="action-buttons">
       <button mat-raised-button color="primary" (click)="openConfirmDialog()">
-        <mat-icon>help_outline</mat-icon>
+        <mat-icon svgIcon="help" />
         Confirm Dialog
       </button>
       <button mat-raised-button color="primary" (click)="openShareDialog()">
-        <mat-icon>share</mat-icon>
+        <mat-icon svgIcon="share" />
         Share Dialog
       </button>
       <button mat-raised-button color="primary" (click)="openExportDialog()">
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
         Export Dialog
       </button>
       <button mat-raised-button color="primary" (click)="openSavedSearchDialog()">
-        <mat-icon>save</mat-icon>
+        <mat-icon svgIcon="save" />
         Save Search
       </button>
       <button mat-raised-button color="primary" (click)="toggleSelection()">
-        <mat-icon>check_box</mat-icon>
+        <mat-icon svgIcon="checkbox" />
         Selection Bar
       </button>
     </div>
@@ -49,7 +49,7 @@
   <!-- Layout Components -->
   <section class="section">
     <h2>
-      <mat-icon>view_module</mat-icon>
+      <mat-icon svgIcon="grid_view" />
       Layout Components
     </h2>
     <p class="section-description">
@@ -99,28 +99,28 @@
   <!-- Recent Activity -->
   <section class="section">
     <h2>
-      <mat-icon>history</mat-icon>
+      <mat-icon svgIcon="clock" />
       Widget Container Example
     </h2>
 
     <lib-widget-container [headingLevel]="3" title="Recent Activity" icon="notifications">
       <div class="activity-list">
         <div class="activity-item">
-          <mat-icon class="activity-icon success">check_circle</mat-icon>
+          <mat-icon class="activity-icon success" svgIcon="circle_check" />
           <div class="activity-details">
             <div class="activity-title">Document uploaded successfully</div>
             <div class="activity-time">2 minutes ago</div>
           </div>
         </div>
         <div class="activity-item">
-          <mat-icon class="activity-icon warning">schedule</mat-icon>
+          <mat-icon class="activity-icon warning" svgIcon="clock" />
           <div class="activity-details">
             <div class="activity-title">Workflow pending approval</div>
             <div class="activity-time">15 minutes ago</div>
           </div>
         </div>
         <div class="activity-item">
-          <mat-icon class="activity-icon info">person_add</mat-icon>
+          <mat-icon class="activity-icon info" svgIcon="add_user" />
           <div class="activity-details">
             <div class="activity-title">New user added to workspace</div>
             <div class="activity-time">1 hour ago</div>
@@ -133,7 +133,7 @@
   <!-- Component Reference -->
   <section class="section">
     <h2>
-      <mat-icon>code</mat-icon>
+      <mat-icon svgIcon="code" />
       Available Components
     </h2>
 
@@ -198,7 +198,7 @@
   <!-- Code Example -->
   <section class="section">
     <h2>
-      <mat-icon>integration_instructions</mat-icon>
+      <mat-icon svgIcon="code" />
       Usage in Your Extension
     </h2>
 
@@ -236,7 +236,7 @@ export class MyDashboardComponent {{ '{' }} {{ '}' }}</pre>
 
   <!-- Integration Note -->
   <div class="info-banner">
-    <mat-icon>info</mat-icon>
+    <mat-icon svgIcon="info" />
     <div>
       <strong>For customer extensions:</strong>
       All components shown are available in your Layer 2 extension code. Import them from

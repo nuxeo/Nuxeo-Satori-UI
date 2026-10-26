@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, ChangeDetectionStrategy } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -16,6 +16,7 @@ export interface ShareDialogData {
   imports: [TranslatePipe, MatDialogModule, MatButtonModule, MatIconModule],
   providers: [provideNxsToast()],
   templateUrl: './share-dialog.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

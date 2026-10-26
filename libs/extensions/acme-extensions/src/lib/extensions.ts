@@ -51,7 +51,7 @@ const NAV_ITEMS: readonly NavItemDescriptor[] = [
     id: ACME_EXTENSIONS_EXTENSION_IDS.navbar[0],
     label: 'AcmeExtensions',
     path: '/acme-extensions',
-    icon: 'extension',
+    icon: 'build',
     // Spaced by ten so a manifest can insert between entries without restating
     // the list. Absent `order` sorts after any ordinary number, stably.
     order: 500,

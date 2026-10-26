@@ -1,5 +1,13 @@
 import { DateAdapter, MAT_DATE_FORMATS } from '@angular/material/core';
-import { Component, DestroyRef, OnInit, ViewChild, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  ViewChild,
+  inject,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogModule } from '@angular/material/dialog';
@@ -58,6 +66,7 @@ export interface EditCollectionDialogData {
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './edit-collection-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './edit-collection-dialog.scss',
 })
 export class EditCollectionDialogComponent implements OnInit {

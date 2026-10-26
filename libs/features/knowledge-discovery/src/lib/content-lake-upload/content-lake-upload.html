@@ -47,7 +47,7 @@
       (click)="goUpOneFolderLevel()"
       [attr.aria-label]="'kd.content-lake-upload.up-one-folder-level' | translate"
     >
-      <mat-icon>arrow_upward</mat-icon>
+      <mat-icon svgIcon="arrow_up" />
     </button>
   </div>
 
@@ -67,7 +67,7 @@
       (change)="onFilesSelected($event)"
     />
     <span class="kd-content-lake-upload__picker-label">
-      <mat-icon>upload_file</mat-icon>
+      <mat-icon svgIcon="upload" />
       <!-- Always plural: the input carries `multiple`, so several files can be chosen. -->
       {{ 'kd.content-lake-upload.choose-file-many' | translate }}
     </span>
@@ -172,9 +172,9 @@
     (click)="uploadToContentLake()"
   >
     @if (isBusy()) {
-      <mat-icon class="kd-spinning">autorenew</mat-icon>
+      <mat-icon class="kd-spinning" svgIcon="autorenew" />
     } @else {
-      <mat-icon>cloud_upload</mat-icon>
+      <mat-icon svgIcon="cloud_upload" />
     }
     {{ 'knowledge-discovery.content-lake-upload.upload' | translate }}
   </button>

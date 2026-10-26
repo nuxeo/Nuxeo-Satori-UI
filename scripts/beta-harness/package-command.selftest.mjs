@@ -107,3 +107,24 @@ test('nx uses its installed manifest bin rather than assuming a version-specific
     rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('missing package tools return spawn-style errors while invalid options still throw', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'missing-package-tool-'));
+  const executable = process.execPath;
+  try {
+    process.execPath = join(dir, 'node');
+    const result = spawnToolSync('npm', ['--version'], {
+      cwd: dir,
+      env: { PATH: '' },
+      encoding: 'utf8',
+    });
+    assert.equal(result.status, null);
+    assert.equal(result.stdout, null);
+    assert.equal(result.stderr, null);
+    assert.match(result.error?.message, /Cannot locate npm-cli\.js/);
+    assert.throws(() => spawnToolSync('npm', [], { cwd: dir, shell: true }), /without a shell/);
+  } finally {
+    process.execPath = executable;
+    rmSync(dir, { recursive: true, force: true });
+  }
+});

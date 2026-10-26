@@ -21,7 +21,7 @@
       [attr.aria-label]="'satori-components.pickers.clear' | translate"
       (click)="clear()"
     >
-      <mat-icon aria-hidden="true">close</mat-icon>
+      <mat-icon aria-hidden="true" svgIcon="x_large" />
     </button>
   }
   @if (unmatched()) {
@@ -64,9 +64,10 @@
       @case ('found') {
         @for (principal of finder.state().results; track principal.prefixedId) {
           <mat-option [value]="principal" [attr.data-principal]="principal.prefixedId">
-            <mat-icon aria-hidden="true">{{
-              principal.kind === 'group' ? 'group' : 'person'
-            }}</mat-icon>
+            <mat-icon
+              aria-hidden="true"
+              [svgIcon]="principal.kind === 'group' ? 'user_group' : 'user'"
+            />
             <span class="nxs-picker__option">
               <span class="nxs-picker__option-label">{{ principal.label }}</span
               >&ngsp;
