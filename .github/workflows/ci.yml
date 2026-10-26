@@ -32,6 +32,31 @@ permissions:
   actions: read
 
 jobs:
+  pr438-derived-sync:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/feature/nxsat-655-vocabulary-dates'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          registry-url: https://npm.pkg.github.com
+          scope: '@hylandsoftware'
+      - name: Install dependencies
+        run: npm ci
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+          SATORI_GH_READONLY_TOKEN: ${{ secrets.SATORI_GH_READONLY_TOKEN }}
+      - name: Regenerate derived files from the merged tree
+        run: npm run sync:derived -- --base origin/integration/satori-migration
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pr438-derived-api
+          path: docs/api/platform.api.md
+          if-no-files-found: error
   lint-build-test:
     runs-on: ubuntu-latest
     steps:
