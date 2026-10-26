@@ -115,16 +115,16 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
     return btn as HTMLButtonElement;
   }
 
-  /** Projected avatar mat-icon (any markup — class is not part of the regression contract). */
-  function profileProjectedMatIcon(button: Element): Element {
-    const icon = button.querySelector('mat-icon');
-    expect(icon).withContext('profile button must project a mat-icon').toBeTruthy();
-    return icon as Element;
+  /** Projected avatar element (sat-avatar after NXSAT-673 migration, mat-icon before). */
+  function profileProjectedAvatar(button: Element): Element {
+    const avatar = button.querySelector('sat-avatar') ?? button.querySelector('mat-icon');
+    expect(avatar).withContext('profile button must project a sat-avatar or mat-icon').toBeTruthy();
+    return avatar as Element;
   }
 
-  /** DOM text of the projected profile icon (aria-hidden ligature text tripped IBM 2972081309). */
+  /** DOM text of the projected profile avatar (ligature text tripped IBM 2972081309). */
   function profileProjectedIconText(button: Element): string {
-    return profileProjectedMatIcon(button).textContent?.trim() ?? '';
+    return profileProjectedAvatar(button).textContent?.trim() ?? '';
   }
 
   it('does not render vendor initials that diverge from the aria-label (IBM 2972081309)', () => {
@@ -159,17 +159,15 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
       .not.toContain('account_circle');
   });
 
-  it('renders the profile avatar glyph via SVG icon (NXSAT-673)', () => {
+  it('renders the profile avatar via sat-avatar, aria-hidden (NXSAT-673)', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
     TestBed.inject(SatPlatformNavState).toggleCollapsed();
     fixture.detectChanges();
 
-    const icon = profileProjectedMatIcon(profileButton(fixture.nativeElement as HTMLElement));
-    expect(icon.getAttribute('svgIcon') ?? icon.getAttribute('svgicon'))
-      .withContext('profile mat-icon must use svgIcon="user_circle"')
-      .toBe('user_circle');
-    expect(icon.getAttribute('aria-hidden'))
-      .withContext('profile icon must be aria-hidden')
+    const avatar = profileProjectedAvatar(profileButton(fixture.nativeElement as HTMLElement));
+    expect(avatar.tagName.toLowerCase()).toBe('sat-avatar');
+    expect(avatar.getAttribute('aria-hidden'))
+      .withContext('profile avatar must be aria-hidden')
       .toBe('true');
   });
 
