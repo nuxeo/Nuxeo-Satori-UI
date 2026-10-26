@@ -1,5 +1,5 @@
 <sat-platform-nav>
-  <sat-platform-nav-list-item [active]="active()" [attr.data-nav-id]="navId()">{{
-    label()
-  }}</sat-platform-nav-list-item>
+  <sat-platform-nav-menu>
+    <a sat-platform-nav-menu-item [active]="active()" [attr.data-nav-id]="navId()">{{ label() }}</a>
+  </sat-platform-nav-menu>
 </sat-platform-nav>

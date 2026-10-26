@@ -168,8 +168,8 @@
             class="nxs-document-list__icon"
             [class.nxs-document-list__icon--folder]="isFolder(doc)"
             aria-hidden="true"
-            >{{ icon(doc) }}</mat-icon
-          >
+            [svgIcon]="icon(doc)"
+          />
         </ng-template>
         @if (hasThumbnail(doc)) {
           <nxs-thumbnail class="nxs-document-list__thumb" [documentId]="doc.uid">

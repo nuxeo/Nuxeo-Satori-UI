@@ -41,7 +41,7 @@
             [attr.aria-label]="'document-detail.note-editor.edit-note' | translate"
             (click)="focusForEdit()"
           >
-            <mat-icon>edit</mat-icon>
+            <mat-icon svgIcon="pencil" />
           </button>
           <div
             #quillToolbar
@@ -276,7 +276,7 @@
                 [attr.aria-label]="'document-detail.note-editor.edit-note' | translate"
                 (click)="enterPlainTextEdit()"
               >
-                <mat-icon>edit</mat-icon>
+                <mat-icon svgIcon="pencil" />
               </button>
               @if (isMarkdown()) {
                 <div class="note-markdown-rendered" [innerHTML]="markdownHtml()"></div>
@@ -340,7 +340,7 @@
           "
           (click)="toggleSourceMode()"
         >
-          <mat-icon>{{ sourceMode() ? 'edit' : 'code' }}</mat-icon>
+          <mat-icon [svgIcon]="sourceMode() ? 'pencil' : 'code'" />
         </button>
         <button
           type="button"

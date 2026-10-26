@@ -10,7 +10,7 @@
   (focus)="onFocus()"
   (click)="onClick()"
 >
-  <mat-icon aria-hidden="true">{{ icon() }}</mat-icon>
+  <mat-icon aria-hidden="true" [svgIcon]="icon()" />
 </button>
 <div class="nxs-rich-tooltip__live" role="status">
   @if (open()) {

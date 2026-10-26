@@ -176,7 +176,7 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       '[data-action-id="acme.contextMenu.escalate"]',
     ) as HTMLElement;
     expect(item.textContent).toContain('Escalate');
-    expect(item.textContent).toContain('flag');
+    expect(item.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe('flag');
   });
 
   /**

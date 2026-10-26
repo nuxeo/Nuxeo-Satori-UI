@@ -110,7 +110,6 @@ type AppConfigSource = 'configuration-service' | 'packaged-default';
 interface AppIntegrationsConfig {
     readonly arender: AppARenderConfig | null;
     readonly knowledgeDiscoveryOperations: Readonly<Record<string, string>>;
-    readonly knowledgeEnrichmentOperations: Readonly<Record<string, string>>;
     }
 }
 interface AppRuntimeManifest {
@@ -189,7 +188,7 @@ function resolveTheme(config: AppBootstrapConfig, id: string | null): AppThemeCo
 
 ## @nuxeo/satori-platform/components
 
-135 exported symbol(s).
+138 exported symbol(s).
 
 ```ts
 const NXS_EMPTY_SEARCH_FILTERS: NxsSearchFilters;
@@ -200,6 +199,7 @@ const NXS_PRIMITIVE_IDS: Readonly<{
     readonly avatar: "nxs.primitives.avatar";
     readonly breadcrumbs: "nxs.primitives.breadcrumbs";
     readonly tag: "nxs.primitives.tag";
+    readonly statusTag: "nxs.primitives.statusTag";
     readonly richTooltip: "nxs.primitives.richTooltip";
     readonly errorState: "nxs.primitives.errorState";
     readonly banner: "nxs.primitives.banner";
@@ -277,7 +277,7 @@ interface NxsAvatarInputs {
     readonly label: InputSignal<string>;
     }
 }
-type NxsAvatarSize = '128' | '24' | '28' | '36' | '64' | '80';
+type NxsAvatarSize = '128' | '18' | '24' | '28' | '36' | '64' | '80';
 interface NxsBannerAction {
     readonly label: string;
     readonly icon?: string;
@@ -2084,6 +2084,37 @@ class NxsSpinnerComponent {
     }, {}, never, never, true, never>;
     }
 }
+class NxsStatusTagComponent implements NxsStatusTagInputs {
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly status: import("@angular/core").InputSignal<NxsTagStatus>;
+    readonly hideIcon: import("@angular/core").InputSignal<boolean>;
+    protected readonly icon: import("@angular/core").Signal<string | null>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsStatusTagComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsStatusTagComponent, "nxs-status-tag", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "status": {
+    "alias": "status";
+    "required": false;
+    "isSignal": true;
+    };
+    "hideIcon": {
+    "alias": "hideIcon";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
+    }
+}
+interface NxsStatusTagInputs {
+    readonly label: InputSignal<string>;
+    readonly status: InputSignal<NxsTagStatus>;
+    readonly hideIcon: InputSignal<boolean>;
+    }
+}
 interface NxsTab {
     readonly id: string;
     readonly label: string;
@@ -2264,6 +2295,7 @@ interface NxsTagInputs {
     readonly color: InputSignal<NxsTagColor>;
     }
 }
+type NxsTagStatus = 'important' | 'important-loud' | 'info' | 'neutral' | 'neutral-quiet' | 'success' | 'warning';
 class NxsThumbnailComponent {
     readonly documentId: import("@angular/core").InputSignal<string>;
     readonly alt: import("@angular/core").InputSignal<string>;

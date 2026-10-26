@@ -133,7 +133,7 @@ describe('platform sidebar nav — keyboard focus ring (NXENG-761)', () => {
 
   function link(navId: 'idle' | 'active'): HTMLElement {
     const el = fixture.nativeElement.querySelector(
-      `sat-platform-nav-list-item[data-nav-id="${navId}"] .sat-platform-nav-item`,
+      `a[sat-platform-nav-menu-item][data-nav-id="${navId}"]`,
     );
     expect(el).withContext(`the ${navId} nav link renders`).toBeTruthy();
     return el as HTMLElement;
@@ -360,7 +360,7 @@ describe('platform sidebar nav — Collections link (NXENG-777)', () => {
 
   function collectionsLink(): HTMLElement {
     const el = fixture.nativeElement.querySelector(
-      `sat-platform-nav-list-item[data-nav-id="${COLLECTIONS_NAV_ID}"] .sat-platform-nav-item`,
+      `a[sat-platform-nav-menu-item][data-nav-id="${COLLECTIONS_NAV_ID}"]`,
     );
     expect(el).withContext('Collections nav link renders').toBeTruthy();
     return el as HTMLElement;

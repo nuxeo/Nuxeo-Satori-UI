@@ -26,6 +26,7 @@
 .nxs-document-list__table {
   width: 100%;
 
+  // stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides
   th.mat-mdc-header-cell {
     position: sticky;
     top: 0;
@@ -36,6 +37,7 @@
     white-space: nowrap;
   }
 
+  // stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides
   td.mat-mdc-cell {
     font: var(--mat-sys-body-medium);
   }

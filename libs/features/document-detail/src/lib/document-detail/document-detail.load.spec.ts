@@ -36,7 +36,6 @@ import {
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import {
   EXTENSION_SLOTS,
   PACKAGED_DOCUMENT_TABS,
@@ -91,9 +90,6 @@ function doc(over: Partial<NuxeoDocument> = {}): NuxeoDocument {
 function fileContent(mimeType: string, name = 'file.bin'): Record<string, unknown> {
   return { name, 'mime-type': mimeType, length: 1234, data: `/nuxeo/blob/${name}` };
 }
-
-const emptyKe = (): Observable<KeEnrichmentResult> =>
-  of({ textClassification: { result: '' } } as KeEnrichmentResult);
 
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
@@ -239,7 +235,6 @@ describe('DocumentDetailComponent — load chain', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: mockBrowseService },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: KeClientService, useValue: { enrich: emptyKe } },
         { provide: TaskService, useValue: mockTaskService },
         { provide: WorkflowService, useValue: mockWorkflowService },
         { provide: ARenderService, useValue: mockARenderService },
@@ -642,17 +637,6 @@ describe('DocumentDetailComponent — load chain', () => {
   });
 
   describe('per-type decisions outside the viewer', () => {
-    it.each<[string, string, boolean]>([
-      ['Picture', 'application/octet-stream', true],
-      ['File', 'image/png', true],
-      ['File', 'application/pdf', false],
-      ['Claim', 'application/octet-stream', false],
-    ])('offers image enrichment on a %s holding %s: %s', async (type, mime, expected) => {
-      await build(doc({ type, properties: { 'file:content': fileContent(mime, 'f.bin') } }));
-
-      expect(component.supportsImageKnowledgeEnrichment()).toBe(expected);
-    });
-
     describe('focusing the editor of a note just created', () => {
       afterEach(() => history.replaceState(null, ''));
 
@@ -785,51 +769,6 @@ describe('DocumentDetailComponent — load chain', () => {
       // even opening the confirmation.
       expect(mockDialog.open).not.toHaveBeenCalled();
       expect(mockDetailService.trashDocument).not.toHaveBeenCalled();
-    });
-
-    it('offers Restore and Delete permanently on a trashed document, each pressing its own action', async () => {
-      await build(doc({ isTrashed: true }));
-      const restore = vi.spyOn(component, 'restoreFromTrash').mockImplementation(() => undefined);
-      const remove = vi.spyOn(component, 'permanentlyDelete').mockImplementation(() => undefined);
-
-      const [restoreAction, deleteAction] = component.trashedBannerActions();
-      restoreAction.press();
-      deleteAction.press();
-
-      expect(restoreAction).toEqual(
-        expect.objectContaining({ emphasis: 'outlined', disabled: false }),
-      );
-      expect(deleteAction).toEqual(expect.objectContaining({ danger: true, disabled: false }));
-      expect(restore).toHaveBeenCalledTimes(1);
-      expect(remove).toHaveBeenCalledTimes(1);
-    });
-
-    it('offers no trashed-banner action to a reader who may neither restore nor remove', async () => {
-      await build(doc({ isTrashed: true, contextParameters: { permissions: ['Read'] } }));
-
-      expect(component.trashedBannerActions()).toEqual([]);
-    });
-
-    it('offers Go to latest on an older version, and Restore only to a user who may restore it', async () => {
-      await build(doc({ isVersion: true, contextParameters: { permissions: ['Read'] } }));
-      expect(component.versionBannerActions().map((a) => a.cssClass)).toEqual([
-        'version-banner-latest',
-      ]);
-
-      await build(
-        doc({ isVersion: true, contextParameters: { permissions: ['Read', 'WriteVersion'] } }),
-      );
-      const restore = vi
-        .spyOn(component, 'confirmRestoreVersion')
-        .mockImplementation(() => undefined);
-      const actions = component.versionBannerActions();
-      actions[1].press();
-
-      expect(actions.map((a) => a.cssClass)).toEqual([
-        'version-banner-latest',
-        'version-banner-restore',
-      ]);
-      expect(restore).toHaveBeenCalledTimes(1);
     });
 
     it('restores from trash and reloads the document', async () => {

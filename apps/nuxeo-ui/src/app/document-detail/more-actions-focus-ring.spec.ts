@@ -18,6 +18,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
+import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { TranslatePipe } from '@ngx-translate/core';
 import {
   NxsDocumentToolbarComponent,
@@ -49,7 +50,7 @@ describe('Document detail More actions — focus ring SCSS contract (NXSAT-535 /
         MoreActionsFocusHostComponent,
         testTranslateModule({ 'document-detail.document-detail.more-actions': 'More actions' }),
       ],
-      providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
+      providers: [provideZonelessChangeDetection(), provideNoopAnimations(), provideSatori()],
     }).compileComponents();
   });
 
@@ -68,7 +69,7 @@ describe('Document detail More actions — focus ring SCSS contract (NXSAT-535 /
       ),
     ) as HTMLButtonElement[];
     const button = buttons.find(
-      (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
+      (b) => b.querySelector('mat-icon')?.getAttribute('svgicon') === 'more_vert',
     ) as HTMLButtonElement;
     const header = fixture.nativeElement.querySelector('.detail-header') as HTMLElement;
     return { fixture, button, header };

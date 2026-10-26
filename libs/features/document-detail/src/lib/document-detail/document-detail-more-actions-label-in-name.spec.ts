@@ -59,7 +59,7 @@ describe('Document detail header More actions label in name (NXSAT-539)', () => 
 
     const hiddenName = visuallyHiddenAccessibleName(moreButton);
     expect(squash(hiddenName)).toContain(MORE_NAME);
-    expect(moreButton).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
+    expect(moreButton).toContain('svgIcon="more_vert"');
   });
 
   it('gives the trigger the page’s own translated wording', () => {

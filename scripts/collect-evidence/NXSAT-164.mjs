@@ -74,7 +74,7 @@ async function openBrowseDrawer(page, helpers) {
   await page.waitForTimeout(1200);
 
   // Browse is the 3rd platform nav item (Knowledge Discovery, Dashboard, Browse).
-  const browseNav = page.locator('sat-platform-nav-list-item').nth(2);
+  const browseNav = page.locator('a[sat-platform-nav-menu-item]').nth(2);
   await browseNav.click({ timeout: 10000 });
   await page.waitForTimeout(500);
 

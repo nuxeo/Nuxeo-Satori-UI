@@ -43,6 +43,6 @@ describe('Document viewer Remove main file label in name (NXSAT-538)', () => {
     )?.[0];
     expect(hiddenName, 'Remove main file visually hidden accessible name').toBeTruthy();
     expect(hiddenName).toContain(`'${REMOVE_KEY}' | translate`);
-    expect(removeButton).toContain('<mat-icon aria-hidden="true">cancel</mat-icon>');
+    expect(removeButton).toContain('svgIcon="circle_x"');
   });
 });

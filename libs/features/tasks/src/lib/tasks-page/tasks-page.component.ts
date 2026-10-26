@@ -45,7 +45,8 @@ import {
   provideSatoriDateAdapter,
   provideTranslatedDatepickerIntl,
 } from '@nuxeo/satori-platform/ui';
-import { SatBreadcrumbsComponent, SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { SatBreadcrumbs, type SatBreadcrumbsItem } from '@hylandsoftware/satori-ui/breadcrumbs';
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
 
 const DUE_LABEL_KEYS = {
@@ -82,7 +83,8 @@ const DUE_LABEL_KEYS = {
     MatTabsModule,
     MatDividerModule,
     DocumentViewerComponent,
-    SatBreadcrumbsComponent,
+    SatBreadcrumbs,
+    SatHeaderBar,
   ],
   templateUrl: './tasks-page.component.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -948,9 +950,9 @@ export class TasksPageComponent implements OnInit {
 
   actionIcon(action: { name: string }): string {
     const n = action.name.toLowerCase();
-    if (n.includes('approve') || n.includes('validate')) return 'check_circle';
-    if (n.includes('reject')) return 'cancel';
-    if (n.includes('start')) return 'play_arrow';
+    if (n.includes('approve') || n.includes('validate')) return 'circle_check';
+    if (n.includes('reject')) return 'x_large';
+    if (n.includes('start')) return 'triangle_right';
     if (n.includes('cancel')) return 'block';
     return 'send';
   }

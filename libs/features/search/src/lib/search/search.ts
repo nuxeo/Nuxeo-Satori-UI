@@ -1071,7 +1071,7 @@ export class SearchComponent {
             collectionKey: '',
             tags: [],
             flags: '',
-            icon: 'description',
+            icon: 'page',
             isFavorite: doc.contextParameters?.favorites?.isFavorite ?? false,
           }));
           this.aiResults.set(items);

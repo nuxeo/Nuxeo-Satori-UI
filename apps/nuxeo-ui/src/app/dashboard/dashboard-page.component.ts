@@ -304,11 +304,11 @@ export class DashboardPageComponent {
 
   insightIcon(icon: string): string {
     const map: Record<string, string> = {
-      task: 'assignment',
-      document: 'description',
+      task: 'tasks',
+      document: 'page',
       warning: 'warning',
       info: 'info',
-      workflow: 'account_tree',
+      workflow: 'processes',
     };
     return map[icon] ?? 'info';
   }

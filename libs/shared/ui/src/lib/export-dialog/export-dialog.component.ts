@@ -104,8 +104,8 @@ export class ExportDialogComponent {
 
   readonly options: ExportOption[] = [
     { type: 'thumbnail', labelKey: 'rendition.thumbnail', label: 'Thumbnail', icon: 'image' },
-    { type: 'pdf', labelKey: 'rendition.pdf', label: 'PDF', icon: 'picture_as_pdf' },
-    { type: 'zip', labelKey: 'rendition.zip', label: 'ZIP Export', icon: 'folder_zip' },
+    { type: 'pdf', labelKey: 'rendition.pdf', label: 'PDF', icon: 'pdf' },
+    { type: 'zip', labelKey: 'rendition.zip', label: 'ZIP Export', icon: 'archive' },
     { type: 'xml', labelKey: 'rendition.xml', label: 'XML Export', icon: 'code' },
   ];
 

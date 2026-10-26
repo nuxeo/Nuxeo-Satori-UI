@@ -24,6 +24,7 @@ import { MatDialog, MatDialogModule } from '@angular/material/dialog';
 import { of, finalize, filter, switchMap, map } from 'rxjs';
 import { catchError } from 'rxjs/operators';
 
+import { SatHeaderBar } from '@hylandsoftware/satori-ui/header-bar';
 import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ConfirmDialogComponent,
@@ -101,6 +102,7 @@ const SORTABLE_COLUMNS = new Set(['title', 'modified', 'contributor', 'created',
     MatSnackBarModule,
     MatMenuModule,
     MatDialogModule,
+    SatHeaderBar,
     SatTagModule,
   ],
   templateUrl: './trash.component.html',

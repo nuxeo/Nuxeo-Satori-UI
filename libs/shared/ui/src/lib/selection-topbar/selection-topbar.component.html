@@ -29,7 +29,7 @@
           [disabled]="!isEnabled(action)"
           (click)="run(action)"
         >
-          <mat-icon>{{ action.icon }}</mat-icon>
+          <mat-icon [svgIcon]="action.icon!" />
         </button>
       }
     </div>
@@ -62,7 +62,7 @@
         class="selection-popup-close"
         (click)="closeSelectionPopup()"
       >
-        <mat-icon>close</mat-icon>
+        <mat-icon svgIcon="x_large" />
       </button>
     </div>
 

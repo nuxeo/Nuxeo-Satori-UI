@@ -1,5 +1,5 @@
 @if (icon()) {
-  <mat-icon class="nxs-empty-state__icon" aria-hidden="true">{{ icon() }}</mat-icon>
+  <mat-icon class="nxs-empty-state__icon" aria-hidden="true" [svgIcon]="icon()" />
 }
 @switch (headingLevel()) {
   @case (1) {

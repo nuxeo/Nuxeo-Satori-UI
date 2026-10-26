@@ -15,7 +15,7 @@ export default async function collectEvidence(page, helpers, _outDir) {
 
   const openClipboardDrawer = async () => {
     const clipboardNav = page
-      .locator('sat-platform-nav-list-item')
+      .locator('a[sat-platform-nav-menu-item]')
       .filter({ hasText: 'Clipboard' })
       .first();
     await clipboardNav.click();

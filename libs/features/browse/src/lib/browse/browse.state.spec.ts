@@ -238,6 +238,29 @@ describe('BrowseComponent — listing state', () => {
     expect(component.filterModifiedTo()).toBeNull();
   });
 
+  it('navigating to a new folder clears filters and selection', () => {
+    component.entries.set([doc({ uid: 'a', title: 'Alpha' }), doc({ uid: 'b', title: 'Beta' })]);
+    component.filterText.set('alpha');
+    component.filterType.set('File');
+    component.filterContributor.set('jdoe');
+    component.filterModifiedFrom.set(new Date('2026-01-01'));
+    component.filterModifiedTo.set(new Date('2026-12-31'));
+    selection.toggle('a', 'Alpha');
+
+    expect(component.filteredEntries().length).toBe(0);
+    expect(selection.selectedCount()).toBe(1);
+
+    // Simulate what the NavigationEnd handler does
+    component['resetBrowseTabState']();
+
+    expect(component.filterText()).toBe('');
+    expect(component.filterType()).toBe('');
+    expect(component.filterContributor()).toBe('');
+    expect(component.filterModifiedFrom()).toBeNull();
+    expect(component.filterModifiedTo()).toBeNull();
+    expect(selection.selectedCount()).toBe(0);
+  });
+
   it('distinctTypes lists each type present in the listing once, sorted', () => {
     component.entries.set([
       doc({ uid: 'a', type: 'Note' }),

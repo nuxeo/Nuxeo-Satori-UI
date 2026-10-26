@@ -1,9 +1,22 @@
+import { createRequire } from 'node:module';
 import nx from '@nx/eslint-plugin';
+
+const require = createRequire(import.meta.url);
+const satoriLint = require('@hylandsoftware/satori-lint/eslint');
 
 export default [
   ...nx.configs['flat/base'],
   ...nx.configs['flat/typescript'],
   ...nx.configs['flat/javascript'],
+  ...satoriLint.configs['flat/recommended'],
+  {
+    files: ['**/*.html'],
+    rules: {
+      // 513 Material font icons → Satori SVG icons is a separate migration tracked by
+      // `npm run satori:icons`. Warn so lint stays green while SDSC tracks progress.
+      '@hylandsoftware/satori-lint/eslint/no-material-font-icons': 'warn',
+    },
+  },
   {
     ignores: [
       '**/dist',

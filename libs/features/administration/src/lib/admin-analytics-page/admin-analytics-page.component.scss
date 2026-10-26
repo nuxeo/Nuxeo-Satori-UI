@@ -67,16 +67,19 @@
   border-radius: var(--admin-radius-1, 8px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .admin-page .mat-mdc-form-field {
   --mat-form-field-container-height: var(--admin-control-height, 40px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .admin-page .mat-mdc-unelevated-button,
 .admin-page .mat-mdc-outlined-button,
 .admin-page .mat-mdc-button {
   min-height: var(--admin-control-height, 40px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .mini-table th.mat-mdc-header-cell,
 .mini-table td.mat-mdc-cell {
   padding-top: var(--admin-row-padding-y, 0.68rem);

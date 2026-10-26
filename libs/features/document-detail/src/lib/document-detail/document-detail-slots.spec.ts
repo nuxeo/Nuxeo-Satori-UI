@@ -51,7 +51,6 @@ import {
   AiFeatureFlagService,
   AiGatewayService,
 } from '@agentic-ui/shared/ai-client';
-import { KeClientService, type KeEnrichmentResult } from '@agentic-ui/shared/ke-client';
 import { DocumentViewerComponent, MAT_TAB_LIST_KEYDOWN_ATTR } from '@nuxeo/satori-platform/ui';
 
 import { DocumentDetailComponent } from './document-detail';
@@ -164,9 +163,6 @@ const nuxeoGet = vi.fn((path: string): Observable<unknown> =>
   ),
 );
 
-const emptyKe = (): Observable<KeEnrichmentResult> =>
-  of({ textClassification: { result: '' } } as KeEnrichmentResult);
-
 const mockDetailService = {
   getFullDocument: vi.fn((): Observable<NuxeoDocument> => of(doc())),
   fetchBlob: vi.fn((): Observable<Blob> => of(new Blob(['x'], { type: 'text/plain' }))),
@@ -256,7 +252,6 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         { provide: DocumentDetailService, useValue: mockDetailService },
         { provide: BrowseService, useValue: { updateDocument: vi.fn(() => of(doc())) } },
         { provide: DirectoryService, useValue: mockDirectoryService },
-        { provide: KeClientService, useValue: { enrich: emptyKe } },
         { provide: TaskService, useValue: { getDocumentTasks: vi.fn(() => of([])) } },
         {
           provide: WorkflowService,
@@ -626,7 +621,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(button.querySelector('.cdk-visually-hidden')?.textContent?.trim()).toBe('Archive');
       const icon = button.querySelector('mat-icon');
       expect(icon?.getAttribute('aria-hidden')).toBe('true');
-      expect(icon?.textContent?.trim()).toBe('inventory_2');
+      expect(icon?.getAttribute('data-mat-icon-name')).toBe('inventory_2');
     });
 
     /** The shipped default is unchanged: the packaged ids are the ones that render. */
@@ -670,7 +665,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         ),
       ) as HTMLButtonElement[];
       const button = buttons.find(
-        (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
+        (b) => b.querySelector('mat-icon')?.getAttribute('data-mat-icon-name') === 'more_vert',
       );
       expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
       expect(

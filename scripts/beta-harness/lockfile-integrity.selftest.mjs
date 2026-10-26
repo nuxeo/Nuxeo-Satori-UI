@@ -477,28 +477,37 @@ expect(
 );
 
 // ---------------------------------------------------------------------------------------------
-// 18. The Phase 2 failure itself, on the real lock: prune `@oxc-resolver/binding-wasm32-wasi`'s
-//    nested `@emnapi/*` entries, as a bare `npm install` on macOS does, and the v1.11.2 pins
-//    walk up to the top-level 1.11.3. This is the control that was previously run by hand.
+// 18. The Phase 2 failure itself, fixed in NXSAT-673: the lockfile originally had nested
+//    `@emnapi/*` entries at 1.11.2 under `@oxc-resolver/binding-wasm32-wasi` that a bare
+//    `npm install` on macOS would prune, causing version mismatches with top-level 1.11.3.
+//    The fix hoisted @emnapi/core and @emnapi/runtime to the top level and removed the nested
+//    copies. This control verifies the fix stays in place: if nested @emnapi entries at the
+//    wrong version reappear (under any path), the gate catches them.
 // ---------------------------------------------------------------------------------------------
 {
   const lock = JSON.parse(readFileSync(REAL_LOCK, 'utf8'));
   const manifest = JSON.parse(readFileSync(REAL_MANIFEST, 'utf8'));
-  const pruned = Object.keys(lock.packages).filter((k) =>
-    k.startsWith('node_modules/@oxc-resolver/binding-wasm32-wasi/node_modules/@emnapi/'),
-  );
-  if (pruned.length === 0) {
-    throw new Error(
-      'the @emnapi control found nothing to prune — the lock has changed shape, so this control ' +
-        'would have passed for the wrong reason',
-    );
-  }
-  for (const key of pruned) delete lock.packages[key];
+  // The fix removed node_modules/@oxc-resolver/.../node_modules/@emnapi/* entries.
+  // They may exist elsewhere (e.g. under storybook or nx) at correct versions.
+  // This control adds back a problematic nested entry at the old wrong version to verify
+  // the gate would catch a regression.
+  const testLock = structuredClone(lock);
+  const WRONG_VERSION = '1.11.2';
+  const problematicEntry = {
+    version: WRONG_VERSION,
+    resolved: `https://registry.npmjs.org/@emnapi/core/-/core-${WRONG_VERSION}.tgz`,
+    integrity: 'sha512-TC8MkTuZUtcTSiFeuC0ksCh9QIJ5+F21MvZ4Wn4ORfYaFJ/0dsiudv5tVkejgwZlwQ39jL9WWDe2lz8x0WglOA==',
+    dev: true,
+    license: 'MIT',
+    dependencies: { tslib: '^2.4.0' },
+  };
+  testLock.packages['node_modules/@oxc-resolver/binding-wasm32-wasi/node_modules/@emnapi/core'] =
+    problematicEntry;
   expect(
-    `Phase 2 regression: pruning ${pruned.length} nested @emnapi entries from the real lock`,
+    'Phase 2 regression: nested @emnapi/core at wrong version under @oxc-resolver should fail',
     'fail',
-    '@emnapi/',
-    runGate('phase2-emnapi-pruned', manifest, lock),
+    'at 1.11.2',
+    runGate('phase2-emnapi-wrong-version', manifest, testLock),
   );
 }
 

@@ -1,7 +1,7 @@
 <div class="kd-citation-dialog">
   <header class="kd-citation-dialog__header">
     <div class="kd-citation-dialog__header-copy">
-      <mat-icon class="kd-citation-dialog__brand" aria-hidden="true">auto_awesome</mat-icon>
+      <mat-icon class="kd-citation-dialog__brand" aria-hidden="true" svgIcon="ai" />
       <div class="kd-citation-dialog__header-text">
         <p class="kd-citation-dialog__title">{{ headerLabel() }}</p>
         @if (documentPath()) {
@@ -15,7 +15,7 @@
       (click)="close()"
       [attr.aria-label]="'kd.kd-citation-dialog.close-citation-viewer' | translate"
     >
-      <mat-icon>close</mat-icon>
+      <mat-icon svgIcon="x_large" />
     </button>
   </header>
 
@@ -34,7 +34,7 @@
         </div>
       } @else if (documentError()) {
         <div class="kd-citation-dialog__state kd-citation-dialog__state--error">
-          <mat-icon>error_outline</mat-icon>
+          <mat-icon svgIcon="error" />
           <p>{{ documentError() }}</p>
         </div>
       } @else {
@@ -60,7 +60,7 @@
           }
           @default {
             <div class="kd-citation-dialog__state">
-              <mat-icon>description</mat-icon>
+              <mat-icon svgIcon="page" />
               <p>{{ 'kd.kd-citation-dialog.preview-is-not-available-for-this' | translate }}</p>
               @if (mimeType()) {
                 <span class="kd-citation-dialog__mime">{{ mimeType() }}</span>

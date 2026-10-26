@@ -1,13 +1,11 @@
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
-import { provideTranslateService } from '@ngx-translate/core';
-
 import { provideStoryRouter } from '../../.storybook/story-router';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
 
 /**
- * The four `nxs.primitives.*` IDs Satori also implements, resolved through `lib-extension-outlet` as
+ * The five `nxs.primitives.*` IDs Satori also implements, resolved through `lib-extension-outlet` as
  * a host renders them, with only `provideNxsComponents()` — what an application without Satori
  * gets. The Satori library's Storybook renders the same template with `provideNxsSatoriComponents()`
  * added.
@@ -18,7 +16,7 @@ const meta: Meta = {
   title: 'Primitives/By registered ID',
   decorators: [
     applicationConfig({
-      providers: [provideTranslateService(), provideStoryRouter(), provideNxsComponents()],
+      providers: [provideStoryRouter(), provideNxsComponents()],
     }),
     moduleMetadata({ imports: [ExtensionOutletComponent] }),
   ],
@@ -36,10 +34,16 @@ export const MaterialRegistration: StoryObj = {
         items: [{ label: 'Domain', routerLink: ['/browse'] }, { label: 'Contracts' }],
       },
       tag: { label: 'Invoice', color: 'purple' },
+      statusTag: { label: 'In progress', status: 'info', hideIcon: false },
       tooltip: {
         heading: 'Versioning',
         content: 'A new version is created each time you check in.',
         triggerLabel: 'About versioning',
+      },
+      errorState: {
+        status: 500,
+        heading: 'Failed to load folder contents.',
+        retryable: true,
       },
     },
     template: `
@@ -47,7 +51,9 @@ export const MaterialRegistration: StoryObj = {
         <lib-extension-outlet [componentId]="ids.avatar" [componentInputs]="avatar" />
         <lib-extension-outlet [componentId]="ids.breadcrumbs" [componentInputs]="breadcrumbs" />
         <lib-extension-outlet [componentId]="ids.tag" [componentInputs]="tag" />
+        <lib-extension-outlet [componentId]="ids.statusTag" [componentInputs]="statusTag" />
         <lib-extension-outlet [componentId]="ids.richTooltip" [componentInputs]="tooltip" />
+        <lib-extension-outlet [componentId]="ids.errorState" [componentInputs]="errorState" />
       </div>
     `,
   }),

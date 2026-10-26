@@ -674,7 +674,7 @@ export class BrowseComponent {
         entries.unshift({
           id: 'collection.edit',
           label: this.translate.instant('browse.browse.edit'),
-          icon: 'edit',
+          icon: 'pencil',
         });
       }
       if (entries.length > 0) menus[doc.uid] = entries;
@@ -691,6 +691,8 @@ export class BrowseComponent {
 
   /** Rendered by ID, so the product shows Satori's and a host without it the built-in one. */
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
+  /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
 
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();
@@ -977,6 +979,8 @@ export class BrowseComponent {
     this.permissionsLoading.set(false);
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
+    this.clearFilters();
+    this.selectionService.clear();
   }
 
   loadContent(): void {

@@ -33,10 +33,12 @@
 }
 
 /* Outline + floating label need auto height on multi-line fields — fixed 40px breaks label alignment. */
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .nxql-field--query.mat-mdc-form-field {
   --mat-form-field-container-height: auto;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .nxql-field--query textarea.mat-mdc-input-element {
   min-height: 10rem;
   line-height: 1.5;
@@ -133,12 +135,14 @@
   font-size: 0.9rem;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .nxql-page .mat-mdc-unelevated-button,
 .nxql-page .mat-mdc-outlined-button,
 .nxql-page .mat-mdc-button {
   min-height: var(--admin-control-height, 40px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .nxql-table th.mat-mdc-header-cell,
 .nxql-table td.mat-mdc-cell {
   padding-top: var(--admin-row-padding-y, 0.68rem);

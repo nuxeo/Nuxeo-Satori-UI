@@ -38,7 +38,7 @@
             [placeholder]="'admin.admin-nxql-search-page.query-example' | translate"
             (keydown.enter)="generateFromNl()"
           />
-          <mat-icon matPrefix class="ai-prefix-icon">auto_awesome</mat-icon>
+          <mat-icon matPrefix class="ai-prefix-icon" svgIcon="ai" />
         </mat-form-field>
         @if (aiGenerating()) {
           <button type="button" mat-flat-button class="ai-gen-btn" disabled>
@@ -55,7 +55,7 @@
             [disabled]="!aiNlQuery.trim()"
             (click)="generateFromNl()"
           >
-            <mat-icon>auto_awesome</mat-icon>
+            <mat-icon svgIcon="ai" />
             {{ 'admin.admin-nxql-search-page.generate-nxql' | translate }}
           </button>
         }

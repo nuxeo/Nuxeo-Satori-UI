@@ -15,7 +15,7 @@
           class="selection-action-btn"
           (click)="restoreSelected()"
         >
-          <mat-icon>restore_from_trash</mat-icon>
+          <mat-icon svgIcon="restore" />
           {{ 'trash.trash.untrash-selected' | translate }}
         </button>
         <button
@@ -24,23 +24,23 @@
           class="selection-action-btn"
           (click)="deleteSelected()"
         >
-          <mat-icon>delete_forever</mat-icon>
+          <mat-icon svgIcon="trash_x" />
           {{ 'trash.trash.delete-permanently-2' | translate }}
         </button>
       </div>
     </div>
   }
 
-  <div class="page-header-row">
-    <span class="page-header-title">{{ 'trash.trash.search-results' | translate }}</span>
-    <div class="page-header-actions">
+  <sat-header-bar variant="one-row">
+    {{ 'trash.trash.search-results' | translate }}
+    <div sat-header-bar-trailing class="page-header-actions">
       <button mat-flat-button class="save-as-btn" [disabled]="saving()" (click)="saveAsSearch()">
-        <mat-icon>bookmark_add</mat-icon>
+        <mat-icon svgIcon="bookmark" />
         {{ 'trash.trash.save-as' | translate }}
       </button>
       @if (trashFilterService.hasSavedFilter()) {
         <button mat-flat-button class="save-btn" [disabled]="saving()" (click)="saveSearch()">
-          <mat-icon>bookmark</mat-icon>
+          <mat-icon svgIcon="bookmark" />
           {{ 'trash.trash.save' | translate }}
         </button>
         <button
@@ -49,7 +49,7 @@
           [matMenuTriggerFor]="resultsActionsMenu"
           [attr.aria-label]="'trash.trash.results-actions' | translate"
         >
-          <mat-icon>more_vert</mat-icon>
+          <mat-icon svgIcon="more_vert" />
         </button>
         <mat-menu #resultsActionsMenu="matMenu">
           <button mat-menu-item type="button" (click)="onEditSelectedSavedSearch()">
@@ -64,7 +64,7 @@
         </mat-menu>
       }
     </div>
-  </div>
+  </sat-header-bar>
 
   <div class="results-toolbar">
     <div class="results-summary">
@@ -86,7 +86,7 @@
         (click)="exportCsv()"
         class="toolbar-btn"
       >
-        <mat-icon>download</mat-icon>
+        <mat-icon svgIcon="download" />
       </button>
 
       <button
@@ -97,7 +97,7 @@
         (click)="setViewMode('grid')"
         class="toolbar-btn"
       >
-        <mat-icon>grid_view</mat-icon>
+        <mat-icon svgIcon="grid_view" />
       </button>
 
       <button
@@ -108,7 +108,7 @@
         (click)="setViewMode('table')"
         class="toolbar-btn"
       >
-        <mat-icon>view_list</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
 
       <button
@@ -119,7 +119,7 @@
         (click)="setViewMode('list')"
         class="toolbar-btn"
       >
-        <mat-icon>format_list_bulleted</mat-icon>
+        <mat-icon svgIcon="bullet_list" />
       </button>
     </div>
   </div>
@@ -169,7 +169,7 @@
             (click)="toggleSortDir()"
             class="action-btn"
           >
-            <mat-icon>{{ sortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+            <mat-icon [svgIcon]="sortDir() === 'asc' ? 'arrow_up' : 'arrow_down'" />
           </button>
         </div>
       </div>
@@ -189,7 +189,7 @@
               @if (thumbnailMap()[doc.uid]; as thumb) {
                 <img class="result-thumbnail-image" [src]="thumb" alt="" />
               } @else {
-                <mat-icon class="result-icon">{{ docIcon(doc) }}</mat-icon>
+                <mat-icon class="result-icon" [svgIcon]="docIcon(doc)" />
               }
             </div>
             <div class="result-card-body">
@@ -261,11 +261,13 @@
             @if (SORTABLE_COLUMNS.has(col.key)) {
               <button type="button" class="col-sortable" (click)="sortByColumn(col.key)">
                 {{ col | descriptorLabel }}
-                <mat-icon class="sort-icon" [class.sort-active]="sortBy() === col.key">
-                  {{
-                    sortBy() === col.key && sortDir() === 'desc' ? 'arrow_downward' : 'arrow_upward'
-                  }}
-                </mat-icon>
+                <mat-icon
+                  class="sort-icon"
+                  [class.sort-active]="sortBy() === col.key"
+                  [svgIcon]="
+                    sortBy() === col.key && sortDir() === 'desc' ? 'arrow_down' : 'arrow_up'
+                  "
+                />
               </button>
             } @else {
               <span>{{ col | descriptorLabel }}</span>
@@ -279,7 +281,7 @@
               [attr.aria-label]="'trash.trash.manage-columns' | translate"
               (click)="openColumnPanel()"
             >
-              <mat-icon>tune</mat-icon>
+              <mat-icon svgIcon="settings" />
             </button>
           </span>
         </div>
@@ -304,7 +306,7 @@
                   @if (thumbnailMap()[doc.uid]; as thumb) {
                     <img class="row-thumbnail-image" [src]="thumb" alt="" />
                   } @else {
-                    <mat-icon class="row-icon">{{ docIcon(doc) }}</mat-icon>
+                    <mat-icon class="row-icon" [svgIcon]="docIcon(doc)" />
                   }
                   <button
                     type="button"
@@ -332,7 +334,7 @@
                 [disabled]="actionInProgress().has(doc.uid)"
                 (click)="restoreDocument(doc.uid, $event)"
               >
-                <mat-icon class="action-icon">restore_from_trash</mat-icon>
+                <mat-icon class="action-icon" svgIcon="restore" />
               </button>
               <button
                 mat-icon-button
@@ -342,7 +344,7 @@
                 [disabled]="actionInProgress().has(doc.uid)"
                 (click)="permanentlyDelete(doc.uid, $event)"
               >
-                <mat-icon class="action-icon">delete_forever</mat-icon>
+                <mat-icon class="action-icon" svgIcon="trash_x" />
               </button>
             </span>
           </div>
@@ -390,7 +392,7 @@
           (click)="toggleSortDir()"
           class="action-btn"
         >
-          <mat-icon>{{ sortDir() === 'asc' ? 'arrow_upward' : 'arrow_downward' }}</mat-icon>
+          <mat-icon [svgIcon]="sortDir() === 'asc' ? 'arrow_up' : 'arrow_down'" />
         </button>
       </div>
     </div>
@@ -402,7 +404,7 @@
             @if (thumbnailMap()[doc.uid]; as thumb) {
               <img class="simple-list-thumb" [src]="thumb" alt="" />
             } @else {
-              <mat-icon class="simple-list-icon">{{ docIcon(doc) }}</mat-icon>
+              <mat-icon class="simple-list-icon" [svgIcon]="docIcon(doc)" />
             }
             <span class="simple-list-checkbox col-hover-select">
               <mat-checkbox
@@ -434,7 +436,7 @@
                 [disabled]="actionInProgress().has(doc.uid)"
                 (click)="restoreDocument(doc.uid, $event)"
               >
-                <mat-icon class="action-icon">restore_from_trash</mat-icon>
+                <mat-icon class="action-icon" svgIcon="restore" />
               </button>
               <button
                 mat-icon-button
@@ -444,7 +446,7 @@
                 [disabled]="actionInProgress().has(doc.uid)"
                 (click)="permanentlyDelete(doc.uid, $event)"
               >
-                <mat-icon class="action-icon">delete_forever</mat-icon>
+                <mat-icon class="action-icon" svgIcon="trash_x" />
               </button>
             </div>
           </div>

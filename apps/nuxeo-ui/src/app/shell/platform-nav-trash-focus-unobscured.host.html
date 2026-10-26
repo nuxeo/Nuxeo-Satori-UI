@@ -2,43 +2,27 @@
   Enough entries to overflow a short viewport; Trash sits near the bottom like production.
 -->
 <sat-platform-nav>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.knowledgeDiscovery"
-    >Knowledge Discovery</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.dashboard"
-    >Dashboard</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.browse">Browse</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.search">Search</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.recentlyViewed"
-    >Recently viewed</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.searchFilters"
-    >Search filters</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.expired"
-    >Expired Queue</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.assets">Assets</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.tasks">Tasks</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.favorites"
-    >Favorites</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.collections"
-    >Collections</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.personalSpace"
-    >Personal Space</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.clipboard"
-    >Clipboard</sat-platform-nav-list-item
-  >
-  <sat-platform-nav-list-item data-nav-id="app.navbar.trash">Trash</sat-platform-nav-list-item>
-  <sat-platform-nav-list-item data-nav-id="app.navbar.administration"
-    >Administration</sat-platform-nav-list-item
-  >
+  <sat-platform-nav-menu>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.knowledgeDiscovery"
+      >Knowledge Discovery</a
+    >
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.dashboard">Dashboard</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.browse">Browse</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.search">Search</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.recentlyViewed">Recently viewed</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.searchFilters">Search filters</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.expired">Expired Queue</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.assets">Assets</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.tasks">Tasks</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.favorites">Favorites</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.collections">Collections</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.personalSpace">Personal Space</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.clipboard">Clipboard</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.trash">Trash</a>
+    <a sat-platform-nav-menu-item data-nav-id="app.navbar.administration">Administration</a>
+  </sat-platform-nav-menu>
 
   <sat-platform-nav-user>
-    <sat-platform-nav-user-profile>Administrator</sat-platform-nav-user-profile>
+    <button satPlatformNavUserProfile>Administrator</button>
   </sat-platform-nav-user>
 </sat-platform-nav>

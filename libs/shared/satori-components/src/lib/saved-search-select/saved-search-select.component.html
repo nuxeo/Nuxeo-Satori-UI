@@ -12,7 +12,7 @@
     (focus)="load()"
     (input)="onInput($any($event.target).value)"
   />
-  <mat-icon class="nxs-saved-search-select__arrow" aria-hidden="true">arrow_drop_down</mat-icon>
+  <mat-icon class="nxs-saved-search-select__arrow" aria-hidden="true" svgIcon="chevron_down" />
 </div>
 <mat-autocomplete
   #panel="matAutocomplete"
@@ -33,7 +33,7 @@
         [value]="search.id"
         [class.nxs-saved-search-select__current]="search.id === selectedId()"
       >
-        <mat-icon aria-hidden="true">bookmark</mat-icon>{{ search.title }}
+        <mat-icon aria-hidden="true" svgIcon="bookmark" />{{ search.title }}
       </mat-option>
     } @empty {
       <mat-option disabled>{{

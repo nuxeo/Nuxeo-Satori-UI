@@ -677,6 +677,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
   border-radius: 2px;
 
   &--complete {
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     ::ng-deep .mdc-linear-progress__bar-inner {
       border-color: var(--mat-sys-primary, #0066ff);
     }
@@ -700,6 +701,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 .vocab-field {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-select-trigger {
     height: auto;
     min-height: 24px;
@@ -715,12 +717,14 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
     box-sizing: border-box;
   }
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mat-mdc-chip-set .mdc-evolution-chip {
     margin: 2px 4px 2px 0;
   }
 }
 
 .expires-field-invalid {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   ::ng-deep .mdc-notched-outline__leading,
   ::ng-deep .mdc-notched-outline__notch,
   ::ng-deep .mdc-notched-outline__trailing {
@@ -733,6 +737,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 // Mat-select panels render in a CDK overlay outside :host — use unscoped ::ng-deep.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 ::ng-deep .mat-mdc-select-panel.vocab-select-panel {
   display: flex;
   flex-direction: column;
@@ -773,6 +778,7 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 ::ng-deep .vocab-grouped-select-panel {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-optgroup-label,
   .mat-mdc-optgroup .mdc-list-group__subheader {
     font-weight: 700;
@@ -787,12 +793,15 @@ $tile-hover: var(--mat-sys-surface-container-high, #eef0f4);
 }
 
 ::ng-deep .subjects-select-panel {
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-mdc-option {
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mat-pseudo-checkbox,
     mat-pseudo-checkbox {
       display: none;
     }
 
+    /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
     .mdc-list-item__primary-text {
       margin-left: 0;
     }

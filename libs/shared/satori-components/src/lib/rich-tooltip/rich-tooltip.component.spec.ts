@@ -59,7 +59,7 @@ describe('NxsRichTooltipComponent', () => {
 
   it('shows the default info icon, hidden from assistive technology', () => {
     const icon = trigger().querySelector('mat-icon');
-    expect(icon?.textContent?.trim()).toBe('info');
+    expect(icon?.getAttribute('data-mat-icon-name')).toBe('info');
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 
