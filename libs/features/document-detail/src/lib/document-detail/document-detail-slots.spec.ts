@@ -670,7 +670,7 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
         ),
       ) as HTMLButtonElement[];
       const button = buttons.find(
-        (b) => b.querySelector('mat-icon')?.textContent?.trim() === 'more_vert',
+        (b) => b.querySelector('mat-icon')?.getAttribute('svgicon') === 'more_vert',
       );
       expect(button, 'expected header More actions mat-icon-button').toBeTruthy();
       expect(
