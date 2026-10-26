@@ -50,6 +50,7 @@ export const SatoriRegistration: StoryObj = {
         items: [{ label: 'Domain', routerLink: ['/browse'] }, { label: 'Contracts' }],
       },
       tag: { label: 'Invoice', color: 'purple' },
+      statusTag: { label: 'In progress', status: 'info', hideIcon: false },
       tooltip: {
         heading: 'Versioning',
         content: 'A new version is created each time you check in.',
@@ -61,6 +62,7 @@ export const SatoriRegistration: StoryObj = {
         <lib-extension-outlet [componentId]="ids.avatar" [componentInputs]="avatar" />
         <lib-extension-outlet [componentId]="ids.breadcrumbs" [componentInputs]="breadcrumbs" />
         <lib-extension-outlet [componentId]="ids.tag" [componentInputs]="tag" />
+        <lib-extension-outlet [componentId]="ids.statusTag" [componentInputs]="statusTag" />
         <lib-extension-outlet [componentId]="ids.richTooltip" [componentInputs]="tooltip" />
       </div>
     `,

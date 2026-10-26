@@ -198,6 +198,7 @@ import {
   NxsToastService,
   nxsAceTimeFrame,
   nxsErrorStatus,
+  NXS_PRIMITIVE_IDS,
   nxsToggleFavorite,
   provideNxsToast,
   type NxsDeletePermissionDialogData,
@@ -902,6 +903,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     () => !this.isVersionView() && canManageDocumentPermissions(this.doc()),
   );
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
   readonly canWriteDoc = computed(() => !this.isVersionView() && canWriteDocument(this.doc()));
