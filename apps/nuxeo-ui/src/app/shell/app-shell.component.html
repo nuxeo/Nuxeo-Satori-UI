@@ -35,10 +35,8 @@
 
     <sat-platform-nav-user>
       <button satPlatformNavUserProfile (click)="toggleSettingsDrawer()">
-        <!-- NXENG-894: projected mat-icon/img skips vendor avatar initials. SVG icon (not ligature
-             text) — IBM label_name_visible counted "account_circle" ligature as visible label text
-             outside aria-label. SVG icons don't have this issue.
-        --><mat-icon aria-hidden="true" svgIcon="user_circle" />{{ displayName() }}
+        <sat-avatar [initials]="displayName()" size="28" [borderless]="true" aria-hidden="true" />
+        {{ displayName() }}
       </button>
     </sat-platform-nav-user>
   </sat-platform-nav>

@@ -34,6 +34,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatSidenavModule } from '@angular/material/sidenav';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { SatAppHeaderModule } from '@hylandsoftware/satori-ui/app-header';
+import { SatAvatarModule } from '@hylandsoftware/satori-ui/avatar';
 import { SatLogoModule } from '@hylandsoftware/satori-ui/logo';
 import { SatPlatformNavModule, SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 import {
@@ -71,6 +72,7 @@ import { AiMarkdownPipe } from '../pipes/ai-markdown.pipe';
     RouterLink,
     SatPlatformNavModule,
     SatAppHeaderModule,
+    SatAvatarModule,
     SatLogoModule,
     MatDialogModule,
     MatMenuModule,
