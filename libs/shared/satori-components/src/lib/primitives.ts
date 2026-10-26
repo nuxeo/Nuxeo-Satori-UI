@@ -131,7 +131,10 @@ export interface NxsTabsInputs {
   readonly label: InputSignal<string>;
   /** The selected tab's position. Past the last tab selects the last. */
   readonly selectedIndex: InputSignal<number>;
-  /** The template every tab's body renders from, given the tab as `let-tab`. */
+  /**
+   * The template every tab's body renders from, given the tab as `let-tab`. A body once shown is
+   * kept, hidden, while another tab is selected, so what the user left in it is there on return.
+   */
   readonly body: InputSignal<TemplateRef<NxsTabBodyContext> | null>;
   /**
    * Called with the selected tab and its position whenever the selection changes — the user

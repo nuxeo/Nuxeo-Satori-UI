@@ -25,4 +25,9 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
+
+  // The `display` above would otherwise outrank the user agent's `[hidden] { display: none }`.
+  &[hidden] {
+    display: none;
+  }
 }

@@ -8,7 +8,7 @@
       class="nxs-satori-tabs__tab"
       [id]="tabId(index)"
       [active]="index === shown()"
-      [attr.aria-controls]="index === shown() ? panelId : null"
+      [attr.aria-controls]="shownBefore().has(tab.id) ? panelId(index) : null"
       [attr.data-tab-id]="tab.id"
       (click)="select(index)"
       (keydown.enter)="select(index)"
@@ -22,19 +22,21 @@
   }
 </sat-navigation-tabs>
 
-@if (shownTab(); as tab) {
-  <!-- One view per tab, so a body starts afresh each time its tab is shown, as Material's does. -->
-  @for (current of [tab]; track current.id) {
+<!-- A panel for each tab whose body has been shown, hidden while another is selected, so a body
+     keeps its state when the user switches away and back, as Material's tab group does. -->
+@for (tab of tabs(); track tab.id; let index = $index) {
+  @if (shownBefore().has(tab.id)) {
     <div
       class="nxs-satori-tabs__panel"
       role="tabpanel"
-      [id]="panelId"
-      [attr.aria-labelledby]="tabId(shown())"
+      [id]="panelId(index)"
+      [attr.aria-labelledby]="tabId(index)"
+      [hidden]="index !== shown()"
     >
       @if (body(); as template) {
         <ng-container
           [ngTemplateOutlet]="template"
-          [ngTemplateOutletContext]="{ $implicit: current }"
+          [ngTemplateOutletContext]="{ $implicit: tab }"
         />
       }
     </div>

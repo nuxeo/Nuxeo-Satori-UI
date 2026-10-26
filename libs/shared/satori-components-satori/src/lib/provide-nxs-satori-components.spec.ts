@@ -372,16 +372,16 @@ describe('the Satori primitives, rendered by ID', () => {
     const host = fixture.nativeElement as HTMLElement;
     expect(host.querySelector('nxs-satori-tabs sat-navigation-tabs')).not.toBeNull();
     expect(host.querySelector('nxs-tabs')).toBeNull();
-    expect(host.querySelector('[role="tabpanel"] .probe-body')?.textContent?.trim()).toBe(
-      'View body',
-    );
+    expect(
+      host.querySelector('[role="tabpanel"]:not([hidden]) .probe-body')?.textContent?.trim(),
+    ).toBe('View body');
 
     host.querySelectorAll<HTMLElement>('a[satNavigationTab]')[1].click();
     await fixture.whenStable();
     expect(calls).toEqual([['app.tabs.history', 1]]);
-    expect(host.querySelector('[role="tabpanel"] .probe-body')?.textContent?.trim()).toBe(
-      'History body',
-    );
+    expect(
+      host.querySelector('[role="tabpanel"]:not([hidden]) .probe-body')?.textContent?.trim(),
+    ).toBe('History body');
   });
 
   it("renders the action bar on Satori's action-bar buttons, calling the handler the outlet passes", async () => {

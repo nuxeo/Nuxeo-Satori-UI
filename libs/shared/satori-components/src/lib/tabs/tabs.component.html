@@ -4,6 +4,7 @@
   [aria-label]="ownLabel()"
   [selectedIndex]="selectedIndex()"
   (selectedIndexChange)="select($event)"
+  (selectedTabChange)="select($event.index)"
 >
   @for (tab of tabs(); track tab.id) {
     <mat-tab>

@@ -544,7 +544,7 @@ Both keep what the page relies on: an entry marked `overflow` is always in the m
 
 A document's View, Permissions and History tabs and a "Claims" tab a manifest adds, with View selected and its body under the strip. Without Satori, Material's tab group underlines the selected tab; with Satori, Satori's navigation tabs draw it on a tinted background with a short bar beneath.
 
-Satori's tabs are a strip of links and show no panel, so the Satori version renders the selected tab's body under the strip itself, as the panel its tab names, and adds what Satori's strip leaves out: Enter and Space select the focused tab, and the selected tab is the strip's tab stop. On both, the arrow keys move between tabs and Home and End go to the first and last. When the tabs do not fit, Material's strip scrolls and Satori's wraps onto a second row. The `--nxs-tabs-*` tokens style Material's strip only.
+Satori's tabs are a strip of links and show no panel, so the Satori version renders the selected tab's body under the strip itself, as the panel its tab names, and adds what Satori's strip leaves out: Enter and Space select the focused tab, and the selected tab is the strip's tab stop. On both, the arrow keys move between tabs and Home and End go to the first and last, and a body once shown is kept while another tab is selected, so an unsaved edit survives a look at another tab. When the tabs do not fit, Material's strip scrolls and Satori's wraps onto a second row. The `--nxs-tabs-*` tokens style Material's strip only.
 
 The page gives the tabs their list and one template every body renders from, so a tab a manifest adds renders like a packaged one.
 

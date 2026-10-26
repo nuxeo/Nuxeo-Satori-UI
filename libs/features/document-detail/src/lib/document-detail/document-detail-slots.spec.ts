@@ -827,6 +827,41 @@ describe('DocumentDetailComponent — rendered Layer 1 slots', () => {
       expect(selected?.textContent?.trim()).toBe('Publishing');
     });
 
+    // The Note editor holds an unsaved draft itself, so a strip that rebuilt the View body on every
+    // switch would discard it on a look at History.
+    it.each([
+      ['Material', [provideNxsComponents()]],
+      ['Satori', SATORI],
+    ])(
+      'keeps the Note editor, and its draft, across a switch to History and back on %s',
+      async (_name, registrations) => {
+        await render(
+          {},
+          doc({
+            type: 'Note',
+            properties: { 'note:note': 'hello', 'note:mime_type': 'text/plain' },
+          }),
+          {},
+          registrations,
+        );
+        const tab = (label: string): HTMLElement | undefined =>
+          [...tabsOutlet().querySelectorAll<HTMLElement>('[role="tab"]')].find(
+            (el) => el.textContent?.trim() === label,
+          );
+        const editor = tabsOutlet().querySelector('lib-note-editor');
+        expect(editor).toBeTruthy();
+
+        tab('History')?.click();
+        await settle();
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.history');
+        tab('View')?.click();
+        await settle();
+
+        expect(fixture.componentInstance.activeTabId()).toBe('app.tabs.view');
+        expect(tabsOutlet().querySelector('lib-note-editor')).toBe(editor);
+      },
+    );
+
     it('runs a Satori action through the page', async () => {
       await render({}, doc(), {}, SATORI);
       // Only that the entry reaches the page: running it opens a real dialog jsdom cannot lay out.

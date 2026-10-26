@@ -130,6 +130,25 @@ describe('NxsTabsComponent', () => {
     expect(activeBody()?.textContent).toContain('Permissions body');
   });
 
+  // The tab group reports only `selectedTabChange` here, not `selectedIndexChange`.
+  it('reports a different tab at the same position when the list changes under the selection', async () => {
+    host.index.set(1);
+    await render();
+    host.tabs.set([TABS[0], TABS[2]]);
+    await render();
+    expect(host.selected).toEqual(['app.tabs.permissions', 'acme.tabs.claims']);
+    expect(activeBody()?.getAttribute('data-for')).toBe('acme.tabs.claims');
+  });
+
+  it('keeps a body alive while another tab is selected', async () => {
+    const view = activeBody();
+    tabs()[1].click();
+    await render();
+    tabs()[0].click();
+    await render();
+    expect(activeBody()).toBe(view);
+  });
+
   it('selects the last tab for an index past it', async () => {
     host.index.set(7);
     await render();

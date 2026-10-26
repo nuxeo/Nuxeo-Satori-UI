@@ -50,7 +50,8 @@ describe('NxsSatoriTabsComponent', () => {
   const tabs = (): HTMLAnchorElement[] => [
     ...el().querySelectorAll<HTMLAnchorElement>('a[satNavigationTab]'),
   ];
-  const panel = (): HTMLElement | null => el().querySelector('[role="tabpanel"]');
+  /** The panel on show; a tab shown before keeps a hidden one. */
+  const panel = (): HTMLElement | null => el().querySelector('[role="tabpanel"]:not([hidden])');
   const key = (target: HTMLElement, name: string): KeyboardEvent => {
     const event = new KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true });
     target.dispatchEvent(event);
@@ -180,13 +181,39 @@ describe('NxsSatoriTabsComponent', () => {
     expect(document.activeElement).toBe(tabs()[1]);
   });
 
-  it('starts a body afresh each time its tab is shown', async () => {
+  // Material's tab group keeps a body it has shown, so an unsaved edit survives a look at History.
+  it('keeps a body alive while another tab is selected, as Material does', async () => {
     const first = panel()?.querySelector('.body');
     tabs()[1].click();
     await render();
+    expect(first?.isConnected).toBe(true);
+    expect(first?.closest('[role="tabpanel"]')?.hasAttribute('hidden')).toBe(true);
+    expect(el().querySelectorAll('[role="tabpanel"]:not([hidden])')).toHaveLength(1);
+    expect(tabs()[0].getAttribute('aria-controls')).toBe(first?.closest('[role="tabpanel"]')?.id);
+
     tabs()[0].click();
     await render();
-    expect(panel()?.querySelector('.body')).not.toBe(first);
+    expect(panel()?.querySelector('.body')).toBe(first);
+  });
+
+  it('renders no panel for a tab not yet shown', () => {
+    expect(el().querySelectorAll('[role="tabpanel"]')).toHaveLength(1);
+    expect(el().querySelector('[data-for="acme.tabs.claims"]')).toBeNull();
+  });
+
+  // Document detail's lazy loads run from the handler, so a tab that takes the selected position
+  // without one would show an empty body.
+  it('reports a different tab at the same position when the list changes under the selection', async () => {
+    host.index.set(1);
+    await render();
+    host.tabs.set([TABS[0], TABS[2]]);
+    await render();
+    expect(host.calls).toEqual([
+      ['app.tabs.permissions', 1],
+      ['acme.tabs.claims', 1],
+    ]);
+    expect(panel()?.querySelector('.body')?.getAttribute('data-for')).toBe('acme.tabs.claims');
+    expect(el().querySelector('[data-for="app.tabs.permissions"]')).toBeNull();
   });
 
   it('renders an empty panel when there is no body template', async () => {

@@ -77,6 +77,8 @@ export class NxsTabsComponent implements NxsTabsInputs {
   protected readonly ownLabel = computed(() => this.label().trim());
 
   private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
+  /** The last selection reported, so it is reported once although the tab group says it twice. */
+  private reported: { readonly index: number; readonly id: string } | null = null;
 
   constructor() {
     afterRenderEffect(() => {
@@ -92,10 +94,16 @@ export class NxsTabsComponent implements NxsTabsInputs {
     });
   }
 
+  /**
+   * The tab group's `selectedIndexChange` reports a new position, and its `selectedTabChange` also a
+   * different tab at the same position when the list changes under the selection, which the first
+   * does not. Both arrive for an ordinary change, so a selection already reported is skipped.
+   */
   protected select(index: number): void {
     this.selectedIndex.set(index);
     const tab = this.tabs()[index];
-    if (!tab) return;
+    if (!tab || (this.reported?.index === index && this.reported.id === tab.id)) return;
+    this.reported = { index, id: tab.id };
     this.selectedTabChange.emit(tab);
     this.selectHandler()?.(tab, index);
   }
