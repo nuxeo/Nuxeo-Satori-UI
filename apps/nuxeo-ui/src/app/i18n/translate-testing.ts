@@ -1,4 +1,5 @@
-import { TranslateLoader, TranslateModule } from '@ngx-translate/core';
+import { NgModule } from '@angular/core';
+import { provideTranslateService, TranslateLoader } from '@ngx-translate/core';
 import { of, type Observable } from 'rxjs';
 
 import { EN_FALLBACK_TRANSLATIONS } from './en-fallback';
@@ -42,11 +43,19 @@ class FallbackCatalogueLoader implements TranslateLoader {
  * Passing the expected string rather than reading the catalogue is the point: the spec then says
  * what a user should see, and a catalogue change that alters the wording shows up as a failing
  * assertion to be read rather than silently redefining what the test proves.
+ *
+ * ngx-translate 18 replaced `TranslateModule` with `provideTranslateService()`. For backward
+ * compatibility with specs that call `imports: [testTranslateModule()]`, this wraps the provider
+ * in a module.
  */
 export function testTranslateModule(extra: Record<string, string> = {}) {
-  return TranslateModule.forRoot({
-    loader: { provide: TranslateLoader, useFactory: () => new FallbackCatalogueLoader(extra) },
-    lang: 'en',
-    fallbackLang: 'en',
-  });
+  @NgModule({
+    providers: provideTranslateService({
+      loader: { provide: TranslateLoader, useFactory: () => new FallbackCatalogueLoader(extra) },
+      lang: 'en',
+      fallbackLang: 'en',
+    }),
+  })
+  class TestTranslateModule {}
+  return TestTranslateModule;
 }

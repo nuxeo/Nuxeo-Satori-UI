@@ -1,6 +1,11 @@
 import { LiveAnnouncer } from '@angular/cdk/a11y';
 import { COMMA, ENTER } from '@angular/cdk/keycodes';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { of, throwError } from 'rxjs';
@@ -14,6 +19,7 @@ import { NxsTagInputComponent } from './tag-input.component';
 @Component({
   standalone: true,
   imports: [NxsTagInputComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-tag-input label="Tags" [allowNew]="allowNew()" [formControl]="tags" />`,
 })
 class HostComponent {
@@ -24,6 +30,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsTagInputComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-tag-input label="Tags" /><nxs-tag-input label="Keywords" />`,
 })
 class TwoFieldsComponent {}

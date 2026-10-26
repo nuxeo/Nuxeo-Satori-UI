@@ -1,5 +1,6 @@
 import {
   ApplicationRef,
+  ChangeDetectionStrategy,
   Component,
   provideZonelessChangeDetection,
   reflectComponentType,
@@ -87,6 +88,7 @@ describe('provideNxsSatoriComponents', () => {
 
 describe('the Satori primitives, rendered by ID', () => {
   @Component({
+    changeDetection: ChangeDetectionStrategy.Eager,
     standalone: true,
     imports: [ExtensionOutletComponent],
     template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,

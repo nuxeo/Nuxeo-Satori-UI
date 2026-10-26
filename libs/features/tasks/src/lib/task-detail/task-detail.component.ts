@@ -1,4 +1,11 @@
-import { Component, DestroyRef, inject, signal, OnInit } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  inject,
+  signal,
+  OnInit,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { HttpClient } from '@angular/common/http';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -53,6 +60,7 @@ import {
     SatTagModule,
   ],
   templateUrl: './task-detail.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './task-detail.component.scss',
 })
 export class TaskDetailComponent implements OnInit {

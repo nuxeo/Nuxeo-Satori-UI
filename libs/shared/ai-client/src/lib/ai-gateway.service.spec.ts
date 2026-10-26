@@ -1,6 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection, signal } from '@angular/core';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
@@ -40,7 +40,7 @@ describe('AiGatewayService', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: AI_BACKEND_URL, useValue: backend },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(aiEnabled) } },
@@ -82,7 +82,7 @@ describe('AiGatewayService', () => {
     TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: AI_BACKEND_URL, useValue: 'https://nuxeo.example.com/nuxeo' },
         { provide: AiFeatureFlagService, useValue: { aiEnabled: signal(true) } },

@@ -2,7 +2,7 @@
  * NXENG-826 — header back icon must render arrow_back via CSS codepoint on the legacy Material
  * Icons font (apps/nuxeo-ui/src/index.html). fontIcon does not paint a glyph with that font alone.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -15,6 +15,7 @@ import { provideNoopAnimations } from '@angular/platform-browser/animations';
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail-go-back-icon.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './document-detail-go-back-icon.spec.html',
 })
 class DocumentDetailGoBackIconHostComponent {}

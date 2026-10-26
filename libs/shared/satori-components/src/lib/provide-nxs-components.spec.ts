@@ -3,6 +3,7 @@ import {
   provideZonelessChangeDetection,
   type EnvironmentProviders,
   type Provider,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
@@ -22,7 +23,12 @@ import { NxsRichTooltipComponent } from './rich-tooltip/rich-tooltip.component';
 import { NxsStatusTagComponent } from './status-tag/status-tag.component';
 import { NxsTagComponent } from './tag/tag.component';
 
-@Component({ selector: 'nxs-probe-tag', standalone: true, template: '' })
+@Component({
+  selector: 'nxs-probe-tag',
+  standalone: true,
+  changeDetection: ChangeDetectionStrategy.Eager,
+  template: '',
+})
 class ProbeTagComponent {}
 
 describe('provideNxsComponents', () => {
@@ -66,6 +72,7 @@ describe('provideNxsComponents', () => {
 
   it('renders a primitive by ID through the extension outlet, with its inputs', async () => {
     @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
       standalone: true,
       imports: [ExtensionOutletComponent],
       template: `<lib-extension-outlet
@@ -97,6 +104,7 @@ describe('provideNxsComponents', () => {
   it('renders the error state by ID, calling the retry handler the outlet passes', async () => {
     const retries: number[] = [];
     @Component({
+      changeDetection: ChangeDetectionStrategy.Eager,
       standalone: true,
       imports: [ExtensionOutletComponent],
       template: `<lib-extension-outlet [componentId]="id" [componentInputs]="inputs" />`,

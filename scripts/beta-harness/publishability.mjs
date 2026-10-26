@@ -71,8 +71,10 @@
 import { execFileSync } from 'node:child_process';
 import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { join, relative, resolve } from 'node:path';
 import ts from 'typescript';
+
+import { entryTypes } from './package-types.mjs';
 
 const DIST = resolve('dist/libs/platform');
 
@@ -559,7 +561,11 @@ try {
               moduleResolution: 'bundler',
               target: 'es2022',
               types: [],
-              baseUrl: '.',
+              // No `baseUrl`: TypeScript 6 makes it a deprecation error (TS5101) and the gate
+              // refuses to report a pass when its own typecheck could not run, so it went red on
+              // Angular 22. It was never needed — every `paths` value below is relative, and
+              // without `baseUrl` TypeScript resolves those relative to this tsconfig's own
+              // directory, which is `stage`, exactly what they are relative to.
               // Built with `join`, not string concatenation: the first cut produced
               // `./pkg/nuxeo-clientindex.d.ts` for `./nuxeo-client` — a missing separator
               // — and the resulting "Cannot find module" was attributed to `probe.ts`,
@@ -568,7 +574,7 @@ try {
               paths: Object.fromEntries(
                 subpaths.map((s) => [
                   s.replace(/^\./, pkg.name),
-                  [`./${join('pkg', s.replace(/^\.\/?/, ''), 'index.d.ts')}`],
+                  [`./${relative(stage, entryTypes(join(stage, 'pkg'), s))}`],
                 ]),
               ),
             },

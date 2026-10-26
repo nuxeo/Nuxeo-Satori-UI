@@ -7,6 +7,7 @@ import {
   inject,
   signal,
   untracked,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
@@ -261,6 +262,7 @@ const PAGE_SIZE = 50;
     NxsPermissionsPanelComponent,
   ],
   templateUrl: './browse.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './browse.scss',
 })
 export class BrowseComponent {
@@ -520,7 +522,7 @@ export class BrowseComponent {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
 
   /** The columns as the picker offers them: names resolved for the active language. */
@@ -2216,7 +2218,7 @@ export class BrowseComponent {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   permissionIcon(permission: string): string {

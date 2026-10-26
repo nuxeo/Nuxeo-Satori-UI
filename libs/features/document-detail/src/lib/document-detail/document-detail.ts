@@ -11,6 +11,7 @@ import {
   effect,
   ElementRef,
   viewChild,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import {
@@ -347,6 +348,7 @@ const MIME_BY_EXTENSION: Record<string, string> = {
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
   templateUrl: './document-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrls: [
     './document-detail.scss',
     './document-detail-go-back-icon.scss',
@@ -440,11 +442,9 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
 
   /** Ticks when the language or its catalogue changes, so `instant` lookups in computeds re-run. */
   private readonly translationTick = toSignal(
-    merge(
-      this.translate.onLangChange,
-      this.translate.onTranslationChange,
-      this.translate.onDefaultLangChange,
-    ).pipe(map((_, index) => index)),
+    merge(this.translate.onLangChange, this.translate.onTranslationChange).pipe(
+      map((_, index) => index),
+    ),
     { initialValue: -1 },
   );
 
@@ -1054,7 +1054,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private readFreshBlobNavigationState(): boolean {
-    const fromCurrent = this.router.getCurrentNavigation()?.extras?.state as
+    const fromCurrent = this.router.currentNavigation()?.extras?.state as
       { freshBlobDocument?: boolean } | undefined;
     if (fromCurrent?.freshBlobDocument === true) {
       return true;
@@ -1064,7 +1064,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
   }
 
   private readFreshNoteNavigationState(): boolean {
-    const fromCurrent = this.router.getCurrentNavigation()?.extras?.state as
+    const fromCurrent = this.router.currentNavigation()?.extras?.state as
       { freshNote?: boolean } | undefined;
     if (fromCurrent?.freshNote === true) {
       return true;
@@ -3643,7 +3643,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   // ── Panel Activity ──

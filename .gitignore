@@ -51,6 +51,9 @@ Thumbs.db
 
 .nx/cache
 .nx/workspace-data
+# Nx 22 shares one cache across every worktree of a checkout, so a validation run that must not
+# replay another worktree's results points NX_CACHE_DIRECTORY here. Cache output either way.
+.nx/suite-cache
 .angular
 
 vitest.config.*.timestamp*
@@ -162,3 +165,4 @@ scripts/Untitled*
 # the consolidated reports but never these, and a 12-minute 11y:scan -- modes leaves a dozen
 # untracked directories here that a git add -A would commit.
 /a11y-reports/
+.nx/migrate-runs

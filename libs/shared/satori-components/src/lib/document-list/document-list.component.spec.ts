@@ -5,6 +5,7 @@ import {
   signal,
   type EnvironmentProviders,
   type Provider,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DocumentDetailService, type NuxeoDocument } from '@nuxeo/satori-platform/nuxeo-client';
@@ -43,6 +44,7 @@ const COLUMNS: readonly NxsDocumentListColumn[] = [
 @Component({
   standalone: true,
   imports: [NxsDocumentListComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-document-list
       [documents]="documents()"

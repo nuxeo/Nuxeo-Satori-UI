@@ -6,7 +6,8 @@
     "outDir": "../../out-tsc/spec",
     "types": ["jasmine"],
     "useDefineForClassFields": false,
-    "importHelpers": false
+    "importHelpers": false,
+    "rootDir": "../.."
   },
   "include": ["src/**/*.d.ts", "src/**/*.spec.ts"]
 }

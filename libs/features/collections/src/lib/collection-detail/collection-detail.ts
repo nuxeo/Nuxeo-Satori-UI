@@ -1,4 +1,12 @@
-import { Component, DestroyRef, LOCALE_ID, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  LOCALE_ID,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ActivatedRoute, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
@@ -142,6 +150,7 @@ const MEMBER_PAGE_SIZE = 50;
     SatAvatarModule,
   ],
   templateUrl: './collection-detail.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './collection-detail.scss',
 })
 export class CollectionDetailComponent {
@@ -181,7 +190,7 @@ export class CollectionDetailComponent {
   /** The active language as a signal, so the column names follow a language change. */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
   /** The member columns, as the list takes them: translated, each sorted on the server. */
   readonly memberColumns = computed<readonly NxsDocumentListColumn[]>(() => {

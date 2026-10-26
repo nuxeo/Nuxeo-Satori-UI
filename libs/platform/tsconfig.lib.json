@@ -26,7 +26,8 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "isolatedModules": true,
-    "moduleResolution": "bundler"
+    "moduleResolution": "bundler",
+    "rootDir": ".."
   },
   "angularCompilerOptions": {
     // Partial ("linked") compilation — Angular's library distribution format. It emits

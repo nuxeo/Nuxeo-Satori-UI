@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, ChangeDetectionStrategy } from '@angular/core';
 
 /**
  * `acme.panel.policySummary`
@@ -12,6 +12,7 @@ import { Component } from '@angular/core';
   selector: 'acme-policy-summary',
   standalone: true,
   templateUrl: './policy-summary.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './policy-summary.scss',
 })
 export class PolicySummaryComponent {}

@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsSpinnerComponent } from './spinner.component';
@@ -6,6 +11,7 @@ import { NxsSpinnerComponent } from './spinner.component';
 @Component({
   standalone: true,
   imports: [NxsSpinnerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-spinner [label]="label()" [diameter]="diameter()" />`,
 })
 class HostComponent {
@@ -16,6 +22,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsSpinnerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-spinner diameter="24" />`,
 })
 class StaticAttributeHostComponent {}

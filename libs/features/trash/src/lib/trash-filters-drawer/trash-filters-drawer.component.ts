@@ -1,4 +1,13 @@
-import { Component, inject, signal, computed, OnInit, effect, untracked } from '@angular/core';
+import {
+  Component,
+  inject,
+  signal,
+  computed,
+  OnInit,
+  effect,
+  untracked,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { Router } from '@angular/router';
 import { FormsModule } from '@angular/forms';
@@ -68,6 +77,7 @@ const SIZE_LABELS: Record<string, string> = {
     MatTooltipModule,
   ],
   templateUrl: './trash-filters-drawer.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './trash-filters-drawer.component.scss',
 })
 export class TrashFiltersDrawerComponent implements OnInit {

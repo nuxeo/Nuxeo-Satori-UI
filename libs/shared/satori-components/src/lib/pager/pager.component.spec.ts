@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsPagerComponent } from './pager.component';
@@ -6,6 +11,7 @@ import { NxsPagerComponent } from './pager.component';
 @Component({
   standalone: true,
   imports: [NxsPagerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-pager
       [pageIndex]="pageIndex()"

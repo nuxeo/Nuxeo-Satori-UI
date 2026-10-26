@@ -7,12 +7,14 @@
  * selector on the focused control. Contrast is measured against the rendered `.detail-header`
  * background from production SCSS, not a duplicated colour.
  */
-import { Component, provideZonelessChangeDetection } from '@angular/core';
+import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
-import { TranslateModule } from '@ngx-translate/core';
+// testTranslateModule() removed - no longer exported in ngx-translate 18
+
+import { TranslatePipe } from '@ngx-translate/core';
 
 import { testTranslateModule } from '../i18n/translate-testing';
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
@@ -52,11 +54,12 @@ function productionDetailHeaderBackground(host: HTMLElement): string {
 
 @Component({
   standalone: true,
-  imports: [MatButtonModule, MatIconModule, TranslateModule],
+  imports: [MatButtonModule, MatIconModule, TranslatePipe, testTranslateModule()],
   styleUrls: [
     '../../../../../libs/features/document-detail/src/lib/document-detail/document-detail.scss',
     './ke-action-focus-ring.fixture.scss',
   ],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './ke-action-focus-ring.spec.html',
 })
 class KeActionFocusHostComponent {}
@@ -68,7 +71,7 @@ describe('Document detail ke-action button — keyboard focus indicator (NXENG-7
     originalTheme = document.documentElement.getAttribute('data-app-theme');
 
     await TestBed.configureTestingModule({
-      imports: [KeActionFocusHostComponent, testTranslateModule()],
+      imports: [KeActionFocusHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
   });
@@ -181,9 +184,9 @@ describe('Document detail ke-action button — keyboard focus indicator (NXENG-7
       );
       expect(focusSelectors.length).toBeGreaterThan(0);
       expect(canonical).toContain('.ke-action-btn.mat-mdc-outlined-button:focus');
-      expect(canonical.some((s) => s.includes('.ke-action-btn.mat-mdc-outlined-button:focus,'))).toBe(
-        false,
-      );
+      expect(
+        canonical.some((s) => s.includes('.ke-action-btn.mat-mdc-outlined-button:focus,')),
+      ).toBe(false);
     } finally {
       button.blur();
       fixture.nativeElement.remove();

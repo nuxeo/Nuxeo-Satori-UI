@@ -1,9 +1,11 @@
-import { Component, signal } from '@angular/core';
+import { Component, signal, ChangeDetectionStrategy } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { SatPlatformNavModule } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
-import { TranslateModule } from '@ngx-translate/core';
+import { TranslatePipe } from '@ngx-translate/core';
+
+import { testTranslateModule } from '../i18n/translate-testing';
 
 import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
@@ -23,7 +25,8 @@ const PERSONAL_SPACE_LINK =
 
 @Component({
   standalone: true,
-  imports: [SatPlatformNavModule, TranslateModule],
+  imports: [SatPlatformNavModule, TranslatePipe, testTranslateModule()],
+  changeDetection: ChangeDetectionStrategy.Eager,
   templateUrl: './personal-space-nav-focus-visible.host.html',
 })
 class PersonalSpaceNavHostComponent {
@@ -81,7 +84,7 @@ describe('Personal Space sidebar nav — keyboard focus visible (NXENG-778)', ()
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [PersonalSpaceNavHostComponent, TranslateModule.forRoot()],
+      imports: [PersonalSpaceNavHostComponent, TranslatePipe, testTranslateModule()],
       providers: [provideSatori(), provideNoopAnimations()],
     }).compileComponents();
     originalTheme = document.documentElement.getAttribute('data-app-theme');

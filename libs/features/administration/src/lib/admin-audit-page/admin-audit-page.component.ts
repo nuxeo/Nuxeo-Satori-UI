@@ -1,5 +1,12 @@
 import { DatePipe } from '@angular/common';
-import { Component, OnInit, inject, signal, computed } from '@angular/core';
+import {
+  Component,
+  OnInit,
+  inject,
+  signal,
+  computed,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -49,6 +56,7 @@ import {
     MatTooltipModule,
   ],
   templateUrl: './admin-audit-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-audit-page.component.scss',
 })
 export class AdminAuditPageComponent implements OnInit {

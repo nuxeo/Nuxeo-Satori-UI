@@ -62,6 +62,7 @@ describe('Document detail History date column locale (NXSAT-628)', () => {
     expect(formatDate(when, format, 'fr', 'UTC')).toBe('12 oct. 2026, 12:00:00');
 
     // An audit entry needs its time as well as its day, as Web UI's audit table shows it.
-    expect(formatDate(when, format, 'en-US', 'UTC')).toBe('Oct 12, 2026, 12:00:00 PM');
+    // Angular 21's CLDR data separates the time from AM/PM with a narrow no-break space.
+    expect(formatDate(when, format, 'en-US', 'UTC')).toBe('Oct 12, 2026, 12:00:00 PM');
   });
 });

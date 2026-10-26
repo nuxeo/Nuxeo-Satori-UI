@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { By } from '@angular/platform-browser';
@@ -21,6 +26,7 @@ const SEARCHES: SavedSearchOption[] = [
 @Component({
   standalone: true,
   imports: [NxsSavedSearchSelectComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-saved-search-select
     [selectedId]="selectedId()"
     [selectedTitle]="selectedTitle()"

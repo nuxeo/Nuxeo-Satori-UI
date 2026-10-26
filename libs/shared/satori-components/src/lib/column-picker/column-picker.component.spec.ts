@@ -1,5 +1,10 @@
 import { InteractivityChecker } from '@angular/cdk/a11y';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NxsColumnPickerComponent, type NxsPickableColumn } from './column-picker.component';
@@ -28,6 +33,7 @@ const COLUMNS: readonly NxsPickableColumn[] = [
 @Component({
   standalone: true,
   imports: [NxsColumnPickerComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <button type="button" class="opener" (click)="open.set(true)">Manage columns</button>
     @if (open()) {
