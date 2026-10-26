@@ -1,10 +1,7 @@
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
-<<<<<<< ours
 import { expect } from 'storybook/test';
 
-=======
->>>>>>> theirs
 import { provideStoryRouter } from '../../.storybook/story-router';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
