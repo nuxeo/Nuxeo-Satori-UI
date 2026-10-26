@@ -73,11 +73,7 @@ describe('NxsTabsComponent', () => {
   });
 
   it('renders one tab per entry, in order, each addressable by its ID', () => {
-    expect(tabs().map((tab) => tab.textContent?.trim())).toEqual([
-      'visibility View',
-      'Permissions',
-      'Claims',
-    ]);
+    expect(tabs().map((tab) => tab.textContent?.trim())).toEqual(['View', 'Permissions', 'Claims']);
     expect(
       [...el().querySelectorAll('[data-tab-id]')].map((n) => n.getAttribute('data-tab-id')),
     ).toEqual(['app.tabs.view', 'app.tabs.permissions', 'acme.tabs.claims']);

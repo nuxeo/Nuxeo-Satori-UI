@@ -71,9 +71,9 @@ const PACKAGED_LABEL_BY_NAV_ID = Object.fromEntries(
   PACKAGED_NAV_ITEMS.map((item) => [item.id, item.label]),
 ) as Record<string, string>;
 
-/** Focusable anchor inside the list item under test — never a bare `.sat-platform-nav-item`. */
+/** The menu item anchor under test. */
 function linkSelector(navId: string): string {
-  return `sat-platform-nav-list-item[data-nav-id="${navId}"] .sat-platform-nav-item`;
+  return `a[sat-platform-nav-menu-item][data-nav-id="${navId}"]`;
 }
 
 @Component({

@@ -45,7 +45,7 @@ export function flattenCatalogue(
  * (**critical**) on *every* surface in the application, seven of seven. Its `matTooltip`
  * resolved to empty too, so the attribute was not even present in the DOM.
  *
- * Upstream ships `provideAndConfigureSatoriUITranslations`, and we deliberately do not use it:
+ * Upstream ships `provideAndConfigureSatoriTranslations`, and we deliberately do not use it:
  * it calls `provideTranslateService` with its own `MultiTranslateHttpLoader`, which would
  * replace this loader and take the manifest `labels` layering — a shipped Layer 0 capability —
  * with it. Fetching the folder here gets the strings with no such trade.

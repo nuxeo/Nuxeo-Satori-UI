@@ -40,6 +40,9 @@ describe('DocumentViewerComponent — format download focus ring (NXENG-781 / NX
         commentLines.unshift(lines[i]);
         continue;
       }
+      if (trimmed.startsWith('/*') && trimmed.endsWith('*/')) {
+        continue;
+      }
       break;
     }
     expect(commentLines.length).toBeGreaterThan(0);

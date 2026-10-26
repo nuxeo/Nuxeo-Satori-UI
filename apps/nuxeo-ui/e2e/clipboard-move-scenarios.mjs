@@ -195,7 +195,7 @@ async function main() {
     await page.waitForTimeout(800);
     log('Add to clipboard', 'PASS', fileTitle);
 
-    const badge = page.locator('sat-platform-nav-list-item.nav-item--clipboard-badge').first();
+    const badge = page.locator('a[sat-platform-nav-menu-item].nav-item--clipboard-badge').first();
     const badgeVisible = await badge.isVisible({ timeout: 3000 }).catch(() => false);
     log('Clipboard nav badge', badgeVisible ? 'PASS' : 'FAIL', badgeVisible ? 'visible on nav icon' : 'missing');
 
@@ -204,7 +204,7 @@ async function main() {
     await page.waitForTimeout(2500);
     log('Navigate target', 'PASS', targetFolder.path);
 
-    await page.locator('sat-platform-nav-list-item').filter({ hasText: 'Clipboard' }).first().click();
+    await page.locator('a[sat-platform-nav-menu-item]').filter({ hasText: 'Clipboard' }).first().click();
     await page.waitForTimeout(1200);
 
     const moveBtn = page.locator('.clipboard-action-btn').filter({ hasText: 'Move' }).first();

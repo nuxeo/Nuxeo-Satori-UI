@@ -6,8 +6,8 @@ import { NxsActionMenuComponent, type NxsMenuAction } from './action-menu.compon
 /** Browse's header menu for a folder the user does not follow: the packaged `contextMenu` slot. */
 const BROWSE_HEADER: readonly NxsMenuAction[] = [
   { id: 'app.contextMenu.share', label: 'Share', icon: 'share' },
-  { id: 'app.contextMenu.subscribe', label: 'Notify Me', icon: 'notifications' },
-  { id: 'app.contextMenu.export', label: 'Export', icon: 'ios_share' },
+  { id: 'app.contextMenu.subscribe', label: 'Notify Me', icon: 'bell' },
+  { id: 'app.contextMenu.export', label: 'Export', icon: 'import_export' },
 ];
 
 /**

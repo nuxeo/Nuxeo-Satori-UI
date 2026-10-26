@@ -79,9 +79,9 @@ describe('NxsAvatarComponent', () => {
     expect(host.classList).not.toContain('nxs-avatar--blue');
   });
 
-  // Satori's avatar shows one initial at 24 px, where two do not fit.
-  it('shows one initial at size 24, as Satori does', async () => {
-    const host = await render({ initials: 'nk', size: '24' });
+  // Satori's avatar shows one initial at 18 and 24 px, where two do not fit.
+  it.each(['18', '24'] as const)('shows one initial at size %s, as Satori does', async (size) => {
+    const host = await render({ initials: 'nk', size });
     expect(host.querySelector('.nxs-avatar__initials')?.textContent?.trim()).toBe('N');
   });
 

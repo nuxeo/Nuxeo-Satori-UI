@@ -1,11 +1,12 @@
 /**
- * NXENG-826 — header back icon must render arrow_back via CSS codepoint on the legacy Material
- * Icons font (apps/nuxeo-ui/src/index.html). fontIcon does not paint a glyph with that font alone.
+ * NXENG-826 / NXSAT-673 — header back icon must render via SVG icon, not CSS codepoint or
+ * font ligature (which trip IBM's label-in-name check).
  */
 import { Component, provideZonelessChangeDetection, ChangeDetectionStrategy } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatIconTestingModule } from '@angular/material/icon/testing';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 
 @Component({
@@ -25,7 +26,7 @@ describe('Document detail header go-back icon glyph (NXENG-826)', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [DocumentDetailGoBackIconHostComponent],
+      imports: [DocumentDetailGoBackIconHostComponent, MatIconTestingModule],
       providers: [provideZonelessChangeDetection(), provideNoopAnimations()],
     }).compileComponents();
 
@@ -38,19 +39,11 @@ describe('Document detail header go-back icon glyph (NXENG-826)', () => {
     fixture.nativeElement.remove();
   });
 
-  it('renders arrow_back via ::before on an empty mat-icon (legacy Material Icons font)', () => {
-    const icon = fixture.nativeElement.querySelector(
-      'mat-icon.detail-header-go-back-icon',
-    ) as HTMLElement;
+  it('renders arrow_left via SVG icon without ligature text (NXSAT-673)', () => {
+    const icon = fixture.nativeElement.querySelector('mat-icon') as HTMLElement;
     expect(icon).toBeTruthy();
+    expect(icon.getAttribute('svgicon')).toBe('arrow_left');
+    expect(icon.getAttribute('aria-hidden')).toBe('true');
     expect((icon.textContent ?? '').trim()).toBe('');
-
-    const glyph = getComputedStyle(icon, '::before');
-    const content = glyph.content.replace(/"/g, '');
-    expect(content).not.toBe('none');
-    expect(content.codePointAt(0))
-      .withContext('::before must use Material Icons arrow_back codepoint U+E5C4')
-      .toBe(0xe5c4);
-    expect(glyph.fontFamily.toLowerCase()).toContain('material icons');
   });
 });

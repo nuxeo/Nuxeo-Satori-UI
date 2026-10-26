@@ -5,8 +5,8 @@ import { NxsDocumentToolbarComponent, type NxsToolbarAction } from './document-t
 
 /** The packaged `toolbar` slot for a File the user can edit, locked by someone else. */
 const FILE_TOOLBAR: readonly NxsToolbarAction[] = [
-  { id: 'app.toolbar.edit', label: 'Edit', icon: 'edit' },
-  { id: 'app.toolbar.addToCollection', label: 'Add to collection', icon: 'playlist_add' },
+  { id: 'app.toolbar.edit', label: 'Edit', icon: 'pencil' },
+  { id: 'app.toolbar.addToCollection', label: 'Add to collection', icon: 'add_list' },
   {
     id: 'app.toolbar.unlock',
     label: 'Unlock',
@@ -14,19 +14,19 @@ const FILE_TOOLBAR: readonly NxsToolbarAction[] = [
     tooltip: 'Locked by Jane Doe on May 3, 2026',
     active: true,
   },
-  { id: 'app.toolbar.addToFavorites', label: 'Add to Favorites', icon: 'star_border' },
+  { id: 'app.toolbar.addToFavorites', label: 'Add to Favorites', icon: 'star' },
   { id: 'app.toolbar.share', label: 'Share', icon: 'share' },
-  { id: 'app.toolbar.delete', label: 'Delete', icon: 'delete' },
+  { id: 'app.toolbar.delete', label: 'Delete', icon: 'trash' },
   { id: 'app.toolbar.publish', label: 'Publish document', icon: 'publish', overflow: true },
-  { id: 'app.toolbar.subscribe', label: 'Notify Me', icon: 'notifications', overflow: true },
+  { id: 'app.toolbar.subscribe', label: 'Notify Me', icon: 'bell', overflow: true },
   {
     id: 'app.toolbar.addToClipboard',
     label: 'Add to Clipboard',
     icon: 'content_paste',
     overflow: true,
   },
-  { id: 'app.toolbar.export', label: 'Export', icon: 'ios_share', overflow: true },
-  { id: 'app.toolbar.startProcess', label: 'Start Process', icon: 'account_tree', overflow: true },
+  { id: 'app.toolbar.export', label: 'Export', icon: 'import_export', overflow: true },
+  { id: 'app.toolbar.startProcess', label: 'Start Process', icon: 'processes', overflow: true },
 ];
 
 /**

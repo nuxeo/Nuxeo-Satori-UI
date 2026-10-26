@@ -1,7 +1,5 @@
 import { applicationConfig, moduleMetadata, type Meta, type StoryObj } from '@storybook/angular';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
-import { provideTranslateService } from '@ngx-translate/core';
-
 import { provideStoryRouter } from '../../.storybook/story-router';
 import { NXS_PRIMITIVE_IDS } from './primitives';
 import { provideNxsComponents } from './provide-nxs-components';
@@ -18,7 +16,7 @@ const meta: Meta = {
   title: 'Primitives/By registered ID',
   decorators: [
     applicationConfig({
-      providers: [provideTranslateService(), provideStoryRouter(), provideNxsComponents()],
+      providers: [provideStoryRouter(), provideNxsComponents()],
     }),
     moduleMetadata({ imports: [ExtensionOutletComponent] }),
   ],
@@ -42,6 +40,11 @@ export const MaterialRegistration: StoryObj = {
         content: 'A new version is created each time you check in.',
         triggerLabel: 'About versioning',
       },
+      errorState: {
+        status: 500,
+        heading: 'Failed to load folder contents.',
+        retryable: true,
+      },
     },
     template: `
       <div style="display: grid; gap: 16px; justify-items: start">
@@ -50,6 +53,7 @@ export const MaterialRegistration: StoryObj = {
         <lib-extension-outlet [componentId]="ids.tag" [componentInputs]="tag" />
         <lib-extension-outlet [componentId]="ids.statusTag" [componentInputs]="statusTag" />
         <lib-extension-outlet [componentId]="ids.richTooltip" [componentInputs]="tooltip" />
+        <lib-extension-outlet [componentId]="ids.errorState" [componentInputs]="errorState" />
       </div>
     `,
   }),

@@ -9,7 +9,7 @@
     [attr.aria-label]="'shared-ui.share-saved-search-dialog.close-dialog' | translate"
     (click)="dialogRef.close(null)"
   >
-    <mat-icon>close</mat-icon>
+    <mat-icon svgIcon="x_large" />
   </button>
 </div>
 
@@ -35,7 +35,8 @@
           (click)="openAddPermissionDialog()"
           [disabled]="saving()"
         >
-          <mat-icon>add</mat-icon> {{ 'shared-ui.share-saved-search-dialog.new' | translate }}
+          <mat-icon svgIcon="plus_large" />
+          {{ 'shared-ui.share-saved-search-dialog.new' | translate }}
         </button>
       </div>
 
@@ -67,7 +68,7 @@
                     "
                     (click)="editRow(row.id)"
                   >
-                    <mat-icon>edit</mat-icon>
+                    <mat-icon svgIcon="pencil" />
                   </button>
                   <button
                     mat-icon-button
@@ -79,7 +80,7 @@
                     [disabled]="saving() || !row.aceId"
                     (click)="removeRow(row.id)"
                   >
-                    <mat-icon>delete_outline</mat-icon>
+                    <mat-icon svgIcon="trash" />
                   </button>
                 </td>
               </tr>
@@ -204,7 +205,7 @@
                     [disabled]="saving()"
                     (click)="editExternalPermission(row)"
                   >
-                    <mat-icon>edit</mat-icon>
+                    <mat-icon svgIcon="pencil" />
                   </button>
                   <button
                     mat-icon-button
@@ -215,7 +216,7 @@
                     [disabled]="saving()"
                     (click)="sendExternalNotification(row)"
                   >
-                    <mat-icon>send</mat-icon>
+                    <mat-icon svgIcon="send" />
                   </button>
                   <button
                     mat-icon-button
@@ -227,7 +228,7 @@
                     [disabled]="saving() || !row.aceId"
                     (click)="removeExternalPermission(row)"
                   >
-                    <mat-icon>delete_outline</mat-icon>
+                    <mat-icon svgIcon="trash" />
                   </button>
                 </td>
               </tr>

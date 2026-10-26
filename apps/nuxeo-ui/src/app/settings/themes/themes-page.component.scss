@@ -25,6 +25,7 @@
   margin: 0 auto 1.25rem;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .themes-toolbar .mat-mdc-icon-button {
   color: var(--mat-sys-on-surface-variant);
 }
@@ -141,6 +142,7 @@
   min-width: 5.5rem;
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .theme-card__btn.mat-mdc-outlined-button[disabled] {
   opacity: 1;
   color: var(--mat-sys-on-surface-variant);

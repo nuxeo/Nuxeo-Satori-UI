@@ -40,14 +40,14 @@ import { MatIconModule } from '@angular/material/icon';
   changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <button type="button" mat-stroked-button class="ke-action-btn" data-testid="idle-btn">
-      <mat-icon>category</mat-icon>
+      <mat-icon svgIcon="tag" />
       Classify Document
     </button>
     <button type="button" mat-stroked-button class="ke-action-btn" data-testid="loading-btn">
       @if (loading()) {
         <mat-icon class="ke-spinning">autorenew</mat-icon>
       } @else {
-        <mat-icon>category</mat-icon>
+        <mat-icon svgIcon="tag" />
       }
       Classify Document
     </button>

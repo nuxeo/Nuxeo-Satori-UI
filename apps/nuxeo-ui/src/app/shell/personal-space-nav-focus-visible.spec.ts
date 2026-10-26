@@ -11,7 +11,7 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 /**
  * NXENG-778 — IBM Equal Access Issue ID 362174057 on the Personal Space sidebar link
- * (`sat-platform-nav-list-item[12]` / `aria-label="Personal Space"`).
+ * (`a[sat-platform-nav-menu-item]` / `aria-label="Personal Space"`).
  *
  * Same mechanism as NXENG-761: Satori reads `--sat-platform-nav-outline` for every
  * `.sat-platform-nav-item`, including Personal Space. This spec pins the reported element
@@ -20,8 +20,7 @@ import { COMPILED_THEME_BASES } from '../theme/app-theme';
 
 const ACTIVE_CLASS = 'sat-platform-nav-item-active';
 
-const PERSONAL_SPACE_LINK =
-  'sat-platform-nav-list-item[data-nav-id="app.navbar.personalSpace"] .sat-platform-nav-item';
+const PERSONAL_SPACE_LINK = 'a[sat-platform-nav-menu-item][data-nav-id="app.navbar.personalSpace"]';
 
 @Component({
   standalone: true,

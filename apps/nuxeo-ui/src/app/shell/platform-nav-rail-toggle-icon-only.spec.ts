@@ -3,10 +3,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { By } from '@angular/platform-browser';
 import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { MatTooltip } from '@angular/material/tooltip';
-import {
-  SatPlatformNavModule,
-  SatPlatformNavStateService,
-} from '@hylandsoftware/satori-ui/platform-nav';
+import { SatPlatformNavModule, SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 import { provideSatori } from '@hylandsoftware/satori-ui/providers';
 import { TranslateService } from '@ngx-translate/core';
 
@@ -78,7 +75,7 @@ describe('Platform nav rail toggle icon-only labels (NXENG-927)', () => {
   });
 
   it('exposes translated aria-label and tooltip when the rail is collapsed', () => {
-    const navState = TestBed.inject(SatPlatformNavStateService);
+    const navState = TestBed.inject(SatPlatformNavState);
     if (!navState.collapsed()) {
       navState.toggleCollapsed();
       fixture.detectChanges();
@@ -88,7 +85,7 @@ describe('Platform nav rail toggle icon-only labels (NXENG-927)', () => {
   });
 
   it('exposes translated aria-label and tooltip when the rail is expanded', () => {
-    const navState = TestBed.inject(SatPlatformNavStateService);
+    const navState = TestBed.inject(SatPlatformNavState);
     if (navState.collapsed()) {
       navState.toggleCollapsed();
       fixture.detectChanges();

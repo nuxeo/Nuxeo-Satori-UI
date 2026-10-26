@@ -3,7 +3,8 @@
  * text competing with aria-label (WCAG 2.5.3 label-in-name). MatIcon adds aria-hidden by default,
  * but IBM still counts ligature text nodes as visible labelling.
  *
- * Computed ::before glyph: `apps/nuxeo-ui/.../document-detail-go-back-icon.spec.ts`.
+ * Originally worked around with CSS ::before codepoint. Migrated to Satori SVG icons in NXSAT-673
+ * since SVG paths don't have the ligature text issue.
  */
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -16,7 +17,7 @@ const scssPath = join(dir, 'document-detail-go-back-icon.scss');
 const componentPath = join(dir, 'document-detail.ts');
 
 describe('Document detail Go back label in name (NXENG-826)', () => {
-  it('renders the header back glyph without Material ligature text in the DOM', () => {
+  it('renders the header back glyph as SVG icon without ligature text', () => {
     const html = readFileSync(templatePath, 'utf8');
     const headerBlock = html.match(/class="detail-header"[\s\S]*?<div class="header-info">/)?.[0];
     expect(headerBlock, 'detail header markup').toBeTruthy();
@@ -25,9 +26,9 @@ describe('Document detail Go back label in name (NXENG-826)', () => {
     expect(backButton).toContain(
       '[attr.aria-label]="\'document-detail.document-detail.go-back\' | translate"',
     );
-    const iconMarkup = backButton!.match(/<mat-icon[\s\S]*?<\/mat-icon>/)?.[0];
+    const iconMarkup = backButton!.match(/<mat-icon[\s\S]*?\/>/)?.[0];
     expect(iconMarkup, 'header back mat-icon').toBeTruthy();
-    expect(iconMarkup).toContain('class="detail-header-go-back-icon"');
+    expect(iconMarkup).toContain('svgIcon="arrow_left"');
     expect(iconMarkup).toContain('aria-hidden="true"');
     expect(iconMarkup, 'ligature text must not appear as mat-icon content').not.toMatch(
       />\s*arrow_back\s*</,
@@ -35,11 +36,12 @@ describe('Document detail Go back label in name (NXENG-826)', () => {
     expect(iconMarkup).not.toContain('fontIcon=');
   });
 
-  it('maps the header back icon to Material Icons arrow_back codepoint U+E5C4 in SCSS', () => {
+  it('documents the removal of CSS codepoint workaround in SCSS', () => {
     const scss = readFileSync(scssPath, 'utf8');
-    expect(scss).toMatch(
-      /\.detail-header mat-icon\.detail-header-go-back-icon::before[\s\S]*content:\s*'\\e5c4'/,
-    );
+    // NXSAT-673 removed the CSS ::before workaround in favor of Satori SVG icons
+    expect(scss).toMatch(/NXSAT-673/);
+    expect(scss).toMatch(/svgIcon="arrow_left"/);
+    expect(scss, 'CSS codepoint workaround should be removed').not.toMatch(/content:\s*'\\e5c4'/);
   });
 
   it('loads go-back icon styles through DocumentDetailComponent styleUrls', () => {
