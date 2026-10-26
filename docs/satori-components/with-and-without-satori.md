@@ -211,12 +211,12 @@ The same icon, heading, message and projected action in both; the theme sets the
 
 ### Error state
 
-| Field           | Value                                                                                                                |
-| --------------- | -------------------------------------------------------------------------------------------------------------------- |
-| Component       | `NxsErrorStateComponent`                                                                                             |
-| Registered ID   | `nxs.primitives.errorState`                                                                                          |
-| With Satori     | Satori's own component: `NxsSatoriErrorStateComponent` renders `<sat-401-error-state>`                               |
-| Storybook story | `primitives-by-registered-id--material-registration`; with Satori `primitives-by-registered-id--satori-registration` |
+| Field           | Value                                                                                  |
+| --------------- | -------------------------------------------------------------------------------------- |
+| Component       | `NxsErrorStateComponent`                                                               |
+| Registered ID   | `nxs.primitives.errorState`                                                            |
+| With Satori     | Satori's own component: `NxsSatoriErrorStateComponent` renders `<sat-401-error-state>` |
+| Storybook story | `states-error-state--server-error-with-retry`                                          |
 
 ![Error state: without Satori on the left, with Satori on the right](error-state-side-by-side.png 'Left: without Satori (Material theme). Right: with Satori (Satori theme). Same component, same inputs.')
 
