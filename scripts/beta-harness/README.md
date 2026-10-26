@@ -15,6 +15,9 @@ The platform jobs use the runtime pinned in `.nvmrc`. The Windows workflow expli
 gate always requires its output.
 Both Windows verification and CodeQL run for PRs into `feature/nxsat-673-satori-1.0`;
 otherwise the fixed target would silently omit the Windows gate or its prerequisite.
+The assertion audit also canonicalizes report keys before applying the legacy story-runner
+scope exception; Windows separators must not impose the phase runner's identity contract
+on `scripts/collect-evidence/`. Constant-condition checks still apply to both runners.
 
 `npm run beta:e2e-negative-control` uses the portable Node runner (the `.sh` file is only
 a compatibility wrapper). It preserves separate baseline/starved reports and artifacts,
