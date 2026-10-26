@@ -779,13 +779,7 @@ $ai-radius: 14px;
   }
 }
 
-:host ::ng-deep button[satPlatformNavUserProfile] mat-icon.app-shell-user-profile-icon {
+:host ::ng-deep button[satPlatformNavUserProfile] mat-icon {
   flex-shrink: 0;
-
-  &::before {
-    content: '\e853';
-    font-family: 'Material Icons';
-    font-size: 24px;
-    line-height: 1;
-  }
+  // NXENG-894 — CSS codepoint workaround removed in NXSAT-673 — now uses svgIcon="user_circle".
 }
