@@ -430,9 +430,8 @@ Husky hooks, all three of which will run on you:
 - `commit-msg` → `node scripts/strip-bot-coauthors.mjs`
 - `pre-push` → `npm run review:guardrails`
 
-Commit convention: **Conventional Commits**, enforced downstream by `conventional-changelog` in the
-`changelog.yml` workflow. Branches are `feature/*`, `fix/*`, `docs/*`, `refactor/*`. Never commit
-to `main`.
+Commit convention: **Conventional Commits** (not enforced by a hook or workflow). Branches are
+`feature/*`, `fix/*`, `docs/*`, `refactor/*`. Never commit to `main`.
 
 - [ESLint flat config](https://eslint.org/docs/latest/use/configure/configuration-files)
 - [typescript-eslint](https://typescript-eslint.io/getting-started)
@@ -1109,7 +1108,6 @@ Estimated effort: **15 hours**.
 | `a11y.yml`              | PR, push, `workflow_call`, dispatch                | Template a11y rules against a baseline                                                                                                                   |
 | `build-marketplace.yml` | PR (build only), dispatch (can publish)            | JDK 21 + Node 24, Maven package, publish to pre-prod                                                                                                     |
 | `release.yml`           | dispatch only                                      | `npm version`, changelog, tag, GitHub release, then dispatches the marketplace build                                                                     |
-| `changelog.yml`         | push to `main`, dispatch                           | Regenerates `CHANGELOG.md` from Conventional Commits                                                                                                     |
 | `dependency-review.yml` | PR                                                 | Fails on moderate-severity advisories                                                                                                                    |
 | `pr-auto-fix.yml`       | review submitted                                   | Summarises genuinely-open review threads via GraphQL                                                                                                     |
 | `dead-code.yml`         | weekly                                             | `knip`, opens an issue                                                                                                                                   |
