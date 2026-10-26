@@ -96,8 +96,14 @@ To show the "Verified" badge on bot commits:
 
 1. Dispatch the Crowdin Pull workflow (it commits only when translations differ from `main`)
 2. Open its commit on the `crowdin-translations-update` branch
-3. Check that the bot commit shows "Verified" badge
-4. Verify with: `git log --show-signature`
+3. **Signature created:** `git log --show-signature` shows a signature, or the commits API returns a
+   `verification.signature`
+4. **Signature verified:** the commit shows the "Verified" badge. This does not pass with the
+   current setup: the commit identity is `github-actions[bot]@users.noreply.github.com`, which no
+   one can attach a GPG key to, so GitHub reports `verified: false`, `reason: unknown_key`. It
+   needs a bot account that owns the public key, with a verified email matching the signature,
+   and the workflow's `github_user_name` / `github_user_email` changed to that account (see the
+   KNOWN GAP note in `crowdin-pull.yaml`)
 
 Do not dispatch `release.yml` to test this: it has no signing step, and dispatching it performs a
 real release.

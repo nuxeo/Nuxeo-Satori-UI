@@ -18,9 +18,13 @@ direct-push repair, before the first release. `changelog.yml` was removed.
 
 When enabled, the Crowdin pull workflow will:
 
-1. Import a GPG private key from repository secrets
-2. Configure git to automatically sign commits
-3. Create commits that show "Verified" badge on GitHub
+1. Pass the GPG private key and passphrase from repository secrets to the action
+2. Sign the commit inside the action's container
+3. Produce a **signed** commit. It does not show GitHub's "Verified" badge yet: the commit
+   identity is `github-actions[bot]@users.noreply.github.com`, which no one can attach a GPG key
+   to, so GitHub reports `unknown_key`. The badge needs a bot account that owns the public key,
+   with a verified email matching the signature, and the workflow's `github_user_name` /
+   `github_user_email` set to it. See the KNOWN GAP note in `crowdin-pull.yaml`.
 
 ### 3. Required Setup (Not Yet Complete)
 
@@ -34,7 +38,7 @@ To activate GPG signing, you need to:
 3. **Add repository variable**:
    - `GPG_BOT_SIGNING_ENABLED` = `true`
 
-4. **Add public key to GitHub** so commits show "Verified"
+4. **Add public key to GitHub**, on a bot account whose verified email matches the commit identity, and set the workflow's commit identity to that account. Uploading the key alone does not make commits show "Verified".
 
 ## Quick Start
 
@@ -71,7 +75,7 @@ gpg --armor --export YOUR_KEY_ID > bot-public.asc
    - **Leave as-is** (unsigned bot commits, simpler but less secure)
 
 3. **If enabling signing**, follow setup steps in the full guide
-4. **Test** by dispatching the Crowdin Pull workflow and checking that its commit on `crowdin-translations-update` shows "Verified". It commits only when translations differ from `main`. Do not dispatch `release.yml` to test signing: it has no signing step, and dispatching it performs a real release.
+4. **Test** by dispatching the Crowdin Pull workflow. It commits only when translations differ from `main`. Check that its commit on `crowdin-translations-update` is signed (`git log --show-signature`, or a `verification.signature` in the commits API). Expect `verified: false` with `reason: unknown_key` until a key-owning bot account is set up as described above; the "Verified" badge is the test for that later step. Do not dispatch `release.yml` to test signing: it has no signing step, and dispatching it performs a real release.
 
 ## Security Note
 
