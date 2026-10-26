@@ -740,7 +740,7 @@ The whole Satori theme (colours, Noto Sans, focus rings, form-field defaults, Sa
 
 ## How our own app uses this
 
-The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's and a manifest can swap them. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and a manifest cannot swap them.
+The app registers both entry points, so anything rendered by ID shows Satori. Browse and the collection page render their breadcrumbs by ID, browse, the collection page, document detail and task detail render their status tags by ID, and the document list renders each row's type tag and contributor avatar by ID, so there the app shows Satori's, and a provider that registers its own component under the ID swaps them. A manifest only names the ID; it does not choose the implementation. Its other screens still use `<sat-avatar>`, `<sat-category-tag>` and `<sat-breadcrumbs>` directly, so there the app looks as it always has and no ID reaches them.
 
 Only things rendered by ID, such as customer extensions, go through the choice.
 
