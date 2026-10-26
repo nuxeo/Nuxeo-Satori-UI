@@ -1,22 +1,24 @@
 import type { EnvironmentProviders } from '@angular/core';
 import type { SatAvatarCategory, SatAvatarSize } from '@hylandsoftware/satori-ui/avatar';
-import type { SatTagCategory } from '@hylandsoftware/satori-ui/tag';
+import type { SatTagCategory, SatTagStatus } from '@hylandsoftware/satori-ui/tag';
 import {
   NXS_PRIMITIVE_IDS,
   type NxsAvatarColor,
   type NxsAvatarSize,
   type NxsTagColor,
+  type NxsTagStatus,
 } from '@nuxeo/satori-platform/components';
 import { provideSatoriExtensions } from '@nuxeo/satori-platform/extensions';
 
 import { NxsSatoriAvatarComponent } from './avatar/satori-avatar.component';
 import { NxsSatoriBreadcrumbsComponent } from './breadcrumbs/satori-breadcrumbs.component';
 import { NxsSatoriRichTooltipComponent } from './rich-tooltip/satori-rich-tooltip.component';
+import { NxsSatoriStatusTagComponent } from './status-tag/satori-status-tag.component';
 import { NxsSatoriTagComponent } from './tag/satori-tag.component';
 
 /**
- * Re-register the avatar, breadcrumbs, tag and rich tooltip `NXS_PRIMITIVE_IDS` on Satori, over the
- * Material implementations `provideNxsComponents()` registered.
+ * Re-register the avatar, breadcrumbs, tag, status tag and rich tooltip `NXS_PRIMITIVE_IDS` on
+ * Satori, over the Material implementations `provideNxsComponents()` registered.
  *
  * `NXS_PRIMITIVE_IDS.errorState` is left on Material: Satori's `sat-401-` to `sat-500-error-state`
  * ship only in Satori 1.0, which needs Angular 22, and the Satori this package can install has no
@@ -40,6 +42,7 @@ export function provideNxsSatoriComponents(): EnvironmentProviders {
       [NXS_PRIMITIVE_IDS.avatar]: NxsSatoriAvatarComponent,
       [NXS_PRIMITIVE_IDS.breadcrumbs]: NxsSatoriBreadcrumbsComponent,
       [NXS_PRIMITIVE_IDS.tag]: NxsSatoriTagComponent,
+      [NXS_PRIMITIVE_IDS.statusTag]: NxsSatoriStatusTagComponent,
       [NXS_PRIMITIVE_IDS.richTooltip]: NxsSatoriRichTooltipComponent,
     },
   });
@@ -59,4 +62,5 @@ export type NxsSatoriValueContract = [
   Assert<Same<NxsAvatarColor, SatAvatarCategory>>,
   Assert<Same<NxsAvatarSize, SatAvatarSize>>,
   Assert<Same<NxsTagColor, SatTagCategory>>,
+  Assert<Same<NxsTagStatus, SatTagStatus>>,
 ];
