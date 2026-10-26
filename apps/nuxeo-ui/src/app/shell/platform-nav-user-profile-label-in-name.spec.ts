@@ -159,23 +159,18 @@ describe('platform sidebar — user profile label in name (NXENG-894)', () => {
       .not.toContain('account_circle');
   });
 
-  it('renders the profile avatar glyph via CSS codepoint (NXENG-894)', () => {
+  it('renders the profile avatar glyph via SVG icon (NXSAT-673)', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
     TestBed.inject(SatPlatformNavState).toggleCollapsed();
     fixture.detectChanges();
 
     const icon = profileProjectedMatIcon(profileButton(fixture.nativeElement as HTMLElement));
-    const glyph = getComputedStyle(icon, '::before');
-    const content = glyph.content.replace(/"/g, '');
-    expect(content)
-      .withContext('profile mat-icon must expose account_circle via ::before content')
-      .not.toBe('none');
-    expect(content.length).toBeGreaterThan(0);
-    expect(content.codePointAt(0))
-      .withContext('::before must use Material Icons account_circle codepoint U+E853')
-      .toBe(0xe853);
-    expect(glyph.fontFamily.toLowerCase()).toContain('material icons');
-    expect(Number.parseFloat(glyph.fontSize)).toBeGreaterThanOrEqual(24);
+    expect(icon.getAttribute('svgIcon') ?? icon.getAttribute('svgicon'))
+      .withContext('profile mat-icon must use svgIcon="user_circle"')
+      .toBe('user_circle');
+    expect(icon.getAttribute('aria-hidden'))
+      .withContext('profile icon must be aria-hidden')
+      .toBe('true');
   });
 
   it('keeps label in name when the sidebar rail is collapsed (IBM 2972081309)', () => {

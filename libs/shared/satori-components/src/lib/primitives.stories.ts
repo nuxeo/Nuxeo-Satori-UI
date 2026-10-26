@@ -44,7 +44,7 @@ export const MaterialRegistration: StoryObj = {
       errorState: {
         status: 500,
         heading: 'Server error',
-        canRetry: true,
+        retryable: true,
       },
     },
     template: `
