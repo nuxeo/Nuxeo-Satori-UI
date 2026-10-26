@@ -90,7 +90,6 @@ export interface AppARenderConfig {
 export interface AppIntegrationsConfig {
   readonly arender: AppARenderConfig | null;
   readonly knowledgeDiscoveryOperations: Readonly<Record<string, string>>;
-  readonly knowledgeEnrichmentOperations: Readonly<Record<string, string>>;
 }
 
 /** `null` means "keep the compiled default", which mirrors Nuxeo's own `nuxeo.session.timeout`. */
@@ -236,7 +235,6 @@ export const DEFAULT_APP_BOOTSTRAP_CONFIG: AppBootstrapConfig = {
   integrations: {
     arender: null,
     knowledgeDiscoveryOperations: {},
-    knowledgeEnrichmentOperations: {},
   },
   session: {
     idleTimeoutMs: null,
@@ -433,10 +431,6 @@ function mergeIntegrations(base: AppIntegrationsConfig, value: unknown): AppInte
     knowledgeDiscoveryOperations: {
       ...base.knowledgeDiscoveryOperations,
       ...readStringRecord(value['knowledgeDiscoveryOperations']),
-    },
-    knowledgeEnrichmentOperations: {
-      ...base.knowledgeEnrichmentOperations,
-      ...readStringRecord(value['knowledgeEnrichmentOperations']),
     },
   };
 }

@@ -160,14 +160,6 @@
       "sTotal": 303,
       "sCovered": 302
     },
-    "shared-ke-client": {
-      "lines": 100,
-      "statements": 100,
-      "branches": 98.23,
-      "functions": 100,
-      "sTotal": 123,
-      "sCovered": 123
-    },
     "tasks": {
       "lines": 97,
       "statements": 97,
