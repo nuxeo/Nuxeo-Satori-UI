@@ -1,4 +1,9 @@
-import { HttpInterceptorFn, provideHttpClient, withInterceptors } from '@angular/common/http';
+import {
+  HttpInterceptorFn,
+  provideHttpClient,
+  withInterceptors,
+  withXhr,
+} from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { APP_BOOTSTRAP_CONFIG_URL } from '@nuxeo/satori-platform/app-config';
@@ -109,7 +114,7 @@ describe('DocumentLayoutService', () => {
     };
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(withInterceptors([recorder])),
+        provideHttpClient(withXhr(), withInterceptors([recorder])),
         provideHttpClientTesting(),
         { provide: APP_BOOTSTRAP_CONFIG_URL, useValue: '/nuxeo/agentic-ui-config/bootstrap.json' },
         { provide: NUXEO_API_ORIGIN, useValue: '' },

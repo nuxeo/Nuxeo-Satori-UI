@@ -47,7 +47,7 @@
 
 import { describe, it, expect, afterAll, beforeAll, beforeEach } from 'vitest';
 import { TestBed } from '@angular/core/testing';
-import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideHttpClient, withInterceptors, withXhr } from '@angular/common/http';
 import {
   SearchService,
   type GlobalSearchSuggestion,
@@ -144,6 +144,7 @@ describe('SearchService Integration Tests', () => {
         // answers an unauthenticated query with HTTP 200 and no rows rather than a 401,
         // so the suite would look like it was working while testing a different principal.
         provideHttpClient(
+          withXhr(),
           withInterceptors([
             (req, next) => next(req.clone({ setHeaders: { Authorization: harness.auth } })),
           ]),

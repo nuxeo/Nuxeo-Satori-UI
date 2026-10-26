@@ -1,4 +1,4 @@
-import { Component, OnInit, inject, signal } from '@angular/core';
+import { Component, OnInit, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTableModule } from '@angular/material/table';
 import { MatButtonModule } from '@angular/material/button';
@@ -20,6 +20,7 @@ import { TranslatePipe } from '@ngx-translate/core';
     MatProgressSpinnerModule,
   ],
   templateUrl: './admin-cloud-services-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './admin-cloud-services-page.component.scss',
 })
 export class AdminCloudServicesPageComponent implements OnInit {

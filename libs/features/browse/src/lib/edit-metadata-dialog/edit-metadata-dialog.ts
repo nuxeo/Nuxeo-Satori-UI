@@ -1,4 +1,11 @@
-import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ViewChild,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -41,6 +48,7 @@ export interface EditMetadataDialogData {
   ],
   providers: [provideNxsToast()],
   templateUrl: './edit-metadata-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     ':host { display: block; min-width: min(480px, 80vw); } mat-dialog-content { display: flex; flex-direction: column; gap: 8px; } .full-width { width: 100%; }',
   ],

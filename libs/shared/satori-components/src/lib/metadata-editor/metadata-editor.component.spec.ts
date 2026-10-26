@@ -6,6 +6,7 @@ import {
   signal,
   viewChild,
   type Type,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { DateAdapter, NativeDateAdapter } from '@angular/material/core';
@@ -131,6 +132,7 @@ const SECOND: NxsEditorSection = {
 @Component({
   standalone: true,
   imports: [NxsMetadataEditorComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-metadata-editor
       [sections]="sections()"
@@ -162,6 +164,7 @@ const CODES_ONLY: NxsEditorSection = {
 @Component({
   standalone: true,
   imports: [NxsMetadataEditorComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-metadata-editor [sections]="sections" [dublinCore]="false" />
     <nxs-metadata-editor [sections]="sections" [dublinCore]="false" />`,
 })
@@ -644,6 +647,7 @@ class HostLibraryAdapter extends NativeDateAdapter {
 @Component({
   standalone: true,
   imports: [NxsMetadataEditorComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-metadata-editor [values]="values" />`,
 })
 class DatesHostComponent {
@@ -655,6 +659,7 @@ class DatesHostComponent {
   standalone: true,
   imports: [NxsMetadataEditorComponent],
   providers: [{ provide: DateAdapter, useClass: HostLibraryAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-metadata-editor [values]="values" />`,
 })
 class DatesHostWithAdapterComponent extends DatesHostComponent {}
@@ -671,6 +676,7 @@ class MondayFirstAdapter extends NativeDateAdapter {
   standalone: true,
   imports: [NxsMetadataEditorComponent],
   providers: [{ provide: DateAdapter, useClass: MondayFirstAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-metadata-editor [values]="values" />`,
 })
 class DatesHostWithNativeSubclassComponent extends DatesHostComponent {}
@@ -749,6 +755,7 @@ const written = (date: Date) =>
   standalone: true,
   imports: [NxsMetadataEditorComponent],
   providers: [{ provide: DateAdapter, useClass: CalendarDayAdapter }],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-metadata-editor [values]="values" />`,
 })
 class CalendarDaysHostComponent {

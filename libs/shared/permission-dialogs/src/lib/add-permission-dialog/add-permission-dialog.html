@@ -18,9 +18,10 @@
     >
       @for (suggestion of suggestions(); track suggestion.id) {
         <mat-option [value]="suggestion">
-          <mat-icon class="suggestion-icon">
-            {{ suggestion.type === 'USER_TYPE' ? 'person' : 'group' }}
-          </mat-icon>
+          <mat-icon
+            class="suggestion-icon"
+            [svgIcon]="suggestion.type === 'USER_TYPE' ? 'user' : 'user_group'"
+          />
           {{ suggestion.displayLabel }}
           <span class="suggestion-id">({{ suggestion.id }})</span>
         </mat-option>

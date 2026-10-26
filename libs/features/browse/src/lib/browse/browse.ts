@@ -44,6 +44,7 @@ import {
   inject,
   signal,
   untracked,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { DatePipe } from '@angular/common';
@@ -86,6 +87,7 @@ import {
   BrowseContextService,
   ClipboardTargetService,
   decodeNuxeoPathSegment,
+  nuxeoBreadcrumbTitles,
   parseBrowseNuxeoPathFromRouterUrl,
   isBrowseRouterUrl,
   nuxeoPathsEqualFlexible,
@@ -261,6 +263,7 @@ const PAGE_SIZE = 50;
     NxsPermissionsPanelComponent,
   ],
   templateUrl: './browse.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './browse.scss',
 })
 export class BrowseComponent {
@@ -520,7 +523,7 @@ export class BrowseComponent {
    */
   private readonly currentLang = toSignal(
     this.translate.onLangChange.pipe(map((event) => event.lang)),
-    { initialValue: this.translate.currentLang },
+    { initialValue: this.translate.getCurrentLang() ?? 'en' },
   );
 
   /** The columns as the picker offers them: names resolved for the active language. */
@@ -672,7 +675,7 @@ export class BrowseComponent {
         entries.unshift({
           id: 'collection.edit',
           label: this.translate.instant('browse.browse.edit'),
-          icon: 'edit',
+          icon: 'pencil',
         });
       }
       if (entries.length > 0) menus[doc.uid] = entries;
@@ -700,12 +703,21 @@ export class BrowseComponent {
       { label: this.translate.instant('browse.breadcrumb.root'), routerLink: '/browse' },
     ];
     if (!path || path === '/') return crumbs;
+    // Ancestor titles as Web UI renders them, from the `breadcrumb` enricher on the same fetch that
+    // brought the folder. A path segment is only the fallback, and it has three real cases: a folder
+    // opened from the address bar has no document and so no enricher; an entry may carry no title;
+    // and `afterBrowseMetadataEdit` sets `currentDoc` from the update response, which carries no
+    // enricher, for the one render before `loadContent()` re-fetches.
+    const ancestorTitles = nuxeoBreadcrumbTitles(doc);
     const parts = path.split('/').filter(Boolean);
     let accumulated = '';
     for (const part of parts) {
       accumulated += `/${part}`;
       const isCurrent = accumulated === path;
-      const label = isCurrent && doc ? doc.title : decodeNuxeoPathSegment(part);
+      const label =
+        isCurrent && doc
+          ? doc.title
+          : (ancestorTitles.get(accumulated) ?? decodeNuxeoPathSegment(part));
       if (isCurrent) {
         crumbs.push({ label });
       } else {
@@ -966,6 +978,8 @@ export class BrowseComponent {
     this.permissionsLoading.set(false);
     this.activeTabIndex.set(0);
     this.pendingPasteEntries.clear();
+    this.clearFilters();
+    this.selectionService.clear();
   }
 
   loadContent(): void {
@@ -2205,7 +2219,7 @@ export class BrowseComponent {
    * `formatRelativeTime` for why a key per unit cannot express Polish or Arabic plurals.
    */
   relativeTime(dateStr: string): string {
-    return formatRelativeTime(dateStr, this.translate.currentLang);
+    return formatRelativeTime(dateStr, this.translate.getCurrentLang() ?? 'en');
   }
 
   permissionIcon(permission: string): string {

@@ -20,7 +20,6 @@
   --showcase-status-success: var(--mat-sys-tertiary, #388e3c);
   --showcase-code-bg: var(--mat-sys-inverse-surface, #263238);
   --showcase-code-fg: var(--mat-sys-inverse-primary, #aed581);
-  --showcase-banner-bg: var(--mat-sys-primary-container, #e3f2fd);
 }
 
 $code-font: 'Monaco', 'Courier New', monospace;
@@ -165,28 +164,13 @@ $code-font: 'Monaco', 'Courier New', monospace;
     line-height: 1.6;
   }
 
-  .info-banner {
+  sat-banner {
     margin-top: 2rem;
-    padding: 1rem;
-    background: var(--showcase-banner-bg);
-    border-left: 4px solid var(--showcase-status-info);
-    border-radius: 4px;
-
-    p {
-      margin: 0;
-      display: flex;
-      align-items: start;
-      gap: 0.5rem;
-    }
   }
 
-  // The three status meanings carried by this page — informational, warning, success —
-  // as modifiers rather than per-element rules, because the same meaning appears on a
-  // stat icon, a stat value, an activity icon and the banner icon.
   .stat-icon,
   .stat-value,
-  .activity-icon,
-  .banner-icon {
+  .activity-icon {
     &.info {
       color: var(--showcase-status-info);
     }

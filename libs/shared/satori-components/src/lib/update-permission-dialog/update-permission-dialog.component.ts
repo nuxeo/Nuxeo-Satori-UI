@@ -28,7 +28,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 
 import { provideNxsDateAdapter } from '../date-input/locale-date';
-import { failureKey, offeredRights, principalLabel } from '../permission-dialog-support';
+import { failureKey, nxsOfferedRights, principalLabel } from '../permission-dialog-support';
 import { dateToWrite, dayToDate, toDay } from '../permissions-panel/permissions-model';
 import { NxsSpinnerComponent } from '../spinner/spinner.component';
 import { NxsToastService, provideNxsToast } from '../toast/toast.service';
@@ -98,7 +98,7 @@ export class NxsUpdatePermissionDialogComponent {
   protected readonly id = `nxs-update-permission-dialog-${nextId++}`;
   protected readonly external = this.ace.externalUser;
   protected readonly principal = principalLabel(this.ace);
-  protected readonly rights = offeredRights(this.data.permissions, this.ace.permission);
+  protected readonly rights = nxsOfferedRights(this.data.permissions, this.ace.permission);
   protected readonly mailHint = PERMISSION_NOTIFICATION_MAIL_HINT_KEY;
 
   protected readonly right = signal(this.ace.permission);

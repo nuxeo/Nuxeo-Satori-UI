@@ -1,4 +1,4 @@
-import { Component, DestroyRef, inject, signal } from '@angular/core';
+import { Component, DestroyRef, inject, signal, ChangeDetectionStrategy } from '@angular/core';
 import { Router } from '@angular/router';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -15,6 +15,7 @@ import { TranslatePipe, TranslateService } from '@ngx-translate/core';
   standalone: true,
   imports: [TranslatePipe, MatProgressSpinnerModule, MatButtonModule],
   templateUrl: './personal-space-page.component.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './personal-space-page.component.scss',
 })
 export class PersonalSpacePageComponent {

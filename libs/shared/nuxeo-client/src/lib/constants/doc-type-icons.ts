@@ -1,20 +1,20 @@
 export const DOC_TYPE_ICONS: Record<string, string> = {
-  File: 'description',
-  Note: 'sticky_note_2',
+  File: 'page',
+  Note: 'notepad',
   Picture: 'image',
   Video: 'videocam',
-  Audio: 'audiotrack',
+  Audio: 'audio',
   Folder: 'folder',
   OrderedFolder: 'folder',
-  Workspace: 'workspaces',
-  WorkspaceRoot: 'source',
-  Domain: 'public',
-  Collection: 'collections_bookmark',
-  SectionRoot: 'library_books',
-  Section: 'library_books',
-  TemplateRoot: 'dashboard_customize',
+  Workspace: 'apps',
+  WorkspaceRoot: 'processes',
+  Domain: 'users',
+  Collection: 'bookmark_filled',
+  SectionRoot: 'book',
+  Section: 'book',
+  TemplateRoot: 'ui',
 };
 
 export function docTypeIcon(type: string): string {
-  return DOC_TYPE_ICONS[type] ?? 'insert_drive_file';
+  return DOC_TYPE_ICONS[type] ?? 'page';
 }

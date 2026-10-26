@@ -50,7 +50,7 @@ describe('DocumentDetailComponent — header More actions focus ring (NXSAT-535)
     expect(button).toMatch(
       /cdk-visually-hidden[\s\S]*satori-components\.document-toolbar\.more-actions/,
     );
-    expect(button).toContain('<mat-icon aria-hidden="true">more_vert</mat-icon>');
+    expect(button).toContain('svgIcon="more_vert"');
   });
 
   it('keeps the Karma host More actions trigger aligned with production markup', () => {

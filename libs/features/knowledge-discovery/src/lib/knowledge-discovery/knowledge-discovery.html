@@ -6,29 +6,28 @@
     </div>
     <div class="kd-topbar__actions">
       <button mat-stroked-button type="button" (click)="openContentLakeUploadDialog()">
-        <mat-icon>cloud_upload</mat-icon>
+        <mat-icon svgIcon="cloud_upload" />
         {{ 'kd.knowledge-discovery.upload-to-content-lake' | translate }}
       </button>
       <button mat-stroked-button type="button" (click)="loadReferenceData()">
-        <mat-icon>sync</mat-icon>
+        <mat-icon svgIcon="sync" />
         {{ 'kd.knowledge-discovery.refresh-metadata' | translate }}
       </button>
       <button mat-stroked-button type="button" (click)="loadAgents()">
-        <mat-icon>refresh</mat-icon>
+        <mat-icon svgIcon="refresh" />
         {{ 'kd.knowledge-discovery.refresh-agents' | translate }}
       </button>
     </div>
   </header>
 
   @if (agentsError()) {
-    <div class="kd-banner kd-banner--error">
-      <mat-icon>error_outline</mat-icon>
-      <span>{{ agentsError() }}</span>
-    </div>
+    <sat-banner class="kd-banner--error" variant="important">
+      <sat-banner-message>{{ agentsError() }}</sat-banner-message>
+    </sat-banner>
     @if (debugMode() && agentsErrorDetail(); as detail) {
       <details class="kd-debug" open>
         <summary>
-          <mat-icon>bug_report</mat-icon>
+          <mat-icon svgIcon="troubleshooting" />
           {{ 'kd.debug-operation' | translate: { operation: detail.operation } }}
           @if (detail.status !== undefined) {
             <span class="kd-debug__chip">{{
@@ -41,7 +40,7 @@
             class="kd-debug__copy"
             (click)="copyDebugInfo(detail); $event.preventDefault()"
           >
-            <mat-icon>content_copy</mat-icon>
+            <mat-icon svgIcon="pages" />
             {{ 'kd.knowledge-discovery.copy' | translate }}
           </button>
         </summary>
@@ -50,14 +49,13 @@
     }
   }
   @if (referenceDataError()) {
-    <div class="kd-banner kd-banner--muted">
-      <mat-icon>info_outline</mat-icon>
-      <span>{{ referenceDataError() }}</span>
-    </div>
+    <sat-banner variant="info">
+      <sat-banner-message>{{ referenceDataError() }}</sat-banner-message>
+    </sat-banner>
     @if (debugMode() && referenceDataErrorDetail(); as detail) {
       <details class="kd-debug" open>
         <summary>
-          <mat-icon>bug_report</mat-icon>
+          <mat-icon svgIcon="troubleshooting" />
           {{ 'kd.debug-operation' | translate: { operation: detail.operation } }}
           @if (detail.status !== undefined) {
             <span class="kd-debug__chip">{{
@@ -70,7 +68,7 @@
             class="kd-debug__copy"
             (click)="copyDebugInfo(detail); $event.preventDefault()"
           >
-            <mat-icon>content_copy</mat-icon>
+            <mat-icon svgIcon="pages" />
             {{ 'kd.knowledge-discovery.copy' | translate }}
           </button>
         </summary>
@@ -79,14 +77,13 @@
     }
   }
   @if (agentDetailsError()) {
-    <div class="kd-banner kd-banner--error">
-      <mat-icon>error_outline</mat-icon>
-      <span>{{ agentDetailsError() }}</span>
-    </div>
+    <sat-banner class="kd-banner--error" variant="important">
+      <sat-banner-message>{{ agentDetailsError() }}</sat-banner-message>
+    </sat-banner>
     @if (debugMode() && agentDetailsErrorDetail(); as detail) {
       <details class="kd-debug" open>
         <summary>
-          <mat-icon>bug_report</mat-icon>
+          <mat-icon svgIcon="troubleshooting" />
           {{ 'kd.debug-operation' | translate: { operation: detail.operation } }}
           @if (detail.status !== undefined) {
             <span class="kd-debug__chip">{{
@@ -99,7 +96,7 @@
             class="kd-debug__copy"
             (click)="copyDebugInfo(detail); $event.preventDefault()"
           >
-            <mat-icon>content_copy</mat-icon>
+            <mat-icon svgIcon="pages" />
             {{ 'kd.knowledge-discovery.copy' | translate }}
           </button>
         </summary>
@@ -128,7 +125,7 @@
           } @else {
             @if (selectedAgent(); as agent) {
               <span class="kd-inline-status kd-inline-status--muted">
-                <mat-icon>smart_toy</mat-icon>
+                <mat-icon svgIcon="ai" />
                 {{ agent.name }}
               </span>
             }
@@ -198,7 +195,7 @@
             [disabled]="!canClear()"
             (click)="clearQuestion()"
           >
-            <mat-icon>close</mat-icon>
+            <mat-icon svgIcon="x_large" />
             {{ 'kd.knowledge-discovery.clear' | translate }}
           </button>
           <button
@@ -208,7 +205,7 @@
             (click)="submitQuestion()"
             type="button"
           >
-            <mat-icon>send</mat-icon>
+            <mat-icon svgIcon="send" />
             {{ 'kd.knowledge-discovery.ask' | translate }}
           </button>
         </div>
@@ -300,7 +297,7 @@
                 "
                 (click)="submitFeedback('Good')"
               >
-                <mat-icon>thumb_up</mat-icon>
+                <mat-icon svgIcon="thumbsup" />
                 {{ 'kd.knowledge-discovery.helpful' | translate }}
               </button>
               <button
@@ -311,7 +308,7 @@
                 "
                 (click)="submitFeedback('Bad')"
               >
-                <mat-icon>thumb_down</mat-icon>
+                <mat-icon svgIcon="thumbsdown" />
                 {{ 'kd.knowledge-discovery.not-helpful' | translate }}
               </button>
               <button
@@ -322,14 +319,14 @@
                 "
                 (click)="submitFeedback('Retry')"
               >
-                <mat-icon>refresh</mat-icon>
+                <mat-icon svgIcon="refresh" />
                 {{ 'kd.knowledge-discovery.retry' | translate }}
               </button>
             </div>
           </div>
         } @else {
           <div class="kd-empty-state">
-            <mat-icon>psychology</mat-icon>
+            <mat-icon svgIcon="ai" />
             <p>{{ 'kd.knowledge-discovery.ask-a-question-to-see-the' | translate }}</p>
           </div>
         }
@@ -424,7 +421,7 @@
               (click)="loadHistory(selectedAgentId() ?? '')"
               [attr.aria-label]="'kd.knowledge-discovery.reload-history' | translate"
             >
-              <mat-icon>refresh</mat-icon>
+              <mat-icon svgIcon="refresh" />
             </button>
           }
         </div>

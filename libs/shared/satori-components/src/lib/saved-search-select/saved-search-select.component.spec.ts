@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatAutocompleteTrigger } from '@angular/material/autocomplete';
 import { By } from '@angular/platform-browser';
@@ -21,6 +26,7 @@ const SEARCHES: SavedSearchOption[] = [
 @Component({
   standalone: true,
   imports: [NxsSavedSearchSelectComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-saved-search-select
     [selectedId]="selectedId()"
     [selectedTitle]="selectedTitle()"
@@ -98,7 +104,7 @@ describe('NxsSavedSearchSelectComponent', () => {
     await open();
     expect(getSavedSearches).toHaveBeenCalledTimes(1);
     expect(getSavedSearches).toHaveBeenCalledWith('assets_search');
-    expect(options()).toEqual(['bookmarkContracts this month', 'bookmarkBoard papers']);
+    expect(options()).toEqual(['Contracts this month', 'Board papers']);
   });
 
   it('says it is loading, then that there are none', async () => {
@@ -118,7 +124,7 @@ describe('NxsSavedSearchSelectComponent', () => {
     box().value = 'BOARD';
     box().dispatchEvent(new Event('input'));
     await render();
-    expect(options()).toEqual(['bookmarkBoard papers']);
+    expect(options()).toEqual(['Board papers']);
 
     box().value = 'nothing like it';
     box().dispatchEvent(new Event('input'));
@@ -144,7 +150,7 @@ describe('NxsSavedSearchSelectComponent', () => {
     expect(options()).toHaveLength(2);
     expect(
       document.querySelector('mat-option.nxs-saved-search-select__current')?.textContent?.trim(),
-    ).toBe('bookmarkContracts this month');
+    ).toBe('Contracts this month');
   });
 
   it('puts the open search’s title back when the list closes without a choice', async () => {
@@ -176,7 +182,7 @@ describe('NxsSavedSearchSelectComponent', () => {
     await render();
     expect(getSavedSearches).toHaveBeenCalledTimes(2);
     await open();
-    expect(options()).toContain('bookmarkNew one');
+    expect(options()).toContain('New one');
   });
 
   it('ignores a choice it does not list', async () => {

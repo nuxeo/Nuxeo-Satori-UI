@@ -1,10 +1,10 @@
 import { provideZonelessChangeDetection, signal } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { provideRouter, withDisabledInitialNavigation } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
+// TranslateModule removed - no longer exported in ngx-translate 18
 import { EMPTY, of } from 'rxjs';
 import { vi } from 'vitest';
 
@@ -84,7 +84,7 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       providers: [
         provideZonelessChangeDetection(),
         provideRouter([], withDisabledInitialNavigation()),
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: BrowseService, useValue: mockBrowseService },
         {
@@ -176,7 +176,7 @@ describe('BrowseComponent — rendered contextMenu slot', () => {
       '[data-action-id="acme.contextMenu.escalate"]',
     ) as HTMLElement;
     expect(item.textContent).toContain('Escalate');
-    expect(item.textContent).toContain('flag');
+    expect(item.querySelector('mat-icon')?.getAttribute('data-mat-icon-name')).toBe('flag');
   });
 
   /**

@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClient, withXhr } from '@angular/common/http';
 import {
   HttpTestingController,
   provideHttpClientTesting,
@@ -44,7 +44,7 @@ describe('BrowseService paging — Root, Domain, Favorites and Collection', () =
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
       ],
@@ -277,7 +277,7 @@ describe('CollectionService.getCollectionMembers paging', () => {
   beforeEach(() => {
     TestBed.configureTestingModule({
       providers: [
-        provideHttpClient(),
+        provideHttpClient(withXhr()),
         provideHttpClientTesting(),
         { provide: NUXEO_API_ORIGIN, useValue: '' },
       ],

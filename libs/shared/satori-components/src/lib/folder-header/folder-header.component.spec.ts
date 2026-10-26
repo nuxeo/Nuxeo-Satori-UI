@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { NxsHeadingLevel } from '../heading-level';
@@ -7,6 +12,7 @@ import { NxsFolderHeaderComponent } from './folder-header.component';
 @Component({
   standalone: true,
   imports: [NxsFolderHeaderComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-folder-header
       [heading]="heading()"
@@ -85,7 +91,7 @@ describe('NxsFolderHeaderComponent', () => {
 
   it('shows the type’s icon, decorative beside the title', () => {
     const icon = query('nxs-doc-type-icon mat-icon');
-    expect(icon?.textContent?.trim()).toBe('folder');
+    expect(icon?.getAttribute('data-mat-icon-name')).toBe('folder');
     expect(icon?.getAttribute('aria-hidden')).toBe('true');
   });
 

@@ -4,7 +4,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { By } from '@angular/platform-browser';
 import { MatTooltip } from '@angular/material/tooltip';
 
-import { SatPlatformNavStateService } from '@hylandsoftware/satori-ui/platform-nav';
+import { SatPlatformNavState } from '@hylandsoftware/satori-ui/platform-nav';
 import { TranslateService } from '@ngx-translate/core';
 
 import { appConfig } from '../app.config';
@@ -103,7 +103,7 @@ describe('App shell — platform nav rail toggle icon-only (NXENG-927)', () => {
 
   it('renders icon-only expand control in production AppShell when the rail is collapsed', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
-    const navState = TestBed.inject(SatPlatformNavStateService);
+    const navState = TestBed.inject(SatPlatformNavState);
     if (!navState.collapsed()) {
       navState.toggleCollapsed();
     }
@@ -126,7 +126,7 @@ describe('App shell — platform nav rail toggle icon-only (NXENG-927)', () => {
 
   it('renders icon-only collapse control in production AppShell when the rail is expanded', () => {
     const fixture = TestBed.createComponent(AppShellComponent);
-    const navState = TestBed.inject(SatPlatformNavStateService);
+    const navState = TestBed.inject(SatPlatformNavState);
     if (navState.collapsed()) {
       navState.toggleCollapsed();
     }

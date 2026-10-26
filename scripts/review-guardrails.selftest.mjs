@@ -6290,6 +6290,28 @@ expectRed(
   /thing\.module\.ts:2 declares an @NgModule/,
 );
 
+falsePositiveControls += 1;
+expectGreen(
+  "the TestBed setup's zone module, which the library build excludes",
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/test-setup.ts`]:
+      "import { NgModule, provideZoneChangeDetection } from '@angular/core';\n" +
+      '@NgModule({ providers: [provideZoneChangeDetection()] })\nclass ZoneModule {}\n',
+  }),
+);
+
+expectRed(
+  'an NgModule in a file named test-setup.ts anywhere but the setup itself',
+  'checkSatoriComponentsFederationReadiness',
+  NXS_LIB({
+    [`${NXS_ROOT}/src/lib/thing/test-setup.ts`]:
+      "import { NgModule } from '@angular/core';\n@NgModule({})\nexport class ThingModule {}\n",
+  }),
+  null,
+  /thing\/test-setup\.ts:2 declares an @NgModule/,
+);
+
 expectRed(
   'a component with standalone: false',
   'checkSatoriComponentsFederationReadiness',

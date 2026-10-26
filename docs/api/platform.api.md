@@ -90,20 +90,20 @@ interface AppConfigServerDiagnostic {
     }
 }
 class AppConfigService {
-    readonly bootstrap: _angular_core.Signal<AppBootstrapConfig>;
-    readonly manifest: _angular_core.Signal<AppRuntimeManifest>;
-    readonly diagnostics: _angular_core.Signal<AppConfigDiagnostics>;
-    readonly activePreset: _angular_core.Signal<AppActivePreset | null>;
-    readonly themes: _angular_core.Signal<readonly AppThemeConfig[]>;
-    readonly brandingLogo: _angular_core.Signal<{
+    readonly bootstrap: import("@angular/core").Signal<AppBootstrapConfig>;
+    readonly manifest: import("@angular/core").Signal<AppRuntimeManifest>;
+    readonly diagnostics: import("@angular/core").Signal<AppConfigDiagnostics>;
+    readonly activePreset: import("@angular/core").Signal<AppActivePreset | null>;
+    readonly themes: import("@angular/core").Signal<readonly AppThemeConfig[]>;
+    readonly brandingLogo: import("@angular/core").Signal<{
     readonly url: string;
     readonly alt: string;
     } | null>;
     load(): Promise<void>;
     resolveTheme(id: string | null): AppThemeConfig;
     featureToggle(id: string, fallback: boolean): boolean;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<AppConfigService, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<AppConfigService>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<AppConfigService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 type AppConfigSource = 'configuration-service' | 'packaged-default';
@@ -207,26 +207,65 @@ const NXS_PRIMITIVE_IDS: Readonly<{
 const NXS_SIZE_RANGES: readonly ["tiny", "small", "medium", "big", "huge"];
 const NXS_TOAST_DURATION = 4000;
 class NxsActionMenuComponent {
-    readonly actions: _angular_core.InputSignal<readonly NxsMenuAction[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly icon: _angular_core.InputSignal<string>;
-    readonly selected: _angular_core.OutputEmitterRef<NxsMenuAction>;
-    protected readonly ownLabel: _angular_core.Signal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsActionMenuComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsActionMenuComponent, "nxs-action-menu", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, never, true, never>;
+    readonly actions: import("@angular/core").InputSignal<readonly NxsMenuAction[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly icon: import("@angular/core").InputSignal<string>;
+    readonly selected: import("@angular/core").OutputEmitterRef<NxsMenuAction>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsActionMenuComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsActionMenuComponent, "nxs-action-menu", never, {
+    "actions": {
+    "alias": "actions";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "icon": {
+    "alias": "icon";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "selected": "selected";
+    }, never, never, true, never>;
     }
 }
 type NxsAvatarColor = 'blue' | 'green' | 'orange' | 'pink' | 'purple' | 'red' | 'teal' | 'yellow';
 class NxsAvatarComponent implements NxsAvatarInputs {
-    readonly initials: _angular_core.InputSignal<string>;
-    readonly color: _angular_core.InputSignal<NxsAvatarColor>;
-    readonly size: _angular_core.InputSignal<NxsAvatarSize>;
-    readonly label: _angular_core.InputSignal<string>;
-    protected readonly name: _angular_core.Signal<string>;
-    protected readonly namedColor: _angular_core.Signal<Record<string, string> | null>;
-    protected readonly shownInitials: _angular_core.Signal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsAvatarComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsAvatarComponent, "nxs-avatar", never, { "initials": { "alias": "initials"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; "size": { "alias": "size"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    readonly initials: import("@angular/core").InputSignal<string>;
+    readonly color: import("@angular/core").InputSignal<NxsAvatarColor>;
+    readonly size: import("@angular/core").InputSignal<NxsAvatarSize>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    protected readonly name: import("@angular/core").Signal<string>;
+    protected readonly namedColor: import("@angular/core").Signal<Record<string, string> | null>;
+    protected readonly shownInitials: import("@angular/core").Signal<string>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsAvatarComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsAvatarComponent, "nxs-avatar", never, {
+    "initials": {
+    "alias": "initials";
+    "required": true;
+    "isSignal": true;
+    };
+    "color": {
+    "alias": "color";
+    "required": false;
+    "isSignal": true;
+    };
+    "size": {
+    "alias": "size";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsAvatarInputs {
@@ -245,15 +284,26 @@ interface NxsBreadcrumbItem {
     }
 }
 class NxsBreadcrumbsComponent implements NxsBreadcrumbsInputs {
-    readonly items: _angular_core.InputSignal<readonly NxsBreadcrumbItem[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    protected readonly name: _angular_core.Signal<string>;
-    protected readonly hiddenItems: _angular_core.Signal<NxsBreadcrumbItem[]>;
-    protected readonly entries: _angular_core.Signal<readonly TrailEntry[]>;
+    readonly items: import("@angular/core").InputSignal<readonly NxsBreadcrumbItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    protected readonly name: import("@angular/core").Signal<string>;
+    protected readonly hiddenItems: import("@angular/core").Signal<NxsBreadcrumbItem[]>;
+    protected readonly entries: import("@angular/core").Signal<readonly TrailEntry[]>;
     constructor();
     protected linkKind(item: NxsBreadcrumbItem): 'href' | 'router' | 'text';
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsBreadcrumbsComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsBreadcrumbsComponent, "nxs-breadcrumbs", never, { "items": { "alias": "items"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsBreadcrumbsComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsBreadcrumbsComponent, "nxs-breadcrumbs", never, {
+    "items": {
+    "alias": "items";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsBreadcrumbsInputs {
@@ -262,12 +312,12 @@ interface NxsBreadcrumbsInputs {
     }
 }
 class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
-    readonly columns: _angular_core.InputSignal<readonly NxsPickableColumn[]>;
-    readonly required: _angular_core.InputSignal<readonly string[]>;
-    readonly defaults: _angular_core.InputSignal<readonly string[]>;
-    readonly apply: _angular_core.OutputEmitterRef<readonly string[]>;
-    readonly dismiss: _angular_core.OutputEmitterRef<void>;
-    protected readonly chosen: _angular_core.Signal<readonly string[]>;
+    readonly columns: import("@angular/core").InputSignal<readonly NxsPickableColumn[]>;
+    readonly required: import("@angular/core").InputSignal<readonly string[]>;
+    readonly defaults: import("@angular/core").InputSignal<readonly string[]>;
+    readonly apply: import("@angular/core").OutputEmitterRef<readonly string[]>;
+    readonly dismiss: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly chosen: import("@angular/core").Signal<readonly string[]>;
     ngAfterViewInit(): void;
     ngOnDestroy(): void;
     protected isChosen(key: string): boolean;
@@ -276,8 +326,27 @@ class NxsColumnPickerComponent implements AfterViewInit, OnDestroy {
     protected reset(): void;
     protected commit(): void;
     protected cancel(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsColumnPickerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsColumnPickerComponent, "nxs-column-picker", never, { "columns": { "alias": "columns"; "required": true; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "defaults": { "alias": "defaults"; "required": false; "isSignal": true; }; }, { "apply": "apply"; "dismiss": "dismiss"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsColumnPickerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsColumnPickerComponent, "nxs-column-picker", never, {
+    "columns": {
+    "alias": "columns";
+    "required": true;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "defaults": {
+    "alias": "defaults";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "apply": "apply";
+    "dismiss": "dismiss";
+    }, never, never, true, never>;
     }
 }
 interface NxsCommentContext {
@@ -287,33 +356,33 @@ interface NxsCommentContext {
 class NxsCommentExtraDirective {
     readonly template: TemplateRef<NxsCommentContext>;
     static ngTemplateContextGuard(_directive: NxsCommentExtraDirective, _context: unknown): _context is NxsCommentContext;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsCommentExtraDirective, never>;
-    static ɵdir: _angular_core.ɵɵDirectiveDeclaration<NxsCommentExtraDirective, "ng-template[nxsCommentExtra]", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCommentExtraDirective, never>;
+    static ɵdir: i0.ɵɵDirectiveDeclaration<NxsCommentExtraDirective, "ng-template[nxsCommentExtra]", never, {}, {}, never, never, true, never>;
     }
 }
 class NxsCommentsComponent {
-    readonly documentUid: _angular_core.InputSignal<string>;
-    readonly readOnly: _angular_core.InputSignal<boolean>;
-    readonly pageSize: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly maxChars: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly threadChange: _angular_core.OutputEmitterRef<readonly NuxeoComment[]>;
-    protected readonly extra: _angular_core.Signal<NxsCommentExtraDirective | undefined>;
+    readonly documentUid: import("@angular/core").InputSignal<string>;
+    readonly readOnly: import("@angular/core").InputSignal<boolean>;
+    readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly maxChars: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly threadChange: import("@angular/core").OutputEmitterRef<readonly NuxeoComment[]>;
+    protected readonly extra: import("@angular/core").Signal<NxsCommentExtraDirective | undefined>;
     protected readonly id: string;
-    protected readonly loading: _angular_core.WritableSignal<boolean>;
-    protected readonly failed: _angular_core.WritableSignal<boolean>;
-    protected readonly saving: _angular_core.WritableSignal<boolean>;
-    protected readonly comments: _angular_core.WritableSignal<readonly NuxeoComment[]>;
-    protected readonly replies: _angular_core.WritableSignal<Readonly<Record<string, readonly NuxeoComment[]>>>;
-    protected readonly allShown: _angular_core.WritableSignal<boolean>;
-    protected readonly opened: _angular_core.WritableSignal<ReadonlySet<string>>;
-    protected readonly allRepliesShown: _angular_core.WritableSignal<ReadonlySet<string>>;
-    protected readonly fullText: _angular_core.WritableSignal<ReadonlySet<string>>;
-    protected readonly editing: _angular_core.WritableSignal<string | null>;
-    protected readonly editText: _angular_core.WritableSignal<string>;
-    protected readonly newText: _angular_core.WritableSignal<string>;
-    protected readonly replyTexts: _angular_core.WritableSignal<Readonly<Record<string, string>>>;
-    protected readonly shown: _angular_core.Signal<readonly NuxeoComment[]>;
-    protected readonly hiddenCount: _angular_core.Signal<number>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failed: import("@angular/core").WritableSignal<boolean>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
+    protected readonly comments: import("@angular/core").WritableSignal<readonly NuxeoComment[]>;
+    protected readonly replies: import("@angular/core").WritableSignal<Readonly<Record<string, readonly NuxeoComment[]>>>;
+    protected readonly allShown: import("@angular/core").WritableSignal<boolean>;
+    protected readonly opened: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly allRepliesShown: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly fullText: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly editing: import("@angular/core").WritableSignal<string | null>;
+    protected readonly editText: import("@angular/core").WritableSignal<string>;
+    protected readonly newText: import("@angular/core").WritableSignal<string>;
+    protected readonly replyTexts: import("@angular/core").WritableSignal<Readonly<Record<string, string>>>;
+    protected readonly shown: import("@angular/core").Signal<readonly NuxeoComment[]>;
+    protected readonly hiddenCount: import("@angular/core").Signal<number>;
     constructor();
     reload(): void;
     protected repliesOf(id: string): readonly NuxeoComment[];
@@ -338,20 +407,43 @@ class NxsCommentsComponent {
     protected menuClosed(): void;
     protected cancelEdit(): void;
     protected saveEdit(comment: NuxeoComment, parent: NuxeoComment | null): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsCommentsComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsCommentsComponent, "nxs-comments", never, { "documentUid": { "alias": "documentUid"; "required": true; "isSignal": true; }; "readOnly": { "alias": "readOnly"; "required": false; "isSignal": true; }; "pageSize": { "alias": "pageSize"; "required": false; "isSignal": true; }; "maxChars": { "alias": "maxChars"; "required": false; "isSignal": true; }; }, { "threadChange": "threadChange"; }, ["extra"], never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCommentsComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsCommentsComponent, "nxs-comments", never, {
+    "documentUid": {
+    "alias": "documentUid";
+    "required": true;
+    "isSignal": true;
+    };
+    "readOnly": {
+    "alias": "readOnly";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "maxChars": {
+    "alias": "maxChars";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "threadChange": "threadChange";
+    }, ["extra"], never, true, never>;
     }
 }
 class NxsCreateVersionDialogComponent {
     protected readonly data: NxsCreateVersionDialogData;
     protected increment: 'Major' | 'Minor';
-    protected readonly saving: _angular_core.WritableSignal<boolean>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
     protected readonly current: string;
     protected readonly nextMinor: string;
     protected readonly nextMajor: string;
     protected create(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsCreateVersionDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsCreateVersionDialogComponent, "nxs-create-version-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsCreateVersionDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsCreateVersionDialogComponent, "nxs-create-version-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsCreateVersionDialogData {
@@ -391,12 +483,50 @@ class NxsDateInputComponent implements ControlValueAccessor, Validator, DoCheck 
     protected typing(event: Event): void;
     protected changed(event: MatDatepickerInputEvent<unknown>): void;
     protected blurred(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDateInputComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDateInputComponent, "nxs-date-input", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "min": { "alias": "min"; "required": false; "isSignal": true; }; "max": { "alias": "max"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDateInputComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDateInputComponent, "nxs-date-input", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "min": {
+    "alias": "min";
+    "required": false;
+    "isSignal": true;
+    };
+    "max": {
+    "alias": "max";
+    "required": false;
+    "isSignal": true;
+    };
+    "hint": {
+    "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    }, never, never, true, never>;
     }
 }
 class NxsDeletePermissionDialogComponent {
-    protected readonly deleting: _angular_core.WritableSignal<boolean>;
+    protected readonly deleting: import("@angular/core").WritableSignal<boolean>;
     protected readonly principal: string;
     protected readonly right: string;
     protected readonly timeFrame: string;
@@ -405,10 +535,10 @@ class NxsDeletePermissionDialogComponent {
     label: string;
     value: string;
     }[];
-    protected readonly narrow: _angular_core.Signal<boolean>;
+    protected readonly narrow: import("@angular/core").Signal<boolean>;
     protected confirm(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDeletePermissionDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDeletePermissionDialogComponent, "nxs-delete-permission-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDeletePermissionDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDeletePermissionDialogComponent, "nxs-delete-permission-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsDeletePermissionDialogData {
@@ -418,21 +548,50 @@ interface NxsDeletePermissionDialogData {
     }
 }
 class NxsDetailsPanelComponent {
-    readonly heading: _angular_core.InputSignal<string>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly tabs: _angular_core.InputSignal<readonly NxsDetailsPanelTab[]>;
-    readonly selected: _angular_core.ModelSignal<string>;
-    readonly closeLabel: _angular_core.InputSignal<string>;
-    readonly closed: _angular_core.OutputEmitterRef<void>;
-    protected readonly regionLabel: _angular_core.Signal<string | null>;
-    protected readonly ownCloseLabel: _angular_core.Signal<string>;
-    protected readonly activeId: _angular_core.Signal<string>;
+    readonly heading: import("@angular/core").InputSignal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly tabs: import("@angular/core").InputSignal<readonly NxsDetailsPanelTab[]>;
+    readonly selected: import("@angular/core").ModelSignal<string>;
+    readonly closeLabel: import("@angular/core").InputSignal<string>;
+    readonly closed: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly regionLabel: import("@angular/core").Signal<string | null>;
+    protected readonly ownCloseLabel: import("@angular/core").Signal<string>;
+    protected readonly activeId: import("@angular/core").Signal<string>;
     protected readonly panelId: string;
     protected tabId(id: string): string;
     protected select(tab: NxsDetailsPanelTab): void;
     protected onKeydown(event: KeyboardEvent, index: number): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDetailsPanelComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDetailsPanelComponent, "nxs-details-panel", never, { "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "tabs": { "alias": "tabs"; "required": true; "isSignal": true; }; "selected": { "alias": "selected"; "required": false; "isSignal": true; }; "closeLabel": { "alias": "closeLabel"; "required": false; "isSignal": true; }; }, { "selected": "selectedChange"; "closed": "closed"; }, never, ["*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDetailsPanelComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDetailsPanelComponent, "nxs-details-panel", never, {
+    "heading": {
+    "alias": "heading";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "tabs": {
+    "alias": "tabs";
+    "required": true;
+    "isSignal": true;
+    };
+    "selected": {
+    "alias": "selected";
+    "required": false;
+    "isSignal": true;
+    };
+    "closeLabel": {
+    "alias": "closeLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "selected": "selectedChange";
+    "closed": "closed";
+    }, never, ["*"], true, never>;
     }
 }
 interface NxsDetailsPanelTab {
@@ -441,38 +600,49 @@ interface NxsDetailsPanelTab {
     }
 }
 class NxsDocTypeIconComponent {
-    readonly type: _angular_core.InputSignal<string>;
-    readonly label: _angular_core.InputSignal<string>;
-    protected readonly icon: _angular_core.Signal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocTypeIconComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocTypeIconComponent, "nxs-doc-type-icon", never, { "type": { "alias": "type"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    readonly type: import("@angular/core").InputSignal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    protected readonly icon: import("@angular/core").Signal<string>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocTypeIconComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocTypeIconComponent, "nxs-doc-type-icon", never, {
+    "type": {
+    "alias": "type";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 class NxsDocumentHistoryComponent {
-    readonly documentUid: _angular_core.InputSignal<string>;
-    readonly pageSize: _angular_core.InputSignal<number>;
-    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
+    readonly documentUid: import("@angular/core").InputSignal<string>;
+    readonly pageSize: import("@angular/core").InputSignal<number>;
+    readonly headingLevel: import("@angular/core").InputSignal<NxsHeadingLevel>;
     protected readonly columns: string[];
-    protected readonly filters: _angular_core.WritableSignal<NxsHistoryFilters>;
-    protected readonly userText: _angular_core.WritableSignal<string>;
-    protected readonly sort: _angular_core.WritableSignal<{
+    protected readonly filters: import("@angular/core").WritableSignal<NxsHistoryFilters>;
+    protected readonly userText: import("@angular/core").WritableSignal<string>;
+    protected readonly sort: import("@angular/core").WritableSignal<{
     by: AuditLogSortField;
     order: "asc" | "desc";
     }>;
-    protected readonly pageIndex: _angular_core.WritableSignal<number>;
-    protected readonly size: _angular_core.Signal<number>;
-    protected readonly entries: _angular_core.WritableSignal<readonly AuditEntry[]>;
-    protected readonly total: _angular_core.WritableSignal<number>;
-    protected readonly loading: _angular_core.WritableSignal<boolean>;
-    protected readonly failure: _angular_core.WritableSignal<NxsErrorStatus | null>;
-    protected readonly filtered: _angular_core.Signal<boolean>;
-    protected readonly eventTypes: _angular_core.WritableSignal<readonly DirectoryEntry[]>;
-    protected readonly categories: _angular_core.WritableSignal<readonly DirectoryEntry[]>;
-    protected readonly eventOptions: _angular_core.Signal<{
+    protected readonly pageIndex: import("@angular/core").WritableSignal<number>;
+    protected readonly size: import("@angular/core").Signal<number>;
+    protected readonly entries: import("@angular/core").WritableSignal<readonly AuditEntry[]>;
+    protected readonly total: import("@angular/core").WritableSignal<number>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failure: import("@angular/core").WritableSignal<NxsErrorStatus | null>;
+    protected readonly filtered: import("@angular/core").Signal<boolean>;
+    protected readonly eventTypes: import("@angular/core").WritableSignal<readonly DirectoryEntry[]>;
+    protected readonly categories: import("@angular/core").WritableSignal<readonly DirectoryEntry[]>;
+    protected readonly eventOptions: import("@angular/core").Signal<{
     id: string;
     label: string;
     }[]>;
-    protected readonly categoryOptions: _angular_core.Signal<{
+    protected readonly categoryOptions: import("@angular/core").Signal<{
     id: string;
     label: string;
     }[]>;
@@ -486,8 +656,24 @@ class NxsDocumentHistoryComponent {
     protected eventLabel(id: string): string;
     protected categoryLabel(id: string): string;
     protected initials(user: string): string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentHistoryComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentHistoryComponent, "nxs-document-history", never, { "documentUid": { "alias": "documentUid"; "required": true; "isSignal": true; }; "pageSize": { "alias": "pageSize"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentHistoryComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentHistoryComponent, "nxs-document-history", never, {
+    "documentUid": {
+    "alias": "documentUid";
+    "required": true;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsDocumentListColumn {
@@ -497,49 +683,49 @@ interface NxsDocumentListColumn {
     }
 }
 class NxsDocumentListComponent {
-    readonly documents: _angular_core.InputSignal<readonly NuxeoDocument[]>;
-    readonly columns: _angular_core.InputSignal<readonly NxsDocumentListColumn[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly sort: _angular_core.InputSignal<NxsDocumentListSort | null>;
-    readonly selectedIds: _angular_core.ModelSignal<readonly string[]>;
-    readonly selectable: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly pageIndex: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly pageSize: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly totalSize: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly hasNextPage: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly loading: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly error: _angular_core.InputSignal<NxsErrorStatus | null>;
-    readonly errorHeading: _angular_core.InputSignal<string>;
-    readonly emptyHeading: _angular_core.InputSignal<string>;
-    readonly emptyMessage: _angular_core.InputSignal<string>;
-    readonly stateHeadingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
-    readonly rowActions: _angular_core.InputSignal<Readonly<Record<string, readonly NxsMenuAction[]>>>;
-    readonly dropEnabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly dropLabel: _angular_core.InputSignal<string>;
-    readonly sortChange: _angular_core.OutputEmitterRef<NxsDocumentListSort | null>;
-    readonly pageChange: _angular_core.OutputEmitterRef<number>;
-    readonly open: _angular_core.OutputEmitterRef<NuxeoDocument>;
-    readonly rowAction: _angular_core.OutputEmitterRef<NxsDocumentListRowAction>;
-    readonly filesDropped: _angular_core.OutputEmitterRef<readonly File[]>;
-    readonly retry: _angular_core.OutputEmitterRef<void>;
+    readonly documents: import("@angular/core").InputSignal<readonly NuxeoDocument[]>;
+    readonly columns: import("@angular/core").InputSignal<readonly NxsDocumentListColumn[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly sort: import("@angular/core").InputSignal<NxsDocumentListSort | null>;
+    readonly selectedIds: import("@angular/core").ModelSignal<readonly string[]>;
+    readonly selectable: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly loading: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly error: import("@angular/core").InputSignal<NxsErrorStatus | null>;
+    readonly errorHeading: import("@angular/core").InputSignal<string>;
+    readonly emptyHeading: import("@angular/core").InputSignal<string>;
+    readonly emptyMessage: import("@angular/core").InputSignal<string>;
+    readonly stateHeadingLevel: import("@angular/core").InputSignal<NxsHeadingLevel>;
+    readonly rowActions: import("@angular/core").InputSignal<Readonly<Record<string, readonly NxsMenuAction[]>>>;
+    readonly dropEnabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly dropLabel: import("@angular/core").InputSignal<string>;
+    readonly sortChange: import("@angular/core").OutputEmitterRef<NxsDocumentListSort | null>;
+    readonly pageChange: import("@angular/core").OutputEmitterRef<number>;
+    readonly open: import("@angular/core").OutputEmitterRef<NuxeoDocument>;
+    readonly rowAction: import("@angular/core").OutputEmitterRef<NxsDocumentListRowAction>;
+    readonly filesDropped: import("@angular/core").OutputEmitterRef<readonly File[]>;
+    readonly retry: import("@angular/core").OutputEmitterRef<void>;
     protected readonly tagId: "nxs.primitives.tag";
     protected readonly avatarId: "nxs.primitives.avatar";
     protected readonly hintId: string;
     protected readonly selectColumn = "__select";
     protected readonly actionsColumn = "__actions";
     protected readonly drop: NxsFileDropTracker;
-    protected readonly activeIndex: _angular_core.WritableSignal<number>;
-    protected readonly selected: _angular_core.Signal<Set<string>>;
-    protected readonly sortableColumns: _angular_core.Signal<NxsDocumentListColumn[]>;
-    protected readonly plainColumns: _angular_core.Signal<NxsDocumentListColumn[]>;
-    protected readonly hasRowActions: _angular_core.Signal<boolean>;
-    protected readonly displayedColumns: _angular_core.Signal<string[]>;
-    protected readonly pageIds: _angular_core.Signal<string[]>;
-    protected readonly allOnPageSelected: _angular_core.Signal<boolean>;
-    protected readonly someOnPageSelected: _angular_core.Signal<boolean>;
-    protected readonly rowCount: _angular_core.Signal<number>;
-    protected readonly matSortActive: _angular_core.Signal<string>;
-    protected readonly matSortDirection: _angular_core.Signal<"" | "asc" | "desc">;
+    protected readonly activeIndex: import("@angular/core").WritableSignal<number>;
+    protected readonly selected: import("@angular/core").Signal<Set<string>>;
+    protected readonly sortableColumns: import("@angular/core").Signal<NxsDocumentListColumn[]>;
+    protected readonly plainColumns: import("@angular/core").Signal<NxsDocumentListColumn[]>;
+    protected readonly hasRowActions: import("@angular/core").Signal<boolean>;
+    protected readonly displayedColumns: import("@angular/core").Signal<string[]>;
+    protected readonly pageIds: import("@angular/core").Signal<string[]>;
+    protected readonly allOnPageSelected: import("@angular/core").Signal<boolean>;
+    protected readonly someOnPageSelected: import("@angular/core").Signal<boolean>;
+    protected readonly rowCount: import("@angular/core").Signal<number>;
+    protected readonly matSortActive: import("@angular/core").Signal<string>;
+    protected readonly matSortDirection: import("@angular/core").Signal<"" | "asc" | "desc">;
     constructor();
     protected actionsFor(doc: NuxeoDocument): readonly NxsMenuAction[];
     protected isSelected(doc: NuxeoDocument): boolean;
@@ -565,8 +751,112 @@ class NxsDocumentListComponent {
     protected onOpenClick(event: MouseEvent, doc: NuxeoDocument, index: number): void;
     protected onRowFocusIn(index: number): void;
     protected onRowKeydown(event: KeyboardEvent, doc: NuxeoDocument, index: number): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentListComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentListComponent, "nxs-document-list", never, { "documents": { "alias": "documents"; "required": true; "isSignal": true; }; "columns": { "alias": "columns"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "sort": { "alias": "sort"; "required": false; "isSignal": true; }; "selectedIds": { "alias": "selectedIds"; "required": false; "isSignal": true; }; "selectable": { "alias": "selectable"; "required": false; "isSignal": true; }; "pageIndex": { "alias": "pageIndex"; "required": false; "isSignal": true; }; "pageSize": { "alias": "pageSize"; "required": false; "isSignal": true; }; "totalSize": { "alias": "totalSize"; "required": false; "isSignal": true; }; "hasNextPage": { "alias": "hasNextPage"; "required": false; "isSignal": true; }; "loading": { "alias": "loading"; "required": false; "isSignal": true; }; "error": { "alias": "error"; "required": false; "isSignal": true; }; "errorHeading": { "alias": "errorHeading"; "required": false; "isSignal": true; }; "emptyHeading": { "alias": "emptyHeading"; "required": false; "isSignal": true; }; "emptyMessage": { "alias": "emptyMessage"; "required": false; "isSignal": true; }; "stateHeadingLevel": { "alias": "stateHeadingLevel"; "required": false; "isSignal": true; }; "rowActions": { "alias": "rowActions"; "required": false; "isSignal": true; }; "dropEnabled": { "alias": "dropEnabled"; "required": false; "isSignal": true; }; "dropLabel": { "alias": "dropLabel"; "required": false; "isSignal": true; }; }, { "selectedIds": "selectedIdsChange"; "sortChange": "sortChange"; "pageChange": "pageChange"; "open": "open"; "rowAction": "rowAction"; "filesDropped": "filesDropped"; "retry": "retry"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentListComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentListComponent, "nxs-document-list", never, {
+    "documents": {
+    "alias": "documents";
+    "required": true;
+    "isSignal": true;
+    };
+    "columns": {
+    "alias": "columns";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "sort": {
+    "alias": "sort";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectedIds": {
+    "alias": "selectedIds";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectable": {
+    "alias": "selectable";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageIndex": {
+    "alias": "pageIndex";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "totalSize": {
+    "alias": "totalSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "hasNextPage": {
+    "alias": "hasNextPage";
+    "required": false;
+    "isSignal": true;
+    };
+    "loading": {
+    "alias": "loading";
+    "required": false;
+    "isSignal": true;
+    };
+    "error": {
+    "alias": "error";
+    "required": false;
+    "isSignal": true;
+    };
+    "errorHeading": {
+    "alias": "errorHeading";
+    "required": false;
+    "isSignal": true;
+    };
+    "emptyHeading": {
+    "alias": "emptyHeading";
+    "required": false;
+    "isSignal": true;
+    };
+    "emptyMessage": {
+    "alias": "emptyMessage";
+    "required": false;
+    "isSignal": true;
+    };
+    "stateHeadingLevel": {
+    "alias": "stateHeadingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    "rowActions": {
+    "alias": "rowActions";
+    "required": false;
+    "isSignal": true;
+    };
+    "dropEnabled": {
+    "alias": "dropEnabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "dropLabel": {
+    "alias": "dropLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "selectedIds": "selectedIdsChange";
+    "sortChange": "sortChange";
+    "pageChange": "pageChange";
+    "open": "open";
+    "rowAction": "rowAction";
+    "filesDropped": "filesDropped";
+    "retry": "retry";
+    }, never, never, true, never>;
     }
 }
 interface NxsDocumentListRowAction {
@@ -587,20 +877,20 @@ interface NxsDocumentReference {
     }
 }
 class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Validator, DoCheck {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly documentTypes: _angular_core.InputSignal<readonly string[]>;
-    readonly idProperty: _angular_core.InputSignal<"path" | "uid">;
-    readonly hint: _angular_core.InputSignal<string>;
-    readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly value: _angular_core.ModelSignal<string | null>;
-    readonly documentChange: _angular_core.OutputEmitterRef<NxsDocumentReference | null>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly documentTypes: import("@angular/core").InputSignal<readonly string[]>;
+    readonly idProperty: import("@angular/core").InputSignal<"path" | "uid">;
+    readonly hint: import("@angular/core").InputSignal<string>;
+    readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly value: import("@angular/core").ModelSignal<string | null>;
+    readonly documentChange: import("@angular/core").OutputEmitterRef<NxsDocumentReference | null>;
     protected readonly minChars = 3;
-    protected readonly document: _angular_core.WritableSignal<NxsDocumentReference | null>;
-    protected readonly text: _angular_core.WritableSignal<string>;
+    protected readonly document: import("@angular/core").WritableSignal<NxsDocumentReference | null>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsDocumentReference>;
-    protected readonly isDisabled: _angular_core.Signal<boolean>;
-    protected readonly unmatched: _angular_core.Signal<boolean>;
+    protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
@@ -618,66 +908,147 @@ class NxsDocumentReferenceInputComponent implements ControlValueAccessor, Valida
     protected choose(document: NxsDocumentReference | null): void;
     protected clear(): void;
     protected blurred(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentReferenceInputComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "documentTypes": { "alias": "documentTypes"; "required": false; "isSignal": true; }; "idProperty": { "alias": "idProperty"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; "documentChange": "documentChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentReferenceInputComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentReferenceInputComponent, "nxs-document-reference-input", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "documentTypes": {
+    "alias": "documentTypes";
+    "required": false;
+    "isSignal": true;
+    };
+    "idProperty": {
+    "alias": "idProperty";
+    "required": false;
+    "isSignal": true;
+    };
+    "hint": {
+    "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    "documentChange": "documentChange";
+    }, never, never, true, never>;
     }
 }
 class NxsDocumentToolbarComponent {
-    readonly actions: _angular_core.InputSignal<readonly NxsToolbarAction[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly moreLabel: _angular_core.InputSignal<string>;
-    readonly selected: _angular_core.OutputEmitterRef<NxsToolbarAction>;
-    protected readonly inline: _angular_core.Signal<NxsToolbarAction[]>;
-    protected readonly overflow: _angular_core.Signal<NxsToolbarAction[]>;
-    protected readonly ownLabel: _angular_core.Signal<string>;
-    protected readonly ownMoreLabel: _angular_core.Signal<string>;
+    readonly actions: import("@angular/core").InputSignal<readonly NxsToolbarAction[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly moreLabel: import("@angular/core").InputSignal<string>;
+    readonly selected: import("@angular/core").OutputEmitterRef<NxsToolbarAction>;
+    protected readonly inline: import("@angular/core").Signal<NxsToolbarAction[]>;
+    protected readonly overflow: import("@angular/core").Signal<NxsToolbarAction[]>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
+    protected readonly ownMoreLabel: import("@angular/core").Signal<string>;
     protected tooltipOf(action: NxsToolbarAction): string;
     protected extraOf(action: NxsToolbarAction): string;
     protected nameOf(action: NxsToolbarAction): string;
     protected run(action: NxsToolbarAction): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, { "actions": { "alias": "actions"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "moreLabel": { "alias": "moreLabel"; "required": false; "isSignal": true; }; }, { "selected": "selected"; }, never, ["*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentToolbarComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentToolbarComponent, "nxs-document-toolbar", never, {
+    "actions": {
+    "alias": "actions";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "moreLabel": {
+    "alias": "moreLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "selected": "selected";
+    }, never, ["*"], true, never>;
     }
 }
 class NxsDocumentTreeComponent {
-    readonly currentPath: _angular_core.InputSignal<string>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly navigate: _angular_core.OutputEmitterRef<NuxeoDocument>;
-    protected readonly status: _angular_core.WritableSignal<"error" | "loading" | "ready">;
-    protected readonly loadError: _angular_core.WritableSignal<NxsErrorStatus>;
-    protected readonly focusKey: _angular_core.WritableSignal<string | null>;
-    protected readonly topNodes: _angular_core.Signal<readonly TreeNode[]>;
-    protected readonly showRootBack: _angular_core.Signal<boolean>;
-    protected readonly rows: _angular_core.Signal<readonly TreeRow[]>;
-    protected readonly currentKey: _angular_core.Signal<string | null>;
+    readonly currentPath: import("@angular/core").InputSignal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly navigate: import("@angular/core").OutputEmitterRef<NuxeoDocument>;
+    protected readonly status: import("@angular/core").WritableSignal<"error" | "loading" | "ready">;
+    protected readonly loadError: import("@angular/core").WritableSignal<NxsErrorStatus>;
+    protected readonly focusKey: import("@angular/core").WritableSignal<string | null>;
+    protected readonly topNodes: import("@angular/core").Signal<readonly TreeNode[]>;
+    protected readonly showRootBack: import("@angular/core").Signal<boolean>;
+    protected readonly rows: import("@angular/core").Signal<readonly TreeRow[]>;
+    protected readonly currentKey: import("@angular/core").Signal<string | null>;
     protected rowFor(key: string): TreeRow | undefined;
-    protected readonly tabStop: _angular_core.Signal<string>;
+    protected readonly tabStop: import("@angular/core").Signal<string>;
     constructor();
     reload(): void;
     protected nodeLabel(node: TreeNode): string;
     protected onItemClick(event: MouseEvent, row: TreeRow): void;
     protected onKeydown(event: KeyboardEvent, row: TreeRow): void;
     protected openRoot(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDocumentTreeComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDocumentTreeComponent, "nxs-document-tree", never, { "currentPath": { "alias": "currentPath"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; }, { "navigate": "navigate"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDocumentTreeComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDocumentTreeComponent, "nxs-document-tree", never, {
+    "currentPath": {
+    "alias": "currentPath";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    }, {
+    "navigate": "navigate";
+    }, never, never, true, never>;
     }
 }
 class NxsDomainHintComponent {
-    readonly documentType: _angular_core.InputSignal<string | null | undefined>;
-    readonly path: _angular_core.InputSignal<string | null | undefined>;
+    readonly documentType: import("@angular/core").InputSignal<string | null | undefined>;
+    readonly path: import("@angular/core").InputSignal<string | null | undefined>;
     protected readonly guidanceKey = "browse.message.domain-container-guidance";
-    protected readonly visible: _angular_core.Signal<boolean>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDomainHintComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDomainHintComponent, "nxs-domain-hint", never, { "documentType": { "alias": "documentType"; "required": false; "isSignal": true; }; "path": { "alias": "path"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    protected readonly visible: import("@angular/core").Signal<boolean>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDomainHintComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDomainHintComponent, "nxs-domain-hint", never, {
+    "documentType": {
+    "alias": "documentType";
+    "required": false;
+    "isSignal": true;
+    };
+    "path": {
+    "alias": "path";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 class NxsDriveDialogComponent {
     protected readonly packages: readonly DrivePackage[];
-    protected readonly checking: _angular_core.WritableSignal<boolean>;
+    protected readonly checking: import("@angular/core").WritableSignal<boolean>;
     constructor();
     protected close(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDriveDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDriveDialogComponent, "nxs-drive-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDriveDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDriveDialogComponent, "nxs-drive-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsDriveDialogData {
@@ -685,19 +1056,47 @@ interface NxsDriveDialogData {
     }
 }
 class NxsDropzoneComponent {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly buttonLabel: _angular_core.InputSignal<string>;
-    readonly multiple: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly accept: _angular_core.InputSignal<string>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly files: _angular_core.OutputEmitterRef<readonly File[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly buttonLabel: import("@angular/core").InputSignal<string>;
+    readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly accept: import("@angular/core").InputSignal<string>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly files: import("@angular/core").OutputEmitterRef<readonly File[]>;
     protected readonly drop: NxsFileDropTracker;
     protected readonly buttonId: string;
     protected choose(): void;
     protected onPicked(event: Event): void;
     protected onDrop(event: DragEvent): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsDropzoneComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsDropzoneComponent, "nxs-dropzone", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "buttonLabel": { "alias": "buttonLabel"; "required": false; "isSignal": true; }; "multiple": { "alias": "multiple"; "required": false; "isSignal": true; }; "accept": { "alias": "accept"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "files": "files"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsDropzoneComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsDropzoneComponent, "nxs-dropzone", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "buttonLabel": {
+    "alias": "buttonLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "multiple": {
+    "alias": "multiple";
+    "required": false;
+    "isSignal": true;
+    };
+    "accept": {
+    "alias": "accept";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "files": "files";
+    }, never, never, true, never>;
     }
 }
 interface NxsEditorConstraints {
@@ -738,23 +1137,72 @@ class NxsEmptyStateComponent {
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     readonly message: InputSignal<string>;
     readonly icon: InputSignal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsEmptyStateComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "message": { "alias": "message"; "required": false; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsEmptyStateComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsEmptyStateComponent, "nxs-empty-state", never, {
+    "heading": {
+    "alias": "heading";
+    "required": true;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    "message": {
+    "alias": "message";
+    "required": false;
+    "isSignal": true;
+    };
+    "icon": {
+    "alias": "icon";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, ["*"], true, never>;
     }
 }
 class NxsErrorStateComponent implements NxsErrorStateInputs {
-    readonly status: _angular_core.InputSignal<NxsErrorStatus>;
-    readonly heading: _angular_core.InputSignal<string>;
-    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
-    readonly retryable: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly retryHandler: _angular_core.InputSignal<(() => void) | null>;
-    readonly retry: _angular_core.OutputEmitterRef<void>;
-    protected readonly variant: _angular_core.Signal<Variant>;
-    protected readonly ownHeading: _angular_core.Signal<string>;
-    protected readonly canRetry: _angular_core.Signal<boolean>;
+    readonly status: import("@angular/core").InputSignal<NxsErrorStatus>;
+    readonly heading: import("@angular/core").InputSignal<string>;
+    readonly headingLevel: import("@angular/core").InputSignal<NxsHeadingLevel>;
+    readonly retryable: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly retryHandler: import("@angular/core").InputSignal<(() => void) | null>;
+    readonly retry: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly variant: import("@angular/core").Signal<Variant>;
+    protected readonly ownHeading: import("@angular/core").Signal<string>;
+    protected readonly canRetry: import("@angular/core").Signal<boolean>;
     protected pressRetry(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsErrorStateComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsErrorStateComponent, "nxs-error-state", never, { "status": { "alias": "status"; "required": false; "isSignal": true; }; "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "retryable": { "alias": "retryable"; "required": false; "isSignal": true; }; "retryHandler": { "alias": "retryHandler"; "required": false; "isSignal": true; }; }, { "retry": "retry"; }, never, ["*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsErrorStateComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsErrorStateComponent, "nxs-error-state", never, {
+    "status": {
+    "alias": "status";
+    "required": false;
+    "isSignal": true;
+    };
+    "heading": {
+    "alias": "heading";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    "retryable": {
+    "alias": "retryable";
+    "required": false;
+    "isSignal": true;
+    };
+    "retryHandler": {
+    "alias": "retryHandler";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "retry": "retry";
+    }, never, ["*"], true, never>;
     }
 }
 interface NxsErrorStateInputs {
@@ -773,16 +1221,36 @@ interface NxsFacetOption {
     }
 }
 class NxsFavoriteToggleComponent {
-    readonly documentId: _angular_core.InputSignal<string>;
-    readonly favorite: _angular_core.ModelSignal<boolean>;
-    readonly disabled: _angular_core.InputSignal<boolean>;
-    readonly changed: _angular_core.OutputEmitterRef<boolean>;
-    readonly failed: _angular_core.OutputEmitterRef<unknown>;
-    protected readonly busy: _angular_core.Signal<boolean>;
+    readonly documentId: import("@angular/core").InputSignal<string>;
+    readonly favorite: import("@angular/core").ModelSignal<boolean>;
+    readonly disabled: import("@angular/core").InputSignal<boolean>;
+    readonly changed: import("@angular/core").OutputEmitterRef<boolean>;
+    readonly failed: import("@angular/core").OutputEmitterRef<unknown>;
+    protected readonly busy: import("@angular/core").Signal<boolean>;
     protected toggle(): void;
     protected press(event: Event): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "favorite": { "alias": "favorite"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; }, { "favorite": "favoriteChange"; "changed": "changed"; "failed": "failed"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsFavoriteToggleComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsFavoriteToggleComponent, "nxs-favorite-toggle", never, {
+    "documentId": {
+    "alias": "documentId";
+    "required": true;
+    "isSignal": true;
+    };
+    "favorite": {
+    "alias": "favorite";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "favorite": "favoriteChange";
+    "changed": "changed";
+    "failed": "failed";
+    }, never, never, true, never>;
     }
 }
 class NxsFolderHeaderComponent {
@@ -790,29 +1258,50 @@ class NxsFolderHeaderComponent {
     readonly headingLevel: InputSignal<NxsHeadingLevel>;
     readonly subheading: InputSignal<string>;
     readonly documentType: InputSignal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFolderHeaderComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFolderHeaderComponent, "nxs-folder-header", never, { "heading": { "alias": "heading"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "subheading": { "alias": "subheading"; "required": false; "isSignal": true; }; "documentType": { "alias": "documentType"; "required": false; "isSignal": true; }; }, {}, never, ["[nxsFolderHeaderDetail]", "*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsFolderHeaderComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsFolderHeaderComponent, "nxs-folder-header", never, {
+    "heading": {
+    "alias": "heading";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    "subheading": {
+    "alias": "subheading";
+    "required": false;
+    "isSignal": true;
+    };
+    "documentType": {
+    "alias": "documentType";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, ["[nxsFolderHeaderDetail]", "*"], true, never>;
     }
 }
 class NxsFolderPickerDialogComponent {
     protected readonly data: NxsFolderPickerDialogData;
-    protected readonly path: _angular_core.WritableSignal<string>;
-    protected readonly folder: _angular_core.WritableSignal<NuxeoDocument | null>;
-    protected readonly folders: _angular_core.WritableSignal<readonly NuxeoDocument[]>;
-    protected readonly loading: _angular_core.WritableSignal<boolean>;
-    protected readonly failure: _angular_core.WritableSignal<NxsErrorStatus | "not-a-folder" | null>;
-    protected readonly trail: _angular_core.Signal<string[]>;
-    protected readonly canGoUp: _angular_core.Signal<boolean>;
-    protected readonly refusal: _angular_core.Signal<"already" | "inside" | null>;
-    protected readonly canChoose: _angular_core.Signal<boolean>;
+    protected readonly path: import("@angular/core").WritableSignal<string>;
+    protected readonly folder: import("@angular/core").WritableSignal<NuxeoDocument | null>;
+    protected readonly folders: import("@angular/core").WritableSignal<readonly NuxeoDocument[]>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failure: import("@angular/core").WritableSignal<NxsErrorStatus | "not-a-folder" | null>;
+    protected readonly trail: import("@angular/core").Signal<string[]>;
+    protected readonly canGoUp: import("@angular/core").Signal<boolean>;
+    protected readonly refusal: import("@angular/core").Signal<"already" | "inside" | null>;
+    protected readonly canChoose: import("@angular/core").Signal<boolean>;
     constructor();
     protected load(): void;
     protected open(doc: NuxeoDocument): void;
     protected up(): void;
     protected choose(): void;
     protected cancel(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsFolderPickerDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsFolderPickerDialogComponent, "nxs-folder-picker-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsFolderPickerDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsFolderPickerDialogComponent, "nxs-folder-picker-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsFolderPickerDialogData {
@@ -831,25 +1320,36 @@ interface NxsFolderPickerDialogResult {
 }
 type NxsHeadingLevel = 1 | 2 | 3 | 4 | 5 | 6;
 class NxsIconComponent {
-    readonly name: _angular_core.InputSignal<string>;
-    readonly label: _angular_core.InputSignal<string>;
-    protected readonly accessibleName: _angular_core.Signal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsIconComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsIconComponent, "nxs-icon", never, { "name": { "alias": "name"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    readonly name: import("@angular/core").InputSignal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    protected readonly accessibleName: import("@angular/core").Signal<string>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsIconComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsIconComponent, "nxs-icon", never, {
+    "name": {
+    "alias": "name";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 class NxsManageVersionsComponent {
-    readonly document: _angular_core.InputSignal<NuxeoDocument>;
-    readonly versionSelected: _angular_core.OutputEmitterRef<NuxeoDocument>;
-    readonly latestSelected: _angular_core.OutputEmitterRef<void>;
-    readonly versionCreated: _angular_core.OutputEmitterRef<NuxeoDocument>;
-    protected readonly label: _angular_core.Signal<string>;
-    protected readonly hasVersions: _angular_core.Signal<boolean>;
-    protected readonly canCreate: _angular_core.Signal<boolean>;
-    protected readonly offersCreate: _angular_core.Signal<boolean>;
-    protected readonly versions: _angular_core.WritableSignal<readonly NuxeoDocument[]>;
-    protected readonly loading: _angular_core.WritableSignal<boolean>;
-    protected readonly failed: _angular_core.WritableSignal<boolean>;
+    readonly document: import("@angular/core").InputSignal<NuxeoDocument>;
+    readonly versionSelected: import("@angular/core").OutputEmitterRef<NuxeoDocument>;
+    readonly latestSelected: import("@angular/core").OutputEmitterRef<void>;
+    readonly versionCreated: import("@angular/core").OutputEmitterRef<NuxeoDocument>;
+    protected readonly label: import("@angular/core").Signal<string>;
+    protected readonly hasVersions: import("@angular/core").Signal<boolean>;
+    protected readonly canCreate: import("@angular/core").Signal<boolean>;
+    protected readonly offersCreate: import("@angular/core").Signal<boolean>;
+    protected readonly versions: import("@angular/core").WritableSignal<readonly NuxeoDocument[]>;
+    protected readonly loading: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failed: import("@angular/core").WritableSignal<boolean>;
     constructor();
     protected opened(): void;
     protected retry(event: Event): void;
@@ -858,8 +1358,18 @@ class NxsManageVersionsComponent {
     protected modified(version: NuxeoDocument): string;
     protected choose(version: NuxeoDocument): void;
     protected create(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsManageVersionsComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsManageVersionsComponent, "nxs-manage-versions", never, { "document": { "alias": "document"; "required": true; "isSignal": true; }; }, { "versionSelected": "versionSelected"; "latestSelected": "latestSelected"; "versionCreated": "versionCreated"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsManageVersionsComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsManageVersionsComponent, "nxs-manage-versions", never, {
+    "document": {
+    "alias": "document";
+    "required": true;
+    "isSignal": true;
+    };
+    }, {
+    "versionSelected": "versionSelected";
+    "latestSelected": "latestSelected";
+    "versionCreated": "versionCreated";
+    }, never, never, true, never>;
     }
 }
 interface NxsMenuAction {
@@ -870,14 +1380,14 @@ interface NxsMenuAction {
     }
 }
 class NxsMetadataEditorComponent {
-    readonly sections: _angular_core.InputSignal<readonly NxsEditorSection[]>;
-    readonly display: _angular_core.InputSignal<NxsEditorDisplay>;
-    readonly values: _angular_core.InputSignal<Readonly<Record<string, unknown>>>;
-    readonly dublinCore: _angular_core.InputSignal<boolean>;
-    readonly disabled: _angular_core.InputSignal<boolean>;
-    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
-    readonly tabsLabel: _angular_core.InputSignal<string>;
-    readonly validChange: _angular_core.OutputEmitterRef<boolean>;
+    readonly sections: import("@angular/core").InputSignal<readonly NxsEditorSection[]>;
+    readonly display: import("@angular/core").InputSignal<NxsEditorDisplay>;
+    readonly values: import("@angular/core").InputSignal<Readonly<Record<string, unknown>>>;
+    readonly dublinCore: import("@angular/core").InputSignal<boolean>;
+    readonly disabled: import("@angular/core").InputSignal<boolean>;
+    readonly headingLevel: import("@angular/core").InputSignal<NxsHeadingLevel>;
+    readonly tabsLabel: import("@angular/core").InputSignal<string>;
+    readonly validChange: import("@angular/core").OutputEmitterRef<boolean>;
     protected readonly id: string;
     protected readonly form: FormGroup<Record<string, AbstractControl<any, any, any>>>;
     protected readonly structure: _angular_core.WritableSignal<number>;
@@ -912,30 +1422,106 @@ class NxsMetadataEditorComponent {
     protected addComplexItem(control: AbstractControl, definition: NxsEditorFieldType, depth: number): void;
     protected removeComplexItem(control: AbstractControl, index: number): void;
     protected selectTab(index: number): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsMetadataEditorComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsMetadataEditorComponent, "nxs-metadata-editor", never, { "sections": { "alias": "sections"; "required": false; "isSignal": true; }; "display": { "alias": "display"; "required": false; "isSignal": true; }; "values": { "alias": "values"; "required": false; "isSignal": true; }; "dublinCore": { "alias": "dublinCore"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; "tabsLabel": { "alias": "tabsLabel"; "required": false; "isSignal": true; }; }, { "validChange": "validChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsMetadataEditorComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsMetadataEditorComponent, "nxs-metadata-editor", never, {
+    "sections": {
+    "alias": "sections";
+    "required": false;
+    "isSignal": true;
+    };
+    "display": {
+    "alias": "display";
+    "required": false;
+    "isSignal": true;
+    };
+    "values": {
+    "alias": "values";
+    "required": false;
+    "isSignal": true;
+    };
+    "dublinCore": {
+    "alias": "dublinCore";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    "tabsLabel": {
+    "alias": "tabsLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "validChange": "validChange";
+    }, never, never, true, never>;
     }
 }
 class NxsPagerComponent {
-    readonly pageIndex: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly pageSize: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly itemCount: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly totalSize: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly hasNextPage: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly pageChange: _angular_core.OutputEmitterRef<number>;
-    protected readonly visible: _angular_core.Signal<boolean>;
-    protected readonly first: _angular_core.Signal<number>;
-    protected readonly last: _angular_core.Signal<number>;
-    protected readonly knownTotal: _angular_core.Signal<number | null>;
-    protected readonly canPrevious: _angular_core.Signal<boolean>;
-    protected readonly canNext: _angular_core.Signal<boolean>;
-    protected readonly ownLabel: _angular_core.Signal<string>;
+    readonly pageIndex: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly pageSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly itemCount: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly totalSize: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly hasNextPage: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly pageChange: import("@angular/core").OutputEmitterRef<number>;
+    protected readonly visible: import("@angular/core").Signal<boolean>;
+    protected readonly first: import("@angular/core").Signal<number>;
+    protected readonly last: import("@angular/core").Signal<number>;
+    protected readonly knownTotal: import("@angular/core").Signal<number | null>;
+    protected readonly canPrevious: import("@angular/core").Signal<boolean>;
+    protected readonly canNext: import("@angular/core").Signal<boolean>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
     previous(): void;
     next(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsPagerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsPagerComponent, "nxs-pager", never, { "pageIndex": { "alias": "pageIndex"; "required": false; "isSignal": true; }; "pageSize": { "alias": "pageSize"; "required": false; "isSignal": true; }; "itemCount": { "alias": "itemCount"; "required": false; "isSignal": true; }; "totalSize": { "alias": "totalSize"; "required": false; "isSignal": true; }; "hasNextPage": { "alias": "hasNextPage"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, { "pageChange": "pageChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsPagerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsPagerComponent, "nxs-pager", never, {
+    "pageIndex": {
+    "alias": "pageIndex";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageSize": {
+    "alias": "pageSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "itemCount": {
+    "alias": "itemCount";
+    "required": false;
+    "isSignal": true;
+    };
+    "totalSize": {
+    "alias": "totalSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "hasNextPage": {
+    "alias": "hasNextPage";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "pageChange": "pageChange";
+    }, never, never, true, never>;
     }
 }
 class NxsPermissionsPanelComponent {
@@ -967,14 +1553,14 @@ class NxsPermissionsPanelComponent {
     protected readonly canManage: _angular_core.Signal<boolean>;
     protected readonly editable: _angular_core.Signal<boolean>;
     protected readonly trackItem: (_index: number, item: LocalItem) => string;
-    protected readonly pendingCount: _angular_core.Signal<number>;
-    protected readonly permissionGroups: _angular_core.Signal<{
+    protected readonly pendingCount: import("@angular/core").Signal<number>;
+    protected readonly permissionGroups: import("@angular/core").Signal<{
     label: string;
     permissions: readonly string[];
     }[]>;
-    protected readonly localItems: _angular_core.Signal<LocalItem[]>;
-    protected readonly editorExtraPermissions: _angular_core.Signal<readonly string[]>;
-    protected readonly editorInvalidRange: _angular_core.Signal<boolean>;
+    protected readonly localItems: import("@angular/core").Signal<LocalItem[]>;
+    protected readonly editorExtraPermissions: import("@angular/core").Signal<readonly string[]>;
+    protected readonly editorInvalidRange: import("@angular/core").Signal<boolean>;
     constructor();
     protected reload(): void;
     protected permissionLabel(permission: string): string;
@@ -999,8 +1585,24 @@ class NxsPermissionsPanelComponent {
     protected failedEntry(outcome: Extract<NxsSaveOutcome, {
     kind: 'failed';
     }>): string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsPermissionsPanelComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsPermissionsPanelComponent, "nxs-permissions-panel", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "permissionsChanged": { "alias": "permissionsChanged"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsPermissionsPanelComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsPermissionsPanelComponent, "nxs-permissions-panel", never, {
+    "documentId": {
+    "alias": "documentId";
+    "required": true;
+    "isSignal": true;
+    };
+    "permissionsChanged": {
+    "alias": "permissionsChanged";
+    "required": false;
+    "isSignal": true;
+    };
+    "offer": {
+    "alias": "offer";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsPickableColumn {
@@ -1019,48 +1621,86 @@ interface NxsPrincipal {
 }
 type NxsPrincipalSearch = 'groups' | 'users' | 'users-and-groups';
 class NxsPropertiesPanelComponent {
-    readonly document: _angular_core.InputSignal<NuxeoDocument | null>;
-    readonly vocabularyLabel: _angular_core.InputSignal<NxsVocabularyLabel | null>;
-    readonly processRunning: _angular_core.InputSignal<boolean>;
-    readonly versionLabel: _angular_core.InputSignal<string>;
-    readonly publications: _angular_core.InputSignal<number | null>;
-    readonly format: _angular_core.InputSignal<string>;
-    readonly headingLevel: _angular_core.InputSignal<NxsHeadingLevel>;
-    readonly publicationsSelected: _angular_core.OutputEmitterRef<void>;
-    protected readonly props: _angular_core.Signal<Readonly<Record<string, unknown>>>;
-    protected readonly state: _angular_core.Signal<string>;
-    protected readonly modified: _angular_core.Signal<string>;
-    protected readonly created: _angular_core.Signal<string>;
-    protected readonly expires: _angular_core.Signal<string>;
-    protected readonly creator: _angular_core.Signal<NxsPerson | null>;
-    protected readonly contributors: _angular_core.Signal<NxsPerson[]>;
-    protected readonly fileName: _angular_core.Signal<string>;
-    protected readonly description: _angular_core.Signal<string>;
-    protected readonly nature: _angular_core.Signal<string>;
-    protected readonly coverage: _angular_core.Signal<string>;
-    protected readonly subjects: _angular_core.Signal<string>;
-    protected readonly taggable: _angular_core.Signal<boolean>;
-    protected readonly tags: _angular_core.Signal<string[]>;
-    protected readonly collections: _angular_core.Signal<{
+    readonly document: import("@angular/core").InputSignal<NuxeoDocument | null>;
+    readonly vocabularyLabel: import("@angular/core").InputSignal<NxsVocabularyLabel | null>;
+    readonly processRunning: import("@angular/core").InputSignal<boolean>;
+    readonly versionLabel: import("@angular/core").InputSignal<string>;
+    readonly publications: import("@angular/core").InputSignal<number | null>;
+    readonly format: import("@angular/core").InputSignal<string>;
+    readonly headingLevel: import("@angular/core").InputSignal<NxsHeadingLevel>;
+    readonly publicationsSelected: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly props: import("@angular/core").Signal<Readonly<Record<string, unknown>>>;
+    protected readonly state: import("@angular/core").Signal<string>;
+    protected readonly modified: import("@angular/core").Signal<string>;
+    protected readonly created: import("@angular/core").Signal<string>;
+    protected readonly expires: import("@angular/core").Signal<string>;
+    protected readonly creator: import("@angular/core").Signal<NxsPerson | null>;
+    protected readonly contributors: import("@angular/core").Signal<NxsPerson[]>;
+    protected readonly fileName: import("@angular/core").Signal<string>;
+    protected readonly description: import("@angular/core").Signal<string>;
+    protected readonly nature: import("@angular/core").Signal<string>;
+    protected readonly coverage: import("@angular/core").Signal<string>;
+    protected readonly subjects: import("@angular/core").Signal<string>;
+    protected readonly taggable: import("@angular/core").Signal<boolean>;
+    protected readonly tags: import("@angular/core").Signal<string[]>;
+    protected readonly collections: import("@angular/core").Signal<{
     uid: string;
     title: string;
     }[]>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsPropertiesPanelComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsPropertiesPanelComponent, "nxs-properties-panel", never, { "document": { "alias": "document"; "required": true; "isSignal": true; }; "vocabularyLabel": { "alias": "vocabularyLabel"; "required": false; "isSignal": true; }; "processRunning": { "alias": "processRunning"; "required": false; "isSignal": true; }; "versionLabel": { "alias": "versionLabel"; "required": false; "isSignal": true; }; "publications": { "alias": "publications"; "required": false; "isSignal": true; }; "format": { "alias": "format"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; }, { "publicationsSelected": "publicationsSelected"; }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsPropertiesPanelComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsPropertiesPanelComponent, "nxs-properties-panel", never, {
+    "document": {
+    "alias": "document";
+    "required": true;
+    "isSignal": true;
+    };
+    "vocabularyLabel": {
+    "alias": "vocabularyLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "processRunning": {
+    "alias": "processRunning";
+    "required": false;
+    "isSignal": true;
+    };
+    "versionLabel": {
+    "alias": "versionLabel";
+    "required": false;
+    "isSignal": true;
+    };
+    "publications": {
+    "alias": "publications";
+    "required": false;
+    "isSignal": true;
+    };
+    "format": {
+    "alias": "format";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "publicationsSelected": "publicationsSelected";
+    }, never, ["[nxsVersion]", "[nxsTags]", "*"], true, never>;
     }
 }
 class NxsRenameDialogComponent {
     protected readonly data: NxsRenameDialogData;
-    protected readonly title: _angular_core.WritableSignal<string>;
-    protected readonly saving: _angular_core.WritableSignal<boolean>;
-    protected readonly failure: _angular_core.WritableSignal<NxsErrorStatus | 409 | null>;
-    protected readonly trimmed: _angular_core.Signal<string>;
-    protected readonly unchanged: _angular_core.Signal<boolean>;
-    protected readonly canSave: _angular_core.Signal<boolean>;
+    protected readonly title: import("@angular/core").WritableSignal<string>;
+    protected readonly saving: import("@angular/core").WritableSignal<boolean>;
+    protected readonly failure: import("@angular/core").WritableSignal<NxsErrorStatus | 409 | null>;
+    protected readonly trimmed: import("@angular/core").Signal<string>;
+    protected readonly unchanged: import("@angular/core").Signal<boolean>;
+    protected readonly canSave: import("@angular/core").Signal<boolean>;
     protected save(): void;
     protected cancel(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRenameDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRenameDialogComponent, "nxs-rename-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsRenameDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsRenameDialogComponent, "nxs-rename-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsRenameDialogData {
@@ -1069,13 +1709,13 @@ interface NxsRenameDialogData {
     }
 }
 class NxsRichTooltipComponent implements NxsRichTooltipInputs {
-    readonly heading: _angular_core.InputSignal<string>;
-    readonly content: _angular_core.InputSignal<string>;
-    readonly triggerLabel: _angular_core.InputSignal<string>;
-    readonly icon: _angular_core.InputSignal<string>;
-    protected readonly open: _angular_core.WritableSignal<boolean>;
+    readonly heading: import("@angular/core").InputSignal<string>;
+    readonly content: import("@angular/core").InputSignal<string>;
+    readonly triggerLabel: import("@angular/core").InputSignal<string>;
+    readonly icon: import("@angular/core").InputSignal<string>;
+    protected readonly open: import("@angular/core").WritableSignal<boolean>;
     protected readonly panelId: string;
-    protected readonly shift: _angular_core.WritableSignal<number>;
+    protected readonly shift: import("@angular/core").WritableSignal<number>;
     constructor();
     protected onPointerEnter(event: PointerEvent): void;
     protected onPointerLeave(event: PointerEvent): void;
@@ -1085,8 +1725,29 @@ class NxsRichTooltipComponent implements NxsRichTooltipInputs {
     protected onClick(): void;
     protected onEscape(): void;
     protected onFocusOut(event: FocusEvent): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsRichTooltipComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsRichTooltipComponent, "nxs-rich-tooltip", never, { "heading": { "alias": "heading"; "required": true; "isSignal": true; }; "content": { "alias": "content"; "required": true; "isSignal": true; }; "triggerLabel": { "alias": "triggerLabel"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsRichTooltipComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsRichTooltipComponent, "nxs-rich-tooltip", never, {
+    "heading": {
+    "alias": "heading";
+    "required": true;
+    "isSignal": true;
+    };
+    "content": {
+    "alias": "content";
+    "required": true;
+    "isSignal": true;
+    };
+    "triggerLabel": {
+    "alias": "triggerLabel";
+    "required": true;
+    "isSignal": true;
+    };
+    "icon": {
+    "alias": "icon";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsRichTooltipInputs {
@@ -1097,21 +1758,43 @@ interface NxsRichTooltipInputs {
     }
 }
 class NxsSavedSearchActionsComponent {
-    readonly savedSearchId: _angular_core.InputSignal<string>;
-    readonly dirty: _angular_core.InputSignal<boolean>;
-    readonly hasFilters: _angular_core.InputSignal<boolean>;
-    readonly saveAs: _angular_core.OutputEmitterRef<void>;
-    readonly save: _angular_core.OutputEmitterRef<void>;
-    readonly rename: _angular_core.OutputEmitterRef<void>;
-    readonly share: _angular_core.OutputEmitterRef<void>;
-    readonly remove: _angular_core.OutputEmitterRef<void>;
-    protected readonly canEdit: _angular_core.Signal<boolean>;
-    protected readonly isSaved: _angular_core.Signal<boolean>;
-    protected readonly showSaveAs: _angular_core.Signal<boolean>;
-    protected readonly showSave: _angular_core.Signal<boolean>;
-    protected readonly showMenu: _angular_core.Signal<boolean>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSavedSearchActionsComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSavedSearchActionsComponent, "nxs-saved-search-actions", never, { "savedSearchId": { "alias": "savedSearchId"; "required": false; "isSignal": true; }; "dirty": { "alias": "dirty"; "required": false; "isSignal": true; }; "hasFilters": { "alias": "hasFilters"; "required": false; "isSignal": true; }; }, { "saveAs": "saveAs"; "save": "save"; "rename": "rename"; "share": "share"; "remove": "remove"; }, never, never, true, never>;
+    readonly savedSearchId: import("@angular/core").InputSignal<string>;
+    readonly dirty: import("@angular/core").InputSignal<boolean>;
+    readonly hasFilters: import("@angular/core").InputSignal<boolean>;
+    readonly saveAs: import("@angular/core").OutputEmitterRef<void>;
+    readonly save: import("@angular/core").OutputEmitterRef<void>;
+    readonly rename: import("@angular/core").OutputEmitterRef<void>;
+    readonly share: import("@angular/core").OutputEmitterRef<void>;
+    readonly remove: import("@angular/core").OutputEmitterRef<void>;
+    protected readonly canEdit: import("@angular/core").Signal<boolean>;
+    protected readonly isSaved: import("@angular/core").Signal<boolean>;
+    protected readonly showSaveAs: import("@angular/core").Signal<boolean>;
+    protected readonly showSave: import("@angular/core").Signal<boolean>;
+    protected readonly showMenu: import("@angular/core").Signal<boolean>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsSavedSearchActionsComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsSavedSearchActionsComponent, "nxs-saved-search-actions", never, {
+    "savedSearchId": {
+    "alias": "savedSearchId";
+    "required": false;
+    "isSignal": true;
+    };
+    "dirty": {
+    "alias": "dirty";
+    "required": false;
+    "isSignal": true;
+    };
+    "hasFilters": {
+    "alias": "hasFilters";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "saveAs": "saveAs";
+    "save": "save";
+    "rename": "rename";
+    "share": "share";
+    "remove": "remove";
+    }, never, never, true, never>;
     }
 }
 interface NxsSavedSearchChoice {
@@ -1120,24 +1803,47 @@ interface NxsSavedSearchChoice {
     }
 }
 class NxsSavedSearchSelectComponent {
-    readonly selectedId: _angular_core.InputSignal<string>;
-    readonly selectedTitle: _angular_core.InputSignal<string>;
-    readonly pageProvider: _angular_core.InputSignal<string>;
-    readonly refresh: _angular_core.InputSignal<number>;
-    readonly selectedChange: _angular_core.OutputEmitterRef<NxsSavedSearchChoice>;
+    readonly selectedId: import("@angular/core").InputSignal<string>;
+    readonly selectedTitle: import("@angular/core").InputSignal<string>;
+    readonly pageProvider: import("@angular/core").InputSignal<string>;
+    readonly refresh: import("@angular/core").InputSignal<number>;
+    readonly selectedChange: import("@angular/core").OutputEmitterRef<NxsSavedSearchChoice>;
     protected readonly inputId: string;
-    protected readonly text: _angular_core.WritableSignal<string>;
-    protected readonly searches: _angular_core.WritableSignal<readonly SavedSearchOption[]>;
-    protected readonly state: _angular_core.WritableSignal<"idle" | "loaded" | "loading">;
-    protected readonly options: _angular_core.Signal<readonly SavedSearchOption[]>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
+    protected readonly searches: import("@angular/core").WritableSignal<readonly SavedSearchOption[]>;
+    protected readonly state: import("@angular/core").WritableSignal<"idle" | "loaded" | "loading">;
+    protected readonly options: import("@angular/core").Signal<readonly SavedSearchOption[]>;
     constructor();
     protected load(): void;
     protected onInput(value: string): void;
     protected choose(id: string): void;
     protected restore(): void;
     protected readonly display: (id: string | null) => string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSavedSearchSelectComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSavedSearchSelectComponent, "nxs-saved-search-select", never, { "selectedId": { "alias": "selectedId"; "required": false; "isSignal": true; }; "selectedTitle": { "alias": "selectedTitle"; "required": false; "isSignal": true; }; "pageProvider": { "alias": "pageProvider"; "required": false; "isSignal": true; }; "refresh": { "alias": "refresh"; "required": false; "isSignal": true; }; }, { "selectedChange": "selectedChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsSavedSearchSelectComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsSavedSearchSelectComponent, "nxs-saved-search-select", never, {
+    "selectedId": {
+    "alias": "selectedId";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectedTitle": {
+    "alias": "selectedTitle";
+    "required": false;
+    "isSignal": true;
+    };
+    "pageProvider": {
+    "alias": "pageProvider";
+    "required": false;
+    "isSignal": true;
+    };
+    "refresh": {
+    "alias": "refresh";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "selectedChange": "selectedChange";
+    }, never, never, true, never>;
     }
 }
 interface NxsSearchFilters {
@@ -1154,11 +1860,11 @@ interface NxsSearchFilters {
     }
 }
 class NxsSearchFiltersComponent {
-    readonly filters: _angular_core.ModelSignal<NxsSearchFilters>;
-    readonly aggregations: _angular_core.InputSignal<SearchAggregations>;
-    readonly optionLabels: _angular_core.InputSignal<Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>>;
-    readonly filtersReset: _angular_core.OutputEmitterRef<void>;
-    readonly saveAs: _angular_core.OutputEmitterRef<void>;
+    readonly filters: import("@angular/core").ModelSignal<NxsSearchFilters>;
+    readonly aggregations: import("@angular/core").InputSignal<SearchAggregations>;
+    readonly optionLabels: import("@angular/core").InputSignal<Readonly<Partial<Record<string, Readonly<Record<string, string>>>>>>;
+    readonly filtersReset: import("@angular/core").OutputEmitterRef<void>;
+    readonly saveAs: import("@angular/core").OutputEmitterRef<void>;
     protected readonly ids: {
     fulltext: string;
     authors: string;
@@ -1166,21 +1872,21 @@ class NxsSearchFiltersComponent {
     tags: string;
     group: (field: string) => string;
     };
-    protected readonly hasFilters: _angular_core.Signal<boolean>;
-    protected readonly fulltextDraft: _angular_core.WritableSignal<string>;
-    protected readonly authorText: _angular_core.WritableSignal<string>;
-    protected readonly collectionText: _angular_core.WritableSignal<string>;
-    protected readonly tagText: _angular_core.WritableSignal<string>;
-    protected readonly groups: _angular_core.Signal<{
+    protected readonly hasFilters: import("@angular/core").Signal<boolean>;
+    protected readonly fulltextDraft: import("@angular/core").WritableSignal<string>;
+    protected readonly authorText: import("@angular/core").WritableSignal<string>;
+    protected readonly collectionText: import("@angular/core").WritableSignal<string>;
+    protected readonly tagText: import("@angular/core").WritableSignal<string>;
+    protected readonly groups: import("@angular/core").Signal<{
     before: CheckboxGroup[];
     after: CheckboxGroup[];
     }>;
-    protected readonly authorOptions: _angular_core.Signal<NxsFacetOption[]>;
-    protected readonly collections: _angular_core.WritableSignal<readonly SearchCollectionOption[]>;
-    protected readonly collectionsState: _angular_core.WritableSignal<"failed" | "idle" | "loaded" | "loading">;
-    protected readonly collectionOptions: _angular_core.Signal<SearchCollectionOption[]>;
+    protected readonly authorOptions: import("@angular/core").Signal<NxsFacetOption[]>;
+    protected readonly collections: import("@angular/core").WritableSignal<readonly SearchCollectionOption[]>;
+    protected readonly collectionsState: import("@angular/core").WritableSignal<"failed" | "idle" | "loaded" | "loading">;
+    protected readonly collectionOptions: import("@angular/core").Signal<SearchCollectionOption[]>;
     protected readonly emptyDisplay: () => string;
-    protected readonly tagOptions: _angular_core.Signal<string[]>;
+    protected readonly tagOptions: import("@angular/core").Signal<string[]>;
     constructor();
     protected isExpanded(field: CheckboxField): boolean;
     protected toggleGroup(field: CheckboxField): void;
@@ -1196,8 +1902,28 @@ class NxsSearchFiltersComponent {
     protected onTagInput(value: string): void;
     protected resetFilters(): void;
     protected collectionTitle(id: string): string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSearchFiltersComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, { "filters": { "alias": "filters"; "required": false; "isSignal": true; }; "aggregations": { "alias": "aggregations"; "required": false; "isSignal": true; }; "optionLabels": { "alias": "optionLabels"; "required": false; "isSignal": true; }; }, { "filters": "filtersChange"; "filtersReset": "filtersReset"; "saveAs": "saveAs"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsSearchFiltersComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsSearchFiltersComponent, "nxs-search-filters", never, {
+    "filters": {
+    "alias": "filters";
+    "required": false;
+    "isSignal": true;
+    };
+    "aggregations": {
+    "alias": "aggregations";
+    "required": false;
+    "isSignal": true;
+    };
+    "optionLabels": {
+    "alias": "optionLabels";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "filters": "filtersChange";
+    "filtersReset": "filtersReset";
+    "saveAs": "saveAs";
+    }, never, never, true, never>;
     }
 }
 class NxsShareExternalDialogComponent {
@@ -1213,14 +1939,14 @@ class NxsShareExternalDialogComponent {
     protected readonly saving: _angular_core.WritableSignal<"another" | "create" | null>;
     protected readonly emailValid: _angular_core.Signal<boolean>;
     protected readonly emailError: ErrorStateMatcher;
-    protected readonly endBeforeBegin: _angular_core.Signal<boolean>;
-    protected readonly valid: _angular_core.Signal<boolean>;
+    protected readonly endBeforeBegin: import("@angular/core").Signal<boolean>;
+    protected readonly valid: import("@angular/core").Signal<boolean>;
     constructor();
     protected label(permission: string): string;
     protected cancel(): void;
     protected create(another: boolean): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsShareExternalDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsShareExternalDialogComponent, "nxs-share-external-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsShareExternalDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsShareExternalDialogComponent, "nxs-share-external-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsShareExternalDialogData {
@@ -1229,11 +1955,22 @@ interface NxsShareExternalDialogData {
     }
 }
 class NxsSpinnerComponent {
-    readonly diameter: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly label: _angular_core.InputSignal<string>;
-    protected readonly name: _angular_core.Signal<string>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsSpinnerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsSpinnerComponent, "nxs-spinner", never, { "diameter": { "alias": "diameter"; "required": false; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    readonly diameter: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    protected readonly name: import("@angular/core").Signal<string>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsSpinnerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsSpinnerComponent, "nxs-spinner", never, {
+    "diameter": {
+    "alias": "diameter";
+    "required": false;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface NxsTab {
@@ -1249,67 +1986,115 @@ interface NxsTabBodyContext {
 class NxsTabBodyDirective {
     readonly template: TemplateRef<NxsTabBodyContext>;
     static ngTemplateContextGuard(_directive: NxsTabBodyDirective, _context: unknown): _context is NxsTabBodyContext;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTabBodyDirective, never>;
-    static ɵdir: _angular_core.ɵɵDirectiveDeclaration<NxsTabBodyDirective, "ng-template[nxsTabBody]", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTabBodyDirective, never>;
+    static ɵdir: i0.ɵɵDirectiveDeclaration<NxsTabBodyDirective, "ng-template[nxsTabBody]", never, {}, {}, never, never, true, never>;
     }
 }
 class NxsTabsComponent {
-    readonly tabs: _angular_core.InputSignal<readonly NxsTab[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly selectedIndex: _angular_core.ModelSignal<number>;
-    readonly selectedTabChange: _angular_core.OutputEmitterRef<NxsTab>;
-    protected readonly body: _angular_core.Signal<NxsTabBodyDirective | undefined>;
-    protected readonly ownLabel: _angular_core.Signal<string>;
+    readonly tabs: import("@angular/core").InputSignal<readonly NxsTab[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly selectedIndex: import("@angular/core").ModelSignal<number>;
+    readonly selectedTabChange: import("@angular/core").OutputEmitterRef<NxsTab>;
+    protected readonly body: import("@angular/core").Signal<NxsTabBodyDirective | undefined>;
+    protected readonly ownLabel: import("@angular/core").Signal<string>;
     constructor();
     protected select(index: number): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTabsComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTabsComponent, "nxs-tabs", never, { "tabs": { "alias": "tabs"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": false; "isSignal": true; }; "selectedIndex": { "alias": "selectedIndex"; "required": false; "isSignal": true; }; }, { "selectedIndex": "selectedIndexChange"; "selectedTabChange": "selectedTabChange"; }, ["body"], never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTabsComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTabsComponent, "nxs-tabs", never, {
+    "tabs": {
+    "alias": "tabs";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": false;
+    "isSignal": true;
+    };
+    "selectedIndex": {
+    "alias": "selectedIndex";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "selectedIndex": "selectedIndexChange";
+    "selectedTabChange": "selectedTabChange";
+    }, ["body"], never, true, never>;
     }
 }
 type NxsTagColor = NxsAvatarColor | 'gray';
 class NxsTagComponent implements NxsTagInputs {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly color: _angular_core.InputSignal<NxsTagColor>;
-    protected readonly namedColor: _angular_core.Signal<Record<string, string> | null>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTagComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagComponent, "nxs-tag", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "color": { "alias": "color"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly color: import("@angular/core").InputSignal<NxsTagColor>;
+    protected readonly namedColor: import("@angular/core").Signal<Record<string, string> | null>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTagComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTagComponent, "nxs-tag", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "color": {
+    "alias": "color";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 class NxsTagEditorComponent {
-    readonly documentUid: _angular_core.InputSignal<string>;
-    readonly tags: _angular_core.InputSignal<readonly string[]>;
-    readonly readOnly: _angular_core.InputSignal<boolean>;
-    readonly tagsChange: _angular_core.OutputEmitterRef<readonly string[]>;
+    readonly documentUid: import("@angular/core").InputSignal<string>;
+    readonly tags: import("@angular/core").InputSignal<readonly string[]>;
+    readonly readOnly: import("@angular/core").InputSignal<boolean>;
+    readonly tagsChange: import("@angular/core").OutputEmitterRef<readonly string[]>;
     protected readonly id: string;
-    protected readonly saved: _angular_core.WritableSignal<readonly string[]>;
-    protected readonly adding: _angular_core.WritableSignal<readonly string[]>;
-    protected readonly removing: _angular_core.WritableSignal<ReadonlySet<string>>;
-    protected readonly term: _angular_core.WritableSignal<string>;
-    protected readonly shown: _angular_core.Signal<string[]>;
-    protected readonly options: _angular_core.Signal<readonly NxsTagOption[]>;
+    protected readonly saved: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly adding: import("@angular/core").WritableSignal<readonly string[]>;
+    protected readonly removing: import("@angular/core").WritableSignal<ReadonlySet<string>>;
+    protected readonly term: import("@angular/core").WritableSignal<string>;
+    protected readonly shown: import("@angular/core").Signal<string[]>;
+    protected readonly options: import("@angular/core").Signal<readonly NxsTagOption[]>;
     constructor();
     protected typed(value: string): void;
     protected picked(event: MatAutocompleteSelectedEvent): void;
     protected entered(event: MatChipInputEvent): void;
     protected remove(tag: string): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTagEditorComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagEditorComponent, "nxs-tag-editor", never, { "documentUid": { "alias": "documentUid"; "required": true; "isSignal": true; }; "tags": { "alias": "tags"; "required": false; "isSignal": true; }; "readOnly": { "alias": "readOnly"; "required": false; "isSignal": true; }; }, { "tagsChange": "tagsChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTagEditorComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTagEditorComponent, "nxs-tag-editor", never, {
+    "documentUid": {
+    "alias": "documentUid";
+    "required": true;
+    "isSignal": true;
+    };
+    "tags": {
+    "alias": "tags";
+    "required": false;
+    "isSignal": true;
+    };
+    "readOnly": {
+    "alias": "readOnly";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "tagsChange": "tagsChange";
+    }, never, never, true, never>;
     }
 }
 class NxsTagInputComponent implements ControlValueAccessor, Validator, DoCheck {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly allowNew: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly hint: _angular_core.InputSignal<string>;
-    readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly value: _angular_core.ModelSignal<readonly string[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly allowNew: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly hint: import("@angular/core").InputSignal<string>;
+    readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly value: import("@angular/core").ModelSignal<readonly string[]>;
     protected readonly separators: readonly [13, 188];
     protected readonly inputId: string;
-    protected readonly text: _angular_core.WritableSignal<string>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<string>;
-    protected readonly isDisabled: _angular_core.Signal<boolean>;
-    protected readonly suggestions: _angular_core.Signal<string[]>;
-    protected readonly addable: _angular_core.Signal<string | null>;
+    protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly suggestions: import("@angular/core").Signal<string[]>;
+    protected readonly addable: import("@angular/core").Signal<string | null>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
@@ -1326,8 +2111,41 @@ class NxsTagInputComponent implements ControlValueAccessor, Validator, DoCheck {
     protected add(tag: string): void;
     protected remove(tag: string): void;
     protected blurred(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsTagInputComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsTagInputComponent, "nxs-tag-input", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "allowNew": { "alias": "allowNew"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsTagInputComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsTagInputComponent, "nxs-tag-input", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "allowNew": {
+    "alias": "allowNew";
+    "required": false;
+    "isSignal": true;
+    };
+    "hint": {
+    "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    }, never, never, true, never>;
     }
 }
 interface NxsTagInputs {
@@ -1336,13 +2154,24 @@ interface NxsTagInputs {
     }
 }
 class NxsThumbnailComponent {
-    readonly documentId: _angular_core.InputSignal<string>;
-    readonly alt: _angular_core.InputSignal<string>;
-    protected readonly url: _angular_core.WritableSignal<string | null>;
+    readonly documentId: import("@angular/core").InputSignal<string>;
+    readonly alt: import("@angular/core").InputSignal<string>;
+    protected readonly url: import("@angular/core").WritableSignal<string | null>;
     constructor();
     protected broken(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsThumbnailComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsThumbnailComponent, "nxs-thumbnail", never, { "documentId": { "alias": "documentId"; "required": true; "isSignal": true; }; "alt": { "alias": "alt"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsThumbnailComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsThumbnailComponent, "nxs-thumbnail", never, {
+    "documentId": {
+    "alias": "documentId";
+    "required": true;
+    "isSignal": true;
+    };
+    "alt": {
+    "alias": "alt";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, ["*"], true, never>;
     }
 }
 interface NxsToastAction {
@@ -1362,8 +2191,8 @@ interface NxsToastOptions {
 class NxsToastService {
     show(message: string, options?: NxsToastOptions): void;
     error(message: string, options?: NxsToastErrorOptions): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsToastService, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<NxsToastService>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsToastService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface NxsToolbarAction {
@@ -1394,8 +2223,8 @@ class NxsUpdatePermissionDialogComponent {
     protected readonly valid: _angular_core.Signal<boolean>;
     protected label(permission: string): string;
     protected update(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUpdatePermissionDialogComponent, "nxs-update-permission-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsUpdatePermissionDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsUpdatePermissionDialogComponent, "nxs-update-permission-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface NxsUpdatePermissionDialogData {
@@ -1420,10 +2249,10 @@ interface NxsUploadProgress {
     }
 }
 class NxsUploadQueue {
-    readonly items: _angular_core.Signal<readonly NxsUploadItem[]>;
-    readonly busy: _angular_core.Signal<boolean>;
-    readonly done: _angular_core.Signal<NxsUploadItem[]>;
-    readonly failed: _angular_core.Signal<NxsUploadItem[]>;
+    readonly items: import("@angular/core").Signal<readonly NxsUploadItem[]>;
+    readonly busy: import("@angular/core").Signal<boolean>;
+    readonly done: import("@angular/core").Signal<NxsUploadItem[]>;
+    readonly failed: import("@angular/core").Signal<NxsUploadItem[]>;
     stage(files: readonly File[]): void;
     pending(): File[];
     start(): void;
@@ -1436,34 +2265,48 @@ class NxsUploadQueue {
     }
 }
 class NxsUploadQueueComponent {
-    readonly items: _angular_core.InputSignal<readonly NxsUploadItem[]>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly remove: _angular_core.OutputEmitterRef<string>;
-    readonly retry: _angular_core.OutputEmitterRef<string>;
-    protected readonly doneCount: _angular_core.Signal<number>;
-    protected readonly failedCount: _angular_core.Signal<number>;
-    protected readonly started: _angular_core.Signal<boolean>;
-    protected readonly scrolls: _angular_core.WritableSignal<boolean>;
+    readonly items: import("@angular/core").InputSignal<readonly NxsUploadItem[]>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly remove: import("@angular/core").OutputEmitterRef<string>;
+    readonly retry: import("@angular/core").OutputEmitterRef<string>;
+    protected readonly doneCount: import("@angular/core").Signal<number>;
+    protected readonly failedCount: import("@angular/core").Signal<number>;
+    protected readonly started: import("@angular/core").Signal<boolean>;
+    protected readonly scrolls: import("@angular/core").WritableSignal<boolean>;
     constructor();
     protected size(bytes: number): string;
     protected removable(item: NxsUploadItem): boolean;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUploadQueueComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUploadQueueComponent, "nxs-upload-queue", never, { "items": { "alias": "items"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; }, { "remove": "remove"; "retry": "retry"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsUploadQueueComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsUploadQueueComponent, "nxs-upload-queue", never, {
+    "items": {
+    "alias": "items";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    }, {
+    "remove": "remove";
+    "retry": "retry";
+    }, never, never, true, never>;
     }
 }
 type NxsUploadState = 'done' | 'failed' | 'staged' | 'uploading' | 'waiting';
 class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, DoCheck {
-    readonly label: _angular_core.InputSignal<string>;
-    readonly search: _angular_core.InputSignal<NxsPrincipalSearch>;
-    readonly minChars: _angular_core.InputSignalWithTransform<number, unknown>;
-    readonly hint: _angular_core.InputSignal<string>;
-    readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly value: _angular_core.ModelSignal<NxsPrincipal | null>;
-    protected readonly text: _angular_core.WritableSignal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly search: import("@angular/core").InputSignal<NxsPrincipalSearch>;
+    readonly minChars: import("@angular/core").InputSignalWithTransform<number, unknown>;
+    readonly hint: import("@angular/core").InputSignal<string>;
+    readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly value: import("@angular/core").ModelSignal<NxsPrincipal | null>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
     protected readonly finder: NxsSearchAsYouType<NxsPrincipal>;
-    protected readonly isDisabled: _angular_core.Signal<boolean>;
-    protected readonly unmatched: _angular_core.Signal<boolean>;
+    protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
@@ -1481,26 +2324,64 @@ class NxsUserGroupPickerComponent implements ControlValueAccessor, Validator, Do
     protected choose(principal: NxsPrincipal | null): void;
     protected clear(): void;
     protected blurred(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsUserGroupPickerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsUserGroupPickerComponent, "nxs-user-group-picker", never, { "label": { "alias": "label"; "required": true; "isSignal": true; }; "search": { "alias": "search"; "required": false; "isSignal": true; }; "minChars": { "alias": "minChars"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsUserGroupPickerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsUserGroupPickerComponent, "nxs-user-group-picker", never, {
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "search": {
+    "alias": "search";
+    "required": false;
+    "isSignal": true;
+    };
+    "minChars": {
+    "alias": "minChars";
+    "required": false;
+    "isSignal": true;
+    };
+    "hint": {
+    "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    }, never, never, true, never>;
     }
 }
 type NxsVocabularyLabel = (directory: string, id: string) => string;
 class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, DoCheck {
-    readonly directory: _angular_core.InputSignal<string>;
-    readonly label: _angular_core.InputSignal<string>;
-    readonly multiple: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly hint: _angular_core.InputSignal<string>;
-    readonly required: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly disabled: _angular_core.InputSignalWithTransform<boolean, unknown>;
-    readonly value: _angular_core.ModelSignal<string | readonly string[] | null>;
+    readonly directory: import("@angular/core").InputSignal<string>;
+    readonly label: import("@angular/core").InputSignal<string>;
+    readonly multiple: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly hint: import("@angular/core").InputSignal<string>;
+    readonly required: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly disabled: import("@angular/core").InputSignalWithTransform<boolean, unknown>;
+    readonly value: import("@angular/core").ModelSignal<string | readonly string[] | null>;
     protected readonly inputId: string;
-    protected readonly loaded: _angular_core.WritableSignal<Loaded>;
-    protected readonly text: _angular_core.WritableSignal<string>;
-    protected readonly chosen: _angular_core.Signal<readonly string[]>;
-    protected readonly isDisabled: _angular_core.Signal<boolean>;
-    protected readonly groups: _angular_core.Signal<readonly EntryGroup[]>;
-    protected readonly unmatched: _angular_core.Signal<boolean>;
+    protected readonly loaded: import("@angular/core").WritableSignal<Loaded>;
+    protected readonly text: import("@angular/core").WritableSignal<string>;
+    protected readonly chosen: import("@angular/core").Signal<readonly string[]>;
+    protected readonly isDisabled: import("@angular/core").Signal<boolean>;
+    protected readonly groups: import("@angular/core").Signal<readonly EntryGroup[]>;
+    protected readonly unmatched: import("@angular/core").Signal<boolean>;
     protected readonly errorState: {
     isErrorState: () => boolean;
     };
@@ -1520,8 +2401,46 @@ class NxsVocabularySelectComponent implements ControlValueAccessor, Validator, D
     protected remove(id: string): void;
     protected clear(): void;
     protected blurred(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<NxsVocabularySelectComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<NxsVocabularySelectComponent, "nxs-vocabulary-select", never, { "directory": { "alias": "directory"; "required": true; "isSignal": true; }; "label": { "alias": "label"; "required": true; "isSignal": true; }; "multiple": { "alias": "multiple"; "required": false; "isSignal": true; }; "hint": { "alias": "hint"; "required": false; "isSignal": true; }; "required": { "alias": "required"; "required": false; "isSignal": true; }; "disabled": { "alias": "disabled"; "required": false; "isSignal": true; }; "value": { "alias": "value"; "required": false; "isSignal": true; }; }, { "value": "valueChange"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<NxsVocabularySelectComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<NxsVocabularySelectComponent, "nxs-vocabulary-select", never, {
+    "directory": {
+    "alias": "directory";
+    "required": true;
+    "isSignal": true;
+    };
+    "label": {
+    "alias": "label";
+    "required": true;
+    "isSignal": true;
+    };
+    "multiple": {
+    "alias": "multiple";
+    "required": false;
+    "isSignal": true;
+    };
+    "hint": {
+    "alias": "hint";
+    "required": false;
+    "isSignal": true;
+    };
+    "required": {
+    "alias": "required";
+    "required": false;
+    "isSignal": true;
+    };
+    "disabled": {
+    "alias": "disabled";
+    "required": false;
+    "isSignal": true;
+    };
+    "value": {
+    "alias": "value";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "value": "valueChange";
+    }, never, never, true, never>;
     }
 }
 class TranslatedDatepickerIntl extends MatDatepickerIntl {
@@ -1537,6 +2456,7 @@ function nxsDocumentSuggestionQuery(term: string, types?: readonly string[]): st
 function nxsErrorStatus(error: unknown): NxsErrorStatus;
 function nxsHasSearchFilters(filters: NxsSearchFilters): boolean;
 function nxsInitials(text: string | null | undefined, count: number): string;
+function nxsOfferedRights(visible: readonly string[] | null | undefined, current?: string): readonly string[];
 function nxsPropertyText(value: unknown): string;
 function nxsRangeOptions(ranges: readonly string[], aggregation: AggregateResult | undefined): NxsFacetOption[];
 function nxsSameSearchFilters(a: NxsSearchFilters, b: NxsSearchFilters): boolean;
@@ -1574,25 +2494,25 @@ function provideNxsSatoriComponents(): EnvironmentProviders;
 ```ts
 const APP_NAV_ITEMS: InjectionToken<Signal<readonly NavItemDescriptor[]>>;
 class AppExtensionsService {
-    readonly config: _angular_core.Signal<ExtensionConfig>;
-    readonly missingLayers: _angular_core.Signal<readonly string[]>;
-    readonly invalidRoutes: _angular_core.Signal<readonly RejectedExtensionRoute[]>;
+    readonly config: import("@angular/core").Signal<ExtensionConfig>;
+    readonly missingLayers: import("@angular/core").Signal<readonly string[]>;
+    readonly invalidRoutes: import("@angular/core").Signal<readonly RejectedExtensionRoute[]>;
     constructor();
     register<T extends ExtensionElement>(slot: ExtensionSlotId, entries: readonly T[]): void;
     registerRules(evaluators: Readonly<Record<string, ExtensionRuleEvaluator>>): void;
     resolve<T extends ExtensionElement>(slot: ExtensionSlotId, context?: ExtensionRuleContext): readonly T[];
     evaluateRule(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext): boolean;
     inventory(): Readonly<Record<string, readonly string[]>>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<AppExtensionsService, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<AppExtensionsService>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<AppExtensionsService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 const CORE_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEvaluator>>;
 const DOCUMENT_RULE_EVALUATORS: Readonly<Record<string, ExtensionRuleEvaluator>>;
 class DescriptorLabelPipe implements PipeTransform {
     transform(descriptor: LabelledDescriptor | null | undefined): string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<DescriptorLabelPipe, never>;
-    static ɵpipe: _angular_core.ɵɵPipeDeclaration<DescriptorLabelPipe, "descriptorLabel", true>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<DescriptorLabelPipe, never>;
+    static ɵpipe: i0.ɵɵPipeDeclaration<DescriptorLabelPipe, "descriptorLabel", true>;
     }
 }
 interface DocumentLayoutChange {
@@ -1641,8 +2561,8 @@ class ExtensionActionRegistry {
     has(id: string): boolean;
     registeredActionIds(): readonly string[];
     execute(descriptor: ExtensionActionDescriptor, context: ExtensionRuleContext): boolean;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExtensionActionRegistry, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<ExtensionActionRegistry>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionActionRegistry, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface ExtensionColumnDescriptor extends ExtensionElement {
@@ -1660,8 +2580,8 @@ class ExtensionComponentRegistry {
     has(id: string): boolean;
     peek(id: string): Type<unknown> | null;
     resolve(id: string): Promise<Type<unknown> | null>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExtensionComponentRegistry, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<ExtensionComponentRegistry>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionComponentRegistry, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 type ExtensionComponentSource = Type<unknown> | (() => Promise<Type<unknown>>);
@@ -1695,14 +2615,30 @@ interface ExtensionElement {
 }
 type ExtensionLayerResolver = (name: string) => ExtensionConfig | null;
 class ExtensionOutletComponent {
-    readonly componentId: _angular_core.InputSignal<string | null>;
-    readonly componentType: _angular_core.InputSignal<Type<unknown> | null>;
-    readonly componentInputs: _angular_core.InputSignal<Readonly<Record<string, unknown>> | null | undefined>;
-    readonly loading: _angular_core.WritableSignal<boolean>;
-    readonly unresolved: _angular_core.WritableSignal<boolean>;
+    readonly componentId: import("@angular/core").InputSignal<string | null>;
+    readonly componentType: import("@angular/core").InputSignal<Type<unknown> | null>;
+    readonly componentInputs: import("@angular/core").InputSignal<Readonly<Record<string, unknown>> | null | undefined>;
+    readonly loading: import("@angular/core").WritableSignal<boolean>;
+    readonly unresolved: import("@angular/core").WritableSignal<boolean>;
     constructor();
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExtensionOutletComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<ExtensionOutletComponent, "lib-extension-outlet", never, { "componentId": { "alias": "componentId"; "required": false; "isSignal": true; }; "componentType": { "alias": "componentType"; "required": false; "isSignal": true; }; "componentInputs": { "alias": "componentInputs"; "required": false; "isSignal": true; }; }, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionOutletComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<ExtensionOutletComponent, "lib-extension-outlet", never, {
+    "componentId": {
+    "alias": "componentId";
+    "required": false;
+    "isSignal": true;
+    };
+    "componentType": {
+    "alias": "componentType";
+    "required": false;
+    "isSignal": true;
+    };
+    "componentInputs": {
+    "alias": "componentInputs";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, never, true, never>;
     }
 }
 interface ExtensionOverride {
@@ -1736,16 +2672,16 @@ interface ExtensionRuleContext {
     }
 }
 class ExtensionRuleContextService {
-    readonly document: _angular_core.WritableSignal<NuxeoDocument | null>;
-    readonly selection: _angular_core.WritableSignal<readonly NuxeoDocument[]>;
-    readonly selectionCount: _angular_core.WritableSignal<number>;
-    readonly username: _angular_core.WritableSignal<string | null>;
-    readonly isAdministrator: _angular_core.WritableSignal<boolean>;
-    readonly url: _angular_core.WritableSignal<string>;
-    readonly flags: _angular_core.WritableSignal<Readonly<Record<string, boolean>>>;
-    readonly context: _angular_core.Signal<ExtensionRuleContext>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExtensionRuleContextService, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<ExtensionRuleContextService>;
+    readonly document: import("@angular/core").WritableSignal<NuxeoDocument | null>;
+    readonly selection: import("@angular/core").WritableSignal<readonly NuxeoDocument[]>;
+    readonly selectionCount: import("@angular/core").WritableSignal<number>;
+    readonly username: import("@angular/core").WritableSignal<string | null>;
+    readonly isAdministrator: import("@angular/core").WritableSignal<boolean>;
+    readonly url: import("@angular/core").WritableSignal<string>;
+    readonly flags: import("@angular/core").WritableSignal<Readonly<Record<string, boolean>>>;
+    readonly context: import("@angular/core").Signal<ExtensionRuleContext>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionRuleContextService, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 type ExtensionRuleEvaluator = (context: ExtensionRuleContext, parameters: readonly unknown[], resolve: ExtensionRuleResolver) => boolean;
@@ -1761,8 +2697,8 @@ class ExtensionRuleRegistry {
     registeredRuleIds(): readonly string[];
     has(id: string): boolean;
     evaluate(rule: ExtensionRule | null | undefined, context: ExtensionRuleContext): boolean;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExtensionRuleRegistry, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<ExtensionRuleRegistry>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionRuleRegistry, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 type ExtensionRuleResolver = (rule: ExtensionRule) => boolean;
@@ -1777,8 +2713,8 @@ class ExtensionSlotRegistry {
     registeredSlotIds(): readonly ExtensionSlotId[];
     registeredIds(slot: ExtensionSlotId): readonly string[];
     resolve<T extends ExtensionElement>(slot: ExtensionSlotId, overrides?: ExtensionSlotOverrides, context?: ExtensionRuleContext): readonly T[];
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExtensionSlotRegistry, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<ExtensionSlotRegistry>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExtensionSlotRegistry, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface ExtensionTabDescriptor extends ExtensionElement {
@@ -1855,7 +2791,7 @@ function resolveExtensionConfig(root: ExtensionConfig, resolveLayer?: ExtensionL
 
 ## @nuxeo/satori-platform/nuxeo-client
 
-315 exported symbol(s).
+316 exported symbol(s).
 
 ```ts
 const ADD_CHILDREN = "AddChildren";
@@ -1871,7 +2807,7 @@ class ARenderService {
     getDiffUrl(leftDocUid: string, rightDocUid: string): Observable<string | null>;
     isAvailable(): Observable<boolean>;
     static ɵfac: i0.ɵɵFactoryDeclaration<ARenderService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<ARenderService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface AdminAccessChecks {
@@ -1896,7 +2832,7 @@ class AdministrationService {
     listDirectoryNames(): Observable<string[]>;
     getDefaultDomainPath(): Observable<string>;
     static ɵfac: i0.ɵɵFactoryDeclaration<AdministrationService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<AdministrationService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface AggregateBucket {
@@ -1909,14 +2845,14 @@ interface AggregateResult {
     }
 }
 class AssetAggregationService {
-    readonly aggregations: i0.WritableSignal<AssetAggregations>;
-    readonly items: i0.WritableSignal<AssetQueueItem[]>;
-    readonly selectedSavedSearchId: i0.WritableSignal<string>;
-    readonly selectedSavedSearchTitle: i0.WritableSignal<string>;
-    readonly savedSearchVersion: i0.WritableSignal<number>;
+    readonly aggregations: import("@angular/core").WritableSignal<AssetAggregations>;
+    readonly items: import("@angular/core").WritableSignal<AssetQueueItem[]>;
+    readonly selectedSavedSearchId: import("@angular/core").WritableSignal<string>;
+    readonly selectedSavedSearchTitle: import("@angular/core").WritableSignal<string>;
+    readonly savedSearchVersion: import("@angular/core").WritableSignal<number>;
     markSavedSearchDirty(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<AssetAggregationService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<AssetAggregationService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface AssetAggregations {
@@ -1958,7 +2894,7 @@ interface AssetSearchResult extends NuxeoPaginatedList<NuxeoDocument> {
 class AssetService {
     searchAssets(params?: AssetSearchParams): Observable<AssetSearchResult>;
     static ɵfac: i0.ɵɵFactoryDeclaration<AssetService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<AssetService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface AuditEntry {
@@ -2001,10 +2937,10 @@ const BLOB_HOLDING_DOC_TYPES: ReadonlySet<string>;
 const BLOB_NOT_ATTACHED_ERROR = "File was not attached to the document";
 type BlobClientReason = 'download' | 'view';
 class BrowseContextService {
-    readonly contextPath: i0.WritableSignal<string>;
-    readonly treeRefreshTick: i0.WritableSignal<number>;
-    readonly contentRefreshTick: i0.WritableSignal<number>;
-    readonly clipboardPasteTick: i0.WritableSignal<number>;
+    readonly contextPath: import("@angular/core").WritableSignal<string>;
+    readonly treeRefreshTick: import("@angular/core").WritableSignal<number>;
+    readonly contentRefreshTick: import("@angular/core").WritableSignal<number>;
+    readonly clipboardPasteTick: import("@angular/core").WritableSignal<number>;
     requestTreeRefresh(): void;
     requestContentRefresh(): void;
     notifyClipboardPasteComplete(event: ClipboardPasteEvent): void;
@@ -2014,7 +2950,7 @@ class BrowseContextService {
     setFromDocument(doc: NuxeoDocument): void;
     setFromNuxeoPath(nuxeoPath: string): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<BrowseContextService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<BrowseContextService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface BrowsePageRequest {
@@ -2046,7 +2982,7 @@ class BrowseService {
     startCsvExport(parentUid: string): Observable<string>;
     pollAndDownloadCsv(executionId: string): Observable<Blob>;
     static ɵfac: i0.ɵɵFactoryDeclaration<BrowseService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<BrowseService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface BrowseSortEntry {
@@ -2074,11 +3010,11 @@ interface ClipboardPasteEvent {
     }
 }
 class ClipboardTargetService {
-    readonly target: i0.WritableSignal<NuxeoDocument | null>;
+    readonly target: import("@angular/core").WritableSignal<NuxeoDocument | null>;
     setTarget(doc: NuxeoDocument | null): void;
     clear(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<ClipboardTargetService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<ClipboardTargetService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class CollectionService {
@@ -2089,7 +3025,7 @@ class CollectionService {
     updateProperties(uid: string, properties: Record<string, unknown>): Observable<NuxeoDocument>;
     bulkDownload(collectionUid: string, filename?: string): Observable<Blob>;
     static ɵfac: i0.ɵɵFactoryDeclaration<CollectionService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<CollectionService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface CompareRow {
@@ -2139,7 +3075,7 @@ class ContentLakeIngestService {
     backfillIngestMarkerIfNeeded(doc: NuxeoDocument, sourceIds?: string[]): Observable<ContentLakeBackfillResult>;
     markIngested(documentUids: string[]): Observable<NuxeoDocument[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<ContentLakeIngestService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<ContentLakeIngestService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface ContentLakeIngestStatus {
@@ -2154,7 +3090,7 @@ interface ContentLakeIngestStatus {
 class ContentModelService {
     getContentModel(): Observable<NuxeoContentModel>;
     static ɵfac: i0.ɵɵFactoryDeclaration<ContentModelService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<ContentModelService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface CreateBlobHoldingDocumentOptions {
@@ -2225,7 +3161,7 @@ class DirectoryService {
     getEventTypes(): Observable<DirectoryEntry[]>;
     getEventCategories(): Observable<DirectoryEntry[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<DirectoryService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<DirectoryService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class DocTypeLabelPipe implements PipeTransform {
@@ -2376,7 +3312,7 @@ class DocumentDetailService {
     updateComment(uid: string, commentId: string, text: string): Observable<NuxeoComment>;
     deleteComment(uid: string, commentId: string): Observable<void>;
     static ɵfac: i0.ɵɵFactoryDeclaration<DocumentDetailService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<DocumentDetailService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class DocumentImportService {
@@ -2396,7 +3332,7 @@ class DocumentImportService {
     importFilesWithProperties(parentPath: string, entries: ImportFileEntry[], options?: ImportFilesOptions): Observable<NuxeoDocument[]>;
     importFromCsvText(parentPath: string, csvText: string): Observable<CsvImportResult>;
     static ɵfac: i0.ɵɵFactoryDeclaration<DocumentImportService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<DocumentImportService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class DocumentService {
@@ -2405,7 +3341,7 @@ class DocumentService {
     getExpiredDocuments(pageSize?: number): Observable<NuxeoDocumentList>;
     getById(docId: string): Observable<NuxeoDocument>;
     static ɵfac: i0.ɵɵFactoryDeclaration<DocumentService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<DocumentService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 const EXPIRED_DOCUMENTS_QUERY: string;
@@ -2551,7 +3487,7 @@ class NuxeoApiBase {
     delete<T>(path: string, headers?: Record<string, string>): Observable<T>;
     nxqlSearch(query: string, pageSize: number, headers?: Record<string, string>): Observable<NuxeoDocumentList>;
     static ɵfac: i0.ɵɵFactoryDeclaration<NuxeoApiBase, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<NuxeoApiBase>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface NuxeoComment {
@@ -2619,6 +3555,9 @@ interface NuxeoDocument {
     isFavorite: boolean;
     };
     subscribedNotifications?: string[];
+    breadcrumb?: {
+    entries?: NuxeoDocument[];
+    };
     [key: string]: unknown;
     };
     }
@@ -2630,7 +3569,7 @@ class NuxeoDriveService {
     buildDirectTransferUrl(docPath: string): string;
     openDriveUrl(url: string): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<NuxeoDriveService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<NuxeoDriveService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface NuxeoFacetDefinition {
@@ -2876,7 +3815,7 @@ interface PrincipalPermissionRow {
 class PrincipalPermissionsService {
     listLocalPermissionRows(logicalPrincipal: string, pageSize: number, currentPageIndex: number): Observable<PrincipalPermissionPage>;
     static ɵfac: i0.ɵɵFactoryDeclaration<PrincipalPermissionsService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<PrincipalPermissionsService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 const READ_WRITE_DOCUMENT = "ReadWrite";
@@ -2897,15 +3836,15 @@ interface SavedSearchOption {
     }
 }
 class SearchAggregationService {
-    readonly aggregations: i0.WritableSignal<SearchAggregations>;
-    readonly items: i0.WritableSignal<SearchResultItem[]>;
-    readonly drawerFilters: i0.WritableSignal<Record<string, string>>;
-    readonly selectedSavedSearchId: i0.WritableSignal<string>;
-    readonly selectedSavedSearchTitle: i0.WritableSignal<string>;
-    readonly savedSearchVersion: i0.WritableSignal<number>;
+    readonly aggregations: import("@angular/core").WritableSignal<SearchAggregations>;
+    readonly items: import("@angular/core").WritableSignal<SearchResultItem[]>;
+    readonly drawerFilters: import("@angular/core").WritableSignal<Record<string, string>>;
+    readonly selectedSavedSearchId: import("@angular/core").WritableSignal<string>;
+    readonly selectedSavedSearchTitle: import("@angular/core").WritableSignal<string>;
+    readonly savedSearchVersion: import("@angular/core").WritableSignal<number>;
     markSavedSearchDirty(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<SearchAggregationService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<SearchAggregationService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface SearchAggregations {
@@ -2991,15 +3930,15 @@ class SearchService {
     search(params: SearchQueryParams): Observable<SearchResponse>;
     getTagSuggestions(term: string): Observable<string[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<SearchService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<SearchService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class SelectionService {
-    readonly selectedIds: i0.WritableSignal<Set<string>>;
-    readonly selectedLabels: i0.WritableSignal<Map<string, string>>;
-    readonly selectedPreviews: i0.WritableSignal<Map<string, SelectionPreview>>;
-    readonly selectedTypes: i0.WritableSignal<Map<string, string>>;
-    readonly clearOnlyMode: i0.WritableSignal<boolean>;
+    readonly selectedIds: import("@angular/core").WritableSignal<Set<string>>;
+    readonly selectedLabels: import("@angular/core").WritableSignal<Map<string, string>>;
+    readonly selectedPreviews: import("@angular/core").WritableSignal<Map<string, SelectionPreview>>;
+    readonly selectedTypes: import("@angular/core").WritableSignal<Map<string, string>>;
+    readonly clearOnlyMode: import("@angular/core").WritableSignal<boolean>;
     readonly selectedCount: () => number;
     readonly selectedItems: () => {
     id: string;
@@ -3018,7 +3957,7 @@ class SelectionService {
     setClearOnlyMode(enabled: boolean): void;
     deleteSelected(): Observable<NuxeoDocument[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<SelectionService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<SelectionService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class SettingsService {
@@ -3029,7 +3968,7 @@ class SettingsService {
     setSynchronizationRoot(rootId: string, enable: boolean): Observable<unknown>;
     changePassword(oldPassword: string, newPassword: string): Observable<void>;
     static ɵfac: i0.ɵɵFactoryDeclaration<SettingsService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<SettingsService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface StageFileInBatchOptions {
@@ -3053,7 +3992,7 @@ class TagService {
     searchTags(term: string): Observable<string[]>;
     suggestTags(term: string): Observable<string[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<TagService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<TagService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface TaskDueDistance {
@@ -3072,25 +4011,25 @@ class TaskService {
     reassignTask(taskId: string, actors: string[], comment?: string): Observable<void>;
     delegateTask(taskId: string, delegatedActors: string[], comment?: string): Observable<void>;
     static ɵfac: i0.ɵɵFactoryDeclaration<TaskService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<TaskService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 class TrashFilterService {
-    readonly filters: i0.WritableSignal<TrashFilters>;
-    readonly layoutMode: i0.WritableSignal<TrashLayoutMode>;
-    readonly results: i0.WritableSignal<TrashResultItem[]>;
-    readonly resultThumbnails: i0.WritableSignal<Record<string, string | null>>;
-    readonly totalResults: i0.WritableSignal<number>;
-    readonly resultsLoading: i0.WritableSignal<boolean>;
-    readonly savedSearchVersion: i0.WritableSignal<number>;
-    readonly activeSavedFilterUid: i0.WritableSignal<string | null>;
-    readonly activeSavedFilterTitle: i0.WritableSignal<string | null>;
-    readonly hasSavedFilter: i0.Signal<boolean>;
+    readonly filters: import("@angular/core").WritableSignal<TrashFilters>;
+    readonly layoutMode: import("@angular/core").WritableSignal<TrashLayoutMode>;
+    readonly results: import("@angular/core").WritableSignal<TrashResultItem[]>;
+    readonly resultThumbnails: import("@angular/core").WritableSignal<Record<string, string | null>>;
+    readonly totalResults: import("@angular/core").WritableSignal<number>;
+    readonly resultsLoading: import("@angular/core").WritableSignal<boolean>;
+    readonly savedSearchVersion: import("@angular/core").WritableSignal<number>;
+    readonly activeSavedFilterUid: import("@angular/core").WritableSignal<string | null>;
+    readonly activeSavedFilterTitle: import("@angular/core").WritableSignal<string | null>;
+    readonly hasSavedFilter: import("@angular/core").Signal<boolean>;
     reset(): void;
     toggleLayout(): void;
     markSavedSearchDirty(): void;
     static ɵfac: i0.ɵɵFactoryDeclaration<TrashFilterService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<TrashFilterService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface TrashFilters {
@@ -3127,7 +4066,7 @@ class TrashService {
     updateSearch(uid: string, title: string, params: Record<string, unknown>): Observable<SavedSearch>;
     getSavedSearches(): Observable<SavedSearch[]>;
     static ɵfac: i0.ɵɵFactoryDeclaration<TrashService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<TrashService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface TrustedHtmlConfig {
@@ -3185,7 +4124,7 @@ class UserService {
     }): Observable<NuxeoGroup>;
     deleteGroup(groupname: string): Observable<void>;
     static ɵfac: i0.ɵɵFactoryDeclaration<UserService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<UserService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 interface VocabularyEntryFormValues {
@@ -3211,7 +4150,7 @@ class WorkflowService {
     getWorkflowModel(modelName: string): Observable<NuxeoWorkflowModel>;
     getWorkflowModelGraph(modelName: string): Observable<unknown>;
     static ɵfac: i0.ɵɵFactoryDeclaration<WorkflowService, never>;
-    static ɵprov: i0.ɵɵInjectableDeclaration<WorkflowService>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 const administrationAccessGuard: CanActivateFn;
@@ -3316,6 +4255,7 @@ function normalizeDocumentPickerList(res: PaginatedListMeta & {
 }
 function normalizeNuxeoPath(path: string): string;
 function noteFormatLabel(mimeType: string | null | undefined): string;
+function nuxeoBreadcrumbTitles(doc: Pick<NuxeoDocument, 'contextParameters'> | null | undefined): Map<string, string>;
 function nuxeoPathSegments(path: string): string[];
 function nuxeoPathsEqual(a: string, b: string): boolean;
 function nuxeoPathsEqualFlexible(a: string, b: string): boolean;
@@ -3374,8 +4314,8 @@ function writeClipboardDocs(docs: ClipboardDoc[]): void;
 ```ts
 class ConfirmDialogComponent {
     readonly data: ConfirmDialogData;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ConfirmDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<ConfirmDialogComponent, "lib-confirm-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ConfirmDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<ConfirmDialogComponent, "lib-confirm-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface ConfirmDialogData {
@@ -3386,25 +4326,25 @@ interface ConfirmDialogData {
 }
 class DateMaskPipe implements PipeTransform {
     transform(translatedMask: string | null | undefined): string;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<DateMaskPipe, never>;
-    static ɵpipe: _angular_core.ɵɵPipeDeclaration<DateMaskPipe, "dateMask", true>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<DateMaskPipe, never>;
+    static ɵpipe: i0.ɵɵPipeDeclaration<DateMaskPipe, "dateMask", true>;
     }
 }
 class DocumentCompareDialogComponent {
     readonly data: DocumentCompareDialogData;
-    readonly leftId: _angular_core.WritableSignal<string>;
-    readonly rightId: _angular_core.WritableSignal<string>;
-    readonly viewAllData: _angular_core.WritableSignal<boolean>;
-    readonly unifiedView: _angular_core.WritableSignal<boolean>;
-    readonly loading: _angular_core.WritableSignal<boolean>;
-    readonly error: _angular_core.WritableSignal<string | null>;
-    readonly leftDoc: _angular_core.WritableSignal<NuxeoDocument | null>;
-    readonly rightDoc: _angular_core.WritableSignal<NuxeoDocument | null>;
-    readonly sections: _angular_core.Signal<_nuxeo_satori_platform_nuxeo_client.CompareSection[]>;
+    readonly leftId: import("@angular/core").WritableSignal<string>;
+    readonly rightId: import("@angular/core").WritableSignal<string>;
+    readonly viewAllData: import("@angular/core").WritableSignal<boolean>;
+    readonly unifiedView: import("@angular/core").WritableSignal<boolean>;
+    readonly loading: import("@angular/core").WritableSignal<boolean>;
+    readonly error: import("@angular/core").WritableSignal<string | null>;
+    readonly leftDoc: import("@angular/core").WritableSignal<NuxeoDocument | null>;
+    readonly rightDoc: import("@angular/core").WritableSignal<NuxeoDocument | null>;
+    readonly sections: import("@angular/core").Signal<import("@nuxeo/satori-platform/nuxeo-client").CompareSection[]>;
     isIconRow(row: CompareRow): boolean;
     constructor();
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<DocumentCompareDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<DocumentCompareDialogComponent, "lib-document-compare-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<DocumentCompareDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<DocumentCompareDialogComponent, "lib-document-compare-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface DocumentCompareDialogData {
@@ -3415,58 +4355,58 @@ interface DocumentCompareDialogData {
     }
 }
 class DocumentViewerComponent {
-    readonly blobUrl: _angular_core.InputSignal<SafeResourceUrl | null>;
-    readonly rawBlobUrl: _angular_core.InputSignal<string | null>;
-    readonly blobType: _angular_core.InputSignal<string>;
-    readonly mimeType: _angular_core.InputSignal<string>;
-    readonly fileName: _angular_core.InputSignal<string>;
-    readonly fileSize: _angular_core.InputSignal<string>;
-    readonly loading: _angular_core.InputSignal<boolean>;
-    readonly noteContent: _angular_core.InputSignal<string | null>;
-    readonly noteHtml: _angular_core.InputSignal<SafeHtml | null>;
-    readonly videoSources: _angular_core.InputSignal<VideoSource[]>;
-    readonly storyboard: _angular_core.InputSignal<StoryboardItem[]>;
-    readonly posterUrl: _angular_core.InputSignal<string | null>;
-    readonly hasPdfRendition: _angular_core.InputSignal<boolean>;
-    readonly previewUrl: _angular_core.InputSignal<SafeResourceUrl | null>;
-    readonly pictureInfo: _angular_core.InputSignal<PictureInfo | null>;
-    readonly pictureViews: _angular_core.InputSignal<PictureView[]>;
-    readonly exifData: _angular_core.InputSignal<ExifData | null>;
-    readonly iptcData: _angular_core.InputSignal<IptcData | null>;
-    readonly videoInfo: _angular_core.InputSignal<VideoInfo | null>;
-    readonly arenderUrl: _angular_core.InputSignal<SafeResourceUrl | null>;
-    readonly arenderReloadId: _angular_core.InputSignal<number>;
-    readonly viewerDocUid: _angular_core.InputSignal<string>;
-    readonly annotationsTab: _angular_core.InputSignal<boolean>;
-    readonly showMainFileControls: _angular_core.InputSignal<boolean>;
-    readonly mainFileActionInProgress: _angular_core.InputSignal<string | null>;
-    readonly downloadClicked: _angular_core.OutputEmitterRef<void>;
-    readonly openWithDriveClicked: _angular_core.OutputEmitterRef<void>;
-    readonly previewClicked: _angular_core.OutputEmitterRef<void>;
-    readonly replaceMainFileClicked: _angular_core.OutputEmitterRef<void>;
-    readonly removeMainFileClicked: _angular_core.OutputEmitterRef<void>;
-    readonly storyboardSeek: _angular_core.OutputEmitterRef<number>;
-    readonly formatDownload: _angular_core.OutputEmitterRef<string>;
-    readonly contentType: _angular_core.Signal<"audio" | "html" | "image" | "markdown" | "none" | "pdf" | "pdfRendition" | "preview" | "text" | "video" | "xml">;
-    readonly showARenderViewer: _angular_core.Signal<boolean>;
-    readonly showImageToolbar: _angular_core.Signal<boolean>;
-    readonly showVideoStoryboard: _angular_core.Signal<boolean>;
-    readonly showPictureCards: _angular_core.Signal<boolean>;
-    readonly showVideoInfoCard: _angular_core.Signal<boolean>;
-    readonly arenderAvailable: _angular_core.Signal<boolean>;
-    readonly exifEntries: _angular_core.Signal<{
+    readonly blobUrl: import("@angular/core").InputSignal<SafeResourceUrl | null>;
+    readonly rawBlobUrl: import("@angular/core").InputSignal<string | null>;
+    readonly blobType: import("@angular/core").InputSignal<string>;
+    readonly mimeType: import("@angular/core").InputSignal<string>;
+    readonly fileName: import("@angular/core").InputSignal<string>;
+    readonly fileSize: import("@angular/core").InputSignal<string>;
+    readonly loading: import("@angular/core").InputSignal<boolean>;
+    readonly noteContent: import("@angular/core").InputSignal<string | null>;
+    readonly noteHtml: import("@angular/core").InputSignal<SafeHtml | null>;
+    readonly videoSources: import("@angular/core").InputSignal<VideoSource[]>;
+    readonly storyboard: import("@angular/core").InputSignal<StoryboardItem[]>;
+    readonly posterUrl: import("@angular/core").InputSignal<string | null>;
+    readonly hasPdfRendition: import("@angular/core").InputSignal<boolean>;
+    readonly previewUrl: import("@angular/core").InputSignal<SafeResourceUrl | null>;
+    readonly pictureInfo: import("@angular/core").InputSignal<PictureInfo | null>;
+    readonly pictureViews: import("@angular/core").InputSignal<PictureView[]>;
+    readonly exifData: import("@angular/core").InputSignal<ExifData | null>;
+    readonly iptcData: import("@angular/core").InputSignal<IptcData | null>;
+    readonly videoInfo: import("@angular/core").InputSignal<VideoInfo | null>;
+    readonly arenderUrl: import("@angular/core").InputSignal<SafeResourceUrl | null>;
+    readonly arenderReloadId: import("@angular/core").InputSignal<number>;
+    readonly viewerDocUid: import("@angular/core").InputSignal<string>;
+    readonly annotationsTab: import("@angular/core").InputSignal<boolean>;
+    readonly showMainFileControls: import("@angular/core").InputSignal<boolean>;
+    readonly mainFileActionInProgress: import("@angular/core").InputSignal<string | null>;
+    readonly downloadClicked: import("@angular/core").OutputEmitterRef<void>;
+    readonly openWithDriveClicked: import("@angular/core").OutputEmitterRef<void>;
+    readonly previewClicked: import("@angular/core").OutputEmitterRef<void>;
+    readonly replaceMainFileClicked: import("@angular/core").OutputEmitterRef<void>;
+    readonly removeMainFileClicked: import("@angular/core").OutputEmitterRef<void>;
+    readonly storyboardSeek: import("@angular/core").OutputEmitterRef<number>;
+    readonly formatDownload: import("@angular/core").OutputEmitterRef<string>;
+    readonly contentType: import("@angular/core").Signal<"audio" | "html" | "image" | "markdown" | "none" | "pdf" | "pdfRendition" | "preview" | "text" | "video" | "xml">;
+    readonly showARenderViewer: import("@angular/core").Signal<boolean>;
+    readonly showImageToolbar: import("@angular/core").Signal<boolean>;
+    readonly showVideoStoryboard: import("@angular/core").Signal<boolean>;
+    readonly showPictureCards: import("@angular/core").Signal<boolean>;
+    readonly showVideoInfoCard: import("@angular/core").Signal<boolean>;
+    readonly arenderAvailable: import("@angular/core").Signal<boolean>;
+    readonly exifEntries: import("@angular/core").Signal<{
     labelKey: string;
     value: string;
     }[]>;
-    readonly iptcEntries: _angular_core.Signal<{
+    readonly iptcEntries: import("@angular/core").Signal<{
     labelKey: string;
     value: string;
     }[]>;
-    readonly zoom: _angular_core.WritableSignal<number>;
-    readonly rotation: _angular_core.WritableSignal<number>;
-    readonly fitMode: _angular_core.WritableSignal<"real" | "width">;
-    readonly transform: _angular_core.Signal<string>;
-    readonly videoRef: _angular_core.Signal<ElementRef<HTMLVideoElement> | undefined>;
+    readonly zoom: import("@angular/core").WritableSignal<number>;
+    readonly rotation: import("@angular/core").WritableSignal<number>;
+    readonly fitMode: import("@angular/core").WritableSignal<"real" | "width">;
+    readonly transform: import("@angular/core").Signal<string>;
+    readonly videoRef: import("@angular/core").Signal<ElementRef<HTMLVideoElement> | undefined>;
     zoomIn(): void;
     zoomOut(): void;
     toggleFit(): void;
@@ -3476,8 +4416,142 @@ class DocumentViewerComponent {
     formatTimecode(seconds: number): string;
     formatDuration(seconds: number): string;
     isFiniteNumber(value: number | null | undefined): value is number;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<DocumentViewerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<DocumentViewerComponent, "lib-document-viewer", never, { "blobUrl": { "alias": "blobUrl"; "required": false; "isSignal": true; }; "rawBlobUrl": { "alias": "rawBlobUrl"; "required": true; "isSignal": true; }; "blobType": { "alias": "blobType"; "required": true; "isSignal": true; }; "mimeType": { "alias": "mimeType"; "required": false; "isSignal": true; }; "fileName": { "alias": "fileName"; "required": false; "isSignal": true; }; "fileSize": { "alias": "fileSize"; "required": false; "isSignal": true; }; "loading": { "alias": "loading"; "required": false; "isSignal": true; }; "noteContent": { "alias": "noteContent"; "required": false; "isSignal": true; }; "noteHtml": { "alias": "noteHtml"; "required": false; "isSignal": true; }; "videoSources": { "alias": "videoSources"; "required": false; "isSignal": true; }; "storyboard": { "alias": "storyboard"; "required": false; "isSignal": true; }; "posterUrl": { "alias": "posterUrl"; "required": false; "isSignal": true; }; "hasPdfRendition": { "alias": "hasPdfRendition"; "required": false; "isSignal": true; }; "previewUrl": { "alias": "previewUrl"; "required": false; "isSignal": true; }; "pictureInfo": { "alias": "pictureInfo"; "required": false; "isSignal": true; }; "pictureViews": { "alias": "pictureViews"; "required": false; "isSignal": true; }; "exifData": { "alias": "exifData"; "required": false; "isSignal": true; }; "iptcData": { "alias": "iptcData"; "required": false; "isSignal": true; }; "videoInfo": { "alias": "videoInfo"; "required": false; "isSignal": true; }; "arenderUrl": { "alias": "arenderUrl"; "required": false; "isSignal": true; }; "arenderReloadId": { "alias": "arenderReloadId"; "required": false; "isSignal": true; }; "viewerDocUid": { "alias": "viewerDocUid"; "required": false; "isSignal": true; }; "annotationsTab": { "alias": "annotationsTab"; "required": false; "isSignal": true; }; "showMainFileControls": { "alias": "showMainFileControls"; "required": false; "isSignal": true; }; "mainFileActionInProgress": { "alias": "mainFileActionInProgress"; "required": false; "isSignal": true; }; }, { "downloadClicked": "downloadClicked"; "openWithDriveClicked": "openWithDriveClicked"; "previewClicked": "previewClicked"; "replaceMainFileClicked": "replaceMainFileClicked"; "removeMainFileClicked": "removeMainFileClicked"; "storyboardSeek": "storyboardSeek"; "formatDownload": "formatDownload"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<DocumentViewerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<DocumentViewerComponent, "lib-document-viewer", never, {
+    "blobUrl": {
+    "alias": "blobUrl";
+    "required": false;
+    "isSignal": true;
+    };
+    "rawBlobUrl": {
+    "alias": "rawBlobUrl";
+    "required": true;
+    "isSignal": true;
+    };
+    "blobType": {
+    "alias": "blobType";
+    "required": true;
+    "isSignal": true;
+    };
+    "mimeType": {
+    "alias": "mimeType";
+    "required": false;
+    "isSignal": true;
+    };
+    "fileName": {
+    "alias": "fileName";
+    "required": false;
+    "isSignal": true;
+    };
+    "fileSize": {
+    "alias": "fileSize";
+    "required": false;
+    "isSignal": true;
+    };
+    "loading": {
+    "alias": "loading";
+    "required": false;
+    "isSignal": true;
+    };
+    "noteContent": {
+    "alias": "noteContent";
+    "required": false;
+    "isSignal": true;
+    };
+    "noteHtml": {
+    "alias": "noteHtml";
+    "required": false;
+    "isSignal": true;
+    };
+    "videoSources": {
+    "alias": "videoSources";
+    "required": false;
+    "isSignal": true;
+    };
+    "storyboard": {
+    "alias": "storyboard";
+    "required": false;
+    "isSignal": true;
+    };
+    "posterUrl": {
+    "alias": "posterUrl";
+    "required": false;
+    "isSignal": true;
+    };
+    "hasPdfRendition": {
+    "alias": "hasPdfRendition";
+    "required": false;
+    "isSignal": true;
+    };
+    "previewUrl": {
+    "alias": "previewUrl";
+    "required": false;
+    "isSignal": true;
+    };
+    "pictureInfo": {
+    "alias": "pictureInfo";
+    "required": false;
+    "isSignal": true;
+    };
+    "pictureViews": {
+    "alias": "pictureViews";
+    "required": false;
+    "isSignal": true;
+    };
+    "exifData": {
+    "alias": "exifData";
+    "required": false;
+    "isSignal": true;
+    };
+    "iptcData": {
+    "alias": "iptcData";
+    "required": false;
+    "isSignal": true;
+    };
+    "videoInfo": {
+    "alias": "videoInfo";
+    "required": false;
+    "isSignal": true;
+    };
+    "arenderUrl": {
+    "alias": "arenderUrl";
+    "required": false;
+    "isSignal": true;
+    };
+    "arenderReloadId": {
+    "alias": "arenderReloadId";
+    "required": false;
+    "isSignal": true;
+    };
+    "viewerDocUid": {
+    "alias": "viewerDocUid";
+    "required": false;
+    "isSignal": true;
+    };
+    "annotationsTab": {
+    "alias": "annotationsTab";
+    "required": false;
+    "isSignal": true;
+    };
+    "showMainFileControls": {
+    "alias": "showMainFileControls";
+    "required": false;
+    "isSignal": true;
+    };
+    "mainFileActionInProgress": {
+    "alias": "mainFileActionInProgress";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "downloadClicked": "downloadClicked";
+    "openWithDriveClicked": "openWithDriveClicked";
+    "previewClicked": "previewClicked";
+    "replaceMainFileClicked": "replaceMainFileClicked";
+    "removeMainFileClicked": "removeMainFileClicked";
+    "storyboardSeek": "storyboardSeek";
+    "formatDownload": "formatDownload";
+    }, never, never, true, never>;
     }
 }
 class EditCollectionDialogComponent {
@@ -3492,8 +4566,8 @@ class EditCollectionDialogComponent {
     constructor();
     isExpiresValid(): boolean;
     save(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<EditCollectionDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<EditCollectionDialogComponent, "lib-edit-collection-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<EditCollectionDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<EditCollectionDialogComponent, "lib-edit-collection-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface EditCollectionDialogData {
@@ -3511,17 +4585,17 @@ interface ExifData {
     }
 }
 class ExportDialogComponent {
-    readonly exporting: _angular_core.WritableSignal<ExportType | null>;
+    readonly exporting: import("@angular/core").WritableSignal<ExportType | null>;
     readonly options: ExportOption[];
     onExport(type: ExportType): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ExportDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<ExportDialogComponent, "lib-export-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ExportDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<ExportDialogComponent, "lib-export-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface ExportDialogData {
     documentUid: string;
     documentTitle: string;
-    exportFn: (type: ExportType, uid: string) => rxjs.Observable<Blob>;
+    exportFn: (type: ExportType, uid: string) => import('rxjs').Observable<Blob>;
     }
 }
 type ExportType = 'pdf' | 'thumbnail' | 'xml' | 'zip';
@@ -3537,14 +4611,15 @@ const MAT_TAB_LIST_IBM_ONKEYDOWN = "void(0)";
 const MAT_TAB_LIST_KEYDOWN_ATTR = "data-satori-tablist-keydown";
 class MatTabListKeydownDirective {
     constructor();
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<MatTabListKeydownDirective, never>;
-    static ɵdir: _angular_core.ɵɵDirectiveDeclaration<MatTabListKeydownDirective, "mat-tab-group[libMatTabListKeydown]", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<MatTabListKeydownDirective, never>;
+    static ɵdir: i0.ɵɵDirectiveDeclaration<MatTabListKeydownDirective, "mat-tab-group[libMatTabListKeydown]", never, {}, {}, never, never, true, never>;
     }
 }
 const PLATFORM_EN_TRANSLATIONS: Readonly<Record<string, string>>;
 const PLATFORM_MISSING_TRANSLATION_NEXT: InjectionToken<MissingTranslationHandler>;
 interface PermissionEntry {
     id: string;
+    aceId?: string;
     userGroup: string;
     right: string;
     timeFrame: string;
@@ -3570,22 +4645,22 @@ interface PictureView {
     }
 }
 class PlatformEnglishMissingTranslationHandler implements MissingTranslationHandler {
-    handle(params: MissingTranslationHandlerParams): _ngx_translate_core.StrictTranslation | rxjs.Observable<_ngx_translate_core.StrictTranslation>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<PlatformEnglishMissingTranslationHandler, never>;
-    static ɵprov: _angular_core.ɵɵInjectableDeclaration<PlatformEnglishMissingTranslationHandler>;
+    handle(params: MissingTranslationHandlerParams): import("@ngx-translate/core").StrictTranslation | import("rxjs").Observable<import("@ngx-translate/core").StrictTranslation>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<PlatformEnglishMissingTranslationHandler, never>;
+    static ɵprov: i0.ɵɵInjectableDeclaration<any>;
     }
 }
 const SAVED_SEARCH_DIALOG_OPTIONS: Partial<MatDialogConfig>;
 class SavedSearchDialogComponent {
     readonly dialogRef: MatDialogRef<any, any>;
     readonly data: SavedSearchDialogData;
-    readonly name: _angular_core.WritableSignal<string>;
+    readonly name: import("@angular/core").WritableSignal<string>;
     protected readonly hasSlash: () => boolean;
     readonly canSave: () => boolean;
     onInput(value: string): void;
     save(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<SavedSearchDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<SavedSearchDialogComponent, "lib-saved-search-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<SavedSearchDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<SavedSearchDialogComponent, "lib-saved-search-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface SavedSearchDialogData {
@@ -3595,30 +4670,48 @@ interface SavedSearchDialogData {
     }
 }
 class SelectionTopbarComponent {
-    readonly selectedCount: _angular_core.InputSignal<number>;
-    readonly selectedItems: _angular_core.InputSignal<{
+    readonly selectedCount: import("@angular/core").InputSignal<number>;
+    readonly selectedItems: import("@angular/core").InputSignal<{
     id: string;
     name: string;
     preview: SafeUrl | string | null;
     }[]>;
-    readonly clearOnly: _angular_core.InputSignal<boolean>;
-    readonly cleared: _angular_core.OutputEmitterRef<void>;
-    readonly selectionPopupOpen: _angular_core.WritableSignal<boolean>;
-    readonly bulkActions: _angular_core.Signal<readonly ExtensionActionDescriptor[]>;
+    readonly clearOnly: import("@angular/core").InputSignal<boolean>;
+    readonly cleared: import("@angular/core").OutputEmitterRef<void>;
+    readonly selectionPopupOpen: import("@angular/core").WritableSignal<boolean>;
+    readonly bulkActions: import("@angular/core").Signal<readonly ExtensionActionDescriptor[]>;
     isEnabled(action: ExtensionActionDescriptor): boolean;
     run(action: ExtensionActionDescriptor): void;
     openSelectionPopup(): void;
     closeSelectionPopup(): void;
     onEscape(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<SelectionTopbarComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<SelectionTopbarComponent, "lib-selection-topbar", never, { "selectedCount": { "alias": "selectedCount"; "required": true; "isSignal": true; }; "selectedItems": { "alias": "selectedItems"; "required": false; "isSignal": true; }; "clearOnly": { "alias": "clearOnly"; "required": false; "isSignal": true; }; }, { "cleared": "cleared"; }, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<SelectionTopbarComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<SelectionTopbarComponent, "lib-selection-topbar", never, {
+    "selectedCount": {
+    "alias": "selectedCount";
+    "required": true;
+    "isSignal": true;
+    };
+    "selectedItems": {
+    "alias": "selectedItems";
+    "required": false;
+    "isSignal": true;
+    };
+    "clearOnly": {
+    "alias": "clearOnly";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {
+    "cleared": "cleared";
+    }, never, never, true, never>;
     }
 }
 class ShareDialogComponent {
     readonly data: ShareDialogData;
     copyLink(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ShareDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<ShareDialogComponent, "lib-share-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ShareDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<ShareDialogComponent, "lib-share-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface ShareDialogData {
@@ -3629,12 +4722,12 @@ interface ShareDialogData {
 class ShareSavedSearchDialogComponent implements OnInit {
     readonly dialogRef: MatDialogRef<any, any>;
     readonly data: ShareSavedSearchDialogData;
-    readonly permissions: _angular_core.WritableSignal<PermissionEntry[]>;
-    readonly inheritedPermissions: _angular_core.WritableSignal<PermissionSummary[]>;
-    readonly externalPermissions: _angular_core.WritableSignal<ExternalPermissionEntry[]>;
-    readonly isInheritanceBlocked: _angular_core.WritableSignal<boolean>;
-    readonly saving: _angular_core.WritableSignal<boolean>;
-    readonly loading: _angular_core.WritableSignal<boolean>;
+    readonly permissions: import("@angular/core").WritableSignal<PermissionEntry[]>;
+    readonly inheritedPermissions: import("@angular/core").WritableSignal<PermissionSummary[]>;
+    readonly externalPermissions: import("@angular/core").WritableSignal<ExternalPermissionEntry[]>;
+    readonly isInheritanceBlocked: import("@angular/core").WritableSignal<boolean>;
+    readonly saving: import("@angular/core").WritableSignal<boolean>;
+    readonly loading: import("@angular/core").WritableSignal<boolean>;
     ngOnInit(): void;
     openExternalPermissionDialog(): void;
     editExternalPermission(row: ExternalPermissionEntry): void;
@@ -3645,8 +4738,8 @@ class ShareSavedSearchDialogComponent implements OnInit {
     removeRow(id: string): void;
     editRow(id: string): void;
     save(): void;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<ShareSavedSearchDialogComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<ShareSavedSearchDialogComponent, "lib-share-saved-search-dialog", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<ShareSavedSearchDialogComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<ShareSavedSearchDialogComponent, "lib-share-saved-search-dialog", never, {}, {}, never, never, true, never>;
     }
 }
 interface ShareSavedSearchDialogData {
@@ -3667,8 +4760,8 @@ class TranslatedDatepickerIntl extends TranslatedDatepickerIntl$1 {
     }
 }
 class UiComponent {
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<UiComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<UiComponent, "lib-ui", never, {}, {}, never, never, true, never>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<UiComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<UiComponent, "lib-ui", never, {}, {}, never, never, true, never>;
     }
 }
 interface VideoInfo {
@@ -3688,18 +4781,45 @@ interface VideoSource {
     }
 }
 class WidgetContainerComponent {
-    readonly title: _angular_core.InputSignal<string>;
-    readonly icon: _angular_core.InputSignal<string | undefined>;
-    readonly iconColor: _angular_core.InputSignal<string>;
-    readonly headingLevel: _angular_core.InputSignal<2 | 3>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<WidgetContainerComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<WidgetContainerComponent, "lib-widget-container", never, { "title": { "alias": "title"; "required": true; "isSignal": true; }; "icon": { "alias": "icon"; "required": false; "isSignal": true; }; "iconColor": { "alias": "iconColor"; "required": false; "isSignal": true; }; "headingLevel": { "alias": "headingLevel"; "required": false; "isSignal": true; }; }, {}, never, ["[widgetActions]", "*"], true, never>;
+    readonly title: import("@angular/core").InputSignal<string>;
+    readonly icon: import("@angular/core").InputSignal<string | undefined>;
+    readonly iconColor: import("@angular/core").InputSignal<string>;
+    readonly headingLevel: import("@angular/core").InputSignal<2 | 3>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<WidgetContainerComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<WidgetContainerComponent, "lib-widget-container", never, {
+    "title": {
+    "alias": "title";
+    "required": true;
+    "isSignal": true;
+    };
+    "icon": {
+    "alias": "icon";
+    "required": false;
+    "isSignal": true;
+    };
+    "iconColor": {
+    "alias": "iconColor";
+    "required": false;
+    "isSignal": true;
+    };
+    "headingLevel": {
+    "alias": "headingLevel";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, ["[widgetActions]", "*"], true, never>;
     }
 }
 class WidgetGridComponent {
-    readonly columns: _angular_core.InputSignal<number>;
-    static ɵfac: _angular_core.ɵɵFactoryDeclaration<WidgetGridComponent, never>;
-    static ɵcmp: _angular_core.ɵɵComponentDeclaration<WidgetGridComponent, "lib-widget-grid", never, { "columns": { "alias": "columns"; "required": false; "isSignal": true; }; }, {}, never, ["*"], true, never>;
+    readonly columns: import("@angular/core").InputSignal<number>;
+    static ɵfac: i0.ɵɵFactoryDeclaration<WidgetGridComponent, never>;
+    static ɵcmp: i0.ɵɵComponentDeclaration<WidgetGridComponent, "lib-widget-grid", never, {
+    "columns": {
+    "alias": "columns";
+    "required": false;
+    "isSignal": true;
+    };
+    }, {}, never, ["*"], true, never>;
     }
 }
 function dateMaskFor(localeId: string, translatedMask: string): string;

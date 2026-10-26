@@ -271,7 +271,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // The packaged default must change nothing.
   // ---------------------------------------------------------------------------
-  h.step('The configuration file is served from outside the application bundle');
+  await h.step('The configuration file is served from outside the application bundle');
   await h.login();
   await h.expectVisible('app shell rendered', 'app-shell');
 
@@ -355,20 +355,20 @@ export default async function run(page, h) {
   );
   await h.screenshot('default-config-shell');
 
-  h.step('Default configuration reproduces production browse unchanged');
+  await h.step('Default configuration reproduces production browse unchanged');
   await h.goTo('/#/browse');
   await h.expectVisible('browse page rendered', 'lib-browse');
   await h.expectText('repository content listed', 'lib-browse', 'Default domain');
   await h.screenshot('default-config-production-browse');
 
-  h.step('Default configuration reproduces the adf-hx POC route unchanged');
+  await h.step('Default configuration reproduces the adf-hx POC route unchanged');
   await h.goTo('/#/browse-adf-hx');
   await h.expectVisible('POC page rendered', 'lib-browse-adf-hx-poc');
   await h.expectVisible('hxp document list present', 'hxp-document-list');
   await h.expectText('Nuxeo children listed', 'hxp-document-list', 'Default domain');
   await h.screenshot('default-config-adf-hx-browse');
 
-  h.step('Translations resolve rather than leaking raw keys');
+  await h.step('Translations resolve rather than leaking raw keys');
   await h.goTo('/#/settings/themes');
   await h.expectVisible('themes page rendered', 'app-themes-page');
   await h.expectText('translated page title rendered', 'app-themes-page', 'Themes');
@@ -389,7 +389,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // The same bundle, different configuration.
   // ---------------------------------------------------------------------------
-  h.step('A customised configuration file rebrands the application, with no rebuild');
+  await h.step('A customised configuration file rebrands the application, with no rebuild');
   bootstrapBody = configResponse('bootstrap', { customer: [CUSTOMISED_BOOTSTRAP] });
   // Clear the stored preference so the *configured* default is what applies.
   await page.evaluate(() => localStorage.removeItem('agentic_ui_color_theme'));
@@ -432,7 +432,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('customised-config-theme-applied');
 
-  h.step('The configured theme set is open, not the four compiled ones');
+  await h.step('The configured theme set is open, not the four compiled ones');
   const customisedThemeCount = await page.locator('app-themes-page .theme-card').count();
   h.check(
     'a fifth theme added in JSON appears in the picker',
@@ -442,7 +442,7 @@ export default async function run(page, h) {
   await h.expectText('the configured theme label is rendered', 'app-themes-page', 'Acme Brand');
   await h.screenshot('customised-config-theme-picker');
 
-  h.step("The runtime manifest relabels the product from a package's manifest fragment");
+  await h.step("The runtime manifest relabels the product from a package's manifest fragment");
   manifestBody = configResponse('manifest', { customer: [CUSTOMISED_MANIFEST] });
   await reloadApp(page);
   await h.expectText(
@@ -462,7 +462,7 @@ export default async function run(page, h) {
   // ---------------------------------------------------------------------------
   // Failure paths.
   // ---------------------------------------------------------------------------
-  h.step('A malformed configuration file degrades to the packaged defaults');
+  await h.step('A malformed configuration file degrades to the packaged defaults');
   bootstrapBody = '{"branding": {"applicationTitle": ';
   manifestBody = '{"labels": ';
   await h.goTo('/#/browse');
@@ -482,7 +482,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('malformed-config-falls-back');
 
-  h.step('An absent configuration service leaves a working application');
+  await h.step('An absent configuration service leaves a working application');
   bootstrapBody = null;
   manifestBody = null;
   await h.goTo('/#/browse-adf-hx');
@@ -504,7 +504,7 @@ export default async function run(page, h) {
   );
   await h.screenshot('absent-config-still-works');
 
-  h.step('Configuration health');
+  await h.step('Configuration health');
   h.check(
     'no request read a configuration document from the repository',
     documentReads.length === 0,

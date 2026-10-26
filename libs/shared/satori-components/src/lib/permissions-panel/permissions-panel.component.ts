@@ -45,6 +45,7 @@ import {
   type NxsPermissionRefusal,
   type NxsPermissionsSnapshot,
 } from './permissions-model';
+import { nxsOfferedRights } from '../permission-dialog-support';
 import { NxsPermissionsService, type NxsSaveOutcome } from './permissions-panel.service';
 
 /** The ID the panel is registered under, so a customer library can re-register a replacement. */
@@ -81,7 +82,8 @@ interface EditorState {
 /**
  * A document's permissions: local and inherited ACEs, blocked inheritance, and each ACE's time
  * frame and status, with add, edit and remove over the server's list for the document type, Nuxeo's
- * standard permissions and every other permission the server reports to the user.
+ * standard permissions and every other permission the server reports to the user — or, with
+ * `offer` set to `type`, over the type's list alone.
  *
  * **Every write addresses one ACE.** Changes are staged and applied on Save as one
  * `Document.AddPermission`, `ReplacePermission` or `RemovePermission`-by-id per change, so an
@@ -136,6 +138,13 @@ export class NxsPermissionsPanelComponent {
    * ACL-derived content — the external-user shares this panel leaves to it — can read it again.
    */
   readonly permissionsChanged = input<(() => void) | null>(null);
+  /**
+   * Which permissions the selects offer. `all`: the server's list for the document type, then
+   * Nuxeo's standard permissions, then every other permission the server reports. `type`: the
+   * type's `userVisiblePermissions` alone, as Web UI offers them. Either way an entry holding a
+   * permission outside the list keeps it in its own select, so editing never changes it silently.
+   */
+  readonly offer = input<'all' | 'type'>('all');
 
   private readonly service = inject(NxsPermissionsService);
   private readonly translate = inject(TranslateService);
@@ -205,6 +214,14 @@ export class NxsPermissionsPanelComponent {
   protected readonly permissionGroups = computed(() => {
     const catalogue = this.snapshot()?.catalogue;
     if (!catalogue) return [];
+    if (this.offer() === 'type') {
+      return [
+        {
+          label: 'satori-components.permissions-panel.group.suggested',
+          permissions: nxsOfferedRights(catalogue.suggested),
+        },
+      ];
+    }
     return [
       {
         label: 'satori-components.permissions-panel.group.suggested',
@@ -220,7 +237,12 @@ export class NxsPermissionsPanelComponent {
 
   private readonly offered = computed(() => {
     const catalogue = this.snapshot()?.catalogue;
-    return new Set(catalogue ? offeredPermissions(catalogue) : []);
+    if (!catalogue) return new Set<string>();
+    return new Set(
+      this.offer() === 'type'
+        ? nxsOfferedRights(catalogue.suggested)
+        : offeredPermissions(catalogue),
+    );
   });
 
   protected readonly localItems = computed<LocalItem[]>(() => {

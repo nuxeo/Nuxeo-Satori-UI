@@ -66,9 +66,14 @@ const CHROMIUM = {
   ...devices['Desktop Chrome'],
   baseURL,
   viewport: { width: 1440, height: 900 },
+  // `send: 'always'` (NXSAT-643): a guest-enabled Nuxeo never answers with a 401 challenge, so
+  // challenge-based credentials were never sent and the specs' `page.request` calls ran as
+  // `Anonymous`. It reaches `page.request` only; the browser is signed in by the injected
+  // session, and `signedIn` checks both against `/me` (`scripts/beta-harness/identity-guard.mjs`).
   httpCredentials: {
     ...requireNuxeoCredentials(),
-    origin: baseURL,
+    origin: new URL(baseURL).origin,
+    send: 'always' as const,
   },
   trace: 'retain-on-failure' as const,
   screenshot: 'only-on-failure' as const,

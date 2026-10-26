@@ -3,10 +3,12 @@ import { TestBed } from '@angular/core/testing';
 import {
   MissingTranslationHandler,
   MissingTranslationHandlerParams,
-  TranslateModule,
+  provideTranslateService,
+  TranslateLoader,
   TranslateService,
 } from '@ngx-translate/core';
 import { describe, expect, it } from 'vitest';
+import { of, type Observable } from 'rxjs';
 
 import {
   PLATFORM_MISSING_TRANSLATION_NEXT,
@@ -21,18 +23,26 @@ class HostHandler implements MissingTranslationHandler {
   }
 }
 
+/** Empty test loader for the host app. */
+class EmptyLoader implements TranslateLoader {
+  getTranslation(): Observable<Record<string, string>> {
+    return of({});
+  }
+}
+
 /** A host application with its own, partial catalogue — none of the app's `en.json`. */
 function host(extraProviders: Provider[] = []): TranslateService {
   TestBed.resetTestingModule();
   TestBed.configureTestingModule({
-    imports: [
-      TranslateModule.forRoot({
+    providers: [
+      provideTranslateService({
+        loader: { provide: TranslateLoader, useClass: EmptyLoader },
         missingTranslationHandler: providePlatformEnglishFallback(),
         lang: 'fr',
         fallbackLang: 'fr',
       }),
+      ...extraProviders,
     ],
-    providers: extraProviders,
   });
   const translate = TestBed.inject(TranslateService);
   translate.setTranslation('fr', { 'shared-ui': { 'confirm-dialog': { cancel: 'Annuler' } } });

@@ -1,4 +1,11 @@
-import { Component, DestroyRef, ViewChild, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  DestroyRef,
+  ViewChild,
+  inject,
+  signal,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgForm } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -40,6 +47,7 @@ export interface EditCollectionDialogData {
   ],
   providers: [provideNxsToast()],
   templateUrl: './edit-collection-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styleUrl: './edit-collection-dialog.scss',
 })
 export class EditCollectionDialogComponent {

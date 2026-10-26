@@ -31,9 +31,10 @@
         } @else {
           @for (suggestion of suggestions(); track suggestion.id) {
             <mat-option [value]="suggestion">
-              <mat-icon class="suggestion-icon">{{
-                suggestion.type === 'USER_TYPE' ? 'person' : 'groups'
-              }}</mat-icon>
+              <mat-icon
+                class="suggestion-icon"
+                [svgIcon]="suggestion.type === 'USER_TYPE' ? 'user' : 'users'"
+              />
               <span>{{ suggestion.displayLabel }}</span>
               <span class="suggestion-id">{{ suggestion.id }}</span>
             </mat-option>
@@ -58,7 +59,7 @@
     }}</mat-label>
     <mat-select [(ngModel)]="right">
       @for (opt of rightOptions; track opt.value) {
-        <mat-option [value]="opt.value">{{ opt | descriptorLabel }}</mat-option>
+        <mat-option [value]="opt.value">{{ opt.label }}</mat-option>
       }
     </mat-select>
   </mat-form-field>

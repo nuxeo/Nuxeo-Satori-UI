@@ -132,6 +132,7 @@
 .ug-table {
   width: 100%;
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   th.mat-mdc-header-cell,
   td.mat-mdc-cell {
     padding-top: var(--admin-row-padding-y, 0.68rem);
@@ -140,10 +141,12 @@
   }
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .ug-page .mat-mdc-form-field {
   --mat-form-field-container-height: var(--admin-control-height, 40px);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .ug-page .mat-mdc-unelevated-button,
 .ug-page .mat-mdc-outlined-button,
 .ug-page .mat-mdc-button {
@@ -182,6 +185,7 @@ mat-paginator {
   color: var(--mat-sys-primary, #0d47a1);
 }
 
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 :host ::ng-deep .ug-members-menu.mat-mdc-menu-panel {
   min-width: 12rem;
   max-width: 20rem;

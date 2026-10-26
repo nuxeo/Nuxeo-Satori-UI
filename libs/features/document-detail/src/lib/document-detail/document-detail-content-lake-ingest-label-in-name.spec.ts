@@ -51,6 +51,6 @@ describe('Document detail Content Lake ingest label in name (NXENG-793)', () => 
 
     const hiddenName = visuallyHiddenAccessibleName(ingestButton);
     expect(hiddenName).toContain(`'${INGEST_KEY}' | translate`);
-    expect(ingestButton).toContain('<mat-icon aria-hidden="true">cloud_upload</mat-icon>');
+    expect(ingestButton).toContain('svgIcon="cloud_upload"');
   });
 });

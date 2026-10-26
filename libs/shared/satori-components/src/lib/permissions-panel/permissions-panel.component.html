@@ -162,7 +162,7 @@
           [disabled]="!editable()"
           (click)="openAdd()"
         >
-          <mat-icon aria-hidden="true">add</mat-icon>
+          <mat-icon aria-hidden="true" svgIcon="plus_large" />
           {{ 'satori-components.permissions-panel.add' | translate }}
         </button>
       }
@@ -210,9 +210,10 @@
             >
               @for (suggestion of suggestions(); track suggestion.id) {
                 <mat-option [value]="suggestion">
-                  <mat-icon aria-hidden="true">{{
-                    suggestion.type === 'GROUP_TYPE' ? 'group' : 'person'
-                  }}</mat-icon>
+                  <mat-icon
+                    aria-hidden="true"
+                    [svgIcon]="suggestion.type === 'GROUP_TYPE' ? 'user_group' : 'user'"
+                  />
                   {{ suggestion.displayLabel }}
                   <span class="nxs-permissions-panel__id">{{ suggestion.id }}</span>
                 </mat-option>
@@ -463,7 +464,7 @@
                   [disabled]="!editable()"
                   (click)="openEdit(item)"
                 >
-                  <mat-icon aria-hidden="true">edit</mat-icon>
+                  <mat-icon aria-hidden="true" svgIcon="pencil" />
                 </button>
               }
               @if (item.state === 'removed') {
@@ -493,7 +494,7 @@
                   [disabled]="!editable()"
                   (click)="toggleRemove(item)"
                 >
-                  <mat-icon aria-hidden="true">delete</mat-icon>
+                  <mat-icon aria-hidden="true" svgIcon="trash" />
                 </button>
               }
             }

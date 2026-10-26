@@ -1,5 +1,10 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import type { NxsHeadingLevel } from '../heading-level';
@@ -9,6 +14,7 @@ import { type NxsErrorStatus, nxsErrorStatus } from './error-status';
 @Component({
   standalone: true,
   imports: [NxsErrorStateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     <nxs-error-state
       [status]="status()"
@@ -37,6 +43,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsErrorStateComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-error-state retryable />`,
 })
 class BareAttributeHostComponent {}
@@ -51,7 +58,7 @@ describe('NxsErrorStateComponent', () => {
   const text = (selector: string): string | undefined =>
     state().querySelector(selector)?.textContent?.trim();
   const retryButton = (): HTMLButtonElement | undefined =>
-    [...state().querySelectorAll('button')].find((b) => b.textContent?.trim() === 'refresh Retry');
+    [...state().querySelectorAll('button')].find((b) => b.textContent?.trim() === 'Retry');
 
   async function render(): Promise<void> {
     fixture.detectChanges();
@@ -74,21 +81,18 @@ describe('NxsErrorStateComponent', () => {
   });
 
   it.each([
-    [500, 'error_outline', 'Something went wrong', 'The server could not complete the request.'],
+    [500, 'error', 'Something went wrong', 'The server could not complete the request.'],
     [401, 'lock', 'Your session has ended', 'Sign in again to continue.'],
     [403, 'block', 'You do not have access', 'You do not have permission to see this.'],
-    [
-      404,
-      'search_off',
-      'Not found',
-      'It may have been moved or deleted, or the link may be wrong.',
-    ],
+    [404, 'search', 'Not found', 'It may have been moved or deleted, or the link may be wrong.'],
   ] as const)('renders the %i variant', async (status, icon, title, message) => {
     host.status.set(status);
     await render();
 
     expect(state().getAttribute('data-status')).toBe(String(status));
-    expect(text('.nxs-error-state__icon')).toBe(icon);
+    expect(
+      state().querySelector('.nxs-error-state__icon')?.getAttribute('data-mat-icon-name'),
+    ).toBe(icon);
     expect(state().querySelector('.nxs-error-state__icon')?.getAttribute('aria-hidden')).toBe(
       'true',
     );
@@ -181,7 +185,7 @@ describe('NxsErrorStateComponent', () => {
 
     const buttons = (bare.nativeElement as HTMLElement).querySelectorAll('button');
     expect(buttons).toHaveLength(1);
-    expect(buttons[0].textContent?.trim()).toBe('refresh Retry');
+    expect(buttons[0].textContent?.trim()).toBe('Retry');
   });
 });
 

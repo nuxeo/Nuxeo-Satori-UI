@@ -3,6 +3,7 @@
 }
 
 // Compact, to sit among a card's or a row's other icon actions.
+/* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
 .nxs-favorite-toggle__button {
   --mat-icon-button-state-layer-size: 32px;
   width: 32px;
@@ -10,6 +11,7 @@
   padding: 0;
   color: var(--mat-sys-on-surface-variant);
 
+  /* stylelint-disable-next-line @hylandsoftware/satori-lint/stylelint/no-ds-internals-overrides */
   .mat-icon {
     width: 18px;
     height: 18px;

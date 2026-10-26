@@ -1,4 +1,9 @@
-import { Component, provideZonelessChangeDetection, signal } from '@angular/core';
+import {
+  Component,
+  provideZonelessChangeDetection,
+  signal,
+  ChangeDetectionStrategy,
+} from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule, Validators } from '@angular/forms';
 import { of, throwError } from 'rxjs';
@@ -44,6 +49,7 @@ const COVERAGE = [
 @Component({
   standalone: true,
   imports: [NxsVocabularySelectComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `
     @if (multiple()) {
       <nxs-vocabulary-select
@@ -67,6 +73,7 @@ class HostComponent {
 @Component({
   standalone: true,
   imports: [NxsVocabularySelectComponent],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-vocabulary-select label="Nature" directory="nature" />
     <nxs-vocabulary-select label="Coverage" directory="l10ncoverage" multiple />
     <nxs-vocabulary-select label="Subjects" directory="l10nsubjects" multiple />`,

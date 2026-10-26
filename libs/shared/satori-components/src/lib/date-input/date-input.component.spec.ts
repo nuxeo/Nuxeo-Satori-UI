@@ -6,6 +6,7 @@ import {
   provideZonelessChangeDetection,
   signal,
   type Provider,
+  ChangeDetectionStrategy,
 } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FormControl, ReactiveFormsModule } from '@angular/forms';
@@ -110,6 +111,7 @@ describe('nxsParseLocaleDate', () => {
 @Component({
   standalone: true,
   imports: [NxsDateInputComponent, ReactiveFormsModule],
+  changeDetection: ChangeDetectionStrategy.Eager,
   template: `<nxs-date-input
     label="Expires"
     [min]="min()"

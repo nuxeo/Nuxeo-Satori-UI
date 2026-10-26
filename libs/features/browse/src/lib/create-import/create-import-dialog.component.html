@@ -241,7 +241,7 @@
                       (click)="clearCsvFile()"
                       [attr.aria-label]="'browse.create-import-dialog.remove-csv-file' | translate"
                     >
-                      <mat-icon>close</mat-icon>
+                      <mat-icon svgIcon="x_large" />
                     </button>
                   </li>
                 </ul>
@@ -417,7 +417,7 @@
                         [disabled]="busy() || mainFileUploading()"
                         (click)="$event.stopPropagation(); clearMainFile()"
                       >
-                        <mat-icon>close</mat-icon>
+                        <mat-icon svgIcon="x_large" />
                       </button>
                     </div>
                   } @else {
@@ -469,7 +469,7 @@
                             "
                             (click)="$event.stopPropagation(); clearNature()"
                           >
-                            <mat-icon>cancel</mat-icon>
+                            <mat-icon svgIcon="circle_x" />
                           </button>
                         </mat-chip>
                       </mat-chip-set>
@@ -518,7 +518,7 @@
                             "
                             (click)="$event.stopPropagation()"
                           >
-                            <mat-icon>cancel</mat-icon>
+                            <mat-icon svgIcon="circle_x" />
                           </button>
                         </mat-chip>
                       }
@@ -575,7 +575,7 @@
                             "
                             (click)="$event.stopPropagation(); clearCoverage()"
                           >
-                            <mat-icon>cancel</mat-icon>
+                            <mat-icon svgIcon="circle_x" />
                           </button>
                         </mat-chip>
                       </mat-chip-set>
@@ -699,7 +699,7 @@
                                 "
                                 (click)="$event.stopPropagation(); clearNature()"
                               >
-                                <mat-icon>cancel</mat-icon>
+                                <mat-icon svgIcon="circle_x" />
                               </button>
                             </mat-chip>
                           </mat-chip-set>
@@ -750,7 +750,7 @@
                                 "
                                 (click)="$event.stopPropagation()"
                               >
-                                <mat-icon>cancel</mat-icon>
+                                <mat-icon svgIcon="circle_x" />
                               </button>
                             </mat-chip>
                           }
@@ -807,7 +807,7 @@
                                 "
                                 (click)="$event.stopPropagation(); clearCoverage()"
                               >
-                                <mat-icon>cancel</mat-icon>
+                                <mat-icon svgIcon="circle_x" />
                               </button>
                             </mat-chip>
                           </mat-chip-set>
@@ -892,7 +892,11 @@
                       <span class="import-file-title">{{ entry.state.title }}</span>
                     </button>
                     @if (entry.visited) {
-                      <mat-icon class="import-file-done" aria-hidden="true">check_circle</mat-icon>
+                      <mat-icon
+                        class="import-file-done"
+                        aria-hidden="true"
+                        svgIcon="circle_check"
+                      />
                     }
                   </li>
                 }
@@ -902,7 +906,7 @@
         }
         @case ('success') {
           <div class="success-panel" role="status" aria-live="polite">
-            <mat-icon class="success-icon" aria-hidden="true">check_circle</mat-icon>
+            <mat-icon class="success-icon" aria-hidden="true" svgIcon="circle_check" />
             <h2 mat-dialog-title class="success-heading">
               {{ 'browse.create-import-dialog.done' | translate }}
             </h2>
@@ -988,7 +992,7 @@
             [disabled]="!canEditImportPrevious() || busy()"
             (click)="editImportPrevious()"
           >
-            <mat-icon aria-hidden="true">chevron_left</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="chevron_left" />
             {{ 'browse.create-import-dialog.edit-previous' | translate }}
           </button>
           <button
@@ -999,7 +1003,7 @@
             (click)="editImportNext()"
           >
             {{ 'browse.create-import-dialog.edit-next' | translate }}
-            <mat-icon aria-hidden="true">chevron_right</mat-icon>
+            <mat-icon aria-hidden="true" svgIcon="chevron_right" />
           </button>
           <button
             mat-button

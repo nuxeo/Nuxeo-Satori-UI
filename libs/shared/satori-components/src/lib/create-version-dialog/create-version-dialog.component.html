@@ -35,7 +35,7 @@
     (click)="create()"
   >
     @if (saving()) {
-      <mat-icon class="nxs-spinning" aria-hidden="true">autorenew</mat-icon>
+      <mat-icon class="nxs-spinning" aria-hidden="true" svgIcon="autorenew" />
       {{ 'satori-components.create-version-dialog.creating' | translate }}
     } @else {
       {{ 'satori-components.create-version-dialog.create' | translate }}

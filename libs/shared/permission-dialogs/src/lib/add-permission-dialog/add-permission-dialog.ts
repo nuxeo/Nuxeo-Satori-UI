@@ -4,7 +4,14 @@ import {
   provideNxsToast,
 } from '@nuxeo/satori-platform/components';
 
-import { viewChild, Component, DestroyRef, inject, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  viewChild,
+  Component,
+  DestroyRef,
+  inject,
+  signal,
+} from '@angular/core';
 import { DescriptorLabelPipe } from '@nuxeo/satori-platform/extensions';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule, NgModel } from '@angular/forms';
@@ -65,6 +72,7 @@ const PERMISSION_OPTIONS = [
   ],
   providers: [provideSatoriDateAdapter(), provideTranslatedDatepickerIntl(), provideNxsToast()],
   templateUrl: './add-permission-dialog.html',
+  changeDetection: ChangeDetectionStrategy.Eager,
   styles: [
     `
       :host {

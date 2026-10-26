@@ -84,7 +84,7 @@ export const NotFoundAsThePageHeading: Story = {
   render: () => ({
     template: `<nxs-error-state [status]="404" heading="Failed to load document." [headingLevel]="1">
   <button mat-stroked-button type="button">
-    <mat-icon aria-hidden="true">arrow_back</mat-icon>
+    <mat-icon aria-hidden="true" svgIcon="arrow_left" />
     Go Back
   </button>
 </nxs-error-state>`,
