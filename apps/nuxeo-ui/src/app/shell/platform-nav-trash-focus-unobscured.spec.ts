@@ -67,7 +67,7 @@ describe('platform nav Trash focus unobscured (NXENG-868)', () => {
     expect(getComputedStyle(list).paddingTop).toBe('0px');
     expect(list.scrollHeight).toBeLessThanOrEqual(list.clientHeight);
     const links = list.querySelectorAll('.sat-platform-nav-item');
-    expect(links.length).toBe(15);
+    expect(links).toHaveSize(15);
     for (const link of Array.from(links)) {
       expect(link.getBoundingClientRect().bottom).toBeLessThanOrEqual(
         list.getBoundingClientRect().bottom,
