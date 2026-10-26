@@ -15,6 +15,12 @@ The platform jobs use the runtime pinned in `.nvmrc`. The Windows workflow expli
 gate always requires its output.
 Both Windows verification and CodeQL run for PRs into `feature/nxsat-673-satori-1.0`;
 otherwise the fixed target would silently omit the Windows gate or its prerequisite.
+Document-detail tests use native worker console streams rather than Vitest 4's console
+RPC interception, which can reject a pending `onUserConsoleLog` during Windows teardown
+even when every assertion passes (upstream vitest-dev/vitest#11153). Warnings and errors
+remain visible; unhandled errors remain fatal. The Windows workflow runs
+`node --test scripts/beta-harness/windows-console.selftest.mjs` to verify console output,
+assertion failures and unhandled rejections before running the full gate.
 The assertion audit also canonicalizes report keys before applying the legacy story-runner
 scope exception; Windows separators must not impose the phase runner's identity contract
 on `scripts/collect-evidence/`. Constant-condition checks still apply to both runners.

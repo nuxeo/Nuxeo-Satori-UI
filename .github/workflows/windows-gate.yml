@@ -54,6 +54,8 @@ jobs:
         run: npx nx build nuxeo-ui
       - name: CodeQL wait controls
         run: node --test scripts/beta-harness/windows-codeql-wait.selftest.mjs
+      - name: Native console transport and fatal-error controls
+        run: node --test scripts/beta-harness/windows-console.selftest.mjs
       - name: Wait for CodeQL on this revision
         id: wait-codeql
         uses: actions/github-script@v7
