@@ -29,11 +29,19 @@
  * supply-chain surface for no benefit.
  *
  * The check needs an exception list because a package can be genuinely required and never appear in
- * an import: Angular's runtime needs `tslib` and `@angular/animations`. The version pins for
+ * an import: the TypeScript compiler emits imports of `tslib`, and `@angular/animations` is reached
+ * only through `@angular/platform-browser/animations`. The version pins for
  * `@alfresco/adf-core`'s peers and the `ng-mocks` stub adf-hx needed, left over after ADF went in
  * NXSAT-637, were removed in NXSAT-672. Every exception
  * carries a reason, and an exception that stops being needed fails the check as unnecessary — so
  * the list cannot rot into a place where things are hidden.
+ *
+ * ## The overrides check
+ *
+ * `package.json` `overrides` is the other exception list, and it rots the same way: a security pin
+ * outlives the dependency that pulled the vulnerable package in. Five did across Angular 22 and
+ * Nx 23, and NXSAT-672 removed them. Section 6 fails on any override that reaches no installed
+ * package; `override-presence.mjs` says exactly what counts.
  *
  * Usage:
  *   node scripts/beta-harness/supply-chain.mjs
@@ -41,8 +49,9 @@
  *   node scripts/beta-harness/supply-chain.mjs --today 2027-01-01   # test allowlist expiry
  *
  * Exit 1 on a production high/critical, an unallowlisted or expired production finding, an
- * unreferenced production dependency, an exception that is no longer needed, or an acceptance
- * whose cited mitigation no longer exists in the code it names.
+ * unreferenced production dependency, an exception that is no longer needed, an acceptance
+ * whose cited mitigation no longer exists in the code it names, or an override that overrides
+ * nothing.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -50,6 +59,11 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import ts from 'typescript';
 import { CONTROL_COUNT, collectReferences, referenced, selfCheck } from './module-references.mjs';
+import {
+  CONTROL_COUNT as OVERRIDE_CONTROL_COUNT,
+  selfCheck as overrideSelfCheck,
+  staleOverrides,
+} from './override-presence.mjs';
 import {
   CONTROL_COUNT as SCAN_CONTROL_COUNT,
   selfCheck as scanSelfCheck,
@@ -604,6 +618,50 @@ for (const [name, entry] of Object.entries(allowlist.advisories ?? {})) {
   }
 }
 
+/* ------------------------------------------------- 6. overrides that override nothing ---- */
+
+/** `semver` ships with npm's own tree; use it when present, never require it. */
+let semver = null;
+try {
+  semver = (await import('semver')).default ?? null;
+} catch {
+  /* a version selector in an override key is then ignored, which can only under-report */
+}
+
+const overrideControlFailures = overrideSelfCheck(semver);
+for (const failure of overrideControlFailures)
+  fail(`override-presence control failed — ${failure}`);
+if (overrideControlFailures.length === 0) {
+  notes.push(
+    `override-presence controls: ${OVERRIDE_CONTROL_COUNT.negative} negative (must not flag) + ` +
+      `${OVERRIDE_CONTROL_COUNT.positive} positive (must flag exactly these), all as specified` +
+      (semver ? '.' : '; semver unavailable, so version selectors were not checked.'),
+  );
+}
+
+const lockPath = resolve(repoRoot, 'package-lock.json');
+let overridesChecked = 0;
+if (!existsSync(lockPath)) {
+  fail(
+    'package-lock.json is missing, so the `overrides` block cannot be checked against the tree.',
+  );
+} else {
+  const lockPackages = JSON.parse(readFileSync(lockPath, 'utf8')).packages;
+  if (!lockPackages) {
+    fail('package-lock.json has no "packages" map, so `overrides` cannot be checked against it.');
+  } else {
+    const result = staleOverrides(pkg.overrides ?? {}, lockPackages, semver);
+    overridesChecked = result.checked;
+    for (const { key, reason } of result.stale) {
+      fail(
+        `package.json overrides "${key}" forces a version on nothing — ${reason}. An override for ` +
+          'a package the tree no longer installs reads as protection while protecting nothing. ' +
+          'Remove it; npm does not record overrides in the lock, so the lock will not move.',
+      );
+    }
+  }
+}
+
 /* ------------------------------------------------------------------------ report ---- */
 
 function relative(p) {
@@ -622,6 +680,7 @@ if (asJson) {
         productionDependencies: prodDeps.length,
         unreferenced,
         mitigationsChecked,
+        overridesChecked,
         problems,
         notes,
       },
@@ -645,6 +704,7 @@ console.log(
   `  production deps     ${prodDeps.length}, of which ${unreferenced.length} unreferenced`,
 );
 console.log(`  mitigations         ${mitigationsChecked} cited pointer(s) resolved in the source`);
+console.log(`  overrides           ${overridesChecked} entr(y/ies) checked against the lock`);
 console.log(`  date                ${today}`);
 for (const n of notes) console.log(`\n  - ${n}`);
 
