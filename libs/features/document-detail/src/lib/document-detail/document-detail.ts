@@ -112,7 +112,7 @@ import {
 } from '@nuxeo/satori-platform/nuxeo-client';
 import { SAT_BANNER_IMPORTS } from '@hylandsoftware/satori-ui/banner';
 import { SatGhost } from '@hylandsoftware/satori-ui/ghost';
-import { SatTagModule, SatTagCategory } from '@hylandsoftware/satori-ui/tag';
+import { SatTagCategory } from '@hylandsoftware/satori-ui/tag';
 import {
   AiGatewayService,
   AiChatService,
@@ -200,6 +200,7 @@ import {
   NxsToastService,
   nxsAceTimeFrame,
   nxsErrorStatus,
+  NXS_PRIMITIVE_IDS,
   nxsToggleFavorite,
   provideNxsToast,
   type NxsBreadcrumbItem,
@@ -348,7 +349,6 @@ const MIME_BY_EXTENSION: Record<string, string> = {
     NoteEditorComponent,
     SAT_BANNER_IMPORTS,
     SatGhost,
-    SatTagModule,
   ],
   providers: [provideTranslatedDatepickerIntl(), provideSatoriDateAdapter(), provideNxsToast()],
   templateUrl: './document-detail.html',
@@ -897,6 +897,7 @@ export class DocumentDetailComponent implements OnInit, OnDestroy {
     () => !this.isVersionView() && canManageDocumentPermissions(this.doc()),
   );
   readonly permissionsPanelId = NXS_PERMISSIONS_PANEL_ID;
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
   /** The panel's writes can change the external-user shares this tab reads itself. */
   readonly onPermissionsChanged = () => this.reloadDocumentPermissions();
   readonly canWriteDoc = computed(() => !this.isVersionView() && canWriteDocument(this.doc()));

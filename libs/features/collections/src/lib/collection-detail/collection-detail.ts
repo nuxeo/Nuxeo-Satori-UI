@@ -58,7 +58,6 @@ import {
   decodeNuxeoPathSegment,
   permissionRightLabel,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
 import {
   ShareDialogComponent,
   ShareDialogData,
@@ -149,7 +148,6 @@ const MEMBER_PAGE_SIZE = 50;
     MatInputModule,
     MatSelectModule,
     MatDatepickerModule,
-    SatTagModule,
   ],
   templateUrl: './collection-detail.html',
   changeDetection: ChangeDetectionStrategy.Eager,
@@ -261,6 +259,8 @@ export class CollectionDetailComponent {
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
   /** A member's avatar, by ID likewise. */
   readonly avatarId = NXS_PRIMITIVE_IDS.avatar;
+  /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
 
   readonly isInClipboard = computed(() =>
     this.clipboardDocs().some((d) => d.uid === this.collectionUid),

@@ -14,20 +14,28 @@
     </div>
   } @else {
     <!-- Header -->
-    <sat-header-bar variant="one-row">
+    <div class="task-detail-header">
       <button
-        sat-header-bar-leading
         mat-icon-button
         (click)="goBack()"
         [title]="'tasks.task-detail.back-to-tasks' | translate"
       >
         <mat-icon svgIcon="arrow_left" />
       </button>
-      {{ taskLabel(task()!) }}
-      <sat-status-tag sat-header-bar-trailing status="info" [hideIcon]="true">{{
-        taskWorkflow(task()!)
-      }}</sat-status-tag>
-    </sat-header-bar>
+      <div class="task-detail-title-group">
+        <div class="task-detail-heading" role="heading" aria-level="2">
+          {{ taskLabel(task()!) }}
+        </div>
+        <lib-extension-outlet
+          #workflowOutlet
+          [componentId]="statusTagId"
+          [componentInputs]="{ label: taskWorkflow(task()!), status: 'info', hideIcon: true }"
+        />
+        @if (workflowOutlet.unresolved()) {
+          {{ taskWorkflow(task()!) }}
+        }
+      </div>
+    </div>
 
     <div class="task-detail-layout">
       <!-- Left: Task form -->
@@ -228,18 +236,32 @@
             <span class="info-value" [class.overdue]="taskOverdue()">
               {{ task()!.dueDate | date: 'mediumDate' }}
               @if (taskOverdue()) {
-                <sat-status-tag status="important-loud">{{
-                  'tasks.task-detail.overdue' | translate
-                }}</sat-status-tag>
+                <lib-extension-outlet
+                  #overdueOutlet
+                  [componentId]="statusTagId"
+                  [componentInputs]="{
+                    label: 'tasks.task-detail.overdue' | translate,
+                    status: 'important-loud',
+                    hideIcon: false,
+                  }"
+                />
+                @if (overdueOutlet.unresolved()) {
+                  {{ 'tasks.task-detail.overdue' | translate }}
+                }
               }
             </span>
           </div>
           <div class="info-row">
             <span class="info-label">{{ 'tasks.task-detail.state' | translate }}</span>
             <span class="info-value">
-              <sat-status-tag status="neutral" [hideIcon]="true">{{
-                task()!.state
-              }}</sat-status-tag>
+              <lib-extension-outlet
+                #stateOutlet
+                [componentId]="statusTagId"
+                [componentInputs]="{ label: task()!.state, status: 'neutral', hideIcon: true }"
+              />
+              @if (stateOutlet.unresolved()) {
+                {{ task()!.state }}
+              }
             </span>
           </div>
           <div class="info-row">

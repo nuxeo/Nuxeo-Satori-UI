@@ -641,8 +641,8 @@ item whose ID follows the convention picks up a registered component with no fur
 
 ## 6a. `nxs.primitives.*` — Satori if available, Material otherwise
 
-Five component-registry IDs for the primitives Satori also ships. Each resolves to a Material
-implementation from `@nuxeo/satori-platform/components`, and the first four to a Satori-backed one
+Six component-registry IDs for the primitives Satori also ships. Each resolves to a Material
+implementation from `@nuxeo/satori-platform/components`, and all but `errorState` to a Satori-backed one
 when `@nuxeo/satori-platform/components-satori` is provided after it. That second entry point is the only
 one in the package that imports `@hylandsoftware/satori-ui`, an **optional** peer: without GitHub
 Packages access, leave it out and every ID still resolves, on Material.
@@ -652,6 +652,7 @@ Packages access, leave it out and every ID still resolves, on Material.
 | `nxs.primitives.avatar`      | `initials`, `color`, `size`, `label`                             | `sat-avatar`                                             |
 | `nxs.primitives.breadcrumbs` | `items`, `label`                                                 | `sat-breadcrumbs`                                        |
 | `nxs.primitives.tag`         | `label`, `color`                                                 | `sat-category-tag`                                       |
+| `nxs.primitives.statusTag`   | `label`, `status`, `hideIcon`                                    | `sat-status-tag`                                         |
 | `nxs.primitives.richTooltip` | `heading`, `content`, `triggerLabel`, `icon`                     | `sat-rich-tooltip`                                       |
 | `nxs.primitives.errorState`  | `status`, `heading`, `headingLevel`, `retryable`, `retryHandler` | — (Material only: Satori's error states need Satori 1.0) |
 
@@ -683,9 +684,9 @@ ID reaches it. The uses resolved by ID are these:
 | `nxs.primitives.avatar`      | browse (members, the info panel's creator and contributor, activity), document detail (activity), the collection page (members), the dashboard, `nxs-document-list` |
 | `nxs.primitives.tag`         | browse (a child's type, the tags panel), search (a result's type), document detail (the AI primary category), task detail, trash, `nxs-document-list`               |
 | `nxs.primitives.breadcrumbs` | browse, document detail, the collection page, the tasks page                                                                                                        |
+| `nxs.primitives.statusTag`   | browse, document detail, the collection page, task detail                                                                                                           |
 
-Search shows no avatar or breadcrumb trail. The status tags (`sat-status-tag`) are not one of these
-primitives and are still rendered directly, until NXSAT-653 gives them an ID.
+Search shows no avatar, breadcrumb trail or status tag.
 
 Breadcrumb page layout belongs to the screen, not the registered implementation. Browse,
 document detail, collections and tasks wrap both the outlet and its fallback in the same layout

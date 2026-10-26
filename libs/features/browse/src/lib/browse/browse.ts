@@ -92,8 +92,6 @@ import {
   DocTypeLabelPipe,
 } from '@nuxeo/satori-platform/nuxeo-client';
 
-import { SatTagModule } from '@hylandsoftware/satori-ui/tag';
-
 import {
   ConfirmDialogComponent,
   ConfirmDialogData,
@@ -260,7 +258,6 @@ const PAGE_SIZE = 50;
     MatChipsModule,
     MatAutocompleteModule,
     MatCheckboxModule,
-    SatTagModule,
     ExtensionOutletComponent,
     NxsPermissionsPanelComponent,
   ],
@@ -696,6 +693,8 @@ export class BrowseComponent {
   readonly breadcrumbsId = NXS_PRIMITIVE_IDS.breadcrumbs;
   /** The avatar and tag in the template's `primitiveAvatar` and `primitiveTag`, by ID likewise. */
   readonly primitiveIds = NXS_PRIMITIVE_IDS;
+  /** Rendered by ID, so the product shows Satori's status tag and a host without it the built-in one. */
+  readonly statusTagId = NXS_PRIMITIVE_IDS.statusTag;
 
   readonly breadcrumbs = computed<NxsBreadcrumbItem[]>(() => {
     this.currentLang();

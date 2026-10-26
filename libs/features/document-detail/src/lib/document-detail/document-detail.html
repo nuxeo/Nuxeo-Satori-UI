@@ -710,9 +710,18 @@
                           </div>
                         </td>
                         <td>
-                          <sat-status-tag status="neutral" [hideIcon]="true">{{
-                            publishedVersion(pub)
-                          }}</sat-status-tag>
+                          <lib-extension-outlet
+                            #publishedVersionOutlet
+                            [componentId]="statusTagId"
+                            [componentInputs]="{
+                              label: publishedVersion(pub),
+                              status: 'neutral',
+                              hideIcon: true,
+                            }"
+                          />
+                          @if (publishedVersionOutlet.unresolved()) {
+                            {{ publishedVersion(pub) }}
+                          }
                         </td>
                         <td>{{ publishedRendition(pub) }}</td>
                         <td>
@@ -1035,9 +1044,18 @@
                             'document-detail.document-detail.workflow' | translate
                           }}</span>
                           <span class="ai-meta-val">
-                            <sat-status-tag status="info" [hideIcon]="true">{{
-                              aiClassification()!.suggestedWorkflow
-                            }}</sat-status-tag>
+                            <lib-extension-outlet
+                              #suggestedWorkflowOutlet
+                              [componentId]="statusTagId"
+                              [componentInputs]="{
+                                label: aiClassification()!.suggestedWorkflow,
+                                status: 'info',
+                                hideIcon: true,
+                              }"
+                            />
+                            @if (suggestedWorkflowOutlet.unresolved()) {
+                              {{ aiClassification()!.suggestedWorkflow }}
+                            }
                           </span>
                         </div>
                       }
