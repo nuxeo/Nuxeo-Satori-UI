@@ -200,7 +200,6 @@ import {
   NxsToastService,
   nxsAceTimeFrame,
   nxsErrorStatus,
-  NXS_PRIMITIVE_IDS,
   nxsToggleFavorite,
   provideNxsToast,
   type NxsBreadcrumbItem,

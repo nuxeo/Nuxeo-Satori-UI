@@ -31,8 +31,6 @@ import {
   DocumentService,
   NuxeoApiBase,
 } from '@nuxeo/satori-platform/nuxeo-client';
-import { NXS_PRIMITIVE_IDS } from '@nuxeo/satori-platform/components';
-import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { ExtensionOutletComponent } from '@nuxeo/satori-platform/extensions';
 import { NXS_PRIMITIVE_IDS, NxsTagComponent } from '@nuxeo/satori-platform/components';
 import { TranslatePipe, TranslateService } from '@ngx-translate/core';
@@ -57,7 +55,6 @@ import {
     MatSelectModule,
     MatDatepickerModule,
     MatSnackBarModule,
-    ExtensionOutletComponent,
     ExtensionOutletComponent,
     NxsTagComponent,
   ],
